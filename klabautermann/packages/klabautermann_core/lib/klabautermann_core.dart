@@ -129,6 +129,32 @@ export 'package:seance_core/seance_core.dart'
 // their display and reveals one on request.
 export 'package:klabautermann_docker/klabautermann_docker.dart'
     show MaskedValue;
+// The Docker tab (03 §7.12 to §7.14, §10.1): the route a
+// DockerEndpointState names and the plain-data Docker models a
+// DockerResult carries (D52).
+export 'src/docker/docker_ladder.dart'
+    show
+        DockerNoRouteReason,
+        DockerRank,
+        DockerRootEquivalence,
+        DockerRouteLabel;
+export 'package:klabautermann_docker/klabautermann_docker.dart'
+    show
+        ApiVersion,
+        ContainerHostConfig,
+        ContainerMount,
+        ContainerNetwork,
+        ContainerNetworkSettings,
+        ContainerPort,
+        ContainerRestartPolicy,
+        ContainerSummary,
+        DockerServerVersion,
+        EngineComponent,
+        EngineInfo,
+        EnvVar,
+        HealthStatus,
+        ImageSummary,
+        LogConfig;
 // The coverage card's external-monitor finding (03 §9.5 item 3): K04's
 // rule over a `units` reading, and what it reports.
 export 'package:klabautermann_host/klabautermann_host.dart'
