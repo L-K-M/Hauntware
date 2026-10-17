@@ -71,6 +71,50 @@ void main() {
           'https://github.com/L-K-M/Hauntware/releases/latest');
     });
 
+    test('reports the release files that carry a SHA-256 digest', () async {
+      const digest =
+          'F6FDD1E716651A6C7392EC2D8BD74F47863091858F09F55CF0F67E5BF5E81D15';
+      Map<String, Object?> asset(String name,
+              {String url = 'https://github.com/L-K-M/Hauntware/releases/'
+                  'download/v0.3.0/seance-android.apk',
+              Object? size = 74211084,
+              Object? digest = 'sha256:$digest'}) =>
+          {
+            'name': name,
+            'browser_download_url': url,
+            'size': size,
+            'digest': digest,
+          };
+      final checker = checkerReturning(jsonEncode({
+        'tag_name': 'v0.3.0',
+        'assets': [
+          asset('seance-android.apk'),
+          asset('no-digest.apk', digest: null),
+          asset('md5.apk', digest: 'md5:0123'),
+          asset('plain-http.apk', url: 'http://example.com/a.apk'),
+          asset('empty.apk', size: 0),
+          'not an asset',
+        ],
+      }));
+
+      final info = await checker.check('0.2.0');
+
+      expect(info!.assets.keys, ['seance-android.apk']);
+      final apk = info.assets['seance-android.apk']!;
+      expect(
+          apk.downloadUrl.toString(),
+          'https://github.com/L-K-M/Hauntware/releases/download/v0.3.0/'
+          'seance-android.apk');
+      expect(apk.size, 74211084);
+      expect(apk.sha256, digest.toLowerCase());
+    });
+
+    test('a release without assets reports none', () async {
+      final checker = checkerReturning(
+          jsonEncode({'tag_name': 'v0.3.0', 'assets': 'garbage'}));
+      expect((await checker.check('0.2.0'))!.assets, isEmpty);
+    });
+
     test('reports nothing when up to date', () async {
       final checker = checkerReturning(jsonEncode({'tag_name': 'v0.2.0'}));
       expect(await checker.check('0.2.0'), isNull);
