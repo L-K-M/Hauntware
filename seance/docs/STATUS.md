@@ -168,7 +168,7 @@ macOS and Windows were not exercised.
 
 Editor tabs zoom like Planchette's editor: ⌘ (Apple platforms) or Ctrl
 (elsewhere) with +, − and 0 in an editor tab, and a Built-in editor
-slider under Settings → General after Terminal. Every editor tab resizes
+slider under Settings → General. Every editor tab resizes
 at once. The size is device-local like the terminal's (`editorFontSize`
 in the settings file, never synced) and travels to the Settings window
 in its snapshot, with a new `setEditorFontSize` link method. Range and
