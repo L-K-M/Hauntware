@@ -31,6 +31,7 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
         DockerServerVersion,
         EngineInfo,
         EnvVar,
+        ExternalManager,
         HealthStatus,
         ImageSummary,
         MaskedValue;
@@ -137,6 +138,10 @@ import '../docker/docker_ladder.dart'
 /// [OpenLogStream], [LogBatch] and [LogStreamState], and
 /// [LogStreamEndReason] gained `logDriverUnreadable`, whose detail names
 /// the driver.
+///
+/// Stack verification then joined v3 the same way (03 §7.16 STK-01,
+/// STK-05): [DockerStacksPayload] gained each project's [StackVerdict]
+/// and the [DockerComposeCli] found.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -1653,11 +1658,113 @@ final class DockerImagesPayload extends DockerPayload {
 }
 
 /// The containers grouped by compose project (STK-01), from the same
-/// list [DockerContainersPayload] carries.
+/// list [DockerContainersPayload] carries, with each project's source
+/// verdict and the compose CLI the host has (STK-05). A project's
+/// managed-by badge (STK-10) is its [ComposeProject.ownership].
 final class DockerStacksPayload extends DockerPayload {
-  const DockerStacksPayload(this.grouping);
+  const DockerStacksPayload(
+    this.grouping, {
+    this.verdicts = const {},
+    this.composeCli,
+  });
 
   final ComposeGrouping grouping;
+
+  /// The verdict for each project in [grouping], by name; a project the
+  /// engine has not checked yet reads [StackVerifying], and the list is
+  /// sent again once it has.
+  final Map<String, StackVerdict> verdicts;
+
+  /// The compose CLI found, once the engine has looked.
+  final DockerComposeCli? composeCli;
+}
+
+/// Whether a compose project's files are its source (03 §7.16 STK-01).
+@immutable
+sealed class StackVerdict {
+  const StackVerdict();
+}
+
+/// The engine is checking the project's files.
+final class StackVerifying extends StackVerdict {
+  const StackVerifying();
+}
+
+/// Every config file exists and `compose config --hash '*'` over them
+/// matches the `config-hash` label of every service's containers: the
+/// files are the project's source.
+final class StackVerified extends StackVerdict {
+  const StackVerified();
+}
+
+/// "Unverified source", for [reason].
+final class StackUnverified extends StackVerdict {
+  const StackUnverified(this.reason);
+
+  final StackUnverifiedReason reason;
+}
+
+/// "Source not on host": a config file the containers name is missing.
+/// A manager that runs compose in its own container records paths
+/// inside it (Dockge's rule), so [deployedBy] names the manager the
+/// project's labels mark, when they mark one.
+final class StackSourceNotOnHost extends StackVerdict {
+  const StackSourceNotOnHost({this.deployedBy});
+
+  final ExternalManager? deployedBy;
+}
+
+/// Why a project's files are not its verified source.
+enum StackUnverifiedReason {
+  /// The containers record no config files.
+  noSourceLabels,
+
+  /// A recorded project name or path fails 03 §8.8's validation, so no
+  /// command names it.
+  unsafeLabels,
+
+  /// A service's container carries no `config-hash` label.
+  noHashLabels,
+
+  /// The host has no compose CLI.
+  noComposeCli,
+
+  /// The host has only the standalone `docker-compose`, which is
+  /// read-only (STK-05) and does not verify.
+  standaloneComposeOnly,
+
+  /// The compose CLI did not print service hashes for `config --hash
+  /// '*'`, as one without that flag form would not.
+  cliCouldNotHash,
+
+  /// `compose config` failed over the files: a file it cannot read or
+  /// parse, or a variable it cannot interpolate.
+  configFailed,
+
+  /// A service's hash differs from its containers' label, or the files
+  /// define no such service: the files changed since the deploy, or
+  /// are not the ones it used.
+  hashMismatch,
+
+  /// The check could not run: the link failed or timed out.
+  checkFailed,
+}
+
+/// The compose CLIs on the host (03 §7.16 STK-05), each version as it
+/// printed it without a leading `v`.
+@immutable
+final class DockerComposeCli {
+  const DockerComposeCli({this.pluginVersion, this.standaloneVersion});
+
+  /// `docker compose version`; null without the plugin.
+  final String? pluginVersion;
+
+  /// `docker-compose version`; null without the standalone binary.
+  final String? standaloneVersion;
+
+  /// Whether the standalone binary is the Python Compose v1, unmaintained
+  /// since 2023 and read-only here (STK-05).
+  bool get standaloneLegacy => standaloneVersion?.startsWith('1.') ?? false;
 }
 
 /// One stats round over a watch's `statsFor` (CST-01): a row for each

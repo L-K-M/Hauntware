@@ -13,6 +13,8 @@
 ///   stream lost ─▶ open again after 1 s, 2 s, ... 30 s
 ///   every 5 s ─▶ one-shot stats for statsFor (4 at once on streamlocal,
 ///                one at a time on a relay) ─▶ deltas
+///   stacks sent with a project not checked ─▶ check its files, then
+///                send the stacks again with its verdict
 ///   detach (endpoint dropped) keeps the lists and the resume point;
 ///   close (last unwatch, session end) forgets them
 /// ```
@@ -27,6 +29,7 @@ import 'package:klabautermann_docker/klabautermann_docker.dart';
 import '../engine/protocol.dart';
 import 'docker_ladder.dart';
 import 'inspect_masking.dart';
+import 'stack_sources.dart';
 
 /// Events arriving within this window after the first are refreshed
 /// together (DKE-02's debounce [E]), so a `compose up` re-lists once.
@@ -77,6 +80,9 @@ abstract interface class DockerWatchTarget {
   /// relay it holds a session channel as a follower does (M9); D09
   /// accounts for it.
   DockerClient openStream();
+
+  /// The endpoint's stack checks (03 §7.16 STK-01).
+  StackSources get stacks;
 }
 
 /// [failure] read from a Docker call that threw [error], and whether the
@@ -146,6 +152,11 @@ final class DockerWatcher {
   Timer? _statsTimer;
   int? _refreshing;
   int? _polling;
+  int? _verifying;
+
+  /// Whether a watch asked for the stacks while detached, so the next
+  /// endpoint's verdicts are checked again.
+  bool _stacksAsked = false;
 
   // Work due: whole lists ([_fresh] of them read from nothing) and
   // container ids to read again.
@@ -181,6 +192,12 @@ final class DockerWatcher {
     _previous.removeWhere((id, _) => !_statsFor.contains(id));
     if (!_wantsContainers) _containers = null;
     if (!_lists.contains(DockerWatchList.images)) _images = null;
+
+    // A view that opens the stacks again sees the files checked again.
+    if (asked.contains(DockerWatchList.stacks)) {
+      _target?.stacks.forget();
+      _stacksAsked = _target == null;
+    }
 
     // Detached, a list is read when the next endpoint attaches, even if
     // the stream resumes there.
@@ -219,6 +236,8 @@ final class DockerWatcher {
     }
     _socketPath = target.socketPath;
     _target = target;
+    if (_stacksAsked) target.stacks.forget();
+    _stacksAsked = false;
     _retries = 0;
     unawaited(_open(target, _epoch));
     _poll();
@@ -503,13 +522,53 @@ final class DockerWatcher {
       case DockerWatchList.containers:
         payload = DockerContainersPayload(_containers!);
       case DockerWatchList.stacks:
-        payload = DockerStacksPayload(groupComposeProjects(_containers!));
+        final target = _target;
+        if (target == null) return;
+        final stacks = _stacks(target);
+        payload = stacks;
+        if (_verifying != _epoch &&
+            stacks.verdicts.values.any((v) => v is StackVerifying)) {
+          unawaited(_verify(target, _epoch));
+        }
       case DockerWatchList.images:
         payload = DockerImagesPayload(_images!);
       case DockerWatchList.stats:
         return;
     }
     _emitList(list, payload, fullRelist: fresh);
+  }
+
+  DockerStacksPayload _stacks(DockerWatchTarget target) {
+    final grouping = groupComposeProjects(_containers!);
+    return DockerStacksPayload(
+      grouping,
+      verdicts: target.stacks.known(grouping),
+      composeCli: target.stacks.composeCli,
+    );
+  }
+
+  /// Checks the projects the stacks list has without a verdict and sends
+  /// it again, until a check finds every project of the list it read
+  /// known; one run per endpoint.
+  Future<void> _verify(DockerWatchTarget target, int epoch) async {
+    _verifying = epoch;
+    try {
+      while (epoch == _epoch && _lists.contains(DockerWatchList.stacks)) {
+        final containers = _containers;
+        if (containers == null) return;
+        final grouping = groupComposeProjects(containers);
+        final verdicts = target.stacks.known(grouping);
+        if (!verdicts.values.any((v) => v is StackVerifying)) return;
+
+        await target.stacks.verify(grouping);
+        if (epoch != _epoch || _containers == null) return;
+        if (_lists.contains(DockerWatchList.stacks)) {
+          _emitList(DockerWatchList.stacks, _stacks(target));
+        }
+      }
+    } finally {
+      if (_verifying == epoch) _verifying = null;
+    }
   }
 
   void _fail(DockerWatchList list, DockerQueryFailed failure) {

@@ -398,6 +398,44 @@ void main() {
       expect(row.memoryLimit, 4096);
     });
 
+    test('stack verdicts survive with their reasons (03 §7.16)', () async {
+      final stacks =
+          await roundTrip(
+                DockerListChanged(
+                  serverId: 'srv-1',
+                  list: DockerWatchList.stacks,
+                  payload: DockerStacksPayload(
+                    groupComposeProjects(const []),
+                    verdicts: const {
+                      'a': StackVerified(),
+                      'b': StackUnverified(StackUnverifiedReason.hashMismatch),
+                      'c': StackSourceNotOnHost(
+                        deployedBy: ExternalManager.dockge,
+                      ),
+                      'd': StackVerifying(),
+                    },
+                    composeCli: const DockerComposeCli(
+                      pluginVersion: '2.29.7',
+                      standaloneVersion: '1.29.2',
+                    ),
+                  ),
+                  at: DateTime.utc(2026, 10, 17),
+                ),
+              )
+              as DockerListChanged;
+      final payload = stacks.payload as DockerStacksPayload;
+      expect(payload.verdicts['a'], isA<StackVerified>());
+      expect(
+        (payload.verdicts['b']! as StackUnverified).reason,
+        StackUnverifiedReason.hashMismatch,
+      );
+      expect(
+        (payload.verdicts['c']! as StackSourceNotOnHost).deployedBy,
+        ExternalManager.dockge,
+      );
+      expect(payload.composeCli!.standaloneLegacy, isTrue);
+    });
+
     test('sampling requests survive with their ids, streams and '
         'profile (D45)', () async {
       final subscribe =
