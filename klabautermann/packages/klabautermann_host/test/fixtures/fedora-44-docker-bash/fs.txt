@@ -1,0 +1,16 @@
+== blocks ==
+Filesystem     Type        1-blocks        Used   Available Capacity Mounted on
+overlay        overlay 270553174016 27126210560 14697648128      65% /
+tmpfs          tmpfs       67108864           0    67108864       0% /dev
+tmpfs          tmpfs     8437465088           0  8437465088       0% /sys/fs/cgroup
+shm            tmpfs       67108864           0    67108864       0% /dev/shm
+/dev/vda       ext4    270553174016 27126210560 14697648128      65% /etc/hosts
+tmpfs          tmpfs           4096           0        4096       0% /proc/acpi
+== inodes ==
+Filesystem       Inodes  IUsed    IFree IUse% Mounted on
+overlay        16777216 998734 15778482    6% /
+tmpfs           2059928     15  2059913    1% /dev
+tmpfs           2059928     10  2059918    1% /sys/fs/cgroup
+shm             2059928      1  2059927    1% /dev/shm
+/dev/vda       16777216 998734 15778482    6% /etc/hosts
+tmpfs                 1      1        0  100% /proc/acpi

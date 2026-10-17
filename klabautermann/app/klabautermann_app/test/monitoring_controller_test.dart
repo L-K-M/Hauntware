@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show ChangeNotifier, FlutterError;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/log_reads.dart';
@@ -148,6 +150,108 @@ void main() {
       expect(second.subscriptionId, 'row');
       expect(second.streams, {SampleStream.core, SampleStream.fs});
       expect(monitoring.isSubscribed('srv-1', 'row'), isTrue);
+    });
+  });
+
+  group('refresh (PLT-02)', () {
+    SamplingState phase(SamplingPhase phase) => SamplingState(
+      serverId: 'srv-1',
+      phase: phase,
+      since: DateTime.utc(2026, 10, 16, 12),
+    );
+
+    test(
+      'asks the engine to read one held subscription at once, and ends '
+      'at once while the engine samples nothing, as with links off',
+      () async {
+        monitoring.subscribe('srv-1', 'processes', {SampleStream.procs});
+        var done = false;
+        unawaited(
+          monitoring.refresh('srv-1', 'processes').then((_) => done = true),
+        );
+        // Nothing held under these ids, so nothing to read.
+        await monitoring.refresh('srv-1', 'system');
+        await monitoring.refresh('srv-2', 'processes');
+        await settle();
+
+        expect(done, isTrue);
+        final [refresh] = engine
+            .sentOfType<RefreshSubscription>()
+            .cast<RefreshSubscription>();
+        expect(
+          (refresh.serverId, refresh.subscriptionId),
+          ('srv-1', 'processes'),
+        );
+      },
+    );
+
+    test('while the server samples, waits for a newer reading of each '
+        'stream, a failed one included', () async {
+      monitoring.subscribe('srv-1', 'system', {
+        SampleStream.fs,
+        SampleStream.core,
+      });
+      engine
+        ..emit(phase(SamplingPhase.sampling))
+        ..emit(_sample('srv-1', SampleStream.fs, 1))
+        ..emit(_sample('srv-1', SampleStream.core, 2));
+      await settle();
+
+      var done = false;
+      unawaited(monitoring.refresh('srv-1', 'system').then((_) => done = true));
+      engine.emit(_sample('srv-1', SampleStream.core, 3));
+      await settle();
+      expect(done, isFalse);
+
+      engine.emit(_sample('srv-1', SampleStream.fs, 4));
+      await settle();
+      expect(done, isTrue);
+    });
+
+    test('ends once the server stops sampling, leaves the fleet or the '
+        'controller goes', () async {
+      final other = MonitoringController(engine);
+      for (final controller in [monitoring, other]) {
+        controller.subscribe('srv-1', 'jobs', {SampleStream.timers});
+      }
+      engine.emit(phase(SamplingPhase.sampling));
+      await settle();
+
+      final ended = <String>[];
+      unawaited(
+        monitoring.refresh('srv-1', 'jobs').then((_) => ended.add('link')),
+      );
+      engine.emit(phase(SamplingPhase.waitingForLink));
+      await settle();
+      expect(ended, ['link']);
+
+      engine.emit(phase(SamplingPhase.sampling));
+      await settle();
+      unawaited(
+        monitoring.refresh('srv-1', 'jobs').then((_) => ended.add('fleet')),
+      );
+      unawaited(other.refresh('srv-1', 'jobs').then((_) => ended.add('gone')));
+      other.dispose();
+      engine.emit(CatalogReplaced([_entry('srv-2')]));
+      await settle();
+      expect(ended, ['link', 'gone', 'fleet']);
+    });
+
+    testWidgets('gives up after kRefreshWait without the readings', (
+      tester,
+    ) async {
+      final waiting = MonitoringController(engine);
+      addTearDown(waiting.dispose);
+      waiting.subscribe('srv-1', 'services', {SampleStream.units});
+      engine.emit(phase(SamplingPhase.sampling));
+      await tester.pump();
+
+      var done = false;
+      unawaited(waiting.refresh('srv-1', 'services').then((_) => done = true));
+      await tester.pump(kRefreshWait - const Duration(seconds: 1));
+      expect(done, isFalse);
+      await tester.pump(const Duration(seconds: 1));
+      expect(done, isTrue);
     });
   });
 
@@ -551,6 +655,82 @@ void main() {
         ..leaveServer('srv-1');
       // The test binding fails a timer still pending here: it would hold
       // the dead controller for the grace, to send nothing.
+    });
+  });
+
+  group('Connect rejections (D61)', () {
+    const noUser = ConnectRejectedReason.noLoginName;
+    const addressOnly = ConnectRejectedReason.addressOnlyImport;
+
+    test('are kept per open server until its next Connect', () async {
+      monitoring
+        ..openServer('srv-1')
+        ..openServer('srv-2');
+      engine
+        ..emit(const ConnectRejected('srv-1', noUser))
+        ..emit(const ConnectRejected('srv-2', addressOnly))
+        // A server no view holds has nothing to show it on.
+        ..emit(const ConnectRejected('srv-3', noUser));
+      await settle();
+      expect(monitoring.connectRejections.value, {
+        'srv-1': noUser,
+        'srv-2': addressOnly,
+      });
+
+      // The last leave drops it; the next open connects without it.
+      monitoring.leaveServer('srv-1');
+      expect(monitoring.connectRejections.value, {'srv-2': addressOnly});
+    });
+
+    test('a new fleet connects each rejected server it still lists again, '
+        'and drops the rest', () async {
+      monitoring
+        ..openServer('srv-1')
+        ..openServer('srv-2');
+      engine
+        ..emit(const ConnectRejected('srv-1', noUser))
+        ..emit(const ConnectRejected('srv-2', addressOnly));
+      await settle();
+      final before = engine.sentOfType<Connect>().length;
+      var notified = 0;
+      monitoring.connectRejections.addListener(() => notified++);
+
+      engine.emit(CatalogReplaced([_entry('srv-1')]));
+      await settle();
+
+      expect(monitoring.connectRejections.value, isEmpty);
+      expect(notified, 1, reason: 'one change for the whole fleet');
+      expect(
+        [
+          for (final Connect(:serverId)
+              in engine.sentOfType<Connect>().skip(before).cast<Connect>())
+            serverId,
+        ],
+        ['srv-1'],
+      );
+
+      // Still without a config, it is rejected again. A rejection still
+      // on its way for the server that left is not kept.
+      engine
+        ..emit(const ConnectRejected('srv-1', noUser))
+        ..emit(const ConnectRejected('srv-2', addressOnly));
+      await settle();
+      expect(monitoring.connectRejections.value, {'srv-1': noUser});
+    });
+
+    test('a rejection notifies its listeners, and a RequestRejected for '
+        'Connect is not one', () async {
+      var notified = 0;
+      monitoring.connectRejections.addListener(() => notified++);
+      monitoring.openServer('srv-1');
+      engine.emit(const RequestRejected('Connect', 'links are off'));
+      await settle();
+      expect(notified, 0);
+      expect(monitoring.connectRejections.value, isEmpty);
+
+      engine.emit(const ConnectRejected('srv-1', noUser));
+      await settle();
+      expect(notified, 1);
     });
   });
 

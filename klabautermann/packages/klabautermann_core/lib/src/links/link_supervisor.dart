@@ -63,6 +63,7 @@ typedef LinkConnect =
     Future<LinkConnectResult> Function(
       ServerConfig config, {
       required ConnectPurpose purpose,
+      required ChangedHostKey changedKey,
       void Function(LinkStatus phase)? onPhase,
       void Function()? onDialing,
       Future<void>? abandoned,
@@ -82,6 +83,9 @@ typedef LinkConnect =
 ///   unclassified one included, waits for the user (fail2ban, c2 R11),
 ///   and so does a server whose last connect needed keyboard-interactive
 ///   answers (c2 R10).
+/// - A blocked server stays blocked, but the user's request to one a
+///   changed host key blocked reviews that key ([ChangedHostKey.review],
+///   D61): trusting it re-pins and connects, declining blocks again.
 /// - No attempt starts while the app is in the background; under
 ///   [BackgroundLinkPolicy.closeAfterGrace] links close after
 ///   [kBackgroundGracePeriod] and redial on return.
@@ -140,14 +144,24 @@ final class LinkSupervisor {
   /// attempt fails for want of the user. An unattended request starts one
   /// only for a server with nothing running, no backoff, nothing waiting
   /// for the user and no keyboard-interactive last connect. A blocked
-  /// server stays blocked.
+  /// server stays blocked, unless an interactive request finds it blocked
+  /// by a changed host key: its attempt reviews the key, and the server
+  /// is blocked again unless the user trusts it.
   bool connect(String serverId, {required ConnectPurpose purpose}) {
     if (_configFor(serverId) == null) return false;
 
     final server = _servers.putIfAbsent(serverId, () => _Server(serverId));
     final interactive = purpose == ConnectPurpose.interactive;
     server.wanted = true;
-    if (server.hold == _Hold.blocked || server.link != null) return true;
+    if (server.link != null) return true;
+    if (server.hold == _Hold.blocked) {
+      if (interactive && server.blockedBy == LinkBlockedReason.hostKeyChanged) {
+        server.hold = _Hold.none;
+        server.blockedBy = null;
+        _enqueue(_Attempt(server, purpose, changedKey: ChangedHostKey.review));
+      }
+      return true;
+    }
 
     final attempt = server.attempt;
     if (attempt != null) {
@@ -172,16 +186,26 @@ final class LinkSupervisor {
 
   /// Gives up any attempt, backoff or link to [serverId] (closing the
   /// link) and reports it closed by its owner. A blocked server, or one
-  /// waiting for the user, keeps its status.
+  /// waiting for the user, keeps its status, and so does one whose review
+  /// of a changed host key is given up undecided.
   void disconnect(String serverId) {
     final server = _servers[serverId];
     if (server == null) return;
 
     server.wanted = false;
     if (server.hold == _Hold.untilForeground) server.hold = _Hold.none;
+    final attempt = server.attempt;
+    final reviewing =
+        attempt != null &&
+        attempt.changedKey == ChangedHostKey.review &&
+        !attempt.serverKeyTrusted;
     if (!_tearDown(server)) return;
 
-    _set(server, const LinkClosed(LinkClosedReason.closedByOwner));
+    if (reviewing) {
+      _block(server, LinkBlockedReason.hostKeyChanged);
+    } else {
+      _set(server, const LinkClosed(LinkClosedReason.closedByOwner));
+    }
     _pump();
   }
 
@@ -371,6 +395,7 @@ final class LinkSupervisor {
       result = await _connect(
         config,
         purpose: attempt.purpose,
+        changedKey: attempt.changedKey,
         onPhase: (phase) => _onPhase(attempt, phase),
         onDialing: () => attempt.onNetwork = true,
         abandoned: attempt.abandon.future,
@@ -406,6 +431,7 @@ final class LinkSupervisor {
     } else if (server.status is LinkNeedsUser) {
       _armDeadline(attempt);
     }
+    if (phase is LinkAuthenticating) attempt.serverKeyTrusted = true;
     _set(server, phase);
   }
 
@@ -444,8 +470,7 @@ final class LinkSupervisor {
         server.link = link;
         server.states = link.states.listen((s) => _onLinkState(server, s));
       case LinkConnectBlocked(:final reason):
-        server.hold = _Hold.blocked;
-        _set(server, LinkBlocked(reason));
+        _block(server, reason);
       case LinkConnectFailed(:final failure):
         _set(
           server,
@@ -461,6 +486,12 @@ final class LinkSupervisor {
     }
   }
 
+  void _block(_Server server, LinkBlockedReason reason) {
+    server.hold = _Hold.blocked;
+    server.blockedBy = reason;
+    _set(server, LinkBlocked(reason));
+  }
+
   /// A failure to reach the server; any other waits for the user.
   static bool _redials(LinkFailureKind? failure) => switch (failure) {
     LinkFailureKind.unreachable || LinkFailureKind.timedOut => true,
@@ -469,12 +500,24 @@ final class LinkSupervisor {
 
   /// A failure of an unattended attempt that an interactive one may not
   /// meet: a declined first-seen host key, or a sign-in that may have
-  /// needed answers, rejected or not classified.
+  /// needed answers, rejected or not classified. A key that needs a
+  /// passphrase is not one until the passphrase prompt lands (K45b): no
+  /// prompt asks for it yet, so the interactive attempt would fail the
+  /// same way. Exhaustive, so a new kind takes a decision here.
   static bool _promptMayResolve(LinkFailureKind? failure) => switch (failure) {
     null ||
     LinkFailureKind.hostKeyDeclined ||
     LinkFailureKind.authenticationRejected => true,
-    _ => false,
+    LinkFailureKind.keyPassphraseRequired => false,
+    // The user's own answer to the questions; asking again would repeat it.
+    LinkFailureKind.keyboardInteractiveCancelled => false,
+    LinkFailureKind.unreachable ||
+    LinkFailureKind.timedOut ||
+    LinkFailureKind.credentialUnavailable ||
+    LinkFailureKind.keyFileHiddenBySandbox ||
+    LinkFailureKind.unsupportedAlgorithm ||
+    LinkFailureKind.insecureAlgorithmsOnly ||
+    LinkFailureKind.keyExchangeTimedOut => false,
   };
 
   void _onLinkState(_Server server, SshLinkState state) {
@@ -632,15 +675,29 @@ final class _Server {
   int failures = 0;
   _Hold hold = _Hold.none;
 
+  /// Why the server is held [_Hold.blocked], which decides whether the
+  /// user's request reviews the block.
+  LinkBlockedReason? blockedBy;
+
   /// The last connect asked keyboard-interactive questions.
   bool keyboardInteractive = false;
 }
 
 final class _Attempt {
-  _Attempt(this.server, this.purpose);
+  _Attempt(this.server, this.purpose, {this.changedKey = ChangedHostKey.block});
 
   final _Server server;
   ConnectPurpose purpose;
+
+  /// [ChangedHostKey.review] only for the user's request to a server a
+  /// changed host key blocked.
+  final ChangedHostKey changedKey;
+
+  /// The server's own host key passed its check, so its user
+  /// authentication runs. A trusted answer to a review has already
+  /// re-pinned the key by then (`TofuVerifier.pin`), so the review is
+  /// decided.
+  bool serverKeyTrusted = false;
   bool holdsSlot = false;
   bool dialing = false;
 

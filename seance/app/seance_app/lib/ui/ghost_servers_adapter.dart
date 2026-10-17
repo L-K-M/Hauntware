@@ -9,6 +9,7 @@ import 'package:ghost_servers/ghost_servers.dart';
 import 'package:seance_core/seance_core.dart';
 
 import '../app_state.dart';
+import '../services/missing_credential.dart';
 import '../theme.dart';
 
 /// Séance's status words: the package's defaults are Séance's own.
@@ -44,6 +45,63 @@ GhostProbeState ghostProbeOf(ProbeStatus probe) => switch (probe) {
   ProbeStatus.offline => GhostProbeState.offline,
   ProbeStatus.unknown => GhostProbeState.unknown,
 };
+
+/// A host-key decision as the shared prompt shows it: the presented key,
+/// and the pinned key's fingerprint and type. The pin marks the changed-key
+/// review; a trusted decision, the one other verdict that carries a pin,
+/// never reaches the prompt (`seance_core` connects without asking).
+GhostHostKeyPrompt ghostHostKeyPromptOf(HostKeyDecision decision) =>
+    GhostHostKeyPrompt(
+      host: decision.presented.host,
+      port: decision.presented.port,
+      keyType: decision.presented.type,
+      fingerprintSha256: decision.presented.fingerprintSha256,
+      pinnedFingerprintSha256: decision.pinned?.fingerprintSha256,
+      pinnedKeyType: decision.pinned?.type,
+    );
+
+/// A keyboard-interactive challenge as the shared prompt shows it: the
+/// trusted endpoint from the server's configuration, and the server's own
+/// name, instruction and questions.
+GhostKeyboardPrompt ghostKeyboardPromptOf(
+  KeyboardInteractiveChallenge challenge,
+) => GhostKeyboardPrompt(
+  username: challenge.server.username,
+  host: challenge.server.host,
+  port: challenge.server.port,
+  name: challenge.name,
+  instruction: challenge.instruction,
+  prompts: challenge.prompts,
+);
+
+/// The credential prompt for a server this device has no credential for
+/// (CRED-05): Séance's pasted-key form, titled with the server's label.
+GhostCredentialRequest ghostCredentialRequestOf({
+  required String serverLabel,
+  required AuthMethod authMethod,
+}) => GhostCredentialRequest(
+  authMethod: authMethod,
+  endpointLabel: serverLabel,
+  keyField: GhostKeyField.pastedPem,
+);
+
+/// The shared prompt's answer as the credential-required tab supplies it.
+/// The vault offer is never made, since the recovery flow always saves, so
+/// [GhostCredentialReply.saveToVault] carries nothing here. [UseSshAgent]
+/// never comes from the prompt: the tab offers the agent as its own button,
+/// beside the one that opens the prompt, and supplies it directly.
+/// [GhostKeyPassphraseReply] never comes either: it answers only the
+/// passphrase-only form, and [ghostCredentialRequestOf] always asks for a
+/// pasted key.
+MissingCredential missingCredentialOf(GhostCredentialReply reply) =>
+    switch (reply) {
+      GhostPasswordReply(:final password) => MissingPassword(password),
+      GhostPrivateKeyReply(:final privateKeyPem, :final keyPassphrase) =>
+        MissingPrivateKey(privateKeyPem, passphrase: keyPassphrase),
+      GhostKeyPassphraseReply() => throw StateError(
+        'Séance never raises the passphrase-only credential prompt',
+      ),
+    };
 
 /// The theme's status colours ([StatusColors]) as the package takes them.
 GhostStatusColors seanceStatusColors(BuildContext context) => GhostStatusColors(

@@ -10,14 +10,12 @@ readonly repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Every committed path that legitimately carries a private-key header
 # today, found with the same detection the scan below uses. The three
 # sshd keys are real fixture keys; the Séance Dart files carry the header
-# only as a detection constant or a test-fixture string.
+# only as a test-fixture string.
 readonly -a allowed=(
   'poltergeist/test/integration/keys/ssh_host_ed25519_key'
   'poltergeist/test/integration/keys/ssh_host_ed25519_key_swap'
   'poltergeist/test/integration/keys/ssh_host_rsa_key'
-  'seance/app/seance_app/lib/ui/credential_prompt.dart'
   'seance/app/seance_app/test/command_stats_privacy_test.dart'
-  'seance/app/seance_app/test/credential_prompt_test.dart'
   'seance/packages/seance_core/test/pure_logic_test.dart'
   'seance/packages/seance_core/test/quoted_secret_redaction_test.dart'
 )

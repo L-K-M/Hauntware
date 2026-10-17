@@ -1,17 +1,19 @@
 /// The engine's log streams (03 §5.2, §7.6, §10.1): every [OpenLogStream]
-/// and [CloseStream] the engine accepts, routed to a [LogService] on its
-/// server's link once the link is ready, the app is in the foreground and
-/// the read's channel share has room.
+/// and [CloseStream] the engine accepts, a window routed to a [LogService]
+/// and a follow to its [LogFollower] on its server's link once the link
+/// is ready, the app is in the foreground and the read's channel share
+/// has room.
 ///
 /// The router answers each open before it returns, with the read's
-/// [LogStreamRunning] from the service or a [LogStreamWaiting] that says
-/// what it waits for, and every stream ends exactly once:
+/// [LogStreamRunning] or a [LogStreamWaiting] that says what it waits
+/// for, and every stream ends exactly once:
 ///
 /// ```text
 ///   open ─▶ waiting (link, channel, background) ─▶ running ─▶ ended
 ///              ▲                                      │
-///              └──── background: paused, process closed
-///   running, its link lost or replaced ─▶ ended (failed)
+///              ├──── background: paused, process closed
+///              └──── a follow's link lost or replaced: paused
+///   a window's link lost or replaced ─▶ ended (failed)
 ///   Disconnect, fleet removal, close() ─▶ ended (failed)
 ///   CloseStream ─▶ ended (closed)
 /// ```
@@ -19,10 +21,12 @@ library;
 
 import 'dart:async';
 
-import 'package:seance_core/seance_core.dart' show SshLink, quoteShellWord;
+import 'package:seance_core/seance_core.dart'
+    show SshLink, SshLinkClosed, quoteShellWord;
 
 import '../engine/protocol.dart';
 import '../links/channel_quota.dart';
+import 'log_follower.dart';
 import 'log_service.dart';
 
 /// The most streams one server holds open, waiting or running [E]: a
@@ -37,20 +41,31 @@ typedef LogServiceOpener =
 LogService _defaultService(SshLink link, void Function(EngineEvent) emit) =>
     LogService(link: link, quote: quoteShellWord, emit: emit);
 
+Duration Function() _monotonicClock() {
+  final watch = Stopwatch()..start();
+  return () => watch.elapsed;
+}
+
 /// Owned by the engine isolate, which hands it the log requests and tells
 /// it what changed: [update] after a server's [LinkState], [activity],
 /// [disconnect], [retain] for the fleet and [close].
 final class LogStreamRouter {
   /// [linkFor] gives a server's ready link, null while it has none.
+  /// [startTimer] and [elapsed], a monotonic clock, pace the follows'
+  /// batches; tests pass a fake clock.
   LogStreamRouter({
     required this._linkFor,
     required this._emit,
     this._openService = _defaultService,
-  });
+    this._startTimer = Timer.new,
+    Duration Function()? elapsed,
+  }) : _elapsed = elapsed ?? _monotonicClock();
 
   final SshLink? Function(String serverId) _linkFor;
   final void Function(EngineEvent event) _emit;
   final LogServiceOpener _openService;
+  final Timer Function(Duration duration, void Function() callback) _startTimer;
+  final Duration Function() _elapsed;
 
   /// Servers with a stream open; an entry goes with its last stream.
   final Map<String, _Server> _servers = {};
@@ -65,13 +80,12 @@ final class LogStreamRouter {
 
   /// Accepts [request] and returns null, having sent the stream's first
   /// [LogStreamState], or returns why the engine rejects it: a reused id,
-  /// a follow (K26), a server outside the fleet, or a server already
-  /// holding [kLogStreamsPerServerMax] streams.
+  /// a server outside the fleet, or a server already holding
+  /// [kLogStreamsPerServerMax] streams.
   String? open(OpenLogStream request) {
     final OpenLogStream(:streamId, :spec) = request;
     final serverId = spec.serverId;
     if (!_usedIds.add(streamId)) return 'stream id $streamId was used before';
-    if (spec.follow) return 'following a log is not implemented yet';
     if (!_fleet.contains(serverId)) return 'no fleet server $serverId';
     if ((_servers[serverId]?.count ?? 0) >= kLogStreamsPerServerMax) {
       return '$serverId holds $kLogStreamsPerServerMax log streams';
@@ -79,7 +93,7 @@ final class LogStreamRouter {
 
     // Refused before it waits for anything, as the service would refuse
     // it on opening.
-    if (!LogService.accepts(spec)) {
+    if (!(spec.follow ? LogFollower.accepts(spec) : LogService.accepts(spec))) {
       _emit(
         LogStreamState(
           streamId,
@@ -91,6 +105,7 @@ final class LogStreamRouter {
 
     final server = _servers.putIfAbsent(serverId, () => _Server(serverId));
     final stream = _Stream(streamId, spec, server);
+    if (spec.follow) stream.follower = _follower(stream);
     _streams[streamId] = stream;
     server.waiting.add(stream);
     _pump(server);
@@ -102,6 +117,10 @@ final class LogStreamRouter {
   void closeStream(String streamId) {
     final stream = _streams[streamId];
     if (stream == null) return;
+    // The follower sends the end, and _followerEnded follows it.
+    if (stream.follower case final follower?) {
+      return follower.end(const LogStreamEnded(LogStreamEndReason.closed));
+    }
 
     final server = stream.server;
     if (server.running.containsKey(streamId)) {
@@ -114,8 +133,9 @@ final class LogStreamRouter {
     _pump(server);
   }
 
-  /// Follows [serverId]'s link: a read running on a link that went ends
-  /// as failed, and waiting reads start once one is ready.
+  /// Follows [serverId]'s link: a window running on a link that went ends
+  /// as failed, a follow waits for the next link, and waiting reads start
+  /// once one is ready.
   void update(String serverId) {
     final server = _servers[serverId];
     if (server != null) _pump(server);
@@ -123,12 +143,14 @@ final class LogStreamRouter {
 
   /// Follows the app's visibility (03 §6.4): the background pauses every
   /// read, closing the processes of those running, and the foreground
-  /// starts them again from their start.
+  /// starts a window again from its start and resumes a follow.
   set activity(AppActivity activity) {
     if (activity == _activity) return;
     _activity = activity;
     for (final server in _servers.values.toList()) {
-      if (activity == AppActivity.background) _pause(server);
+      if (activity == AppActivity.background) {
+        _pause(server, server.running.values.toList());
+      }
       _pump(server);
     }
   }
@@ -163,10 +185,17 @@ final class LogStreamRouter {
   // -- servers --------------------------------------------------------
 
   /// Starts what [server] can run and tells each read left waiting why;
-  /// drops the server's entry once it holds no stream.
+  /// drops the server's entry once it holds no stream. A closed link the
+  /// supervisor has not reported yet counts as none, so a follow lost on
+  /// it waits instead of starting there again.
   void _pump(_Server server) {
-    final link = _linkFor(server.id);
+    var link = _linkFor(server.id);
+    if (link?.state is SshLinkClosed) link = null;
     if (!identical(link, server.link)) {
+      _pause(server, [
+        for (final stream in server.running.values)
+          if (stream.follower != null) stream,
+      ]);
       _closeService(server);
       server.link = link;
     }
@@ -195,7 +224,12 @@ final class LogStreamRouter {
 
       server.waiting.remove(stream);
       server.running[stream.id] = stream;
-      stream.waitingFor = null;
+      if (stream.follower case final follower?) {
+        _status(stream, LogStreamRunning(continuity: follower.run(link)));
+        continue;
+      }
+      // The service sends the window's states from here.
+      stream.status = null;
       final service = server.service ??= _service(server, link);
       service.open(stream.id, stream.spec);
     }
@@ -235,41 +269,91 @@ final class LogStreamRouter {
 
     server.service = null;
     server.link = null;
-    final closing = service.close();
-    _closing.add(closing);
-    unawaited(closing.whenComplete(() => _closing.remove(closing)));
+    _track(service.close());
   }
 
-  /// Stops [server]'s running reads without an event and queues them
-  /// ahead of the others, in the order they started.
-  void _pause(_Server server) {
-    final paused = server.running.values.toList();
-    for (final stream in paused) {
+  /// Stops [streams], running on [server], without an event and queues
+  /// them ahead of the others, in the order they started. A follow the
+  /// host ended stays until its last batch goes.
+  void _pause(_Server server, List<_Stream> streams) {
+    final paused = <_Stream>[];
+    for (final stream in streams) {
+      if (stream.follower case final follower?) {
+        if (!follower.pause()) continue;
+      } else {
+        server.service!.pause(stream.id);
+      }
       server.running.remove(stream.id);
       server.quota.give(stream.share);
-      server.service!.pause(stream.id);
+      paused.add(stream);
     }
     server.waiting.insertAll(0, paused);
   }
 
   void _endAll(_Server server) {
     _closeService(server);
-    for (final stream in server.waiting) {
+    for (final stream in [...server.running.values, ...server.waiting]) {
       _endWaiting(stream, LogStreamEndReason.failed);
     }
     server.waiting.clear();
   }
 
-  // -- streams --------------------------------------------------------
-
-  void _wait(_Stream stream, LogStreamWaitReason reason) {
-    if (stream.waitingFor == reason) return;
-    stream.waitingFor = reason;
-    _emit(LogStreamState(stream.id, LogStreamWaiting(reason)));
+  void _track(Future<void> closing) {
+    _closing.add(closing);
+    unawaited(closing.whenComplete(() => _closing.remove(closing)));
   }
 
-  /// Ends [stream], which waits and runs nothing, for [reason].
+  // -- streams --------------------------------------------------------
+
+  LogFollower _follower(_Stream stream) => LogFollower(
+    streamId: stream.id,
+    spec: stream.spec,
+    emit: _emit,
+    onLost: () => _followerLost(stream),
+    onEnded: () => _followerEnded(stream),
+    track: _track,
+    elapsed: _elapsed,
+    quote: quoteShellWord,
+    startTimer: _startTimer,
+  );
+
+  /// Queues [stream], whose follow lost its process, ahead of the others
+  /// and runs it again where it can.
+  void _followerLost(_Stream stream) {
+    final server = stream.server;
+    if (server.running.remove(stream.id) == null) return;
+    server.quota.give(stream.share);
+    server.waiting.insert(0, stream);
+    _pump(server);
+  }
+
+  /// Forgets [stream], whose follow sent its end, and frees its slot.
+  void _followerEnded(_Stream stream) {
+    _streams.remove(stream.id);
+    final server = stream.server;
+    if (server.running.remove(stream.id) != null) {
+      server.quota.give(stream.share);
+    }
+    server.waiting.remove(stream);
+    if (identical(_servers[server.id], server)) _pump(server);
+  }
+
+  void _wait(_Stream stream, LogStreamWaitReason reason) =>
+      _status(stream, LogStreamWaiting(reason));
+
+  /// Sends [status] for [stream] unless it was the last the router sent.
+  void _status(_Stream stream, LogStreamStatus status) {
+    if (stream.status == status) return;
+    stream.status = status;
+    _emit(LogStreamState(stream.id, status));
+  }
+
+  /// Ends [stream], which runs nothing on the service, for [reason]: a
+  /// waiting window, or a follow, which ends itself.
   void _endWaiting(_Stream stream, LogStreamEndReason reason) {
+    if (stream.follower case final follower?) {
+      return follower.end(LogStreamEnded(reason));
+    }
     _streams.remove(stream.id);
     _emit(LogStreamState(stream.id, LogStreamEnded(reason)));
   }
@@ -285,10 +369,10 @@ final class _Server {
   /// Streams not running, oldest first.
   final List<_Stream> waiting = [];
 
-  /// Streams running on [service], in the order they started.
+  /// Streams running on [link], in the order they started.
   final Map<String, _Stream> running = {};
 
-  /// The link [service] reads over.
+  /// The link [service] and the follows read over.
   SshLink? link;
   LogService? service;
 
@@ -302,9 +386,12 @@ final class _Stream {
   final LogStreamSpec spec;
   final _Server server;
 
-  /// What the last [LogStreamWaiting] sent named; null while running or
-  /// before any.
-  LogStreamWaitReason? waitingFor;
+  /// A follow's reader; null for a window.
+  LogFollower? follower;
+
+  /// The last status the router sent; null before any, and while the
+  /// service runs a window and sends its states.
+  LogStreamStatus? status;
 
   ChannelShare get share =>
       spec.follow ? ChannelShare.follower : ChannelShare.shortAction;

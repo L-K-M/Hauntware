@@ -66,7 +66,29 @@ import 'package:meta/meta.dart';
 /// [HostProfileChanged] gained `cachedAt` for a profile the device cache
 /// kept (D59), within v3 the same way.
 ///
-/// Pull-only sync joined v3 the same way (03 §4.3, D63): [EnrollSync]
+/// [ProcessRow] then gained `startedAt`, its start by the engine's clock
+/// (03 §7.2), within v3 the same way.
+///
+/// [LogStreamRunning] then gained [LogContinuity], whether a follow that
+/// ran again may lack records (03 §7.6), within v3 the same way.
+///
+/// [LinkFailureKind] then gained `keyPassphraseRequired` and
+/// `keyFileHiddenBySandbox` (03 §10.1), within v3 the same way.
+///
+/// [RefreshSubscription] then joined, reading a subscription's streams at
+/// once for the phones' pull to refresh (PLT-02), within v3 the same way.
+///
+/// [KeyboardInteractivePromptRequest] then gained `user`, the account it
+/// signs in as, [PromptCancelAnswer] joined to decline its questions, and
+/// [LinkFailureKind] gained `keyboardInteractiveCancelled` for the attempt
+/// a cancel ends (03 §10.1), within v3 the same way.
+///
+/// [HostKeyPromptRequest] then gained `pinnedFingerprintSha256` and
+/// `pinnedKeyType` for the re-pin review of a changed key, and
+/// [ConnectRejected] joined to say why a [Connect] to a fleet server
+/// cannot start (03 §4.6, §10.1, D61), within v3 the same way.
+///
+/// Pull-only sync then joined v3 the same way (03 §4.3, D63): [EnrollSync]
 /// carries the account to sign in to, [SyncStatus] reports each sync
 /// operation with a typed [SyncFailure], [EngineReady] gains the enrolled
 /// account and what was wrong with the sync state files, and the engine
@@ -171,7 +193,10 @@ final class SetMonitorSet extends EngineRequest {
   final List<String> serverIds;
 }
 
-/// Opens the SSH link to one server (03 §10.1).
+/// Opens the SSH link to one server (03 §10.1). The app sends it when the
+/// user opens the server, so the connect may prompt; to a server blocked
+/// by [LinkBlockedReason.hostKeyChanged] it reviews the changed key
+/// (D61). A fleet server the engine cannot dial gets [ConnectRejected].
 final class Connect extends EngineRequest {
   const Connect(this.serverId);
 
@@ -229,6 +254,28 @@ final class Subscribe extends EngineRequest {
 /// The engine stops a stream once no subscription for the server names it.
 final class Unsubscribe extends EngineRequest {
   const Unsubscribe({required this.serverId, required this.subscriptionId});
+
+  final String serverId;
+  final String subscriptionId;
+}
+
+/// Reads the streams of the subscription [Subscribe] made with the same
+/// ids at once rather than at their next 03 §6.4 tick, as a pull to
+/// refresh asks (PLT-02). While the server samples, each stream is read
+/// once more as soon as its sampler is free, a busy, restarting or
+/// probing sampler holding the reading rather than losing it, and a
+/// stream that rides on another's collector (`overview` on `core`,
+/// `failedUnits` on `units`) is read through that collector. `identity`,
+/// otherwise read once per link, is read again too. While the server is
+/// [SamplingPhase.waitingForLink] or [SamplingPhase.pausedInBackground],
+/// nothing is read now, and sampling resumes with every stream the
+/// subscription names. No event answers it but the readings, and a
+/// subscription the engine does not hold changes nothing.
+final class RefreshSubscription extends EngineRequest {
+  const RefreshSubscription({
+    required this.serverId,
+    required this.subscriptionId,
+  });
 
   final String serverId;
   final String subscriptionId;
@@ -476,6 +523,31 @@ final class LinkState extends EngineEvent {
 
   final String serverId;
   final LinkStatus status;
+}
+
+/// A [Connect] to the fleet server [serverId] could not start, because the
+/// engine has no config to dial it with (03 §10.1, D61). Nothing about
+/// the server's link changes; a later [CatalogReplaced] may give it one.
+/// A [Connect] for an id outside the fleet still gets [RequestRejected].
+final class ConnectRejected extends EngineEvent {
+  const ConnectRejected(this.serverId, this.reason);
+
+  final String serverId;
+  final ConnectRejectedReason reason;
+}
+
+/// Why the engine has no config for a fleet server.
+enum ConnectRejectedReason {
+  /// No login name is known for the server or a jump host on its route:
+  /// the import names no `User`, and neither `USER` nor `USERNAME` is
+  /// set in the engine's environment.
+  noLoginName,
+
+  /// The import store is of an older schema (1 or 2), which kept each
+  /// host's address only (`ImportedHostDetail.addressOnly`), so how the
+  /// server signs in and which jump hosts it needs are unknown until the
+  /// next import.
+  addressOnlyImport,
 }
 
 /// The last reachability probe of [serverId] (FL-04, 03 §5.12). A probe
@@ -1006,7 +1078,7 @@ final class LogStreamSpec {
   /// record. journalctl refuses `--since` together with a cursor, so with
   /// one the engine applies [JournalLogSource.since] itself: a window ends
   /// with [LogStreamEndReason.oldestReached] at the first record older
-  /// than it, and a follow reads on from the cursor alone.
+  /// than it, and a follow skips such records, as it does without one.
   final String? afterCursor;
 }
 
@@ -1190,14 +1262,32 @@ final class LogStreamWaiting extends LogStreamStatus {
 
 /// The read runs on the host: a window until it ends, a follow live.
 /// [reader] says which of its source's readers serves it, so the view can
-/// name where a kernel log came from (LOG-03).
+/// name where a kernel log came from (LOG-03), and [continuity] whether a
+/// follow that waited may lack records written meanwhile (LOG-02).
 final class LogStreamRunning extends LogStreamStatus {
-  const LogStreamRunning({this.reader = LogReader.primary});
+  const LogStreamRunning({
+    this.reader = LogReader.primary,
+    this.continuity = LogContinuity.complete,
+  });
 
   final LogReader reader;
+  final LogContinuity continuity;
 
   @override
-  List<Object?> get _values => [reader];
+  List<Object?> get _values => [reader, continuity];
+}
+
+/// Whether a running stream holds every record since it opened (03 §7.6).
+enum LogContinuity {
+  /// Every record arrived or was counted in a [LogBatch.dropped]: a
+  /// window, a follow on its first run, or one that resumed after its
+  /// newest journal cursor.
+  complete,
+
+  /// A follow without a cursor to resume after, such as a file's `tail
+  /// -F`, started again after it waited and delivers only new records:
+  /// records written while it waited may be missing, uncounted.
+  gap,
 }
 
 /// Which reader a [LogStreamRunning] stream reads with (03 §7.6).
@@ -1371,20 +1461,33 @@ sealed class PromptRequest {
   PromptKind get kind;
 }
 
-/// Trust a host key the pin store has never seen (03 §4.6). A key that
-/// differs from the pinned one does not prompt: it blocks the link with
-/// [LinkBlockedReason.hostKeyChanged].
+/// Trust a host key the pin store has never seen, or re-pin a changed one
+/// (03 §4.6). A key that differs from the pinned one blocks the link with
+/// [LinkBlockedReason.hostKeyChanged]; only the user's next [Connect] to
+/// the blocked server asks about it, with the pinned key in
+/// [pinnedFingerprintSha256] and [pinnedKeyType] (D61). Trusting it
+/// replaces the pin. An unattended connect never asks.
 final class HostKeyPromptRequest extends PromptRequest {
   const HostKeyPromptRequest({
     required this.keyType,
     required this.fingerprintSha256,
+    this.pinnedFingerprintSha256,
+    this.pinnedKeyType,
   });
 
-  /// The key algorithm, such as `ssh-ed25519`.
+  /// The presented key's algorithm, such as `ssh-ed25519`.
   final String keyType;
 
-  /// The fingerprint in OpenSSH's `SHA256:` form.
+  /// The presented key's fingerprint in OpenSSH's `SHA256:` form.
   final String fingerprintSha256;
+
+  /// The pinned key's fingerprint in the same form when the presented key
+  /// differs from it, or null for a first-seen key.
+  final String? pinnedFingerprintSha256;
+
+  /// The pinned key's algorithm beside [pinnedFingerprintSha256]; it can
+  /// differ from [keyType] when the server changed key algorithm.
+  final String? pinnedKeyType;
 
   @override
   PromptKind get kind => PromptKind.hostKey;
@@ -1393,13 +1496,19 @@ final class HostKeyPromptRequest extends PromptRequest {
 /// The server's keyboard-interactive challenge (RFC 4256), shown as the
 /// server sent it. It carries no echo flags (`seance_core`'s
 /// `KeyboardInteractiveChallenge` has none), so a surface masks every
-/// answer. [PromptResponsesAnswer] answers [questions] in order.
+/// answer. [PromptResponsesAnswer] answers [questions] in order, and
+/// [PromptCancelAnswer] declines them.
 final class KeyboardInteractivePromptRequest extends PromptRequest {
   const KeyboardInteractivePromptRequest({
+    this.user,
     this.name = '',
     this.instruction = '',
     this.questions = const [],
   });
+
+  /// The account the engine signs in as on the asking machine; null
+  /// where it does not say.
+  final String? user;
 
   final String name;
   final String instruction;
@@ -1471,6 +1580,16 @@ final class PromptResponsesAnswer extends PromptAnswer {
   const PromptResponsesAnswer(this.responses);
 
   final List<String> responses;
+}
+
+/// The user declined [PromptKind.keyboardInteractive]'s questions. The
+/// engine sends the server no responses, so the attempt fails with
+/// [LinkFailureKind.keyboardInteractiveCancelled] at once rather than
+/// when the prompt expires. Only that kind takes it: a host key is
+/// declined with `PromptTrustAnswer(false)`, a password prompt dismissed
+/// with `PromptSecretAnswer(null)`.
+final class PromptCancelAnswer extends PromptAnswer {
+  const PromptCancelAnswer();
 }
 
 /// One alert as the UI shows it (v1.x, 03 §10.1, D42).
@@ -1645,7 +1764,7 @@ enum LinkClosedReason {
   connectFailed,
 }
 
-/// What the engine found behind a [LinkClosed]. The first five are the
+/// What the engine found behind a [LinkClosed]. The first eight are the
 /// connect failures protocol version 3 classifies (03 §10.1); the last
 /// three are 03 §5.3's client limitations.
 enum LinkFailureKind {
@@ -1658,12 +1777,28 @@ enum LinkFailureKind {
   /// The server refused every credential offered.
   authenticationRejected,
 
-  /// No credential could be offered: no agent answered, or a key file
-  /// could not be read.
+  /// No credential could be offered: the ssh-agent holds no keys, a key
+  /// file could not be read or holds no key the client can use, or a
+  /// stored secret is not on this device.
   credentialUnavailable,
+
+  /// The private key is encrypted and the engine has no passphrase that
+  /// opens it: none was given, or the one given was wrong. Nothing reached
+  /// the server. No prompt asks for one yet, so only an agent holding the
+  /// key gets past it.
+  keyPassphraseRequired,
+
+  /// Inside the Flatpak sandbox, a key file could not be found: the
+  /// sandbox shows only the paths its manifest grants, so a key outside
+  /// them reads as missing whether or not it exists (03 §4.5).
+  keyFileHiddenBySandbox,
 
   /// The user, or the background rule, declined a first-seen host key.
   hostKeyDeclined,
+
+  /// The user cancelled keyboard-interactive questions the server or one
+  /// of its jump hosts asked ([PromptCancelAnswer]).
+  keyboardInteractiveCancelled,
 
   /// The server requires an algorithm the client does not support yet
   /// (CN-23).
@@ -2260,6 +2395,7 @@ final class ProcessRow {
     this.residentBytes,
     this.cpuPercent,
     this.startTicks,
+    this.startedAt,
     this.arguments,
   });
 
@@ -2284,6 +2420,14 @@ final class ProcessRow {
   /// `/proc/<pid>/stat`): with [pid], what PRC-02's PID-reuse guard
   /// compares before signalling it.
   final int? startTicks;
+
+  /// When it started by the engine's clock, UTC: the reading's time less
+  /// the host's uptime, plus [startTicks] at 100 a second, the USER_HZ the
+  /// CPU shares assume too (7.2). Null without either, before the probe
+  /// reports its lxcfs mounts, and where lxcfs serves a container's own
+  /// age as `/proc/uptime`, since start ticks count from the kernel's
+  /// boot (D50).
+  final DateTime? startedAt;
 
   /// The command line, one item per argument (per whitespace token on a
   /// host where only `ps` lists it, 7.2), each masked by 03 §8.9's rules;

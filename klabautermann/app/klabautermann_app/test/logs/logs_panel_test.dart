@@ -166,6 +166,38 @@ void main() {
     );
   });
 
+  testWidgets('says lines may be missing when a file follow runs again '
+      'after it waited', (tester) async {
+    const gap =
+        'Following again. Lines written while it was paused or '
+        'disconnected may be missing.';
+    final panel = await _pump(tester);
+    await tester.tap(find.text('File'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Common paths'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('/var/log/nginx/error.log'));
+    await tester.pumpAndSettle();
+    final id = panel.opens.last.streamId;
+
+    await panel.emit(tester, LogStreamState(id, const LogStreamRunning()));
+    expect(find.text(gap), findsNothing);
+    await panel.emit(
+      tester,
+      LogStreamState(id, const LogStreamRunning(continuity: LogContinuity.gap)),
+    );
+    expect(_chip('Live'), findsOneWidget);
+    expect(find.text(gap), findsOneWidget);
+    expect(find.byIcon(Icons.info_outline), findsOneWidget);
+    expect(find.text('Retry'), findsNothing);
+
+    await panel.emit(
+      tester,
+      LogStreamState(id, const LogStreamWaiting(LogStreamWaitReason.link)),
+    );
+    expect(find.text(gap), findsNothing);
+  });
+
   testWidgets('shows journal rows with LOG-04\'s notice, searches them and '
       'pauses on the Live chip', (tester) async {
     final panel = await _pump(tester);

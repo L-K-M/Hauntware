@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, setEquals;
+import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show SchedulerBinding;
-import 'package:flutter/widgets.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/monitoring_controller.dart';
@@ -100,7 +100,8 @@ class _OpenServerState extends State<OpenServer> {
 /// its own while [visible], and none while hidden or once unmounted (03
 /// §6.4: everything pauses when its view is hidden). A tab view keeps a
 /// hidden page built, so its owner passes [visible] from the selected
-/// index.
+/// index. With [pullToRefresh], pulling the surface down from its top
+/// has the engine read its streams at once (PLT-02).
 class SampledSurface extends StatefulWidget {
   const SampledSurface({
     super.key,
@@ -109,6 +110,7 @@ class SampledSurface extends StatefulWidget {
     required this.surface,
     required this.streams,
     required this.visible,
+    this.pullToRefresh = false,
     required this.child,
   });
 
@@ -122,6 +124,10 @@ class SampledSurface extends StatefulWidget {
   final Set<SampleStream> streams;
 
   final bool visible;
+
+  /// As on a phone's server screen (03 §10.5); a desktop has no pull.
+  final bool pullToRefresh;
+
   final Widget child;
 
   @override
@@ -180,8 +186,35 @@ class _SampledSurfaceState extends State<SampledSurface> {
     widget.monitoring.unsubscribe(held, _subscriptionId);
   }
 
+  /// Reads what the surface samples at once; it samples nothing hidden.
+  Future<void> _refresh() {
+    final held = _held;
+    if (held == null) return Future.value();
+    return widget.monitoring.refresh(held, _subscriptionId);
+  }
+
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    if (!widget.pullToRefresh) return widget.child;
+
+    return RefreshIndicator.adaptive(
+      onRefresh: _refresh,
+      // A panel's own lists, a table's inside a sideways scroll included,
+      // pull from their top as well as the panel around them.
+      notificationPredicate: (notification) =>
+          notification.metrics.axis == Axis.vertical,
+      // A panel whose content fits does not scroll, so this view, its
+      // exact size, overscrolls for it. Not primary: the panel's own view
+      // answers a status bar tap.
+      child: LayoutBuilder(
+        builder: (context, box) => SingleChildScrollView(
+          primary: false,
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: SizedBox.fromSize(size: box.biggest, child: widget.child),
+        ),
+      ),
+    );
+  }
 }
 
 /// Reports to [MonitoringController.setAppActivity] whether the user can

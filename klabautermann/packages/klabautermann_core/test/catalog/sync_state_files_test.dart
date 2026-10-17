@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart'
@@ -168,6 +167,23 @@ void main() {
       await store.addNegativePin('b.example:22');
       final reopened = await openVerdicts();
       expect(await reopened.negativePins(), {'a.example:22', 'b.example:22'});
+    });
+
+    test('retrying a failed change writes it', () async {
+      var fail = true;
+      Future<void> flaky(File target, List<int> bytes) => fail
+          ? Future.error(const FileSystemException('disk full'))
+          : writeFileAtomically(target, bytes);
+
+      final store = await openVerdicts(writer: flaky);
+      await expectLater(
+        store.addNegativePin('a.example:22'),
+        throwsA(isA<FileSystemException>()),
+      );
+
+      fail = false;
+      await store.addNegativePin('a.example:22');
+      expect(await (await openVerdicts()).negativePins(), {'a.example:22'});
     });
   });
 
@@ -390,6 +406,15 @@ void main() {
     );
   });
 
+  test('a body never shadows the version', () async {
+    final (file, _) = await SyncStateFile.open(
+      fileIn(syncTripwiresFileName),
+      access: _exclusive,
+      decode: (body) => body,
+    );
+    expect(() => file.save({'version': 9}), throwsA(isA<AssertionError>()));
+  });
+
   group('unguarded access (no instance lock)', () {
     test('changes stay in memory and nothing is written', () async {
       final verdicts = await openVerdicts(access: _unguarded);
@@ -435,8 +460,9 @@ void main() {
   // and host_keys.json do.
   test('the files keep the process default mode', () async {
     if (Platform.isWindows) return;
+    // A plain create, independent of the writer under test.
     final reference = fileIn('reference.json');
-    await writeFileAtomically(reference, utf8.encode('{}'));
+    await reference.writeAsString('{}');
 
     final verdicts = await openVerdicts();
     await verdicts.addNegativePin('a.example:22');

@@ -5,6 +5,13 @@
 
 **Current version:** v<!-- version -->1.9.0<!-- /version --> · [Releases](https://github.com/L-K-M/Hauntware/releases)
 
+Desktop apps are ad-hoc signed and not notarized. After moving one to
+Applications, clear its quarantine flag, for example:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Seance.app"
+```
+
 Free to use. Haunting included.
 
 One repository, one version and one release cadence:

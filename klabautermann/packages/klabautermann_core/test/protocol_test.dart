@@ -86,6 +86,7 @@ void main() {
           streams: {SampleStream.overview, SampleStream.fs},
         ),
         const Unsubscribe(serverId: 'srv-1', subscriptionId: 'row'),
+        const RefreshSubscription(serverId: 'srv-1', subscriptionId: 'row'),
         const SetCadenceProfile(CadenceProfile.phone),
         const ImportSshConfig('Host web-1\n  HostName web-1.example\n'),
         OpenLogStream(
@@ -113,6 +114,7 @@ void main() {
           ),
         ),
         const AnswerPrompt('prompt-1', PromptTrustAnswer(true)),
+        const AnswerPrompt('prompt-2', PromptCancelAnswer()),
         const HandleAlert('alert-1', AlertAction.acknowledge),
         const OpenTerminal(
           serverId: 'srv-1',
@@ -136,6 +138,7 @@ void main() {
       final events = <EngineEvent>[
         const EngineReady(kEngineProtocolVersion),
         const RequestRejected('Connect', 'nope'),
+        const ConnectRejected('srv-1', ConnectRejectedReason.noLoginName),
         CatalogReplaced(const [_webEntry]),
         const SshConfigImported(importedCount: 1, skippedCount: 0, saved: true),
         const SyncStatus(
@@ -230,6 +233,17 @@ void main() {
               as Unsubscribe;
       expect(unsubscribe.serverId, 'srv-9');
       expect(unsubscribe.subscriptionId, 'row');
+
+      final refresh =
+          await roundTrip(
+                const RefreshSubscription(
+                  serverId: 'srv-9',
+                  subscriptionId: 'processes',
+                ),
+              )
+              as RefreshSubscription;
+      expect(refresh.serverId, 'srv-9');
+      expect(refresh.subscriptionId, 'processes');
 
       for (final profile in CadenceProfile.values) {
         final received =
@@ -393,6 +407,7 @@ void main() {
                       residentBytes: 8192,
                       cpuPercent: 0.5,
                       startTicks: 1234,
+                      startedAt: DateTime.utc(2026, 10, 15, 9, 41),
                       arguments: [
                         MaskedValue.plain('mysql'),
                         MaskedValue.redacted('-p********', '-phunter2'),
@@ -414,6 +429,7 @@ void main() {
       expect(mysql.residentBytes, 8192);
       expect(mysql.cpuPercent, 0.5);
       expect(mysql.startTicks, 1234);
+      expect(mysql.startedAt, DateTime.utc(2026, 10, 15, 9, 41));
       // A masked argument crosses with its real text for the reveal
       // action (03 §8.9), and shows the mask.
       expect(mysql.arguments!.map((a) => a.display), ['mysql', '-p********']);
@@ -803,6 +819,7 @@ void main() {
         for (final reason in LogStreamWaitReason.values)
           LogStreamWaiting(reason),
         for (final reader in LogReader.values) LogStreamRunning(reader: reader),
+        const LogStreamRunning(continuity: LogContinuity.gap),
         for (final reason in LogStreamEndReason.values) LogStreamEnded(reason),
         const LogStreamEnded(
           LogStreamEndReason.denied,
@@ -818,8 +835,8 @@ void main() {
         expect(state.status.hashCode, status.hashCode);
       }
 
-      // Every status differs from every other: by variant, reader, reason
-      // or detail.
+      // Every status differs from every other: by variant, reader,
+      // continuity, reason or detail.
       for (var i = 0; i < statuses.length; i++) {
         for (var j = i + 1; j < statuses.length; j++) {
           expect(statuses[i], isNot(statuses[j]));
@@ -1006,6 +1023,10 @@ void main() {
           LinkClosedReason.connectFailed,
           failure: LinkFailureKind.authenticationRejected,
         ),
+        const LinkClosed(
+          LinkClosedReason.connectFailed,
+          failure: LinkFailureKind.keyboardInteractiveCancelled,
+        ),
       ];
 
       for (final status in statuses) {
@@ -1016,6 +1037,20 @@ void main() {
         // run-time DateTime arrives as a copy, so equality is by value.
         expect(received.status, status);
         expect(received.status.hashCode, status.hashCode);
+      }
+    });
+
+    test('every failure kind survives on a closed link', () async {
+      for (final failure in LinkFailureKind.values) {
+        final status = LinkClosed(
+          LinkClosedReason.connectFailed,
+          failure: failure,
+        );
+        final received =
+            await roundTrip(LinkState('srv-1', status)) as LinkState;
+
+        expect(received.status, status);
+        expect((received.status as LinkClosed).failure, failure);
       }
     });
 
@@ -1061,6 +1096,18 @@ void main() {
       }
     });
 
+    test('a Connect rejection keeps its server and every reason', () async {
+      for (final reason in ConnectRejectedReason.values) {
+        final received =
+            await roundTrip(ConnectRejected('ssh-config:web', reason))
+                as ConnectRejected;
+        expect(
+          (received.serverId, received.reason),
+          ('ssh-config:web', reason),
+        );
+      }
+    });
+
     test('structured prompts survive with every field', () async {
       Future<PromptRequest> request(PromptRequest request) async {
         final prompt =
@@ -1093,10 +1140,34 @@ void main() {
       expect(hostKey.kind, PromptKind.hostKey);
       expect(hostKey.keyType, 'ssh-ed25519');
       expect(hostKey.fingerprintSha256, 'SHA256:abc');
+      expect(
+        (hostKey.pinnedFingerprintSha256, hostKey.pinnedKeyType),
+        (null, null),
+      );
+      final changed =
+          await request(
+                const HostKeyPromptRequest(
+                  keyType: 'ecdsa-sha2-nistp256',
+                  fingerprintSha256: 'SHA256:new',
+                  pinnedFingerprintSha256: 'SHA256:abc',
+                  pinnedKeyType: 'ssh-ed25519',
+                ),
+              )
+              as HostKeyPromptRequest;
+      expect(
+        (
+          changed.keyType,
+          changed.fingerprintSha256,
+          changed.pinnedFingerprintSha256,
+          changed.pinnedKeyType,
+        ),
+        ('ecdsa-sha2-nistp256', 'SHA256:new', 'SHA256:abc', 'ssh-ed25519'),
+      );
 
       final challenge =
           await request(
                 const KeyboardInteractivePromptRequest(
+                  user: 'jump',
                   name: 'Duo',
                   instruction: 'Second factor',
                   questions: ['Passcode: ', 'Push? '],
@@ -1104,9 +1175,14 @@ void main() {
               )
               as KeyboardInteractivePromptRequest;
       expect(challenge.kind, PromptKind.keyboardInteractive);
+      expect(challenge.user, 'jump');
       expect(challenge.name, 'Duo');
       expect(challenge.instruction, 'Second factor');
       expect(challenge.questions, ['Passcode: ', 'Push? ']);
+      final unnamed =
+          await request(const KeyboardInteractivePromptRequest())
+              as KeyboardInteractivePromptRequest;
+      expect(unnamed.user, isNull);
 
       final credential =
           await request(
@@ -1155,6 +1231,10 @@ void main() {
           await roundTrip(const AnswerPrompt('p', PromptTrustAnswer(false)))
               as AnswerPrompt;
       expect((trust.answer as PromptTrustAnswer).accepted, isFalse);
+      final cancel =
+          await roundTrip(const AnswerPrompt('p', PromptCancelAnswer()))
+              as AnswerPrompt;
+      expect(cancel.answer, isA<PromptCancelAnswer>());
 
       final bytes =
           await roundTrip(TerminalBytes('t', Uint8List.fromList(const [9, 8])))

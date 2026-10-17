@@ -1,0 +1,16 @@
+== stat ==
+cpu  640180 0 120696 432306 70017 0 12842 31568 0 0
+== meminfo ==
+MemTotal: 16479424
+MemFree: 3360348
+MemAvailable: 12477540
+Buffers: 966032
+Cached: 6840668
+SwapTotal: 0
+SwapFree: 0
+Shmem: 14680
+SReclaimable: 1909628
+== loadavg ==
+4.12 3.82 4.53 7/225 52
+== netdev ==
+eth0 0 84

@@ -52,8 +52,11 @@ abstract interface class SyncKeystore {
   Future<void> writeMasterKey(List<int> key);
 }
 
-/// [KeystoreSyncCredentialStore.writeVaultKey] found no vault master key
-/// to re-seal the vault from, so it staged nothing and changed nothing.
+/// [KeystoreSyncCredentialStore.writeVaultKey] read no vault master key to
+/// re-seal the vault from, so it staged nothing and changed nothing. The
+/// keystore holds none or cannot answer ([SyncKeystore.readMasterKey] does
+/// not tell them apart); a keystore that was only locked may answer on a
+/// later attempt.
 final class SyncVaultKeyUnavailableException implements Exception {
   const SyncVaultKeyUnavailableException();
 
@@ -119,8 +122,14 @@ final class KeystoreSyncCredentialStore implements SyncCredentialStore {
     try {
       await _keystore.writeMasterKey(vaultKey);
     } on Object {
-      final installed = await _keystore.readMasterKey();
-      if (installed != null) await journal.settleRekey(installed);
+      // The write's own failure is the one to report; a recovery that
+      // fails too leaves the journal staged for the next settle.
+      try {
+        final installed = await _keystore.readMasterKey();
+        if (installed != null) await journal.settleRekey(installed);
+      } on Object {
+        // Left staged; the next attempt or launch settles it.
+      }
       rethrow;
     }
     await journal.settleRekey(vaultKey);

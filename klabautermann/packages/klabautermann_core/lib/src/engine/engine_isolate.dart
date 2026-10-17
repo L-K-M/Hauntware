@@ -3,11 +3,6 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:meta/meta.dart';
-import 'package:seance_core/catalog.dart'
-    show
-        ConflictAwareHostKeyStore,
-        FileHostKeyStore,
-        InMemoryConflictAwareHostKeyStore;
 import 'package:seance_core/seance_core.dart' show ImportedHost, SshLink;
 
 import '../capabilities/capability_cache.dart';
@@ -18,6 +13,7 @@ import '../fleet/ssh_config_entries.dart';
 import '../fleet/ssh_config_import_store.dart';
 import '../fleet/synced_fleet.dart';
 import '../links/credential_source.dart';
+import '../links/host_key_pins.dart';
 import '../links/link_connector.dart';
 import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
@@ -51,14 +47,15 @@ final class EngineStart {
   /// Whether the engine opens SSH links (03 §5.1, §10.1). Without them it
   /// has no link supervisor, sampling scheduler or log streams: [Connect]
   /// and [OpenLogStream] get [RequestRejected] and nothing dials, samples
-  /// or reads, [CloseStream], [Disconnect] and
+  /// or reads, [CloseStream], [Disconnect], [RefreshSubscription] and
   /// [SetAppActivity] change nothing, subscriptions are only recorded,
   /// and no [Prompt] is ever open. The app's composition root leaves
   /// them off; tests turn them on.
   final bool linksEnabled;
 
   /// Whether this process alone uses [supportDirectory]: the engine writes
-  /// and purges its capability cache there only then (03 §4.10, D59).
+  /// and purges its capability cache and writes its host-key pins there
+  /// only then (03 §4.10, D59, D61).
   final SupportDirectoryAccess supportDirectoryAccess;
 
   /// This install's sync authorship id from `settings.json`
@@ -79,19 +76,21 @@ final class EngineStart {
 /// [Unsubscribe] and [SetCadenceProfile] update the sampling subscriptions,
 /// which the sampling scheduler runs over each server's ready link as
 /// [Sample], [Gap], [SamplingState] and [HostProfileChanged] events
-/// (03 §6.4; links off, nothing samples), a server's cached profile goes
+/// (03 §6.4; links off, nothing samples), [RefreshSubscription] has it
+/// read one subscription's streams at once, a server's cached profile goes
 /// out as a [HostProfileChanged] when a [Connect] or [Subscribe] first
 /// names it (03 §6.1, D59), [ImportSshConfig] gets
 /// [CatalogReplaced] and [SshConfigImported], [Connect], [Disconnect] and
 /// [SetAppActivity] go to the link supervisor and [AnswerPrompt] to the
-/// prompt broker (03 §5.1), [OpenLogStream] and [CloseStream] go to the
-/// log streams, which read each window over its server's link (03 §5.2,
-/// §7.6), [EnrollSync] and [RunSyncRound] run pull-only sync one at a
-/// time beside the request queue (03 §4.3, D63), answered by
-/// [SyncStatus] and, when they succeed, the fleet, [AnswerKeystore]
-/// completes the keystore call it names ahead of the queue, [Shutdown]
-/// ends every log stream and exits, and every other 03 §10.1 row gets
-/// [RequestRejected] until its milestone lands.
+/// prompt broker (03 §5.1), a [Connect] to a fleet server without a
+/// config gets [ConnectRejected] (D61), [OpenLogStream] and
+/// [CloseStream] go to the log streams, which read each window over its
+/// server's link (03 §5.2, §7.6), [EnrollSync] and [RunSyncRound] run
+/// pull-only sync one at a time beside the request queue (03 §4.3, D63),
+/// answered by [SyncStatus] and, when they succeed, the fleet,
+/// [AnswerKeystore] completes the keystore call it names ahead of the
+/// queue, [Shutdown] ends every log stream and exits, and every other
+/// 03 §10.1 row gets [RequestRejected] until its milestone lands.
 ///
 /// [dial] replaces `SshLink.connect`, so tests can run the engine's links
 /// without a network, and [syncTransport] the sync server's HTTP client.
@@ -146,21 +145,6 @@ void engineMain(
   var fleetIds = <String>{};
   List<FleetEntry> fleetEntries() => [...synced, ...fleet.entries];
 
-  // The engine's one host-key store, shared by its links and the sync
-  // coordinator, since two over one file would each write back their own
-  // pins (03 §4.10, D63): `host_keys.json` while this process holds the
-  // support directory alone, and pins in memory otherwise, as an
-  // unguarded engine writes nothing (D59).
-  final ConflictAwareHostKeyStore hostKeys =
-      start.supportDirectoryAccess == SupportDirectoryAccess.exclusive
-      ? FileHostKeyStore(
-          File(
-            '${start.supportDirectory}${Platform.pathSeparator}'
-            '$hostKeysFileName',
-          ),
-        )
-      : InMemoryConflictAwareHostKeyStore();
-
   // The OS keystore, which the app answers (D62), and pull-only sync,
   // opened with the import store.
   final keystore = ChannelSyncKeystore(uiPort.send);
@@ -169,6 +153,17 @@ void engineMain(
   // What the engine asks the user while it connects, keyed by prompt id
   // (03 §10.1).
   final prompts = PromptBroker(emit: uiPort.send);
+
+  // The host-key pins (03 §4.6, D61): `host_keys.json` while the process
+  // holds the support directory alone, otherwise that file's pins read
+  // once and kept in memory. One store for the engine's lifetime (P14),
+  // shared by its links and the sync coordinator (D63), since two over one
+  // file would each write back their own pins. Opening it reads nothing;
+  // the first connect or sync operation loads the file.
+  final hostKeys = openHostKeyPins(
+    start.supportDirectory,
+    access: start.supportDirectoryAccess,
+  );
 
   // One link per server (03 §5.1, §5.12), dialed through the connector.
   // None while links are off, so nothing in the engine can dial. Pins go
@@ -319,14 +314,24 @@ void engineMain(
       case Connect(:final serverId):
         sendCachedProfile(serverId);
         // The app sends it when the user opens the server (03 §10.1), so
-        // the connect may prompt.
+        // the connect may prompt, and to a server a changed host key
+        // blocked it reviews the key (D61).
         if (links == null) {
           reject(message, 'links are off in this engine');
         } else if (!links.connect(
           serverId,
           purpose: ConnectPurpose.interactive,
         )) {
-          reject(message, 'no fleet server $serverId the engine can dial');
+          // A fleet server without a config is the user's to fix, so the
+          // app is told why; any other id is not a server it lists.
+          switch (fleetIds.contains(serverId)
+              ? fleet.missingConfigReason(serverId)
+              : null) {
+            case final reason?:
+              uiPort.send(ConnectRejected(serverId, reason));
+            case null:
+              reject(message, 'no fleet server $serverId the engine can dial');
+          }
         }
       case Disconnect(:final serverId):
         // Its streams end before its link closes, so none reports
@@ -353,6 +358,10 @@ void engineMain(
       case Unsubscribe(:final serverId):
         sampling.unsubscribe(message);
         scheduler?.update(serverId);
+      case RefreshSubscription(:final serverId, :final subscriptionId):
+        if (sampling.streamsOf(serverId, subscriptionId) case final streams?) {
+          scheduler?.refresh(serverId, streams);
+        }
       case SetCadenceProfile(:final profile):
         sampling.profile = profile;
         scheduler?.profileChanged();

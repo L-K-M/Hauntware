@@ -113,6 +113,7 @@ final class _Call {
   _Call(
     this.serverId,
     this.purpose,
+    this.changedKey,
     this.onPhase,
     this.onDialing,
     this.abandoned,
@@ -122,11 +123,15 @@ final class _Call {
 
   final String serverId;
   final ConnectPurpose purpose;
+  final ChangedHostKey changedKey;
   final void Function(LinkStatus phase)? onPhase;
   final void Function()? onDialing;
   final Future<void>? abandoned;
   final _result = Completer<LinkConnectResult>();
   bool wasAbandoned = false;
+
+  void block(LinkBlockedReason reason) =>
+      _result.complete(LinkConnectBlocked(reason, Exception('blocked')));
 
   void fail(LinkFailureKind? failure) => _result.complete(
     LinkConnectFailed(Exception('failed'), failure: failure),
@@ -170,11 +175,26 @@ void main() {
     BackgroundLinkPolicy policy = BackgroundLinkPolicy.keepOpen,
     double random = 0,
   }) => LinkSupervisor(
-    connect: (config, {required purpose, onPhase, onDialing, abandoned}) {
-      final call = _Call(config.id, purpose, onPhase, onDialing, abandoned);
-      calls.add(call);
-      return call._result.future;
-    },
+    connect:
+        (
+          config, {
+          required purpose,
+          required changedKey,
+          onPhase,
+          onDialing,
+          abandoned,
+        }) {
+          final call = _Call(
+            config.id,
+            purpose,
+            changedKey,
+            onPhase,
+            onDialing,
+            abandoned,
+          );
+          calls.add(call);
+          return call._result.future;
+        },
     configFor: (id) =>
         id.startsWith('s') && !gone.contains(id) ? _config(id) : null,
     emit: events.add,
@@ -349,8 +369,11 @@ void main() {
     null,
     LinkFailureKind.authenticationRejected,
     LinkFailureKind.credentialUnavailable,
+    LinkFailureKind.keyPassphraseRequired,
+    LinkFailureKind.keyFileHiddenBySandbox,
     LinkFailureKind.hostKeyDeclined,
     LinkFailureKind.unsupportedAlgorithm,
+    LinkFailureKind.insecureAlgorithmsOnly,
     LinkFailureKind.keyExchangeTimedOut,
   ]) {
     test('${failure?.name ?? 'an unclassified failure'} waits for an '
@@ -370,19 +393,115 @@ void main() {
     });
   }
 
-  test('a changed host key blocks the server', () async {
+  group('a changed host key (D61)', () {
+    const blocked = LinkBlocked(LinkBlockedReason.hostKeyChanged);
+
+    setUp(() async {
+      supervisor.connect('s1', purpose: _interactive);
+      expect(calls.single.changedKey, ChangedHostKey.block);
+      calls.single.block(LinkBlockedReason.hostKeyChanged);
+      await clock.elapse(const Duration(minutes: 5));
+    });
+
+    test('blocks the server: nothing unattended dials', () async {
+      supervisor.connect('s1', purpose: _background);
+      supervisor.setActivity(AppActivity.background);
+      supervisor.setActivity(AppActivity.foreground);
+      await clock.elapse(const Duration(minutes: 5));
+
+      expect(calls, hasLength(1));
+      expect(statuses().last, blocked);
+    });
+
+    test('the user\'s next connect reviews the key, and trusting it '
+        'connects', () async {
+      supervisor.connect('s1', purpose: _interactive);
+      expect(calls, hasLength(2));
+      expect(
+        (calls.last.purpose, calls.last.changedKey),
+        (_interactive, ChangedHostKey.review),
+      );
+      expect(statuses().last, const LinkConnecting());
+
+      calls.last.succeed();
+      await clock.elapse(Duration.zero);
+      expect(statuses().last, const LinkReady());
+
+      // The block is gone: the link is held like any other.
+      supervisor.connect('s1', purpose: _interactive);
+      expect(calls, hasLength(2));
+    });
+
+    test('a declined review blocks again, and only the next user connect '
+        'reviews again', () async {
+      supervisor.connect('s1', purpose: _interactive);
+      calls.last.block(LinkBlockedReason.hostKeyChanged);
+      await clock.elapse(Duration.zero);
+      expect(statuses().last, blocked);
+
+      supervisor.connect('s1', purpose: _background);
+      expect(calls, hasLength(2));
+      supervisor.connect('s1', purpose: _interactive);
+      expect(calls, hasLength(3));
+      expect(calls.last.changedKey, ChangedHostKey.review);
+    });
+
+    test('a review given up undecided keeps the block', () async {
+      supervisor.connect('s1', purpose: _interactive);
+      final review = calls.last;
+      supervisor.disconnect('s1');
+      await clock.elapse(Duration.zero);
+
+      expect(review.wasAbandoned, isTrue);
+      expect(statuses().last, blocked);
+      supervisor.connect('s1', purpose: _background);
+      expect(calls, hasLength(2));
+    });
+
+    test('a review given up after trusting the key leaves no block', () async {
+      supervisor.connect('s1', purpose: _interactive);
+      final review = calls.last..onPhase!(const LinkAuthenticating());
+      supervisor.disconnect('s1');
+      await clock.elapse(Duration.zero);
+
+      expect(statuses().last, const LinkClosed(LinkClosedReason.closedByOwner));
+      // The given-up dial returns before the next one starts.
+      review.fail(LinkFailureKind.unreachable);
+      await clock.elapse(Duration.zero);
+      supervisor.connect('s1', purpose: _background);
+      await clock.elapse(const Duration(seconds: 5));
+      expect(calls, hasLength(3));
+      expect(
+        (calls.last.purpose, calls.last.changedKey),
+        (_background, ChangedHostKey.block),
+      );
+    });
+
+    test('a review that fails otherwise follows the usual rules', () async {
+      supervisor.connect('s1', purpose: _interactive);
+      calls.last.fail(LinkFailureKind.unreachable);
+      await clock.elapse(Duration.zero);
+      expect(statuses().last, isA<LinkBackoff>());
+
+      // The redial is unattended, so the still-changed key blocks it.
+      await clock.elapse(const Duration(seconds: 1));
+      expect(
+        (calls.last.purpose, calls.last.changedKey),
+        (_background, ChangedHostKey.block),
+      );
+    });
+  });
+
+  test('a changed endpoint stays blocked on the user\'s connect', () async {
     supervisor.connect('s1', purpose: _interactive);
-    calls.last._result.complete(
-      LinkConnectBlocked(LinkBlockedReason.hostKeyChanged, Exception('key')),
-    );
-    await clock.elapse(const Duration(minutes: 5));
+    calls.single.block(LinkBlockedReason.endpointChanged);
+    await clock.elapse(Duration.zero);
     supervisor.connect('s1', purpose: _interactive);
-    supervisor.disconnect('s1');
 
     expect(calls, hasLength(1));
     expect(
       statuses().last,
-      const LinkBlocked(LinkBlockedReason.hostKeyChanged),
+      const LinkBlocked(LinkBlockedReason.endpointChanged),
     );
   });
 
@@ -713,6 +832,20 @@ void main() {
 
       expect(calls, hasLength(1));
       expect(statuses().last, _failed(LinkFailureKind.unsupportedAlgorithm));
+    });
+
+    // No prompt asks for a passphrase until K45b, so the user's attempt
+    // would fail the same way.
+    test('does not take over a key that needs a passphrase, and nothing '
+        'redials it', () async {
+      await askDuringDial();
+      calls.single.fail(LinkFailureKind.keyPassphraseRequired);
+      await clock.elapse(const Duration(minutes: 5));
+      supervisor.connect('s1', purpose: _background);
+      await clock.elapse(const Duration(minutes: 5));
+
+      expect(calls, hasLength(1));
+      expect(statuses().last, _failed(LinkFailureKind.keyPassphraseRequired));
     });
 
     test('ends when that dial is given up', () async {

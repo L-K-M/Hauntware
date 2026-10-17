@@ -46,7 +46,8 @@ import 'sync_verdict_files.dart';
 const PushPolicy engineSyncPushPolicy = PushPolicy.none;
 
 /// The catalog library's files under the support directory (03 §4.10).
-const String hostKeysFileName = 'host_keys.json';
+/// `host_keys.json` is not among them: the engine opens its one host-key
+/// store with `openHostKeyPins` and hands it in (D61, D63).
 const String _syncRecordsFileName = 'sync_records.json';
 const String _serversFileName = 'servers.json';
 const String _vaultFileName = 'vault.json';

@@ -23,6 +23,12 @@ const int kSessionRingCapacity = 300;
 /// freshness in seconds ("updated 4 s ago").
 const Duration kFreshnessTick = Duration(seconds: 1);
 
+/// The longest a refresh waits for its readings (PLT-02) [E]: a slow
+/// sampler's reply on a slow link comes well within it, and a hung `df`
+/// does not keep the pull indicator spinning. The panel's freshness line
+/// keeps telling a reading's age after it.
+const Duration kRefreshWait = Duration(seconds: 10);
+
 /// The streams whose readings feed [MetricSeries] rings.
 const Set<SampleStream> _ringStreams = {
   SampleStream.overview,
@@ -154,6 +160,9 @@ final class MonitoringController extends ChangeNotifier {
 
   final Map<String, _ServerReadings> _readings = {};
 
+  /// The refreshes waiting for their readings.
+  final Set<_PendingRefresh> _refreshes = {};
+
   /// The fleet's ids from the last [CatalogReplaced] this controller saw.
   /// The engine's startup fleet goes to the fleet controller, its client's
   /// first listener (`main.dart`), so this is null until the next import;
@@ -182,6 +191,9 @@ final class MonitoringController extends ChangeNotifier {
   DateTime? _backgroundSince;
   Set<String> _pausedServers = {};
   final ValueNotifier<BackgroundPause?> _backgroundPause = ValueNotifier(null);
+
+  final ValueNotifier<Map<String, ConnectRejectedReason>> _connectRejections =
+      ValueNotifier(const {});
 
   /// The latest sample of [serverId]'s [stream]. A surface listens to this
   /// one box instead of the whole controller.
@@ -238,6 +250,15 @@ final class MonitoringController extends ChangeNotifier {
   ValueListenable<BackgroundPause?> get backgroundPause => _backgroundPause;
 
   void dismissBackgroundPause() => _backgroundPause.value = null;
+
+  /// Why the engine could not connect each server whose last [Connect] it
+  /// rejected with [ConnectRejected] (D61): it has no config to dial with
+  /// until the user imports their SSH config again. Only servers a view
+  /// holds are kept. A server's entry goes when this controller sends its
+  /// next [Connect], which the next fleet does for each one it still
+  /// lists, since that fleet may give it a config.
+  ValueListenable<Map<String, ConnectRejectedReason>> get connectRejections =>
+      _connectRejections;
 
   /// The freshness clock: this device's time, notifying every
   /// [kFreshnessTick] while anything listens, so an age keeps counting
@@ -297,6 +318,35 @@ final class MonitoringController extends ChangeNotifier {
     _send(Unsubscribe(serverId: serverId, subscriptionId: subscriptionId));
   }
 
+  /// Asks the engine to read the streams of [serverId]'s subscription
+  /// [subscriptionId] at once (PLT-02's pull to refresh). Completes once
+  /// each has a newer sample, failed readings included, once the server
+  /// stops sampling, or after [kRefreshWait]; at once when the engine is
+  /// not sampling the server, as while links are off or the link is down,
+  /// since no reading would come.
+  Future<void> refresh(String serverId, String subscriptionId) {
+    final streams = _subscribed[(serverId, subscriptionId)];
+    if (streams == null || !_listed(serverId)) return Future.value();
+
+    _send(
+      RefreshSubscription(serverId: serverId, subscriptionId: subscriptionId),
+    );
+    final readings = _readings[serverId];
+    if (_engineStopped ||
+        readings == null ||
+        readings.sampling.value?.state.phase != SamplingPhase.sampling) {
+      return Future.value();
+    }
+    final refresh = _PendingRefresh(
+      serverId,
+      readings,
+      streams,
+      _refreshes.remove,
+    );
+    _refreshes.add(refresh);
+    return refresh.done;
+  }
+
   /// Whether the fleet lists [serverId]. The engine holds no link or
   /// subscription for a server it does not list (03 §5.1).
   bool _listed(String serverId) => _fleetIds?.contains(serverId) ?? true;
@@ -340,10 +390,12 @@ final class MonitoringController extends ChangeNotifier {
   /// screen). The first sends [Connect]; within the grace after the last
   /// leave the link is still held and nothing is sent.
   ///
-  /// An engine with links off, as the app spawns it until they are ready,
-  /// answers [Connect] with [RequestRejected], which this controller
-  /// ignores like every event it does not consume: the views stay as they
-  /// are and show no error.
+  /// A server the engine has no config for gets [ConnectRejected], which
+  /// [connectRejections] keeps for the views to show. An engine with links
+  /// off, as the app spawns it until they are ready, answers [Connect]
+  /// with [RequestRejected] before it looks for a config, which this
+  /// controller ignores like every event it does not consume: the views
+  /// stay as they are and show no error.
   void openServer(String serverId) {
     final views = _openViews[serverId] ?? 0;
     _openViews[serverId] = views + 1;
@@ -354,7 +406,7 @@ final class MonitoringController extends ChangeNotifier {
       leaving.cancel();
       return;
     }
-    if (_listed(serverId)) _send(Connect(serverId));
+    if (_listed(serverId)) _connect(serverId);
   }
 
   /// A view [openServer] counted closed. The last sends [Disconnect] once
@@ -370,6 +422,7 @@ final class MonitoringController extends ChangeNotifier {
 
     _openViews.remove(serverId);
     _forgetPause(serverId);
+    _forgetRejection(serverId);
     // A stopped engine (or a disposed controller) holds no link, nor does
     // the engine hold one for a server the fleet no longer lists, so no
     // grace timer waits to disconnect it.
@@ -433,6 +486,21 @@ final class MonitoringController extends ChangeNotifier {
         : BackgroundPause(start: pause.start, end: pause.end, serverIds: rest);
   }
 
+  /// Sends [Connect] for [serverId], whose earlier rejection the answer
+  /// replaces.
+  void _connect(String serverId) {
+    _forgetRejection(serverId);
+    _send(Connect(serverId));
+  }
+
+  void _forgetRejection(String serverId) {
+    final rejections = _connectRejections.value;
+    if (!rejections.containsKey(serverId)) return;
+    _connectRejections.value = Map.unmodifiable(
+      {...rejections}..remove(serverId),
+    );
+  }
+
   /// Sends [request] unless the engine has stopped: views and surfaces let
   /// go as the app closes, and a stopped engine has nothing to hear.
   void _send(EngineRequest request) {
@@ -456,7 +524,29 @@ final class MonitoringController extends ChangeNotifier {
         if (_fleetIds case final ids? when !ids.contains(serverId)) return;
         _server(serverId).profile.value = profile;
       case CatalogReplaced(:final entries):
-        _replaceFleet({for (final entry in entries) entry.serverId});
+        final fleetIds = {for (final entry in entries) entry.serverId};
+        final rejected = _connectRejections.value.keys.toList();
+        _replaceFleet(fleetIds);
+        // A new fleet may give a rejected server a config, so its views
+        // connect again; one that still has none is rejected again. One
+        // that left the fleet takes its rejection with it. Cleared first,
+        // so listeners hear one change rather than one per server.
+        if (rejected.isNotEmpty) _connectRejections.value = const {};
+        for (final serverId in rejected) {
+          if (fleetIds.contains(serverId) && _openViews.containsKey(serverId)) {
+            _connect(serverId);
+          }
+        }
+      case ConnectRejected(:final serverId, :final reason):
+        // Only for a server a view still holds: one whose views all left
+        // has nothing to show it on. One answered after its server left
+        // the fleet stays purged, as a sample does.
+        if (!_openViews.containsKey(serverId)) return;
+        if (_fleetIds case final ids? when !ids.contains(serverId)) return;
+        _connectRejections.value = Map.unmodifiable({
+          ..._connectRejections.value,
+          serverId: reason,
+        });
       case SamplingState(:final serverId):
         // As for a sample: a server that left the fleet stays purged.
         if (_fleetIds case final ids? when !ids.contains(serverId)) return;
@@ -491,6 +581,9 @@ final class MonitoringController extends ChangeNotifier {
   void _replaceFleet(Set<String> fleetIds) {
     final before = _fleetIds;
     _fleetIds = fleetIds;
+    for (final refresh in _refreshes.toList()) {
+      if (!fleetIds.contains(refresh.serverId)) refresh.finish();
+    }
     _readings.removeWhere((serverId, readings) {
       if (fleetIds.contains(serverId)) return false;
       readings.dispose();
@@ -505,7 +598,7 @@ final class MonitoringController extends ChangeNotifier {
     // Until the first fleet this controller saw, every server was listed.
     if (before == null) return;
     for (final serverId in fleetIds.difference(before)) {
-      if (_openViews.containsKey(serverId)) _send(Connect(serverId));
+      if (_openViews.containsKey(serverId)) _connect(serverId);
       for (final MapEntry(key: (id, subscriptionId), value: streams)
           in _subscribed.entries) {
         if (id != serverId) continue;
@@ -536,6 +629,9 @@ final class MonitoringController extends ChangeNotifier {
     unawaited(_events.cancel());
     logs.dispose();
     _onEngineDone();
+    for (final refresh in _refreshes.toList()) {
+      refresh.finish();
+    }
     for (final readings in _readings.values) {
       readings.dispose();
     }
@@ -543,7 +639,60 @@ final class MonitoringController extends ChangeNotifier {
     _readings.clear();
     _clock.dispose();
     _backgroundPause.dispose();
+    _connectRejections.dispose();
     super.dispose();
+  }
+}
+
+/// A [MonitoringController.refresh] waiting for a newer sample of each of
+/// its streams, while the server samples, for at most [kRefreshWait].
+final class _PendingRefresh {
+  _PendingRefresh(
+    this.serverId,
+    this._readings,
+    Set<SampleStream> streams,
+    this._onDone,
+  ) : _before = {
+        for (final stream in streams) stream: _readings.box(stream).value?.seq,
+      } {
+    for (final stream in _before.keys) {
+      _readings.box(stream).addListener(_check);
+    }
+    _readings.sampling.addListener(_check);
+    _timer = Timer(kRefreshWait, finish);
+  }
+
+  final String serverId;
+  final _ServerReadings _readings;
+
+  /// Each stream's latest seq when the refresh went out.
+  final Map<SampleStream, int?> _before;
+  final void Function(_PendingRefresh refresh) _onDone;
+  final Completer<void> _done = Completer();
+  late final Timer _timer;
+
+  Future<void> get done => _done.future;
+
+  void _check() {
+    final sampling =
+        _readings.sampling.value?.state.phase == SamplingPhase.sampling;
+    final read = _before.entries.every((entry) {
+      final seq = _readings.box(entry.key).value?.seq;
+      return seq != null && seq > (entry.value ?? -1);
+    });
+    if (!sampling || read) finish();
+  }
+
+  /// Stops waiting; once only.
+  void finish() {
+    if (_done.isCompleted) return;
+    _timer.cancel();
+    for (final stream in _before.keys) {
+      _readings.box(stream).removeListener(_check);
+    }
+    _readings.sampling.removeListener(_check);
+    _onDone(this);
+    _done.complete();
   }
 }
 

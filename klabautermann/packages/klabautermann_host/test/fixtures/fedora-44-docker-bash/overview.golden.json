@@ -1,0 +1,50 @@
+{
+  "result": {
+    "cpu": {
+      "name": "cpu",
+      "jiffies": [
+        244458,
+        0,
+        56895,
+        2170242,
+        32035,
+        0,
+        10665,
+        14655,
+        0,
+        0
+      ]
+    },
+    "perCpu": {},
+    "btime": null,
+    "meminfo": {
+      "fields": {
+        "MemTotal": 16479424,
+        "MemFree": 13480356,
+        "MemAvailable": 15580396,
+        "Buffers": 110072,
+        "Cached": 1493496,
+        "SwapTotal": 0,
+        "SwapFree": 0,
+        "Shmem": 14680,
+        "SReclaimable": 823840
+      }
+    },
+    "loadavg": {
+      "load1": 4.07,
+      "load5": 1.95,
+      "load15": 1.19,
+      "running": 1,
+      "total": 161,
+      "lastPid": 17
+    },
+    "netdev": [
+      {
+        "name": "eth0",
+        "rxBytes": 0,
+        "txBytes": 42
+      }
+    ]
+  },
+  "warnings": []
+}

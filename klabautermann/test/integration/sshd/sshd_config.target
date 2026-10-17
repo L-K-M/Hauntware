@@ -1,0 +1,3 @@
+# The host the engine samples, directly and behind the jump host. It keeps
+# the common config's AllowTcpForwarding no.
+Include /etc/ssh/fixture/sshd_config.common

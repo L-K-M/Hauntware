@@ -19,6 +19,7 @@ import 'package:seance_core/seance_core.dart'
         ResolvedSshHost,
         ServerConfig,
         SshConnectException,
+        SshConnectFailureKind,
         SshConnectionLog,
         SshCredentials,
         SshJumpHostResolver,
@@ -45,6 +46,7 @@ ServerConfig _server({
   String id = 'ssh-config:web',
   String host = '192.0.2.10',
   int port = 22,
+  String username = 'me',
   AuthMethod authMethod = AuthMethod.agent,
   String? identityFilePath,
   String? jumpHostId,
@@ -53,7 +55,7 @@ ServerConfig _server({
   label: id,
   host: host,
   port: port,
-  username: 'me',
+  username: username,
   authMethod: authMethod,
   identityFilePath: identityFilePath,
   jumpHostId: jumpHostId,
@@ -82,8 +84,10 @@ KeyboardInteractiveChallenge _challenge(List<String> questions) =>
       instruction: '',
     );
 
-SshConnectException _connectError(Object cause) =>
-    SshConnectException('failed', cause, SshConnectionLog());
+SshConnectException _connectError(
+  Object cause, {
+  SshConnectFailureKind kind = SshConnectFailureKind.other,
+}) => SshConnectException('failed', cause, SshConnectionLog(), kind: kind);
 
 LinkFailureKind? _failure(LinkConnectResult result) =>
     (result as LinkConnectFailed).failure;
@@ -112,10 +116,11 @@ void main() {
   LinkConnector connector({
     bool realDial = false,
     ServerConfig? Function(String id)? hopConfig,
+    Map<String, String> environment = const {},
   }) => LinkConnector(
     credentials: EngineCredentialSource(
       identityAuditLogIn(temp.path),
-      environment: {'HOME': temp.path},
+      environment: {'HOME': temp.path, ...environment},
       isMacOS: false,
     ),
     hostKeys: pins,
@@ -147,13 +152,16 @@ void main() {
   Future<LinkConnectResult> connect({
     ServerConfig? server,
     ConnectPurpose purpose = ConnectPurpose.background,
+    ChangedHostKey changedKey = ChangedHostKey.block,
     bool realDial = false,
+    Map<String, String> environment = const {},
     void Function(LinkStatus phase)? onPhase,
     void Function()? onDialing,
     Future<void>? abandoned,
-  }) => connector(realDial: realDial).connect(
+  }) => connector(realDial: realDial, environment: environment).connect(
     server ?? _server(),
     purpose: purpose,
+    changedKey: changedKey,
     onPhase: onPhase,
     onDialing: onDialing,
     abandoned: abandoned,
@@ -214,6 +222,89 @@ void main() {
     expect(events, isEmpty);
   });
 
+  group('a review of a changed key (D61)', () {
+    final changed = HostKey(
+      host: '192.0.2.10',
+      type: 'ecdsa-sha2-nistp256',
+      fingerprintSha256: 'SHA256:new',
+      pinnedAt: 0,
+    );
+
+    setUp(() async {
+      await pins.put(_key('192.0.2.10'));
+      presenting(changed);
+    });
+
+    test('asks with the pinned key beside the presented one, and trusting '
+        'it re-pins', () async {
+      final result = connect(
+        purpose: ConnectPurpose.interactive,
+        changedKey: ChangedHostKey.review,
+      );
+      final prompt = await answerNext(const PromptTrustAnswer(true));
+
+      expect(await result, isA<LinkConnected>());
+      final request = prompt.request as HostKeyPromptRequest;
+      expect(
+        (
+          request.keyType,
+          request.fingerprintSha256,
+          request.pinnedKeyType,
+          request.pinnedFingerprintSha256,
+        ),
+        ('ecdsa-sha2-nistp256', 'SHA256:new', 'ssh-ed25519', 'SHA256:first'),
+      );
+      expect(
+        (await pins.get('192.0.2.10', 22))?.fingerprintSha256,
+        'SHA256:new',
+      );
+    });
+
+    test('a declined review blocks again and keeps the pin', () async {
+      final result = connect(
+        purpose: ConnectPurpose.interactive,
+        changedKey: ChangedHostKey.review,
+      );
+      await answerNext(const PromptTrustAnswer(false));
+
+      expect(
+        (await result as LinkConnectBlocked).reason,
+        LinkBlockedReason.hostKeyChanged,
+      );
+      expect(
+        (await pins.get('192.0.2.10', 22))?.fingerprintSha256,
+        'SHA256:first',
+      );
+    });
+
+    test('an unattended connect never asks, even as a review', () async {
+      final result = await connect(changedKey: ChangedHostKey.review);
+
+      expect(
+        (result as LinkConnectBlocked).reason,
+        LinkBlockedReason.hostKeyChanged,
+      );
+      expect(events, isEmpty);
+    });
+
+    test('a first-seen key asks without a pinned key', () async {
+      presenting(_key('198.51.100.1'));
+
+      final result = connect(
+        purpose: ConnectPurpose.interactive,
+        changedKey: ChangedHostKey.review,
+      );
+      final prompt = await answerNext(const PromptTrustAnswer(true));
+
+      expect(await result, isA<LinkConnected>());
+      final request = prompt.request as HostKeyPromptRequest;
+      expect(
+        (request.pinnedFingerprintSha256, request.pinnedKeyType),
+        (null, null),
+      );
+    });
+  });
+
   group('an interactive connect', () {
     test('asks about a first-seen key and pins it when trusted', () async {
       presenting(_key('198.51.100.1'));
@@ -226,10 +317,9 @@ void main() {
         (prompt.serverId, prompt.host),
         ('ssh-config:web', '198.51.100.1'),
       );
-      expect(
-        (prompt.request as HostKeyPromptRequest).fingerprintSha256,
-        'SHA256:first',
-      );
+      final request = prompt.request as HostKeyPromptRequest;
+      expect(request.fingerprintSha256, 'SHA256:first');
+      expect(request.pinnedFingerprintSha256, isNull, reason: 'first seen');
       expect(await pins.get('198.51.100.1', 22), isNotNull);
     });
 
@@ -263,7 +353,11 @@ void main() {
         onDial = (dial) async {
           responses = await dial.onKeyboardInteractive!(
             KeyboardInteractiveChallenge(
-              server: _server(host: '198.51.100.7', port: 2222),
+              server: _server(
+                host: '198.51.100.7',
+                port: 2222,
+                username: 'jump',
+              ),
               prompts: ['Code:'],
               name: 'otp',
               instruction: 'Enter the code',
@@ -281,6 +375,8 @@ void main() {
         expect(responses, ['123456']);
         expect((prompt.host, prompt.port), ('198.51.100.7', 2222));
         final request = prompt.request as KeyboardInteractivePromptRequest;
+        // The asking machine's own user, not the server's.
+        expect(request.user, 'jump');
         expect((request.name, request.instruction), ('otp', 'Enter the code'));
         expect(request.questions, ['Code:']);
       },
@@ -316,6 +412,41 @@ void main() {
 
       expect(responses, isEmpty);
       expect(events.last, isA<PromptWithdrawn>());
+    });
+
+    test('fails as cancelled at once when the user declines the '
+        'questions', () async {
+      late List<String> responses;
+      // dartssh2 closes the connection on a count other than the
+      // question count, so the dial fails.
+      onDial = (dial) async {
+        responses = await dial.onKeyboardInteractive!(_challenge(['Code:']));
+        if (responses.isEmpty) throw _connectError(Exception('count'));
+        return _FakeLink();
+      };
+
+      final result = connect(purpose: ConnectPurpose.interactive);
+      await answerNext(const PromptCancelAnswer());
+
+      expect(
+        _failure(await result),
+        LinkFailureKind.keyboardInteractiveCancelled,
+      );
+      expect(responses, isEmpty);
+      // Answered: nothing was left to withdraw.
+      expect(events.single, isA<Prompt>());
+    });
+
+    test('an expired challenge is no cancel', () async {
+      broker = PromptBroker(emit: events.add, expiry: Duration.zero);
+      onDial = (dial) async {
+        await dial.onKeyboardInteractive!(_challenge(['Code:']));
+        throw _connectError(Exception('count'));
+      };
+
+      final result = await connect(purpose: ConnectPurpose.interactive);
+
+      expect(_failure(result), isNull);
     });
 
     test('withdraws prompts still open when the attempt ends', () async {
@@ -548,6 +679,48 @@ void main() {
         IdentityFileFailure.notFound,
       );
     });
+
+    group('inside the Flatpak sandbox', () {
+      const flatpak = {'FLATPAK_ID': 'ch.lkmc.klabautermann'};
+
+      test('a key file it hides is its own failure', () async {
+        final result = await connect(
+          server: _server(
+            authMethod: AuthMethod.privateKey,
+            identityFilePath: '~/.ssh/id_ed25519',
+          ),
+          environment: flatpak,
+        );
+
+        expect(_failure(result), LinkFailureKind.keyFileHiddenBySandbox);
+        expect(
+          (result as LinkConnectFailed).identityFile,
+          IdentityFileFailure.sandboxDenied,
+        );
+        expect(dials, isEmpty);
+      });
+
+      test('so is a hop key file it hides', () async {
+        hops['ssh-config-hop:gw'] = _keyedHop();
+        onDial = (dial) async {
+          try {
+            await dial.resolveJumpHost!('ssh-config-hop:gw');
+          } on Exception catch (error) {
+            // seance_core types a resolver error as other; its cause says
+            // what failed.
+            throw _connectError(error);
+          }
+          return _FakeLink();
+        };
+
+        final result = await connect(
+          server: _server(jumpHostId: 'ssh-config-hop:gw'),
+          environment: flatpak,
+        );
+
+        expect(_failure(result), LinkFailureKind.keyFileHiddenBySandbox);
+      });
+    });
   });
 
   test('an ssh_config import reaches the dial through the store and '
@@ -629,17 +802,119 @@ Host gw
         LinkFailureKind.timedOut,
       ),
       (
+        'a connect timeout from Darwin',
+        const SocketException('timed out', osError: OSError('', 60)),
+        LinkFailureKind.timedOut,
+      ),
+      (
         'a handshake timeout',
         TimeoutException('handshake'),
         LinkFailureKind.timedOut,
       ),
       ('anything else', Exception('auth failed'), null),
     ]) {
-      test('$name is ${kind?.name ?? 'not classified'}', () async {
+      test('untyped, $name is ${kind?.name ?? 'not classified'}', () async {
         onDial = (_) async => throw _connectError(cause);
 
         expect(_failure(await connect()), kind);
       });
     }
+
+    group('a typed connect failure', () {
+      // Each cause alone would classify otherwise, or not at all, so only
+      // the kind can give the expected failure.
+      const refused = SocketException('Connection refused');
+      final typed = <SshConnectFailureKind, (Object, LinkFailureKind?)>{
+        SshConnectFailureKind.unreachable: (
+          TimeoutException('connect'),
+          LinkFailureKind.unreachable,
+        ),
+        SshConnectFailureKind.timedOut: (refused, LinkFailureKind.timedOut),
+        SshConnectFailureKind.routeInvalid: (refused, null),
+        SshConnectFailureKind.keyPassphraseRequired: (
+          refused,
+          LinkFailureKind.keyPassphraseRequired,
+        ),
+        SshConnectFailureKind.keyPassphraseWrong: (
+          refused,
+          LinkFailureKind.keyPassphraseRequired,
+        ),
+        SshConnectFailureKind.keyUnreadable: (
+          refused,
+          LinkFailureKind.credentialUnavailable,
+        ),
+        SshConnectFailureKind.agentEmpty: (
+          refused,
+          LinkFailureKind.credentialUnavailable,
+        ),
+        SshConnectFailureKind.authenticationRejected: (
+          refused,
+          LinkFailureKind.authenticationRejected,
+        ),
+        SshConnectFailureKind.hostKeyRefused: (refused, null),
+        SshConnectFailureKind.unsupportedAlgorithm: (
+          refused,
+          LinkFailureKind.unsupportedAlgorithm,
+        ),
+        SshConnectFailureKind.insecureAlgorithmsOnly: (
+          refused,
+          LinkFailureKind.insecureAlgorithmsOnly,
+        ),
+        SshConnectFailureKind.keyExchangeTimedOut: (
+          refused,
+          LinkFailureKind.keyExchangeTimedOut,
+        ),
+      };
+
+      test('covers every kind but other', () {
+        expect(
+          typed.keys.toSet(),
+          SshConnectFailureKind.values.toSet()
+            ..remove(SshConnectFailureKind.other),
+        );
+      });
+
+      for (final MapEntry(key: kind, value: (cause, failure))
+          in typed.entries) {
+        test('${kind.name} is ${failure?.name ?? 'not classified'}, '
+            'whatever its cause', () async {
+          onDial = (_) async => throw _connectError(cause, kind: kind);
+
+          expect(_failure(await connect()), failure);
+        });
+      }
+
+      test('a host key the attempt declined keeps its verdict', () async {
+        onDial = (dial) async {
+          final decision = await dial.tofu.check(_key('192.0.2.10'));
+          await dial.onHostKey(decision);
+          throw _connectError(
+            Exception('host key'),
+            kind: SshConnectFailureKind.hostKeyRefused,
+          );
+        };
+
+        expect(_failure(await connect()), LinkFailureKind.hostKeyDeclined);
+      });
+
+      test('a key file that holds no key fails before dialing, through the '
+          'real SshLink', () async {
+        final key = File('${temp.path}/.ssh/id_ed25519');
+        await key.create(recursive: true);
+        await key.writeAsString('not a key');
+
+        final result = await connect(
+          // A documentation address: the key is read before any socket.
+          server: _server(
+            authMethod: AuthMethod.privateKey,
+            identityFilePath: '~/.ssh/id_ed25519',
+          ),
+          realDial: true,
+        );
+
+        expect(_failure(result), LinkFailureKind.credentialUnavailable);
+        expect((result as LinkConnectFailed).identityFile, isNull);
+      });
+    });
   });
 }

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- When a server requires an SSH algorithm Séance does not support,
+  offers only ones Séance refuses as insecure, or drops the connection
+  during a finite-field Diffie-Hellman key exchange, the connection error
+  now says which, instead of showing the raw handshake error. For the
+  last, it suggests enabling curve25519-sha256 or an ecdh-sha2 key
+  exchange on the server.
+- When a server rejects your key or your ssh-agent keys, the connection
+  error no longer names Séance: it says "The offered key" or "The offered
+  ssh-agent keys" where it said "The key Séance offered" or "The
+  ssh-agent keys Séance offered". The advice after it is unchanged.
 - Settings › General › Built-in editor has a font field with the same
   picker as the terminal's, and a Ligatures switch. Editor tabs draw in
   JetBrains Mono with ligatures unless you choose otherwise.

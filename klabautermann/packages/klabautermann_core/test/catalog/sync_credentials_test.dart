@@ -70,15 +70,25 @@ final class _FakeKeystore implements SyncKeystore {
 final class _LoggingJournal implements VaultRekeyJournal {
   final log = <String>[];
 
+  /// Whether settling fails once a re-key is staged.
+  bool failSettlesAfterStage = false;
+  bool _staged = false;
+
   @override
   Future<void> stageRekey({
     required List<int> currentKey,
     required List<int> newKey,
-  }) async => log.add('stage ${currentKey.first}->${newKey.first}');
+  }) async {
+    log.add('stage ${currentKey.first}->${newKey.first}');
+    _staged = true;
+  }
 
   @override
   Future<VaultRekeyOutcome> settleRekey(List<int> key) async {
     log.add('settle ${key.first}');
+    if (failSettlesAfterStage && _staged) {
+      throw const FileSystemException('vault unreadable');
+    }
     return VaultRekeyOutcome.none;
   }
 }
@@ -203,6 +213,14 @@ void main() {
       expect(keystore.masterKey, _key(1));
     });
 
+    test('a recovery that fails after a refused write still reports the '
+        'write', () async {
+      keystore.failWrites = true;
+      journal.failSettlesAfterStage = true;
+      await expectLater(store.writeVaultKey(_key(2)), throwsStateError);
+      expect(journal.log, ['settle 1', 'stage 1->2', 'settle 1']);
+    });
+
     test('without a journal the key is swapped directly', () async {
       final plain = KeystoreSyncCredentialStore(keystore: keystore);
       await plain.writeVaultKey(_key(3));
@@ -294,8 +312,9 @@ final class _GoesDarkAfterWrite implements SyncKeystore {
   Future<void> writeMasterKey(List<int> key) async {
     try {
       await _inner.writeMasterKey(key);
-    } finally {
+    } on Object {
       _inner.unreadable = true;
+      rethrow;
     }
   }
 }

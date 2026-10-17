@@ -245,8 +245,10 @@ D47 sampler deadlines · D48 host-side filtering · D49 collector locale ·
 D50 LXC values · D51 Access tab · D52 runtime placement · D53 integration
 placement · D54 runtime override in M3 · D55 no health overlay in the MVP
 · D56 log search through `planchette_core` · D57 timer triggers · D58
-cron zone rules · D59 capability cache · D62 sync state files and the
-keystore port · D63 pull-only sync in the engine.
+cron zone rules · D59 capability cache · D60 threshold announcements ·
+D61 host-key pins and re-pin ·
+D62 sync state files and the keystore port · D63 pull-only sync in the
+engine.
 Proposals awaiting the owner close the section; they are not decisions.
 
 ### Shape and scope
@@ -931,6 +933,44 @@ Proposals awaiting the owner close the section; they are not decisions.
   with the cached profile (a stale container answer would withhold or
   show the wrong figures, D50, until the probe); sending cached profiles
   with the startup fleet.
+- **D61. Host-key pins persist, and the user's connect re-pins a changed
+  key.** The engine keeps one host-key store for its lifetime:
+  `seance_core`'s `FileHostKeyStore` over `host_keys.json` in the support
+  directory (4.10) when `EngineStart.supportDirectoryAccess` says the
+  process holds the directory alone, so a pin outlives the engine.
+  Without that, it reads the file's pins once and keeps them and its own
+  in memory: it writes, renames and creates nothing there, a damaged file
+  included, as the capability cache writes nothing (D59), while another
+  instance's pins still block a changed key. Two stores over one file
+  would undo each other's pins, since each loads once and then writes its
+  whole cache, so catalog sync (K49) installs pulled pins through the same
+  store. A changed key still blocks the server (4.6), and an unattended
+  connect never asks about it. Only the user's `Connect` to a server a
+  changed host key blocked starts an attempt that reviews the key:
+  `HostKeyPromptRequest` carries the pinned key's fingerprint and type
+  beside the presented key's, the app shows `ghost_servers`' changed-key
+  review (both fingerprints under the "HOST KEY CHANGED" warning), and
+  trusting it replaces the pin through `TofuVerifier.pin` and connects.
+  Declining it, letting it expire or leaving the server before deciding
+  blocks the server again. The first `Connect` after a restart blocks
+  too, so the user sees the block before any review. A `Connect` to a
+  fleet server without a config (no login name, or an address-only
+  import; 10.1) gets `ConnectRejected` with the reason, which the app
+  shows on the server's view instead of ignoring it. A lane decision
+  within the M2 plan's approved scope (its section 2), which owner
+  question O8 reopens only if the owner treats host-key policy as
+  theirs. Why: `TofuVerifier` "requires the user to explicitly re-pin"
+  (`SC/src/hostkey/tofu.dart:36-38, :61-62` [V]) and never auto-repins
+  (4.6, 8.12); once pins persist, a rekeyed server would otherwise stay
+  blocked for good, where an engine restart used to clear the in-memory
+  pins; Séance's changed-key dialog is the suite's precedent.
+  *Rejected:* a review on every interactive connect (the first connect
+  after a restart would ask before the user saw the block, so a changed
+  key would read as routine); re-pinning from an unattended connect (no
+  one to ask, 4.5); an empty in-memory store when unguarded (a second
+  instance would take every pinned server as first seen, so a
+  man-in-the-middle would meet a first-use review instead of a block);
+  writing the file without the lock (two instances race, 4.10).
 - **D62. Sync state files and the keystore port (K49a, M2).** The
   catalog library's `PinVerdictStore`, `SyncTripwireStore` and
   `SyncEnrollmentState` seams get files of their own under the support
@@ -1299,6 +1339,23 @@ Proposals awaiting the owner close the section; they are not decisions.
   viewer (10.8). *Rejected:* a search of the app's own (a second copy of
   the same rules); `planchette_editor`'s find (an editor for one text
   buffer, 10.8).
+- **D60. Threshold-band announcements are a device setting.** A11Y-15's
+  switch is `klabautermann.accessibility.announceThresholdBands` in
+  `settings.json` (4.10), on by default and never synced, since whether
+  a screen reader runs differs per device; it sits on Settings' General
+  tab, which the Overview's health card links to. While a server's
+  Overview shows and the switch is on, the screen reader hears CPU busy,
+  used memory and each listed mount's space and inode use cross into or
+  out of the warning or critical band: the fleet rows' 80 % and 90 %
+  until OV-11, since `threshold.dart` holds the rule model and no levels.
+  A change is heard once it has held for 10 s, through that model's
+  hysteresis rules with the hold as `for` on both sides, and only with a
+  value inside the new band, since each level's rule settles on its own.
+  The value is judged as the whole percent the announcement speaks, so
+  79.6 % is never "80%: back to normal"; the first reading only sets
+  where a value starts. *Rejected:* a synced preference (one device's
+  screen reader would switch another's); a clear level below each level
+  as the debounce (a threshold OV-11 has not set).
 
 ### Proposals awaiting the owner
 
@@ -1489,16 +1546,17 @@ The barrel's `klabautermann_host` export shows only the plain-data types
 that sampling results and `HostProfileChanged` carry (10.1),
 `JournalEntry` (the log viewer's journal rows, 10.8), and the access
 check over a `HostProfile` (`evaluateAccess` and its `AccessReport`,
-whose journal row drives the Logs panel's LOG-04 notice, 10.8). The
-Jobs tab (7.7) adds the jobs rows and schedule descriptions a
-`CronResult` carries, `TimerJobEntry`, which the app builds from a
-`TimersResult`'s timers, and the engine limits and names its words
-follow. The barrel's `klabautermann_docker` export shows only
-`MaskedValue`, the masked process arguments a `ProcsResult` carries
-(8.9). Each list changes only as a milestone wires a type in or retires
-one. The app's tests alone also depend on `klabautermann_host`, to
-build jobs rows with the engine's `mergeJobs`, since those rows have no
-public constructor; `depend_on_referenced_packages` keeps `lib/` from
+whose journal row drives the Logs panel's LOG-04 notice, 10.8), and the
+threshold rule model whose evaluator debounces the Overview's band
+announcements (7.19, D60). The Jobs tab (7.7) adds the jobs rows and
+schedule descriptions a `CronResult` carries, `TimerJobEntry`, which
+the app builds from a `TimersResult`'s timers, and the engine limits
+and names its words follow. The barrel's `klabautermann_docker` export
+shows only `MaskedValue`, the masked process arguments a `ProcsResult`
+carries (8.9). Each list changes only as a milestone wires a type in or
+retires one. The app's tests alone also depend on `klabautermann_host`,
+to build jobs rows with the engine's `mergeJobs`, since those rows have
+no public constructor; `depend_on_referenced_packages` keeps `lib/` from
 importing that dev dependency. No `ghost_*` package
 depends on `seance_core`; `klabautermann_core` is a product package, and
 the curated lines above are its only
@@ -1521,8 +1579,8 @@ and `engine_isolate.dart` only dispatches to them (D52). They use
 |---|---|---|
 | `klabautermann_host` | HWS/1 program text and collector fragments; frame parser; one pure parser per collector (`ParseResult<T> parseX(String raw, ParseContext ctx)`, never throws); typed snapshots; counter-to-rate maths with wrap and reboot detection; cron parser and next-run evaluation in the server time zone; command builders with validators for `systemctl`, `journalctl`, `crontab`, `df`, `ss`, package tools; threshold rule evaluator with hysteresis; T1 script templates and health-file schema (v1.x); alert format v1 model and validator, spool record schema (v1.x, D42) | Injected `CommandRunner` and `ShellChannel` interfaces (RemoteGit precedent, `SC/src/ssh/remote_git.dart`) |
 | `klabautermann_docker` | HTTP/1.1 client; NDJSON, JSON-seq and JSON Lines scanner; stdcopy demultiplexer; versioned API client with negotiation and feature gates; tolerant models; event refresher logic; compose label model, project grouping, ownership markers, compose command builders and output parsers; image digest comparison | Injected `DuplexOpener` returning a `ByteDuplex` |
-| `klabautermann_core` | Host engine: connections over `SshLink`, channel scheduling, sampler runner, followers, Docker endpoint discovery and transport selection, operation plans and runner, detached runner, admin-mode state machine over `seance_core` elevation, protected targets, masking rules, alert scheduling, history rollups and ring files, catalog adapters (monitor set, endpoint pins), audit writer, engine-isolate protocol; alert inbox client (fetch, open, validate, acknowledge, delete) over `seance_core`'s `InboxApi` and sender lifecycle (v1.x, D42) | `SshLink` and the catalog library |
-| `klabautermann_app` | Composition root, controllers, UI, ARB catalog, settings window, platform folders | `klabautermann_core` barrel only |
+| `klabautermann_core` | Host engine: connections over `SshLink`, channel scheduling, sampler runner, followers, Docker endpoint discovery and transport selection, operation plans and runner, detached runner, admin-mode state machine over `seance_core` elevation, protected targets, masking rules, alert scheduling, history rollups and ring files, catalog adapters (monitor set, endpoint pins), audit writer, engine-isolate protocol; alert inbox client (fetch, open, validate, acknowledge, delete) over `seance_core`'s `InboxApi` and sender lifecycle (v1.x, D42); in a library of its own (`replay.dart`), the fixture replay engine of the frame-timing test (11.4) | `SshLink` and the catalog library |
+| `klabautermann_app` | Composition root, controllers, UI, ARB catalog, settings window, platform folders | `klabautermann_core` barrel only; its `integration_test/` also imports `replay.dart`, test support that `lib/` never imports (11.4) |
 | `klabautermann/rust/` (Cargo, not a Dart package) | `klabautermann-inbox` (sealing under the alert domain, alert format v1, HTTPS posting), `klabautermann-notify` binary (v1.x), companion (M9) | Runs on the host; talks only to the sync server's producer endpoint |
 
 ### 3.4 Machine-enforced rules
@@ -1880,6 +1938,11 @@ re-push (c1 §2.4).
 - Verification through `TofuVerifier` (`SC/src/hostkey/tofu.dart`), which
   never auto-repins, with the pin locator `ServerConfig.host` verbatim plus
   port so pins match across apps.
+- Pins persist in `host_keys.json` (4.10) through the engine's one
+  `FileHostKeyStore` (D61). A changed key blocks the server, and
+  background connects never ask about it (4.5). Only the user's next
+  connect to the blocked server asks, showing the pinned key beside the
+  new one, and trusting it re-pins (`TofuVerifier.pin`).
 - Pulled `hostkey:` records go through the quarantine handler: installed only
   without conflict, conflicts parked behind a diff, negative pins and kept
   verdicts honoured.
@@ -2003,11 +2066,11 @@ platform identities in 04, section 12.3):
 |---|---|---|---|
 | `servers.json`, `sync_records.json` | Catalog mirror and materialized list; written by the engine's coordinator (M2, K49b, D63) only with exclusive access | catalog library | MVP |
 | `vault.json`, `vault.json.rekey` | Credentials and re-key journal | `SC/src/store/` | MVP |
-| `host_keys.json`, `pin_verdicts.json`, `sync_tripwires.json` | Pins and quarantine state. As built in M2 (K49b, D63), the engine holds one `FileHostKeyStore` over `host_keys.json` for its links and its sync coordinator alike while it holds the directory alone, and keeps pins in memory otherwise. As built in M2 (K49a, D62), the verdict and tripwire files are named `pin_verdicts.json` (negative pins and kept verdicts) and `sync_tripwires.json` (tripped record ids), owned by `klabautermann_core` over the catalog library's seams. A damaged file is renamed to `<name>.corrupt-<UTC time>` and the store starts empty; one it cannot read or rename, or one from a newer schema, is left as it is and no change is saved that run; nothing is written or renamed without exclusive access | catalog library; the verdict and tripwire files `klabautermann_core` [E] | MVP |
+| `host_keys.json`, `pin_verdicts.json`, `sync_tripwires.json` | Pins and quarantine state. From M2 the engine pins through the catalog library's `FileHostKeyStore`, one instance per engine that its links and, from K49b (D63), its sync coordinator share, and writes `host_keys.json` only while the process holds the directory alone; otherwise it reads the file once and keeps pins in memory (D61). As built in M2 (K49a, D62), the verdict and tripwire files are named `pin_verdicts.json` (negative pins and kept verdicts) and `sync_tripwires.json` (tripped record ids), owned by `klabautermann_core` over the catalog library's seams. A damaged file is renamed to `<name>.corrupt-<UTC time>` and the store starts empty; one it cannot read or rename, or one from a newer schema, is left as it is and no change is saved that run; nothing is written or renamed without exclusive access | catalog library; the verdict and tripwire files `klabautermann_core` [E] | MVP |
 | `sync_enrollment.json` [E] | Enrollment state (M2, K49a, D62): the push hold, the raised notices and the enrolled account (server URL, user name, mode); never the token or vault key, which stay in the keystore (4.5), and not the device id, which stays in `settings.json`. Kept like the verdict files; a damaged file reads as not enrolled | `klabautermann_core` [E] | MVP |
 | `endpoint_pins.json` | Confirmed endpoints | catalog library | MVP |
 | `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config`, replaced whole by each import; never pushed (D14). Schema 3 (M2) holds each host's alias, host, port, user, `IdentityFile` and `ProxyJump` with the values ssh would use (10.1): the effective host (`%h` expanded, lowercased unless an address) and port, the first `IdentityFile` that is not `none`, and the `ProxyJump` as written; under `hops` it holds the same for each other name a stored route gives. An older file holds addresses only: schema 1 (M1) kept no `IdentityFile` or `ProxyJump` and kept `HostName` as written, `%h` included, and schema 2 read each host's values from its first block alone. Its hosts are listed as stored, with no `jumpRoute`, `authKind` or `locatorConflict`, and get no connect config until the next import rewrites the file. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
-| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), monitor set, per-server device preferences | app | MVP |
+| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), whether threshold-band changes are announced (`klabautermann.accessibility.announceThresholdBands`, M2, D60; anything but `false` announces), monitor set, per-server device preferences | app | MVP |
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
 | `instance.lock` [E] | Empty. One desktop instance per support directory (built in M2): the composition root takes an exclusive, non-blocking advisory lock on it after the settings window's branch and before `settings.json` and `window_state.json` open and the engine isolate starts, so one process mints the device id and writes these files, and holds it for the life of the process; the file is never deleted. A second instance opens no other file and only says it is already running, until the user quits it. A lock that fails for another reason (no write access, no lock support) lets the app run unguarded and says so at startup. Phones run one process per app and take none | app, through `klabautermann_core`'s `InstanceLock` | MVP |
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
@@ -2091,9 +2154,10 @@ abstract interface class RemoteProcess {
   limitation come back on every retry, and repeated sign-in failures get
   the device banned by fail2ban (c2 R11). A server whose last connect needed
   keyboard-interactive answers, on itself or a jump host, is never dialed
-  unattended (4.5). A changed host key blocks the server until the
-  re-pin flow of 4.6 exists; until then nothing unblocks it but an
-  engine restart.
+  unattended (4.5). A changed host key blocks the server, also across
+  engine restarts since pins persist (4.10), and nothing unattended
+  dials it; the user's next connect reviews the key and re-pins it if
+  the user trusts it (4.6, D61).
 - **Attempts.** `SshLink.connect` shows no state before it returns, so
   the supervisor reports `connecting` while an attempt queues and dials,
   `authenticating` once the server's own host key has passed (each jump
@@ -2180,8 +2244,9 @@ takes a short-action slot, and one that finds the share full waits in
 the engine as `LogStreamWaiting(channel)`, where the app can show it,
 rather than on the link. A follower (K26) gets no slot while the link
 has learned a session limit below 4 (the two samplers, one follower and
-one short action), so it reports waiting for a channel instead of
-holding the last free one and leaving short actions none; the rest of
+one short action), and only one at 4, each session above it making room
+for one more, so it reports waiting for a channel instead of holding
+the last free one and leaving short actions none; the rest of
 low-session mode is M3. The link still opens every session channel at
 one priority, since `seance_core`'s `start` and `run` take none yet.
 
@@ -2503,8 +2568,11 @@ printf '\036%s READY HWS/1\n' "$N"
 
 The production program adds `timeout` absence handling (BusyBox and
 Alpine), `denied` detection, the collectors in 6.4 and a protocol version
-check. The program text is versioned (`HWS/1` plus a collector-set version)
-and is the single source for every runner, including the T1 scripts (9.3).
+check. Where `timeout` exists, a guarded command it stopped is `timeout`
+whether the guard exited 124 (GNU) or with the command's own 143 after
+its SIGTERM (BusyBox 1.38 on the Alpine fixture, 11.3 [L]). The program
+text is versioned (`HWS/1` plus a collector-set version) and is the single
+source for every runner, including the T1 scripts (9.3).
 
 ### 6.4 Collectors and cadence
 
@@ -2764,7 +2832,15 @@ unless the user enables admin mode for that panel.
   block precedes every command line. Command lines are masked per
   argument (8.9);
   the `ps` fallback joins arguments with spaces, so masking there works on
-  whitespace tokens. Kill and signal
+  whitespace tokens, and the `[comm]` it prints for an empty command line
+  (`[comm] <defunct>` for a GNU zombie) reads as none where it matches
+  the row's `comm`. The engine dates each
+  start as the reading's time
+  less the reply's uptime plus the start ticks at USER_HZ 100, as the CPU
+  shares assume; the start is unknown until the probe reports its lxcfs
+  mounts and where lxcfs serves the container's own age as
+  `/proc/uptime` (D50), since start ticks count from the kernel's boot.
+  Kill and signal
   (PRC-02): the plan records the PID and its start
   time (field 22 of `/proc/<pid>/stat`: fields resume at 3, `state`,
   after the last `)`, because `comm` may contain spaces and `)`, so
@@ -2859,7 +2935,8 @@ no longer holds that value.
   read does until lines arrive: waiting for an answer, the link, a
   channel or the foreground, reading, no lines, or the end's reason with
   the host's error text. A read still running when its tab hides stops
-  and starts over once shown. The read opens through the controller's
+  and starts over once shown. On a phone the page opens the lines in a
+  bottom sheet instead, which reads them while it is open (10.5). The read opens through the controller's
   one owner of log streams, which the Logs panel shares and which gives
   each rejection of `OpenLogStream` to the oldest open without an answer
   (10.1). While links are off, as the composition root leaves them
@@ -2899,8 +2976,8 @@ As built in M2 (`klabautermann_core/lib/src/logs/log_service.dart`,
 K25a; `log_stream_router.dart`, K25b, routes `OpenLogStream` to it),
 `LogService` serves the windows (`follow: false`) of one server's link,
 one host command at a time through `HostCommands.commandLine`, and
-answers each open with a `LogStreamState` before it returns. Followers
-are K26.
+answers each open with a `LogStreamState` before it returns, and
+`LogFollower` (`log_follower.dart`, K26) serves each follow.
 
 - A window holds 1 to 500 records, LOG-01's page. Any other size, a
   file with a cursor and what 8.8's validators refuse end as an invalid
@@ -2955,21 +3032,62 @@ are K26.
 - `LogStreamRouter` (K25b) owns the engine's streams while links are on;
   with links off the engine rejects every `OpenLogStream`. It rejects an
   id an earlier open named (it keeps each id for the engine's lifetime),
-  a follow until K26, a server outside the fleet and a server's 17th
-  open stream [E], and ends a spec 8.8 refuses as invalid at once.
+  a server outside the fleet and a server's 17th open stream [E], and
+  ends a spec 8.8 refuses as invalid at once.
   Otherwise it answers the open with the read's `LogStreamRunning`, or
   with `LogStreamWaiting` naming the link (none ready), the foreground
   (the app is in the background) or a channel (5.2's share is full),
   and starts the read on its own, oldest first, once that clears.
-- Every stream ends exactly once. A read running on a link that closes
-  or is replaced ends as failed; waiting reads wait for the next link.
+- Every stream ends exactly once. A window running on a link that
+  closes or is replaced ends as failed, a follow waits and resumes
+  (below), and waiting reads wait for the next link.
   `Disconnect`, the server leaving the fleet and `Shutdown` end every
   stream of the server as failed, waiting ones included, since nothing
   would bring a link back for them. The background closes the running
   reads' processes without ending them, reports every read as waiting
   for the foreground and queues the paused ones ahead of the others,
-  and the foreground runs them again from the start; a window sends its
-  records as it ends, so a paused one has sent none.
+  and the foreground runs a window again from the start, since it sends
+  its records as it ends, and resumes a follow.
+- A follow runs `journalctl -f -o json`, with `-k -b` for the kernel
+  log (`dmesg` serves only windows), or `tail -n <window> -F --` on its
+  own process in a follower slot (5.2), stopped as a window's command
+  is. Its first run delivers up to `window` (0 to 500) earlier records
+  oldest first, or every record after the spec's `afterCursor`
+  (`--after-cursor` with `--no-tail`: up to systemd 253, the 10 lines
+  `-f` implies end the first pass and hold the rest back until the
+  journal next changes). journalctl gets no `--since`, which up to
+  systemd 253 it seeks before `-n`, printing the range's oldest records;
+  the engine drops records older than `since` itself. A follow with
+  `until` ends as invalid.
+- Output is split into lines as it arrives, each cut at 256 KiB, and
+  held in a ring of at most 5,000 lines and 4 MiB [E], oldest dropped
+  first. A batch takes every line held, parsed only then, at most every
+  50 ms, so a stream sends at most 20 `LogBatch` a second [E], each
+  counting the lines dropped since the last: ring overflow, cut journal
+  entries and lines that are not JSON objects (a cut file line keeps its
+  first bytes). At 1,000 lines/s a batch holds about 50 lines.
+- When its link closes or is replaced, or the app leaves the
+  foreground, a follow's process closes and the follow keeps the lines
+  it holds and waits; a replaced link needs no wait. The next run
+  resumes a journal follow after the newest valid cursor received, or
+  the spec's `afterCursor`, so nothing repeats or goes missing. Once it
+  has received a line, a file follow, or a journal follow with no valid
+  cursor, starts again with new lines only (`-n 0`), and its
+  `LogStreamRunning` says records may be missing (`LogContinuity.gap`);
+  before any line arrives, a follow reads its window again. The router
+  sends a state only when it changes, so on a replaced link a journal
+  follow that resumes after a cursor sends none, while one that starts
+  again with a gap sends `LogStreamRunning` once. A process lost on a
+  live link (no exit status) runs again once, and a second loss before
+  any line ends the follow as failed.
+- A follow runs until it is closed, so any exit ends it once the lines
+  it holds are sent: as a window's exit would (missing, denied), and as
+  failed otherwise, exit 0 included. `tail -F` retries a file it cannot
+  open instead of exiting, so a file follow whose open fails with a
+  refusal before its process's first line (GNU's `cannot open`,
+  BusyBox's `can't open`), a resumed run's included, ends as denied or
+  missing; a rotation's `has become inaccessible` does not end it. `CloseStream` ends a follow as closed
+  and drops what it holds.
 
 ### 7.7 Scheduled jobs (JOB)
 
@@ -3066,8 +3184,8 @@ each row's source and the user its line names:
   `crontab` command, and an empty list names only the sources read,
   never other users' crontabs (JOB-03). Where the
   probe finds systemd not running, the tab says the server has no timers
-  instead of a failed timers reading. The phone reaches the tab once
-  More lists it (10.5).
+  instead of a failed timers reading. The phone reaches the tab
+  through More (10.5).
 
 ### 7.8 Packages and updates (PKG)
 
@@ -3790,6 +3908,14 @@ CI.
   and header values (`Authorization: Bearer`). Masking the argument after
   any `-p`, `-a` or `-u` would also hide `ssh -p 22`, `mkdir -p` and
   `sudo -u`, so the trade-off is left to a follow-up after K33.
+- Reveal (M2, the Processes tab): a tap on a masked argument in a
+  process's details shows it there for 30 s, and it is masked again
+  sooner when the details close or the app turns inactive, as it loses
+  focus or before it is hidden, so an app switcher's snapshot keeps the
+  mask. The revealed text lives in that sheet's state only: it is never
+  sent, stored or logged, and the table, its filter and its command sort
+  read display text only. A screen reader hears "(masked)" where the
+  screen shows the mask.
 - Every export, share and diagnostic bundle passes `SecretRedactor`
   (`SC/src/llm/redaction.dart`) by default, with an explicit include-secrets
   toggle.
@@ -4384,13 +4510,13 @@ shows there.
 | `AnswerKeystore(requestId, result)` (D62) | `KeystoreRequest(requestId, operation)`: the engine asks the app for the OS keystore |
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)`, `SetMonitorSet(ids)` | `EndpointChanged(serverId)` |
-| `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status) |
-| `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
+| `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status), `ConnectRejected(serverId, reason)` (no config to dial with, D61) |
+| `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `RefreshSubscription(serverId, subscriptionId)` (a phone's pull to refresh, PLT-02), `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
 | `DockerQuery(serverId, query)` | `DockerResult`, `DockerEvent` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(preview)`, `ActionProgress`, `ActionFinished` |
-| `AnswerPrompt(promptId, answer)` | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
+| `AnswerPrompt(promptId, answer)` (trust, responses or cancel, secret) | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
 | `SetAppActivity(activity)` (foreground or background; D34, D45) | no event: it changes what runs |
 | none: the engine's probe sweeps (5.12) | `Reachability(serverId, status)` (FL-04) |
 | `HandleAlert(alertRef, acknowledge or dismiss)` (v1.x; inbox fetch runs inside `RunSyncRound`) | `AlertsArrived(serverId, alerts)`, `AlertStatusChanged` (D42) |
@@ -4413,7 +4539,8 @@ the engine in `engine_isolate.dart` beside it):
 - **Start.** The app spawns the engine with
   `IsolateEngineClient.spawn(supportDirectory:)`, its support directory,
   where the engine keeps its own files (4.10), and from M2
-  `supportDirectoryAccess`, whether the process holds it alone (D59).
+  `supportDirectoryAccess`, whether the process holds it alone (D59,
+  D61).
   `EngineReady` carries
   `importStoreIssue`, what was wrong with `ssh_config_imports.json` at
   start, or none, and the engine follows it at once with a
@@ -4639,7 +4766,8 @@ the engine in `engine_isolate.dart` beside it):
   prompt is its own event. Statuses compare by value. `Prompt` replaces
   v2's engine text with a sealed request per kind: a first-seen host
   key's type and SHA-256 fingerprint (a changed key blocks the link
-  instead, 4.6), the server's keyboard-interactive name, instruction and
+  instead, 4.6, until the user's connect reviews it, M2 pins below), the
+  server's keyboard-interactive name, instruction and
   questions (without echo flags, which `seance_core`'s challenge does not
   carry, so every answer is masked), and the login or sudo password of a
   user with a retry flag. `host` and `port` name the machine that asks,
@@ -4666,17 +4794,16 @@ the engine in `engine_isolate.dart` beside it):
   `Disconnect` and `SetAppActivity` to its link supervisor (5.1, 5.12)
   and `AnswerPrompt` to its prompt broker. `Connect` is the user's
   connect, since the app sends it when a view opens, so it may prompt.
-  `RequestRejected` answers a `Connect` for a server the engine cannot
-  dial (outside the fleet, a jump hop's id included, or without a
-  config) and an `AnswerPrompt` for a prompt that is not open or with
-  an answer that does not fit it.
+  `RequestRejected` answers a `Connect` for an id outside the fleet, a
+  jump hop's id included, and an `AnswerPrompt` for a prompt that is not
+  open or with an answer that does not fit it; a fleet server without a
+  config gets `ConnectRejected` (M2 pins, below).
   `IsolateEngineClient.spawn(linksEnabled:)` (`EngineStart.linksEnabled`,
   off unless given) turns links on. Off, the engine has no supervisor,
   so `Connect` gets `RequestRejected` and nothing dials, while
   `Disconnect` and `SetAppActivity` change nothing. The composition root
-  keeps them off until pins outlive the engine (the catalog library's
-  `host_keys.json`, 4.10, which the engine opens from K49b, D63, while it
-  holds the directory alone) and the app can show prompts; tests turn
+  keeps them off until K44b, though pins outlive the engine (M2 pins,
+  below) and the app can show prompts (M2 prompts, below); tests turn
   them on.
 - **Version 3 (M2 sampling).** Sampling joined version 3 without a bump,
   as the import store's fields joined version 2, before any version 3
@@ -4694,7 +4821,17 @@ the engine in `engine_isolate.dart` beside it):
   repeat included, so a surface refreshes it by resending. While the
   server is `waitingForLink` or `pausedInBackground`, that reading waits
   until the link is ready and the app is in the foreground, and resends
-  in the meantime add no further reading. The engine
+  in the meantime add no further reading. `RefreshSubscription` (K40)
+  reads one subscription's streams at once in any column, for a phone's
+  pull to refresh (PLT-02): each is read once more as soon as its
+  sampler is free, a busy, restarting or probing sampler holding the
+  reading as it holds a first one rather than losing it, a stream that
+  rides on another's collector through that collector, and `identity`,
+  otherwise read once per link, too. While the server waits for its
+  link or the foreground nothing is read, and sampling resumes with
+  every stream the subscription names. No event answers it but the
+  readings; with links off, or for a subscription the engine does not
+  hold, it reads nothing. The engine
   sends one `Sample` per subscribed stream and reading: `seq` counts per
   server across its streams (D44), `at` is the engine's own clock in UTC,
   since a host's clock may be off, and `result` is a sealed value per
@@ -4707,8 +4844,8 @@ the engine in `engine_isolate.dart` beside it):
   map null until a previous reading exists, so unknown never sums to
   zero, and a `withheld` map naming each value left null because a
   container host's `/proc` would supply it (D50); for `procs`,
-  per-process CPU shares with the start time PRC-02 checks, each
-  argument as a `MaskedValue` (8.9), plus the
+  per-process CPU shares with the start time PRC-02 checks and its
+  wall-clock time (7.2), each argument as a `MaskedValue` (8.9), plus the
   host's process count and how it chose the rows it sent (D48); for
   `identity`, the strings SYS-01 shows, resolved in the engine so the
   host's JSON never crosses (6.5); the parsed tables for `fs`,
@@ -4764,11 +4901,11 @@ the engine in `engine_isolate.dart` beside it):
   --after-cursor` does. journalctl refuses `--since` with a cursor, so
   with one the engine applies the `since` filter itself: a window stops
   at the first record older than it and ends as oldest record reached,
-  and a follow reads on from the cursor alone. A follow delivers up to
-  `window` earlier records oldest first, then each new one as the host
-  writes it, and `afterCursor` resumes it after a record the app holds
-  instead: it delivers every record after that one, so a reconnect
-  leaves no gap, and `window` does not apply.
+  and a follow skips such records, as it does without one (7.6). A
+  follow delivers up to `window` earlier records oldest first, then each
+  new one as the host writes it, and `afterCursor` resumes it after a
+  record the app holds instead: it delivers every record after that one,
+  so a reconnect leaves no gap, and `window` does not apply.
   `LogBatch(streamId, records, dropped)` carries sealed records, which
   the engine resolves so the app parses nothing (6.5): a journal entry's
   cursor, time, priority as a syslog severity, unit, identifier, PID,
@@ -4780,7 +4917,9 @@ the engine in `engine_isolate.dart` beside it):
   `LogStreamState(streamId, status)` carries a sealed status that
   compares by value: waiting (for the link, a free channel under 5.2's
   budget, or the foreground), running (with the source's own reader or
-  the kernel log's `dmesg` fallback, 7.6), or ended with a reason (window
+  the kernel log's `dmesg` fallback, 7.6, and whether a follow that ran
+  again after waiting, with no cursor to resume after, may lack records
+  written meanwhile), or ended with a reason (window
   filled, oldest record reached, closed, spec refused, source missing,
   read denied, or failed) and the host's error output. With links off,
   as in the app until K44, the engine rejects `OpenLogStream` and
@@ -4799,6 +4938,77 @@ the engine in `engine_isolate.dart` beside it):
   must therefore do, and if nothing else in the app sends
   `OpenLogStream`: a second sender with its own queue would take each
   rejection as its own as well.
+- **Version 3 (M2 failure kinds).** Two failure kinds joined version 3
+  the same way. `keyPassphraseRequired` names an encrypted private key,
+  the server's or a jump host's, that no passphrase the engine holds
+  opens, whether none was given or a wrong one; nothing reached the
+  server. `keyFileHiddenBySandbox` names a key file that reads as
+  missing inside the Flatpak sandbox (4.5). The connector reads
+  `seance_core`'s typed `SshConnectException.kind`, never its English
+  summary: unreachable and timed out keep their names, a missing or
+  wrong passphrase is `keyPassphraseRequired` (one remedy, so one kind),
+  a key the client cannot read and an agent with no keys are credentials
+  unavailable, and a refused sign-in is credentials rejected. A route
+  the engine cannot follow and a host-key refusal without a declined
+  prompt (a key-exchange signature that did not verify) stay
+  unclassified; `other` falls back to the error behind it, so a jump
+  hop's key file keeps its kind. 5.3's three client limitations wait
+  for `seance_core` to type them. No prompt asks for a passphrase until
+  the owner decides (2, "Encrypted keys and agent order"), so the
+  supervisor does not hand such a failure to the user's request, and
+  the app's copy for both kinds says to load the key into ssh-agent and
+  drop the `IdentityFile` line that names it, since an import that
+  names a key file offers only that file.
+- **Version 3 (M2 prompts).** The app's prompts joined version 3 the same
+  way. `KeyboardInteractivePromptRequest` gained `user`, the account the
+  asking machine signs in as (the challenge's `server.username`), so the
+  dialog names the account as the siblings' do. `PromptCancelAnswer`
+  declines a keyboard-interactive prompt's questions: a
+  `PromptResponsesAnswer` must hold one response per question, so an
+  empty one cannot decline, and a declined prompt would otherwise wait
+  out its expiry. The broker closes the prompt at once, the engine sends
+  the server no responses, which dartssh2 refuses by closing the
+  connection, and the attempt fails with its own failure kind,
+  keyboard-interactive cancelled, as a declined host key fails with
+  host key declined, then waits for the user's next connect (5.1). Only
+  that kind takes a cancel: a host key is declined with
+  `PromptTrustAnswer(false)` and a password prompt dismissed with
+  `PromptSecretAnswer(null)`. A keyboard-interactive prompt that expires
+  or is withdrawn is no cancel, and the failure that follows is
+  classified as any other.
+  On the app side, the prompt controller queues the engine's prompts in
+  arrival order, and the app shows one at a time through
+  `ghost_servers`' dialogs (D8): a first-seen host key as the first-use
+  review, answered with `PromptTrustAnswer`, and keyboard-interactive
+  questions, answered with `PromptResponsesAnswer` or, on Cancel,
+  `PromptCancelAnswer`. `PromptWithdrawn` closes its prompt's dialog
+  without an answer, or drops the prompt from the queue, and an engine
+  that stops closes them all; what a closed dialog returns is never
+  sent: the app checks after each await that the prompt is still open.
+  Each dialog is keyed, so a close removes its own route, even under
+  another. Credential and elevation prompts have
+  no producer and no dialog yet; the app dismisses one with
+  `PromptSecretAnswer(null)` rather than leave the attempt waiting out
+  the expiry. With links off, as in the app until K44, no prompt
+  arrives.
+- **Version 3 (M2 pins).** Persistent pins and the re-pin joined version
+  3 the same way (D61). `HostKeyPromptRequest` gained
+  `pinnedFingerprintSha256` and `pinnedKeyType`, set only when the
+  presented key differs from the pinned one, which only the user's
+  `Connect` to a server blocked by `hostKeyChanged` asks about. The app
+  maps them onto `GhostHostKeyPrompt`'s pinned fields, so `ghost_servers`
+  shows its changed-key review, and answers with `PromptTrustAnswer`.
+  `ConnectRejected(serverId, reason)` answers a `Connect` to a fleet
+  server the engine has no config for: `noLoginName` when neither the
+  import nor `USER` or `USERNAME` names a login name for the server or a
+  jump host on its route, and `addressOnlyImport` for a schema 1 or 2
+  import store (4.10). Nothing about the link changes. The monitoring
+  controller keeps the reason while a view holds the server, and the
+  server's workspace and phone screen show it as a banner until the
+  server's next `Connect`. A new fleet sends that `Connect` for each
+  rejected server it still lists, so an import that fixes the config
+  connects the open view. With links off, the engine answers `Connect`
+  with `RequestRejected` before it looks for a config.
 - **Version 3 (M2 sync).** Pull-only sync joined version 3 the same way
   (K49b, D63). `IsolateEngineClient.spawn(deviceId:)` hands the engine
   the id `settings.json` holds, read after the instance lock.
@@ -4862,7 +5072,8 @@ the engine in `engine_isolate.dart` beside it):
   monitoring controller has no endpoint to compare on the first import
   after launch; that purge needs the engine to report the change
   (`EndpointChanged`) or the startup entries. With links off, the
-  engine's rejection of `Connect` shows nothing. A server that leaves
+  engine's `RequestRejected` of `Connect` shows nothing; a
+  `ConnectRejected` shows on the server's views (M2 pins, above). A server that leaves
   the fleet is sent nothing until it comes back, when the views and
   surfaces still holding it connect and subscribe again (5.1).
 - **`Reachability(serverId, status)`** reports one server's latest probe
@@ -4952,8 +5163,10 @@ The bar and age show only where the row still fits the name and state
 word in full and the age fits beside it, each measured as drawn at the
 current text scale; elsewhere they give way, staying in the tooltip and
 the label. The warning always shows, and a touch on it shows its
-words. A collapsed or filtered section that hides a live server does
-not yet say so in its header (`ghostHiddenLiveIndicator`).
+words. A closed link's failure kind takes a sentence, as under the
+server header (10.4), which only the tooltip and the label carry. A
+collapsed or filtered section that hides a live server does not yet
+say so in its header (`ghostHiddenLiveIndicator`).
 The filter (FL-05) is the kit's `SidebarFilterField`
 over `FleetEntry.searchText`, name and address standing in without it:
 every term must occur, Enter opens the first match and Esc clears.
@@ -4977,8 +5190,7 @@ tab:
   its values read "unknown". A hidden tab is not built, so it samples
   nothing; it names what is missing and links to the Access tab, which
   the desktop strip selects, moving keyboard focus into it, and a phone
-  pushes. The phone's More destination does not list Access yet, so
-  there the link is the way in.
+  pushes. The phone's More destination lists it too (10.5).
 - Each row shows its state as an icon and a word, its reason, SAF-08's
   badge on a root-equivalent right, and its fix as one line: the
   elevation prefix, then each word, quoted (8.8) only where a shell
@@ -5018,10 +5230,13 @@ and DSK-01's and DSK-02's mounts in the sortable table, in IEC units:
 
 As built in M2 (`app/klabautermann_app/lib/ui/server_header.dart`), the
 server header shows the name (the phone's app bar carries it instead),
-the link state, the coverage chip, the detected runtime and a slot for
-client-limitation messages, which stays empty until 5.3's rows are
-worded (K45); the transport label, privilege badges, admin mode and
-the read-only and low-session indicators come with their subsystems.
+the link state, the coverage chip, the detected runtime and, under
+them, why a closed link failed when the engine classified it: each
+failure kind of 10.1 in a sentence that says what to do, 5.3's client
+limitations in their own words, and PLT-04's background line on an iOS
+or Android phone's screen (10.5). The transport label, privilege
+badges, admin mode and the read-only and low-session indicators come
+with their subsystems.
 The state resolves through `ghost_servers`' indicator under the rail
 rule, as the server's row does, as a dot, an icon and a word, with
 the link's own word where the indicator shows none; the kit keeps its
@@ -5041,7 +5256,7 @@ As built in M2 for OV-01, OV-03 and OV-04
 (`app/klabautermann_app/lib/ui/overview_panel.dart`), the Overview tab
 shows CPU, load, memory and swap cards from the `core` stream's last
 reading, in two columns from the System tab's 600 px panel width:
-- One freshness line heads the cards in 9.5 item 4's words, stale at
+- One freshness line heads the panel in 9.5 item 4's words, stale at
   the fleet rows' 20 s `core` limit (10.3). Stale values, bars and
   sparkline lines turn grey beside its history icon. A failed reading
   says why above the last values rather than clearing them.
@@ -5070,6 +5285,61 @@ reading, in two columns from the System tab's 600 px panel width:
   the core count would be the host's.
 - No radial `Gauge` exists yet; the stacked bar is the gauge.
 
+As built in M2 for the rest of OV-01 and OV-02 (the same file), the
+health card follows the freshness line: the failed units through the
+Services tab's summary over the `failedUnits` stream, then every listed
+mount whose space or inode use reaches the fleet rows' 80 % or 90 %,
+critical and fullest first, each with an icon and its level in words
+(pseudo filesystems stay out: a squashfs image is always full). After
+the four cards, Disks lists the first eight mounts the System tab lists
+by default, each with a bar that warns at the same levels, its use,
+size and inodes, after a `df` timeout the last reading's mounts with
+their use unknown, and after another failure only why, as the System
+tab does; Network gives NET-01's total rates; Host gives the OS and
+kernel from `identity` and the uptime and boot time from `core`,
+unknown with D50's reason in a container, and waits for or says why it
+lacks an `identity` reading, as the System tab does; read once per
+session, the OS and kernel grey with the panel's line. The health and
+Disks cards give their own age, stale at the fleet rows' 240 s `fs`
+limit, which also judges `failedUnits` (60 s); the health card takes
+the oldest reading it shows, so after a failed `df`, when it names no
+mount, the listing's age drops out. The Overview's subscription already
+named every stream these read (network rates come with `core`), so
+K21's mapping is unchanged.
+`threshold.dart` holds the rule model and no levels, so the fleet rows'
+levels stand in until OV-11.
+The health card ends with a link to D60's switch, which reaches the
+Overview, and its announcer in `threshold_announcer.dart`, through an
+inherited scope above the navigator, as the macOS toolbar band does,
+since a phone pushes the server screen as a route of its own.
+
+As built in M2 (`app/klabautermann_app/lib/ui/processes_panel.dart`), the
+Processes tab lists PRC-01's processes from the `procs` stream it
+subscribes while it shows:
+
+- The sortable table orders by CPU (the first sort, busiest on top),
+  memory in IEC units, user, start time and command, with the PID
+  beside them. In a panel narrower than 600 px, a width that grows with
+  the text scale, the rows become two-line entries with a sort menu
+  rather than a squeezed table. The row-action slot stays empty until
+  PRC-02 (M4). A row opens the process's details in a sheet: its figures,
+  parent PID, state and each argument (8.9's reveal), as read, under
+  that reading's freshness line and grey once it is stale.
+- A user reads as a name only where the host gives one: a `ps`
+  fallback's column, unless GNU `ps` cut it to 7 characters and a `+`,
+  or the probe's login user for that uid; otherwise "UID n". A start
+  shows its time on the day of the reading, else its date, and
+  "unknown" where the engine could not date it (7.2). A row with no
+  command line shows the kernel's name and "command line unavailable".
+- The filter needs every term in the PID, name, user or shown command
+  line. It draws and searches at most 4,096 characters of a command
+  line or argument, which can fill the 1 MiB section.
+- Through a failed reading the last good list stays, under the
+  freshness line (9.5 item 4) and the failure's reason; it turns grey
+  once older than 20 s, twice the stream's slowest cadence. A cut list
+  says "Showing N of M processes" (D48). The phone's server screen
+  reaches the tab through More (10.5).
+
 ### 10.5 Phone (under 600 dp) and tablet
 
 The fleet list is home; a server opens a pushed screen with a bottom bar
@@ -5080,6 +5350,58 @@ mutation (PLT-03). The first-run flow (4.3) is a sequence of full-screen
 steps with "confirm all shown". iOS and Android say plainly that sampling
 stops in the background (PLT-04) and show the return banner. Tablets use a
 two-pane layout (PLT-05, v1).
+
+As built in M2 (`app/klabautermann_app/lib/ui/server_detail_page.dart`,
+`phone_shell.dart`), the pushed screen's More destination lists
+Processes, Services, Jobs, System and Access in the desktop strip's
+order. Each opens full-screen under an app bar naming the panel and the
+server, in the layout the panel takes at that width, on a phone its
+narrow one (Processes' two-line entries, System's three columns, a
+unit's page in the list's place), with the return banner the screen
+under it shows. That screen holds the server
+open, and with More selected none of its destinations samples, so the
+pushed panel's subscription is the only one. Access is the page a
+hidden panel's link already pushed, and a panel the probe hides links
+there from its own page too.
+
+- Logs: the Logs destination stays the Logs panel, whose source and
+  filters already open sheets on phones (10.8); a log that a detail
+  opens is a sheet. In M2 that is SVC-04's lines: a unit's page on the
+  phone offers them behind a button and reads them in a modal bottom
+  sheet that opens at 60 % of the screen and drags from a quarter to
+  the full height, following this section over SVC-04's lines on the
+  page itself. The sheet opens its read as it opens, and closing it by
+  its button, a drag or Back closes a read still running. The desktop
+  keeps the lines on the page.
+- Pull to refresh: the Overview and every pushed panel that samples
+  pull to refresh. A pull sends `RefreshSubscription` for the surface's
+  own subscription (10.1), and the indicator waits until each of its
+  streams has a newer sample, failed readings included, until the
+  server stops sampling, or for 10 s [E]; with nothing sampling, as
+  while links are off (K44), it ends at once. It takes vertical scrolls
+  at any depth, so a panel's own list pulls from its top, and an
+  always-scrollable view of the panel's size pulls a panel whose content
+  fits. Logs and Access sample nothing and do not pull, and the desktop
+  has no pull. Screen readers and keyboards have no refresh action yet;
+  sampling goes on at its cadence meanwhile.
+- PLT-04: on iOS and Android the server header's limitation slot (10.4)
+  says "Reading stops while Klabautermann is in the background and
+  resumes when you return.", the coverage sheet's words, under every
+  destination. That is what the app does: it reports the background
+  (10.1), and the engine pauses every subscription, probe and log read
+  at once, closes the links after 30 s (D34) and resumes them all on
+  return. A desktop window narrow enough for this screen stays in the
+  foreground and does not say so, and a tablet in the desktop layout
+  has it in the inspector's coverage (9.5).
+- SYN-08 (task #50): a server that leaves the fleet, removed by a sync
+  or left out of a new import, closes its screen with everything the
+  screen opened (More's panels, the Access page, sheets and dialogs),
+  back to the fleet list, as the desktop workspace's selection clears.
+  The list then says "web-1 is no longer in your fleet, so its screen
+  closed." in a live region styled as the return banner, until the user
+  dismisses it or opens a server. The desktop shows no such notice yet.
+  Reads close as their sheets go, and the monitoring controller already
+  sends the server nothing (10.1).
 
 ### 10.6 Command palette and keyboard model (v1)
 
@@ -5260,7 +5582,9 @@ a session channel), Disconnected (waiting for the link), Paused (Live
 off, or the app in the background), Stopped (ended, or a file without
 a valid path) or Unavailable (refused). A status line, a live region
 for screen readers, says the same in a sentence with any host error
-output, and offers Retry after a refusal or a failed read. LOG-04's
+output, says that lines may be missing while a follow without a cursor
+runs again after it waited (K26), and offers Retry after a refusal or a
+failed read. LOG-04's
 notice shows above the journal when the access check's journal row
 says the account sees only its own entries (K04), from the probe's
 profile, and above the kernel log, of which the journal then shows it
@@ -5290,6 +5614,9 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
   threshold-band changes (values refreshing every 1 to 5 s are not live
   regions). v1: text scaling to 200 %, full keyboard reachability, log
   readability. v1.x: more languages, right-to-left layout.
+- Announcements (A11Y-15, M2): link changes from the fleet rows (10.3)
+  and threshold-band changes from the Overview (10.4, D60), where the
+  platform takes none (Android) as the label of a live region.
 - Tables (A11Y-03, M2): until F5e lifts it into `ghost_ui`, the app's
   `SortableTable` gives each row one node whose label is its cells as
   "column: value" and whose custom semantics actions are the row's
@@ -5407,6 +5734,34 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
   `sender.conf`, reachable from the sshd host, so the helper's deposits
   and the app's fetch, acknowledgement and deletion run end to end.
 
+As built in M2 (K28a, `klabautermann/test/integration/runner_vm.sh`),
+`run.sh` runs the runner-VM leg after the fixture suites, only on a
+GitHub-hosted runner (`GITHUB_ACTIONS`, `RUNNER_ENVIRONMENT`); anywhere
+else it skips with a notice and changes nothing. It starts a second
+sshd on 127.0.0.1:2243 with its own config, host key and PID file in a
+root-owned temporary directory, keys only and PAM as the system sshd
+uses it, and creates two throwaway accounts whose login shell is
+`/bin/sh` (dash): `klab-vm`, outside `systemd-journal`, `adm` and
+`wheel` (LOG-04), and `klab-vm-journal`, in `systemd-journal`. As
+`klab-vm` it captures the host's collector fixtures into the evidence
+directory (`runner-vm/fixtures/ubuntu-2404-runner-dash/`); then it
+starts a transient system timer and runs
+`klabautermann_core/test/integration/runner_vm_test.dart` (tag
+`runner-vm`). The suite covers the units and timers lists on systemd's
+JSON path; the timer's next run against `systemd-analyze calendar` for
+the `OnCalendar` expression D57's `timer_detail` read gives; a journal
+follow resumed after its cursor across a reconnect forced by killing
+the connection's sshd processes while the listener is stopped, with no
+record lost, repeated or dropped and no gap reported, its journalctl
+running with `--no-pager`, `SYSTEMD_PAGER=` and no terminal; unit logs;
+the kernel log, from the journal for the `systemd-journal` account and
+from the `dmesg` fallback for the other, which `kernel.dmesg_restrict`
+refuses; LOG-04's silent truncation; and cursor paging. Teardown on
+every exit removes the accounts with their sessions, the sshd, the
+timer and the directories; the system sshd, its config and port 22 stay
+untouched. The accounts with sudo, `systemd-run`, linger, the elevation
+prelude and the detached runners remain for later legs.
+
 ### 11.4 Performance budgets (gated from M2)
 
 - Fast tick at most 2.5 KB, plus 30 B for each CPU beyond 32 (D48), and
@@ -5431,6 +5786,53 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
   and (under `dart run`) the live heap. Its runs are provisional
   evidence in `klabautermann/docs/evidence/s5/` and set no budget; CI
   runs only its smoke test.
+- UI side (spike S5 part 2): the app's
+  `integration_test/frame_timing_test.dart` drives the real app over a
+  replay engine (`package:klabautermann_core/replay.dart`, test support
+  the app's `lib/` never imports) that serves the host fixtures through
+  the real parsers and sample pipeline across the production client's
+  isolate hop: ten servers reading `core` every 2 s (04 section 13's S5
+  load, heavier than the monitor set's `overview` fleet rows in 6.4) and
+  a 1,000 lines/s journal follow while the Logs panel shows.
+  It reports `FrameTiming` build and raster times (p90, p99, maximum and
+  frames over 16 ms) for the fleet list, a server's Overview and its
+  Logs panel. `klabautermann/scripts/bench-frame-timing.sh` runs it in
+  profile mode under Xvfb (the `klabautermann_frame_timing` job, 11.6);
+  its software-rendered numbers are provisional evidence in
+  `klabautermann/docs/evidence/s5/` and gate nothing, and the device
+  figure above stays a manual sign-off.
+
+As built in M2 (K28b,
+`klabautermann_core/test/integration/soak_test.dart`, tag `soak`),
+`run.sh` runs the soak after the runner-VM leg, whatever the legs before
+it gave: `KLABAUTERMANN_SOAK_SECONDS` of window (600 on GitHub Actions,
+60 elsewhere) after a warm-up of a tenth of it (10 to 60 s), with the
+numbers in `$KLABAUTERMANN_EVIDENCE_DIR/soak/soak.json` (default
+`klabautermann/build/integration-evidence/soak/`); a soak that passes
+without that file skipped, and fails the run. Ten aliases of the
+fixture's sshd (`alias-0` to `alias-9`, one address and port) are ten
+fleet servers with ten links and twenty sampler shells, at the Phone
+cadence with `alias-0` open, as S5's `phone` scenario: `overview` every
+10 s on each, `core` every 3 s on the open one. A test-only meter wraps
+each link the engine dials, through `IsolateEngineClient.spawn`'s
+`entryPoint` and `engineMain`'s `dial`, and counts open channels and
+process-channel bytes, splitting a sampler's stdout into replies at
+each request line; no engine or `seance_core` API changes. It asserts
+every fast reply in the window against 2.5 KB plus 30 B per CPU beyond
+32 (the sampled host's `/proc/stat`), all channel output of the ten
+hosts against 1 KB/s, no growth (the median of the window's last third
+of 21 readings against its first: none in channels per link, two
+descriptors, 1 MiB of live heap after a full collection, 32 MiB of
+resident set, all provisional), ten links dialed once, no gap, link or
+sampling change, and each server's samples at its period. It records,
+without a budget, the engine process's CPU (`/proc/self/stat` of the
+`dart test` process, which also holds the test isolate and the JIT), the
+SSH payload per connection from `ss`'s `tcp_info` where iproute2 is
+installed, and the sampler shells' CPU per fast tick (utime, stime and
+waited-for children from `/proc/<pid>/stat` in the container) against
+the 5 ms above, which is set for the reference VM: the fixture's
+BusyBox ash in a container on a shared runner is not that VM, so the
+figure is evidence, as S2's was. The 24 h soak stays a manual sign-off.
 
 ### 11.5 Host write inventory test
 

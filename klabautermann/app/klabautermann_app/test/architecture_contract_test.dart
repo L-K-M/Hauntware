@@ -20,6 +20,10 @@ final _packageImport = RegExp(
 );
 final _dependencyEntry = RegExp(r'^  ([a-z0-9_]+):', multiLine: true);
 
+/// Every directory of the app's Dart sources, the frame-timing test's
+/// (spike S5) included.
+const _sourceDirectories = ['lib', 'test', 'integration_test', 'test_driver'];
+
 void main() {
   setUpAll(() {
     final pubspec = File('pubspec.yaml');
@@ -49,8 +53,11 @@ void main() {
 
   test('imports no SSH, protocol or sibling-core package', () {
     final offenders = <String>[];
-    for (final directory in ['lib', 'test']) {
-      for (final entity in Directory(directory).listSync(recursive: true)) {
+    for (final path in _sourceDirectories) {
+      final directory = Directory(path);
+      if (!directory.existsSync()) continue;
+
+      for (final entity in directory.listSync(recursive: true)) {
         if (entity is! File || !entity.path.endsWith('.dart')) continue;
 
         for (final match in _packageImport.allMatches(
@@ -62,6 +69,21 @@ void main() {
         }
       }
     }
+
+    expect(offenders, isEmpty);
+  });
+
+  test('lib/ never imports the replay engine, test support for spike S5 '
+      '(03 §11.4)', () {
+    final offenders = [
+      for (final entity in Directory('lib').listSync(recursive: true))
+        if (entity is File &&
+            entity.path.endsWith('.dart') &&
+            entity.readAsStringSync().contains(
+              'package:klabautermann_core/replay.dart',
+            ))
+          entity.path,
+    ];
 
     expect(offenders, isEmpty);
   });

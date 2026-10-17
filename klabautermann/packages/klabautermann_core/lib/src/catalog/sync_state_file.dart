@@ -99,6 +99,13 @@ final class SyncStateFile {
   final SyncStateIssue? issue;
 
   Future<void> _tail = Future<void>.value();
+  int _queuedWrites = 0;
+  bool _unsaved = false;
+
+  /// Whether memory holds a change the file lacks: a write is queued, or
+  /// the latest one failed. A store's change that changes nothing in
+  /// memory still saves then, so retrying a failed change persists it.
+  bool get hasUnsavedChanges => _unsaved;
 
   /// Opens [file] and decodes its body (the document without its version)
   /// with [decode], which throws a [FormatException] for a body it cannot
@@ -236,12 +243,20 @@ final class SyncStateFile {
       return Future.error(SyncStateReadOnlyException(_file.path, kind));
     }
 
+    // The stores build their bodies; none may shadow the version.
+    assert(!body.containsKey(_versionKey), 'the body holds "$_versionKey"');
     final bytes = utf8.encode(
       jsonEncode({_versionKey: syncStateSchemaVersion, ...body}),
     );
+    final generation = ++_queuedWrites;
+    _unsaved = true;
     final write = _tail.then((_) => _writer(_file, bytes));
     // Each caller gets its own write's failure; the queue itself moves on.
-    _tail = write.then<void>((_) {}, onError: (Object _) {});
+    // Only the latest write's success clears the flag: it carries every
+    // earlier change, while an earlier success says nothing of later ones.
+    _tail = write.then<void>((_) {
+      if (generation == _queuedWrites) _unsaved = false;
+    }, onError: (Object _) {});
     return write;
   }
 }
