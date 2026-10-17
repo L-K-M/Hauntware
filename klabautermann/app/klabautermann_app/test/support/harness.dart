@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/app.dart';
+import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
@@ -24,6 +25,7 @@ final class AppHarness {
     required this.prompts,
     required this.appearance,
     required this.coverage,
+    required this.announcements,
   });
 
   final FakeEngineClient engine;
@@ -32,6 +34,7 @@ final class AppHarness {
   final PromptController prompts;
   final AppearanceController appearance;
   final CoverageController coverage;
+  final AnnouncementController announcements;
 
   void dispose() {
     fleet.dispose();
@@ -39,6 +42,7 @@ final class AppHarness {
     prompts.dispose();
     appearance.dispose();
     coverage.dispose();
+    announcements.dispose();
   }
 }
 
@@ -56,6 +60,7 @@ final class AppHarness {
 /// taken, and [toolbarBand] for the macOS integrated titlebar's band
 /// state. [coverage] replaces a controller whose first-run card was
 /// already dismissed, so the card shows only in the tests that want it.
+/// [announcements] replaces an in-memory A11Y-15 switch that is on.
 /// [linkGrace] defaults to zero, which disconnects a server as its last
 /// view closes: the tree unmounts at the end of every test, and the test
 /// binding fails a test that leaves a grace timer pending.
@@ -66,6 +71,7 @@ Future<AppHarness> pumpApp(
   SshConfigSource? sshConfig,
   AppearanceController? appearance,
   CoverageController? coverage,
+  AnnouncementController? announcements,
   DeviceSettingsIssue? settingsIssue,
   ImportStoreIssue? importStoreIssue,
   InstanceLockUnavailable? instanceLockIssue,
@@ -85,6 +91,7 @@ Future<AppHarness> pumpApp(
     prompts: PromptController(engine),
     appearance: appearance ?? AppearanceController(),
     coverage: coverage ?? CoverageController(firstRunCardDismissed: true),
+    announcements: announcements ?? AnnouncementController(),
   );
   addTearDown(() async {
     harness.dispose();
@@ -98,6 +105,7 @@ Future<AppHarness> pumpApp(
       prompts: harness.prompts,
       appearance: harness.appearance,
       coverage: harness.coverage,
+      announcements: harness.announcements,
       settingsIssue: settingsIssue,
       importStoreIssue: importStoreIssue,
       instanceLockIssue: instanceLockIssue,

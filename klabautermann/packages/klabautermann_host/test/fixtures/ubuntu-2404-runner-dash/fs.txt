@@ -1,0 +1,20 @@
+== blocks ==
+Filesystem      Type      1-blocks        Used   Available Capacity Mounted on
+/dev/root       ext4  154894188544 66457563136 88419848192      43% /
+tmpfs           tmpfs   8382689280       86016  8382603264       1% /dev/shm
+tmpfs           tmpfs   3353075712     1232896  3351842816       1% /run
+tmpfs           tmpfs      5242880           0     5242880       0% /run/lock
+/dev/nvme0n1p16 ext4     923156480    66572288   791941120       8% /boot
+/dev/nvme0n1p15 vfat     109395456     6399488   102995968       6% /boot/efi
+tmpfs           tmpfs   1676537856       12288  1676525568       1% /run/user/1001
+tmpfs           tmpfs   1676537856       12288  1676525568       1% /run/user/1002
+== inodes ==
+Filesystem        Inodes   IUsed    IFree IUse% Mounted on
+/dev/root       19529728 1121100 18408628    6% /
+tmpfs            2046555       2  2046553    1% /dev/shm
+tmpfs             819200     840   818360    1% /run
+tmpfs            2046555       4  2046551    1% /run/lock
+/dev/nvme0n1p16    58496     600    57896    2% /boot
+/dev/nvme0n1p15        0       0        0     - /boot/efi
+tmpfs             409311      32   409279    1% /run/user/1001
+tmpfs             409311      30   409281    1% /run/user/1002

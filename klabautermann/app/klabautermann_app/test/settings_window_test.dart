@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_desktop/ghost_desktop.dart' show GhostSettingsLinkMethod;
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:klabautermann_app/app.dart';
+import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
@@ -86,9 +87,13 @@ void main() {
     messenger.setMockMethodCallHandler(_control, null);
   });
 
-  SettingsWindowHost newHost(AppearanceSettings appearance) {
+  SettingsWindowHost newHost(
+    AppearanceSettings appearance, [
+    AnnouncementSettings? announcements,
+  ]) {
     final host = SettingsWindowHost(
       appearance: appearance,
+      announcements: announcements ?? AnnouncementController(),
       control: _control,
       link: _appLink,
       requestAppExit: () async => AppExitResponse.exit,
@@ -175,14 +180,20 @@ void main() {
 
     test('only the desktops get a settings window host', () {
       final appearance = AppearanceController();
+      final announcements = AnnouncementController();
       addTearDown(appearance.dispose);
+      addTearDown(announcements.dispose);
       for (final platform in [
         TargetPlatform.android,
         TargetPlatform.iOS,
         TargetPlatform.fuchsia,
       ]) {
         expect(
-          settingsWindowHostFor(platform, appearance: appearance),
+          settingsWindowHostFor(
+            platform,
+            appearance: appearance,
+            announcements: announcements,
+          ),
           isNull,
           reason: '$platform',
         );
@@ -192,7 +203,11 @@ void main() {
         TargetPlatform.macOS,
         TargetPlatform.windows,
       ]) {
-        final host = settingsWindowHostFor(platform, appearance: appearance);
+        final host = settingsWindowHostFor(
+          platform,
+          appearance: appearance,
+          announcements: announcements,
+        );
         expect(host, isNotNull, reason: '$platform');
         host!.dispose();
       }
@@ -213,15 +228,20 @@ void main() {
 
   group('the settings window', () {
     late AppearanceController appearance;
+    late AnnouncementController announcements;
     late SettingsWindowHost host;
 
     setUp(() {
       runnerWithWindow();
       appearance = AppearanceController();
-      host = newHost(appearance);
+      announcements = AnnouncementController();
+      host = newHost(appearance, announcements);
     });
 
-    tearDown(() => appearance.dispose());
+    tearDown(() {
+      appearance.dispose();
+      announcements.dispose();
+    });
 
     /// Opens Settings on [tab] and starts the window's side, as the runner
     /// does on the first open.
@@ -273,8 +293,9 @@ void main() {
     /// tree here, joined only by the relayed link.
     Future<RemoteSettings> pumpBothWindows(
       WidgetTester tester,
-      AppearanceController main,
-    ) async {
+      AppearanceController main, {
+      SettingsTab tab = SettingsTab.appearance,
+    }) async {
       tester.view.physicalSize = const Size(2560, 800);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -290,7 +311,7 @@ void main() {
         coverage.dispose();
         await engine.close();
       });
-      final remote = await connectWindow(tester, SettingsTab.appearance);
+      final remote = await connectWindow(tester, tab);
       await tester.pumpWidget(
         Row(
           textDirection: TextDirection.ltr,
@@ -302,6 +323,7 @@ void main() {
                 prompts: prompts,
                 appearance: main,
                 coverage: coverage,
+                announcements: announcements,
               ),
             ),
             Expanded(child: SettingsWindowApp(remote: remote)),
@@ -388,6 +410,45 @@ void main() {
       expect(remote.appearance.value, unsaved.value);
       expect(windowApp(tester).themeMode, ThemeMode.dark);
       expect(windowSwitch(tester), ThemeModePreference.dark);
+    });
+
+    testWidgets('the General tab\'s announcement switch changes the app\'s '
+        'through the link (A11Y-15, D60)', (tester) async {
+      final remote = await pumpBothWindows(
+        tester,
+        appearance,
+        tab: SettingsTab.general,
+      );
+      bool windowSwitch() => tester
+          .widget<SwitchListTile>(
+            find.descendant(
+              of: find.byType(SettingsWindowApp),
+              matching: find.byType(SwitchListTile),
+            ),
+          )
+          .value;
+      expect(windowSwitch(), isTrue);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(SettingsWindowApp),
+          matching: find.text('Announce threshold changes'),
+        ),
+      );
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+
+      expect(announcements.value, isFalse);
+      expect(remote.announcements.value, isFalse);
+      expect(windowSwitch(), isFalse);
+
+      // A change in the app reaches the showing window too.
+      await tester.runAsync(() async {
+        await announcements.setAnnounceThresholdBands(true);
+        await pumpEventQueue();
+      });
+      await tester.pumpAndSettle();
+      expect(windowSwitch(), isTrue);
     });
 
     testWidgets('a theme change in the app re-themes the showing window', (
@@ -503,6 +564,14 @@ void main() {
       expect(
         roundTrip(const AppearanceNotSavedException('disk full')),
         isA<AppearanceNotSavedException>().having(
+          (error) => error.message,
+          'message',
+          'disk full',
+        ),
+      );
+      expect(
+        roundTrip(const AnnouncementNotSavedException('disk full')),
+        isA<AnnouncementNotSavedException>().having(
           (error) => error.message,
           'message',
           'disk full',

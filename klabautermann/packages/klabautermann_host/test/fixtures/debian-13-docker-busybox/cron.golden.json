@@ -1,0 +1,18 @@
+{
+  "result": {
+    "jobs": [],
+    "dirEntries": [
+      {
+        "period": "daily",
+        "name": "apt-compat"
+      },
+      {
+        "period": "daily",
+        "name": "dpkg"
+      }
+    ],
+    "ownCrontabPresent": null,
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

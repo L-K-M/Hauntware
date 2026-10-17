@@ -791,6 +791,7 @@ void main() {
         for (final reason in LogStreamWaitReason.values)
           LogStreamWaiting(reason),
         for (final reader in LogReader.values) LogStreamRunning(reader: reader),
+        const LogStreamRunning(continuity: LogContinuity.gap),
         for (final reason in LogStreamEndReason.values) LogStreamEnded(reason),
         const LogStreamEnded(
           LogStreamEndReason.denied,
@@ -806,8 +807,8 @@ void main() {
         expect(state.status.hashCode, status.hashCode);
       }
 
-      // Every status differs from every other: by variant, reader, reason
-      // or detail.
+      // Every status differs from every other: by variant, reader,
+      // continuity, reason or detail.
       for (var i = 0; i < statuses.length; i++) {
         for (var j = i + 1; j < statuses.length; j++) {
           expect(statuses[i], isNot(statuses[j]));
@@ -1008,6 +1009,20 @@ void main() {
         // run-time DateTime arrives as a copy, so equality is by value.
         expect(received.status, status);
         expect(received.status.hashCode, status.hashCode);
+      }
+    });
+
+    test('every failure kind survives on a closed link', () async {
+      for (final failure in LinkFailureKind.values) {
+        final status = LinkClosed(
+          LinkClosedReason.connectFailed,
+          failure: failure,
+        );
+        final received =
+            await roundTrip(LinkState('srv-1', status)) as LinkState;
+
+        expect(received.status, status);
+        expect((received.status as LinkClosed).failure, failure);
       }
     });
 

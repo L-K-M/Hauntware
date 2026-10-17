@@ -629,18 +629,46 @@ void main() {
       );
     });
 
-    test('a reused id, a follow and a server outside the fleet are '
-        'rejected', () async {
+    test('a reused id and a server outside the fleet are rejected', () async {
       final engine = await startEngine();
       engine
         ..send(window('log-0'))
-        ..send(window('log-0'))
-        ..send(window('log-1', follow: true))
+        ..send(window('log-0', follow: true))
         ..send(window('log-2', serverId: 'ssh-config:gone'));
       expect(await engine.next(), isA<LogStreamState>());
       expect(await engine.rejected(), 'OpenLogStream');
       expect(await engine.rejected(), 'OpenLogStream');
-      expect(await engine.rejected(), 'OpenLogStream');
+    });
+
+    test('a follow (K26) reads its window, then each new entry, and '
+        'Disconnect ends it as failed', () async {
+      final engine = await startEngine();
+      engine.send(const Connect(_web));
+      expect(await engine.next(), _connecting);
+      expect(await engine.next(), _ready);
+      engine.send(window('log-0', follow: true));
+      expect(await engine.next(), stream('log-0', const LogStreamRunning()));
+      expect(
+        link.commands.single,
+        endsWith("'-u' 'nginx.service' '-n' '50' '-f'"),
+      );
+
+      final process = await link.process(0);
+      for (final message in ['old', 'new']) {
+        process.emitText(
+          '${jsonEncode({'__CURSOR': 's=$message', 'MESSAGE': message})}\n',
+        );
+        final batch = await engine.next() as LogBatch;
+        expect((batch.records.single as JournalRecord).message, message);
+      }
+
+      engine.send(const Disconnect(_web));
+      expect(
+        await engine.next(),
+        stream('log-0', const LogStreamEnded(LogStreamEndReason.failed)),
+      );
+      await pumpEventQueue();
+      expect(process.closeCalls, 1);
     });
 
     test('CloseStream ends a running window as closed', () async {

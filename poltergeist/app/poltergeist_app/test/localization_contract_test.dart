@@ -528,12 +528,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // document keys, journal file suffix, and thrown diagnostics are the
   // frozen on-disk format and reported faults, never rendered UI copy.
   'lib/services/file_stores.dart': {
-    "'-'",
-    "''",
-    "':'",
-    "'.'",
-    r"'${file.path}.corrupt-$stamp'",
-    r"'$host:$port'",
     r"'${file.path}.rekey'",
     "'version'",
     "'snapshots'",
@@ -544,9 +538,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'Finish vault recovery before changing credentials.'",
     "'A pending vault recovery must be completed first.'",
     "'No matching snapshot.'",
-    // Conditional host-key replacement diagnostics, never rendered.
-    "'replacement'",
-    "'must use the expected host-key locator'",
   },
   'lib/services/settings_store.dart': {
     "'settings root'",

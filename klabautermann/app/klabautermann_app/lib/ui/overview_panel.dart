@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -7,9 +8,12 @@ import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'chart_strings.dart';
 import 'charts/charts.dart';
+import 'failed_units_summary.dart';
 import 'fleet_row_state.dart' show kFleetRowStaleAfter, kFleetRowThresholds;
 import 'freshness.dart';
 import 'system_panel.dart' show PanelNotice, PanelSection;
+import 'system_view.dart';
+import 'threshold_announcer.dart';
 
 /// The panel width from which the cards sit in two columns, growing with
 /// the text scale as the System tab's does.
@@ -26,6 +30,15 @@ const double _coreGap = 8;
 /// The widest a core's name gets before text scaling; only a name no
 /// kernel prints, such as a broken host's, is cut there.
 const double _coreNameMaxWidth = 72;
+
+/// The limit for the slow streams the health and Disks cards read (03
+/// §6.4): `fs` every 30 to 120 s and `failedUnits` every 60 s, so the
+/// fleet rows' `fs` limit, twice the slowest, judges both.
+final Duration _slowStaleAfter = kFleetRowStaleAfter[SampleStream.fs]!;
+
+/// How many mounts the Disks card lists before pointing to the System tab,
+/// which lists them all; the health card names every full one.
+const int _maxMountsShown = 8;
 
 /// The trailing number of a `/proc/stat` core name such as `cpu12`.
 final RegExp _coreNumber = RegExp(r'\d+$');
@@ -46,18 +59,22 @@ List<(String, double)> orderedCores(Map<String, double> perCpu) {
     });
 }
 
-/// The Overview tab, part one (03 §10.4; OV-01, OV-03, OV-04): CPU in
-/// total and per core (CPU-01, CPU-02), load with core context (CPU-03),
-/// memory with the ZFS ARC note (MEM-01) and swap (MEM-02), with session
-/// sparklines from the controller's rings and bar gauges.
+/// The Overview tab (03 §10.4; OV-01 to OV-04): the health card from
+/// failed units and full disks (OV-02), CPU in total and per core (CPU-01,
+/// CPU-02), load with core context (CPU-03), memory with the ZFS ARC note
+/// (MEM-01) and swap (MEM-02), with session sparklines from the
+/// controller's rings and bar gauges, then the mounts (DSK-01, DSK-02),
+/// network throughput (NET-01), and the host's OS, kernel, uptime and
+/// boot time (SYS-01, BOOT-01).
 ///
-/// It shows the last reading of the `core` stream its [SampledSurface]
-/// subscribes under one freshness line in 9.5 item 4's words, and greys
-/// the values once that line says stale. A failed reading says why above
-/// them. Figures go through the chart formatters' IEC units (A11Y-06);
-/// what the host did not report reads "Unknown" or is hatched, and a
-/// figure a container withholds (D50) says so. The clock ticks only while
-/// [visible].
+/// It shows the last reading of each stream its [SampledSurface]
+/// subscribes, under freshness lines in 9.5 item 4's words, and greys the
+/// values once a line says stale. A failed reading says why above them.
+/// Figures go through the chart formatters' IEC units (A11Y-06); what the
+/// host did not report reads "Unknown" or is hatched, and a figure a
+/// container withholds (D50) says so. The clock ticks only while
+/// [visible], and threshold-band changes are announced only then
+/// (A11Y-15, [ThresholdAnnouncer]).
 class OverviewPanel extends StatelessWidget {
   const OverviewPanel({
     super.key,
@@ -87,14 +104,30 @@ class OverviewPanel extends StatelessWidget {
     final latest = monitoring.sampleFor(serverId, SampleStream.core);
     final reading = monitoring.lastReadingFor(serverId, SampleStream.core);
     final sampling = monitoring.samplingFor(serverId);
-    return ListenableBuilder(
-      listenable: Listenable.merge([latest, reading, sampling]),
-      builder: (context, _) => ListenableBuilder(
-        listenable: visible && reading.value != null
-            ? monitoring.clock
-            : _silent,
-        builder: (context, _) =>
-            _build(context, latest.value, reading.value, sampling.value),
+    final slow = _Slow(monitoring, serverId);
+    final scope = AnnouncementScope.maybeOf(context);
+    // False while a pushed route, such as a phone's Settings, covers the
+    // panel; it rebuilds when that changes.
+    final onstage = TickerMode.valuesOf(context).enabled;
+    return ThresholdAnnouncer(
+      core: latest,
+      fs: slow.fs,
+      active: visible && onstage && (scope?.notifier?.value ?? false),
+      child: ListenableBuilder(
+        listenable: Listenable.merge([latest, reading, sampling, ...slow.all]),
+        builder: (context, _) => ListenableBuilder(
+          listenable: visible && (reading.value != null || slow.aging)
+              ? monitoring.clock
+              : _silent,
+          builder: (context, _) => _build(
+            context,
+            latest.value,
+            reading.value,
+            sampling.value,
+            slow,
+            scope,
+          ),
+        ),
       ),
     );
   }
@@ -104,16 +137,23 @@ class OverviewPanel extends StatelessWidget {
     Sample? latest,
     Sample? reading,
     SamplingStatus? sampling,
+    _Slow slow,
+    AnnouncementScope? scope,
   ) {
     final l10n = AppLocalizations.of(context);
-    final freshness = freshnessOf(
-      now: monitoring.clock.value,
-      staleAfter: kFleetRowStaleAfter[SampleStream.core]!,
-      lastSampleAt: reading?.at,
-      // No monitor set watches a server yet (FL-21): this panel samples it
-      // while it shows.
-      watched: false,
-      sampling: sampling,
+    Freshness freshness(Duration staleAfter, DateTime? lastSampleAt) =>
+        freshnessOf(
+          now: monitoring.clock.value,
+          staleAfter: staleAfter,
+          lastSampleAt: lastSampleAt,
+          // No monitor set watches a server yet (FL-21): this panel
+          // samples it while it shows.
+          watched: false,
+          sampling: sampling,
+        );
+    final coreFreshness = freshness(
+      kFleetRowStaleAfter[SampleStream.core]!,
+      reading?.at,
     );
     final unavailable = switch (latest?.result) {
       final CollectorUnavailable unavailable => unavailable,
@@ -124,10 +164,25 @@ class OverviewPanel extends StatelessWidget {
         monitoring: monitoring,
         serverId: serverId,
         core: core,
-        stale: freshness.stale,
+        stale: coreFreshness.stale,
       ),
       _ => null,
     };
+    final partTwo = _PartTwo(
+      slow: slow,
+      core: cards?.core,
+      coreStale: coreFreshness.stale,
+      diskFreshness: freshness(_slowStaleAfter, slow.listed.value?.at),
+      healthFreshness: freshness(_slowStaleAfter, slow.healthAt),
+    );
+    // Without a `core` reading this run, `core` has no age to lose, so a
+    // link lost after slow readings is said from theirs.
+    final head = reading != null || coreFreshness is FreshnessPaused
+        ? coreFreshness
+        : [
+            partTwo.diskFreshness,
+            partTwo.healthFreshness,
+          ].whereType<FreshnessDisconnected>().firstOrNull;
 
     return LayoutBuilder(
       builder: (context, box) {
@@ -138,14 +193,27 @@ class OverviewPanel extends StatelessWidget {
           spacing: _gap,
           children: children,
         );
+        Widget row(Widget start, Widget end) => Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          spacing: _gap,
+          children: [
+            Expanded(child: start),
+            Expanded(child: end),
+          ],
+        );
+        final disks = partTwo.disks(context);
+        final host = partTwo.host(context);
         return SingleChildScrollView(
           padding: EdgeInsets.all(wide ? 20 : 16),
           child: column([
-            if (reading != null || freshness is FreshnessPaused)
+            // The live stream's line heads the panel: a pause or a lost
+            // link holds every card, and the slow cards add their age.
+            if (head != null)
               PanelNotice(
-                icon: freshness.stale ? Icons.history : Icons.schedule,
-                text: freshnessText(l10n, freshness),
+                icon: head.stale ? Icons.history : Icons.schedule,
+                text: freshnessText(l10n, head),
               ),
+            partTwo.health(context, scope),
             if (unavailable != null)
               PanelNotice(
                 icon: unavailable.reason == CollectorUnavailableReason.timeout
@@ -159,29 +227,493 @@ class OverviewPanel extends StatelessWidget {
                 icon: Icons.hourglass_empty,
                 text: l10n.overviewWaiting,
               ),
-            if (cards != null && wide)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: _gap,
-                children: [
-                  Expanded(
-                    child: column([cards.cpu(context), cards.load(context)]),
-                  ),
-                  Expanded(
-                    child: column([cards.memory(context), cards.swap(context)]),
-                  ),
-                ],
-              )
-            else if (cards != null) ...[
-              cards.cpu(context),
-              cards.load(context),
-              cards.memory(context),
-              cards.swap(context),
+            if (cards != null && wide) ...[
+              row(
+                column([cards.cpu(context), cards.load(context)]),
+                column([cards.memory(context), cards.swap(context)]),
+              ),
+              row(disks, column([cards.network(context), host])),
+            ] else if (wide)
+              row(disks, host)
+            else ...[
+              if (cards != null) ...[
+                cards.cpu(context),
+                cards.load(context),
+                cards.memory(context),
+                cards.swap(context),
+              ],
+              disks,
+              ?cards?.network(context),
+              host,
             ],
             ?coverage,
           ]),
         );
       },
+    );
+  }
+}
+
+/// What a [DiskAlarm] measures of its mount.
+enum DiskMeasure { space, inodes }
+
+/// A listed mount whose space or inode use is at or past a level (OV-02).
+typedef DiskAlarm = ({
+  String mountPoint,
+  DiskMeasure measure,
+  int percent,
+  ChartSeverity severity,
+});
+
+/// [fs]'s mounts whose space or inode use reaches the fleet rows' warning
+/// level (OV-02, until OV-11), the most severe and fullest first. Pseudo
+/// filesystems stay out, as in the Disks card: a squashfs image is always
+/// full.
+List<DiskAlarm> diskAlarms(FsSnapshot fs) {
+  final alarms = <DiskAlarm>[];
+  for (final mount in shownMounts(fs, showPseudo: false)) {
+    for (final (measure, percent) in [
+      (DiskMeasure.space, mount.capacityPercent),
+      (DiskMeasure.inodes, mount.inodeUsePercent),
+    ]) {
+      if (percent == null) continue;
+      final severity = kFleetRowThresholds.severityOf(percent.toDouble());
+      if (severity == ChartSeverity.normal) continue;
+      alarms.add((
+        mountPoint: mount.mountPoint,
+        measure: measure,
+        percent: percent,
+        severity: severity,
+      ));
+    }
+  }
+  return alarms..sort((a, b) {
+    final bySeverity = b.severity.index.compareTo(a.severity.index);
+    return bySeverity != 0 ? bySeverity : b.percent.compareTo(a.percent);
+  });
+}
+
+/// The slow streams the health, Disks and Host cards read (03 §6.4), each
+/// as its latest sample, which says when a reading failed, and its last
+/// reading, which stays shown meanwhile; and the probe's profile for D50.
+final class _Slow {
+  _Slow(MonitoringController monitoring, String serverId)
+    : fs = monitoring.sampleFor(serverId, SampleStream.fs),
+      listed = monitoring.lastReadingFor(serverId, SampleStream.fs),
+      failed = monitoring.sampleFor(serverId, SampleStream.failedUnits),
+      failedReading = monitoring.lastReadingFor(
+        serverId,
+        SampleStream.failedUnits,
+      ),
+      identityLatest = monitoring.sampleFor(serverId, SampleStream.identity),
+      identity = monitoring.lastReadingFor(serverId, SampleStream.identity),
+      profile = monitoring.profileFor(serverId);
+
+  final ValueListenable<Sample?> fs, listed, failed, failedReading;
+  final ValueListenable<Sample?> identityLatest, identity;
+  final ValueListenable<HostProfile?> profile;
+
+  List<Listenable> get all => [
+    fs,
+    listed,
+    failed,
+    failedReading,
+    identityLatest,
+    identity,
+    profile,
+  ];
+
+  /// Whether a reading ages on a freshness line.
+  bool get aging => listed.value != null || failedReading.value != null;
+
+  /// The latest `df`'s failure, or null.
+  CollectorUnavailable? get fsFailure => switch (fs.value?.result) {
+    final CollectorUnavailable unavailable => unavailable,
+    _ => null,
+  };
+
+  /// When the oldest reading the health card shows arrived: the last unit
+  /// list, and the last listing unless the latest `df` failed, since the
+  /// card then names no mount from it.
+  DateTime? get healthAt {
+    final times = [
+      ?failedReading.value?.at,
+      if (fsFailure == null) ?listed.value?.at,
+    ];
+    return times.isEmpty ? null : times.reduce((a, b) => a.isBefore(b) ? a : b);
+  }
+}
+
+/// How the health card's link words the A11Y-15 switch.
+enum _SwitchState { on, off }
+
+/// The health, Disks and Host cards over [slow]'s readings and the `core`
+/// reading's uptime and boot time.
+final class _PartTwo {
+  const _PartTwo({
+    required this.slow,
+    required this.core,
+    required this.coreStale,
+    required this.diskFreshness,
+    required this.healthFreshness,
+  });
+
+  final _Slow slow;
+  final CoreResult? core;
+  final bool coreStale;
+  final Freshness diskFreshness, healthFreshness;
+
+  /// A slow card's age, or null: a pause or a lost link is said once, by
+  /// the panel's first line, though it greys these values too.
+  static Widget? _ageLine(AppLocalizations l10n, Freshness freshness) =>
+      freshness is FreshnessUpdated
+      ? PanelNotice(
+          icon: freshness.stale ? Icons.history : Icons.schedule,
+          text: freshnessText(l10n, freshness),
+        )
+      : null;
+
+  static IconData _reasonIcon(CollectorUnavailable unavailable) =>
+      unavailable.reason == CollectorUnavailableReason.timeout
+      ? Icons.timer_off_outlined
+      : Icons.error_outline;
+
+  /// OV-02: failed units through K34's summary, then the mounts past a
+  /// level, and the link to A11Y-15's switch in Settings (D60).
+  Widget health(BuildContext context, AnnouncementScope? scope) {
+    final l10n = AppLocalizations.of(context);
+    final stale = healthFreshness.stale;
+    final unitsFailed = switch (slow.failed.value?.result) {
+      final CollectorUnavailable unavailable => unavailable,
+      _ => null,
+    };
+    final announce = scope?.notifier?.value ?? false;
+    return PanelSection(
+      title: l10n.overviewHealthTitle,
+      children: [
+        ?_ageLine(l10n, healthFreshness),
+        if (unitsFailed != null)
+          PanelNotice(
+            icon: _reasonIcon(unitsFailed),
+            text: l10n.overviewHealthUnitsCheckFailed(unitsFailed.reason.name),
+            detail: unitsFailed.detail,
+          ),
+        if (slow.failedReading.value?.result case FailedUnitsResult(
+          :final failed,
+        ))
+          FailedUnitsSummary(failed: failed, stale: stale)
+        else if (unitsFailed == null)
+          PanelNotice(
+            icon: Icons.hourglass_empty,
+            text: l10n.overviewHealthUnitsWaiting,
+          ),
+        ..._diskHealth(context, l10n, stale),
+        if (scope != null)
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            // The label states the switch, so the hint says that the
+            // button opens Settings rather than flipping it here.
+            child: MergeSemantics(
+              child: Semantics(
+                hint: l10n.overviewHealthAnnouncementsHint,
+                child: TextButton.icon(
+                  onPressed: () => scope.openSettings(context),
+                  icon: Icon(
+                    announce
+                        ? Icons.record_voice_over_outlined
+                        : Icons.voice_over_off_outlined,
+                  ),
+                  label: Text(
+                    l10n.overviewHealthAnnouncements(
+                      (announce ? _SwitchState.on : _SwitchState.off).name,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// A failed `df` makes every mount's use unknown, so it names no mount
+  /// from an older reading.
+  List<Widget> _diskHealth(
+    BuildContext context,
+    AppLocalizations l10n,
+    bool stale,
+  ) {
+    if (slow.fsFailure case final unavailable?) {
+      return [
+        PanelNotice(
+          icon: _reasonIcon(unavailable),
+          text: l10n.overviewHealthDisksUnknown(unavailable.reason.name),
+        ),
+      ];
+    }
+    final listed = slow.listed.value?.result;
+    if (listed is! FsResult) {
+      return [
+        PanelNotice(
+          icon: Icons.hourglass_empty,
+          text: l10n.overviewDisksWaiting,
+        ),
+      ];
+    }
+
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    final alarms = diskAlarms(listed.fs);
+    if (alarms.isEmpty) {
+      return [
+        _IconLine(
+          icon: Icons.check_circle_outline,
+          color: muted,
+          text: l10n.overviewHealthDisksOk(
+            l10n.chartPercent(kFleetRowThresholds.warning / 100),
+          ),
+          stale: stale,
+        ),
+      ];
+    }
+    final palette = ChartPalette.of(context);
+    return [
+      for (final alarm in alarms)
+        _IconLine(
+          icon: alarm.severity == ChartSeverity.critical
+              ? Icons.error_outline
+              : Icons.warning_amber_outlined,
+          color: stale ? muted : palette.severityColor(alarm.severity) ?? muted,
+          text: switch (alarm.measure) {
+            DiskMeasure.inodes => l10n.overviewHealthDiskInodes(
+              alarm.mountPoint,
+              l10n.chartPercent(alarm.percent / 100),
+              alarm.severity.name,
+            ),
+            DiskMeasure.space => l10n.overviewHealthDiskSpace(
+              alarm.mountPoint,
+              l10n.chartPercent(alarm.percent / 100),
+              alarm.severity.name,
+            ),
+          },
+          stale: stale,
+        ),
+    ];
+  }
+
+  /// DSK-01 and DSK-02 as K37's System tab reads them: the listed mounts,
+  /// after a `df` timeout the last reading's mounts with their use
+  /// unknown, since which mount hung is not known, and after another
+  /// failure only why.
+  Widget disks(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final listed = switch (slow.listed.value) {
+      Sample(:final at, result: FsResult(:final fs)) => (at: at, fs: fs),
+      _ => null,
+    };
+    final unavailable = slow.fsFailure;
+    final timedOut = unavailable?.reason == CollectorUnavailableReason.timeout;
+    final shown = unavailable == null || timedOut ? listed : null;
+    return PanelSection(
+      title: l10n.systemDisksTitle,
+      children: [
+        if (shown != null) ?_ageLine(l10n, diskFreshness),
+        if (timedOut) ...[
+          PanelNotice(
+            icon: Icons.timer_off_outlined,
+            text: l10n.systemDisksTimedOut,
+          ),
+          if (listed != null)
+            Text(l10n.systemDisksLastListed(listed.at.toLocal())),
+        ] else if (unavailable != null)
+          PanelNotice(
+            icon: _reasonIcon(unavailable),
+            text: l10n.overviewUnavailable(unavailable.reason.name),
+            detail: unavailable.detail,
+          )
+        else if (listed == null)
+          PanelNotice(
+            icon: Icons.hourglass_empty,
+            text: l10n.overviewDisksWaiting,
+          )
+        else if (listed.fs.timeoutAbsent)
+          PanelNotice(
+            icon: Icons.info_outline,
+            text: l10n.systemDisksNoTimeout,
+          ),
+        if (shown != null)
+          ..._mounts(context, l10n, shown.fs, timedOut: timedOut),
+      ],
+    );
+  }
+
+  List<Widget> _mounts(
+    BuildContext context,
+    AppLocalizations l10n,
+    FsSnapshot fs, {
+    required bool timedOut,
+  }) {
+    final mounts = shownMounts(fs, showPseudo: false);
+    if (mounts.isEmpty) return [Text(l10n.systemDisksEmpty)];
+
+    final stale = diskFreshness.stale;
+    String? percent(int? value) =>
+        value == null || timedOut ? null : l10n.chartPercent(value / 100);
+    return [
+      for (final mount in mounts.take(_maxMountsShown))
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: 4,
+          children: [
+            Text(
+              mount.mountPoint,
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            if (!timedOut)
+              StackedBar(
+                label: mount.mountPoint,
+                segments: [
+                  BarSegment(
+                    label: l10n.systemColumnUsed,
+                    value: mount.usedBytes?.toDouble(),
+                  ),
+                ],
+                total: _diskBase(mount)?.toDouble(),
+                unit: ChartUnit.bytes,
+                strings: klabautermannChartStrings(l10n),
+                thresholds: kFleetRowThresholds,
+                stale: stale,
+              ),
+            _Facts(
+              stale: stale,
+              facts: [
+                (l10n.systemColumnUse, percent(mount.capacityPercent)),
+                (
+                  l10n.overviewDiskSize,
+                  timedOut ? null : _Cards._bytes(l10n, mount.sizeBytes),
+                ),
+                (l10n.systemColumnInodes, percent(mount.inodeUsePercent)),
+              ],
+            ),
+          ],
+        ),
+      if (mounts.length > _maxMountsShown)
+        Text(l10n.overviewDisksMore(mounts.length - _maxMountsShown)),
+    ];
+  }
+
+  /// What `df` computes a mount's share on: the used plus the available
+  /// space (reserved blocks count in neither), else the size, so bar and
+  /// figure agree as in the System tab.
+  static int? _diskBase(FsMount mount) {
+    final used = mount.usedBytes;
+    final avail = mount.availBytes;
+    return used != null && avail != null ? used + avail : mount.sizeBytes;
+  }
+
+  /// SYS-01's OS and kernel from `identity`, and BOOT-01's uptime and boot
+  /// time from `core`, unknown with D50's reason where the container's
+  /// `/proc` file would give the host's. Before a reading the card waits,
+  /// and a failed one says why above the last values, as the System tab
+  /// and part one's cards do; the panel's first notices speak for `core`.
+  Widget host(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final identityFailed = switch (slow.identityLatest.value?.result) {
+      final CollectorUnavailable unavailable => unavailable,
+      _ => null,
+    };
+    final identity = switch (slow.identity.value?.result) {
+      final IdentityResult identity => identity,
+      _ => null,
+    };
+    final profile = slow.profile.value;
+    final uptimeWithheld = withholdsHostFigure(
+      profile,
+      SystemWideProcFile.uptime,
+    );
+    final bootWithheld = withholdsHostFigure(profile, SystemWideProcFile.stat);
+    final core = this.core;
+    final uptime = uptimeWithheld ? null : core?.uptime;
+    final booted = bootWithheld ? null : core?.bootedAt;
+    return PanelSection(
+      title: l10n.overviewHostTitle,
+      children: [
+        if (identityFailed != null)
+          PanelNotice(
+            icon: _reasonIcon(identityFailed),
+            text: l10n.overviewUnavailable(identityFailed.reason.name),
+            detail: identityFailed.detail,
+          ),
+        if (identity != null)
+          // Read once per session (03 §6.4), so with no age of its own:
+          // it greys with the `core` cards once the panel's line says
+          // stale.
+          _Facts(
+            stale: core != null && coreStale,
+            facts: [
+              (l10n.systemOperatingSystem, identity.osPrettyName),
+              (l10n.systemKernel, kernelText(l10n, identity)),
+            ],
+          )
+        else if (identityFailed == null)
+          PanelNotice(
+            icon: Icons.hourglass_empty,
+            text: l10n.overviewHostWaiting,
+          ),
+        if (core != null) ...[
+          _Facts(
+            stale: coreStale,
+            facts: [
+              (
+                l10n.systemUptime,
+                uptime == null ? null : uptimeText(l10n, uptime),
+              ),
+              (
+                l10n.systemBooted,
+                booted == null
+                    ? null
+                    : l10n.systemBootedValue(booted.toLocal()),
+              ),
+            ],
+          ),
+          if (uptimeWithheld || bootWithheld)
+            PanelNotice(
+              icon: Icons.info_outline,
+              text: uptimeWithheld && bootWithheld
+                  ? l10n.overviewUnknownContainer
+                  : l10n.systemUnknownContainer,
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+/// A state in words beside an icon of its own shape, read as one node;
+/// the colour adds emphasis only (A11Y-01).
+class _IconLine extends StatelessWidget {
+  const _IconLine({
+    required this.icon,
+    required this.color,
+    required this.text,
+    required this.stale,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String text;
+  final bool stale;
+
+  @override
+  Widget build(BuildContext context) {
+    return MergeSemantics(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: 8,
+        children: [
+          Icon(icon, size: 20, color: color),
+          Expanded(child: Text(text, style: _valueStyle(context, stale))),
+        ],
+      ),
     );
   }
 }
@@ -371,6 +903,29 @@ final class _Cards {
         if (memory?.zfsArcCountedAsUsed ?? false)
           PanelNotice(icon: Icons.info_outline, text: l10n.overviewMemoryArc),
         ?_withheld(l10n, const [MetricField.memory]),
+      ],
+    );
+  }
+
+  /// NET-01's total rates over every interface the host reported; the
+  /// first reading after a start or a counter reset has none.
+  Widget network(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final strings = klabautermannChartStrings(l10n);
+    final totals = networkTotals(core.network);
+    String? rate(double? value) => value == null
+        ? null
+        : formatChartValue(value, ChartUnit.bytesPerSecond, strings);
+    return PanelSection(
+      title: l10n.systemNetworkTitle,
+      children: [
+        _Facts(
+          stale: stale,
+          facts: [
+            (l10n.systemReceive, rate(totals?.rx)),
+            (l10n.systemTransmit, rate(totals?.tx)),
+          ],
+        ),
       ],
     );
   }

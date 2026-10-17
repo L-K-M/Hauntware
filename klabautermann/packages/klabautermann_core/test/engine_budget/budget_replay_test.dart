@@ -5,10 +5,9 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/replay/fixture_replay.dart';
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:test/test.dart';
-
-import '../../tool/src/budget_replay.dart';
 
 const _core = '''
 == stat ==
@@ -213,15 +212,22 @@ some avg10=0.05 avg60=0.02 avg300=0.01
 
     test('sends at most 20 batches in any second and about 20 a second '
         'whatever the steps', () {
-      // 10 ms steps with up to 2 ms of jitter, as the harness's timer
-      // fires, and one step 45 ms late, as a loaded machine delays one.
+      // 10 ms steps with up to 2 ms of jitter, as the harness's periodic
+      // timer fires, and the one due at 50 ms running 45 ms late, as on a
+      // loaded machine. The VM runs a late periodic timer once and drops
+      // the ticks that came due meanwhile (`Timer.tick`), so the steps at
+      // 60 to 90 ms never run and the grid holds from 100 ms.
       final random = math.Random(1);
       final steps = [
         for (var ms = 0; ms < 10000; ms += 10)
-          ms == 50
-              ? const Duration(milliseconds: 95)
-              : Duration(microseconds: ms * 1000 + random.nextInt(2000)),
+          if (ms == 50)
+            const Duration(milliseconds: 95)
+          else if (ms < 50 || ms > 90)
+            Duration(microseconds: ms * 1000 + random.nextInt(2000)),
       ];
+      for (var i = 1; i < steps.length; i++) {
+        expect(steps[i], greaterThan(steps[i - 1]), reason: 'step $i');
+      }
       final follow = FollowReplay(streamId: 's', maxPending: 100);
       final sent = <Duration>[];
       for (final (i, now) in steps.indexed) {

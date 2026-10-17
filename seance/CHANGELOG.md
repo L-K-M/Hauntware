@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- When a server rejects your key or your ssh-agent keys, the connection
+  error no longer names Séance: it says "The offered key" or "The offered
+  ssh-agent keys" where it said "The key Séance offered" or "The
+  ssh-agent keys Séance offered". The advice after it is unchanged.
 - Settings › General › Built-in editor has a font field with the same
   picker as the terminal's, and a Ligatures switch. Editor tabs draw in
   JetBrains Mono with ligatures unless you choose otherwise.

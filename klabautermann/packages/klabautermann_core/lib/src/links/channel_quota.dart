@@ -25,7 +25,9 @@ enum ChannelShare {
 /// The least learned session limit under which a follower may take a
 /// channel: the two samplers, one follower and one short action. Below it
 /// a follower waits for a channel, since holding the last free one would
-/// leave short actions none. 03 §5.2's low-session mode arrives with M3.
+/// leave short actions none, and each session above it makes room for
+/// one more follower up to the share's 2. 03 §5.2's low-session mode
+/// arrives with M3.
 const kFollowerMinSessionLimit = 4;
 
 /// One server's [ChannelShare] slots in use, owned by the engine isolate.
@@ -38,16 +40,17 @@ final class ChannelQuota {
   int held(ChannelShare share) => _held[share]!;
 
   /// Takes a slot of [share] and returns true, or returns false when its
-  /// slots are all taken or, for a follower, the link learned a session
-  /// limit ([learnedSessionLimit]) below [kFollowerMinSessionLimit].
+  /// slots are all taken or, for a follower, the session limit the link
+  /// learned ([learnedSessionLimit]) leaves no room for another: none
+  /// below [kFollowerMinSessionLimit], one at it.
   bool take(ChannelShare share, {int? learnedSessionLimit}) {
+    final held = _held[share]!;
     if (share == ChannelShare.follower &&
         learnedSessionLimit != null &&
-        learnedSessionLimit < kFollowerMinSessionLimit) {
+        held > learnedSessionLimit - kFollowerMinSessionLimit) {
       return false;
     }
 
-    final held = _held[share]!;
     if (held >= share.limit) return false;
     _held[share] = held + 1;
     return true;

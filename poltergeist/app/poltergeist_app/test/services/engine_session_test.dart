@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/services/engine_session.dart';
-import 'package:poltergeist_app/services/file_stores.dart';
 import 'package:poltergeist_app/services/prompt_coordinator.dart';
 import 'package:poltergeist_app/services/trash_channel.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';

@@ -1,0 +1,115 @@
+{
+  "result": {
+    "kernelSys": "Linux",
+    "kernelRelease": "6.18.44-fc-v139",
+    "kernelArch": "x86_64",
+    "distroId": "rhel",
+    "distroIdLike": "centos fedora",
+    "distroVersionId": "10.2",
+    "distroPrettyName": "Red Hat Enterprise Linux 10.2 (Coughlan)",
+    "pid1Comm": "sleep",
+    "systemdDir": false,
+    "systemctlVersionLine": "systemd 257 (257-23.el10_2.2-g009f2a8)",
+    "systemdVersion": 257,
+    "virtualization": "docker",
+    "container": "docker",
+    "lxcfsMounts": [],
+    "uid": 0,
+    "user": "root",
+    "groups": [
+      "root"
+    ],
+    "sudoVersionLine": null,
+    "sudoKind": "none",
+    "sudoNonInteractive": null,
+    "doasPresent": false,
+    "doasNonInteractive": null,
+    "run0Present": true,
+    "printfBuiltin": true,
+    "tools": {
+      "journalctl": "/usr/bin/journalctl",
+      "crontab": null,
+      "ss": "/usr/sbin/ss",
+      "ip": "/usr/sbin/ip",
+      "lsblk": "/usr/bin/lsblk",
+      "findmnt": "/usr/bin/findmnt",
+      "smartctl": null,
+      "sensors": null,
+      "docker": null,
+      "podman": null,
+      "socat": null,
+      "timeout": "/usr/bin/timeout",
+      "setsid": "/usr/bin/setsid",
+      "ncdu": null,
+      "gdu": null,
+      "sadf": null,
+      "logger": "/usr/bin/logger",
+      "systemd-run": "/usr/bin/systemd-run",
+      "systemd-analyze": "/usr/bin/systemd-analyze",
+      "apt-get": null,
+      "dnf": "/usr/bin/dnf",
+      "dnf5": null,
+      "apk": null,
+      "pacman": null,
+      "zypper": null,
+      "nvidia-smi": null,
+      "dmesg": "/usr/bin/dmesg",
+      "tail": "/usr/bin/tail"
+    },
+    "psi": true,
+    "cgroupV2": false,
+    "cUtf8": true,
+    "engineSockets": [
+      {
+        "path": "/var/run/docker.sock",
+        "exists": false,
+        "writable": false
+      },
+      {
+        "path": "/run/podman/podman.sock",
+        "exists": false,
+        "writable": false
+      },
+      {
+        "path": "/run/user/0/docker.sock",
+        "exists": false,
+        "writable": false
+      },
+      {
+        "path": "/run/user/0/podman/podman.sock",
+        "exists": false,
+        "writable": false
+      }
+    ],
+    "sshConnection": null,
+    "sessionParentPid": 7,
+    "sessionParentComm": "dart:capture_fi",
+    "epochSeconds": 1792173370,
+    "zoneOffset": "+0000",
+    "timezone": null,
+    "etcTimezone": null,
+    "localtimeTarget": null,
+    "lingerEnabled": null,
+    "killUserProcesses": null,
+    "xdgRuntimeDir": null,
+    "areaStatuses": {
+      "kernel": "ok",
+      "distro": "ok",
+      "init": "ok",
+      "virt": "ok",
+      "lxcfs": "ok",
+      "identity": "ok",
+      "elev": "ok",
+      "tools": "ok",
+      "kfeat": "ok",
+      "locale": "ok",
+      "sockets": "ok",
+      "session": "ok",
+      "clock": "ok",
+      "linger": "ok"
+    }
+  },
+  "warnings": [
+    "probe clock: timedatectl failed"
+  ]
+}

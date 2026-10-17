@@ -69,6 +69,12 @@ import 'package:meta/meta.dart';
 /// [ProcessRow] then gained `startedAt`, its start by the engine's clock
 /// (03 §7.2), within v3 the same way.
 ///
+/// [LogStreamRunning] then gained [LogContinuity], whether a follow that
+/// ran again may lack records (03 §7.6), within v3 the same way.
+///
+/// [LinkFailureKind] then gained `keyPassphraseRequired` and
+/// `keyFileHiddenBySandbox` (03 §10.1), within v3 the same way.
+///
 /// [KeyboardInteractivePromptRequest] then gained `user`, the account it
 /// signs in as, [PromptCancelAnswer] joined to decline its questions, and
 /// [LinkFailureKind] gained `keyboardInteractiveCancelled` for the attempt
@@ -920,7 +926,7 @@ final class LogStreamSpec {
   /// record. journalctl refuses `--since` together with a cursor, so with
   /// one the engine applies [JournalLogSource.since] itself: a window ends
   /// with [LogStreamEndReason.oldestReached] at the first record older
-  /// than it, and a follow reads on from the cursor alone.
+  /// than it, and a follow skips such records, as it does without one.
   final String? afterCursor;
 }
 
@@ -1104,14 +1110,32 @@ final class LogStreamWaiting extends LogStreamStatus {
 
 /// The read runs on the host: a window until it ends, a follow live.
 /// [reader] says which of its source's readers serves it, so the view can
-/// name where a kernel log came from (LOG-03).
+/// name where a kernel log came from (LOG-03), and [continuity] whether a
+/// follow that waited may lack records written meanwhile (LOG-02).
 final class LogStreamRunning extends LogStreamStatus {
-  const LogStreamRunning({this.reader = LogReader.primary});
+  const LogStreamRunning({
+    this.reader = LogReader.primary,
+    this.continuity = LogContinuity.complete,
+  });
 
   final LogReader reader;
+  final LogContinuity continuity;
 
   @override
-  List<Object?> get _values => [reader];
+  List<Object?> get _values => [reader, continuity];
+}
+
+/// Whether a running stream holds every record since it opened (03 §7.6).
+enum LogContinuity {
+  /// Every record arrived or was counted in a [LogBatch.dropped]: a
+  /// window, a follow on its first run, or one that resumed after its
+  /// newest journal cursor.
+  complete,
+
+  /// A follow without a cursor to resume after, such as a file's `tail
+  /// -F`, started again after it waited and delivers only new records:
+  /// records written while it waited may be missing, uncounted.
+  gap,
 }
 
 /// Which reader a [LogStreamRunning] stream reads with (03 §7.6).
@@ -1575,7 +1599,7 @@ enum LinkClosedReason {
   connectFailed,
 }
 
-/// What the engine found behind a [LinkClosed]. The first six are the
+/// What the engine found behind a [LinkClosed]. The first eight are the
 /// connect failures protocol version 3 classifies (03 §10.1); the last
 /// three are 03 §5.3's client limitations.
 enum LinkFailureKind {
@@ -1588,9 +1612,21 @@ enum LinkFailureKind {
   /// The server refused every credential offered.
   authenticationRejected,
 
-  /// No credential could be offered: no agent answered, or a key file
-  /// could not be read.
+  /// No credential could be offered: the ssh-agent holds no keys, a key
+  /// file could not be read or holds no key the client can use, or a
+  /// stored secret is not on this device.
   credentialUnavailable,
+
+  /// The private key is encrypted and the engine has no passphrase that
+  /// opens it: none was given, or the one given was wrong. Nothing reached
+  /// the server. No prompt asks for one yet, so only an agent holding the
+  /// key gets past it.
+  keyPassphraseRequired,
+
+  /// Inside the Flatpak sandbox, a key file could not be found: the
+  /// sandbox shows only the paths its manifest grants, so a key outside
+  /// them reads as missing whether or not it exists (03 §4.5).
+  keyFileHiddenBySandbox,
 
   /// The user, or the background rule, declined a first-seen host key.
   hostKeyDeclined,
