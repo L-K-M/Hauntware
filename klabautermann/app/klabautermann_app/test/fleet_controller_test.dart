@@ -110,6 +110,24 @@ void main() {
       expect(FleetServer.fromEntry(_entry('a')).locatorConflict, isNull);
     });
 
+    test('rows carry where the entry came from and its group (FL-06)', () {
+      const synced = FleetEntry(
+        serverId: 'srv-1',
+        label: 'web-1',
+        host: 'web-1.example',
+        port: kSshDefaultPort,
+        origin: FleetEntryOrigin.synced,
+        group: 'Production',
+      );
+
+      final server = FleetServer.fromEntry(synced);
+      expect(server.origin, FleetEntryOrigin.synced);
+      expect(server.group, 'Production');
+      final import = FleetServer.fromEntry(_entry('a'));
+      expect(import.origin, FleetEntryOrigin.sshConfig);
+      expect(import.group, isNull);
+    });
+
     test(
       'keeps a selection the new fleet lists and drops one it does not',
       () async {
@@ -229,6 +247,75 @@ void main() {
 
       expect(fleet.linkStatusFor('seed'), const LinkConnecting());
       expect(fleet.linkStatusFor('other'), const LinkIdle());
+    });
+  });
+
+  group('pins (03 §10.3)', () {
+    test('start from the restored set, apply at once and save', () async {
+      final saved = <Set<String>>[];
+      final fleet = FleetController(
+        engine,
+        pinnedServerIds: {'srv-1'},
+        savePins: (ids) async => saved.add(ids),
+      );
+      addTearDown(fleet.dispose);
+      var notified = 0;
+      fleet.addListener(() => notified++);
+
+      expect(fleet.pinnedServerIds, {'srv-1'});
+      await fleet.pin('srv-2');
+      expect(fleet.pinnedServerIds, {'srv-1', 'srv-2'});
+      await fleet.unpin('srv-1');
+      expect(fleet.pinnedServerIds, {'srv-2'});
+
+      expect(saved, [
+        {'srv-1', 'srv-2'},
+        {'srv-2'},
+      ]);
+      expect(notified, 2);
+      expect(
+        () => fleet.pinnedServerIds.add('srv-3'),
+        throwsUnsupportedError,
+        reason: 'changes go through pin and unpin',
+      );
+    });
+
+    test('a change that changes nothing saves nothing', () async {
+      var saves = 0;
+      final fleet = FleetController(
+        engine,
+        pinnedServerIds: {'srv-1'},
+        savePins: (_) async => saves++,
+      );
+      addTearDown(fleet.dispose);
+
+      await fleet.pin('srv-1');
+      await fleet.unpin('srv-2');
+
+      expect(saves, 0);
+    });
+
+    test('a save that fails rethrows and keeps the change', () async {
+      final fleet = FleetController(
+        engine,
+        savePins: (_) async => throw const FileSystemException('disk full'),
+      );
+      addTearDown(fleet.dispose);
+
+      await expectLater(
+        fleet.pin('srv-1'),
+        throwsA(isA<FileSystemException>()),
+      );
+      expect(fleet.pinnedServerIds, {'srv-1'});
+    });
+
+    test('outlast a sync that drops the server and brings it back', () async {
+      final fleet = controller();
+      await fleet.pin('srv-1');
+
+      engine.emit(CatalogReplaced(const []));
+      await settle();
+      expect(fleet.pinnedServerIds, {'srv-1'});
     });
   });
 

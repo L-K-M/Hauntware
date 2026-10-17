@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:io' show FileSystemException;
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart' show PointerDeviceKind, kSecondaryButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/semantics.dart' show SemanticsAction;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_servers/ghost_servers.dart' show kPinnedKey, kServersKey;
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
@@ -67,7 +70,8 @@ Future<_Rows> _pump(
   Brightness brightness = Brightness.light,
   String? fontFamily,
   Size size = const Size(260, 480),
-  bool collapsed = false,
+  Set<String> pinned = const {},
+  Future<void> Function(Set<String> ids)? savePins,
   SidebarKitLayout layout = SidebarKitLayout.rail,
   SidebarKitDensity density = SidebarKitDensity.comfortable,
   TargetPlatform? platform,
@@ -80,7 +84,12 @@ Future<_Rows> _pump(
   late final _Rows rows;
   rows = _Rows(
     engine,
-    FleetController(engine, servers: servers),
+    FleetController(
+      engine,
+      servers: servers,
+      pinnedServerIds: pinned,
+      savePins: savePins,
+    ),
     MonitoringController(engine, linkGrace: Duration.zero, now: () => rows.now),
   );
   addTearDown(() async {
@@ -111,7 +120,6 @@ Future<_Rows> _pump(
                 child: FleetServerList(
                   fleet: rows.fleet,
                   monitoring: rows.monitoring,
-                  collapsed: collapsed,
                   showSelection: true,
                   onOpen: (server) {
                     rows.opened.add(server.id);
@@ -308,13 +316,288 @@ void main() {
     testWidgets('a query shows its matches in a collapsed section', (
       tester,
     ) async {
-      await _pump(tester, servers: servers, collapsed: true);
+      await _pump(tester, servers: servers);
+      await tester.tap(find.byKey(fleetSectionHeaderKey(kServersKey)));
+      await tester.pump();
       expect(find.byType(FleetServerRow), findsNothing);
 
       await tester.enterText(find.byType(TextField), 'db');
       await tester.pump();
       expect(find.text('db-1'), findsOneWidget);
       expect(find.text('web-1'), findsNothing);
+    });
+  });
+
+  group('sections (FL-06, 03 §10.3)', () {
+    // Synced servers in the catalog's order, two of them grouped under
+    // spellings of one group, and two imports, which carry no group.
+    const fleet = [
+      FleetServer(id: 'srv-web', displayName: 'web-1', group: 'Production'),
+      FleetServer(id: 'srv-ci', displayName: 'runner', group: 'CI'),
+      FleetServer(id: 'srv-loose', displayName: 'loose'),
+      FleetServer(id: 'srv-db', displayName: 'db-1', group: 'production'),
+      FleetServer(
+        id: 'ssh-config:alpha',
+        displayName: 'alpha',
+        origin: FleetEntryOrigin.sshConfig,
+      ),
+      FleetServer(
+        id: 'ssh-config:bravo',
+        displayName: 'bravo',
+        origin: FleetEntryOrigin.sshConfig,
+      ),
+    ];
+
+    /// The list's lines top to bottom: `#TITLE` for a section header,
+    /// `>name` for a group's, and a row's title, indented by its depth.
+    List<String> lines(WidgetTester tester) => [
+      for (final element
+          in find
+              .byWidgetPredicate(
+                (widget) =>
+                    widget is SidebarSectionHeader || widget is SidebarRow,
+              )
+              .evaluate())
+        switch (element.widget) {
+          SidebarSectionHeader(:final title, nested: true) => '>$title',
+          SidebarSectionHeader(:final title) => '#$title',
+          SidebarRow(:final title, :final depth) => '${'  ' * depth}$title',
+          _ => throw StateError('unexpected ${element.widget}'),
+        },
+    ];
+
+    Future<void> openMenu(WidgetTester tester, String title) async {
+      await tester.tap(
+        find.text(title),
+        buttons: kSecondaryButton,
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('synced servers sit under SERVERS by group, imports in a '
+        'section of their own', (tester) async {
+      await _pump(tester, servers: fleet, size: const Size(260, 720));
+
+      expect(lines(tester), [
+        '#Servers',
+        'loose',
+        '>CI',
+        '  runner',
+        '>Production',
+        '  web-1',
+        '  db-1',
+        '#Imported',
+        'alpha',
+        'bravo',
+      ]);
+      expect(find.text('SERVERS'), findsOneWidget, reason: 'drawn in caps');
+      expect(find.text('IMPORTED'), findsOneWidget);
+    });
+
+    testWidgets('a fleet of imports alone lists them under IMPORTED', (
+      tester,
+    ) async {
+      await _pump(tester, servers: fleet.sublist(4));
+
+      expect(lines(tester), ['#Imported', 'alpha', 'bravo']);
+    });
+
+    testWidgets('a pinned synced server leaves its group for PINNED, first; '
+        'a pin on an import does nothing', (tester) async {
+      await _pump(
+        tester,
+        servers: fleet,
+        size: const Size(260, 720),
+        pinned: {'srv-db', 'ssh-config:alpha'},
+      );
+
+      expect(lines(tester), [
+        '#Pinned',
+        'db-1',
+        '#Servers',
+        'loose',
+        '>CI',
+        '  runner',
+        '>Production',
+        '  web-1',
+        '#Imported',
+        'alpha',
+        'bravo',
+      ]);
+    });
+
+    testWidgets('a synced row\'s menu pins and unpins it; an import has no '
+        'menu', (tester) async {
+      final saved = <Set<String>>[];
+      final rows = await _pump(
+        tester,
+        servers: fleet,
+        size: const Size(260, 720),
+        savePins: (ids) async => saved.add(ids),
+      );
+      expect(_row(tester, 'ssh-config:alpha').menuEntries, isNull);
+
+      await openMenu(tester, 'web-1');
+      await tester.tap(find.text('Pin to top'));
+      await tester.pumpAndSettle();
+      expect(rows.fleet.pinnedServerIds, {'srv-web'});
+      expect(saved, [
+        {'srv-web'},
+      ]);
+      expect(lines(tester).take(3), ['#Pinned', 'web-1', '#Servers']);
+
+      await openMenu(tester, 'web-1');
+      await tester.tap(find.text('Unpin'));
+      await tester.pumpAndSettle();
+      expect(rows.fleet.pinnedServerIds, isEmpty);
+      expect(saved.last, isEmpty);
+      expect(find.text('PINNED'), findsNothing);
+    });
+
+    testWidgets('a pin that cannot be saved holds and says so', (tester) async {
+      final rows = await _pump(
+        tester,
+        servers: fleet,
+        size: const Size(260, 720),
+        savePins: (_) async => throw const FileSystemException('disk full'),
+      );
+
+      await openMenu(tester, 'loose');
+      // The diagnostic is caught here; Flutter checks debugPrint is put
+      // back before the test ends.
+      final printed = <String?>[];
+      final print = debugPrint;
+      debugPrint = (message, {wrapWidth}) => printed.add(message);
+      try {
+        await tester.tap(find.text('Pin to top'));
+        await tester.pumpAndSettle();
+      } finally {
+        debugPrint = print;
+      }
+
+      expect(rows.fleet.pinnedServerIds, {'srv-loose'});
+      expect(find.text('PINNED'), findsOneWidget);
+      expect(printed.single, contains('disk full'));
+      expect(
+        find.text(
+          'Klabautermann could not save your pinned servers, so the change '
+          'lasts only until it quits.',
+        ),
+        findsOneWidget,
+      );
+      // The toast leaves on its own.
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('sections and groups fold under their headers, and a query '
+        'opens them all', (tester) async {
+      await _pump(
+        tester,
+        servers: fleet,
+        size: const Size(260, 720),
+        pinned: {'srv-loose'},
+      );
+
+      await tester.tap(find.byKey(fleetSectionHeaderKey('production')));
+      await tester.pump();
+      await tester.tap(find.byKey(fleetSectionHeaderKey(' imported')));
+      await tester.pump();
+      await tester.tap(find.byKey(fleetSectionHeaderKey(kPinnedKey)));
+      await tester.pump();
+      expect(lines(tester), [
+        '#Pinned',
+        '#Servers',
+        '>CI',
+        '  runner',
+        '>Production',
+        '#Imported',
+      ]);
+
+      await tester.enterText(find.byType(TextField), '-1');
+      await tester.pump();
+      expect(lines(tester), ['#Servers', '>Production', '  web-1', '  db-1']);
+
+      // A tap during the search changes no fold the list does not show.
+      await tester.tap(find.byKey(fleetSectionHeaderKey('production')));
+      await tester.pump();
+      expect(lines(tester), ['#Servers', '>Production', '  web-1', '  db-1']);
+
+      await tester.enterText(find.byType(TextField), '');
+      await tester.pump();
+      expect(lines(tester).first, '#Pinned', reason: 'still folded');
+      expect(lines(tester), contains('>Production'));
+      expect(lines(tester), isNot(contains('  web-1')), reason: 'still folded');
+    });
+
+    testWidgets('Enter opens the first match as the list orders it', (
+      tester,
+    ) async {
+      final rows = await _pump(
+        tester,
+        servers: fleet,
+        size: const Size(260, 720),
+        pinned: {'srv-db'},
+      );
+
+      // In the fleet's order web-1 comes first; pinned, db-1 leads.
+      await tester.enterText(find.byType(TextField), '-1');
+      await tester.testTextInput.receiveAction(TextInputAction.go);
+      await tester.pump();
+      expect(rows.opened, ['srv-db']);
+    });
+
+    testWidgets('the arrows walk headers and rows alike', (tester) async {
+      await _pump(tester, servers: fleet, size: const Size(260, 720));
+      String? focusedTitle() {
+        final context = FocusManager.instance.primaryFocus?.context;
+        return context?.findAncestorWidgetOfExactType<SidebarRow>()?.title ??
+            context
+                ?.findAncestorWidgetOfExactType<SidebarSectionHeader>()
+                ?.title;
+      }
+
+      await tester.tap(find.text('loose'));
+      await tester.pump();
+      expect(focusedTitle(), 'loose');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(focusedTitle(), 'CI');
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(focusedTitle(), 'runner');
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pump();
+      expect(focusedTitle(), 'Servers');
+    });
+
+    testWidgets('a header is one named stop, in its authored spelling', (
+      tester,
+    ) async {
+      await _pump(tester, servers: fleet, pinned: {'srv-db'});
+
+      expect(find.bySemanticsLabel('Pinned, 1 server'), findsOneWidget);
+      expect(find.bySemanticsLabel('Servers, 3 servers'), findsOneWidget);
+      expect(find.bySemanticsLabel('Production, 1 server'), findsOneWidget);
+      expect(find.bySemanticsLabel('Imported, 2 servers'), findsOneWidget);
+    });
+
+    testWidgets('headers and grouped rows lay out at 2x text', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await _pump(
+        tester,
+        servers: fleet,
+        size: const Size(260, 1400),
+        pinned: {'srv-db'},
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(lines(tester), hasLength(11));
     });
   });
 
@@ -454,9 +737,10 @@ void main() {
       ];
       expect(tappable, [
         isNotEmpty,
+        'Servers, 2 servers',
         startsWith('web-1, '),
         startsWith('db-1, '),
-      ], reason: 'the filter field, then one node per row');
+      ], reason: 'the filter field, the section header, then one node per row');
       final bar = tester.widget<PressureBar>(find.byType(PressureBar));
       expect(
         find.bySemanticsLabel(pressureSummary(bar.cells, testChartStrings)),
@@ -703,17 +987,27 @@ void main() {
         TargetPlatform.android,
       ),
     ]) {
-      for (final scale in [1.0, 1.4, 2.0]) {
+      for (final (scale, group) in [
+        (1.0, null),
+        (1.4, null),
+        (2.0, null),
+        // A grouped row is indented, which leaves its label less room.
+        (1.0, 'Production'),
+        (2.0, 'Production'),
+      ]) {
         testWidgets('the bar and age show only where the name, state word '
             'and age fit in full: ${layout.name}, ${density.name}, '
-            '${platform.name}, ${scale}x text', (tester) async {
+            '${platform.name}, ${scale}x text'
+            '${group == null ? '' : ', grouped'}', (tester) async {
           tester.platformDispatcher.textScaleFactorTestValue = scale;
           addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
           const name = 'prod-web-01';
           // No address, so the second line is the state word alone.
           final rows = await _pump(
             tester,
-            servers: const [FleetServer(id: 'srv-1', displayName: name)],
+            servers: [
+              FleetServer(id: 'srv-1', displayName: name, group: group),
+            ],
             size: const Size(900, 480),
             layout: layout,
             density: density,

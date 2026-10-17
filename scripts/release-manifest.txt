@@ -14,6 +14,11 @@
 # asset glob the release legs attach is represented here — keep the
 # manifest and the workflow's `files:` lists in step.
 #
+# The Android APK names are also a contract with every installed build:
+# the apps' in-app update downloads seance-android.apk and
+# poltergeist-android.apk by name (their tests read this file). Renaming
+# one strands installed Android builds on their version.
+#
 # Desktop bundles are unsigned (macOS: ad-hoc); first launch needs the
 # usual unidentified-developer step. iOS IPAs are unsigned and must be
 # re-signed to sideload. There is no linux-arm64 client: Flutter

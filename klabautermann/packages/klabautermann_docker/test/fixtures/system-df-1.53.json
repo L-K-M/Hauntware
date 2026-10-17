@@ -1,0 +1,26 @@
+{
+  "ImageUsage": {
+    "ActiveCount": 3,
+    "TotalCount": 5,
+    "Reclaimable": 734003200,
+    "TotalSize": 2147483648
+  },
+  "ContainerUsage": {
+    "ActiveCount": 4,
+    "TotalCount": 6,
+    "Reclaimable": 52428800,
+    "TotalSize": 60817408
+  },
+  "VolumeUsage": {
+    "ActiveCount": 2,
+    "TotalCount": 3,
+    "Reclaimable": 104857600,
+    "TotalSize": 314572800
+  },
+  "BuildCacheUsage": {
+    "ActiveCount": 0,
+    "TotalCount": 12,
+    "Reclaimable": 268435456,
+    "TotalSize": 268435456
+  }
+}

@@ -351,48 +351,55 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  ghost_apk_update:
+    dependency: "direct main"
+    description:
+      path: "../../../planchette/packages/ghost_apk_update"
+      relative: true
+    source: path
+    version: "1.9.1"
   ghost_desktop:
     dependency: "direct main"
     description:
       path: "../../../planchette/packages/ghost_desktop"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   ghost_fonts:
     dependency: "direct main"
     description:
       path: "../../../planchette/packages/ghost_fonts"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   ghost_keystore:
     dependency: "direct main"
     description:
       path: "../../../planchette/packages/ghost_keystore"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   ghost_marks:
     dependency: "direct main"
     description:
       path: "../../../planchette/packages/ghost_marks"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   ghost_servers:
     dependency: "direct main"
     description:
       path: "../../../planchette/packages/ghost_servers"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   ghost_ui:
     dependency: "direct main"
     description:
       path: "../../../planchette/packages/ghost_ui"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   glob:
     dependency: transitive
     description:
@@ -722,14 +729,14 @@ packages:
       path: "../../../planchette/packages/planchette_core"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   planchette_editor:
     dependency: "direct main"
     description:
       path: "../../../planchette/packages/planchette_editor"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   platform:
     dependency: transitive
     description:
@@ -760,14 +767,14 @@ packages:
       path: "../../packages/poltergeist_core"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   poltergeist_sync:
     dependency: "direct main"
     description:
       path: "../../packages/poltergeist_sync"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   posix:
     dependency: "direct main"
     description:
@@ -854,14 +861,14 @@ packages:
       path: "../../../seance/packages/seance_core"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   seance_protocol:
     dependency: transitive
     description:
       path: "../../../seance/packages/seance_protocol"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   sky_engine:
     dependency: transitive
     description: flutter

@@ -172,7 +172,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   the external-monitor rule.
 - `klabautermann_docker`: pure-Dart HTTP/1.1 client, NDJSON/JSON-seq
   scanning, stdcopy, versioned API models and negotiation, compose labels
-  and grouping.
+  and grouping, and `/system/df` across its shapes with the OV-05 summary
+  maths.
 - Docker transport (M3, D04, 03 §5.3, §5.9): `klabautermann_core`'s
   `DockerLadder.resolve` picks rank 1 (streamlocal), 2 (`dial-stdio`
   with `--host`, Podman's `--url`) or 4 (socat, then `nc -U`), with one
@@ -1137,6 +1138,24 @@ M2, the host read MVP, is the current milestone. What is on main:
   digest `capture.sh` pinned, so `fedora-44` now pins the tag's current
   index digest, and the `fedora-44-docker-bash` fixture is recaptured
   from it with its goldens (collector-set version 7).
+- Docker fixture and rank-1 smoke (M3, 03 §5.4, §11.3, D10): the
+  fixture adds `dind` (Docker 29.9.1, privileged, unpublished, dockerd
+  on one Unix socket with gid 990, on a named volume) and `docker-sshd`
+  on 127.0.0.1:2244, the sshd base plus the static docker CLI and
+  Compose plugin copied from the digest-pinned CLI image, with
+  `AllowTcpForwarding local` ahead of the common config, the socket at
+  `/var/run/docker.sock` and `/run/user/<uid>/docker.sock`, `klab` in
+  `docker` and `klab-nosock` outside it. `run.sh` checks the rendered
+  config with `check_docker_exposure.dart` after Poltergeist's checker
+  (no published 2375 or 2376, no host `docker.sock` bind, `privileged`
+  only on dind or Podman, dind's dockerd on an explicit Unix `--host`),
+  loads busybox pulled by digest into dind over SSH and runs
+  `seed_docker.sh` as `klab` (stack `demo` with healthy, unhealthy and
+  TTY services, stack `gone` without its files, a Coolify-managed
+  container). `docker_link_test.dart` (tags `integration`, `docker`)
+  pings, negotiates and lists over `SshLink.openUnixStream`, reaches the
+  second path, and sees `klab-nosock` refused. Locally it adds about
+  16 s to `run.sh` with the images cached.
 - Desktop settings window (03 §10.2, D32): on macOS, Linux and Windows,
   Settings opens in a native window of its own through `ghost_desktop`'s
   `GhostSettingsWindowHost`; phones, and a desktop runner that cannot

@@ -81,8 +81,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'the engine is not running'",
     "'the engine stopped'",
     "'the fleet controller was disposed'",
-    // The rejected request's class name, which RequestRejected carries.
+    // The rejected requests' class names, which RequestRejected carries.
     r"'$ImportSshConfig'",
+    r"'$ConfirmEndpoints'",
   },
   // The diagnostic of a sync answer the stopped engine never gave;
   // surfaces show ARB text for its failure kind (syncFailed).
@@ -216,6 +217,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'Fleet filter'",
     // The key tests find a row's age by.
     "'fleetRowAge'",
+    // The imports' section collapse key, and the key tests find a section
+    // or group header by.
+    "' imported'",
+    r"'fleet.section.$key'",
+    // The pin-not-saved diagnostic; the toast shows ARB text
+    // (fleetPinNotSaved).
+    r"'$error'",
     // The line break between the row tooltip's facts, each ARB text.
     r"'\n'",
     // An assert message; programmer diagnostic, never rendered.
