@@ -44,6 +44,7 @@ class TerminalView extends StatefulWidget {
     this.onLinkTap,
     this.onSecondaryTapDown,
     this.onSecondaryTapUp,
+    this.onTouchSelectionEnd,
     this.mouseCursor = SystemMouseCursors.text,
     this.keyboardType = TextInputType.emailAddress,
     this.keyboardAppearance = Brightness.dark,
@@ -104,6 +105,12 @@ class TerminalView extends StatefulWidget {
 
   /// Function called when the user stops holding down a secondary button.
   final void Function(TapUpDetails, CellOffset)? onSecondaryTapUp;
+
+  /// [seance fork] Called when a touch gesture has selected text: a
+  /// long-press (with or without a drag) or a double/triple tap. Touch has
+  /// no secondary click, so this is where a host shows its selection
+  /// toolbar, at [TerminalViewState.selectionToolbarAnchors].
+  final VoidCallback? onTouchSelectionEnd;
 
   /// The mouse cursor for mouse pointers that are hovering over the terminal.
   /// [SystemMouseCursors.text] by default.
@@ -349,6 +356,7 @@ class TerminalViewState extends State<TerminalView> {
           widget.onSecondaryTapDown != null ? _onSecondaryTapDown : null,
       onSecondaryTapUp:
           widget.onSecondaryTapUp != null ? _onSecondaryTapUp : null,
+      onLongPressEnd: (_) => _onTouchSelectionEnd(),
       readOnly: widget.readOnly,
       child: child,
     );
@@ -442,6 +450,41 @@ class TerminalViewState extends State<TerminalView> {
       if (link != null) widget.onLinkTap!(link);
     }
     widget.onTapUp?.call(details, offset);
+
+    // [seance fork] A touch double/triple tap selected a word/line on its
+    // way down.
+    if (details.kind == PointerDeviceKind.touch && _tapCount > 1) {
+      _onTouchSelectionEnd();
+    }
+  }
+
+  void _onTouchSelectionEnd() {
+    if (_controller.selection == null) return;
+    widget.onTouchSelectionEnd?.call();
+  }
+
+  /// [seance fork] Where a selection toolbar points, in global coordinates:
+  /// the top of the selection's first row (the toolbar sits above it when it
+  /// fits) and the bottom of its last row (below it otherwise), centred
+  /// between the selection's ends. Both are clamped to the view, so a
+  /// selection reaching into the scrollback still gets a toolbar on screen.
+  /// Null without a selection.
+  TextSelectionToolbarAnchors? get selectionToolbarAnchors {
+    final selection = _controller.selection?.normalized;
+    if (selection == null) return null;
+
+    final render = renderTerminal;
+    final begin = render.getOffset(selection.begin);
+    final end = render.getOffset(selection.end);
+    final view = Offset.zero & render.size;
+    final x = ((begin.dx + end.dx) / 2).clamp(view.left, view.right);
+    Offset anchor(double y) =>
+        render.localToGlobal(Offset(x, y.clamp(view.top, view.bottom)));
+
+    return TextSelectionToolbarAnchors(
+      primaryAnchor: anchor(begin.dy),
+      secondaryAnchor: anchor(end.dy + render.lineHeight),
+    );
   }
 
   void _onTapDown(TapDownDetails details, int tapCount) {

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- On Android and iOS, selecting terminal text with a long-press or a
+  double-tap shows Copy, Paste and Select all above the selection.
+  Before, touch selections could not be copied.
 - When a server requires an SSH algorithm Séance does not support,
   offers only ones Séance refuses as insecure, or drops the connection
   during a finite-field Diffie-Hellman key exchange, the connection error
