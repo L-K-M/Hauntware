@@ -4102,6 +4102,210 @@ abstract class AppLocalizations {
   /// **'Low-session mode: the list is read again every 15 seconds instead of following engine events, and stats are read one container at a time.'**
   String get dockerContainersLowSessionRelay;
 
+  /// Images table column: the image's tags, each repository:tag (IMG-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Tags'**
+  String get dockerImagesColumnTags;
+
+  /// Images table column: the image's short ID, as docker images prints it.
+  ///
+  /// In en, this message translates to:
+  /// **'ID'**
+  String get dockerImagesColumnId;
+
+  /// Images table column: the image's size in IEC units.
+  ///
+  /// In en, this message translates to:
+  /// **'Size'**
+  String get dockerImagesColumnSize;
+
+  /// Images table column: how long ago the image was created, and its date.
+  ///
+  /// In en, this message translates to:
+  /// **'Created'**
+  String get dockerImagesColumnCreated;
+
+  /// Images table column: whether any container, running or not, was created from the image.
+  ///
+  /// In en, this message translates to:
+  /// **'Use'**
+  String get dockerImagesColumnUse;
+
+  /// Images list: the badge of a dangling image, one without a tag, which docker images shows as <none>.
+  ///
+  /// In en, this message translates to:
+  /// **'Dangling'**
+  String get dockerImagesDangling;
+
+  /// Images list: what a screen reader hears, and a phone row shows, for an image containers were created from, running or not.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{In use by 1 container} other{In use by {count} containers}}'**
+  String dockerImagesInUse(int count);
+
+  /// Images table: the Use cell of an image containers were created from, with how many, beside a link icon.
+  ///
+  /// In en, this message translates to:
+  /// **'In use ({count})'**
+  String dockerImagesInUseShort(int count);
+
+  /// Images list: no container was created from the image.
+  ///
+  /// In en, this message translates to:
+  /// **'Unused'**
+  String get dockerImagesUnused;
+
+  /// Images list: when the image was created, as an age and a date, as a screen reader hears it and a phone row shows it.
+  ///
+  /// In en, this message translates to:
+  /// **'{age}, {date}'**
+  String dockerImagesCreated(String age, String date);
+
+  /// Images list: the date an image was created, in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'{date}'**
+  String dockerImagesDate(DateTime date);
+
+  /// Images list: an image created under a minute ago.
+  ///
+  /// In en, this message translates to:
+  /// **'Less than a minute ago'**
+  String get dockerImagesAgeNow;
+
+  /// Images list: an image's age under an hour.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 minute ago} other{{count} minutes ago}}'**
+  String dockerImagesAgeMinutes(int count);
+
+  /// Images list: an image's age under two days.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 hour ago} other{{count} hours ago}}'**
+  String dockerImagesAgeHours(int count);
+
+  /// Images list: an image's age under two weeks.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 day ago} other{{count} days ago}}'**
+  String dockerImagesAgeDays(int count);
+
+  /// Images list: an image's age under two months.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 week ago} other{{count} weeks ago}}'**
+  String dockerImagesAgeWeeks(int count);
+
+  /// Images list: an image's age under two years, a month counted as 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 month ago} other{{count} months ago}}'**
+  String dockerImagesAgeMonths(int count);
+
+  /// Images list: an image's age of two years or more, a year counted as 365 days.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 year ago} other{{count} years ago}}'**
+  String dockerImagesAgeYears(int count);
+
+  /// Images list: a filter choice that lists every image.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get dockerImagesFilterAll;
+
+  /// Images list: a filter choice that lists only the images no container was created from.
+  ///
+  /// In en, this message translates to:
+  /// **'Unused'**
+  String get dockerImagesFilterUnused;
+
+  /// Images list: a filter choice that lists only the dangling images, those without a tag.
+  ///
+  /// In en, this message translates to:
+  /// **'Dangling'**
+  String get dockerImagesFilterDangling;
+
+  /// Images list: the search field's hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search by tag or ID'**
+  String get dockerImagesSearchHint;
+
+  /// Images list: tooltip of the button that clears the search.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear search'**
+  String get dockerImagesSearchClear;
+
+  /// Images list on a phone: the label before the sort menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort by'**
+  String get dockerImagesSortBy;
+
+  /// Images list on a phone: one figure of an image, after its column's name.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: {value}'**
+  String dockerImagesFact(String label, String value);
+
+  /// Images list: the first list has not arrived yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the images…'**
+  String get dockerImagesReading;
+
+  /// Images list: the engine listed none.
+  ///
+  /// In en, this message translates to:
+  /// **'This engine has no images.'**
+  String get dockerImagesEmpty;
+
+  /// Images list: the search matches none.
+  ///
+  /// In en, this message translates to:
+  /// **'No image matches the search.'**
+  String get dockerImagesNoMatch;
+
+  /// Images list: the Unused filter hides every image.
+  ///
+  /// In en, this message translates to:
+  /// **'Every image is in use by a container.'**
+  String get dockerImagesNoneUnused;
+
+  /// Images list: the Dangling filter hides every image.
+  ///
+  /// In en, this message translates to:
+  /// **'No image is dangling.'**
+  String get dockerImagesNoneDangling;
+
+  /// Images list: why the list could not be read. reason is the engine's failure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} daemonError{The engine refused or failed to list the images.} connectionFailed{The connection to the engine failed while listing the images.} other{The images could not be listed.}}'**
+  String dockerImagesFailed(String reason);
+
+  /// Images list: under a failed read, the list it keeps is older.
+  ///
+  /// In en, this message translates to:
+  /// **'The list below is the last one read.'**
+  String get dockerImagesKept;
+
+  /// Images list: below Docker API 1.51 the image list carries no container count, and the container list it is computed from failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Which images are in use is unknown: this engine\'s API reports no count, and the containers could not be listed.'**
+  String get dockerImagesUseUnknown;
+
+  /// Images list: the server's link has a session limit (03 §5.2) on a relay route.
+  ///
+  /// In en, this message translates to:
+  /// **'Low-session mode: the list is read again every 15 seconds instead of following engine events.'**
+  String get dockerImagesLowSessionRelay;
+
   /// Tooltip of the button that closes a container's details in the desktop inspector (03 §10.2).
   ///
   /// In en, this message translates to:

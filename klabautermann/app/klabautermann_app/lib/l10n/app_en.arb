@@ -3727,6 +3727,213 @@
   "@dockerContainersLowSessionRelay": {
     "description": "Containers list: the server's link has a session limit (03 §5.2) on a relay route."
   },
+  "dockerImagesColumnTags": "Tags",
+  "@dockerImagesColumnTags": {
+    "description": "Images table column: the image's tags, each repository:tag (IMG-01)."
+  },
+  "dockerImagesColumnId": "ID",
+  "@dockerImagesColumnId": {
+    "description": "Images table column: the image's short ID, as docker images prints it."
+  },
+  "dockerImagesColumnSize": "Size",
+  "@dockerImagesColumnSize": {
+    "description": "Images table column: the image's size in IEC units."
+  },
+  "dockerImagesColumnCreated": "Created",
+  "@dockerImagesColumnCreated": {
+    "description": "Images table column: how long ago the image was created, and its date."
+  },
+  "dockerImagesColumnUse": "Use",
+  "@dockerImagesColumnUse": {
+    "description": "Images table column: whether any container, running or not, was created from the image."
+  },
+  "dockerImagesDangling": "Dangling",
+  "@dockerImagesDangling": {
+    "description": "Images list: the badge of a dangling image, one without a tag, which docker images shows as <none>."
+  },
+  "dockerImagesInUse": "{count, plural, =1{In use by 1 container} other{In use by {count} containers}}",
+  "@dockerImagesInUse": {
+    "description": "Images list: what a screen reader hears, and a phone row shows, for an image containers were created from, running or not.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerImagesInUseShort": "In use ({count})",
+  "@dockerImagesInUseShort": {
+    "description": "Images table: the Use cell of an image containers were created from, with how many, beside a link icon.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerImagesUnused": "Unused",
+  "@dockerImagesUnused": {
+    "description": "Images list: no container was created from the image."
+  },
+  "dockerImagesCreated": "{age}, {date}",
+  "@dockerImagesCreated": {
+    "description": "Images list: when the image was created, as an age and a date, as a screen reader hears it and a phone row shows it.",
+    "placeholders": {
+      "age": {
+        "type": "String",
+        "example": "3 weeks ago"
+      },
+      "date": {
+        "type": "String",
+        "example": "Sep 24, 2026"
+      }
+    }
+  },
+  "dockerImagesDate": "{date}",
+  "@dockerImagesDate": {
+    "description": "Images list: the date an image was created, in the UI locale and this device's time zone.",
+    "placeholders": {
+      "date": {
+        "type": "DateTime",
+        "format": "yMMMd"
+      }
+    }
+  },
+  "dockerImagesAgeNow": "Less than a minute ago",
+  "@dockerImagesAgeNow": {
+    "description": "Images list: an image created under a minute ago."
+  },
+  "dockerImagesAgeMinutes": "{count, plural, =1{1 minute ago} other{{count} minutes ago}}",
+  "@dockerImagesAgeMinutes": {
+    "description": "Images list: an image's age under an hour.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerImagesAgeHours": "{count, plural, =1{1 hour ago} other{{count} hours ago}}",
+  "@dockerImagesAgeHours": {
+    "description": "Images list: an image's age under two days.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerImagesAgeDays": "{count, plural, =1{1 day ago} other{{count} days ago}}",
+  "@dockerImagesAgeDays": {
+    "description": "Images list: an image's age under two weeks.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerImagesAgeWeeks": "{count, plural, =1{1 week ago} other{{count} weeks ago}}",
+  "@dockerImagesAgeWeeks": {
+    "description": "Images list: an image's age under two months.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerImagesAgeMonths": "{count, plural, =1{1 month ago} other{{count} months ago}}",
+  "@dockerImagesAgeMonths": {
+    "description": "Images list: an image's age under two years, a month counted as 30 days.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerImagesAgeYears": "{count, plural, =1{1 year ago} other{{count} years ago}}",
+  "@dockerImagesAgeYears": {
+    "description": "Images list: an image's age of two years or more, a year counted as 365 days.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerImagesFilterAll": "All",
+  "@dockerImagesFilterAll": {
+    "description": "Images list: a filter choice that lists every image."
+  },
+  "dockerImagesFilterUnused": "Unused",
+  "@dockerImagesFilterUnused": {
+    "description": "Images list: a filter choice that lists only the images no container was created from."
+  },
+  "dockerImagesFilterDangling": "Dangling",
+  "@dockerImagesFilterDangling": {
+    "description": "Images list: a filter choice that lists only the dangling images, those without a tag."
+  },
+  "dockerImagesSearchHint": "Search by tag or ID",
+  "@dockerImagesSearchHint": {
+    "description": "Images list: the search field's hint."
+  },
+  "dockerImagesSearchClear": "Clear search",
+  "@dockerImagesSearchClear": {
+    "description": "Images list: tooltip of the button that clears the search."
+  },
+  "dockerImagesSortBy": "Sort by",
+  "@dockerImagesSortBy": {
+    "description": "Images list on a phone: the label before the sort menu."
+  },
+  "dockerImagesFact": "{label}: {value}",
+  "@dockerImagesFact": {
+    "description": "Images list on a phone: one figure of an image, after its column's name.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Size"
+      },
+      "value": {
+        "type": "String",
+        "example": "187 MiB"
+      }
+    }
+  },
+  "dockerImagesReading": "Reading the images…",
+  "@dockerImagesReading": {
+    "description": "Images list: the first list has not arrived yet."
+  },
+  "dockerImagesEmpty": "This engine has no images.",
+  "@dockerImagesEmpty": {
+    "description": "Images list: the engine listed none."
+  },
+  "dockerImagesNoMatch": "No image matches the search.",
+  "@dockerImagesNoMatch": {
+    "description": "Images list: the search matches none."
+  },
+  "dockerImagesNoneUnused": "Every image is in use by a container.",
+  "@dockerImagesNoneUnused": {
+    "description": "Images list: the Unused filter hides every image."
+  },
+  "dockerImagesNoneDangling": "No image is dangling.",
+  "@dockerImagesNoneDangling": {
+    "description": "Images list: the Dangling filter hides every image."
+  },
+  "dockerImagesFailed": "{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} daemonError{The engine refused or failed to list the images.} connectionFailed{The connection to the engine failed while listing the images.} other{The images could not be listed.}}",
+  "@dockerImagesFailed": {
+    "description": "Images list: why the list could not be read. reason is the engine's failure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerImagesKept": "The list below is the last one read.",
+  "@dockerImagesKept": {
+    "description": "Images list: under a failed read, the list it keeps is older."
+  },
+  "dockerImagesUseUnknown": "Which images are in use is unknown: this engine's API reports no count, and the containers could not be listed.",
+  "@dockerImagesUseUnknown": {
+    "description": "Images list: below Docker API 1.51 the image list carries no container count, and the container list it is computed from failed."
+  },
+  "dockerImagesLowSessionRelay": "Low-session mode: the list is read again every 15 seconds instead of following engine events.",
+  "@dockerImagesLowSessionRelay": {
+    "description": "Images list: the server's link has a session limit (03 §5.2) on a relay route."
+  },
   "dockerDetailsClose": "Close the container details",
   "@dockerDetailsClose": {
     "description": "Tooltip of the button that closes a container's details in the desktop inspector (03 §10.2)."

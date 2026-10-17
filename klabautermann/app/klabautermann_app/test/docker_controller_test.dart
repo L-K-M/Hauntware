@@ -404,6 +404,132 @@ void main() {
     });
   });
 
+  group('the image watch (IMG-01)', () {
+    final at = DateTime(2026, 10, 15, 14, 30);
+
+    List<DockerWatch> watches() => engine.sentOfType<DockerWatch>().cast();
+    List<DockerUnwatch> unwatches() =>
+        engine.sentOfType<DockerUnwatch>().cast();
+
+    test('one watch per server while any view shows, with the containers, '
+        'apart from the container watch', () async {
+      docker.watchContainers('srv-1');
+      docker.watchImages('srv-1');
+      expect(watches(), hasLength(2));
+      final images = watches().last;
+      expect(images.serverId, 'srv-1');
+      expect(images.lists, {
+        DockerWatchList.images,
+        DockerWatchList.containers,
+      });
+      expect(images.watchId, isNot(watches().first.watchId));
+
+      // A second view shares it.
+      docker.watchImages('srv-1');
+      expect(watches(), hasLength(2));
+      docker.unwatchImages('srv-1');
+      expect(unwatches(), isEmpty, reason: 'a view still shows');
+      docker.unwatchImages('srv-1');
+      expect(unwatches().single.watchId, images.watchId);
+      docker.unwatchImages('srv-1');
+      expect(unwatches(), hasLength(1));
+
+      // The container watch is the Containers view's.
+      docker.showStatsFor('srv-1', ['c-1']);
+      expect(watches().last.watchId, watches().first.watchId);
+
+      docker.watchImages('srv-1');
+      expect(watches().last.watchId, isNot(images.watchId));
+    });
+
+    test(
+      'keeps the latest images, and a failed read beside the last list',
+      () async {
+        docker.watchImages('srv-1');
+        final list = docker.imagesFor('srv-1');
+        expect(list.value.images, isNull);
+
+        await emit(
+          dockerImageList('srv-1', [
+            dockerImage('sha256:aa', tags: ['nginx:1.27']),
+          ], at: at),
+        );
+        expect(list.value.images, hasLength(1));
+        expect(list.value.at, at);
+
+        await emit(
+          dockerListFailed(
+            'srv-1',
+            DockerWatchList.images,
+            DockerQueryFailure.daemonError,
+            at: at.add(const Duration(minutes: 1)),
+            detail: 'Error response from daemon',
+          ),
+        );
+        expect(list.value.failure?.failure, DockerQueryFailure.daemonError);
+        expect(list.value.failure?.detail, 'Error response from daemon');
+        expect(list.value.images, hasLength(1));
+        expect(list.value.at, at, reason: 'when the kept list was read');
+
+        // The containers it watches too go where the Containers view reads.
+        await emit(
+          dockerContainerList('srv-1', [dockerContainer('c-1')], at: at),
+        );
+        expect(docker.containersFor('srv-1').value.containers, hasLength(1));
+        expect(list.value.images, hasLength(1));
+
+        await emit(dockerImageList('srv-1', const [], at: at));
+        expect(list.value.images, isEmpty);
+        expect(list.value.failure, isNull);
+
+        // Another server's list leaves it be.
+        await emit(
+          dockerImageList('srv-2', [dockerImage('sha256:bb')], at: at),
+        );
+        expect(list.value.images, isEmpty);
+      },
+    );
+
+    test('a retry watches anew under a new id', () async {
+      docker.watchImages('srv-1');
+      final before = watches().single;
+      docker.retryImages('srv-2');
+      expect(unwatches(), isEmpty, reason: 'nothing watched there');
+
+      docker.retryImages('srv-1');
+      expect(unwatches().single.watchId, before.watchId);
+      expect(watches().last.watchId, isNot(before.watchId));
+      expect(watches().last.lists, before.lists);
+    });
+
+    test('a server that leaves the fleet drops its watch and images '
+        '(SYN-08)', () async {
+      docker.watchImages('srv-1');
+      await emit(dockerImageList('srv-1', [dockerImage('sha256:aa')], at: at));
+      final before = docker.imagesFor('srv-1');
+
+      await emit(CatalogReplaced(const []));
+      expect(docker.imagesFor('srv-1'), isNot(same(before)));
+      expect(docker.imagesFor('srv-1').value.images, isNull);
+
+      docker.unwatchImages('srv-1');
+      docker.watchImages('srv-1');
+      expect(unwatches(), isEmpty);
+      expect(watches(), hasLength(1), reason: 'not in the fleet');
+    });
+
+    test('sends nothing once the engine stopped', () async {
+      await engine.close();
+      await pumpEventQueue();
+      docker
+        ..watchImages('srv-1')
+        ..retryImages('srv-1')
+        ..unwatchImages('srv-1');
+      expect(watches(), isEmpty);
+      expect(unwatches(), isEmpty);
+    });
+  });
+
   group('container details (CTR-03, CTR-04)', () {
     final at = DateTime(2026, 10, 15, 14, 30);
 

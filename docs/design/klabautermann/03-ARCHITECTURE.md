@@ -5431,7 +5431,14 @@ tab:
   hold them, since the 300 px inspector is too narrow for log lines;
   on a phone in a bottom sheet like SVC-04's. The pane reads through
   the Logs panel's controller only while the tab shows, and 10.8's
-  viewer starts each row with the line's local time and stream.
+  viewer starts each row with the line's local time and stream. As
+  built in D16 (`ui/docker/images_panel.dart`), the Images sub-tab
+  holds one image watch per server while it shows, which carries the
+  containers too: 7.14's in-use flag is counted from the container
+  list whenever one was read, at any API version, because a container
+  event re-lists the containers but not the images, so the image
+  list's `Containers` count (1.51) lags a container created or removed
+  and stands in only until the containers arrive.
 
 As built in M2 (`app/klabautermann_app/lib/ui/system_panel.dart`), the
 System tab shows SYS-01's identity, BOOT-01's uptime and boot time,
