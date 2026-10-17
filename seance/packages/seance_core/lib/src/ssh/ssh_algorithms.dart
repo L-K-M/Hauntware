@@ -76,3 +76,22 @@ final SSHAlgorithms suiteSshAlgorithms = SSHAlgorithms(
   ]),
   mac: List.unmodifiable(const SSHAlgorithms().mac),
 );
+
+/// What the suite refuses as insecure although dartssh2 4.1.0 still
+/// implements it: the algorithms 3.1.0 removed from its defaults as broken,
+/// which [suiteSshAlgorithms] keeps off. Never proposed.
+///
+/// Shaped like a proposal so that a failed handshake can be checked against
+/// it the way dartssh2 checks the proposal: a server that would agree with
+/// these added offers only algorithms the suite refuses (03 §5.3), rather
+/// than one this client cannot speak at all.
+final SSHAlgorithms suiteRefusedSshAlgorithms = SSHAlgorithms(
+  kex: List.unmodifiable(const [SSHKexType.dh1Sha1]),
+  hostkey: List.unmodifiable(const <SSHHostkeyType>[]),
+  cipher: List.unmodifiable(const <SSHCipherType>[]),
+  mac: List.unmodifiable(const [
+    SSHMacType.hmacMd5,
+    SSHMacType.hmacSha256_96,
+    SSHMacType.hmacSha512_96,
+  ]),
+);

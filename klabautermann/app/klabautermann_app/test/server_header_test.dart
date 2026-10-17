@@ -3,8 +3,6 @@ import 'package:flutter/rendering.dart' show DiagnosticsDebugCreator;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart' show GhostChrome;
 import 'package:ghost_ui/ghost_ui.dart' show SelectedTabView;
-import 'package:klabautermann_app/controllers/fleet_controller.dart';
-import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/server_header.dart';
@@ -12,8 +10,8 @@ import 'package:klabautermann_app/ui/server_workspace.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'access/profiles.dart';
-import 'support/fake_engine.dart';
 import 'support/harness.dart';
+import 'support/link_failures.dart';
 
 /// A Debian host with a rootful Docker and a rootless Podman socket.
 final _twoEngines = debianHost(
@@ -204,35 +202,111 @@ void main() {
     expect(find.text('Coverage on this device'), findsOneWidget);
   });
 
-  testWidgets('client-limitation messages show under the facts', (
-    tester,
-  ) async {
-    final engine = FakeEngineClient();
-    final fleet = FleetController(engine, servers: twoServers);
-    final monitoring = MonitoringController(engine);
-    addTearDown(() async {
-      fleet.dispose();
-      monitoring.dispose();
-      await engine.close();
+  group('a failed link says why (03 §5.3, §10.1)', () {
+    test('every failure kind has its words', () {
+      expect(failureTexts.keys.toSet(), LinkFailureKind.values.toSet());
     });
-    await tester.pumpWidget(
-      MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(
-          body: ServerHeader(
-            server: twoServers.first,
-            fleet: fleet,
-            monitoring: monitoring,
-            limitations: const ['First limitation', 'Second limitation'],
+
+    for (final MapEntry(key: failure, value: text) in failureTexts.entries) {
+      testWidgets('${failure.name}, under the facts', (tester) async {
+        final harness = await _openWeb1(tester, const Size(1280, 800));
+        harness.engine.emit(
+          LinkState(
+            'srv-1',
+            LinkClosed(LinkClosedReason.connectFailed, failure: failure),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(_inHeader(find.text('Failed')), findsOneWidget);
+        expect(_inHeader(find.text(text)), findsOneWidget);
+        expect(_inHeader(find.byIcon(Icons.info_outline)), findsOneWidget);
+        // Read as one node with its icon.
+        expect(find.bySemanticsLabel(text), findsOneWidget);
+      });
+    }
+
+    testWidgets('and nothing else does', (tester) async {
+      final harness = await _openWeb1(tester, const Size(1280, 800));
+      Finder message() => _inHeader(find.byIcon(Icons.info_outline));
+      expect(message(), findsNothing);
+
+      for (final status in const <LinkStatus>[
+        LinkReady(),
+        // Unclassified, and the owner's close.
+        LinkClosed(LinkClosedReason.connectFailed),
+        LinkClosed(LinkClosedReason.closedByOwner),
+        LinkClosed(LinkClosedReason.linkLost),
+        LinkBlocked(LinkBlockedReason.hostKeyChanged),
+      ]) {
+        harness.engine.emit(LinkState('srv-1', status));
+        await tester.pumpAndSettle();
+        expect(message(), findsNothing, reason: '$status');
+      }
+
+      // A failure goes once the link moves on, as to its backoff.
+      harness.engine.emit(
+        const LinkState(
+          'srv-1',
+          LinkClosed(
+            LinkClosedReason.connectFailed,
+            failure: LinkFailureKind.unreachable,
           ),
         ),
-      ),
-    );
+      );
+      await tester.pumpAndSettle();
+      expect(message(), findsOneWidget);
+      harness.engine.emit(
+        LinkState('srv-1', LinkBackoff(DateTime.utc(2026, 10, 16, 12))),
+      );
+      await tester.pumpAndSettle();
+      expect(message(), findsNothing);
+    });
 
-    expect(find.text('First limitation'), findsOneWidget);
-    expect(find.text('Second limitation'), findsOneWidget);
-    expect(find.byIcon(Icons.info_outline), findsNWidgets(2));
+    testWidgets('the selected server\'s, not another\'s', (tester) async {
+      final harness = await _openWeb1(tester, const Size(1280, 800));
+      harness.engine.emit(
+        const LinkState(
+          'srv-2',
+          LinkClosed(
+            LinkClosedReason.connectFailed,
+            failure: LinkFailureKind.authenticationRejected,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(_inHeader(find.byIcon(Icons.info_outline)), findsNothing);
+    });
+
+    for (final (name, size) in [
+      ('desktop', const Size(960, 700)),
+      ('phone', const Size(390, 800)),
+    ]) {
+      testWidgets('the longest wraps in the $name header at 200 % text', (
+        tester,
+      ) async {
+        final harness = await _openWeb1(tester, size, textScale: 2);
+        harness.engine.emit(
+          const LinkState(
+            'srv-1',
+            LinkClosed(
+              LinkClosedReason.connectFailed,
+              failure: LinkFailureKind.keyPassphraseRequired,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(
+          _inHeader(
+            find.text(failureTexts[LinkFailureKind.keyPassphraseRequired]!),
+          ),
+          findsOneWidget,
+        );
+      });
+    }
   });
 
   for (final (name, size) in [

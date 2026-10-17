@@ -142,6 +142,10 @@ void main() {
           ),
         )
         ..send(const SetCadenceProfile(CadenceProfile.cellularSaver))
+        // With links off nothing samples, so a refresh reads nothing.
+        ..send(
+          const RefreshSubscription(serverId: 'srv-1', subscriptionId: 'row'),
+        )
         ..send(const Unsubscribe(serverId: 'srv-1', subscriptionId: 'row'))
         // The probe proves the engine handled them silently instead of
         // dying or rejecting them.

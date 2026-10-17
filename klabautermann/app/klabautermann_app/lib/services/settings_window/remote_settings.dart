@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 
+import '../../controllers/announcement_controller.dart';
 import '../../controllers/appearance_controller.dart';
 import '../../theme/app_theme.dart';
 import 'settings_window_link.dart';
@@ -41,6 +42,12 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     (method, argument) => invoke(method.name, argument),
   );
 
+  /// The General tab's A11Y-15 switch, from the latest snapshot.
+  late final RemoteAnnouncements announcements = RemoteAnnouncements._(
+    (announce) =>
+        invoke(SettingsLinkMethod.setAnnounceThresholdBands.name, announce),
+  );
+
   @override
   void applySnapshot(Map<String, Object?> snapshot) {
     appearance._apply(
@@ -49,12 +56,42 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
             .cast<String, Object?>(),
       ),
     );
+    announcements._apply(
+      snapshot[SettingsLinkKey.announceThresholdBands.name]! as bool,
+    );
   }
 
   @override
   void dispose() {
     appearance.dispose();
+    announcements.dispose();
     super.dispose();
+  }
+}
+
+/// [AnnouncementSettings] over the link: the app's switch as the latest
+/// snapshot carries it, and changes that run in the app's isolate.
+final class RemoteAnnouncements extends ChangeNotifier
+    implements AnnouncementSettings {
+  RemoteAnnouncements._(this._call);
+
+  final Future<Object?> Function(bool announce) _call;
+
+  // The app's default until the first snapshot, which comes with hello.
+  bool _value = true;
+
+  void _apply(bool announce) {
+    if (announce == _value) return;
+    _value = announce;
+    notifyListeners();
+  }
+
+  @override
+  bool get value => _value;
+
+  @override
+  Future<void> setAnnounceThresholdBands(bool announce) async {
+    await _call(announce);
   }
 }
 

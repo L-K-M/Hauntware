@@ -1,0 +1,112 @@
+{
+  "result": {
+    "mounts": [
+      {
+        "device": "/dev/root",
+        "type": "ext4",
+        "mountPoint": "/",
+        "sizeBytes": 154894188544,
+        "usedBytes": 66457563136,
+        "availBytes": 88419848192,
+        "capacityPercent": 43,
+        "inodesTotal": 19529728,
+        "inodesUsed": 1121100,
+        "inodesFree": 18408628,
+        "inodeUsePercent": 6
+      },
+      {
+        "device": "tmpfs",
+        "type": "tmpfs",
+        "mountPoint": "/dev/shm",
+        "sizeBytes": 8382689280,
+        "usedBytes": 86016,
+        "availBytes": 8382603264,
+        "capacityPercent": 1,
+        "inodesTotal": 2046555,
+        "inodesUsed": 2,
+        "inodesFree": 2046553,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "tmpfs",
+        "type": "tmpfs",
+        "mountPoint": "/run",
+        "sizeBytes": 3353075712,
+        "usedBytes": 1232896,
+        "availBytes": 3351842816,
+        "capacityPercent": 1,
+        "inodesTotal": 819200,
+        "inodesUsed": 840,
+        "inodesFree": 818360,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "tmpfs",
+        "type": "tmpfs",
+        "mountPoint": "/run/lock",
+        "sizeBytes": 5242880,
+        "usedBytes": 0,
+        "availBytes": 5242880,
+        "capacityPercent": 0,
+        "inodesTotal": 2046555,
+        "inodesUsed": 4,
+        "inodesFree": 2046551,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "/dev/nvme0n1p16",
+        "type": "ext4",
+        "mountPoint": "/boot",
+        "sizeBytes": 923156480,
+        "usedBytes": 66572288,
+        "availBytes": 791941120,
+        "capacityPercent": 8,
+        "inodesTotal": 58496,
+        "inodesUsed": 600,
+        "inodesFree": 57896,
+        "inodeUsePercent": 2
+      },
+      {
+        "device": "/dev/nvme0n1p15",
+        "type": "vfat",
+        "mountPoint": "/boot/efi",
+        "sizeBytes": 109395456,
+        "usedBytes": 6399488,
+        "availBytes": 102995968,
+        "capacityPercent": 6,
+        "inodesTotal": 0,
+        "inodesUsed": 0,
+        "inodesFree": 0,
+        "inodeUsePercent": null
+      },
+      {
+        "device": "tmpfs",
+        "type": "tmpfs",
+        "mountPoint": "/run/user/1001",
+        "sizeBytes": 1676537856,
+        "usedBytes": 12288,
+        "availBytes": 1676525568,
+        "capacityPercent": 1,
+        "inodesTotal": 409311,
+        "inodesUsed": 32,
+        "inodesFree": 409279,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "tmpfs",
+        "type": "tmpfs",
+        "mountPoint": "/run/user/1002",
+        "sizeBytes": 1676537856,
+        "usedBytes": 12288,
+        "availBytes": 1676525568,
+        "capacityPercent": 1,
+        "inodesTotal": 409311,
+        "inodesUsed": 30,
+        "inodesFree": 409281,
+        "inodeUsePercent": 1
+      }
+    ],
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

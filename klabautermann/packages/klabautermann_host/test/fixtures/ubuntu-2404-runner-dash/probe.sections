@@ -1,0 +1,91 @@
+### kernel ok
+Linux 6.17.0-1022-azure x86_64
+### distro ok
+PRETTY_NAME="Ubuntu 24.04.5 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION="24.04.5 LTS (Noble Numbat)"
+VERSION_CODENAME=noble
+ID=ubuntu
+ID_LIKE=debian
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+UBUNTU_CODENAME=noble
+LOGO=ubuntu-logo
+### init ok
+pid1_comm=systemd
+systemd_dir=yes
+systemctl_rc=0
+systemctl_version=systemd 255 (255.4-1ubuntu8.17)
+### virt ok
+virt_rc=0
+virt=microsoft
+container_rc=1
+container=none
+### lxcfs ok
+mounts=
+### identity ok
+uid=1002
+user=user2
+groups=user2
+### elev ok
+sudo_version=Sudo version 1.9.15p5
+sudo_noninteractive=1
+doas=absent
+doas_noninteractive=
+run0=absent
+printf=builtin
+### tools ok
+journalctl=/usr/bin/journalctl
+crontab=/usr/bin/crontab
+ss=/usr/bin/ss
+ip=/usr/sbin/ip
+lsblk=/usr/bin/lsblk
+findmnt=/usr/bin/findmnt
+smartctl=
+sensors=
+docker=/usr/bin/docker
+podman=/usr/bin/podman
+socat=
+timeout=/usr/bin/timeout
+setsid=/usr/bin/setsid
+ncdu=
+gdu=
+sadf=/usr/bin/sadf
+logger=/usr/bin/logger
+systemd-run=/usr/bin/systemd-run
+systemd-analyze=/usr/bin/systemd-analyze
+apt-get=/usr/bin/apt-get
+dnf=
+dnf5=
+apk=
+pacman=
+zypper=
+nvidia-smi=
+dmesg=/usr/bin/dmesg
+tail=/usr/bin/tail
+### kfeat ok
+psi=yes
+cgroup_v2=yes
+### locale ok
+c_utf8=yes
+### sockets ok
+/var/run/docker.sock yes no
+/run/podman/podman.sock no no
+/run/user/1002/docker.sock no no
+/run/user/1002/podman/podman.sock no no
+### session ok
+ssh_connection=
+ppid=4473
+ppid_comm=dart:capture_fi
+### clock ok
+epoch=1792189788
+offset=+0000
+Timezone=Etc/UTC
+etc_timezone=Etc/UTC
+localtime=/usr/share/zoneinfo/Etc/UTC
+### linger ok
+xdg_runtime_dir=
+Linger=no
