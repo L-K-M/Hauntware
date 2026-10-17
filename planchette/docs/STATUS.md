@@ -1,5 +1,18 @@
 # Status
 
+## Font catalog and preview picker (2026-10-17)
+
+`ghost_fonts` bundles 20 OFL families. The shared picker searches offline,
+previews real glyphs and emphasis, and confirms family and ligatures together.
+Planchette, Séance and Poltergeist use it. Defaults and stored family names
+are preserved; a saved ligatures-off choice stays off.
+
+Rendering tests check every family's fixed-width metrics and each supported
+font's ligature switch. The additional release files and licenses are pinned
+by SHA-256; the fonts are unmodified. Desktop and narrow layouts were inspected
+as rendered captures. Native macOS, Windows and mobile device checks remain
+manual.
+
 ## Problem checks (2026-10-06)
 
 The shared editor checks the formats it can read quickly and marks what
