@@ -301,49 +301,49 @@ packages:
       path: "../../../planchette/packages/ghost_apk_update"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   ghost_desktop:
     dependency: "direct main"
     description:
       path: "../../../planchette/packages/ghost_desktop"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   ghost_fonts:
     dependency: "direct main"
     description:
       path: "../../../planchette/packages/ghost_fonts"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   ghost_marks:
     dependency: "direct main"
     description:
       path: "../../../planchette/packages/ghost_marks"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   ghost_servers:
     dependency: "direct main"
     description:
       path: "../../../planchette/packages/ghost_servers"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   ghost_theme:
     dependency: "direct main"
     description:
       path: "../../../planchette/packages/ghost_theme"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   ghost_ui:
     dependency: "direct main"
     description:
       path: "../../../planchette/packages/ghost_ui"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   hooks:
     dependency: transitive
     description:
@@ -718,14 +718,14 @@ packages:
       path: "../../../planchette/packages/planchette_core"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   planchette_editor:
     dependency: "direct main"
     description:
       path: "../../../planchette/packages/planchette_editor"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   platform:
     dependency: transitive
     description:
@@ -828,14 +828,14 @@ packages:
       path: "../../packages/seance_core"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   seance_protocol:
     dependency: transitive
     description:
       path: "../../packages/seance_protocol"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   share_plus:
     dependency: "direct main"
     description:

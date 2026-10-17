@@ -4,7 +4,7 @@ description: >-
   Poltergeist and Seance): the editable ThemePalette and its
   stored/pasted JSON form, the shipped preset tables, and the
   per-app style and codec seams each host binds.
-version: 1.9.0
+version: 1.9.1
 publish_to: none
 
 environment:
