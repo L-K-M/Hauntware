@@ -28,15 +28,18 @@ final class HostFixture {
   String get core => payloads[Collector.core.wireName]!;
 }
 
-/// Marks the container captures of `test/integration/capture.sh`
-/// (`<platform>-docker-<shell>`).
-const _containerCapture = '-docker-';
+/// Marks the captures of `test/integration/`: the container captures of
+/// `capture.sh` (`<platform>-docker-<shell>`) and the runner-VM capture
+/// of `runner_vm.sh` (`<platform>-runner-<shell>`).
+const _captureMarks = ['-docker-', '-runner-'];
 
 /// Every platform under [root] with a probe and the fast collectors'
-/// fixtures, by name. The container captures are left out: they are shell
-/// and userland variants of a few platforms, which would crowd the others
-/// out of a ten-host fleet taken in name order, and spike S5 part 1
-/// replayed the platform fixtures alone (docs/evidence/s5).
+/// fixtures, by name. The captures are left out, so the fleet stays the
+/// six platform fixtures that spike S5 part 1 replayed
+/// (docs/evidence/s5): the container captures are shell and userland
+/// variants of a few platforms, which would crowd the others out of a
+/// ten-host fleet taken in name order, and the runner-VM capture would
+/// take a place in it too.
 List<HostFixture> loadHostFixtures(String root) {
   final dirs = Directory(root).listSync().whereType<Directory>().toList()
     ..sort((a, b) => a.path.compareTo(b.path));
@@ -44,7 +47,7 @@ List<HostFixture> loadHostFixtures(String root) {
   final fixtures = <HostFixture>[];
   for (final dir in dirs) {
     final platform = dir.uri.pathSegments.lastWhere((s) => s.isNotEmpty);
-    if (platform.contains(_containerCapture)) continue;
+    if (_captureMarks.any(platform.contains)) continue;
 
     final probe = file(dir, 'probe.sections');
     if (!probe.existsSync()) continue;

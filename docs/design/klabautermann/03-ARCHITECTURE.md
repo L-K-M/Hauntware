@@ -5447,6 +5447,34 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
   `sender.conf`, reachable from the sshd host, so the helper's deposits
   and the app's fetch, acknowledgement and deletion run end to end.
 
+As built in M2 (K28a, `klabautermann/test/integration/runner_vm.sh`),
+`run.sh` runs the runner-VM leg after the fixture suites, only on a
+GitHub-hosted runner (`GITHUB_ACTIONS`, `RUNNER_ENVIRONMENT`); anywhere
+else it skips with a notice and changes nothing. It starts a second
+sshd on 127.0.0.1:2243 with its own config, host key and PID file in a
+root-owned temporary directory, keys only and PAM as the system sshd
+uses it, and creates two throwaway accounts whose login shell is
+`/bin/sh` (dash): `klab-vm`, outside `systemd-journal`, `adm` and
+`wheel` (LOG-04), and `klab-vm-journal`, in `systemd-journal`. As
+`klab-vm` it captures the host's collector fixtures into the evidence
+directory (`runner-vm/fixtures/ubuntu-2404-runner-dash/`); then it
+starts a transient system timer and runs
+`klabautermann_core/test/integration/runner_vm_test.dart` (tag
+`runner-vm`). The suite covers the units and timers lists on systemd's
+JSON path; the timer's next run against `systemd-analyze calendar` for
+the `OnCalendar` expression D57's `timer_detail` read gives; a journal
+follow resumed after its cursor across a reconnect forced by killing
+the connection's sshd processes while the listener is stopped, with no
+record lost, repeated or dropped and no gap reported, its journalctl
+running with `--no-pager`, `SYSTEMD_PAGER=` and no terminal; unit logs;
+the kernel log, from the journal for the `systemd-journal` account and
+from the `dmesg` fallback for the other, which `kernel.dmesg_restrict`
+refuses; LOG-04's silent truncation; and cursor paging. Teardown on
+every exit removes the accounts with their sessions, the sshd, the
+timer and the directories; the system sshd, its config and port 22 stay
+untouched. The accounts with sudo, `systemd-run`, linger, the elevation
+prelude and the detached runners remain for later legs.
+
 ### 11.4 Performance budgets (gated from M2)
 
 - Fast tick at most 2.5 KB, plus 30 B for each CPU beyond 32 (D48), and
