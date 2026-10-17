@@ -600,7 +600,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // Monospace rendering of machine data (fingerprints, endpoints,
   // transcripts) plus list joins — no authored copy.
   'lib/ui/connection_status_panel.dart': {"'\\n'"},
-  'lib/ui/prompts/credential_dialog.dart': {"''"},
   // Monospace rendering of machine data (endpoints, identity paths) plus
   // null-fallbacks for optional labels — no authored copy.
   'lib/ui/import/ssh_config_import_dialog.dart': {
