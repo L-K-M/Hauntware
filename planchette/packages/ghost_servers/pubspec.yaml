@@ -5,7 +5,7 @@ description: >-
   sectioning rules, the status-dot vocabulary and the host-key,
   keyboard-interactive and credential prompts; the connection log views
   follow in a later stage.
-version: 1.9.0
+version: 1.9.1
 publish_to: none
 
 environment:

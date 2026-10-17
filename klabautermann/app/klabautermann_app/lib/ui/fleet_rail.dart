@@ -6,6 +6,7 @@ import '../controllers/monitoring_controller.dart';
 import '../controllers/sync_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'coverage.dart';
+import 'endpoint_confirmation.dart';
 import 'fleet_rows.dart';
 import 'sidebar_kit.dart';
 import 'ssh_config_import_action.dart';
@@ -61,6 +62,9 @@ class FleetRail extends StatelessWidget {
                     monitoring: monitoring,
                     showSelection: true,
                     onOpen: (server) => fleet.select(server.id),
+                    // 03 §4.3 step 3: synced servers waiting to be
+                    // confirmed.
+                    header: EndpointsPendingNotice(fleet: fleet),
                   ),
                 ),
                 SidebarBottomBar(

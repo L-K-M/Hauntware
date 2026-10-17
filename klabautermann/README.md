@@ -11,7 +11,7 @@ The fourth Hauntware product, a sibling of
 
 *The kobold that keeps the ship's engines lit.*
 
-**Current version:** v<!-- version -->1.9.0<!-- /version -->
+**Current version:** v<!-- version -->1.9.1<!-- /version -->
 
 ## Where things stand
 

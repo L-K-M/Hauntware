@@ -1,7 +1,7 @@
 name: poltergeist_app
 description: Poltergeist cross-platform file transfer client.
 publish_to: none
-version: 1.9.0+1090099
+version: 1.9.1+1090199
 
 environment:
   sdk: ^3.12.0
@@ -46,6 +46,9 @@ dependencies:
     path: ../../../planchette/packages/planchette_editor
   ghost_desktop:
     path: ../../../planchette/packages/ghost_desktop
+  # The Android in-app update: download, verify and open the release APK.
+  ghost_apk_update:
+    path: ../../../planchette/packages/ghost_apk_update
   # The bundled monospace fonts behind the app's code stack.
   ghost_fonts:
     path: ../../../planchette/packages/ghost_fonts

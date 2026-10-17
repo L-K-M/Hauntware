@@ -81,8 +81,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'the engine is not running'",
     "'the engine stopped'",
     "'the fleet controller was disposed'",
-    // The rejected request's class name, which RequestRejected carries.
+    // The rejected requests' class names, which RequestRejected carries.
     r"'$ImportSshConfig'",
+    r"'$ConfirmEndpoints'",
   },
   // The diagnostic of a sync answer the stopped engine never gave;
   // surfaces show ARB text for its failure kind (syncFailed).

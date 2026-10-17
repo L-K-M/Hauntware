@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only the staging directory is shareable: the installer can read the
+     downloaded update and nothing else in the app's storage. -->
+<paths>
+    <cache-path name="updates" path="ghost_apk_update/"/>
+</paths>

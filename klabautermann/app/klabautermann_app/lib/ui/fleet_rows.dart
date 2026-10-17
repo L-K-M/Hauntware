@@ -111,6 +111,7 @@ class FleetServerList extends StatefulWidget {
     required this.monitoring,
     required this.onOpen,
     this.showSelection = false,
+    this.header,
   });
 
   final FleetController fleet;
@@ -123,6 +124,10 @@ class FleetServerList extends StatefulWidget {
   /// Draws the selected server's pill: the desktop workspace shows it,
   /// while a phone's pushed screen covers the list.
   final bool showSelection;
+
+  /// Scrolls with the rows above the first, so a notice there never
+  /// takes the rows' room on a short screen at large text (A11Y-09).
+  final Widget? header;
 
   @override
   State<FleetServerList> createState() => _FleetServerListState();
@@ -337,6 +342,7 @@ class _FleetServerListState extends State<FleetServerList> {
                     ? _NoMatches(onClear: () => _setQuery(''))
                     : ListView(
                         children: [
+                          ?widget.header,
                           for (final row in _rows(
                             l10n,
                             matches,

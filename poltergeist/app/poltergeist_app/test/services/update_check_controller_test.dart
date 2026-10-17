@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_apk_update/ghost_apk_update.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart' as http_testing;
 import 'package:path/path.dart' as p;
@@ -16,6 +17,8 @@ import 'package:poltergeist_app/services/app_preferences.dart';
 import 'package:poltergeist_app/services/settings_store.dart';
 import 'package:poltergeist_app/services/update_check_controller.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
+
+import '../support/scripted_apk_updater.dart';
 
 void main() {
   final requests = <http.BaseRequest>[];
@@ -262,6 +265,91 @@ void main() {
       );
       expect(await offline.checkNow('1.0.0'), isNull);
       expect(offline.update, isNull);
+    });
+  });
+
+  group('Android in-place update', () {
+    UpdateCheckController controllerWith(ScriptedApkUpdater? updater) =>
+        UpdateCheckController(
+          checker: UpdateChecker(
+            repo: poltergeistUpdateRepo,
+            client: clientWith(releaseWithApk('v9.9.9')),
+          ),
+          apkUpdater: updater,
+        );
+
+    test('Update downloads the release APK the check found', () async {
+      final updater = ScriptedApkUpdater();
+      final controller = controllerWith(updater);
+      await controller.checkForUpdate('1.0.0');
+
+      expect(controller.updateApk, apkOf('v9.9.9'));
+      await controller.installUpdate();
+
+      expect(updater.requested, [apkOf('v9.9.9')]);
+      // The check stays one GET; the download is the updater's alone.
+      expect(requests, hasLength(1));
+    });
+
+    test('off Android the release only links out', () async {
+      final controller = controllerWith(null);
+      await controller.checkForUpdate('1.0.0');
+
+      expect(controller.update, isNotNull);
+      expect(controller.updateApk, isNull);
+      expect(controller.download, isA<ApkUpdateIdle>());
+      await controller.installUpdate();
+    });
+
+    test('a release without the APK only links out', () async {
+      final updater = ScriptedApkUpdater();
+      final controller = UpdateCheckController(
+        checker: UpdateChecker(
+          repo: poltergeistUpdateRepo,
+          client: clientWith(releaseJson('v9.9.9')),
+        ),
+        apkUpdater: updater,
+      );
+      await controller.checkForUpdate('1.0.0');
+
+      expect(controller.updateApk, isNull);
+      await controller.installUpdate();
+      expect(updater.requested, isEmpty);
+    });
+
+    test('download progress notifies through the controller', () async {
+      final updater = ScriptedApkUpdater();
+      final controller = controllerWith(updater);
+      var notified = 0;
+      controller.addListener(() => notified++);
+
+      updater.scripted = const ApkUpdateDownloading(1, 2);
+
+      expect(notified, 1);
+      expect(controller.download, isA<ApkUpdateDownloading>());
+    });
+
+    test('dismissing or opting out stops a running download', () async {
+      final updater = ScriptedApkUpdater();
+      final controller = controllerWith(updater);
+      await controller.checkForUpdate('1.0.0');
+
+      controller.dismiss();
+      expect(updater.cancels, 1);
+
+      await controller.checkForUpdate('1.0.0');
+      await controller.setEnabled(false);
+      expect(updater.cancels, 2);
+    });
+
+    test('every release publishes the asset installed builds look up', () {
+      // Renaming it would strand every installed Android build on its
+      // version: they look the old name up for good.
+      final manifest = File('../../../scripts/release-manifest.txt');
+      expect(
+        manifest.readAsLinesSync().map((line) => line.trim()),
+        contains(UpdateCheckController.androidReleaseAsset),
+      );
     });
   });
 

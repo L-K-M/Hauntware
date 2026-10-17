@@ -17,6 +17,14 @@
 
 ### Added
 
+- Séance and Poltergeist on Android update themselves when you ask.
+  When a newer release is out, Séance's update banner and Poltergeist's
+  Alerts tab offer Update with the download size. The app downloads
+  that release's APK, discards it unless its size and SHA-256 match what
+  the release lists, and opens Android's installer, which asks you to
+  allow installs from the app the first time and then to confirm. The
+  launch check is unchanged, nothing downloads until you choose Update,
+  and desktop and iOS builds still link to the release page.
 - Planchette, Séance and Poltergeist let you choose the built-in
   editor's font and turn its ligatures off. Each app keeps the choice on
   the device, like the editor's text size.
