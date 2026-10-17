@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- On Android, the update banner offers Update instead of View release,
+  with the download size. Séance downloads the release APK, shows its
+  progress with Cancel, discards it unless its size and SHA-256 match
+  the release, and opens Android's installer. If you back out of the
+  installer, Install reopens it without downloading again. Nothing
+  downloads until you tap Update.
 - On Android and iOS, selecting terminal text with a long-press or a
   double-tap shows Copy, Paste and Select all above the selection.
   Before, touch selections could not be copied.
