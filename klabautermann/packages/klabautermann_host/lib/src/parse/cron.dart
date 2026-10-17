@@ -8,6 +8,7 @@ library;
 import 'package:meta/meta.dart';
 
 import '../cron/expression.dart';
+import '../hws/collector.dart' show ArgValidators;
 import '../hws/program.dart' show kTimeoutAbsentMarker;
 import 'models.dart' show splitBlocks;
 import 'parse_result.dart';
@@ -367,4 +368,52 @@ void _parseCronDirs(
     }
     out.add(CronDirEntry(period: period, name: t.substring(sp + 1).trim()));
   }
+}
+
+/// The crontab spool JOB-03 listed (03 §7.7, M14): the directory and the
+/// user name of each crontab in it.
+@immutable
+final class CrontabSpool {
+  const CrontabSpool({
+    required this.directory,
+    required this.users,
+    required this.skipped,
+  });
+
+  /// The spool directory the listing found.
+  final String directory;
+
+  /// The file names that are valid user names, in listing order; each may
+  /// go to `HostCommands.crontabList`.
+  final List<String> users;
+
+  /// How many file names were not valid user names (cron's own temp
+  /// files, or anything else in the directory). They are never read.
+  final int skipped;
+}
+
+/// Reads `HostCommands.crontabSpoolList`'s output when it exited
+/// `kCrontabSpoolListed`: the directory on the first line, then one file
+/// name per line. Null when the first line is not an absolute path.
+CrontabSpool? parseCrontabSpool(String stdout) {
+  final lines = stdout.split('\n');
+  if (lines.isNotEmpty && lines.last.isEmpty) lines.removeLast();
+  if (lines.isEmpty || ArgValidators.absolutePath(lines.first) != null) {
+    return null;
+  }
+
+  final users = <String>[];
+  var skipped = 0;
+  for (final name in lines.skip(1)) {
+    if (ArgValidators.userName(name) == null) {
+      users.add(name);
+    } else {
+      skipped++;
+    }
+  }
+  return CrontabSpool(
+    directory: lines.first,
+    users: List.unmodifiable(users),
+    skipped: skipped,
+  );
 }
