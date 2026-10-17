@@ -33,6 +33,9 @@ List<int> fixtureBytes(String name) =>
 String fixtureString(String name) =>
     File('$_packageRoot/test/fixtures/$name').readAsStringSync();
 
+/// The fixtures directory, `test/fixtures`.
+Directory get fixturesDirectory => Directory('$_packageRoot/test/fixtures');
+
 /// The scripted server side of a [FakeDuplexPair]. `pair.client` goes to
 /// the code under test; this object plays the daemon: it records the
 /// request bytes, feeds response bytes, and half-closes.
