@@ -46,6 +46,34 @@ void main() {
       expect(r.value.first.name, 'old-web');
     });
 
+    test('reads the 1.52 Health object before the status text', () {
+      final r = parseContainerSummaries(fixtureJson('containers-1.52.json'));
+      expect(r.warnings, isEmpty);
+      expect(r.value.map((c) => c.health), [
+        HealthStatus.healthy,
+        HealthStatus.unhealthy,
+        HealthStatus.none,
+        HealthStatus.none,
+        HealthStatus.none,
+      ]);
+
+      final disagreeing = parseContainerSummaries([
+        {
+          'Id': 'a',
+          'Status': 'Up 1 minute (healthy)',
+          'Health': {'Status': 'unhealthy'},
+        },
+        {
+          'Id': 'b',
+          'Status': 'Up 1 minute (unhealthy)',
+          'Health': {'Status': 'bogus'},
+        },
+      ]);
+      expect(disagreeing.value.first.health, HealthStatus.unhealthy);
+      // An unknown Health.Status falls back to the status text.
+      expect(disagreeing.value.last.health, HealthStatus.unhealthy);
+    });
+
     test('parses the Podman compat shape', () {
       final r = parseContainerSummaries(
         fixtureJson('containers-podman-1.44.json'),

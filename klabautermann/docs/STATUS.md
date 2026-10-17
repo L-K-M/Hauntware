@@ -172,7 +172,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   the external-monitor rule.
 - `klabautermann_docker`: pure-Dart HTTP/1.1 client, NDJSON/JSON-seq
   scanning, stdcopy, versioned API models and negotiation, compose labels
-  and grouping.
+  and grouping, and `/system/df` across its shapes with the OV-05 summary
+  maths.
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and

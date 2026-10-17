@@ -4,6 +4,25 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Android in-app update (2026-10-17)
+
+Owner request: the Android build can update itself once the user
+chooses to. D23 carries the amendment (00-OVERVIEW), with D19, 01 §6,
+09 §4 and INSTALL.md following it. `UpdateChecker` now reports the
+release's assets that carry a GitHub SHA-256 digest; on Android the
+update alert offers Update, and the new shared
+`planchette/packages/ghost_apk_update` downloads
+`poltergeist-android.apk`, checks its size and digest, and opens the
+system installer through a FileProvider. Séance's banner uses the same
+package. The launch check's request shape is unchanged.
+
+Not verified on a device: the installer hand-off, the first-time
+"allow installs from this app" step, and the upgrade in place. CI
+builds the APK, which compiles the plugin and merges its manifest.
+Known gap: the download has no foreground service, so leaving the app
+lets Android freeze it; the 30 s stall timeout then reports a failed
+download, and Retry starts over.
+
 ## D12 runner-image baseline refresh (2026-10-16)
 
 Main run 38642392417 exposed `ubuntu-latest` rotating from
