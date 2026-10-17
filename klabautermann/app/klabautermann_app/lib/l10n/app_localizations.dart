@@ -3400,6 +3400,138 @@ abstract class AppLocalizations {
   /// **'Waiting for the operating system and kernel.'**
   String get overviewHostWaiting;
 
+  /// The health card's heading over the unhealthy containers (OV-02), on a server with a Docker endpoint; count is how many containers report an unhealthy health check.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No unhealthy containers} =1{1 unhealthy container} other{{count} unhealthy containers}}'**
+  String overviewHealthContainersUnhealthy(int count);
+
+  /// One unhealthy container in the health card: its name, or its short ID when it has none, and the engine's status text, such as 'Up 2 hours (unhealthy)'.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}: {status}'**
+  String overviewHealthContainer(String name, String status);
+
+  /// Heading of the Overview's Docker summary card (OV-05).
+  ///
+  /// In en, this message translates to:
+  /// **'Docker'**
+  String get overviewDockerTitle;
+
+  /// The Docker card before the first container and image lists arrived.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the containers and images.'**
+  String get overviewDockerReading;
+
+  /// The Docker card once the server's Docker endpoint is no longer ready: the figures below are the last ones read. time is the older of the two lists' read times, as a date and time in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'These figures are from {time}. The Docker engine cannot be reached now, so they may be out of date.'**
+  String overviewDockerStale(DateTime time);
+
+  /// The Docker card: why the container or image list could not be read; the figures below, if any, are from the last lists read. reason is the engine's failure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} daemonError{The engine refused or failed to list the containers or images.} connectionFailed{The connection to the engine failed while listing the containers or images.} other{The containers or images could not be listed.}}'**
+  String overviewDockerListFailed(String reason);
+
+  /// A count in the Docker card, in the UI locale's number format.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}'**
+  String overviewDockerCount(int count);
+
+  /// Docker card: how many containers are running.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get overviewDockerRunning;
+
+  /// Docker card: how many containers are paused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get overviewDockerPaused;
+
+  /// Docker card: how many containers are neither running nor paused (created, restarting, exited, dead), as docker info counts them.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped'**
+  String get overviewDockerStopped;
+
+  /// Docker card: how many containers report an unhealthy health check.
+  ///
+  /// In en, this message translates to:
+  /// **'Unhealthy'**
+  String get overviewDockerUnhealthy;
+
+  /// Docker card: how many images the engine has.
+  ///
+  /// In en, this message translates to:
+  /// **'Images'**
+  String get overviewDockerImages;
+
+  /// Docker card: how many images at least one container, running or not, was created from.
+  ///
+  /// In en, this message translates to:
+  /// **'Images in use'**
+  String get overviewDockerImagesInUse;
+
+  /// Docker card: how many images have no tag (Docker's dangling images).
+  ///
+  /// In en, this message translates to:
+  /// **'Dangling images'**
+  String get overviewDockerDangling;
+
+  /// Docker card: the space that removing unused images, containers, volumes and build cache would free, from the engine's disk use report.
+  ///
+  /// In en, this message translates to:
+  /// **'Reclaimable space'**
+  String get overviewDockerReclaimable;
+
+  /// Docker card: the reclaimable space before the reader asked for it to be measured.
+  ///
+  /// In en, this message translates to:
+  /// **'Not measured'**
+  String get overviewDockerNotMeasured;
+
+  /// Docker card: under the reclaimable space before it was measured, why it is not measured on its own.
+  ///
+  /// In en, this message translates to:
+  /// **'Measuring asks the engine to add up every image, container, volume and build cache, which can take a while on large hosts.'**
+  String get overviewDockerMeasureNote;
+
+  /// Docker card: button that asks the engine for its disk use report (/system/df) to show the reclaimable space.
+  ///
+  /// In en, this message translates to:
+  /// **'Measure disk use'**
+  String get overviewDockerMeasure;
+
+  /// Docker card: the measure button once a measurement is shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Measure again'**
+  String get overviewDockerMeasureAgain;
+
+  /// Docker card: beside a progress indicator while the disk use report is read.
+  ///
+  /// In en, this message translates to:
+  /// **'Measuring disk use. This can take a while on large hosts.'**
+  String get overviewDockerMeasuring;
+
+  /// Docker card: when the reclaimable space shown was measured, as a date and time in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Measured at {time}.'**
+  String overviewDockerMeasured(DateTime time);
+
+  /// Docker card: why the last disk use measurement failed; a reclaimable space shown is from the measurement before. reason is the engine's failure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, linkUnavailable{Disk use could not be measured: the server is not connected.} profileUnknown{Disk use could not be measured: the server has not been checked yet.} endpointUnavailable{Disk use could not be measured: the Docker engine cannot be reached.} daemonError{The engine refused or failed to measure its disk use.} connectionFailed{The connection to the engine failed or timed out while measuring disk use.} cancelled{The measurement stopped because the connection to the engine changed. Measure again to retry.} other{Disk use could not be measured.}}'**
+  String overviewDockerMeasureFailed(String reason);
+
   /// Tooltip of the sync control in the fleet rail and on phones while this device is not signed in to the Séance sync account; selecting it opens the sign-in. Also told when a sync is asked for before signing in.
   ///
   /// In en, this message translates to:

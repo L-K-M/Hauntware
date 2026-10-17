@@ -503,8 +503,9 @@ void main() {
       await tester.tap(_inDocker(find.text('Containers')));
       await tester.pumpAndSettle();
       expect(watches(), hasLength(2));
+      final second = watches().last;
 
-      // So does another server tab.
+      // So does another server tab; the Overview holds its own (OV-05).
       await tester.tap(
         find
             .descendant(
@@ -515,7 +516,11 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(unwatches(), hasLength(2));
-      expect(unwatches().last.watchId, watches().last.watchId);
+      expect(unwatches().last.watchId, second.watchId);
+      expect(watches().last.lists, {
+        DockerWatchList.containers,
+        DockerWatchList.images,
+      });
     });
 
     testWidgets('says when the engine details could not be read, and reads '

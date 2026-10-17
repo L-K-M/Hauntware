@@ -17,6 +17,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/charts.dart'
     show chartTheme, goldenFontFamily, goldensCompareHere, loadGoldenFonts;
+import 'support/docker.dart';
 import 'support/fake_engine.dart';
 import 'support/harness.dart';
 
@@ -123,6 +124,27 @@ FailedUnitsResult _failed([List<String> units = const []]) =>
         ),
     ]);
 
+/// Two running containers, one of them unhealthy, a paused and an
+/// exited one.
+final _containers = [
+  dockerContainer('c-web', name: 'web', health: HealthStatus.healthy),
+  dockerContainer(
+    'c-db',
+    name: 'db',
+    status: 'Up 3 hours (unhealthy)',
+    health: HealthStatus.unhealthy,
+  ),
+  dockerContainer('c-cache', name: 'cache', state: 'paused'),
+  dockerContainer('c-old', name: 'old', state: 'exited'),
+];
+
+/// Two images in use and a dangling one.
+final _images = [
+  dockerImage('sha256:a', tags: ['nginx:1.27'], containers: 2),
+  dockerImage('sha256:b', tags: ['postgres:16'], containers: 1),
+  dockerImage('sha256:c'),
+];
+
 final class _Panel {
   _Panel(this.engine, this.visible);
 
@@ -135,6 +157,31 @@ final class _Panel {
 
   /// How often the health card's link opened Settings.
   int settingsOpened = 0;
+
+  /// Emits [event] and settles; a progress indicator never settles, so
+  /// [settle] false pumps one frame instead.
+  Future<void> emit(
+    WidgetTester tester,
+    EngineEvent event, {
+    bool settle = true,
+  }) async {
+    engine.emit(event);
+    settle ? await tester.pumpAndSettle() : await tester.pump();
+  }
+
+  /// The server's Docker endpoint ready, with [_containers] and
+  /// [_images] listed at [now].
+  Future<void> docker(
+    WidgetTester tester, {
+    List<ContainerSummary>? containers,
+  }) async {
+    await emit(tester, dockerReady(_serverId));
+    await emit(
+      tester,
+      dockerContainerList(_serverId, containers ?? _containers, at: now),
+    );
+    await emit(tester, dockerImageList(_serverId, _images, at: now));
+  }
 
   Future<void> sample(
     WidgetTester tester,
@@ -1349,6 +1396,289 @@ void main() {
     });
   });
 
+  group('Docker (OV-05, OV-02)', () {
+    List<DockerWatch> watches(_Panel panel) =>
+        panel.engine.sentOfType<DockerWatch>().cast();
+    List<DockerQuery> dfQueries(_Panel panel) => [
+      for (final query in panel.engine.sent.whereType<DockerQuery>())
+        if (query.query is DockerSystemDfQuery) query,
+    ];
+    final dockerCard = find.byWidgetPredicate(
+      (widget) => widget is PanelSection && widget.title == 'Docker',
+    );
+
+    /// [label]'s figure in the Docker card, as [_Facts] lays it out: a
+    /// column of the label over the value.
+    String? figure(WidgetTester tester, String label) {
+      final columns = tester.widgetList<Column>(
+        find.descendant(of: dockerCard, matching: find.byType(Column)),
+      );
+      for (final Column(:children) in columns) {
+        if (children case [
+          Text(data: final shown),
+          Text(:final data),
+        ] when shown == label) {
+          return data;
+        }
+      }
+      return null;
+    }
+
+    /// Taps [text], scrolled into view first.
+    Future<void> tapText(WidgetTester tester, String text) async {
+      await tester.ensureVisible(find.text(text));
+      await tester.pump();
+      await tester.tap(find.text(text));
+      await tester.pump();
+    }
+
+    testWidgets('a server without a Docker endpoint shows no Docker card '
+        'and watches nothing', (tester) async {
+      final panel = await _pump(tester);
+      expect(dockerCard, findsNothing);
+
+      await panel.emit(
+        tester,
+        dockerNoRoute(_serverId, DockerNoRouteReason.noSocket),
+      );
+      await panel.sample(tester, _failed(), stream: SampleStream.failedUnits);
+      expect(dockerCard, findsNothing);
+      expect(find.textContaining('unhealthy container'), findsNothing);
+      expect(watches(panel), isEmpty);
+    });
+
+    testWidgets('counts containers and images, and lists the unhealthy '
+        'containers beside the failed units', (tester) async {
+      final panel = await _pump(tester);
+      await panel.emit(tester, dockerReady(_serverId));
+      expect(watches(panel).single.lists, {
+        DockerWatchList.containers,
+        DockerWatchList.images,
+      });
+      expect(dockerCard, findsOneWidget);
+      expect(find.text('Reading the containers and images.'), findsOneWidget);
+
+      await panel.sample(
+        tester,
+        _failed(['backup.service']),
+        stream: SampleStream.failedUnits,
+      );
+      await panel.docker(tester);
+      expect(find.text('Reading the containers and images.'), findsNothing);
+      for (final (label, value) in [
+        ('Running', '2'),
+        ('Paused', '1'),
+        ('Stopped', '1'),
+        ('Unhealthy', '1'),
+        ('Images', '3'),
+        ('Images in use', '2'),
+        ('Dangling images', '1'),
+        ('Reclaimable space', 'Not measured'),
+      ]) {
+        expect(figure(tester, label), value, reason: label);
+      }
+
+      final health = find.byWidgetPredicate(
+        (widget) => widget is PanelSection && widget.title == 'Health',
+      );
+      for (final text in [
+        '1 failed unit',
+        '1 unhealthy container',
+        'db: Up 3 hours (unhealthy)',
+      ]) {
+        expect(
+          find.descendant(of: health, matching: find.text(text)),
+          findsOneWidget,
+          reason: text,
+        );
+      }
+
+      await panel.emit(
+        tester,
+        dockerContainerList(_serverId, [_containers.first], at: panel.now),
+      );
+      expect(find.text('No unhealthy containers'), findsOneWidget);
+      expect(figure(tester, 'Unhealthy'), '0');
+    });
+
+    testWidgets('names five unhealthy containers and counts the rest', (
+      tester,
+    ) async {
+      final panel = await _pump(tester);
+      await panel.docker(
+        tester,
+        containers: [
+          for (var i = 0; i < 7; i++)
+            dockerContainer(
+              'c-$i',
+              name: 'app-$i',
+              status: 'Up 1 hour (unhealthy)',
+              health: HealthStatus.unhealthy,
+            ),
+        ],
+      );
+      expect(find.text('7 unhealthy containers'), findsOneWidget);
+      expect(find.text('app-4: Up 1 hour (unhealthy)'), findsOneWidget);
+      expect(find.text('app-5: Up 1 hour (unhealthy)'), findsNothing);
+      expect(find.text('and 2 more'), findsOneWidget);
+    });
+
+    testWidgets('measures the reclaimable space on demand, with progress '
+        'and why it failed', (tester) async {
+      final panel = await _pump(tester);
+      await panel.docker(tester);
+      expect(dfQueries(panel), isEmpty, reason: 'only on demand');
+      expect(
+        find.text(
+          'Measuring asks the engine to add up every image, container, '
+          'volume and build cache, which can take a while on large hosts.',
+        ),
+        findsOneWidget,
+      );
+
+      await tapText(tester, 'Measure disk use');
+      expect(dfQueries(panel), hasLength(1));
+      expect(
+        find.text('Measuring disk use. This can take a while on large hosts.'),
+        findsOneWidget,
+      );
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      final button = find.ancestor(
+        of: find.text('Measure disk use'),
+        matching: find.bySubtype<ButtonStyleButton>(),
+      );
+      expect(tester.widget<ButtonStyleButton>(button).onPressed, isNull);
+
+      await panel.emit(
+        tester,
+        dockerAnswer(
+          dfQueries(panel).single,
+          const DockerQueryFailed(
+            DockerQueryFailure.connectionFailed,
+            detail: 'no answer within 30 s',
+          ),
+        ),
+      );
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(
+        find.text(
+          'The connection to the engine failed or timed out while '
+          'measuring disk use.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('no answer within 30 s'), findsOneWidget);
+      expect(figure(tester, 'Reclaimable space'), 'Not measured');
+
+      await tapText(tester, 'Measure disk use');
+      panel.now = _start.add(const Duration(minutes: 2));
+      await panel.emit(
+        tester,
+        dockerAnswer(
+          dfQueries(panel).last,
+          dockerDiskUse(images: 3 * _gib ~/ 2, volumes: 512 * _mib),
+        ),
+      );
+      expect(figure(tester, 'Reclaimable space'), '2 GiB');
+      expect(find.textContaining('Measured at '), findsOneWidget);
+      expect(find.text('Measure again'), findsOneWidget);
+      expect(find.textContaining('could not be measured'), findsNothing);
+    });
+
+    testWidgets('a failed list says why above the last figures and '
+        'watches anew on a retry', (tester) async {
+      final panel = await _pump(tester);
+      await panel.docker(tester);
+      final first = watches(panel).single;
+
+      await panel.emit(
+        tester,
+        dockerListFailed(
+          _serverId,
+          DockerWatchList.images,
+          DockerQueryFailure.daemonError,
+          at: panel.now,
+          detail: 'Error response from daemon',
+        ),
+      );
+      expect(
+        find.text(
+          'The engine refused or failed to list the containers or '
+          'images.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Error response from daemon'), findsOneWidget);
+      expect(figure(tester, 'Images'), '3', reason: 'the last list stays');
+
+      await tapText(tester, 'Try again');
+      expect(watches(panel), hasLength(2));
+      expect(watches(panel).last.watchId, isNot(first.watchId));
+    });
+
+    testWidgets('once the endpoint is gone, the last figures grey under '
+        'their time and nothing is measured', (tester) async {
+      final panel = await _pump(tester);
+      await panel.docker(tester);
+      await panel.emit(
+        tester,
+        const DockerEndpointState(
+          serverId: _serverId,
+          phase: DockerEndpointPhase.waiting,
+        ),
+      );
+      expect(dockerCard, findsOneWidget, reason: 'lists from it are held');
+      expect(
+        find.textContaining('The Docker engine cannot be reached now'),
+        findsOneWidget,
+      );
+      expect(find.text('1 unhealthy container'), findsOneWidget);
+      final running = tester.widget<Text>(
+        find.descendant(of: dockerCard, matching: find.text('2')).first,
+      );
+      expect(
+        running.style?.color,
+        Theme.of(tester.element(dockerCard)).colorScheme.onSurfaceVariant,
+      );
+      final button = find.ancestor(
+        of: find.text('Measure disk use'),
+        matching: find.bySubtype<ButtonStyleButton>(),
+      );
+      expect(tester.widget<ButtonStyleButton>(button).onPressed, isNull);
+
+      await panel.emit(tester, dockerReady(_serverId));
+      expect(
+        find.textContaining('The Docker engine cannot be reached now'),
+        findsNothing,
+      );
+    });
+
+    testWidgets('a hidden Overview lets its watch go', (tester) async {
+      final panel = await _pump(tester);
+      await panel.emit(tester, dockerReady(_serverId));
+      final watch = watches(panel).single;
+
+      panel.visible.value = false;
+      await tester.pumpAndSettle();
+      final unwatch =
+          panel.engine.sentOfType<DockerUnwatch>().single as DockerUnwatch;
+      expect(unwatch.watchId, watch.watchId);
+
+      panel.visible.value = true;
+      await tester.pumpAndSettle();
+      expect(watches(panel), hasLength(2));
+    });
+
+    testWidgets('lays out without overflow at 200 % text on a phone', (
+      tester,
+    ) async {
+      final panel = await _pump(tester, size: _phone, textScale: 2);
+      await panel.docker(tester);
+      await tapText(tester, 'Measure disk use');
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   group('golden', () {
     // 03 §11.1: a server with ZFS, a failed unit and a full mount on a
     // wide panel, and the same readings gone stale on a phone; every card
@@ -1393,6 +1723,59 @@ void main() {
         await expectLater(
           find.byType(OverviewPanel),
           matchesGoldenFile('goldens/overview_phone_${brightness.name}.png'),
+        );
+      }, skip: !goldensCompareHere);
+
+      // OV-05 and OV-02 with Docker: measured beside the Host card on a
+      // wide panel, and gone stale on a phone, its measurement failed.
+      testWidgets('Docker desktop, ${brightness.name}', (tester) async {
+        final panel = await pumpAll(tester, const Size(900, 1500), brightness);
+        await panel.docker(tester);
+        await tester.tap(find.text('Measure disk use'));
+        await tester.pump();
+        final query = panel.engine.sentOfType<DockerQuery>().last;
+        await panel.emit(
+          tester,
+          dockerAnswer(
+            query as DockerQuery,
+            dockerDiskUse(images: 3 * _gib ~/ 2, volumes: 512 * _mib),
+          ),
+        );
+        await expectLater(
+          find.byType(OverviewPanel),
+          matchesGoldenFile(
+            'goldens/overview_docker_desktop_${brightness.name}.png',
+          ),
+        );
+      }, skip: !goldensCompareHere);
+
+      testWidgets('Docker phone, ${brightness.name}', (tester) async {
+        final panel = await _pump(
+          tester,
+          size: const Size(390, 1700),
+          brightness: brightness,
+        );
+        await panel.sample(tester, _failed(), stream: SampleStream.failedUnits);
+        await panel.docker(tester);
+        await tester.tap(find.text('Measure disk use'));
+        await tester.pump();
+        final query = panel.engine.sentOfType<DockerQuery>().last;
+        await panel.emit(
+          tester,
+          dockerAnswer(
+            query as DockerQuery,
+            const DockerQueryFailed(DockerQueryFailure.daemonError),
+          ),
+        );
+        await panel.emit(
+          tester,
+          dockerNoRoute(_serverId, DockerNoRouteReason.socketDenied),
+        );
+        await expectLater(
+          find.byType(OverviewPanel),
+          matchesGoldenFile(
+            'goldens/overview_docker_phone_${brightness.name}.png',
+          ),
         );
       }, skip: !goldensCompareHere);
     }

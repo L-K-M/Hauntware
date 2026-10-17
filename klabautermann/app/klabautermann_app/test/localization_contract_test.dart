@@ -92,6 +92,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/docker_controller.dart': {
     r"'docker-${_count++}'",
     r"'containers-${_count++}'",
+    r"'summary-${_count++}'",
+    r"'df-${_count++}'",
   },
   'lib/controllers/log_streams.dart': {
     // A log stream id the engine keys a stream's events by (03 §10.1), and
@@ -370,9 +372,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/server_surfaces.dart': {
     "'new controllers come with a new tree (KlabautermannApp, D44)'",
   },
-  // The trailing core number of a /proc/stat name such as cpu12, which
-  // orders the per-core figures; the names themselves are server data.
-  'lib/ui/overview_panel.dart': {r"r'\d+$'"},
+  'lib/ui/overview_panel.dart': {
+    // The trailing core number of a /proc/stat name such as cpu12, which
+    // orders the per-core figures; the names themselves are server data.
+    r"r'\d+$'",
+    // An assert message; programmer diagnostic, never rendered.
+    "'new controllers come with a new tree (KlabautermannApp, D44)'",
+  },
   // debugPrint of a failed theme change; the toast is ARB text.
   'lib/ui/settings_page.dart': {r"'$error'"},
   'lib/ui/sortable_table.dart': {

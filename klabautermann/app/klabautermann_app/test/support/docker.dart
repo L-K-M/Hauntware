@@ -129,3 +129,36 @@ DockerListChanged dockerListFailed(
   payload: DockerQueryFailed(failure, detail: detail),
   at: at,
 );
+
+/// One image as the engine lists it (IMG-01): tagged [tags], dangling
+/// with none, and used by [containers] containers.
+ImageSummary dockerImage(
+  String id, {
+  List<String> tags = const [],
+  int containers = 0,
+}) => ImageSummary(id: id, repoTags: tags, containers: containers);
+
+/// [images] on [serverId], as a watch of the images delivers them.
+DockerListChanged dockerImageList(
+  String serverId,
+  List<ImageSummary> images, {
+  required DateTime at,
+}) => DockerListChanged(
+  serverId: serverId,
+  list: DockerWatchList.images,
+  payload: DockerImagesPayload(images),
+  at: at,
+  fullRelist: true,
+);
+
+/// A `/system/df` answer whose images free [images] bytes and volumes
+/// [volumes] (OV-05).
+DockerSystemDfPayload dockerDiskUse({int images = 0, int volumes = 0}) =>
+    DockerSystemDfPayload(
+      SystemDf(
+        images: DiskUsageTotals(reclaimable: images),
+        containers: const DiskUsageTotals(reclaimable: 0),
+        volumes: DiskUsageTotals(reclaimable: volumes),
+        buildCache: const DiskUsageTotals(reclaimable: 0),
+      ),
+    );

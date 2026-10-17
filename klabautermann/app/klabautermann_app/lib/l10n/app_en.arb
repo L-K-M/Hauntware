@@ -3130,6 +3130,138 @@
   "@overviewHostWaiting": {
     "description": "The Overview's Host card before the server sent its operating system and kernel."
   },
+  "overviewHealthContainersUnhealthy": "{count, plural, =0{No unhealthy containers} =1{1 unhealthy container} other{{count} unhealthy containers}}",
+  "@overviewHealthContainersUnhealthy": {
+    "description": "The health card's heading over the unhealthy containers (OV-02), on a server with a Docker endpoint; count is how many containers report an unhealthy health check.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "overviewHealthContainer": "{name}: {status}",
+  "@overviewHealthContainer": {
+    "description": "One unhealthy container in the health card: its name, or its short ID when it has none, and the engine's status text, such as 'Up 2 hours (unhealthy)'.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "web-1"
+      },
+      "status": {
+        "type": "String",
+        "example": "Up 2 hours (unhealthy)"
+      }
+    }
+  },
+  "overviewDockerTitle": "Docker",
+  "@overviewDockerTitle": {
+    "description": "Heading of the Overview's Docker summary card (OV-05)."
+  },
+  "overviewDockerReading": "Reading the containers and images.",
+  "@overviewDockerReading": {
+    "description": "The Docker card before the first container and image lists arrived."
+  },
+  "overviewDockerStale": "These figures are from {time}. The Docker engine cannot be reached now, so they may be out of date.",
+  "@overviewDockerStale": {
+    "description": "The Docker card once the server's Docker endpoint is no longer ready: the figures below are the last ones read. time is the older of the two lists' read times, as a date and time in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "overviewDockerListFailed": "{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} daemonError{The engine refused or failed to list the containers or images.} connectionFailed{The connection to the engine failed while listing the containers or images.} other{The containers or images could not be listed.}}",
+  "@overviewDockerListFailed": {
+    "description": "The Docker card: why the container or image list could not be read; the figures below, if any, are from the last lists read. reason is the engine's failure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewDockerCount": "{count}",
+  "@overviewDockerCount": {
+    "description": "A count in the Docker card, in the UI locale's number format.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "overviewDockerRunning": "Running",
+  "@overviewDockerRunning": {
+    "description": "Docker card: how many containers are running."
+  },
+  "overviewDockerPaused": "Paused",
+  "@overviewDockerPaused": {
+    "description": "Docker card: how many containers are paused."
+  },
+  "overviewDockerStopped": "Stopped",
+  "@overviewDockerStopped": {
+    "description": "Docker card: how many containers are neither running nor paused (created, restarting, exited, dead), as docker info counts them."
+  },
+  "overviewDockerUnhealthy": "Unhealthy",
+  "@overviewDockerUnhealthy": {
+    "description": "Docker card: how many containers report an unhealthy health check."
+  },
+  "overviewDockerImages": "Images",
+  "@overviewDockerImages": {
+    "description": "Docker card: how many images the engine has."
+  },
+  "overviewDockerImagesInUse": "Images in use",
+  "@overviewDockerImagesInUse": {
+    "description": "Docker card: how many images at least one container, running or not, was created from."
+  },
+  "overviewDockerDangling": "Dangling images",
+  "@overviewDockerDangling": {
+    "description": "Docker card: how many images have no tag (Docker's dangling images)."
+  },
+  "overviewDockerReclaimable": "Reclaimable space",
+  "@overviewDockerReclaimable": {
+    "description": "Docker card: the space that removing unused images, containers, volumes and build cache would free, from the engine's disk use report."
+  },
+  "overviewDockerNotMeasured": "Not measured",
+  "@overviewDockerNotMeasured": {
+    "description": "Docker card: the reclaimable space before the reader asked for it to be measured."
+  },
+  "overviewDockerMeasureNote": "Measuring asks the engine to add up every image, container, volume and build cache, which can take a while on large hosts.",
+  "@overviewDockerMeasureNote": {
+    "description": "Docker card: under the reclaimable space before it was measured, why it is not measured on its own."
+  },
+  "overviewDockerMeasure": "Measure disk use",
+  "@overviewDockerMeasure": {
+    "description": "Docker card: button that asks the engine for its disk use report (/system/df) to show the reclaimable space."
+  },
+  "overviewDockerMeasureAgain": "Measure again",
+  "@overviewDockerMeasureAgain": {
+    "description": "Docker card: the measure button once a measurement is shown."
+  },
+  "overviewDockerMeasuring": "Measuring disk use. This can take a while on large hosts.",
+  "@overviewDockerMeasuring": {
+    "description": "Docker card: beside a progress indicator while the disk use report is read."
+  },
+  "overviewDockerMeasured": "Measured at {time}.",
+  "@overviewDockerMeasured": {
+    "description": "Docker card: when the reclaimable space shown was measured, as a date and time in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "overviewDockerMeasureFailed": "{reason, select, linkUnavailable{Disk use could not be measured: the server is not connected.} profileUnknown{Disk use could not be measured: the server has not been checked yet.} endpointUnavailable{Disk use could not be measured: the Docker engine cannot be reached.} daemonError{The engine refused or failed to measure its disk use.} connectionFailed{The connection to the engine failed or timed out while measuring disk use.} cancelled{The measurement stopped because the connection to the engine changed. Measure again to retry.} other{Disk use could not be measured.}}",
+  "@overviewDockerMeasureFailed": {
+    "description": "Docker card: why the last disk use measurement failed; a reclaimable space shown is from the measurement before. reason is the engine's failure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
   "syncSignInTooltip": "Sign in to your Séance account to list its servers",
   "@syncSignInTooltip": {
     "description": "Tooltip of the sync control in the fleet rail and on phones while this device is not signed in to the Séance sync account; selecting it opens the sign-in. Also told when a sync is asked for before signing in."
