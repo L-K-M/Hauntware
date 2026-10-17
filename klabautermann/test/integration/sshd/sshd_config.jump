@@ -1,0 +1,5 @@
+# The ProxyJump host. sshd keeps the first value it reads for a keyword
+# (sshd_config(5)), and the common config sets AllowTcpForwarding no, so
+# the forwarding a jump host needs comes before the Include (03 §11.3).
+AllowTcpForwarding local
+Include /etc/ssh/fixture/sshd_config.common

@@ -57,6 +57,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/appearance_controller.dart': {
     r"'The theme was not saved: $error'",
   },
+  // The not-saved diagnostic; the General tab prints it and shows its own
+  // ARB text (settingsAnnounceNotSaved).
+  'lib/controllers/announcement_controller.dart': {
+    r"'The announcement setting was not saved: $error'",
+  },
   'lib/controllers/fleet_controller.dart': {
     // The row subtitle's address: host or user@host, with :port when the
     // port is not 22 and an IPv6 host then bracketed before it. Machine
@@ -296,6 +301,18 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"r'\s+'",
     r"'\n'",
     "'+'",
+  },
+  'lib/ui/prompts/prompt_host.dart': {
+    // An assert message; programmer diagnostic, never rendered.
+    "'new controllers come with a new tree (KlabautermannApp, D44)'",
+    // Error-report context of a dialog that failed; the prompt is then
+    // declined, and the dialog's own words are ARB text.
+    "'while showing an engine prompt'",
+    // An IPv6 host's brackets in the endpoint line, which ARB text
+    // (promptEndpoint) frames; machine data, not copy.
+    "':'",
+    "'['",
+    r"'[$host]'",
   },
   // An assert message; programmer diagnostic, never rendered.
   'lib/ui/server_surfaces.dart': {

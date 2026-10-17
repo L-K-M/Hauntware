@@ -15,9 +15,13 @@ import 'dart:typed_data';
 
 import 'package:dartssh2/dartssh2.dart';
 // ignore: implementation_imports
+import 'package:dartssh2/src/kex/kex_dh.dart';
+// ignore: implementation_imports
 import 'package:dartssh2/src/kex/kex_x25519.dart';
 // ignore: implementation_imports
 import 'package:dartssh2/src/message/msg_kex.dart';
+// ignore: implementation_imports
+import 'package:dartssh2/src/message/msg_kex_dh.dart';
 // ignore: implementation_imports
 import 'package:dartssh2/src/message/msg_kex_ecdh.dart';
 // ignore: implementation_imports
@@ -42,7 +46,6 @@ const _lineFeed = 0x0a;
 // RFC 4253 §6.1 requires 35000 bytes; anything far beyond is a framing bug.
 const _maxPacketLength = 1 << 20;
 
-const _kexType = SSHKexType.x25519Rfc;
 const _cipherType = SSHCipherType.chacha20poly1305;
 
 // RFC 8032 §7.1, test 1: deliberately public ed25519 test material.
@@ -56,8 +59,9 @@ enum PeerAuthentication { accept, reject }
 
 /// The client's end of an in-memory connection to a minimal SSH server.
 ///
-/// The server sends KEXINIT as its first packet, runs curve25519-sha256 with
-/// an ed25519 host key, agrees strict key exchange when the client offers it,
+/// The server sends KEXINIT as its first packet, runs [keyExchange] (by
+/// default curve25519-sha256, or diffie-hellman-group14-sha256) with an
+/// ed25519 host key, agrees strict key exchange when the client offers it,
 /// and encrypts both directions with chacha20-poly1305@openssh.com after
 /// NEWKEYS. It then accepts the ssh-userauth service and answers every
 /// authentication request as [authentication] says. It stops there: global
@@ -65,15 +69,21 @@ enum PeerAuthentication { accept, reject }
 /// message fails the connection instead of leaving the client waiting.
 ///
 /// The peer never calls [close] itself: that is the client's hang-up, so a
-/// subclass can count or delay it.
+/// subclass can count or delay it. [hangUp] is the server's.
 class SshPeerSocket implements SSHSocket {
-  SshPeerSocket({this.authentication = PeerAuthentication.accept}) {
+  SshPeerSocket({
+    this.authentication = PeerAuthentication.accept,
+    this.keyExchange = SSHKexType.x25519Rfc,
+  }) : assert(_keyExchanges.contains(keyExchange)) {
     _outgoing.stream.listen(_receive);
     _incoming.add(Uint8List.fromList(latin1.encode('$_serverVersion\r\n')));
     _send(_serverKexInit);
   }
 
+  static const _keyExchanges = {SSHKexType.x25519Rfc, SSHKexType.dh14Sha256};
+
   final PeerAuthentication authentication;
+  final SSHKexType keyExchange;
 
   /// Called for a post-auth message the peer has no built-in answer for
   /// (channel opens, channel traffic). When null, the message fails the
@@ -88,6 +98,10 @@ class SshPeerSocket implements SSHSocket {
   /// Sends one SSH payload to the client; public for channel-aware fixtures.
   void sendMessage(Uint8List payload) => _send(payload);
 
+  /// Ends the server's side of the connection without a word, as a server
+  /// that gave up on the client does.
+  void hangUp() => unawaited(_incoming.close());
+
   final _incoming = StreamController<Uint8List>();
   final _outgoing = StreamController<List<int>>();
   final _done = Completer<void>();
@@ -98,8 +112,8 @@ class SshPeerSocket implements SSHSocket {
     _decodeHex('$_hostKeySeed$_hostPublicKey'),
     'seance test peer',
   );
-  final _serverKexInit = SSH_Message_KexInit(
-    kexAlgorithms: [_kexType.name, SSHKexPseudoAlgorithm.strictKexServer],
+  late final _serverKexInit = SSH_Message_KexInit(
+    kexAlgorithms: [keyExchange.name, SSHKexPseudoAlgorithm.strictKexServer],
     serverHostKeyAlgorithms: [SSHHostkeyType.ed25519.name],
     encryptionClientToServer: [_cipherType.name],
     encryptionServerToClient: [_cipherType.name],
@@ -219,6 +233,10 @@ class SshPeerSocket implements SSHSocket {
         _strictKex = SSH_Message_KexInit.decode(
           payload,
         ).kexAlgorithms.contains(SSHKexPseudoAlgorithm.strictKexClient);
+      // KEXDH_INIT and KEX_ECDH_INIT share message number 30.
+      case SSH_Message_KexECDH_Init.messageId
+          when keyExchange == SSHKexType.dh14Sha256:
+        _replyToDhKeyExchange(SSH_Message_KexDH_Init.decode(payload).e);
       case SSH_Message_KexECDH_Init.messageId:
         _replyToKeyExchange(
           SSH_Message_KexECDH_Init.decode(payload).ecdhPublicKey,
@@ -266,7 +284,7 @@ class SshPeerSocket implements SSHSocket {
     final hostKey = _hostKey.toPublicKey().encode();
     final sharedSecret = keyExchange.computeSecret(clientPublicKey);
     final exchangeHash = SSHKexUtils.computeExchangeHash(
-      digest: _kexType.createDigest(),
+      digest: this.keyExchange.createDigest(),
       clientVersion: _clientVersion!,
       serverVersion: _serverVersion,
       clientKexInit: _clientKexInit!,
@@ -286,7 +304,40 @@ class SshPeerSocket implements SSHSocket {
         signature: _hostKey.sign(exchangeHash).encode(),
       ).encode(),
     );
+    _sendNewKeys();
+  }
 
+  /// The group14 counterpart of [_replyToKeyExchange], computed here rather
+  /// than in an isolate: the client's half is the one under test.
+  void _replyToDhKeyExchange(BigInt clientPublicValue) {
+    final keyExchange = SSHKexDH.group14();
+    final hostKey = _hostKey.toPublicKey().encode();
+    final sharedSecret = keyExchange.computeSecret(clientPublicValue);
+    final exchangeHash = SSHKexUtils.computeExchangeHash(
+      digest: this.keyExchange.createDigest(),
+      clientVersion: _clientVersion!,
+      serverVersion: _serverVersion,
+      clientKexInit: _clientKexInit!,
+      serverKexInit: _serverKexInit,
+      hostKey: hostKey,
+      clientPublicKey: _mpintBody(clientPublicValue),
+      serverPublicKey: _mpintBody(keyExchange.e),
+      sharedSecret: sharedSecret,
+    );
+    _sharedSecret = sharedSecret;
+    _exchangeHash = exchangeHash;
+
+    _send(
+      SSH_Message_KexDH_Reply(
+        hostPublicKey: hostKey,
+        f: keyExchange.e,
+        signature: _hostKey.sign(exchangeHash).encode(),
+      ).encode(),
+    );
+    _sendNewKeys();
+  }
+
+  void _sendNewKeys() {
     // Like OpenSSH, send NEWKEYS right after the reply and encrypt from here.
     _send(SSH_Message_NewKeys().encode());
     _encrypter = OpenSSHChaCha20Poly1305(
@@ -297,7 +348,7 @@ class SshPeerSocket implements SSHSocket {
 
   /// Keys for the first and only exchange, whose hash is the session id.
   Uint8List _deriveKey(SSHDeriveKeyType keyType) => SSHKexUtils.deriveKey(
-    digest: _kexType.createDigest(),
+    digest: keyExchange.createDigest(),
     sharedSecret: _sharedSecret!,
     exchangeHash: _exchangeHash!,
     keyType: keyType,
@@ -338,6 +389,16 @@ class SshPeerSocket implements SSHSocket {
     );
     _sendSequence++;
   }
+}
+
+/// A positive [value] as an RFC 4251 §5 mpint without its length: big-endian,
+/// with a zero byte ahead of a set top bit. The exchange hash takes the DH
+/// public values in this form (dartssh2 keeps its own encoder internal).
+Uint8List _mpintBody(BigInt value) {
+  final hex = value.toRadixString(16);
+  final digits = hex.length.isOdd ? '0$hex' : hex;
+  final bytes = _decodeHex(digits);
+  return bytes.first >= 0x80 ? Uint8List.fromList([0, ...bytes]) : bytes;
 }
 
 Uint8List _decodeHex(String value) => Uint8List.fromList([

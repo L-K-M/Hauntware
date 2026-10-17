@@ -1,0 +1,14 @@
+== meta ==
+total=3
+selection=all
+== rows ==
+1 S 0 2 1 326791 0 1720 sleep
+18 R 7 1 0 326817 0 3776 sh
+7 S 0 3 1 326810 0 8720 dart:capture_fi
+== cmdline ==
+==> 1/cmdline <==
+sleep[redacted]
+==> 18/cmdline <==
+/tmp/klab-sh-DEPSUC/sh[redacted]
+==> 7/cmdline <==
+/opt/klab/capture_fixtures[redacted][redacted][redacted][redacted][redacted][redacted][redacted]

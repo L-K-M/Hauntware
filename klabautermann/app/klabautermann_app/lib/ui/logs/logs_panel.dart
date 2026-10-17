@@ -49,6 +49,7 @@ enum _StatusWord {
   waitingLink,
   waitingChannel,
   waitingBackground,
+  gap,
   loading,
   invalid,
   missing,
@@ -91,6 +92,9 @@ _StatusWord? _statusWord(LogsPanelController panel) {
       LogStreamWaitReason.channel => _StatusWord.waitingChannel,
       LogStreamWaitReason.background => _StatusWord.waitingBackground,
     },
+    // A follow without a cursor started again after it waited (LOG-22).
+    LogStreamRunning(continuity: LogContinuity.gap) when panel.live =>
+      _StatusWord.gap,
     LogStreamRunning() => panel.live ? null : _StatusWord.loading,
     LogStreamEnded(:final reason) => switch (reason) {
       LogStreamEndReason.invalid => _StatusWord.invalid,
@@ -301,7 +305,11 @@ class _LogsPanelState extends State<LogsPanel> {
 
     final retry = _retryable.contains(word);
     return _Notice(
-      icon: retry ? Icons.error_outline : Icons.hourglass_empty,
+      icon: switch (word) {
+        _ when retry => Icons.error_outline,
+        _StatusWord.gap => Icons.info_outline,
+        _ => Icons.hourglass_empty,
+      },
       text: l10n.logsPanelStatus(word.name),
       // The host's error output is server data, shown as sent.
       detail: switch (_panel.status) {

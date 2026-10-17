@@ -346,6 +346,72 @@ abstract class AppLocalizations {
   /// **'Server status: {status}'**
   String statusSemantics(String status);
 
+  /// Why a connect failed (03 §10.1), under the server header and in the fleet row's tooltip: the connection was refused, the host had no route or address, or a jump host could not forward to it.
+  ///
+  /// In en, this message translates to:
+  /// **'This server could not be reached. Check its address and your network connection.'**
+  String get linkFailureUnreachable;
+
+  /// Why a connect failed (03 §10.1): connecting, the handshake or signing in ran past its deadline.
+  ///
+  /// In en, this message translates to:
+  /// **'This server did not answer in time. Check that it is running and that your network reaches it.'**
+  String get linkFailureTimedOut;
+
+  /// Why a connect failed (03 §10.1): the server refused every credential offered.
+  ///
+  /// In en, this message translates to:
+  /// **'The server rejected your credentials. Make sure it trusts your key or password.'**
+  String get linkFailureAuthenticationRejected;
+
+  /// Why a connect failed (03 §10.1): a key file could not be read or holds no key the app can use, or ssh-agent holds no keys. ssh-agent is the OpenSSH program's name, not translated.
+  ///
+  /// In en, this message translates to:
+  /// **'No credential could be offered to this server. Check that its key file can be read and holds a supported key, or load a key into ssh-agent.'**
+  String get linkFailureCredentialUnavailable;
+
+  /// Why a connect failed (03 §10.1): the private key of this server or of a jump host on its route is encrypted, and the app has no passphrase prompt yet. A server whose ssh_config entry names a key file uses only that file, so the agent signs only once the IdentityFile line is gone and the config is imported again. ssh-agent, IdentityFile and ~/.ssh/config are OpenSSH names, not translated.
+  ///
+  /// In en, this message translates to:
+  /// **'A key for this server needs a passphrase, which Klabautermann cannot ask for. Load the key into ssh-agent and remove the IdentityFile line that names it from ~/.ssh/config, then import the config again.'**
+  String get linkFailureKeyPassphraseRequired;
+
+  /// Why a connect failed (03 §4.5, §10.1): the Flatpak sandbox shows the app only the paths its manifest grants, so the key file of this server or of a jump host on its route reads as missing. A server whose ssh_config entry names a key file uses only that file, so the agent signs only once the IdentityFile line is gone and the config is imported again. ssh-agent, IdentityFile and ~/.ssh/config are OpenSSH names, not translated.
+  ///
+  /// In en, this message translates to:
+  /// **'A key file for this server cannot be read in the Flatpak sandbox. Load the key into ssh-agent and remove the IdentityFile line that names it from ~/.ssh/config, then import the config again.'**
+  String get linkFailureKeyFileHiddenBySandbox;
+
+  /// Why a connect failed (03 §4.6, §10.1): the user declined a first-seen host key, or a connect the user did not start declined it without asking.
+  ///
+  /// In en, this message translates to:
+  /// **'This server\'s host key has not been trusted, so Klabautermann did not connect.'**
+  String get linkFailureHostKeyDeclined;
+
+  /// Why a connect failed (03 §10.1): the user cancelled the server's keyboard-interactive questions, such as a one-time code.
+  ///
+  /// In en, this message translates to:
+  /// **'The server\'s sign-in questions were cancelled, so Klabautermann did not connect.'**
+  String get linkFailureKeyboardInteractiveCancelled;
+
+  /// Client limitation (03 §5.3, CN-23): the server requires an algorithm the SSH library does not implement, such as an ML-KEM key exchange.
+  ///
+  /// In en, this message translates to:
+  /// **'This server requires an algorithm Klabautermann does not support yet.'**
+  String get linkFailureUnsupportedAlgorithm;
+
+  /// Client limitation (03 §5.3, D23): the server offers only key exchanges or MACs the suite refuses as broken.
+  ///
+  /// In en, this message translates to:
+  /// **'This server offers only algorithms Klabautermann refuses as insecure.'**
+  String get linkFailureInsecureAlgorithmsOnly;
+
+  /// Client limitation (03 §5.3, CN-23): on Android, the server gave up while a finite-field Diffie-Hellman key exchange was still being computed.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not finish this server\'s key exchange in time on this device.'**
+  String get linkFailureKeyExchangeTimedOut;
+
   /// Fleet row state (FL-04): the reachability probe reached the server's SSH port, and nothing is connected to it.
   ///
   /// In en, this message translates to:
@@ -790,7 +856,7 @@ abstract class AppLocalizations {
   /// **'While in the background'**
   String get coverageBackgroundTitle;
 
-  /// Body of the coverage sheet's background item, on iOS and Android only.
+  /// Body of the coverage sheet's background item, and a line in the header of a phone's server screen (PLT-04), on iOS and Android only.
   ///
   /// In en, this message translates to:
   /// **'Reading stops while Klabautermann is in the background and resumes when you return.'**
@@ -1035,6 +1101,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'More'**
   String get serverTabMore;
+
+  /// Title of a server panel a phone opens full-screen from its More list (03 §10.5): panel is the panel's name as its tab reads it (Processes, Services, Jobs or System), and name is the server's display name.
+  ///
+  /// In en, this message translates to:
+  /// **'{panel} on {name}'**
+  String serverPanelPageTitle(String panel, String name);
+
+  /// Notice over a phone's fleet list after the server whose screen was open left the fleet, for example removed on another device or left out of a new ssh_config import (SYN-08). The app closed the server's screen and everything opened from it; name is the server's display name.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is no longer in your fleet, so its screen closed.'**
+  String fleetServerLeftNotice(String name);
+
+  /// Button that hides the notice that a server left the fleet.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get fleetServerLeftDismiss;
 
   /// The Processes tab before the server sent its first process list (PRC-01).
   ///
@@ -2230,11 +2314,23 @@ abstract class AppLocalizations {
   /// **'Close unit details'**
   String get servicesUnitClose;
 
-  /// Heading of a unit's recent journal lines on its details (SVC-04).
+  /// Heading of a unit's recent journal lines on its details (SVC-04), and under the unit's name in the sheet that shows them on a phone.
   ///
   /// In en, this message translates to:
   /// **'Recent log lines'**
   String get servicesLogsTitle;
+
+  /// Button on a unit's details on a phone that opens its recent journal lines in a bottom sheet (SVC-04, PLT-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Show recent log lines'**
+  String get servicesLogsShow;
+
+  /// Tooltip of the button that closes the bottom sheet of a unit's recent journal lines on a phone.
+  ///
+  /// In en, this message translates to:
+  /// **'Close log lines'**
+  String get servicesLogsClose;
 
   /// A unit's log lines were requested and the app has no answer yet.
   ///
@@ -2431,7 +2527,7 @@ abstract class AppLocalizations {
   /// Status line above the log saying what reading it is doing or why it stopped.
   ///
   /// In en, this message translates to:
-  /// **'{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} other{Choose or type the absolute path of a file to tail.}}'**
+  /// **'{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} gap{Following again. Lines written while it was paused or disconnected may be missing.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} other{Choose or type the absolute path of a file to tail.}}'**
   String logsPanelStatus(String status);
 
   /// Button that opens the log again after it stopped or was refused.
@@ -3069,6 +3165,246 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'systemd before version 242 lists only the next run, so later runs are not shown.'**
   String get jobsCalendarOneRun;
+
+  /// Title of the review shown before a server's or jump host's first-seen host key is trusted (03 §4.6).
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown host key'**
+  String get hostKeyUnknownTitle;
+
+  /// Title of the review shown when a server presents a key other than the one trusted before. In capitals on purpose, as an alarm, as in Séance and Poltergeist.
+  ///
+  /// In en, this message translates to:
+  /// **'HOST KEY CHANGED'**
+  String get hostKeyChangedTitle;
+
+  /// Warning at the top of the changed-key review; host is the server's host name or address as configured.
+  ///
+  /// In en, this message translates to:
+  /// **'The key for {host} does not match the one you previously trusted. This can mean a man-in-the-middle attack. Only continue if you know why the key changed.'**
+  String hostKeyChangedWarning(String host);
+
+  /// The machine a prompt comes from: the server or one of its jump hosts. An IPv6 host arrives in brackets.
+  ///
+  /// In en, this message translates to:
+  /// **'{host}:{port}'**
+  String promptEndpoint(String host, int port);
+
+  /// The machine and account a keyboard-interactive prompt comes from, in ssh's user@host notation. An IPv6 host arrives in brackets.
+  ///
+  /// In en, this message translates to:
+  /// **'{user}@{host}:{port}'**
+  String promptEndpointWithUser(String user, String host, int port);
+
+  /// Label over a first-seen key's type and SHA-256 fingerprint.
+  ///
+  /// In en, this message translates to:
+  /// **'Fingerprint'**
+  String get hostKeyFingerprintLabel;
+
+  /// Label over the key the server presents now, in the changed-key review.
+  ///
+  /// In en, this message translates to:
+  /// **'New key'**
+  String get hostKeyNewKeyLabel;
+
+  /// Label over the key trusted before, in the changed-key review.
+  ///
+  /// In en, this message translates to:
+  /// **'Previously trusted'**
+  String get hostKeyPreviousLabel;
+
+  /// Declines the host key; the connect then fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get hostKeyCancel;
+
+  /// Trusts a first-seen host key and goes on connecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Trust and connect'**
+  String get hostKeyTrustConnect;
+
+  /// Trusts the changed key in place of the one trusted before, after the review.
+  ///
+  /// In en, this message translates to:
+  /// **'Trust the new key'**
+  String get hostKeyTrustNewKey;
+
+  /// Title of the dialog with a server's keyboard-interactive questions (RFC 4256), such as a password and a one-time code.
+  ///
+  /// In en, this message translates to:
+  /// **'Authentication'**
+  String get keyboardTitle;
+
+  /// Label over the machine and account the questions come from, which the app knows, apart from the server's own words below it.
+  ///
+  /// In en, this message translates to:
+  /// **'Request from'**
+  String get keyboardRequestFrom;
+
+  /// Label over the name and instruction the server sent with its questions, shown as the server sent them.
+  ///
+  /// In en, this message translates to:
+  /// **'Server message'**
+  String get keyboardServerMessage;
+
+  /// Tooltip of the button that reveals a masked answer.
+  ///
+  /// In en, this message translates to:
+  /// **'Show answer'**
+  String get keyboardShowAnswer;
+
+  /// Tooltip of the button that masks a revealed answer again.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide answer'**
+  String get keyboardHideAnswer;
+
+  /// Declines the questions; the connect then fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get keyboardCancel;
+
+  /// Sends the answers to the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit'**
+  String get keyboardSubmit;
+
+  /// Heading of the accessibility settings on the General settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Accessibility'**
+  String get settingsAccessibilityTitle;
+
+  /// Switch on the General settings tab (A11Y-15): whether screen readers hear a server's values cross a warning or critical level.
+  ///
+  /// In en, this message translates to:
+  /// **'Announce threshold changes'**
+  String get settingsAnnounceBands;
+
+  /// Explanation under the threshold announcement switch on the General settings tab (A11Y-15).
+  ///
+  /// In en, this message translates to:
+  /// **'While a server\'s Overview shows, your screen reader hears when CPU, memory or a disk crosses into or out of its warning or critical level. Values that refresh every few seconds are never read out.'**
+  String get settingsAnnounceBandsDetail;
+
+  /// Toast when the threshold announcement switch applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The setting changed, but it could not be saved, so it will not be kept after a restart.'**
+  String get settingsAnnounceNotSaved;
+
+  /// Toast when the app did not take a change of the threshold announcement switch.
+  ///
+  /// In en, this message translates to:
+  /// **'The setting could not be changed.'**
+  String get settingsAnnounceNotChanged;
+
+  /// Screen-reader announcement (A11Y-15) when a value on a server's Overview has crossed into the warning or critical band, or back below the warning level; metric names the value (CPU, Memory, Disk /var), value is its percentage.
+  ///
+  /// In en, this message translates to:
+  /// **'{metric} {value}: {band, select, warning{warning level} critical{critical level} other{back to normal}}'**
+  String overviewBandAnnouncement(String metric, String value, String band);
+
+  /// A mount's space use as a threshold announcement names it; mount is the mount point, server data such as /var.
+  ///
+  /// In en, this message translates to:
+  /// **'Disk {mount}'**
+  String overviewBandDisk(String mount);
+
+  /// A mount's inode use as a threshold announcement names it; mount is the mount point, server data such as /var.
+  ///
+  /// In en, this message translates to:
+  /// **'Inodes on {mount}'**
+  String overviewBandInodes(String mount);
+
+  /// Heading of the Overview's health card (OV-02): failed units and full disks.
+  ///
+  /// In en, this message translates to:
+  /// **'Health'**
+  String get overviewHealthTitle;
+
+  /// The health card before the server sent its list of failed systemd units.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first check of failed units.'**
+  String get overviewHealthUnitsWaiting;
+
+  /// The health card when the server could not list its failed systemd units this time; the list from the check before, if any, stays shown below it. systemctl is a command name, kept as written.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, missing{The last check of failed units could not run: this server lacks systemctl.} denied{The server refused the last check of failed units.} timeout{The last check of failed units took too long.} other{The last check of failed units failed.}}'**
+  String overviewHealthUnitsCheckFailed(String reason);
+
+  /// The Overview's health and Disks cards before the server sent its first disk usage reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first disk reading.'**
+  String get overviewDisksWaiting;
+
+  /// The health card when the latest disk usage reading failed; df is a command name, kept as written.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, missing{Disk use is unknown: this server lacks df.} denied{Disk use is unknown: the server refused the reading.} timeout{Disk use is unknown: the reading did not finish in time.} other{Disk use is unknown: the reading failed.}}'**
+  String overviewHealthDisksUnknown(String reason);
+
+  /// The health card when every listed mount is below the warning level; level is that level as a percentage, such as 80%.
+  ///
+  /// In en, this message translates to:
+  /// **'No disk has {level} or more of its space or inodes used.'**
+  String overviewHealthDisksOk(String level);
+
+  /// A health card line for a mount whose space use reached a level; mount is the mount point (server data), percent its use, and band the level it reached.
+  ///
+  /// In en, this message translates to:
+  /// **'{mount}: {percent} of its space used, {band, select, critical{critical} other{warning}}'**
+  String overviewHealthDiskSpace(String mount, String percent, String band);
+
+  /// A health card line for a mount whose inode use reached a level; mount is the mount point (server data), percent its inode use, and band the level it reached.
+  ///
+  /// In en, this message translates to:
+  /// **'{mount}: {percent} of its inodes used, {band, select, critical{critical} other{warning}}'**
+  String overviewHealthDiskInodes(String mount, String percent, String band);
+
+  /// The health card's link to the threshold announcement switch in Settings (A11Y-15), with the switch's state.
+  ///
+  /// In en, this message translates to:
+  /// **'{state, select, on{Threshold announcements: on} other{Threshold announcements: off}}'**
+  String overviewHealthAnnouncements(String state);
+
+  /// Screen reader hint on the health card's threshold announcement link: activating it opens Settings, where the switch is, rather than switching announcements on the spot.
+  ///
+  /// In en, this message translates to:
+  /// **'Opens Settings'**
+  String get overviewHealthAnnouncementsHint;
+
+  /// A mount's size in the Overview's Disks card.
+  ///
+  /// In en, this message translates to:
+  /// **'Size'**
+  String get overviewDiskSize;
+
+  /// Under the Overview's Disks card when it lists only the first mounts; the System tab lists them all.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more mount is on the System tab.} other{{count} more mounts are on the System tab.}}'**
+  String overviewDisksMore(int count);
+
+  /// Heading of the Overview's card with the server's operating system, kernel, uptime and boot time.
+  ///
+  /// In en, this message translates to:
+  /// **'Host'**
+  String get overviewHostTitle;
+
+  /// The Overview's Host card before the server sent its operating system and kernel.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the operating system and kernel.'**
+  String get overviewHostWaiting;
 }
 
 class _AppLocalizationsDelegate

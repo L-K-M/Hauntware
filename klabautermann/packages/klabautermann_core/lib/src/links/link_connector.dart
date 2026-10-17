@@ -14,6 +14,7 @@ import 'package:seance_core/seance_core.dart'
         KeyboardInteractiveResponder,
         ServerConfig,
         SshConnectException,
+        SshConnectFailureKind,
         SshCredentials,
         SshJumpHostResolver,
         SshLink,
@@ -23,11 +24,12 @@ import '../engine/protocol.dart';
 import 'credential_source.dart';
 import 'prompt_broker.dart';
 
-/// The OS error codes of a connect that timed out: ETIMEDOUT as Linux
-/// numbers it, and Windows' WSAETIMEDOUT. Dart's `Socket.connect` gives
-/// its own timeout one of these two on every platform (`socket_patch.dart`
-/// in the Dart SDK).
-const Set<int> _connectTimedOutCodes = {110, 10060};
+/// The OS error codes of a connect that timed out: ETIMEDOUT as Linux (110)
+/// and macOS or iOS (60) number it, and Windows' WSAETIMEDOUT (10060), as
+/// seance_core classifies them. Dart's own connect timeout carries 110 or
+/// 10060 on every platform (`socket_patch.dart` in the Dart SDK); one the
+/// OS raises carries its own number.
+const Set<int> _connectTimedOutCodes = {60, 110, 10060};
 
 /// Who a connect is for, which decides whether it may ask the user.
 enum ConnectPurpose {
@@ -173,6 +175,10 @@ final class LinkConnector {
     );
     var answeredQuestions = false;
 
+    // Whether the user declined keyboard-interactive questions: the
+    // closed connection that follows says nothing of why.
+    var cancelledQuestions = false;
+
     // The verdict of a host key the attempt refused, declined or expired:
     // only this tells a declined key from a changed one, which
     // SshConnectException's isHostKeyRefusal cannot.
@@ -217,14 +223,17 @@ final class LinkConnector {
                   host: challenge.server.host,
                   port: challenge.server.port,
                   request: KeyboardInteractivePromptRequest(
+                    user: challenge.server.username,
                     name: challenge.name,
                     instruction: challenge.instruction,
                     questions: challenge.prompts,
                   ),
                 );
-                // A withdrawn prompt answers with no responses: dartssh2
-                // rejects a count other than the question count by closing
-                // the connection, so no made-up answer reaches the server.
+                // A withdrawn or cancelled prompt answers with no
+                // responses: dartssh2 rejects a count other than the
+                // question count by closing the connection, so no made-up
+                // answer reaches the server.
+                if (answer is PromptCancelAnswer) cancelledQuestions = true;
                 if (answer is! PromptResponsesAnswer) return const [];
                 answeredQuestions = true;
                 phase(progress());
@@ -245,13 +254,17 @@ final class LinkConnector {
       );
       return LinkConnected(link, keyboardInteractive: answeredQuestions);
     } on Exception catch (error) {
-      return _classify(error, refused);
+      return _classify(error, refused, cancelledQuestions: cancelledQuestions);
     } finally {
       attempt.end();
     }
   }
 
-  static LinkConnectResult _classify(Exception error, HostKeyVerdict? refused) {
+  static LinkConnectResult _classify(
+    Exception error,
+    HostKeyVerdict? refused, {
+    required bool cancelledQuestions,
+  }) {
     switch (refused) {
       case HostKeyVerdict.changed:
         return LinkConnectBlocked(LinkBlockedReason.hostKeyChanged, error);
@@ -264,9 +277,33 @@ final class LinkConnector {
         break;
     }
 
-    // Jump-hop credential failures arrive wrapped, from the hop resolver.
+    // The user's refusal, as a declined host key is.
+    if (cancelledQuestions) {
+      return LinkConnectFailed(
+        error,
+        failure: LinkFailureKind.keyboardInteractiveCancelled,
+      );
+    }
+
+    // seance_core says which step failed; its English summary is never
+    // read.
+    if (error is SshConnectException &&
+        error.kind != SshConnectFailureKind.other) {
+      return LinkConnectFailed(error, failure: _failureOf(error.kind));
+    }
+
+    // Untyped: a failure before the dial, such as the server's own key
+    // file, or seance_core's `other`, whose cause is the error of a jump
+    // hop's credential (the hop resolver's) or of a handshake that broke
+    // off.
     final cause = error is SshConnectException ? error.cause : error;
     return switch (cause) {
+      IdentityFileUnavailable(failure: IdentityFileFailure.sandboxDenied) =>
+        LinkConnectFailed(
+          error,
+          failure: LinkFailureKind.keyFileHiddenBySandbox,
+          identityFile: IdentityFileFailure.sandboxDenied,
+        ),
       IdentityFileUnavailable(:final failure) => LinkConnectFailed(
         error,
         failure: LinkFailureKind.credentialUnavailable,
@@ -283,16 +320,50 @@ final class LinkConnector {
         error,
         failure: LinkFailureKind.unreachable,
       ),
-      // The handshake's and a jump hop forward's deadlines.
       TimeoutException() => LinkConnectFailed(
         error,
         failure: LinkFailureKind.timedOut,
       ),
-      // What only seance_core can classify: a rejected credential, an
-      // empty agent, the client limitations of 03 §5.3.
+      // Not classified, among them an ssh-agent that could not be reached.
       _ => LinkConnectFailed(error),
     };
   }
+
+  /// The failure behind a typed kind other than `other`, or null where
+  /// none of [LinkFailureKind] names it.
+  static LinkFailureKind? _failureOf(SshConnectFailureKind kind) =>
+      switch (kind) {
+        SshConnectFailureKind.unreachable => LinkFailureKind.unreachable,
+        SshConnectFailureKind.timedOut => LinkFailureKind.timedOut,
+        // A route the fleet's own configs cannot follow, or one given up
+        // before it was resolved; nothing was dialed and nothing the user
+        // can fix on the server.
+        SshConnectFailureKind.routeInvalid => null,
+        // One remedy for both, a passphrase that opens the key. Until the
+        // passphrase prompt (K45b) the app words it as loading the key
+        // into an agent; the prompt can then say a retry, as the password
+        // prompt does.
+        SshConnectFailureKind.keyPassphraseRequired ||
+        SshConnectFailureKind.keyPassphraseWrong =>
+          LinkFailureKind.keyPassphraseRequired,
+        SshConnectFailureKind.keyUnreadable ||
+        SshConnectFailureKind.agentEmpty =>
+          LinkFailureKind.credentialUnavailable,
+        SshConnectFailureKind.authenticationRejected =>
+          LinkFailureKind.authenticationRejected,
+        // A host key the attempt declined has a verdict, which [_classify]
+        // reads first; without one, a key-exchange signature did not
+        // verify, which no failure kind names.
+        SshConnectFailureKind.hostKeyRefused => null,
+        // The client limitations of 03 §5.3, under the same names.
+        SshConnectFailureKind.unsupportedAlgorithm =>
+          LinkFailureKind.unsupportedAlgorithm,
+        SshConnectFailureKind.insecureAlgorithmsOnly =>
+          LinkFailureKind.insecureAlgorithmsOnly,
+        SshConnectFailureKind.keyExchangeTimedOut =>
+          LinkFailureKind.keyExchangeTimedOut,
+        SshConnectFailureKind.other => null,
+      };
 }
 
 /// What an attempt given up before it dialed fails with; nobody reads it.

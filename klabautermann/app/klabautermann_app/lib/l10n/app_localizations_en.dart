@@ -177,6 +177,50 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get linkFailureUnreachable =>
+      'This server could not be reached. Check its address and your network connection.';
+
+  @override
+  String get linkFailureTimedOut =>
+      'This server did not answer in time. Check that it is running and that your network reaches it.';
+
+  @override
+  String get linkFailureAuthenticationRejected =>
+      'The server rejected your credentials. Make sure it trusts your key or password.';
+
+  @override
+  String get linkFailureCredentialUnavailable =>
+      'No credential could be offered to this server. Check that its key file can be read and holds a supported key, or load a key into ssh-agent.';
+
+  @override
+  String get linkFailureKeyPassphraseRequired =>
+      'A key for this server needs a passphrase, which Klabautermann cannot ask for. Load the key into ssh-agent and remove the IdentityFile line that names it from ~/.ssh/config, then import the config again.';
+
+  @override
+  String get linkFailureKeyFileHiddenBySandbox =>
+      'A key file for this server cannot be read in the Flatpak sandbox. Load the key into ssh-agent and remove the IdentityFile line that names it from ~/.ssh/config, then import the config again.';
+
+  @override
+  String get linkFailureHostKeyDeclined =>
+      'This server\'s host key has not been trusted, so Klabautermann did not connect.';
+
+  @override
+  String get linkFailureKeyboardInteractiveCancelled =>
+      'The server\'s sign-in questions were cancelled, so Klabautermann did not connect.';
+
+  @override
+  String get linkFailureUnsupportedAlgorithm =>
+      'This server requires an algorithm Klabautermann does not support yet.';
+
+  @override
+  String get linkFailureInsecureAlgorithmsOnly =>
+      'This server offers only algorithms Klabautermann refuses as insecure.';
+
+  @override
+  String get linkFailureKeyExchangeTimedOut =>
+      'Klabautermann could not finish this server\'s key exchange in time on this device.';
+
+  @override
   String get fleetRowProbeOnline => 'Online';
 
   @override
@@ -631,6 +675,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get serverTabMore => 'More';
+
+  @override
+  String serverPanelPageTitle(String panel, String name) {
+    return '$panel on $name';
+  }
+
+  @override
+  String fleetServerLeftNotice(String name) {
+    return '$name is no longer in your fleet, so its screen closed.';
+  }
+
+  @override
+  String get fleetServerLeftDismiss => 'Dismiss';
 
   @override
   String get processesWaiting => 'Waiting for the first process list.';
@@ -1528,6 +1585,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get servicesLogsTitle => 'Recent log lines';
 
   @override
+  String get servicesLogsShow => 'Show recent log lines';
+
+  @override
+  String get servicesLogsClose => 'Close log lines';
+
+  @override
   String get servicesLogsRequested => 'Asking the server for recent log lines…';
 
   @override
@@ -1698,6 +1761,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'waitingLink': 'Waiting for the connection to the server.',
       'waitingChannel': 'Waiting for a free session on the server.',
       'waitingBackground': 'Paused while the app is in the background.',
+      'gap':
+          'Following again. Lines written while it was paused or disconnected may be missing.',
       'loading': 'Loading entries…',
       'invalid': 'The engine refused this filter or path.',
       'missing': 'The server has no such file or log tool.',
@@ -2306,4 +2371,190 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get jobsCalendarOneRun =>
       'systemd before version 242 lists only the next run, so later runs are not shown.';
+
+  @override
+  String get hostKeyUnknownTitle => 'Unknown host key';
+
+  @override
+  String get hostKeyChangedTitle => 'HOST KEY CHANGED';
+
+  @override
+  String hostKeyChangedWarning(String host) {
+    return 'The key for $host does not match the one you previously trusted. This can mean a man-in-the-middle attack. Only continue if you know why the key changed.';
+  }
+
+  @override
+  String promptEndpoint(String host, int port) {
+    return '$host:$port';
+  }
+
+  @override
+  String promptEndpointWithUser(String user, String host, int port) {
+    return '$user@$host:$port';
+  }
+
+  @override
+  String get hostKeyFingerprintLabel => 'Fingerprint';
+
+  @override
+  String get hostKeyNewKeyLabel => 'New key';
+
+  @override
+  String get hostKeyPreviousLabel => 'Previously trusted';
+
+  @override
+  String get hostKeyCancel => 'Cancel';
+
+  @override
+  String get hostKeyTrustConnect => 'Trust and connect';
+
+  @override
+  String get hostKeyTrustNewKey => 'Trust the new key';
+
+  @override
+  String get keyboardTitle => 'Authentication';
+
+  @override
+  String get keyboardRequestFrom => 'Request from';
+
+  @override
+  String get keyboardServerMessage => 'Server message';
+
+  @override
+  String get keyboardShowAnswer => 'Show answer';
+
+  @override
+  String get keyboardHideAnswer => 'Hide answer';
+
+  @override
+  String get keyboardCancel => 'Cancel';
+
+  @override
+  String get keyboardSubmit => 'Submit';
+
+  @override
+  String get settingsAccessibilityTitle => 'Accessibility';
+
+  @override
+  String get settingsAnnounceBands => 'Announce threshold changes';
+
+  @override
+  String get settingsAnnounceBandsDetail =>
+      'While a server\'s Overview shows, your screen reader hears when CPU, memory or a disk crosses into or out of its warning or critical level. Values that refresh every few seconds are never read out.';
+
+  @override
+  String get settingsAnnounceNotSaved =>
+      'The setting changed, but it could not be saved, so it will not be kept after a restart.';
+
+  @override
+  String get settingsAnnounceNotChanged => 'The setting could not be changed.';
+
+  @override
+  String overviewBandAnnouncement(String metric, String value, String band) {
+    String _temp0 = intl.Intl.selectLogic(band, {
+      'warning': 'warning level',
+      'critical': 'critical level',
+      'other': 'back to normal',
+    });
+    return '$metric $value: $_temp0';
+  }
+
+  @override
+  String overviewBandDisk(String mount) {
+    return 'Disk $mount';
+  }
+
+  @override
+  String overviewBandInodes(String mount) {
+    return 'Inodes on $mount';
+  }
+
+  @override
+  String get overviewHealthTitle => 'Health';
+
+  @override
+  String get overviewHealthUnitsWaiting =>
+      'Waiting for the first check of failed units.';
+
+  @override
+  String overviewHealthUnitsCheckFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'missing':
+          'The last check of failed units could not run: this server lacks systemctl.',
+      'denied': 'The server refused the last check of failed units.',
+      'timeout': 'The last check of failed units took too long.',
+      'other': 'The last check of failed units failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get overviewDisksWaiting => 'Waiting for the first disk reading.';
+
+  @override
+  String overviewHealthDisksUnknown(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'missing': 'Disk use is unknown: this server lacks df.',
+      'denied': 'Disk use is unknown: the server refused the reading.',
+      'timeout': 'Disk use is unknown: the reading did not finish in time.',
+      'other': 'Disk use is unknown: the reading failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String overviewHealthDisksOk(String level) {
+    return 'No disk has $level or more of its space or inodes used.';
+  }
+
+  @override
+  String overviewHealthDiskSpace(String mount, String percent, String band) {
+    String _temp0 = intl.Intl.selectLogic(band, {
+      'critical': 'critical',
+      'other': 'warning',
+    });
+    return '$mount: $percent of its space used, $_temp0';
+  }
+
+  @override
+  String overviewHealthDiskInodes(String mount, String percent, String band) {
+    String _temp0 = intl.Intl.selectLogic(band, {
+      'critical': 'critical',
+      'other': 'warning',
+    });
+    return '$mount: $percent of its inodes used, $_temp0';
+  }
+
+  @override
+  String overviewHealthAnnouncements(String state) {
+    String _temp0 = intl.Intl.selectLogic(state, {
+      'on': 'Threshold announcements: on',
+      'other': 'Threshold announcements: off',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get overviewHealthAnnouncementsHint => 'Opens Settings';
+
+  @override
+  String get overviewDiskSize => 'Size';
+
+  @override
+  String overviewDisksMore(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count more mounts are on the System tab.',
+      one: '1 more mount is on the System tab.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get overviewHostTitle => 'Host';
+
+  @override
+  String get overviewHostWaiting =>
+      'Waiting for the operating system and kernel.';
 }

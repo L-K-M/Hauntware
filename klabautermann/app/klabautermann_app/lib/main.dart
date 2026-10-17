@@ -9,9 +9,11 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'app.dart';
+import 'controllers/announcement_controller.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitoring_controller.dart';
+import 'controllers/prompt_controller.dart';
 import 'services/instance_guard.dart';
 import 'services/macos_titlebar.dart';
 import 'services/settings_window/settings_window_host.dart';
@@ -112,9 +114,8 @@ Future<void> main(List<String> args) async {
   // §4.10) and reports what it found wrong with them in its handshake.
   // Links stay off (03 §10.1): host-key pins would last only until the
   // engine stops, since the catalog library's `host_keys.json` has not
-  // landed (03 §4.10), and the app cannot show the engine's prompts yet.
-  // The engine writes its capability cache only while this process holds
-  // the directory alone (D59).
+  // landed (03 §4.10). The engine writes its capability cache only while
+  // this process holds the directory alone (D59).
   final engine = await IsolateEngineClient.spawn(
     supportDirectory: supportDirectory.path,
     linksEnabled: false,
@@ -141,6 +142,9 @@ Future<void> main(List<String> args) async {
   // with new controllers over it, whose seq floors start empty (D44), and
   // KlabautermannApp remounts its tree when handed them.
   final monitoring = MonitoringController(engine);
+  // The host-key and keyboard-interactive prompts the engine raises while
+  // it connects, shown one at a time over every route.
+  final prompts = PromptController(engine);
   final appearance = appearanceFromSettings(settings);
   // 03 §9.5 item 1: the first-run card shows until dismissed on this
   // device, which settings.json keeps.
@@ -149,19 +153,28 @@ Future<void> main(List<String> args) async {
     saveDismissal: settings.dismissFirstRunCard,
   );
 
+  // A11Y-15's switch (D60), kept per device in settings.json.
+  final announcements = AnnouncementController(
+    announceThresholdBands: settings.announceThresholdBands,
+    save: settings.setAnnounceThresholdBands,
+  );
+
   // Desktop only: the runners there host the settings window; phones keep
   // the settings route.
   final settingsWindow = settingsWindowHostFor(
     defaultTargetPlatform,
     appearance: appearance,
+    announcements: announcements,
   );
 
   runApp(
     KlabautermannApp(
       fleet: fleet,
       monitoring: monitoring,
+      prompts: prompts,
       appearance: appearance,
       coverage: coverage,
+      announcements: announcements,
       settingsIssue: settings.issue,
       importStoreIssue: importStoreIssue,
       instanceLockIssue: instanceLockIssue,
