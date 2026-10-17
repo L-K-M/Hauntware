@@ -524,7 +524,7 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
 
 40. **Touch selections have draggable endpoints** (`terminal_view.dart`,
     `ui/render.dart`): long-press and double/triple-tap selections now show
-    Flutter's platform selection handles. Each drag moves one cell boundary
+    Flutter's platform selection handles. Each drag adjusts one endpoint
     while anchoring the opposite endpoint to its text. Paint-linked handles
     follow scrolling, output and reflow, and hide outside the viewport. They
     are removed on selection clear, focus loss, view replacement or disposal.

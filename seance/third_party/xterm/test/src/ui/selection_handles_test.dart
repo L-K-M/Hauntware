@@ -108,6 +108,7 @@ void main() {
     await tester.tapAt(cell(8, 0));
     await tester.pump(const Duration(milliseconds: 300));
     expect(handles, findsNWidgets(2));
+    expect(terminal.buffer.getText(controller.selection), 'bravo');
 
     controller.clearSelection();
     await tester.pump();
@@ -162,6 +163,7 @@ void main() {
 
     scroll.jumpTo(scroll.position.maxScrollExtent);
     await tester.pump();
+    expect(handles, findsNWidgets(2));
     for (final element in handles.evaluate()) {
       final follower = element.findRenderObject()! as RenderFollowerLayer;
       expect(follower.link.leader, isNull,

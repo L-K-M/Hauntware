@@ -169,9 +169,10 @@ void main() {
     await tester.longPressAt(cell(tester, 2, 0));
     await settle(tester);
 
+    expect(find.byType(CompositedTransformFollower), findsNWidgets(2));
     final endHandle = find
         .descendant(
-          of: find.byType(CompositedTransformFollower).last,
+          of: find.byType(CompositedTransformFollower).at(1),
           matching: find.byType(RawGestureDetector),
         )
         .first;
