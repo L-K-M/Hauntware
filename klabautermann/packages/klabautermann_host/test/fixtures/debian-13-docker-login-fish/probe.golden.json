@@ -1,0 +1,115 @@
+{
+  "result": {
+    "kernelSys": "Linux",
+    "kernelRelease": "6.18.44-fc-v139",
+    "kernelArch": "x86_64",
+    "distroId": "debian",
+    "distroIdLike": null,
+    "distroVersionId": "13",
+    "distroPrettyName": "Debian GNU/Linux 13 (trixie)",
+    "pid1Comm": "sleep",
+    "systemdDir": false,
+    "systemctlVersionLine": null,
+    "systemdVersion": null,
+    "virtualization": null,
+    "container": null,
+    "lxcfsMounts": [],
+    "uid": 0,
+    "user": "root",
+    "groups": [
+      "root"
+    ],
+    "sudoVersionLine": null,
+    "sudoKind": "none",
+    "sudoNonInteractive": null,
+    "doasPresent": false,
+    "doasNonInteractive": null,
+    "run0Present": false,
+    "printfBuiltin": true,
+    "tools": {
+      "journalctl": null,
+      "crontab": null,
+      "ss": null,
+      "ip": null,
+      "lsblk": "/usr/bin/lsblk",
+      "findmnt": "/usr/bin/findmnt",
+      "smartctl": null,
+      "sensors": null,
+      "docker": null,
+      "podman": null,
+      "socat": null,
+      "timeout": "/usr/bin/timeout",
+      "setsid": "/usr/bin/setsid",
+      "ncdu": null,
+      "gdu": null,
+      "sadf": null,
+      "logger": "/usr/bin/logger",
+      "systemd-run": null,
+      "systemd-analyze": null,
+      "apt-get": "/usr/bin/apt-get",
+      "dnf": null,
+      "dnf5": null,
+      "apk": null,
+      "pacman": null,
+      "zypper": null,
+      "nvidia-smi": null,
+      "dmesg": "/usr/bin/dmesg",
+      "tail": "/usr/bin/tail"
+    },
+    "psi": true,
+    "cgroupV2": false,
+    "cUtf8": true,
+    "engineSockets": [
+      {
+        "path": "/var/run/docker.sock",
+        "exists": false,
+        "writable": false
+      },
+      {
+        "path": "/run/podman/podman.sock",
+        "exists": false,
+        "writable": false
+      },
+      {
+        "path": "/run/user/0/docker.sock",
+        "exists": false,
+        "writable": false
+      },
+      {
+        "path": "/run/user/0/podman/podman.sock",
+        "exists": false,
+        "writable": false
+      }
+    ],
+    "sshConnection": "192.0.2.1 50000 192.0.2.1 22",
+    "sessionParentPid": 58,
+    "sessionParentComm": "dart:capture_fi",
+    "epochSeconds": 1792173362,
+    "zoneOffset": "+0000",
+    "timezone": null,
+    "etcTimezone": null,
+    "localtimeTarget": "/usr/share/zoneinfo/Etc/UTC",
+    "lingerEnabled": null,
+    "killUserProcesses": null,
+    "xdgRuntimeDir": null,
+    "areaStatuses": {
+      "kernel": "ok",
+      "distro": "ok",
+      "init": "ok",
+      "virt": "missing",
+      "lxcfs": "ok",
+      "identity": "ok",
+      "elev": "ok",
+      "tools": "ok",
+      "kfeat": "ok",
+      "locale": "ok",
+      "sockets": "ok",
+      "session": "ok",
+      "clock": "ok",
+      "linger": "ok"
+    }
+  },
+  "warnings": [
+    "probe area virt reported missing"
+  ]
+}

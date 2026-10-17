@@ -8,6 +8,7 @@ const _versionKey = 'klabautermann.settings.version';
 const _deviceIdKey = 'klabautermann.sync.deviceId';
 const _appearanceKey = 'klabautermann.appearance';
 const _firstRunCardKey = 'klabautermann.coverage.firstRunCardDismissed';
+const _announceBandsKey = 'klabautermann.accessibility.announceThresholdBands';
 
 final _uuidV4 = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
@@ -160,6 +161,59 @@ void main() {
         expect(store.firstRunCardDismissed, isFalse);
       });
     }
+
+    test(
+      'announces threshold bands until turned off, across reloads',
+      () async {
+        writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+
+        final store = await DeviceSettingsStore.open(file);
+        expect(store.announceThresholdBands, isTrue);
+        await store.setAnnounceThresholdBands(false);
+        final reopened = await DeviceSettingsStore.open(file);
+
+        expect(reopened.announceThresholdBands, isFalse);
+        expect(document(), {
+          _versionKey: 1,
+          _deviceIdKey: 'device-a',
+          _announceBandsKey: false,
+        });
+
+        await reopened.setAnnounceThresholdBands(true);
+        expect(
+          (await DeviceSettingsStore.open(file)).announceThresholdBands,
+          isTrue,
+        );
+      },
+    );
+
+    test('a damaged announcement setting reads as on', () async {
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _announceBandsKey: 'false',
+      });
+
+      final store = await DeviceSettingsStore.open(file);
+
+      expect(store.issue, isNull);
+      expect(store.announceThresholdBands, isTrue);
+    });
+
+    test('an announcement setting a read-only session cannot save stays in '
+        'memory and throws', () async {
+      writeDocument({_versionKey: 2, _deviceIdKey: 'device-a'});
+      final store = await DeviceSettingsStore.open(file);
+      final before = file.readAsStringSync();
+
+      await expectLater(
+        store.setAnnounceThresholdBands(false),
+        throwsA(isA<DeviceSettingsReadOnlyException>()),
+      );
+
+      expect(store.announceThresholdBands, isFalse);
+      expect(file.readAsStringSync(), before);
+    });
 
     test('a dismissal a read-only session cannot save stays in memory and '
         'throws', () async {
