@@ -989,10 +989,10 @@ Proposals awaiting the owner close the section; they are not decisions.
   that cannot be read or renamed, or one from a newer schema, is left as
   it is and no change is saved that session; writes are whole-file and
   atomic through `writeFileAtomically` and queue in call order; a write
-  that fails is thrown to the caller and leaves the change in memory,
-  and the stores save again on the next call even when it changes
-  nothing in memory (`hasUnsavedChanges`), so retrying a failed change
-  persists it; writes happen only with
+  that fails is thrown to the caller and leaves the change in memory
+  and `hasUnsavedChanges` true, so the stores save again on the next
+  call even when that call changes nothing in memory, and retrying a
+  failed change persists it; writes happen only with
   `SupportDirectoryAccess.exclusive`, so an unguarded process reads the
   files, renames nothing and keeps changes in memory, as the capability
   cache does (D59). They hold no secret and keep the process default
