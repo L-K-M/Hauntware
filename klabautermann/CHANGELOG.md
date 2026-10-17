@@ -5,8 +5,7 @@
 - Initial scaffold: the `klabautermann_host`, `klabautermann_docker` and
   `klabautermann_core` packages, the five-platform app shell (desktop
   three-pane layout, phone master-detail stack, settings route), light
-  and dark themes, and suite registration. Nothing connects to a host
-  yet.
+  and dark themes, and suite registration.
 - Desktop import from `~/.ssh/config` (FL-02): the hosts appear in the
   fleet rail and are kept across restarts in this device's
   `ssh_config_imports.json`; each import replaces the previous one. A
@@ -63,6 +62,23 @@
   again while it runs only shows that it is already running, with a Quit
   button, so two copies never overwrite each other's settings and
   imported servers.
+- On macOS, Linux and Windows, opening a server you imported from
+  `~/.ssh/config` connects to it over SSH, through its jump hosts, and
+  its tabs show what the server reports. The first time, you confirm
+  each machine's host key, and you answer any keyboard-interactive
+  questions in the app. Trusted keys are kept across restarts in this
+  device's `host_keys.json`. When a server's key changes, the server is
+  blocked; to review the new key, leave the server, open it again after
+  30 seconds and trust the key only if you expected the change. When
+  Klabautermann has no login name for a server, or the server comes from
+  an import an older version saved, the server's view tells you why it
+  cannot connect. Klabautermann signs in with a host's first
+  `IdentityFile` only, or through ssh-agent when the host names none; a
+  key protected by a passphrase cannot be used yet, and the Flatpak
+  build cannot read key files, so there only hosts that name no
+  `IdentityFile` connect. A `df` that hangs on a BusyBox system, such as
+  Alpine or many NAS devices, now counts as a timeout, so the System tab
+  keeps the last complete disk reading instead of showing an error.
 - Sign in to your Séance sync account from the sync chip at the foot of
   the fleet rail, or the sync button on phones, with the server address,
   account name, password and encryption passphrase you use in Séance.

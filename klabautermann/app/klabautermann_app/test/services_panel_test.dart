@@ -361,10 +361,11 @@ void main() {
       findsOneWidget,
     );
 
-    // With links off, the engine refuses every open.
+    // The engine refuses the open, as it does for a server outside its
+    // fleet.
     await panel.emit(
       tester,
-      const RequestRejected('OpenLogStream', 'links are off in this engine'),
+      const RequestRejected('OpenLogStream', 'no fleet server srv-1'),
     );
     expect(
       find.text('Reading unit logs is not available in this version yet.'),

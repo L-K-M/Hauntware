@@ -2157,7 +2157,11 @@ abstract interface class RemoteProcess {
   unattended (4.5). A changed host key blocks the server, also across
   engine restarts since pins persist (4.10), and nothing unattended
   dials it; the user's next connect reviews the key and re-pins it if
-  the user trusts it (4.6, D61).
+  the user trusts it (4.6, D61). In the app, the user's connect is the
+  `Connect` a server's first open view sends (10.1), and nothing else
+  sends one yet: a server that waits for the user while its view stays
+  open connects again only after the user leaves it past the 30 s grace
+  and opens it again.
 - **Attempts.** `SshLink.connect` shows no state before it returns, so
   the supervisor reports `connecting` while an attempt queues and dials,
   `authenticating` once the server's own host key has passed (each jump
@@ -2939,10 +2943,10 @@ no longer holds that value.
   bottom sheet instead, which reads them while it is open (10.5). The read opens through the controller's
   one owner of log streams, which the Logs panel shares and which gives
   each rejection of `OpenLogStream` to the oldest open without an answer
-  (10.1). While links are off, as the composition root leaves them
-  until K44, the engine rejects every open and the page says unit logs
-  are not available in this version; a read the engine can no longer
-  answer, because it stopped, says so and asks for a restart of the app.
+  (10.1). When the engine rejects the open, as an engine with links off
+  rejects every one, the page says unit logs are not available in this
+  version; a read the engine can no longer answer, because it stopped,
+  says so and asks for a restart of the app.
 
 ### 7.6 Logs (LOG)
 
@@ -4483,7 +4487,7 @@ enough for the desktop layout, the return banner sits under the header,
 scrolling past a fifth of the screen's height, after a return from the
 background that paused that server: the engine had it in `sampling` as
 the app left, or said it paused it while away; a subscription alone, as
-while links are off, reads nothing to pause. It gives this device's
+before its link is ready, reads nothing to pause. It gives this device's
 times of leaving and returning (to the second when both fall in one
 minute) until dismissed, until that screen is left or until the next
 pause; a desktop platform never reports the background, so it never
@@ -4802,9 +4806,12 @@ the engine in `engine_isolate.dart` beside it):
   off unless given) turns links on. Off, the engine has no supervisor,
   so `Connect` gets `RequestRejected` and nothing dials, while
   `Disconnect` and `SetAppActivity` change nothing. The composition root
-  keeps them off until K44b, though pins outlive the engine (M2 pins,
-  below) and the app can show prompts (M2 prompts, below); tests turn
-  them on.
+  turns them on (K44b, held by the app's architecture contract test),
+  since pins outlive the engine (M2 pins, below) and the app shows
+  prompts (M2 prompts, below). A server signs in with the import's
+  first `IdentityFile` alone, or else through the agent (above), and an
+  encrypted key fails the attempt until a passphrase prompt exists (the
+  encrypted-key proposal awaiting the owner, 2).
 - **Version 3 (M2 sampling).** Sampling joined version 3 without a bump,
   as the import store's fields joined version 2, before any version 3
   build shipped. `Subscribe` names the surface's `SampleStream`s: the 6.4
@@ -4922,9 +4929,9 @@ the engine in `engine_isolate.dart` beside it):
   written meanwhile), or ended with a reason (window
   filled, oldest record reached, closed, spec refused, source missing,
   read denied, or failed) and the host's error output. With links off,
-  as in the app until K44, the engine rejects `OpenLogStream` and
-  ignores `CloseStream`, since no stream is open; with links on, the
-  log stream router serves both (7.6).
+  the engine's default, which the app overrides (K44b), the engine
+  rejects `OpenLogStream` and ignores `CloseStream`, since no stream is
+  open; with links on, the log stream router serves both (7.6).
   On the app side (M2), `MonitoringController.logs` owns every stream
   of the run, the Logs panel's and the bounded reads `openLogRead`
   opens through it (SVC-04's unit logs, 7.5): it mints `log-N` ids,
@@ -4989,8 +4996,8 @@ the engine in `engine_isolate.dart` beside it):
   another. Credential and elevation prompts have
   no producer and no dialog yet; the app dismisses one with
   `PromptSecretAnswer(null)` rather than leave the attempt waiting out
-  the expiry. With links off, as in the app until K44, no prompt
-  arrives.
+  the expiry. With links off, the engine's default, which the app
+  overrides (K44b), no prompt arrives.
 - **Version 3 (M2 pins).** Persistent pins and the re-pin joined version
   3 the same way (D61). `HostKeyPromptRequest` gained
   `pinnedFingerprintSha256` and `pinnedKeyType`, set only when the
@@ -5071,11 +5078,12 @@ the engine in `engine_isolate.dart` beside it):
   client hands the startup fleet to the fleet controller alone, so the
   monitoring controller has no endpoint to compare on the first import
   after launch; that purge needs the engine to report the change
-  (`EndpointChanged`) or the startup entries. With links off, the
-  engine's `RequestRejected` of `Connect` shows nothing; a
-  `ConnectRejected` shows on the server's views (M2 pins, above). A server that leaves
-  the fleet is sent nothing until it comes back, when the views and
-  surfaces still holding it connect and subscribe again (5.1).
+  (`EndpointChanged`) or the startup entries. The engine's
+  `RequestRejected` of `Connect` (an id outside the fleet, or links off)
+  shows nothing; a `ConnectRejected` shows on the server's views (M2
+  pins, above). A server that leaves the fleet is sent nothing until it
+  comes back, when the views and surfaces still holding it connect and
+  subscribe again (5.1).
 - **`Reachability(serverId, status)`** reports one server's latest probe
   answer, `online`, `offline` or `unknown` as `seance_core`'s
   `ProbeStatus` gives it, apart from `LinkState`: a probe is a TCP

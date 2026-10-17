@@ -391,11 +391,10 @@ final class MonitoringController extends ChangeNotifier {
   /// leave the link is still held and nothing is sent.
   ///
   /// A server the engine has no config for gets [ConnectRejected], which
-  /// [connectRejections] keeps for the views to show. An engine with links
-  /// off, as the app spawns it until they are ready, answers [Connect]
-  /// with [RequestRejected] before it looks for a config, which this
-  /// controller ignores like every event it does not consume: the views
-  /// stay as they are and show no error.
+  /// [connectRejections] keeps for the views to show. A [RequestRejected]
+  /// of [Connect], for an id outside the engine's fleet or from an engine
+  /// spawned with links off, is ignored like every event this controller
+  /// does not consume: the views stay as they are and show no error.
   void openServer(String serverId) {
     final views = _openViews[serverId] ?? 0;
     _openViews[serverId] = views + 1;
@@ -449,7 +448,7 @@ final class MonitoringController extends ChangeNotifier {
   /// Keeps when the background began and, on return, the pause it was
   /// for the open servers the engine had sampling. Only the engine's
   /// phase says a server was read: a subscription alone samples nothing
-  /// while links are off or the link is down.
+  /// while the link is down.
   void _notePause(AppActivity activity) {
     final now = _clock.value;
     switch (activity) {

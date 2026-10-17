@@ -115,15 +115,16 @@ Future<void> main(List<String> args) async {
   // in the engine isolate; the UI sends plain-data requests and listens.
   // The engine keeps its own files in the same support directory (03
   // §4.10) and reports what it found wrong with them in its handshake.
-  // Links stay off (03 §10.1): host-key pins would last only until the
-  // engine stops, since the catalog library's `host_keys.json` has not
-  // landed (03 §4.10). The engine writes its capability cache and syncs
-  // only while this process holds the directory alone (D59, D63). It gets
-  // the device id read above, after the lock, so enrollment never reads
-  // an id another process may have minted.
+  // Links are on (03 §10.1): opening a server's view connects to it, and
+  // the prompt controller below shows the host-key and keyboard prompts
+  // a connect raises. The engine writes its capability cache and
+  // `host_keys.json`, and syncs, only while this process holds the
+  // directory alone; otherwise it keeps this run's pins in memory (D59,
+  // D61, D63). It gets the device id read above, after the lock, so
+  // enrollment never reads an id another process may have minted.
   final engine = await IsolateEngineClient.spawn(
     supportDirectory: supportDirectory.path,
-    linksEnabled: false,
+    linksEnabled: true,
     supportDirectoryAccess: supportDirectoryAccessFor(instanceLock),
     deviceId: settings.deviceId,
   );

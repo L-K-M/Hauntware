@@ -228,8 +228,8 @@ Host alias-$i
   ];
 }
 
-/// The real engine, spawned as the app spawns it but with links on, which
-/// the app's composition root still leaves off ([EngineStart.linksEnabled]).
+/// The real engine, spawned as the app spawns it, links on included
+/// ([EngineStart.linksEnabled]).
 /// Each test starts its own, so host-key pins and links never carry over,
 /// unless it hands engines one support directory to restart over.
 /// Stopping it disconnects every server first, so the fixture's sampler
