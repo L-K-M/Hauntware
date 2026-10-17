@@ -12,10 +12,10 @@ import 'sidebar_kit.dart';
 import 'ssh_config_import_action.dart';
 import 'sync_sign_in.dart';
 
-/// The desktop rail of 03 §10.2: a section header over the filter and the
-/// fleet rows ([FleetServerList]) and the kit's bottom bar with the add
-/// menu, sync chip and settings gear.
-class FleetRail extends StatefulWidget {
+/// The desktop rail of 03 §10.2: the coverage chip over the filter and the
+/// fleet's sectioned rows ([FleetServerList]), and the kit's bottom bar
+/// with the add menu, sync chip and settings gear.
+class FleetRail extends StatelessWidget {
   const FleetRail({
     super.key,
     required this.fleet,
@@ -41,13 +41,6 @@ class FleetRail extends StatefulWidget {
   final SyncController? sync;
 
   @override
-  State<FleetRail> createState() => _FleetRailState();
-}
-
-class _FleetRailState extends State<FleetRail> {
-  bool _collapsed = false;
-
-  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final tokens = SidebarThemeTokens.of(context);
@@ -56,52 +49,41 @@ class _FleetRailState extends State<FleetRail> {
       child: ColoredBox(
         color: tokens.sidebarBackground,
         child: ListenableBuilder(
-          listenable: Listenable.merge([widget.fleet, widget.sync]),
+          listenable: Listenable.merge([fleet, sync]),
           builder: (context, _) {
-            final servers = widget.fleet.servers;
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 03 §9.5 item 2: the fleet's coverage, over its section.
-                FleetCoverageChip(fleet: widget.fleet),
-                SidebarSectionHeader(
-                  title: l10n.fleetSectionServers,
-                  count: servers.length,
-                  collapsed: _collapsed,
-                  onToggle: () => setState(() => _collapsed = !_collapsed),
-                ),
+                // 03 §9.5 item 2: the fleet's coverage, over its sections.
+                FleetCoverageChip(fleet: fleet),
                 Expanded(
                   child: FleetServerList(
-                    fleet: widget.fleet,
-                    monitoring: widget.monitoring,
-                    collapsed: _collapsed,
+                    fleet: fleet,
+                    monitoring: monitoring,
                     showSelection: true,
-                    onOpen: (server) => widget.fleet.select(server.id),
+                    onOpen: (server) => fleet.select(server.id),
                     // 03 §4.3 step 3: synced servers waiting to be
                     // confirmed.
-                    header: EndpointsPendingNotice(fleet: widget.fleet),
+                    header: EndpointsPendingNotice(fleet: fleet),
                   ),
                 ),
                 SidebarBottomBar(
                   addEntries: () => [
                     SidebarMenuAction(
                       label: l10n.addServer,
-                      onSelected: widget.onAddServer,
+                      onSelected: onAddServer,
                     ),
                     // FL-02: desktops only; phones have no ssh_config.
-                    if (widget.fleet.canImportSshConfig)
+                    if (fleet.canImportSshConfig)
                       SidebarMenuAction(
                         label: l10n.importSshConfig,
-                        onSelected: widget.fleet.isImportingSshConfig
+                        onSelected: fleet.isImportingSshConfig
                             ? null
-                            : () => importSshConfigWithFeedback(
-                                context,
-                                widget.fleet,
-                              ),
+                            : () => importSshConfigWithFeedback(context, fleet),
                       ),
                   ],
-                  sync: _syncChip(context, l10n, widget.sync),
-                  onSettings: widget.onOpenSettings,
+                  sync: _syncChip(context, l10n, sync),
+                  onSettings: onOpenSettings,
                 ),
               ],
             );
