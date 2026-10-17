@@ -5578,6 +5578,38 @@ prelude and the detached runners remain for later legs.
   `klabautermann/docs/evidence/s5/` and gate nothing, and the device
   figure above stays a manual sign-off.
 
+As built in M2 (K28b,
+`klabautermann_core/test/integration/soak_test.dart`, tag `soak`),
+`run.sh` runs the soak after the runner-VM leg, whatever the legs before
+it gave: `KLABAUTERMANN_SOAK_SECONDS` of window (600 on GitHub Actions,
+60 elsewhere) after a warm-up of a tenth of it (10 to 60 s), with the
+numbers in `$KLABAUTERMANN_EVIDENCE_DIR/soak/soak.json` (default
+`klabautermann/build/integration-evidence/soak/`); a soak that passes
+without that file skipped, and fails the run. Ten aliases of the
+fixture's sshd (`alias-0` to `alias-9`, one address and port) are ten
+fleet servers with ten links and twenty sampler shells, at the Phone
+cadence with `alias-0` open, as S5's `phone` scenario: `overview` every
+10 s on each, `core` every 3 s on the open one. A test-only meter wraps
+each link the engine dials, through `IsolateEngineClient.spawn`'s
+`entryPoint` and `engineMain`'s `dial`, and counts open channels and
+process-channel bytes, splitting a sampler's stdout into replies at
+each request line; no engine or `seance_core` API changes. It asserts
+every fast reply in the window against 2.5 KB plus 30 B per CPU beyond
+32 (the sampled host's `/proc/stat`), all channel output of the ten
+hosts against 1 KB/s, no growth (the median of the window's last third
+of 21 readings against its first: none in channels per link, two
+descriptors, 1 MiB of live heap after a full collection, 32 MiB of
+resident set, all provisional), ten links dialed once, no gap, link or
+sampling change, and each server's samples at its period. It records,
+without a budget, the engine process's CPU (`/proc/self/stat` of the
+`dart test` process, which also holds the test isolate and the JIT), the
+SSH payload per connection from `ss`'s `tcp_info` where iproute2 is
+installed, and the sampler shells' CPU per fast tick (utime, stime and
+waited-for children from `/proc/<pid>/stat` in the container) against
+the 5 ms above, which is set for the reference VM: the fixture's
+BusyBox ash in a container on a shared runner is not that VM, so the
+figure is evidence, as S2's was. The 24 h soak stays a manual sign-off.
+
 ### 11.5 Host write inventory test
 
 The M4 exit test snapshots the fixture host's filesystem, runs a scripted

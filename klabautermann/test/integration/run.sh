@@ -10,7 +10,12 @@
 # readiness, the tests one at a time, and teardown on every exit. With
 # KLABAUTERMANN_EVIDENCE_DIR set, logs and test results go there. After
 # the fixture suites it runs the runner-VM leg (runner_vm.sh), which
-# skips itself anywhere but a GitHub-hosted runner.
+# skips itself anywhere but a GitHub-hosted runner, and then the soak
+# with 03 §11.4's budgets, whose numbers go to
+# $KLABAUTERMANN_EVIDENCE_DIR/soak (default build/integration-evidence/soak):
+#
+#   KLABAUTERMANN_SOAK_SECONDS  the soak's measured window (600 with
+#                               GITHUB_ACTIONS=true, otherwise 60)
 set -euo pipefail
 
 readonly integration_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -31,6 +36,18 @@ readonly ready_attempts=60
 # tear down each other's fixture. One runs at a time: the lock is on /tmp,
 # machine-wide like the Docker daemon, and ends with this shell.
 readonly lock_file='/tmp/klabautermann-fixture.lock'
+# 03 §11.4's 10-minute soak in CI; a one-minute smoke run elsewhere.
+if [[ "${GITHUB_ACTIONS:-}" == true ]]; then
+  readonly soak_seconds="${KLABAUTERMANN_SOAK_SECONDS:-600}"
+else
+  readonly soak_seconds="${KLABAUTERMANN_SOAK_SECONDS:-60}"
+fi
+# Absolute, since the soak runs from klabautermann/.
+soak_dir="${KLABAUTERMANN_EVIDENCE_DIR:-$klabautermann_dir/build/integration-evidence}/soak"
+if [[ "$soak_dir" != /* ]]; then
+  soak_dir="$PWD/$soak_dir"
+fi
+readonly soak_dir
 
 compose() {
   docker compose --project-name "$compose_project" --file "$compose_file" "$@"
@@ -74,10 +91,23 @@ fingerprint() {
   ssh-keygen -lf "$1" | cut -d ' ' -f 2
 }
 
+# Stops a backgrounded `dart test` run. package:test lets the running
+# test finish after a first signal, which can take up to its timeout, and
+# exits at once on a second; a supervisor may send SIGKILL before then,
+# which would skip compose down. The pause keeps the two signals from
+# merging into one.
+stop_tests() {
+  kill "$1" 2>/dev/null || true
+  sleep 0.5
+  kill "$1" 2>/dev/null || true
+  wait "$1" || true
+}
+
 runtime_dir=''
 agent_started=0
 suites_pid=''
 runner_vm_pid=''
+soak_pid=''
 
 on_exit() {
   local status="$?" cleanup=0
@@ -87,16 +117,13 @@ on_exit() {
   # leave the fixture, the agent or the key directory behind.
   trap '' INT TERM HUP
 
-  # Before the fixture goes: the suites would fail against it, and they
-  # hold the lock. package:test lets the running test finish after a
-  # first signal, which can take up to its timeout, and exits at once on
-  # a second; a supervisor may send SIGKILL before then, which would skip
-  # compose down. The pause keeps the two signals from merging into one.
+  # Before the fixture goes: the suites and the soak would fail against
+  # it, and they hold the lock.
   if [[ -n "$suites_pid" ]]; then
-    kill "$suites_pid" 2>/dev/null || true
-    sleep 0.5
-    kill "$suites_pid" 2>/dev/null || true
-    wait "$suites_pid" || true
+    stop_tests "$suites_pid"
+  fi
+  if [[ -n "$soak_pid" ]]; then
+    stop_tests "$soak_pid"
   fi
   # The runner-VM leg undoes its own changes on TERM, ignoring further
   # signals while it does; the wait lets it finish.
@@ -126,6 +153,10 @@ on_exit() {
 if [[ "$#" -ne 0 ]]; then
   echo 'usage: test/integration/run.sh' >&2
   exit 2
+fi
+if [[ ! "$soak_seconds" =~ ^[1-9][0-9]*$ ]]; then
+  echo 'KLABAUTERMANN_SOAK_SECONDS takes a whole number of seconds' >&2
+  exit 64
 fi
 
 for tool in docker flock ssh-keygen ssh-keyscan ssh-agent ssh-add "$dart_binary"; do
@@ -214,7 +245,32 @@ wait "$runner_vm_pid" || runner_vm_status="$?"
 runner_vm_pid=''
 # ---- End of the runner-VM leg -------------------------------------------
 
+# ---- Soak and budgets (03 §11.4, K28b) ----------------------------------
+# Ten aliases of the fixture's sshd at the Phone cadence for
+# $soak_seconds s after a warm-up: no growth in channels, descriptors or
+# memory, and the fast-tick and ten-host budgets. It runs whatever the
+# legs before it gave, in the background for on_exit, as they do. A run
+# that passes without soak.json skipped, which must not pass the job.
+mkdir -p "$soak_dir"
+rm -f -- "$soak_dir/soak.json"
+KLABAUTERMANN_SOAK_SECONDS="$soak_seconds" KLABAUTERMANN_SOAK_DIR="$soak_dir" \
+  "$dart_binary" test --concurrency=1 --tags soak --reporter expanded \
+  --file-reporter "json:$soak_dir/soak-test.json" \
+  packages/klabautermann_core/test/integration/soak_test.dart &
+soak_pid="$!"
+soak_status=0
+wait "$soak_pid" || soak_status="$?"
+soak_pid=''
+if ((soak_status == 0)) && [[ ! -f "$soak_dir/soak.json" ]]; then
+  echo "the soak wrote no $soak_dir/soak.json: it skipped" >&2
+  soak_status=1
+fi
+# ---- End of the soak ----------------------------------------------------
+
 if ((suites_status != 0)); then
   exit "$suites_status"
 fi
-exit "$runner_vm_status"
+if ((runner_vm_status != 0)); then
+  exit "$runner_vm_status"
+fi
+exit "$soak_status"
