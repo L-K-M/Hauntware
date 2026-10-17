@@ -246,6 +246,7 @@ D50 LXC values · D51 Access tab · D52 runtime placement · D53 integration
 placement · D54 runtime override in M3 · D55 no health overlay in the MVP
 · D56 log search through `planchette_core` · D57 timer triggers · D58
 cron zone rules · D59 capability cache · D60 threshold announcements ·
+D61 host-key pins and re-pin ·
 D62 sync state files and the keystore port.
 Proposals awaiting the owner close the section; they are not decisions.
 
@@ -931,6 +932,44 @@ Proposals awaiting the owner close the section; they are not decisions.
   with the cached profile (a stale container answer would withhold or
   show the wrong figures, D50, until the probe); sending cached profiles
   with the startup fleet.
+- **D61. Host-key pins persist, and the user's connect re-pins a changed
+  key.** The engine keeps one host-key store for its lifetime:
+  `seance_core`'s `FileHostKeyStore` over `host_keys.json` in the support
+  directory (4.10) when `EngineStart.supportDirectoryAccess` says the
+  process holds the directory alone, so a pin outlives the engine.
+  Without that, it reads the file's pins once and keeps them and its own
+  in memory: it writes, renames and creates nothing there, a damaged file
+  included, as the capability cache writes nothing (D59), while another
+  instance's pins still block a changed key. Two stores over one file
+  would undo each other's pins, since each loads once and then writes its
+  whole cache, so catalog sync (K49) installs pulled pins through the same
+  store. A changed key still blocks the server (4.6), and an unattended
+  connect never asks about it. Only the user's `Connect` to a server a
+  changed host key blocked starts an attempt that reviews the key:
+  `HostKeyPromptRequest` carries the pinned key's fingerprint and type
+  beside the presented key's, the app shows `ghost_servers`' changed-key
+  review (both fingerprints under the "HOST KEY CHANGED" warning), and
+  trusting it replaces the pin through `TofuVerifier.pin` and connects.
+  Declining it, letting it expire or leaving the server before deciding
+  blocks the server again. The first `Connect` after a restart blocks
+  too, so the user sees the block before any review. A `Connect` to a
+  fleet server without a config (no login name, or an address-only
+  import; 10.1) gets `ConnectRejected` with the reason, which the app
+  shows on the server's view instead of ignoring it. A lane decision
+  within the M2 plan's approved scope (its section 2), which owner
+  question O8 reopens only if the owner treats host-key policy as
+  theirs. Why: `TofuVerifier` "requires the user to explicitly re-pin"
+  (`SC/src/hostkey/tofu.dart:36-38, :61-62` [V]) and never auto-repins
+  (4.6, 8.12); once pins persist, a rekeyed server would otherwise stay
+  blocked for good, where an engine restart used to clear the in-memory
+  pins; Séance's changed-key dialog is the suite's precedent.
+  *Rejected:* a review on every interactive connect (the first connect
+  after a restart would ask before the user saw the block, so a changed
+  key would read as routine); re-pinning from an unattended connect (no
+  one to ask, 4.5); an empty in-memory store when unguarded (a second
+  instance would take every pinned server as first seen, so a
+  man-in-the-middle would meet a first-use review instead of a block);
+  writing the file without the lock (two instances race, 4.10).
 - **D62. Sync state files and the keystore port (K49a, M2).** The
   catalog library's `PinVerdictStore`, `SyncTripwireStore` and
   `SyncEnrollmentState` seams get files of their own under the support
@@ -1848,6 +1887,11 @@ re-push (c1 §2.4).
 - Verification through `TofuVerifier` (`SC/src/hostkey/tofu.dart`), which
   never auto-repins, with the pin locator `ServerConfig.host` verbatim plus
   port so pins match across apps.
+- Pins persist in `host_keys.json` (4.10) through the engine's one
+  `FileHostKeyStore` (D61). A changed key blocks the server, and
+  background connects never ask about it (4.5). Only the user's next
+  connect to the blocked server asks, showing the pinned key beside the
+  new one, and trusting it re-pins (`TofuVerifier.pin`).
 - Pulled `hostkey:` records go through the quarantine handler: installed only
   without conflict, conflicts parked behind a diff, negative pins and kept
   verdicts honoured.
@@ -1971,7 +2015,7 @@ platform identities in 04, section 12.3):
 |---|---|---|---|
 | `servers.json`, `sync_records.json` | Catalog mirror and materialized list | catalog library | MVP |
 | `vault.json`, `vault.json.rekey` | Credentials and re-key journal | `SC/src/store/` | MVP |
-| `host_keys.json`, `pin_verdicts.json`, `sync_tripwires.json` | Pins and quarantine state. As built in M2 (K49a, D62), the verdict and tripwire files are named `pin_verdicts.json` (negative pins and kept verdicts) and `sync_tripwires.json` (tripped record ids), owned by `klabautermann_core` over the catalog library's seams. A damaged file is renamed to `<name>.corrupt-<UTC time>` and the store starts empty; one it cannot read or rename, or one from a newer schema, is left as it is and no change is saved that run; nothing is written or renamed without exclusive access | catalog library; the verdict and tripwire files `klabautermann_core` [E] | MVP |
+| `host_keys.json`, `pin_verdicts.json`, `sync_tripwires.json` | Pins and quarantine state. From M2 the engine pins through the catalog library's `FileHostKeyStore`, one instance per engine, and writes `host_keys.json` only while the process holds the directory alone; otherwise it reads the file once and keeps pins in memory (D61). As built in M2 (K49a, D62), the verdict and tripwire files are named `pin_verdicts.json` (negative pins and kept verdicts) and `sync_tripwires.json` (tripped record ids), owned by `klabautermann_core` over the catalog library's seams. A damaged file is renamed to `<name>.corrupt-<UTC time>` and the store starts empty; one it cannot read or rename, or one from a newer schema, is left as it is and no change is saved that run; nothing is written or renamed without exclusive access | catalog library; the verdict and tripwire files `klabautermann_core` [E] | MVP |
 | `sync_enrollment.json` [E] | Enrollment state (M2, K49a, D62): the push hold, the raised notices and the enrolled account (server URL, user name, mode); never the token or vault key, which stay in the keystore (4.5), and not the device id, which stays in `settings.json`. Kept like the verdict files; a damaged file reads as not enrolled | `klabautermann_core` [E] | MVP |
 | `endpoint_pins.json` | Confirmed endpoints | catalog library | MVP |
 | `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config`, replaced whole by each import; never pushed (D14). Schema 3 (M2) holds each host's alias, host, port, user, `IdentityFile` and `ProxyJump` with the values ssh would use (10.1): the effective host (`%h` expanded, lowercased unless an address) and port, the first `IdentityFile` that is not `none`, and the `ProxyJump` as written; under `hops` it holds the same for each other name a stored route gives. An older file holds addresses only: schema 1 (M1) kept no `IdentityFile` or `ProxyJump` and kept `HostName` as written, `%h` included, and schema 2 read each host's values from its first block alone. Its hosts are listed as stored, with no `jumpRoute`, `authKind` or `locatorConflict`, and get no connect config until the next import rewrites the file. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
@@ -2059,9 +2103,10 @@ abstract interface class RemoteProcess {
   limitation come back on every retry, and repeated sign-in failures get
   the device banned by fail2ban (c2 R11). A server whose last connect needed
   keyboard-interactive answers, on itself or a jump host, is never dialed
-  unattended (4.5). A changed host key blocks the server until the
-  re-pin flow of 4.6 exists; until then nothing unblocks it but an
-  engine restart.
+  unattended (4.5). A changed host key blocks the server, also across
+  engine restarts since pins persist (4.10), and nothing unattended
+  dials it; the user's next connect reviews the key and re-pins it if
+  the user trusts it (4.6, D61).
 - **Attempts.** `SshLink.connect` shows no state before it returns, so
   the supervisor reports `connecting` while an attempt queues and dials,
   `authenticating` once the server's own host key has passed (each jump
@@ -4413,7 +4458,7 @@ shows there.
 | `EnrollSync`, `RunSyncRound` | `CatalogReplaced(entries)`, `SyncStatus` |
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)`, `SetMonitorSet(ids)` | `EndpointChanged(serverId)` |
-| `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status) |
+| `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status), `ConnectRejected(serverId, reason)` (no config to dial with, D61) |
 | `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `RefreshSubscription(serverId, subscriptionId)` (a phone's pull to refresh, PLT-02), `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
@@ -4442,7 +4487,8 @@ the engine in `engine_isolate.dart` beside it):
 - **Start.** The app spawns the engine with
   `IsolateEngineClient.spawn(supportDirectory:)`, its support directory,
   where the engine keeps its own files (4.10), and from M2
-  `supportDirectoryAccess`, whether the process holds it alone (D59).
+  `supportDirectoryAccess`, whether the process holds it alone (D59,
+  D61).
   `EngineReady` carries
   `importStoreIssue`, what was wrong with `ssh_config_imports.json` at
   start, or none, and the engine follows it at once with a
@@ -4668,7 +4714,8 @@ the engine in `engine_isolate.dart` beside it):
   prompt is its own event. Statuses compare by value. `Prompt` replaces
   v2's engine text with a sealed request per kind: a first-seen host
   key's type and SHA-256 fingerprint (a changed key blocks the link
-  instead, 4.6), the server's keyboard-interactive name, instruction and
+  instead, 4.6, until the user's connect reviews it, M2 pins below), the
+  server's keyboard-interactive name, instruction and
   questions (without echo flags, which `seance_core`'s challenge does not
   carry, so every answer is masked), and the login or sudo password of a
   user with a retry flag. `host` and `port` name the machine that asks,
@@ -4695,17 +4742,17 @@ the engine in `engine_isolate.dart` beside it):
   `Disconnect` and `SetAppActivity` to its link supervisor (5.1, 5.12)
   and `AnswerPrompt` to its prompt broker. `Connect` is the user's
   connect, since the app sends it when a view opens, so it may prompt.
-  `RequestRejected` answers a `Connect` for a server the engine cannot
-  dial (outside the fleet, a jump hop's id included, or without a
-  config) and an `AnswerPrompt` for a prompt that is not open or with
-  an answer that does not fit it.
+  `RequestRejected` answers a `Connect` for an id outside the fleet, a
+  jump hop's id included, and an `AnswerPrompt` for a prompt that is not
+  open or with an answer that does not fit it; a fleet server without a
+  config gets `ConnectRejected` (M2 pins, below).
   `IsolateEngineClient.spawn(linksEnabled:)` (`EngineStart.linksEnabled`,
   off unless given) turns links on. Off, the engine has no supervisor,
   so `Connect` gets `RequestRejected` and nothing dials, while
   `Disconnect` and `SetAppActivity` change nothing. The composition root
-  keeps them off until pins outlive the engine (the catalog library's
-  `host_keys.json`, 4.10; until then the engine pins in memory), though
-  the app can show prompts (M2 prompts, below); tests turn them on.
+  keeps them off until K44b, though pins outlive the engine (M2 pins,
+  below) and the app can show prompts (M2 prompts, below); tests turn
+  them on.
 - **Version 3 (M2 sampling).** Sampling joined version 3 without a bump,
   as the import store's fields joined version 2, before any version 3
   build shipped. `Subscribe` names the surface's `SampleStream`s: the 6.4
@@ -4892,6 +4939,24 @@ the engine in `engine_isolate.dart` beside it):
   `PromptSecretAnswer(null)` rather than leave the attempt waiting out
   the expiry. With links off, as in the app until K44, no prompt
   arrives.
+- **Version 3 (M2 pins).** Persistent pins and the re-pin joined version
+  3 the same way (D61). `HostKeyPromptRequest` gained
+  `pinnedFingerprintSha256` and `pinnedKeyType`, set only when the
+  presented key differs from the pinned one, which only the user's
+  `Connect` to a server blocked by `hostKeyChanged` asks about. The app
+  maps them onto `GhostHostKeyPrompt`'s pinned fields, so `ghost_servers`
+  shows its changed-key review, and answers with `PromptTrustAnswer`.
+  `ConnectRejected(serverId, reason)` answers a `Connect` to a fleet
+  server the engine has no config for: `noLoginName` when neither the
+  import nor `USER` or `USERNAME` names a login name for the server or a
+  jump host on its route, and `addressOnlyImport` for a schema 1 or 2
+  import store (4.10). Nothing about the link changes. The monitoring
+  controller keeps the reason while a view holds the server, and the
+  server's workspace and phone screen show it as a banner until the
+  server's next `Connect`. A new fleet sends that `Connect` for each
+  rejected server it still lists, so an import that fixes the config
+  connects the open view. With links off, the engine answers `Connect`
+  with `RequestRejected` before it looks for a config.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period
@@ -4938,7 +5003,8 @@ the engine in `engine_isolate.dart` beside it):
   monitoring controller has no endpoint to compare on the first import
   after launch; that purge needs the engine to report the change
   (`EndpointChanged`) or the startup entries. With links off, the
-  engine's rejection of `Connect` shows nothing. A server that leaves
+  engine's `RequestRejected` of `Connect` shows nothing; a
+  `ConnectRejected` shows on the server's views (M2 pins, above). A server that leaves
   the fleet is sent nothing until it comes back, when the views and
   surfaces still holding it connect and subscribe again (5.1).
 - **`Reachability(serverId, status)`** reports one server's latest probe

@@ -658,6 +658,82 @@ void main() {
     });
   });
 
+  group('Connect rejections (D61)', () {
+    const noUser = ConnectRejectedReason.noLoginName;
+    const addressOnly = ConnectRejectedReason.addressOnlyImport;
+
+    test('are kept per open server until its next Connect', () async {
+      monitoring
+        ..openServer('srv-1')
+        ..openServer('srv-2');
+      engine
+        ..emit(const ConnectRejected('srv-1', noUser))
+        ..emit(const ConnectRejected('srv-2', addressOnly))
+        // A server no view holds has nothing to show it on.
+        ..emit(const ConnectRejected('srv-3', noUser));
+      await settle();
+      expect(monitoring.connectRejections.value, {
+        'srv-1': noUser,
+        'srv-2': addressOnly,
+      });
+
+      // The last leave drops it; the next open connects without it.
+      monitoring.leaveServer('srv-1');
+      expect(monitoring.connectRejections.value, {'srv-2': addressOnly});
+    });
+
+    test('a new fleet connects each rejected server it still lists again, '
+        'and drops the rest', () async {
+      monitoring
+        ..openServer('srv-1')
+        ..openServer('srv-2');
+      engine
+        ..emit(const ConnectRejected('srv-1', noUser))
+        ..emit(const ConnectRejected('srv-2', addressOnly));
+      await settle();
+      final before = engine.sentOfType<Connect>().length;
+      var notified = 0;
+      monitoring.connectRejections.addListener(() => notified++);
+
+      engine.emit(CatalogReplaced([_entry('srv-1')]));
+      await settle();
+
+      expect(monitoring.connectRejections.value, isEmpty);
+      expect(notified, 1, reason: 'one change for the whole fleet');
+      expect(
+        [
+          for (final Connect(:serverId)
+              in engine.sentOfType<Connect>().skip(before).cast<Connect>())
+            serverId,
+        ],
+        ['srv-1'],
+      );
+
+      // Still without a config, it is rejected again. A rejection still
+      // on its way for the server that left is not kept.
+      engine
+        ..emit(const ConnectRejected('srv-1', noUser))
+        ..emit(const ConnectRejected('srv-2', addressOnly));
+      await settle();
+      expect(monitoring.connectRejections.value, {'srv-1': noUser});
+    });
+
+    test('a rejection notifies its listeners, and a RequestRejected for '
+        'Connect is not one', () async {
+      var notified = 0;
+      monitoring.connectRejections.addListener(() => notified++);
+      monitoring.openServer('srv-1');
+      engine.emit(const RequestRejected('Connect', 'links are off'));
+      await settle();
+      expect(notified, 0);
+      expect(monitoring.connectRejections.value, isEmpty);
+
+      engine.emit(const ConnectRejected('srv-1', noUser));
+      await settle();
+      expect(notified, 1);
+    });
+  });
+
   group('a server that leaves the fleet (03 §5.1)', () {
     testWidgets('drops its pending Disconnect, so a view back after a '
         're-import within the grace connects again', (tester) async {

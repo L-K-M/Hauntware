@@ -31,8 +31,9 @@ import '../../theme/app_theme.dart';
 /// Only [PromptController.current] is shown, so the next prompt waits.
 ///
 /// - A first-seen host key is the first-use review, answered with
-///   [PromptTrustAnswer]. The engine asks about no other key: a changed
-///   one blocks the link (03 §4.6), so no pinned fingerprint is passed.
+///   [PromptTrustAnswer]. A changed key blocks the link (03 §4.6); the
+///   user's next connect to the blocked server asks again with the pinned
+///   key, which the changed-key review shows beside the new one (D61).
 /// - Keyboard-interactive questions are answered with
 ///   [PromptResponsesAnswer] in question order, or [PromptCancelAnswer]
 ///   on Cancel.
@@ -125,16 +126,20 @@ class _PromptHostState extends State<PromptHost> {
   bool _show(Prompt prompt) {
     final l10n = AppLocalizations.of(context);
     switch (prompt.request) {
-      case HostKeyPromptRequest(:final keyType, :final fingerprintSha256):
+      case final HostKeyPromptRequest request:
         unawaited(
           _ask(prompt, const PromptTrustAnswer(false), (dialogKey) async {
+            // A pinned key makes it the changed-key review (D61), which
+            // only the user's connect to a blocked server raises.
             final trusted = await showGhostHostKeyDialog(
               context,
               GhostHostKeyPrompt(
                 host: prompt.host,
                 port: prompt.port,
-                keyType: keyType,
-                fingerprintSha256: fingerprintSha256,
+                keyType: request.keyType,
+                fingerprintSha256: request.fingerprintSha256,
+                pinnedFingerprintSha256: request.pinnedFingerprintSha256,
+                pinnedKeyType: request.pinnedKeyType,
               ),
               strings: _hostKeyStrings(l10n),
               dialogKey: dialogKey,
@@ -242,8 +247,8 @@ class _PromptHostState extends State<PromptHost> {
   Widget build(BuildContext context) => widget.child;
 }
 
-/// The host-key review's words in ARB. The changed-key ones wait for the
-/// re-pin review; the engine raises no such prompt yet.
+/// The host-key review's words in ARB, for the first-use review and the
+/// changed-key one.
 GhostHostKeyStrings _hostKeyStrings(AppLocalizations l10n) =>
     GhostHostKeyStrings(
       unknownTitle: l10n.hostKeyUnknownTitle,

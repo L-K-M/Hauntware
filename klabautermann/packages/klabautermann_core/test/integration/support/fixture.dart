@@ -188,6 +188,30 @@ Host alias-$i
   Future<String> exec(FixtureService service, List<String> command) =>
       compose(['exec', '-T', service.name, ...command]);
 
+  /// A new directory under run.sh's runtime directory, for engines that
+  /// share one support directory across restarts
+  /// ([FixtureEngine.start]'s `support`). run.sh removes it with the rest.
+  Future<Directory> supportDirectory() =>
+      Directory(_runtimeDirectory).createTemp('support-');
+
+  /// Gives [service] new host keys: removes its keys and restarts it, so
+  /// its entrypoint generates others, and waits until sshd listens again.
+  Future<void> regenerateHostKeys(FixtureService service) async {
+    final logged = (await logs(service)).length;
+    await exec(service, ['sh', '-c', 'rm -f /etc/ssh/ssh_host_*']);
+    await compose(['restart', service.name]);
+    var lines = const <String>[];
+    for (var i = 0; i < 60; i++) {
+      lines = (await logs(service)).skip(logged).toList();
+      if (lines.any((line) => line.startsWith('Server listening on'))) return;
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+    fail(
+      '${service.name} did not listen again after its new host keys; '
+      'it logged:\n${lines.join('\n')}',
+    );
+  }
+
   /// The lines [service] has logged so far.
   Future<List<String>> logs(FixtureService service) async =>
       const LineSplitter().convert(
@@ -206,7 +230,8 @@ Host alias-$i
 
 /// The real engine, spawned as the app spawns it but with links on, which
 /// the app's composition root still leaves off ([EngineStart.linksEnabled]).
-/// Each test starts its own, so host-key pins and links never carry over.
+/// Each test starts its own, so host-key pins and links never carry over,
+/// unless it hands engines one support directory to restart over.
 /// Stopping it disconnects every server first, so the fixture's sampler
 /// shells end with their links.
 final class FixtureEngine {
@@ -214,13 +239,19 @@ final class FixtureEngine {
     this._evidenceDirectory,
     this._client,
     this._events,
-    this._support,
-  );
+    this._support, {
+    required this._ownsSupport,
+  });
 
   final String? _evidenceDirectory;
   final IsolateEngineClient _client;
   final StreamIterator<EngineEvent> _events;
   final Directory _support;
+
+  /// Whether stopping deletes [_support]: only the directory [start]
+  /// made.
+  final bool _ownsSupport;
+  Future<void>? _stopped;
   final _clock = Stopwatch()..start();
   final _log = StringBuffer();
   final _connected = <String>{};
@@ -233,13 +264,23 @@ final class FixtureEngine {
   final seen = <EngineEvent>[];
 
   /// Starts an engine and imports [Fixture._sshConfig]. [name] titles the
-  /// event log it leaves in the evidence directory.
-  static Future<FixtureEngine> start(Fixture fixture, String name) => launch(
+  /// event log it leaves in the evidence directory. It runs in a support
+  /// directory of its own, deleted when it stops, unless [support] names
+  /// one ([Fixture.supportDirectory]) that the caller keeps, which a
+  /// restarted engine then reads with [access] as the app would.
+  static Future<FixtureEngine> start(
+    Fixture fixture,
+    String name, {
+    Directory? support,
+    SupportDirectoryAccess access = SupportDirectoryAccess.unguarded,
+  }) => launch(
     name: name,
     runtimeDirectory: fixture._runtimeDirectory,
     sshConfig: fixture._sshConfig,
     hosts: 4,
     evidenceDirectory: fixture._evidenceDirectory,
+    support: support,
+    access: access,
   );
 
   /// Starts an engine through [entryPoint], which wraps the engine's own
@@ -265,7 +306,10 @@ final class FixtureEngine {
   /// imports [sshConfig], which names [hosts] hosts, for a host other than
   /// the Compose fixture, such as the runner VM (`runner_vm.dart`). [name]
   /// titles the event log it leaves in [evidenceDirectory], if any.
-  /// [entryPoint] replaces the engine's.
+  /// [entryPoint] replaces the engine's. The engine runs in a support
+  /// directory of its own under [runtimeDirectory], deleted when it
+  /// stops, unless [support] names one the caller keeps, which the engine
+  /// reads with [access].
   static Future<FixtureEngine> launch({
     required String name,
     required String runtimeDirectory,
@@ -273,20 +317,25 @@ final class FixtureEngine {
     required int hosts,
     String? evidenceDirectory,
     void Function(EngineStart start) entryPoint = engineMain,
+    Directory? support,
+    SupportDirectoryAccess access = SupportDirectoryAccess.unguarded,
   }) async {
-    final support = await Directory(runtimeDirectory).createTemp('engine-');
+    final directory =
+        support ?? await Directory(runtimeDirectory).createTemp('engine-');
     final client = await IsolateEngineClient.spawn(
-      supportDirectory: support.path,
+      supportDirectory: directory.path,
       linksEnabled: true,
+      supportDirectoryAccess: access,
       entryPoint: entryPoint,
     );
     final engine = FixtureEngine._(
       evidenceDirectory,
       client,
       StreamIterator(client.events),
-      support,
+      directory,
+      ownsSupport: support == null,
     );
-    addTearDown(() => engine._stop(name));
+    addTearDown(() => engine.stop(name));
 
     await engine.until<CatalogReplaced>();
     engine.send(ImportSshConfig(sshConfig));
@@ -445,6 +494,12 @@ final class FixtureEngine {
       if (event is LinkState && event.serverId == serverId) event.status,
   ];
 
+  /// Disconnects every server, shuts the engine down and writes its event
+  /// log; a second call waits for the first. A test stops an engine early
+  /// to restart another over its support directory, since two engines
+  /// over one `host_keys.json` would undo each other's pins (P14).
+  Future<void> stop(String name) => _stopped ??= _stop(name);
+
   Future<void> _stop(String name) async {
     try {
       for (final serverId in _connected) {
@@ -466,7 +521,7 @@ final class FixtureEngine {
       // stream's close in shutdown.
       await _events.cancel();
       await _client.shutdown();
-      await _support.delete(recursive: true);
+      if (_ownsSupport) await _support.delete(recursive: true);
       if (_evidenceDirectory case final directory?) {
         final file = File('$directory/${name.replaceAll(' ', '-')}.events');
         await file.create(recursive: true);

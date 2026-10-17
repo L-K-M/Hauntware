@@ -11,6 +11,7 @@ import 'inspector_pane.dart' show PlaceholderPaneBody;
 import 'jobs_panel.dart';
 import 'logs/logs_panel.dart';
 import 'overview_panel.dart';
+import 'connect_rejected_banner.dart';
 import 'processes_panel.dart';
 import 'server_coverage.dart';
 import 'server_header.dart';
@@ -180,9 +181,19 @@ class _ServerDetailPageState extends State<ServerDetailPage>
               if (pausesInBackground(context)) l10n.coverageBackgroundBody,
             ],
           ),
-          banner: BackgroundReturnBanner(
-            monitoring: widget.monitoring,
-            serverId: widget.server.id,
+          banner: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ConnectRejectedBanner(
+                monitoring: widget.monitoring,
+                serverId: widget.server.id,
+              ),
+              BackgroundReturnBanner(
+                monitoring: widget.monitoring,
+                serverId: widget.server.id,
+              ),
+            ],
           ),
           child: SelectedTabView(
             controller: _destinations,
