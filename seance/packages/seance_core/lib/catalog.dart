@@ -2,7 +2,7 @@
 /// the record coordinator with its handler seam and write path, the
 /// persistent record store, the server-config store and its sync tuples,
 /// enrollment, the host-key and pin-verdict seams, the file-backed
-/// host-key store, record crypto, the read-only server catalog, and the
+/// host-key store, endpoint pins and their file store, record crypto, the read-only server catalog, and the
 /// file primitives behind the stores' default writer. A secondary library
 /// of `seance_core`: import it beside
 /// `package:seance_core/seance_core.dart`.
@@ -14,6 +14,7 @@ library;
 
 export 'src/catalog/catalog_snapshot.dart' show CatalogSnapshot;
 export 'src/catalog/catalog_writer.dart' show CatalogWriter, WriteOutcome;
+export 'src/catalog/endpoint_pin_store.dart' show EndpointPin, EndpointPinStore;
 export 'src/catalog/enrollment.dart'
     show
         EnrollmentResult,
@@ -79,6 +80,13 @@ export 'src/catalog/sync_tuple.dart' show SyncTuple;
 // with the Séance app's own store until the app switches.
 export 'src/store/corrupt_file_quarantine.dart' show quarantineCorruptFile;
 export 'src/store/file_host_key_store.dart' show FileHostKeyStore;
+// The endpoint pins' file store (D16, 03-ARCHITECTURE.md 4.7), beside
+// the host-key store whose conventions it shares.
+export 'src/store/file_endpoint_pin_store.dart'
+    show
+        EndpointPinsNewerVersionException,
+        FileEndpointPinStore,
+        endpointPinsFileName;
 // The file primitives behind the stores' default writer, which
 // Poltergeist's local-file safety and transfer journal share.
 export 'src/store/file_permissions.dart' show restrictLocalPathPermissions;
