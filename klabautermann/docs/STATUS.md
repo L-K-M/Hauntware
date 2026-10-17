@@ -287,8 +287,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   PID as unknown; `JournalEntry.timestampUtc` no longer throws on such a
   time. Logs joined v3 without a bump. With links on, the engine routes
   windows to the log service and rejects follows until K26 (K25a and
-  K25b, below); with links off, the engine's default, which the app
-  overrides since K44b, it rejects every `OpenLogStream` and ignores
+  K25b, below); with links off (the engine's default, which the app
+  overrides since K44b), it rejects every `OpenLogStream` and ignores
   `CloseStream`.
 - Log service (M2, 03 §7.6, LOG-01, LOG-03, LOG-22, SVC-04, K25a, #221):
   `klabautermann_core`'s `LogService` reads one window (`follow: false`)
@@ -331,7 +331,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   over an injected pin store (in memory for now). Only interactive
   connects prompt: background connects decline a first-seen host key and
   offer no keyboard-interactive, and a changed key blocks the link. There
-  is no passphrase prompt and no prompt dialog in the app yet. The engine
+  is no passphrase prompt yet; the app shows the host-key and
+  keyboard-interactive prompts (K43). The engine
   wires the connector and the broker in behind links, which the app
   turns on since K44b (below).
 - Link supervisor (M2, 03 §5.1, §5.12, K19a, #206): `LinkSupervisor`
@@ -359,11 +360,12 @@ M2, the host read MVP, is the current milestone. What is on main:
   `Connect`, `Disconnect` and `SetAppActivity` to the link supervisor and
   `AnswerPrompt` to the prompt broker, and dials through the link
   connector with an in-memory pin store. `Connect` is the user's
-  connect, so it may prompt; one for a server the engine cannot dial gets
-  `RequestRejected`. Phones close links in the background (D34);
+  connect, so it may prompt; one for an id outside the fleet gets
+  `RequestRejected`, and one for a fleet server without a config gets
+  `ConnectRejected` (K44a). Phones close links in the background (D34);
   desktops keep them. `EngineStart.linksEnabled` gates the whole stack.
   It is off unless given, and `main.dart` turns it on since K44b (a
-  contract test holds it), after pins in `host_keys.json` (K44a) and the
+  contract test holds it on), after pins in `host_keys.json` (K44a) and the
   app's prompts (K43) landed. With links off,
   `Connect` is rejected, `Disconnect` and `SetAppActivity` change nothing,
   and nothing dials. A server that leaves the fleet is forgotten: its link
@@ -423,7 +425,7 @@ M2, the host read MVP, is the current milestone. What is on main:
   announcements; samples and probe answers are not. Rows subscribe nothing
   until the monitor set (K30), and the app's engine sends no probe
   answers (K20). It sends link states and samples since K44b turned links
-  on, so in a real run a row shows its link state once its server was
+  on, so in a real run a row shows its link state once its server is
   opened, and its readings while a view holds them.
 - Server header and Overview part 1 (M2, 03 §10.2, §10.4, OV-01, OV-03,
   OV-04, MEM-01, MEM-02, K32a, #223): the desktop workspace and the
