@@ -3,14 +3,14 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:meta/meta.dart';
-import 'package:seance_core/seance_core.dart'
-    show ImportedHost, InMemoryHostKeyStore, SshLink;
+import 'package:seance_core/seance_core.dart' show ImportedHost, SshLink;
 
 import '../capabilities/capability_cache.dart';
 import '../fleet/imported_fleet.dart';
 import '../fleet/ssh_config_entries.dart';
 import '../fleet/ssh_config_import_store.dart';
 import '../links/credential_source.dart';
+import '../links/host_key_pins.dart';
 import '../links/link_connector.dart';
 import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
@@ -50,7 +50,8 @@ final class EngineStart {
   final bool linksEnabled;
 
   /// Whether this process alone uses [supportDirectory]: the engine writes
-  /// and purges its capability cache there only then (03 §4.10, D59).
+  /// and purges its capability cache and writes its host-key pins there
+  /// only then (03 §4.10, D59, D61).
   final SupportDirectoryAccess supportDirectoryAccess;
 }
 
@@ -71,10 +72,12 @@ final class EngineStart {
 /// names it (03 §6.1, D59), [ImportSshConfig] gets
 /// [CatalogReplaced] and [SshConfigImported], [Connect], [Disconnect] and
 /// [SetAppActivity] go to the link supervisor and [AnswerPrompt] to the
-/// prompt broker (03 §5.1), [OpenLogStream] and [CloseStream] go to the
-/// log streams, which read each window over its server's link (03 §5.2,
-/// §7.6), [Shutdown] ends every log stream and exits, and every other
-/// 03 §10.1 row gets [RequestRejected] until its milestone lands.
+/// prompt broker (03 §5.1), a [Connect] to a fleet server without a
+/// config gets [ConnectRejected] (D61), [OpenLogStream] and
+/// [CloseStream] go to the log streams, which read each window over its
+/// server's link (03 §5.2, §7.6), [Shutdown] ends every log stream and
+/// exits, and every other 03 §10.1 row gets [RequestRejected] until its
+/// milestone lands.
 ///
 /// [dial] replaces `SshLink.connect`, so tests can run the engine's links
 /// without a network. [subscriptions], when given, holds the sampling
@@ -128,10 +131,18 @@ void engineMain(
   // (03 §10.1).
   final prompts = PromptBroker(emit: uiPort.send);
 
+  // The host-key pins (03 §4.6, D61): `host_keys.json` while the process
+  // holds the support directory alone, otherwise that file's pins read
+  // once and kept in memory. One store for the engine's lifetime (P14),
+  // which catalog sync shares once it lands (K49). Opening it reads
+  // nothing; the first connect loads the file.
+  final hostKeys = openHostKeyPins(
+    start.supportDirectory,
+    access: start.supportDirectoryAccess,
+  );
+
   // One link per server (03 §5.1, §5.12), dialed through the connector.
-  // None while links are off, so nothing in the engine can dial. Host-key
-  // pins live in memory until the catalog library's `host_keys.json`
-  // lands (03 §4.10), so they last for this engine's lifetime only.
+  // None while links are off, so nothing in the engine can dial.
   // Phones close their links in the background (D34); desktops keep them.
   final links = start.linksEnabled
       ? LinkSupervisor(
@@ -139,7 +150,7 @@ void engineMain(
             credentials: EngineCredentialSource(
               identityAuditLogIn(start.supportDirectory),
             ),
-            hostKeys: InMemoryHostKeyStore(),
+            hostKeys: hostKeys,
             prompts: prompts,
             hopConfig: (id) => fleet.serverConfig(id),
             dial: dial,
@@ -231,14 +242,24 @@ void engineMain(
       case Connect(:final serverId):
         sendCachedProfile(serverId);
         // The app sends it when the user opens the server (03 §10.1), so
-        // the connect may prompt.
+        // the connect may prompt, and to a server a changed host key
+        // blocked it reviews the key (D61).
         if (links == null) {
           reject(message, 'links are off in this engine');
         } else if (!links.connect(
           serverId,
           purpose: ConnectPurpose.interactive,
         )) {
-          reject(message, 'no fleet server $serverId the engine can dial');
+          // A fleet server without a config is the user's to fix, so the
+          // app is told why; any other id is not a server it lists.
+          switch (fleetIds.contains(serverId)
+              ? fleet.missingConfigReason(serverId)
+              : null) {
+            case final reason?:
+              uiPort.send(ConnectRejected(serverId, reason));
+            case null:
+              reject(message, 'no fleet server $serverId the engine can dial');
+          }
         }
       case Disconnect(:final serverId):
         // Its streams end before its link closes, so none reports

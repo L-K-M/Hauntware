@@ -106,6 +106,26 @@ void main() {
       expect(fleet.serverConfig('ssh-config:b')?.username, 'u');
       expect(fleet.serverConfig('ssh-config-hop:v@j')?.username, 'v');
       expect(fleet.serverConfig('ssh-config:c'), isNull);
+
+      // A connect to a host without a config says why (D61): here, the
+      // login name of the host or of a hop on its route.
+      expect(
+        [
+          for (final id in ['a', 'b', 'c'])
+            fleet.missingConfigReason('ssh-config:$id'),
+        ],
+        [
+          ConnectRejectedReason.noLoginName,
+          null,
+          ConnectRejectedReason.noLoginName,
+        ],
+      );
+      expect(
+        fleet.missingConfigReason('ssh-config-hop:j'),
+        isNull,
+        reason: 'a hop is no fleet server',
+      );
+      expect(fleet.missingConfigReason('ssh-config:gone'), isNull);
     });
 
     test('maps a ProxyJump chain to hop configs, each through the one '
@@ -321,6 +341,10 @@ void main() {
       expect(entry.searchText, contains('10.0.0.5'));
       expect(entry.locatorConflict, isNull);
       expect(fleet.serverConfig('ssh-config:db'), isNull);
+      expect(
+        fleet.missingConfigReason('ssh-config:db'),
+        ConnectRejectedReason.addressOnlyImport,
+      );
     });
 
     test('flags servers at one locator behind different routes', () {

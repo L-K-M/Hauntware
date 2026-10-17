@@ -192,6 +192,9 @@ final class MonitoringController extends ChangeNotifier {
   Set<String> _pausedServers = {};
   final ValueNotifier<BackgroundPause?> _backgroundPause = ValueNotifier(null);
 
+  final ValueNotifier<Map<String, ConnectRejectedReason>> _connectRejections =
+      ValueNotifier(const {});
+
   /// The latest sample of [serverId]'s [stream]. A surface listens to this
   /// one box instead of the whole controller.
   ValueListenable<Sample?> sampleFor(String serverId, SampleStream stream) =>
@@ -247,6 +250,15 @@ final class MonitoringController extends ChangeNotifier {
   ValueListenable<BackgroundPause?> get backgroundPause => _backgroundPause;
 
   void dismissBackgroundPause() => _backgroundPause.value = null;
+
+  /// Why the engine could not connect each server whose last [Connect] it
+  /// rejected with [ConnectRejected] (D61): it has no config to dial with
+  /// until the user imports their SSH config again. Only servers a view
+  /// holds are kept. A server's entry goes when this controller sends its
+  /// next [Connect], which the next fleet does for each one it still
+  /// lists, since that fleet may give it a config.
+  ValueListenable<Map<String, ConnectRejectedReason>> get connectRejections =>
+      _connectRejections;
 
   /// The freshness clock: this device's time, notifying every
   /// [kFreshnessTick] while anything listens, so an age keeps counting
@@ -378,10 +390,12 @@ final class MonitoringController extends ChangeNotifier {
   /// screen). The first sends [Connect]; within the grace after the last
   /// leave the link is still held and nothing is sent.
   ///
-  /// An engine with links off, as the app spawns it until they are ready,
-  /// answers [Connect] with [RequestRejected], which this controller
-  /// ignores like every event it does not consume: the views stay as they
-  /// are and show no error.
+  /// A server the engine has no config for gets [ConnectRejected], which
+  /// [connectRejections] keeps for the views to show. An engine with links
+  /// off, as the app spawns it until they are ready, answers [Connect]
+  /// with [RequestRejected] before it looks for a config, which this
+  /// controller ignores like every event it does not consume: the views
+  /// stay as they are and show no error.
   void openServer(String serverId) {
     final views = _openViews[serverId] ?? 0;
     _openViews[serverId] = views + 1;
@@ -392,7 +406,7 @@ final class MonitoringController extends ChangeNotifier {
       leaving.cancel();
       return;
     }
-    if (_listed(serverId)) _send(Connect(serverId));
+    if (_listed(serverId)) _connect(serverId);
   }
 
   /// A view [openServer] counted closed. The last sends [Disconnect] once
@@ -408,6 +422,7 @@ final class MonitoringController extends ChangeNotifier {
 
     _openViews.remove(serverId);
     _forgetPause(serverId);
+    _forgetRejection(serverId);
     // A stopped engine (or a disposed controller) holds no link, nor does
     // the engine hold one for a server the fleet no longer lists, so no
     // grace timer waits to disconnect it.
@@ -471,6 +486,21 @@ final class MonitoringController extends ChangeNotifier {
         : BackgroundPause(start: pause.start, end: pause.end, serverIds: rest);
   }
 
+  /// Sends [Connect] for [serverId], whose earlier rejection the answer
+  /// replaces.
+  void _connect(String serverId) {
+    _forgetRejection(serverId);
+    _send(Connect(serverId));
+  }
+
+  void _forgetRejection(String serverId) {
+    final rejections = _connectRejections.value;
+    if (!rejections.containsKey(serverId)) return;
+    _connectRejections.value = Map.unmodifiable(
+      {...rejections}..remove(serverId),
+    );
+  }
+
   /// Sends [request] unless the engine has stopped: views and surfaces let
   /// go as the app closes, and a stopped engine has nothing to hear.
   void _send(EngineRequest request) {
@@ -494,7 +524,29 @@ final class MonitoringController extends ChangeNotifier {
         if (_fleetIds case final ids? when !ids.contains(serverId)) return;
         _server(serverId).profile.value = profile;
       case CatalogReplaced(:final entries):
-        _replaceFleet({for (final entry in entries) entry.serverId});
+        final fleetIds = {for (final entry in entries) entry.serverId};
+        final rejected = _connectRejections.value.keys.toList();
+        _replaceFleet(fleetIds);
+        // A new fleet may give a rejected server a config, so its views
+        // connect again; one that still has none is rejected again. One
+        // that left the fleet takes its rejection with it. Cleared first,
+        // so listeners hear one change rather than one per server.
+        if (rejected.isNotEmpty) _connectRejections.value = const {};
+        for (final serverId in rejected) {
+          if (fleetIds.contains(serverId) && _openViews.containsKey(serverId)) {
+            _connect(serverId);
+          }
+        }
+      case ConnectRejected(:final serverId, :final reason):
+        // Only for a server a view still holds: one whose views all left
+        // has nothing to show it on. One answered after its server left
+        // the fleet stays purged, as a sample does.
+        if (!_openViews.containsKey(serverId)) return;
+        if (_fleetIds case final ids? when !ids.contains(serverId)) return;
+        _connectRejections.value = Map.unmodifiable({
+          ..._connectRejections.value,
+          serverId: reason,
+        });
       case SamplingState(:final serverId):
         // As for a sample: a server that left the fleet stays purged.
         if (_fleetIds case final ids? when !ids.contains(serverId)) return;
@@ -546,7 +598,7 @@ final class MonitoringController extends ChangeNotifier {
     // Until the first fleet this controller saw, every server was listed.
     if (before == null) return;
     for (final serverId in fleetIds.difference(before)) {
-      if (_openViews.containsKey(serverId)) _send(Connect(serverId));
+      if (_openViews.containsKey(serverId)) _connect(serverId);
       for (final MapEntry(key: (id, subscriptionId), value: streams)
           in _subscribed.entries) {
         if (id != serverId) continue;
@@ -587,6 +639,7 @@ final class MonitoringController extends ChangeNotifier {
     _readings.clear();
     _clock.dispose();
     _backgroundPause.dispose();
+    _connectRejections.dispose();
     super.dispose();
   }
 }

@@ -44,6 +44,18 @@ enum ConnectPurpose {
   background,
 }
 
+/// What an interactive connect does with a host key other than the pinned
+/// one (03 §4.6, D61). An unattended connect never asks either way.
+enum ChangedHostKey {
+  /// Refuse it, so the link is [LinkBlocked]: every connect but a review.
+  block,
+
+  /// Ask the user, with the pinned key beside the presented one; trusting
+  /// it re-pins (`TofuVerifier.pin`). Only the user's connect to a server
+  /// a changed key blocked reviews it.
+  review,
+}
+
 /// [SshLink.connect] as the connector calls it; tests pass a fake.
 typedef LinkDialer =
     Future<SshLink> Function({
@@ -102,15 +114,15 @@ final class LinkConnectFailed extends LinkConnectResult {
 /// host keys with `TofuVerifier` over the pin store it is given, and asks
 /// the user through the [PromptBroker] only on an interactive connect.
 /// Each attempt's prompts are withdrawn when it ends. A changed host key
-/// never prompts: it blocks the link (03 §10.1). Reconnects, backoff and
+/// blocks the link (03 §10.1) unless the connect reviews it
+/// ([ChangedHostKey.review]). Reconnects, backoff and
 /// the connect cap belong to the link supervisor above it, which hears
 /// the attempt's phases through `onPhase` and gives it up through
 /// `abandoned`.
 final class LinkConnector {
-  /// [hostKeys] holds the pins. Until the suite's file-backed host-key
-  /// store lands (F3b), the engine passes an in-memory one, so pins last
-  /// for the engine's lifetime only. `hopConfig` looks up a jump hop's
-  /// config by id, such as `ImportedFleet.serverConfig`.
+  /// [hostKeys] holds the pins: the engine's one store, which
+  /// `openHostKeyPins` opens (D61, P14). `hopConfig` looks up a jump
+  /// hop's config by id, such as `ImportedFleet.serverConfig`.
   LinkConnector({
     required CredentialSource credentials,
     required this._hostKeys,
@@ -125,7 +137,8 @@ final class LinkConnector {
   final ServerConfig? Function(String id) _hopConfig;
   final LinkDialer _dial;
 
-  /// Connects to [config], a fleet server's config, for [purpose].
+  /// Connects to [config], a fleet server's config, for [purpose]. An
+  /// interactive connect handles a changed host key as [changedKey] says.
   ///
   /// `SshLink.connect` shows no state before it returns, so [onPhase]
   /// hears the attempt's own: [LinkNeedsUser] once each prompt is out,
@@ -139,6 +152,7 @@ final class LinkConnector {
   Future<LinkConnectResult> connect(
     ServerConfig config, {
     required ConnectPurpose purpose,
+    ChangedHostKey changedKey = ChangedHostKey.block,
     void Function(LinkStatus phase)? onPhase,
     void Function()? onDialing,
     Future<void>? abandoned,
@@ -151,6 +165,8 @@ final class LinkConnector {
       ),
     );
     final interactive = purpose == ConnectPurpose.interactive;
+    final reviewsChangedKey =
+        interactive && changedKey == ChangedHostKey.review;
     var gaveUp = false;
     unawaited(
       abandoned?.then((_) {
@@ -185,16 +201,25 @@ final class LinkConnector {
     HostKeyVerdict? refused;
     Future<bool> onHostKey(HostKeyDecision decision) async {
       final presented = decision.presented;
-      final answer = decision.isChanged || !interactive
-          ? null
-          : await attempt.ask(
+      final asks = interactive && (!decision.isChanged || reviewsChangedKey);
+      // A trusted answer pins the presented key: `SshLink.connect` calls
+      // `TofuVerifier.pin`, which replaces a changed key's pin.
+      final answer = asks
+          ? await attempt.ask(
               host: presented.host,
               port: presented.port,
               request: HostKeyPromptRequest(
                 keyType: presented.type,
                 fingerprintSha256: presented.fingerprintSha256,
+                pinnedFingerprintSha256: decision.isChanged
+                    ? decision.pinned?.fingerprintSha256
+                    : null,
+                pinnedKeyType: decision.isChanged
+                    ? decision.pinned?.type
+                    : null,
               ),
-            );
+            )
+          : null;
       final trusted = answer is PromptTrustAnswer && answer.accepted;
       if (!trusted) refused ??= decision.verdict;
       if (trusted) phase(progress());

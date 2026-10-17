@@ -152,6 +152,7 @@ void main() {
   Future<LinkConnectResult> connect({
     ServerConfig? server,
     ConnectPurpose purpose = ConnectPurpose.background,
+    ChangedHostKey changedKey = ChangedHostKey.block,
     bool realDial = false,
     Map<String, String> environment = const {},
     void Function(LinkStatus phase)? onPhase,
@@ -160,6 +161,7 @@ void main() {
   }) => connector(realDial: realDial, environment: environment).connect(
     server ?? _server(),
     purpose: purpose,
+    changedKey: changedKey,
     onPhase: onPhase,
     onDialing: onDialing,
     abandoned: abandoned,
@@ -220,6 +222,89 @@ void main() {
     expect(events, isEmpty);
   });
 
+  group('a review of a changed key (D61)', () {
+    final changed = HostKey(
+      host: '192.0.2.10',
+      type: 'ecdsa-sha2-nistp256',
+      fingerprintSha256: 'SHA256:new',
+      pinnedAt: 0,
+    );
+
+    setUp(() async {
+      await pins.put(_key('192.0.2.10'));
+      presenting(changed);
+    });
+
+    test('asks with the pinned key beside the presented one, and trusting '
+        'it re-pins', () async {
+      final result = connect(
+        purpose: ConnectPurpose.interactive,
+        changedKey: ChangedHostKey.review,
+      );
+      final prompt = await answerNext(const PromptTrustAnswer(true));
+
+      expect(await result, isA<LinkConnected>());
+      final request = prompt.request as HostKeyPromptRequest;
+      expect(
+        (
+          request.keyType,
+          request.fingerprintSha256,
+          request.pinnedKeyType,
+          request.pinnedFingerprintSha256,
+        ),
+        ('ecdsa-sha2-nistp256', 'SHA256:new', 'ssh-ed25519', 'SHA256:first'),
+      );
+      expect(
+        (await pins.get('192.0.2.10', 22))?.fingerprintSha256,
+        'SHA256:new',
+      );
+    });
+
+    test('a declined review blocks again and keeps the pin', () async {
+      final result = connect(
+        purpose: ConnectPurpose.interactive,
+        changedKey: ChangedHostKey.review,
+      );
+      await answerNext(const PromptTrustAnswer(false));
+
+      expect(
+        (await result as LinkConnectBlocked).reason,
+        LinkBlockedReason.hostKeyChanged,
+      );
+      expect(
+        (await pins.get('192.0.2.10', 22))?.fingerprintSha256,
+        'SHA256:first',
+      );
+    });
+
+    test('an unattended connect never asks, even as a review', () async {
+      final result = await connect(changedKey: ChangedHostKey.review);
+
+      expect(
+        (result as LinkConnectBlocked).reason,
+        LinkBlockedReason.hostKeyChanged,
+      );
+      expect(events, isEmpty);
+    });
+
+    test('a first-seen key asks without a pinned key', () async {
+      presenting(_key('198.51.100.1'));
+
+      final result = connect(
+        purpose: ConnectPurpose.interactive,
+        changedKey: ChangedHostKey.review,
+      );
+      final prompt = await answerNext(const PromptTrustAnswer(true));
+
+      expect(await result, isA<LinkConnected>());
+      final request = prompt.request as HostKeyPromptRequest;
+      expect(
+        (request.pinnedFingerprintSha256, request.pinnedKeyType),
+        (null, null),
+      );
+    });
+  });
+
   group('an interactive connect', () {
     test('asks about a first-seen key and pins it when trusted', () async {
       presenting(_key('198.51.100.1'));
@@ -232,10 +317,9 @@ void main() {
         (prompt.serverId, prompt.host),
         ('ssh-config:web', '198.51.100.1'),
       );
-      expect(
-        (prompt.request as HostKeyPromptRequest).fingerprintSha256,
-        'SHA256:first',
-      );
+      final request = prompt.request as HostKeyPromptRequest;
+      expect(request.fingerprintSha256, 'SHA256:first');
+      expect(request.pinnedFingerprintSha256, isNull, reason: 'first seen');
       expect(await pins.get('198.51.100.1', 22), isNotNull);
     });
 

@@ -2433,6 +2433,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get keyboardSubmit => 'Submit';
 
   @override
+  String get connectRejectedNoLoginName =>
+      'You can\'t connect to this server yet: your SSH config names no user for it or for a jump host it goes through, and your login name could not be read from this device. Add a User line to your SSH config, then import it again.';
+
+  @override
+  String get connectRejectedAddressOnly =>
+      'You can\'t connect to this server yet: it comes from an earlier import that kept only its address. Import your SSH config again to connect.';
+
+  @override
   String get settingsAccessibilityTitle => 'Accessibility';
 
   @override

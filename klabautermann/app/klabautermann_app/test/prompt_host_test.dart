@@ -14,6 +14,15 @@ const _hostKey = HostKeyPromptRequest(
   fingerprintSha256: 'SHA256:abc',
 );
 
+/// The re-pin review of a key that replaced the pinned one (D61), under
+/// another algorithm.
+const _changedKey = HostKeyPromptRequest(
+  keyType: 'ecdsa-sha2-nistp256',
+  fingerprintSha256: 'SHA256:new',
+  pinnedFingerprintSha256: 'SHA256:abc',
+  pinnedKeyType: 'ssh-ed25519',
+);
+
 const _questions = KeyboardInteractivePromptRequest(
   user: 'deploy',
   name: 'otp',
@@ -92,6 +101,47 @@ void main() {
       expect(_hostKeyTitle, findsNothing);
       expect(_answers(harness.engine), ['p-1: trust false']);
     });
+
+    for (final (button, trusted) in [
+      ('Trust the new key', true),
+      ('Cancel', false),
+    ]) {
+      testWidgets('shows a changed key as the changed-key review beside the '
+          'pinned one, and $button answers $trusted', (tester) async {
+        final harness = await pumpApp(tester, servers: twoServers);
+
+        harness.engine.emit(_prompt('p-1', _changedKey));
+        await tester.pumpAndSettle();
+
+        expect(find.text('HOST KEY CHANGED'), findsOneWidget);
+        expect(_hostKeyTitle, findsNothing);
+        expect(
+          find.textContaining('The key for web-1.example does not match'),
+          findsOneWidget,
+        );
+        expect(find.text('New key'), findsOneWidget);
+        expect(find.text('Previously trusted'), findsOneWidget);
+        // Each fingerprint under its own key's type.
+        for (final text in [
+          'ecdsa-sha2-nistp256\nSHA256:new',
+          'ssh-ed25519\nSHA256:abc',
+        ]) {
+          expect(
+            find.byWidgetPredicate(
+              (widget) => widget is SelectableText && widget.data == text,
+            ),
+            findsOneWidget,
+            reason: text,
+          );
+        }
+
+        await tester.tap(find.text(button));
+        await tester.pumpAndSettle();
+
+        expect(find.text('HOST KEY CHANGED'), findsNothing);
+        expect(_answers(harness.engine), ['p-1: trust $trusted']);
+      });
+    }
 
     testWidgets('brackets a bare IPv6 host before its port', (tester) async {
       final harness = await pumpApp(tester, servers: twoServers);

@@ -11,6 +11,7 @@ import 'jobs_panel.dart';
 import 'logs/logs_panel.dart';
 import 'overview_panel.dart';
 import 'processes_panel.dart';
+import 'connect_rejected_banner.dart';
 import 'server_coverage.dart';
 import 'server_header.dart';
 import 'server_surfaces.dart';
@@ -92,9 +93,13 @@ class ServerWorkspace extends StatelessWidget {
         ),
         // An iOS or Android tablet takes this layout and pauses in the
         // background too (03 §9.5 item 6).
-        banner: BackgroundReturnBanner(
-          monitoring: monitoring,
-          serverId: server.id,
+        banner: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ConnectRejectedBanner(monitoring: monitoring, serverId: server.id),
+            BackgroundReturnBanner(monitoring: monitoring, serverId: server.id),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

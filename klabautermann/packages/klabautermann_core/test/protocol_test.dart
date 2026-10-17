@@ -132,6 +132,7 @@ void main() {
       final events = <EngineEvent>[
         const EngineReady(kEngineProtocolVersion),
         const RequestRejected('Connect', 'nope'),
+        const ConnectRejected('srv-1', ConnectRejectedReason.noLoginName),
         CatalogReplaced(const [_webEntry]),
         const SshConfigImported(importedCount: 1, skippedCount: 0, saved: true),
         const SyncStatus(SyncPhase.running),
@@ -1080,6 +1081,18 @@ void main() {
       }
     });
 
+    test('a Connect rejection keeps its server and every reason', () async {
+      for (final reason in ConnectRejectedReason.values) {
+        final received =
+            await roundTrip(ConnectRejected('ssh-config:web', reason))
+                as ConnectRejected;
+        expect(
+          (received.serverId, received.reason),
+          ('ssh-config:web', reason),
+        );
+      }
+    });
+
     test('structured prompts survive with every field', () async {
       Future<PromptRequest> request(PromptRequest request) async {
         final prompt =
@@ -1112,6 +1125,29 @@ void main() {
       expect(hostKey.kind, PromptKind.hostKey);
       expect(hostKey.keyType, 'ssh-ed25519');
       expect(hostKey.fingerprintSha256, 'SHA256:abc');
+      expect(
+        (hostKey.pinnedFingerprintSha256, hostKey.pinnedKeyType),
+        (null, null),
+      );
+      final changed =
+          await request(
+                const HostKeyPromptRequest(
+                  keyType: 'ecdsa-sha2-nistp256',
+                  fingerprintSha256: 'SHA256:new',
+                  pinnedFingerprintSha256: 'SHA256:abc',
+                  pinnedKeyType: 'ssh-ed25519',
+                ),
+              )
+              as HostKeyPromptRequest;
+      expect(
+        (
+          changed.keyType,
+          changed.fingerprintSha256,
+          changed.pinnedFingerprintSha256,
+          changed.pinnedKeyType,
+        ),
+        ('ecdsa-sha2-nistp256', 'SHA256:new', 'SHA256:abc', 'ssh-ed25519'),
+      );
 
       final challenge =
           await request(

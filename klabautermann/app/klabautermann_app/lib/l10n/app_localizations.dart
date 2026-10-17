@@ -3274,6 +3274,18 @@ abstract class AppLocalizations {
   /// **'Submit'**
   String get keyboardSubmit;
 
+  /// Banner on a server's workspace or screen when the engine cannot connect it because no login name is known (03 §10.1, D61): the imported SSH config names no User for the server or one of its ProxyJump hosts, and the USER and USERNAME environment variables are unset. The user fixes it by adding a User line and importing again.
+  ///
+  /// In en, this message translates to:
+  /// **'You can\'t connect to this server yet: your SSH config names no user for it or for a jump host it goes through, and your login name could not be read from this device. Add a User line to your SSH config, then import it again.'**
+  String get connectRejectedNoLoginName;
+
+  /// Banner on a server's workspace or screen when the engine cannot connect it because the saved import predates the format that keeps sign-in and jump-host details (03 §4.10, schema 1 or 2; D61). A new import of the SSH config fixes it.
+  ///
+  /// In en, this message translates to:
+  /// **'You can\'t connect to this server yet: it comes from an earlier import that kept only its address. Import your SSH config again to connect.'**
+  String get connectRejectedAddressOnly;
+
   /// Heading of the accessibility settings on the General settings tab.
   ///
   /// In en, this message translates to:
