@@ -90,3 +90,8 @@
   the system keychain. Synced servers cannot be opened yet: that waits
   for confirming each server's address on this device. Sync is off when
   Klabautermann cannot check whether another copy of it is running.
+- The fleet list on desktops and phones is sectioned as in Séance: your
+  synced servers sit under Servers, grouped by their Séance groups in
+  sections you can fold, and your imports follow under Imported. Pin a
+  synced server to the top from its menu (right-click, Shift+F10, the Menu
+  key or a long-press); pins are kept on this device only.

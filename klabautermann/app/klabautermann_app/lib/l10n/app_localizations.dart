@@ -112,6 +112,36 @@ abstract class AppLocalizations {
   /// **'Servers'**
   String get fleetSectionServers;
 
+  /// Fleet list section header over the synced servers pinned to the top on this device (03 §10.3); drawn in caps.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned'**
+  String get fleetSectionPinned;
+
+  /// Fleet list section header over the servers imported from this device's SSH config (FL-02), listed apart from the synced servers and their groups; drawn in caps.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported'**
+  String get fleetSectionImported;
+
+  /// A synced fleet row's menu verb that lists the server under the Pinned section on this device.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin to top'**
+  String get fleetRowPin;
+
+  /// A pinned fleet row's menu verb that returns the server to its section.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin'**
+  String get fleetRowUnpin;
+
+  /// Top toast when pinning or unpinning a server could not be written to the device's settings file; the change holds for this session.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save your pinned servers, so the change lasts only until it quits.'**
+  String get fleetPinNotSaved;
+
   /// No description provided for @fleetEmptyTitle.
   ///
   /// In en, this message translates to:
