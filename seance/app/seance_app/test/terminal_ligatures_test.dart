@@ -21,10 +21,19 @@ void main() {
     TerminalLigatures ligatures, {
     String family = '',
   }) async {
+    await tester.runAsync(loadBundledMonoFonts);
     final appearance = TerminalAppearance.resolve(
       AppSettings(terminalFontFamily: family, terminalLigatures: ligatures),
       Brightness.dark,
     );
+    final metrics = TextPainter(
+      text: TextSpan(text: 'm', style: appearance.style.toTextStyle()),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    // Every bundled face is narrower than the square test font. Missing
+    // assets must fail here rather than letting its pixels prove ligatures.
+    expect(metrics.width, lessThan(appearance.style.fontSize));
+    metrics.dispose();
     final terminal = Terminal()..write(output);
     await tester.pumpWidget(
       MaterialApp(
@@ -58,10 +67,6 @@ void main() {
     });
     return bytes!;
   }
-
-  setUp(() async {
-    await TestWidgetsFlutterBinding.instance.runAsync(loadBundledMonoFonts);
-  });
 
   testWidgets('Iosevka Term joins -> and != with ligatures on', (tester) async {
     const output = r'a -> b != c';

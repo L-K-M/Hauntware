@@ -22,7 +22,7 @@ falls back through. Apps register each family as
 | Intel One Mono | regular, bold, italic, bold italic | `ss01` |
 | Fragment Mono | regular, italic | `calt` |
 | Google Sans Code | variable weight, upright and italic | none |
-| Commit Mono | regular, bold, italic, bold italic | none |
+| Commit Mono | regular, bold, italic, bold italic | `ss01` (math), `ss02` (arrows) |
 | Departure Mono | regular | none |
 
 The engine synthesizes styles absent upstream. Google Sans Code uses its
@@ -40,6 +40,9 @@ also controls fonts whose coding ligatures require stylistic sets; disabling
 them turns those sets off. Fonts without coding ligatures say so in the picker.
 Editors and terminals use the same feature policy. Rendering tests check real
 font metrics and glyph changes, not just feature flags.
+
+Commit Mono's `calt` also applies smart kerning, so disabling ligatures can
+change plain-letter outlines while preserving their cell advances.
 
 ## Licences
 

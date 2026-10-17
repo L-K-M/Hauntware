@@ -20,6 +20,7 @@ enum MonoLigatures {
       BundledMonoFont.monaspaceKrypton => _monaspaceLigatures,
       BundledMonoFont.geistMono => const ['ss11'],
       BundledMonoFont.intelOneMono => const ['ss01'],
+      BundledMonoFont.commitMono => const ['ss01', 'ss02'],
       _ => const <String>[],
     };
     return [

@@ -71,6 +71,23 @@ void main() {
 
   setUpAll(loadBundledMonoFonts);
 
+  test('Commit Mono enables both coding ligature sets by default', () async {
+    final font = BundledMonoFont.commitMono;
+    expect(
+      await _render(
+        font.family,
+        '!= ->',
+        features: MonoLigatures.on.featuresFor(font.family),
+      ),
+      await _render(
+        font.family,
+        '!= ->',
+        features: const [ui.FontFeature('ss01'), ui.FontFeature('ss02')],
+      ),
+    );
+    expect(font.hasProgrammingLigatures, isTrue);
+  });
+
   group('each bundled family', () {
     for (final font in BundledMonoFont.values) {
       test('${font.displayName} is declared and fixed-width', () {
@@ -111,6 +128,9 @@ void main() {
             isNotEmpty,
             reason: 'A real glyph change, not just a feature flag',
           );
+          // Commit Mono's calt also applies smart kerning to plain letters.
+          if (font == BundledMonoFont.commitMono) return;
+
           // The control: letters that never ligate draw the same either way.
           expect(
             await _render(font.family, 'ab', features: enabled),

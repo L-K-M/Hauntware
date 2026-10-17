@@ -10,9 +10,10 @@ picker. The terminal preview uses `TerminalAppearance`'s palette, size and
 OpenType features. Confirming writes font and ligatures together; cancelling
 leaves settings alone. Existing disabled ligatures stay disabled.
 
-All 17 families with programming ligatures have terminal-painter pixel tests
+All 18 families with programming ligatures have terminal-painter pixel tests
 for on/off. `TerminalStyle` forwards host-selected font features, including
-Monaspace's `ss01`–`ss10`, Geist Mono's `ss11` and Intel One Mono's `ss01`.
+Monaspace's `ss01`–`ss10`, Geist Mono's `ss11`, Intel One Mono's `ss01`, and
+Commit Mono's `ss01` mathematical ligatures and `ss02` arrows.
 No native-device smoke test has been performed for this change.
 
 ## dartssh2 4.1.0 (2026-10-10)

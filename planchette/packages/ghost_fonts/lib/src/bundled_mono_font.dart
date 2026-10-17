@@ -46,7 +46,7 @@ enum BundledMonoFont {
 
   /// Whether the shipped face has programming ligatures to preview.
   bool get hasProgrammingLigatures => switch (this) {
-    googleSansCode || commitMono || departureMono => false,
+    googleSansCode || departureMono => false,
     _ => true,
   };
 

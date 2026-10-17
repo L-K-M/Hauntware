@@ -405,7 +405,7 @@ class _MonoFontPickerState extends State<_MonoFontPicker> {
                 scrollDirection: Axis.horizontal,
                 child:
                     widget.previewBuilder?.call(_resolved, _ligatures) ??
-                    MonoFontPreview(
+                    _MonoFontPreview(
                       family: _resolved,
                       fontSize: widget.fontSize,
                       ligatures: _ligatures,
@@ -422,12 +422,11 @@ class _MonoFontPickerState extends State<_MonoFontPicker> {
 enum _PickerLayout { compact, wide }
 
 /// Code, ambiguous glyphs and emphasis using the same shaping as the editor.
-class MonoFontPreview extends StatelessWidget {
-  const MonoFontPreview({
-    super.key,
+class _MonoFontPreview extends StatelessWidget {
+  const _MonoFontPreview({
     required this.family,
-    this.fontSize = 14,
-    this.ligatures = MonoLigatures.on,
+    required this.fontSize,
+    required this.ligatures,
   });
 
   final String family;
