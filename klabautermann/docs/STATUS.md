@@ -1131,7 +1131,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   logs `Content-Type` and `/system/df` gates against the lists, the
   2,000-line follow demultiplexed, a `since` resume with no lost or
   repeated line, and one-shot stats then a stream delta. An idle
-  container's CPU now reads 0 % rather than unknown.
+  container's CPU now reads 0 % rather than unknown, and Go's zero time
+  (a created container's `StartedAt`) reads as absent.
 - Desktop settings window (03 §10.2, D32): on macOS, Linux and Windows,
   Settings opens in a native window of its own through `ghost_desktop`'s
   `GhostSettingsWindowHost`; phones, and a desktop runner that cannot

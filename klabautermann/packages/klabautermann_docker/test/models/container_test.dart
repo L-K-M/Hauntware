@@ -137,6 +137,21 @@ void main() {
       expect(labels['org.opencontainers.image.title']!.display, 'web');
     });
 
+    test('reads Go zero times as absent', () {
+      // A created container that never ran: the daemon reports Go's zero
+      // time for both instants (03 §5.8).
+      final r = parseContainerInspect({
+        'Id': 'abc',
+        'State': {
+          'Status': 'created',
+          'StartedAt': '0001-01-01T00:00:00Z',
+          'FinishedAt': '0001-01-01T00:00:00Z',
+        },
+      });
+      expect(r.value.state!.startedAt, isNull);
+      expect(r.value.state!.finishedAt, isNull);
+    });
+
     test('never throws on a non-object inspect', () {
       expect(parseContainerInspect(null).warnings, isNotEmpty);
       expect(parseContainerInspect('nope').value.id, '');
