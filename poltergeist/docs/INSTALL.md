@@ -33,8 +33,10 @@ mirror. They cannot attest a compromised release pipeline, and a matching
 checksum says nothing about who produced the binary. Origin assurance is
 "this repository's CI built from the pushed tag" — nothing more. Any
 "update available" prompt or installer offered anywhere other than this
-repo's Releases page is fake by definition: Poltergeist never prompts for
-or auto-installs updates.
+repo's Releases page or Poltergeist's own Alerts tab is fake by
+definition. Poltergeist never installs an update by itself: on Android,
+its Update button fetches this repo's release APK only when you tap it
+(below).
 
 ## macOS
 
@@ -94,7 +96,11 @@ is no Play Store listing; you install the APK yourself:
    replaces an installed copy, keeping its data).
 
 A later release's APK installs over the current one and keeps your
-servers, favorites, and settings. Poltergeist 1.0.1 and earlier used the
+servers, favorites, and settings. When one is out, the Alerts tab offers
+Update: Poltergeist downloads that release's APK, discards it unless its
+size and SHA-256 match what the release lists, and opens Android's
+installer. Android asks you to allow installs from Poltergeist the first
+time, then to confirm the update. Poltergeist 1.0.1 and earlier used the
 `com.lkm.poltergeist_app` ID: the first suite APK installs beside such an
 install and starts without its data.
 

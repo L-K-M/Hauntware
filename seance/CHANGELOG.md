@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- On Android, the update banner offers Update instead of View release,
+  with the download size. Séance downloads the release APK, shows its
+  progress with Cancel, discards it unless its size and SHA-256 match
+  the release, and opens Android's installer. If you back out of the
+  installer, Install reopens it without downloading again. Nothing
+  downloads until you tap Update.
 - When a server requires an SSH algorithm Séance does not support,
   offers only ones Séance refuses as insecure, or drops the connection
   during a finite-field Diffie-Hellman key exchange, the connection error
