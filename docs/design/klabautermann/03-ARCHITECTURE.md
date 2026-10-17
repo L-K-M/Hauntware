@@ -2411,7 +2411,7 @@ nothing, so reconnecting ends the mode. Stack logs merged through one
 | Stream | Endpoint | Framing | Cancel | Resume |
 |---|---|---|---|---|
 | Container logs | `GET /containers/{id}/logs?follow=1&tail=N&timestamps=1&stdout=1&stderr=1` | stdcopy 8-byte frames unless `Config.Tty` (from inspect; Docker sets `Content-Type: application/vnd.docker.multiplexed-stream` or `application/vnd.docker.raw-stream` from API 1.42; from 1.42 the header is used when present and cross-checked with `Config.Tty`; below 1.42 a current daemon labels every logs response raw-stream, and older daemons and possibly Podman's compat layer omit it [R: moby `container_routes.go` `getContainersLogs`, reported by review]); split on `\n` after demultiplexing | Close the duplex | `since=<unix seconds>.<9-digit nanoseconds>` converted from the last delivered line's RFC3339Nano timestamp (the API rejects RFC3339 with 400); `since` is inclusive, so drop re-sent lines up to and including the last delivered one [R: moby `getContainersLogs`, `loggerutils/logfile.go`, reported by review] |
-| Stats, list | `GET /containers/{id}/stats?stream=false&one-shot=true` | One JSON object | n/a | Deltas between polls client-side (one-shot `precpu_stats` not meaningful [U]) |
+| Stats, list | `GET /containers/{id}/stats?stream=false&one-shot=true` | One JSON object | n/a | Deltas between polls client-side (one-shot `precpu_stats` is zero on Docker 29.9, so not meaningful; D21) |
 | Stats, detail | `GET /containers/{id}/stats?stream=1` | JSON lines | Close | n/a |
 | Events | `GET /events?since=&filters=` | JSON lines; `Type`, `Action`, `Actor` only (1.52 removed the legacy fields), legacy shape accepted below 1.52 | Close | `since=` last event time; full re-list after a gap over 60 s |
 | Pull progress | `POST /images/create?fromImage=&tag=` | JSON values keyed by layer `id`; `progressDetail`, `errorDetail` | Close, which cancels the pull on the daemon unless another client is pulling the same image [R: moby `image_routes.go` request context, `xfer/transfer.go` `release`, reported by review]; a pull that must outlive its view runs detached (7.14) | n/a |
@@ -3447,10 +3447,11 @@ each row's source and the user its line names:
   `.service`, `.oneoff`, `.depends_on`, `.image` [R: compose
   `pkg/api/labels.go`]. A file counts as the stack's source only if it exists
   and `docker compose -p <p> --project-directory <d> -f <files> config
-  --hash '*'` matches the containers' `config-hash` labels [U: flag form on
-  Compose v5]; otherwise the stack shows "unverified source", or "source not
-  on host (deployed by X)" when missing. Containerized managers record paths
-  inside their own container (Dockge's rule [R]).
+  --hash '*'` matches the containers' `config-hash` labels (Compose v5.6
+  prints a hash per service in that form; D21); otherwise the stack shows
+  "unverified source", or "source not on host (deployed by X)" when
+  missing. Containerized managers record paths inside their own container
+  (Dockge's rule [R]).
 - **Overview and files (STK-02, STK-04, MVP).** Services, containers, state,
   health, ports, images; compose and `.env` read over SFTP when the login
   user can read them, elevated `cat` in admin mode otherwise, shown in
@@ -6064,6 +6065,45 @@ digest, in a build stage, in place of the new frozen base above: a new
 GHCR package starts private (06), and `fixture-images.yml` stays as it
 is. The Docker services start with the others rather than under a
 `docker` profile.
+
+As built in M3 (D21), `klabautermann_core/test/integration/
+docker_engine_test.dart` (tags `integration` and `docker`, so `run.sh`
+runs it with the fixture suites) drives the real engine in its isolate,
+links on, over an imported ssh_config naming the Docker host as `klab`
+and as `klab-nosock`. It checks rank 1 to `/var/run/docker.sock` with
+the socket-forward label, rootful and root-equivalent; negotiation
+against dind (Docker 29.9.1 offers API 1.56, so 1.55 is used); a
+`docker run` over SSH reaching the watched list within 2 s, as a
+targeted re-read and not a full re-list (about 0.2 s locally); after
+`compose stop` and `start` of `docker-sshd`, with a container started
+in dind meanwhile, the events stream resuming with `since`, which
+reports it without a full re-list; inspect, the stack's compose file
+and its `.env` with the seeded fake secrets masked; a log follow
+across `compose restart docker-sshd` with no line lost, repeated or
+dropped; list stats, the first read without CPU % and the next with
+it; images with a dangling one flagged; the stacks verified, source
+not on host and Coolify-managed; and `klab-nosock` failed with no
+route for `socketDenied` while the access check's socket row reads
+missing, not writable, with the group fix. Each test subscribes the
+server first and waits for its probe, since a query before the probe
+answers fails (5.4). The fixture gained `Subsystem sftp internal-sftp`
+on the Docker host, whose common config names none, for stack files,
+and `seed_docker.sh` a `vault` service in `demo` whose environment,
+label, command line and health output carry fake low-entropy secrets,
+one from the stack's `.env`, and a dangling image committed without a
+tag. Spike S1's follow, a container writing 1,000 numbered lines a
+second for 20 s over streamlocal, delivered every line with none
+dropped, at under 50 ms p95 and 81 ms worst from the daemon's
+timestamp to the test in three local runs; the test writes its
+numbers to the evidence directory (`fixture/docker-follow.json`).
+**D20 confirmed:** the pure-Dart HTTP client carried every stream here
+(queries, chunked lists, the `/events` NDJSON stream, multiplexed log
+follows, one-shot stats), so the `dart:io` `HttpClient` alternative is
+not re-run (M3 decision M1).
+The run settles two [U]s, Compose v5.6's `config --hash '*'` flag form
+(7.16) and one-shot `precpu_stats` being zero (5.6), and shows that
+dind 29.9's containerd image store lists a dangling image with no
+`RepoTags`, which `ImageSummary.isDangling` reads as dangling.
 
 ### 11.4 Performance budgets (gated from M2)
 
