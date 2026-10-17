@@ -519,9 +519,16 @@ void main() {
       await tester.pump();
       expect(lines(tester), ['#Servers', '>Production', '  web-1', '  db-1']);
 
+      // A tap during the search changes no fold the list does not show.
+      await tester.tap(find.byKey(fleetSectionHeaderKey('production')));
+      await tester.pump();
+      expect(lines(tester), ['#Servers', '>Production', '  web-1', '  db-1']);
+
       await tester.enterText(find.byType(TextField), '');
       await tester.pump();
       expect(lines(tester).first, '#Pinned', reason: 'still folded');
+      expect(lines(tester), contains('>Production'));
+      expect(lines(tester), isNot(contains('  web-1')), reason: 'still folded');
     });
 
     testWidgets('Enter opens the first match as the list orders it', (

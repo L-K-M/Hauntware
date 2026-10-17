@@ -143,9 +143,14 @@ class _FleetServerListState extends State<FleetServerList> {
 
   void _setQuery(String query) => setState(() => _query = query);
 
-  void _toggle(String key) => setState(() {
-    if (!_collapsed.remove(key)) _collapsed.add(key);
-  });
+  /// Folds or unfolds [key]. A search draws every header open, so a tap
+  /// during one changes nothing rather than a fold the user cannot see.
+  void _toggle(String key) {
+    if (_query.isNotEmpty) return;
+    setState(() {
+      if (!_collapsed.remove(key)) _collapsed.add(key);
+    });
+  }
 
   /// The lines drawn for [servers]: `ghost_servers`' sections of the
   /// synced ones, then the imports' section. One definition, so "the first

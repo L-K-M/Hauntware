@@ -117,7 +117,7 @@ final class FleetController extends ChangeNotifier {
   /// [servers] seeds the list until the engine's first [CatalogReplaced].
   /// [sshConfig] is null on platforms without an ssh_config, which hides
   /// the import (see [sshConfigSourceFor]). [pinnedServerIds] are the pins
-  /// `settings.json` restored, and [savePins] writes the set back; without
+  /// `settings.json` restored, and `savePins` writes the set back; without
   /// it, as in most tests, pins are held in memory only.
   FleetController(
     this._engine, {
