@@ -24,7 +24,8 @@
 # re-signed to sideload. There is no linux-arm64 client: Flutter
 # publishes no linux-arm64 host artifacts.
 
-# --- Planchette desktop clients (3 targets, 4 assets)
+# --- Planchette clients (4 targets, 7 assets)
+planchette-android.apk
 planchette-linux-x64.tar.gz
 planchette_*.deb
 planchette-linux-x64.AppImage

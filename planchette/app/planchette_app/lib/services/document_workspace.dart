@@ -674,7 +674,8 @@ final class DocumentWorkspace extends ChangeNotifier {
       _clearScope(tab);
       return true;
     } catch (error) {
-      if (await _explainedByDisk(tab, target) case final reason?) {
+      final reason = await _explainedByDisk(tab, target);
+      if (reason != null && error is! DocumentRecoveryException) {
         // The notice says what happened and offers the way on; the save's
         // own error would only repeat it less helpfully.
         _saveFailures[tab] = reason;
