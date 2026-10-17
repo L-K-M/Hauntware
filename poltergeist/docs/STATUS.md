@@ -19,6 +19,9 @@ package. The launch check's request shape is unchanged.
 Not verified on a device: the installer hand-off, the first-time
 "allow installs from this app" step, and the upgrade in place. CI
 builds the APK, which compiles the plugin and merges its manifest.
+Known gap: the download has no foreground service, so leaving the app
+lets Android freeze it; the 30 s stall timeout then reports a failed
+download, and Retry starts over.
 
 ## D12 runner-image baseline refresh (2026-10-16)
 

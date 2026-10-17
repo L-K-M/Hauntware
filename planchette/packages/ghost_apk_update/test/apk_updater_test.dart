@@ -216,4 +216,60 @@ void main() {
     expect(installer.installed, isEmpty);
     expect(stagedNames(), isEmpty);
   });
+
+  test('Cancel after the last byte still keeps the installer closed', () async {
+    final body = StreamController<List<int>>();
+    final updater = ApkUpdater(
+      client: MockClient.streaming(
+        (request, _) async => http.StreamedResponse(body.stream, HttpStatus.ok),
+      ),
+      installer: installer,
+    );
+
+    final running = updater.update(release);
+    await pumpEventQueue();
+    body.add(apkBytes);
+    await pumpEventQueue();
+
+    // Every byte is in, but the stream has not ended yet.
+    updater.cancel();
+    await body.close();
+    await running;
+
+    expect(updater.state, isA<ApkUpdateIdle>());
+    expect(installer.installed, isEmpty);
+  });
+
+  test('a second Install while one opens does not stack installers', () async {
+    final updater = ApkUpdater(client: serving(apkBytes), installer: installer);
+    await updater.update(release);
+    expect(installer.installed, hasLength(1));
+
+    await Future.wait([updater.update(release), updater.update(release)]);
+
+    expect(installer.installed, hasLength(2));
+  });
+
+  test('a missing plugin is an installer failure, not an escape', () async {
+    final updater = ApkUpdater(
+      client: serving(apkBytes),
+      installer: _MissingInstaller(staging),
+    );
+
+    await updater.update(release);
+
+    expect(
+      (updater.state as ApkUpdateFailed).failure,
+      ApkUpdateFailure.installer,
+    );
+  });
+}
+
+/// The plugin as an engine without it registered answers.
+class _MissingInstaller extends _FakeInstaller {
+  _MissingInstaller(super.directory);
+
+  @override
+  Future<void> install(String path) async =>
+      throw MissingPluginException('No implementation found');
 }

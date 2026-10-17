@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import 'apk_installer.dart';
@@ -114,16 +113,26 @@ class ApkUpdater extends ChangeNotifier {
   ApkUpdateState _state = const ApkUpdateIdle();
   Completer<void>? _abort;
   ({ApkRelease release, File file})? _staged;
+  bool _running = false;
   bool _disposed = false;
 
   ApkUpdateState get state => _state;
 
   /// Downloads [release], verifies it and opens the installer. Does
-  /// nothing while a download runs. Once [release] is verified, this
-  /// reopens the installer instead of downloading it again.
+  /// nothing while an attempt runs, so a double tap opens one installer.
+  /// Once [release] is verified, this reopens the installer instead of
+  /// downloading it again.
   Future<void> update(ApkRelease release) async {
-    if (_state is ApkUpdateDownloading) return;
+    if (_running) return;
+    _running = true;
+    try {
+      await _attempt(release);
+    } finally {
+      _running = false;
+    }
+  }
 
+  Future<void> _attempt(ApkRelease release) async {
     final staged = _staged;
     if (staged != null &&
         staged.release == release &&
@@ -132,23 +141,36 @@ class ApkUpdater extends ChangeNotifier {
       return;
     }
 
-    final File apk;
+    // Armed before the first await so a Cancel tapped at once still
+    // lands, and until the installer opens, so a late one does too.
+    final abort = Completer<void>();
+    _abort = abort;
     try {
-      apk = await _download(release);
-    } on http.RequestAbortedException {
-      _set(const ApkUpdateIdle());
-      return;
-    } on _VerificationFailed {
-      _set(const ApkUpdateFailed(ApkUpdateFailure.verification));
-      return;
-    } on Exception {
-      // Offline, refused, timed out, no staging directory or no space.
-      _set(const ApkUpdateFailed(ApkUpdateFailure.download));
-      return;
-    }
+      final File apk;
+      try {
+        apk = await _download(release, abort);
+      } on http.RequestAbortedException {
+        _set(const ApkUpdateIdle());
+        return;
+      } on _VerificationFailed {
+        _set(const ApkUpdateFailed(ApkUpdateFailure.verification));
+        return;
+      } on Exception {
+        // Offline, refused, timed out, no staging directory or no space.
+        _set(const ApkUpdateFailed(ApkUpdateFailure.download));
+        return;
+      }
 
-    _staged = (release: release, file: apk);
-    await _install(apk);
+      _staged = (release: release, file: apk);
+      if (abort.isCompleted) {
+        // Cancelled once verified: keep the file for a later Update.
+        _set(const ApkUpdateIdle());
+        return;
+      }
+      await _install(apk);
+    } finally {
+      _abort = null;
+    }
   }
 
   /// Stops a running download and discards what arrived.
@@ -158,10 +180,7 @@ class ApkUpdater extends ChangeNotifier {
     abort.complete();
   }
 
-  Future<File> _download(ApkRelease release) async {
-    // Armed before the first await so a Cancel tapped at once still lands.
-    final abort = Completer<void>();
-    _abort = abort;
+  Future<File> _download(ApkRelease release, Completer<void> abort) async {
     _set(ApkUpdateDownloading(0, release.size));
 
     File? partial;
@@ -200,6 +219,11 @@ class ApkUpdater extends ChangeNotifier {
           sink.add(chunk);
           _progress(received, release.size);
         }
+        // Cancelled after the last chunk, or a client that ends the
+        // stream on abort instead of failing it.
+        if (abort.isCompleted) {
+          throw http.RequestAbortedException(release.url);
+        }
       } finally {
         await sink.close();
       }
@@ -215,8 +239,6 @@ class ApkUpdater extends ChangeNotifier {
       if (!abort.isCompleted) abort.complete();
       await _deleteQuietly(partial);
       rethrow;
-    } finally {
-      _abort = null;
     }
   }
 
@@ -224,7 +246,9 @@ class ApkUpdater extends ChangeNotifier {
     try {
       await _installer.install(apk.path);
       _set(const ApkUpdateReady());
-    } on PlatformException {
+    } on Exception {
+      // A refusal (PlatformException) or no plugin at all
+      // (MissingPluginException).
       _set(const ApkUpdateFailed(ApkUpdateFailure.installer));
     }
   }
