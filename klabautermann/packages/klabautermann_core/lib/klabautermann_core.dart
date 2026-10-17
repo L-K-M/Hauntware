@@ -165,6 +165,10 @@ export 'package:klabautermann_docker/klabautermann_docker.dart'
         LogConfig,
         Ownership,
         OwnershipMarker;
+// A container's managed-by badge (DKE-10), from its inspected labels; a
+// stack's is its ComposeProject.ownership.
+export 'package:klabautermann_docker/klabautermann_docker.dart'
+    show detectOwnership;
 // The coverage card's external-monitor finding (03 §9.5 item 3): K04's
 // rule over a `units` reading, and what it reports.
 export 'package:klabautermann_host/klabautermann_host.dart'

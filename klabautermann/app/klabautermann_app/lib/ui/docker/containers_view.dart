@@ -150,10 +150,12 @@ enum _UptimeUnit {
 
 /// [container]'s ports as `docker ps` shows them: a wildcard address
 /// left out, so IPv4's and IPv6's binding of one port read once.
-String containerPortsText(ContainerSummary container) {
-  final labels = <String>{for (final port in container.ports) _portLabel(port)};
-  return labels.join(', ');
-}
+String containerPortsText(ContainerSummary container) =>
+    containerPortLabels(container).join(', ');
+
+/// [container]'s ports one by one, as [containerPortsText] lists them.
+List<String> containerPortLabels(ContainerSummary container) =>
+    {for (final port in container.ports) _portLabel(port)}.toList();
 
 String _portLabel(ContainerPort port) => switch (port.ip) {
   '0.0.0.0' || '::' => ContainerPort(

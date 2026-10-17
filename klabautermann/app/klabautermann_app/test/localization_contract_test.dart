@@ -92,6 +92,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/docker_controller.dart': {
     r"'docker-${_count++}'",
     r"'containers-${_count++}'",
+    r"'container-${_count++}'",
   },
   'lib/controllers/log_streams.dart': {
     // A log stream id the engine keys a stream's events by (03 §10.1), and
@@ -206,6 +207,94 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // debugPrint of a dismissal that was not saved; the toast is ARB text.
   'lib/ui/coverage.dart': {r"'$error'"},
+  'lib/ui/docker/container_details.dart': {
+    // A mount's type as the Engine API names it, matched, never shown;
+    // the empty type a mount without one reads as; the separator between
+    // a network's aliases and the one an image id's algorithm ends with,
+    // machine data.
+    "'volume'",
+    "''",
+    "', '",
+    "':'",
+  },
+  'lib/ui/docker/container_details_view.dart': {
+    // The Engine API's restart policy names, matched, never shown; the
+    // empty one is the default.
+    "''",
+    "'no'",
+    "'always'",
+    "'unless-stopped'",
+    "'on-failure'",
+    // The raw view's JSON: the Engine API's inspect field names, as
+    // `docker inspect` prints them, its indent, and an environment
+    // variable in the API's KEY=value form, its value masked. Machine
+    // data, never translated (03 §10.10).
+    "'Aliases'",
+    "'Args'",
+    "'AutoRemove'",
+    "'Binds'",
+    "'Cmd'",
+    "'Config'",
+    "'Created'",
+    "'Dead'",
+    "'Destination'",
+    "'Driver'",
+    "'End'",
+    "'Entrypoint'",
+    "'Env'",
+    "'Error'",
+    "'ExitCode'",
+    "'FailingStreak'",
+    "'FinishedAt'",
+    "'Gateway'",
+    "'Health'",
+    "'HostConfig'",
+    "'Hostname'",
+    "'IPAddress'",
+    "'Id'",
+    "'Image'",
+    "'Labels'",
+    "'Log'",
+    "'LogConfig'",
+    "'MacAddress'",
+    "'MaximumRetryCount'",
+    "'Memory'",
+    "'Mode'",
+    "'Mounts'",
+    "'Name'",
+    "'NanoCpus'",
+    "'NetworkID'",
+    "'NetworkMode'",
+    "'NetworkSettings'",
+    "'Networks'",
+    "'OOMKilled'",
+    "'Output'",
+    "'Path'",
+    "'Paused'",
+    "'Pid'",
+    "'PidMode'",
+    "'Platform'",
+    "'Privileged'",
+    "'Propagation'",
+    "'RW'",
+    "'ReadonlyRootfs'",
+    "'RestartCount'",
+    "'RestartPolicy'",
+    "'Restarting'",
+    "'Running'",
+    "'Source'",
+    "'Start'",
+    "'StartedAt'",
+    "'State'",
+    "'Status'",
+    "'StopSignal'",
+    "'Tty'",
+    "'Type'",
+    "'User'",
+    "'WorkingDir'",
+    "'  '",
+    r"'${variable.name}=${variable.value.display}'",
+  },
   'lib/ui/docker/containers_panel.dart': {
     // The key tests find a phone row by, in the table rows' form, and the
     // line break between its cells in its screen-reader label, each ARB

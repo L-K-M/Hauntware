@@ -5418,7 +5418,13 @@ tab:
   it hides; it groups by the compose project label rather than the
   stacks list, whose source checks would run compose on the host, and
   greys stats older than 20 s. The list carries no sizes until a query
-  asks for `size=1`.
+  asks for `size=1`. As built in D14
+  (`ui/docker/container_details.dart`), a container row opens its
+  details (CTR-03, CTR-04, DKE-10) in the desktop inspector in place of
+  the server's coverage, or on a phone's pushed page: one inspect per
+  container a view shows, read again as its list row changes, with
+  8.9's reveal and a raw JSON view drawn from the masked model. Ports
+  come from the list row, as the inspect model carries none.
 
 As built in M2 (`app/klabautermann_app/lib/ui/system_panel.dart`), the
 System tab shows SYS-01's identity, BOOT-01's uptime and boot time,
