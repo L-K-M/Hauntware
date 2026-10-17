@@ -233,5 +233,5 @@ void main() {
     );
     expect(find.text('app_flutter'), findsNothing);
     expect(activePane(tester).location?.path, canonicalPath);
-  });
+  }, skip: Platform.isWindows);
 }

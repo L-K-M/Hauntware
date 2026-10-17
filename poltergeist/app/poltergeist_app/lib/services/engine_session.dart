@@ -390,8 +390,8 @@ final class EngineSession {
   final BookmarkRepository _bookmarks;
   final ApplicationErrorReporter _errors;
 
-  /// The canonical app-owned local home, used to label restored tabs before
-  /// their browse channels open.
+  /// The app-owned local home, resolved when readable, used to label
+  /// restored tabs before their browse channels open.
   final String? fallbackHome;
 
   /// The UI-isolate end of the D15 trash channel (03 §7.1): serves the
@@ -787,11 +787,7 @@ Future<EngineSession?> startEngineSession({
   final AppEngine engine;
   final String? canonicalHome;
   try {
-    // Match the browse engine's realpath so Android's /data/user/0 and
-    // /data/data aliases name the same app-storage location.
-    canonicalHome = fallbackHome == null
-        ? null
-        : await LocalFileSystem().canonicalize(fallbackHome);
+    canonicalHome = await _canonicalFallbackHome(fallbackHome, errors);
     engine = await spawn(
       EngineConfig(
         hostKeyPins: pins,
@@ -838,6 +834,22 @@ Future<EngineSession?> startEngineSession({
       // Best effort: the isolate dies with the process regardless.
     }
     return null;
+  }
+}
+
+/// Resolve Android's storage aliases without blocking remote connections
+/// when the local storage cannot be read.
+Future<String?> _canonicalFallbackHome(
+  String? path,
+  ApplicationErrorReporter errors,
+) async {
+  if (path == null || path.isEmpty) return path;
+
+  try {
+    return await LocalFileSystem().canonicalize(path);
+  } on RemoteFileException catch (error, stackTrace) {
+    errors.report(error, stackTrace);
+    return path;
   }
 }
 
