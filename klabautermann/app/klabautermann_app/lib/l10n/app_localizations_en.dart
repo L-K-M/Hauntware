@@ -2441,6 +2441,86 @@ class AppLocalizationsEn extends AppLocalizations {
       'You can\'t connect to this server yet: it comes from an earlier import that kept only its address. Import your SSH config again to connect.';
 
   @override
+  String get connectRejectedEndpointNotConfirmed =>
+      'You can\'t connect to this server yet: its address comes from your sync account and isn\'t confirmed on this device, or it changed since you confirmed it. Choose Review over the server list to check and confirm it.';
+
+  @override
+  String endpointsPendingNotice(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count synced servers wait for you to confirm their addresses.',
+      one: '$count synced server waits for you to confirm its address.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get endpointsReview => 'Review';
+
+  @override
+  String get endpointsTitle => 'Confirm server addresses';
+
+  @override
+  String get endpointsBody =>
+      'These servers come from your sync account. Klabautermann connects only to addresses you confirm on this device, so an address changed on another device cannot receive your sign-in unnoticed. Check each host, port, user and jump route before you confirm it.';
+
+  @override
+  String get endpointsSearch => 'Search servers';
+
+  @override
+  String endpointsRoute(String route) {
+    return 'via $route';
+  }
+
+  @override
+  String get endpointsRouteSeparator => ' → ';
+
+  @override
+  String get endpointsChanged => 'Changed since you confirmed it';
+
+  @override
+  String get endpointsNoMatch => 'No servers match your search.';
+
+  @override
+  String get endpointsNoneLeft =>
+      'Every synced server\'s address is confirmed on this device.';
+
+  @override
+  String get endpointsConfirmAllShown => 'Confirm all shown';
+
+  @override
+  String endpointsConfirmSelected(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Confirm $count servers',
+      one: 'Confirm $count server',
+      zero: 'Confirm selected',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String endpointsConfirmed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Confirmed $count server addresses.',
+      one: 'Confirmed $count server address.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get endpointsStillPending =>
+      'Some servers still need confirming: confirm the jump hosts they go through too.';
+
+  @override
+  String get endpointsFailed =>
+      'The confirmation could not be saved on this device, so these servers stay unconfirmed. Try again.';
+
+  @override
   String get settingsAccessibilityTitle => 'Accessibility';
 
   @override
