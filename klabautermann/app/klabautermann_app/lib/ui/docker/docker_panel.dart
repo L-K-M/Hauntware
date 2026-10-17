@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart' show SelectedTabView, showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -13,6 +14,7 @@ import '../server_header.dart' show HeaderedBody;
 import 'container_logs.dart';
 import 'containers_panel.dart';
 import 'docker_endpoint.dart';
+import 'docker_endpoint_picker.dart';
 
 /// Hands the Docker tab SAF-08's notice state on every route (M3's M12):
 /// a phone pushes the server screen as a route of its own, so it sits
@@ -135,7 +137,11 @@ class _DockerPanelState extends State<DockerPanel> {
           children: [
             if (notice != null && notice.showsNotice)
               _RootEquivalenceNotice(notice: notice),
-            DockerEngineStrip(docker: _docker, serverId: widget.serverId),
+            DockerEngineStrip(
+              docker: _docker,
+              profile: widget.monitoring.profileFor(widget.serverId),
+              serverId: widget.serverId,
+            ),
           ],
         ),
         child: Column(
@@ -202,15 +208,19 @@ class _DockerPanelState extends State<DockerPanel> {
 
 /// DKE-01's engine strip: the engine as its API names it (M13), the
 /// negotiated API version, and the engine's product, version and host
-/// from its details, or that they are being read or could not be.
+/// from its details, or that they are being read or could not be. Under
+/// them, CN-09's socket picker ([DockerEndpointPicker]) over the sockets
+/// in [profile], the server's probe answer.
 class DockerEngineStrip extends StatelessWidget {
   const DockerEngineStrip({
     super.key,
     required this.docker,
+    required this.profile,
     required this.serverId,
   });
 
   final DockerController docker;
+  final ValueListenable<HostProfile?> profile;
   final String serverId;
 
   @override
@@ -263,6 +273,11 @@ class DockerEngineStrip extends StatelessWidget {
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: facts,
               ),
+            ),
+            DockerEndpointPicker(
+              docker: docker,
+              profile: profile,
+              serverId: serverId,
             ),
           ],
         );

@@ -2074,7 +2074,7 @@ platform identities in 04, section 12.3):
 | `sync_enrollment.json` [E] | Enrollment state (M2, K49a, D62): the push hold, the raised notices and the enrolled account (server URL, user name, mode); never the token or vault key, which stay in the keystore (4.5), and not the device id, which stays in `settings.json`. Kept like the verdict files; a damaged file reads as not enrolled | `klabautermann_core` [E] | MVP |
 | `endpoint_pins.json` | Confirmed endpoints | catalog library | MVP |
 | `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config`, replaced whole by each import; never pushed (D14). Schema 3 (M2) holds each host's alias, host, port, user, `IdentityFile` and `ProxyJump` with the values ssh would use (10.1): the effective host (`%h` expanded, lowercased unless an address) and port, the first `IdentityFile` that is not `none`, and the `ProxyJump` as written; under `hops` it holds the same for each other name a stored route gives. An older file holds addresses only: schema 1 (M1) kept no `IdentityFile` or `ProxyJump` and kept `HostName` as written, `%h` included, and schema 2 read each host's values from its first block alone. Its hosts are listed as stored, with no `jumpRoute`, `authKind` or `locatorConflict`, and get no connect config until the next import rewrites the file. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
-| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), whether threshold-band changes are announced (`klabautermann.accessibility.announceThresholdBands`, M2, D60; anything but `false` announces), whether the Docker tab's root-equivalence notice was dismissed (`klabautermann.docker.rootEquivalenceNoticeDismissed`, M3, 8.4; anything but `true` shows it again), monitor set, per-server device preferences | app | MVP |
+| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), whether threshold-band changes are announced (`klabautermann.accessibility.announceThresholdBands`, M2, D60; anything but `false` announces), whether the Docker tab's root-equivalence notice was dismissed (`klabautermann.docker.rootEquivalenceNoticeDismissed`, M3, 8.4; anything but `true` shows it again), the engine socket chosen per server (`klabautermann.docker.endpointOverrides`, M3, CN-09, D54: by server id, the choice, `detected` or `custom`, its absolute socket path and the endpoint it was chosen for; an entry that does not read as one is skipped and kept as written; a server the fleet drops or lists under another endpoint loses its entry, as does one whose entry names no endpoint, SYN-08), monitor set, other per-server device preferences | app | MVP |
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
 | `instance.lock` [E] | Empty. One desktop instance per support directory (built in M2): the composition root takes an exclusive, non-blocking advisory lock on it after the settings window's branch and before `settings.json` and `window_state.json` open and the engine isolate starts, so one process mints the device id and writes these files, and holds it for the life of the process; the file is never deleted. A second instance opens no other file and only says it is already running, until the user quits it. A lock that fails for another reason (no write access, no lock support) lets the app run unguarded and says so at startup. Phones run one process per app and take none | app, through `klabautermann_core`'s `InstanceLock` | MVP |
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
@@ -4547,7 +4547,7 @@ shows there.
 | `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `RefreshSubscription(serverId, subscriptionId)` (a phone's pull to refresh, PLT-02), `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
-| `DockerQuery(serverId, queryId, query)`, `DockerWatch(serverId, watchId, lists, statsFor)`, `DockerUnwatch(serverId, watchId)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason)`, `DockerListChanged(serverId, list, payload, at, fullRelist)` |
+| `DockerQuery(serverId, queryId, query)`, `DockerWatch(serverId, watchId, lists, statsFor)`, `DockerUnwatch(serverId, watchId)`, `SetDockerEndpoint(serverId, choice)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason, choice)`, `DockerListChanged(serverId, list, payload, at, fullRelist)` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(preview)`, `ActionProgress`, `ActionFinished` |
 | `AnswerPrompt(promptId, answer)` (trust, responses or cancel, secret) | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
 | `SetAppActivity(activity)` (foreground or background; D34, D45) | no event: it changes what runs |
@@ -5102,7 +5102,7 @@ the engine in `engine_isolate.dart` beside it):
   under the ladder, until a retry after 5 s doubling to 2 min [E]. On
   relay ranks the pool holds one connection, in a short-action slot
   (5.2), and closes it after 30 s without a query [E]. The
-  endpoint override is not in the protocol yet.
+  endpoint override joined later (below).
 - **Version 3 (M3 Docker watches).** Watches joined version 3 the same
   way (D06), and the opaque `DockerEvent` row is gone. `DockerWatch`
   names the lists a view shows (containers, images, stacks, stats) and,
@@ -5224,6 +5224,42 @@ the engine in `engine_isolate.dart` beside it):
   such a key, and URL credentials in both; a secret plain scalar
   continued on later lines and flow mappings are not masked. The text
   is neither cached nor logged.
+- **Version 3 (M3 endpoint choice).** CN-09's manual override joined
+  version 3 the same way (D20, D54). `SetDockerEndpoint(serverId,
+  choice)` carries a sealed choice: automatic, one of the sockets the
+  probe found (`detected(path)`), or a path the user typed
+  (`custom(path)`). The app keeps it per server in `settings.json`
+  (4.10) with the endpoint it was chosen for, sends it as the user
+  changes it and again ahead of the endpoint query each time the
+  server's link comes up, and drops it when the fleet drops the server
+  or lists it under another endpoint, as the engine does (SYN-08). The
+  engine keeps the choice apart from the session, so it holds across
+  links, until another arrives or the server is forgotten; the same
+  choice again changes nothing, and one for a server outside the fleet
+  is ignored. A session lets its endpoint go and resolves again with
+  it. A socket choice is the ladder's first candidate, ahead of 5.4's
+  detected sockets, so one that answers on no rung gives way to them
+  (a default, as 5.4 words it, rather than a pin); the path is checked
+  first as `validateSocketPath` checks the CLI's `--host` (absolute,
+  no NUL or line break), and one that fails ends the endpoint as
+  failed with `invalidChoice`, without running the ladder.
+  `DockerEndpointState` gained `choice`, the one it was found with, so
+  the app tells a chosen socket in use (the route reaches it) from one
+  that gave way. `DockerComposeQuery`, answered by
+  `DockerComposePayload(composeCli)` or a failed command, reads the
+  compose CLIs once per endpoint in the stack checks' exec, for the
+  Access tab's compose row without a stacks watch. The Access rows
+  (CN-24) come from `DockerEndpointState` as `klabautermann_host`'s
+  `DockerAccessFacts` (`evaluateAccess(profile, docker:)`): streamlocal
+  is allowed on a rank 1 route and disabled on a relay or with no relay
+  (sshd refused a socket the user can write), denied when the socket
+  refuses the user, untested on any other failure, and unknown until
+  the ladder has run; compose is the plugin's version, the standalone
+  binary only (v2, or the read-only v1), none, unknown until checked,
+  or a failed check; the runtime row says "chosen manually" while the
+  chosen socket is in use or the endpoint looks, and that it is not in
+  use otherwise. The picker sits in the Docker tab's engine strip and,
+  so a failing endpoint can be changed, under the failed tab's reason.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period

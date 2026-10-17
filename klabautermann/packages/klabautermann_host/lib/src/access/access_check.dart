@@ -1,9 +1,10 @@
 /// The access check (CN-24, 03 §6.1, §8.1, §10.4): pure rules from a
-/// [HostProfile] to one row per access right, each `ok`, `missing` or
-/// `unknown` with an enum reason and, where one exists, a copyable fix
-/// command that the app never runs implicitly. A row is `missing` only
-/// when the probe answered; anything it did not answer stays `unknown`,
-/// never zero.
+/// [HostProfile], and what the engine's Docker endpoint found
+/// ([DockerAccessFacts]), to one row per access right, each `ok`,
+/// `missing` or `unknown` with an enum reason and, where one exists, a
+/// copyable fix command that the app never runs implicitly. A row is
+/// `missing` only when the probe or the endpoint answered; anything they
+/// did not answer stays `unknown`, never zero.
 library;
 
 import 'package:meta/meta.dart';
@@ -91,8 +92,44 @@ enum AccessReason {
   /// None of the 03 §5.4 socket candidates exists.
   noEngineSocket,
 
-  /// Answered once the Docker transport and compose detection land (M3).
-  pendingDockerSupport,
+  /// The engine has not looked for the server's Docker endpoint yet: no
+  /// link, or the ladder is still running (03 §5.9).
+  dockerEndpointPending,
+
+  /// sshd forwards the engine socket: the route is rank 1 (03 §5.9).
+  streamlocalAllowed,
+
+  /// sshd refused to forward a socket the user can write, so the engine
+  /// is reached through a relay on the server, or not at all (03 §5.3).
+  streamlocalDisabled,
+
+  /// sshd could not open the socket as the login user, who cannot write
+  /// it; the Docker socket row carries the fix.
+  streamlocalSocketDenied,
+
+  /// The endpoint failed before any socket could be tried: none exists,
+  /// the exec probe failed, or the engine did not answer.
+  streamlocalUntested,
+
+  /// The `docker compose` plugin answered with its version.
+  composePlugin,
+
+  /// Only the standalone `docker-compose` (v2) exists: read-only here,
+  /// and it does not verify stack sources (STK-05).
+  composeStandaloneOnly,
+
+  /// Only the Python Compose v1 exists, unmaintained since 2023 and
+  /// read-only here (STK-05).
+  composeLegacyOnly,
+
+  /// Neither the plugin nor a standalone binary answered.
+  noCompose,
+
+  /// The compose CLIs are looked for once the Docker endpoint is ready.
+  composeNotChecked,
+
+  /// The command that looks for the compose CLIs failed.
+  composeCheckFailed,
 
   /// systemd 246 or later: JSON unit and timer lists.
   systemdJson,
@@ -118,6 +155,14 @@ enum AccessReason {
 
   /// No engine socket and no engine CLI.
   noEngine,
+
+  /// The user chose this server's engine socket on this device (CN-09,
+  /// D54), and the endpoint reaches it.
+  runtimeChosenManually,
+
+  /// The socket chosen on this device is not the one the endpoint
+  /// reaches: it did not answer, so another or none was used.
+  runtimeChosenUnavailable,
 }
 
 /// How a fix command is elevated. [AccessFix.argv] never carries the
@@ -186,7 +231,8 @@ enum EngineMode { rootful, rootless }
 
 /// An existing engine socket, classified by its 03 §5.4 path. A
 /// `podman-docker` install may alias the Docker path to Podman; the API's
-/// `Libpod-API-Version` header settles that once M3 connects.
+/// `Libpod-API-Version` header settles that once the engine connects
+/// (M13).
 @immutable
 final class EngineEndpoint {
   const EngineEndpoint(this.runtime, this.mode, this.socket);
@@ -220,6 +266,74 @@ final class AccessReport {
   };
 }
 
+/// Whether sshd forwards the engine socket (03 §5.3, §5.9), as the
+/// engine's ladder found it.
+enum StreamlocalAccess {
+  /// The route is rank 1.
+  allowed,
+
+  /// sshd refused the socket, which the user can write.
+  disabled,
+
+  /// sshd refused the socket, which the user cannot write.
+  socketDenied,
+
+  /// The endpoint failed before a socket could be tried.
+  untested,
+}
+
+/// The compose CLIs the engine found on the server (STK-05), each version
+/// as it printed it.
+@immutable
+final class ComposeFacts {
+  const ComposeFacts({
+    this.pluginVersion,
+    this.standaloneVersion,
+    this.standaloneLegacy = false,
+  });
+
+  /// `docker compose version`; null without the plugin.
+  final String? pluginVersion;
+
+  /// `docker-compose version`; null without the standalone binary.
+  final String? standaloneVersion;
+
+  /// Whether the standalone binary is the Python Compose v1.
+  final bool standaloneLegacy;
+}
+
+/// What the engine's Docker endpoint told of the rights the probe cannot
+/// see (CN-24): whether sshd forwards the socket, the compose CLIs, and
+/// CN-09's socket chosen on this device. Each fact the endpoint has not
+/// answered yet is null and reads as unknown.
+@immutable
+final class DockerAccessFacts {
+  const DockerAccessFacts({
+    this.streamlocal,
+    this.compose,
+    this.composeCheckFailed = false,
+    this.chosenSocket,
+    this.chosenSocketInUse,
+  });
+
+  /// Null until the ladder has run on the current link.
+  final StreamlocalAccess? streamlocal;
+
+  /// Null until the compose CLIs were looked for.
+  final ComposeFacts? compose;
+
+  /// Whether looking for the compose CLIs failed; [compose] is null then.
+  final bool composeCheckFailed;
+
+  /// The socket chosen for the server on this device (CN-09), or null
+  /// when the engine finds one itself.
+  final String? chosenSocket;
+
+  /// Whether the endpoint reaches [chosenSocket]; null while it has not
+  /// settled on a route or a failure.
+  final bool? chosenSocketInUse;
+}
+
 /// Groups that can read the whole journal (03 §8.1); `systemd-journal`
 /// is the least-privileged one and the one the fix adds.
 const _journalGroups = {'systemd-journal', 'adm', 'wheel'};
@@ -230,22 +344,23 @@ const _systemdJsonVersion = 246;
 /// RHEL 8's systemd, the oldest on a tier A host (03 §6.6).
 const _systemdOldestTested = 239;
 
-/// Evaluates the access check over [profile].
-AccessReport evaluateAccess(HostProfile profile) {
+/// Evaluates the access check over [profile] and, for the streamlocal,
+/// compose and runtime rows, what the engine's Docker endpoint found
+/// ([docker]; null before it reported anything).
+AccessReport evaluateAccess(HostProfile profile, {DockerAccessFacts? docker}) {
   final engines = [
     for (final s in profile.engineSockets)
       if (s.exists) ?classifyEngineSocket(s),
   ];
   final elevation = _fixElevation(profile);
-  const pending = AccessReason.pendingDockerSupport;
   return AccessReport._([
     _sudoRow(profile),
     _journalRow(profile, elevation),
     _socketRow(profile, engines, elevation),
-    _unknown(AccessItem.streamlocal, pending),
-    _unknown(AccessItem.composePlugin, pending),
+    _streamlocalRow(docker),
+    _composeRow(docker),
     _systemdRow(profile),
-    _runtimeRow(profile, engines),
+    _runtimeRow(profile, engines, docker),
   ], engines);
 }
 
@@ -366,6 +481,53 @@ AccessRow _socketRow(
   );
 }
 
+// No fix for either: sshd_config and the compose packages differ by
+// distribution and install method [U], and neither is one command.
+AccessRow _streamlocalRow(DockerAccessFacts? docker) {
+  const item = AccessItem.streamlocal;
+  return switch (docker?.streamlocal) {
+    null => _unknown(item, AccessReason.dockerEndpointPending),
+    StreamlocalAccess.allowed => _ok(item, AccessReason.streamlocalAllowed),
+    StreamlocalAccess.disabled => _missing(
+      item,
+      AccessReason.streamlocalDisabled,
+    ),
+    StreamlocalAccess.socketDenied => _missing(
+      item,
+      AccessReason.streamlocalSocketDenied,
+    ),
+    StreamlocalAccess.untested => _unknown(
+      item,
+      AccessReason.streamlocalUntested,
+    ),
+  };
+}
+
+AccessRow _composeRow(DockerAccessFacts? docker) {
+  const item = AccessItem.composePlugin;
+  final compose = docker?.compose;
+  if (compose == null) {
+    return _unknown(
+      item,
+      docker?.composeCheckFailed ?? false
+          ? AccessReason.composeCheckFailed
+          : AccessReason.composeNotChecked,
+    );
+  }
+  if (compose.pluginVersion != null) {
+    return _ok(item, AccessReason.composePlugin);
+  }
+  if (compose.standaloneVersion == null) {
+    return _missing(item, AccessReason.noCompose);
+  }
+  return _missing(
+    item,
+    compose.standaloneLegacy
+        ? AccessReason.composeLegacyOnly
+        : AccessReason.composeStandaloneOnly,
+  );
+}
+
 AccessRow _systemdRow(HostProfile p) {
   const item = AccessItem.systemd;
   switch (p.systemdDir) {
@@ -390,8 +552,19 @@ AccessRow _systemdRow(HostProfile p) {
   return _unknown(item, AccessReason.systemdOlderThanTested);
 }
 
-AccessRow _runtimeRow(HostProfile p, List<EngineEndpoint> engines) {
+AccessRow _runtimeRow(
+  HostProfile p,
+  List<EngineEndpoint> engines,
+  DockerAccessFacts? docker,
+) {
   const item = AccessItem.runtime;
+  // A choice made on this device stands whatever the probe found; the
+  // endpoint tells whether it is in use.
+  if (docker?.chosenSocket != null) {
+    return docker!.chosenSocketInUse == false
+        ? _missing(item, AccessReason.runtimeChosenUnavailable)
+        : _ok(item, AccessReason.runtimeChosenManually);
+  }
   if (!_answered(p, 'sockets')) return _unknown(item);
   if (engines.isNotEmpty) return _ok(item, AccessReason.enginesDetected);
 

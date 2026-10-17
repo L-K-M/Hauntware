@@ -10,6 +10,7 @@ const _appearanceKey = 'klabautermann.appearance';
 const _firstRunCardKey = 'klabautermann.coverage.firstRunCardDismissed';
 const _rootNoticeKey = 'klabautermann.docker.rootEquivalenceNoticeDismissed';
 const _announceBandsKey = 'klabautermann.accessibility.announceThresholdBands';
+const _overridesKey = 'klabautermann.docker.endpointOverrides';
 
 final _uuidV4 = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
@@ -198,6 +199,189 @@ void main() {
 
       expect(store.issue, isNull);
       expect(store.rootEquivalenceNoticeDismissed, isFalse);
+    });
+
+    group('endpoint overrides (CN-09, D54)', () {
+      const podman = DockerEndpointOverride(
+        DockerEndpointDetected('/run/podman/podman.sock'),
+        endpoint: 'alice@web-1.example:22',
+      );
+      const custom = DockerEndpointOverride(
+        DockerEndpointCustom('/srv/engine.sock'),
+        endpoint: 'db-1:2222',
+      );
+
+      test('round-trip across reloads, beside keys they do not know, and '
+          'auto removes one', () async {
+        writeDocument({
+          _versionKey: 1,
+          _deviceIdKey: 'device-a',
+          'klabautermann.later': {'nested': true},
+        });
+
+        final store = await DeviceSettingsStore.open(file);
+        expect(store.dockerEndpointOverrides, isEmpty);
+        await store.setDockerEndpointOverride('srv-1', podman);
+        await store.setDockerEndpointOverride('srv-2', custom);
+        final reopened = await DeviceSettingsStore.open(file);
+
+        expect(reopened.dockerEndpointOverrides, {
+          'srv-1': podman,
+          'srv-2': custom,
+        });
+        expect(document(), {
+          _versionKey: 1,
+          _deviceIdKey: 'device-a',
+          'klabautermann.later': {'nested': true},
+          _overridesKey: {
+            'srv-1': {
+              'choice': 'detected',
+              'socketPath': '/run/podman/podman.sock',
+              'endpoint': 'alice@web-1.example:22',
+            },
+            'srv-2': {
+              'choice': 'custom',
+              'socketPath': '/srv/engine.sock',
+              'endpoint': 'db-1:2222',
+            },
+          },
+        });
+
+        await reopened.setDockerEndpointOverride('srv-1', null);
+        expect((await DeviceSettingsStore.open(file)).dockerEndpointOverrides, {
+          'srv-2': custom,
+        });
+      });
+
+      test('malformed entries are skipped, and kept as they were when '
+          'another server\'s changes', () async {
+        final malformed = <String, Object?>{
+          'not-a-map': 'custom',
+          'unknown-kind': {
+            'choice': 'remote',
+            'socketPath': '/srv/a.sock',
+            'endpoint': 'a:22',
+          },
+          'relative': {
+            'choice': 'custom',
+            'socketPath': 'srv/a.sock',
+            'endpoint': 'a:22',
+          },
+          'line-break': {
+            'choice': 'custom',
+            'socketPath': '/srv/a\nb.sock',
+            'endpoint': 'a:22',
+          },
+          'no-endpoint': {
+            'choice': 'detected',
+            'socketPath': '/run/docker.sock',
+          },
+          'number-path': {'choice': 'custom', 'socketPath': 7, 'endpoint': 'a'},
+        };
+        writeDocument({
+          _versionKey: 1,
+          _deviceIdKey: 'device-a',
+          _overridesKey: malformed,
+        });
+
+        final store = await DeviceSettingsStore.open(file);
+        expect(store.issue, isNull);
+        expect(store.dockerEndpointOverrides, isEmpty);
+
+        await store.setDockerEndpointOverride('srv-1', podman);
+        expect(document()[_overridesKey], {
+          ...malformed,
+          'srv-1': {
+            'choice': 'detected',
+            'socketPath': '/run/podman/podman.sock',
+            'endpoint': 'alice@web-1.example:22',
+          },
+        });
+      });
+
+      test(
+        'a value that is not an object reads as none and is replaced',
+        () async {
+          writeDocument({
+            _versionKey: 1,
+            _deviceIdKey: 'device-a',
+            _overridesKey: ['srv-1'],
+          });
+
+          final store = await DeviceSettingsStore.open(file);
+          expect(store.dockerEndpointOverrides, isEmpty);
+          await store.setDockerEndpointOverride('srv-2', custom);
+          expect(
+            (await DeviceSettingsStore.open(file)).dockerEndpointOverrides,
+            {'srv-2': custom},
+          );
+        },
+      );
+
+      test('a purge drops servers the fleet lost or whose endpoint changed '
+          '(SYN-08), and writes only when it dropped any', () async {
+        final writes = <String>[];
+        Future<void> writer(File target, List<int> bytes) {
+          writes.add(target.path);
+          return writeFileAtomically(target, bytes);
+        }
+
+        writeDocument({
+          _versionKey: 1,
+          _deviceIdKey: 'device-a',
+          _overridesKey: {
+            'srv-gone': {
+              'choice': 'custom',
+              'socketPath': '/srv/x.sock',
+              'endpoint': 'x:22',
+            },
+            'no-endpoint': {'choice': 'custom', 'socketPath': '/srv/y.sock'},
+          },
+        });
+        final store = await DeviceSettingsStore.open(file, writer: writer);
+        await store.setDockerEndpointOverride('srv-1', podman);
+        await store.setDockerEndpointOverride('srv-2', custom);
+        writes.clear();
+
+        final dropped = await store.purgeDockerEndpointOverrides({
+          'srv-1': 'alice@web-1.example:22',
+          'srv-2': 'db-1:22',
+          'no-endpoint': 'y:22',
+        });
+        expect(dropped, {'srv-gone', 'srv-2', 'no-endpoint'});
+        expect(writes, hasLength(1));
+        expect((await DeviceSettingsStore.open(file)).dockerEndpointOverrides, {
+          'srv-1': podman,
+        });
+
+        writes.clear();
+        expect(
+          await store.purgeDockerEndpointOverrides({
+            'srv-1': 'alice@web-1.example:22',
+          }),
+          isEmpty,
+        );
+        expect(writes, isEmpty);
+      });
+
+      test('a choice a read-only session cannot save stays in memory and '
+          'throws', () async {
+        writeDocument({_versionKey: 2, _deviceIdKey: 'device-a'});
+        final store = await DeviceSettingsStore.open(file);
+        final before = file.readAsStringSync();
+
+        await expectLater(
+          store.setDockerEndpointOverride('srv-1', podman),
+          throwsA(isA<DeviceSettingsReadOnlyException>()),
+        );
+        expect(store.dockerEndpointOverrides, {'srv-1': podman});
+        await expectLater(
+          store.purgeDockerEndpointOverrides(const {}),
+          throwsA(isA<DeviceSettingsReadOnlyException>()),
+        );
+        expect(store.dockerEndpointOverrides, isEmpty);
+        expect(file.readAsStringSync(), before);
+      });
     });
 
     test(

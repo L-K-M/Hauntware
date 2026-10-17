@@ -6,6 +6,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../ui/charts/series_ring.dart';
 import '../ui/charts/time_series.dart';
 import 'docker_controller.dart';
+import 'docker_endpoint_choices.dart';
 import 'log_reads.dart';
 import 'log_streams.dart';
 
@@ -137,15 +138,18 @@ final class SamplingStatus {
 /// remounts them for the new controller.
 final class MonitoringController extends ChangeNotifier {
   /// [linkGrace] replaces [kLinkLeaveGrace]; zero sends [Disconnect] at
-  /// once. [now] is what [clock] reads.
+  /// once. [now] is what [clock] reads. [dockerEndpointChoices], the
+  /// Docker sockets chosen on this device (CN-09), outlives this run and
+  /// goes to [docker]; without it the choices last this run.
   MonitoringController(
     this._engine, {
     this._linkGrace = kLinkLeaveGrace,
     DateTime Function() now = DateTime.now,
+    DockerEndpointChoices? dockerEndpointChoices,
   }) : _clock = _FreshnessClock(now) {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
     logs = LogStreams(_engine);
-    docker = DockerController(_engine);
+    docker = DockerController(_engine, endpointChoices: dockerEndpointChoices);
   }
 
   /// The log streams panels open, and each server's journal access for

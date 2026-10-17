@@ -4,6 +4,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../docker/docker_endpoint.dart' show dockerFailureText;
+import '../docker/docker_endpoint_picker.dart';
 import '../server_surfaces.dart';
 
 /// What a server panel's tab shows (03 §10.4).
@@ -74,9 +75,9 @@ PanelGateDecision decidePanelGate(ServerPanel panel, HostProfile? profile) {
 /// rules hide it (03 §10.4). The Docker tab follows its server's endpoint
 /// rather than the probe (03 §5.9): progress while the engine waits for
 /// the link or looks for a route, the exact reason with a link to Access
-/// when none works, and the panel once the endpoint is ready. A panel
-/// that does not show is not built, so nothing it subscribes or reads
-/// runs.
+/// and CN-09's socket picker when none works, and the panel once the
+/// endpoint is ready. A panel that does not show is not built, so nothing
+/// it subscribes or reads runs.
 class GatedPanel extends StatelessWidget {
   const GatedPanel({
     super.key,
@@ -137,13 +138,22 @@ class GatedPanel extends StatelessWidget {
                 title: l10n.dockerGateResolvingTitle,
                 children: [Text(l10n.dockerGateResolvingBody)],
               ),
+            // The socket picker too: a socket the engine did not find, or
+            // a chosen one that fails, is changed here (CN-09).
             DockerEndpointState(phase: DockerEndpointPhase.failed) =>
               _GateNotice(
                 icon: Icons.visibility_off_outlined,
                 title: l10n.accessPanelHiddenTitle(panel.label(l10n)),
                 onOpenAccess: onOpenAccess,
                 onRetry: () => monitoring.docker.retry(serverId),
-                children: [Text(dockerFailureText(l10n, state))],
+                children: [
+                  Text(dockerFailureText(l10n, state)),
+                  DockerEndpointPicker(
+                    docker: monitoring.docker,
+                    profile: monitoring.profileFor(serverId),
+                    serverId: serverId,
+                  ),
+                ],
               ),
             // Until the engine says anything this run, which it does once
             // the server's link is up.

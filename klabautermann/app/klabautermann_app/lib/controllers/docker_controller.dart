@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import 'docker_endpoint_choices.dart';
+
 /// The app's Docker endpoints for one engine run (03 §5.9, §10.1): each
 /// server's [DockerEndpointState], which the server header names in
 /// every mode (E4) and the Docker tab's gate follows, and the engine's
@@ -36,6 +38,19 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 /// removed. The details live here only while a view shows them: inspect
 /// output is never kept, synced or stored (03 §8.9).
 ///
+/// Each server's engine socket choice (CN-09, D54) comes from
+/// [endpointChoices], which outlives the run: it goes to the engine as a
+/// [SetDockerEndpoint] ahead of the endpoint query each time the server's
+/// link comes up, so the first route found already uses it, and again
+/// whenever it changes while the link is up ([chooseEndpoint], or a purge
+/// for SYN-08). The engine keeps a choice across links, so an automatic
+/// one is sent again only after a socket was.
+///
+/// An Access tab that shows a server ([openAccess]) has its compose CLIs
+/// read (CN-24, 03 §7.16 STK-05): one [DockerComposeQuery] once its
+/// endpoint is ready, again for each new route; a stacks list that names
+/// them answers too.
+///
 /// Every query and watch id is minted here and never reused this run; at
 /// most one engine query per server is in flight, and at most one inspect
 /// per container a view shows. A server that leaves the fleet takes its
@@ -43,11 +58,21 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 /// `MonitoringController`; the engine ends its session, and with it the
 /// server's watches, too.
 final class DockerController {
-  DockerController(this._engine) {
+  /// [endpointChoices] holds the socket chosen per server on this device;
+  /// without it the choices live in memory for this run.
+  DockerController(this._engine, {DockerEndpointChoices? endpointChoices})
+    : endpointChoices = endpointChoices ?? DockerEndpointChoices(),
+      _ownsChoices = endpointChoices == null {
     _events = _engine.events.listen(_onEvent, onDone: _onEngineDone);
+    this.endpointChoices.addListener(_onChoices);
   }
 
   final EngineClient _engine;
+
+  /// Each server's engine socket choice (CN-09), which the engine strip's
+  /// picker shows and changes through [chooseEndpoint].
+  final DockerEndpointChoices endpointChoices;
+  final bool _ownsChoices;
   late final StreamSubscription<EngineEvent> _events;
   int _count = 0;
   bool _stopped = false;
@@ -69,6 +94,76 @@ final class DockerController {
   /// could not be read; null while none were read for this endpoint.
   ValueListenable<DockerPayload?> engineFor(String serverId) =>
       _server(serverId).engine;
+
+  /// The compose CLIs on [serverId]'s ready endpoint: a
+  /// [DockerComposePayload], or a [DockerQueryFailed] saying why they
+  /// could not be read; null while none were read for this endpoint.
+  ValueListenable<DockerPayload?> composeFor(String serverId) =>
+      _server(serverId).compose;
+
+  /// Makes [choice] [serverId]'s engine socket (CN-09) and sends it to the
+  /// engine while the link is up, which resolves the endpoint again with
+  /// it. Rethrows a save that failed; the choice holds for this run.
+  Future<void> chooseEndpoint(String serverId, DockerEndpointChoice choice) =>
+      endpointChoices.choose(serverId, choice);
+
+  /// Sends each linked server's choice that the engine was not given yet.
+  void _onChoices() {
+    for (final MapEntry(key: serverId, value: server) in _servers.entries) {
+      if (server.linked) _sendChoice(serverId, server);
+    }
+  }
+
+  /// Sends [serverId]'s choice unless the engine holds it already: the
+  /// last one sent, or automatic before any was. [always] sends a socket
+  /// choice even so, as a link comes up: the engine forgets choices with
+  /// the server (SYN-08), which this controller may not have seen yet.
+  void _sendChoice(
+    String serverId,
+    _DockerServer server, {
+    bool always = false,
+  }) {
+    final choice = endpointChoices.choiceFor(serverId);
+    final held = server.sentChoice ?? const DockerEndpointAuto();
+    if (choice == held && !(always && choice is DockerEndpointSocket)) return;
+    if (_stopped) return;
+
+    _send(SetDockerEndpoint(serverId: serverId, choice: choice));
+    server.sentChoice = choice;
+  }
+
+  /// An Access tab shows [serverId]; [closeAccess] says it no longer does.
+  void openAccess(String serverId) {
+    if (!_listed(serverId)) return;
+    final server = _server(serverId);
+    server.accessViews++;
+    _readComposeIfShown(serverId, server);
+  }
+
+  void closeAccess(String serverId) {
+    final server = _servers[serverId];
+    if (server == null || server.accessViews == 0) return;
+    server.accessViews--;
+  }
+
+  /// Reads the compose CLIs of a ready endpoint an Access tab shows,
+  /// unless they were read or are being read.
+  void _readComposeIfShown(String serverId, _DockerServer server) {
+    if (server.accessViews == 0 || server.composeQuery != null) return;
+    if (server.endpoint.value?.phase != DockerEndpointPhase.ready) return;
+    if (server.compose.value is DockerComposePayload) return;
+    if (_stopped) return;
+
+    final queryId = 'compose-${_count++}';
+    _send(
+      DockerQuery(
+        serverId: serverId,
+        queryId: queryId,
+        query: const DockerComposeQuery(),
+      ),
+    );
+    if (!_stopped) server.composeQuery = queryId;
+  }
 
   /// What [serverId]'s container watch last delivered: the containers
   /// and their list stats, or why they could not be read.
@@ -370,7 +465,11 @@ final class DockerController {
         final linked = status is LinkReady || status is LinkDegraded;
         final rose = linked && !server.linked;
         server.linked = linked;
-        if (rose) _read(serverId, server);
+        if (!rose) return;
+        // Ahead of the query that starts the endpoint, so its first
+        // route already follows the choice.
+        _sendChoice(serverId, server, always: true);
+        _read(serverId, server);
       case DockerEndpointState(:final serverId):
         if (!_listed(serverId)) return;
         final server = _server(serverId);
@@ -379,32 +478,32 @@ final class DockerController {
         // The details describe the endpoint they were read over.
         if (!_sameEndpoint(before, event)) {
           server.engine.value = null;
+          // A compose read in flight describes the endpoint before; its
+          // answer is let go, and the new one is read.
+          server.compose.value = null;
+          server.composeQuery = null;
           if (event.phase == DockerEndpointPhase.ready) {
             _inspectAfterFailure(serverId, server);
           }
         }
         _readIfShown(serverId, server);
+        _readComposeIfShown(serverId, server);
       case DockerResult(:final serverId, :final queryId, :final payload):
         final server = _servers[serverId];
         if (server == null) return;
+        if (server.composeQuery == queryId) {
+          server.composeQuery = null;
+          if (!_waitedOnEndpoint(payload)) server.compose.value = payload;
+          return;
+        }
         if (server.engineQuery != queryId) {
           _takeInspect(serverId, server, queryId, payload);
           return;
         }
         server.engineQuery = null;
-        switch (payload) {
-          // Nothing was read because no endpoint was ready: its state
-          // says why, and once one is, a shown tab reads again.
-          case DockerQueryFailed(
-            failure: DockerQueryFailure.linkUnavailable ||
-                DockerQueryFailure.profileUnknown ||
-                DockerQueryFailure.endpointUnavailable ||
-                DockerQueryFailure.cancelled,
-          ):
-            break;
-          case _:
-            server.engine.value = payload;
-        }
+        // Nothing was read because no endpoint was ready: its state says
+        // why, and once one is, a shown tab reads again.
+        if (!_waitedOnEndpoint(payload)) server.engine.value = payload;
       case DockerListChanged(
         :final serverId,
         :final list,
@@ -420,6 +519,10 @@ final class DockerController {
           payload,
           at,
         );
+        // A stacks list names the compose CLIs the Access tab shows.
+        if (payload case DockerStacksPayload(:final composeCli?)) {
+          server.compose.value = DockerComposePayload(composeCli);
+        }
         if ((list, payload) case (
           DockerWatchList.containers,
           DockerContainersPayload(:final containers),
@@ -444,6 +547,7 @@ final class DockerController {
     _stopped = true;
     for (final server in _servers.values) {
       server.engineQuery = null;
+      server.composeQuery = null;
       for (final inspected in server.inspected.values) {
         if (inspected.queryId == null) continue;
         inspected.queryId = null;
@@ -471,12 +575,27 @@ final class DockerController {
   void dispose() {
     unawaited(_events.cancel());
     _stopped = true;
+    endpointChoices.removeListener(_onChoices);
+    if (_ownsChoices) endpointChoices.dispose();
     for (final server in _servers.values) {
       server.dispose();
     }
     _servers.clear();
   }
 }
+
+/// Whether [payload] read nothing only because no endpoint was ready, so
+/// a view reads again once one is, rather than showing a failure.
+bool _waitedOnEndpoint(DockerPayload payload) => switch (payload) {
+  DockerQueryFailed(
+    failure: DockerQueryFailure.linkUnavailable ||
+        DockerQueryFailure.profileUnknown ||
+        DockerQueryFailure.endpointUnavailable ||
+        DockerQueryFailure.cancelled,
+  ) =>
+    true,
+  _ => false,
+};
 
 /// [before] with [payload], a read of [list] at [at], taken in: a new
 /// list or stats round, or a failed one, which keeps what was read
@@ -646,6 +765,7 @@ bool _sameEndpoint(DockerEndpointState? before, DockerEndpointState after) {
 final class _DockerServer {
   final ValueNotifier<DockerEndpointState?> endpoint = ValueNotifier(null);
   final ValueNotifier<DockerPayload?> engine = ValueNotifier(null);
+  final ValueNotifier<DockerPayload?> compose = ValueNotifier(null);
   final ValueNotifier<DockerContainerList> containers = ValueNotifier(
     const DockerContainerList(),
   );
@@ -655,6 +775,14 @@ final class _DockerServer {
 
   /// How many Docker tabs show the server.
   int views = 0;
+
+  /// How many Access tabs show the server, and the compose query in
+  /// flight, whose answer [compose] takes.
+  int accessViews = 0;
+  String? composeQuery;
+
+  /// The endpoint choice last sent to the engine; null before any was.
+  DockerEndpointChoice? sentChoice;
 
   /// Whether the server's last [LinkState] was a usable link.
   bool linked = false;
@@ -674,6 +802,7 @@ final class _DockerServer {
   void dispose() {
     endpoint.dispose();
     engine.dispose();
+    compose.dispose();
     containers.dispose();
     for (final container in inspected.values) {
       container.dispose();

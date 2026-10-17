@@ -98,6 +98,21 @@ void main() {
       expect(names, ['PlanAction', 'SetMonitorSet']);
     });
 
+    test('an endpoint choice is rejected while links are off', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+
+      client.send(
+        const SetDockerEndpoint(
+          serverId: 'srv-1',
+          choice: DockerEndpointCustom('/srv/engine.sock'),
+        ),
+      );
+      final answer = (await next(events)) as RequestRejected;
+      expect(answer.requestName, 'SetDockerEndpoint');
+      expect(answer.reason, contains('links are off'));
+    });
+
     test('links stay off unless spawn turns them on', () async {
       Future<String> connectAnswer({bool? linksEnabled}) async {
         final client = linksEnabled == null

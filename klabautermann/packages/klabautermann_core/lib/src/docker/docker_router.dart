@@ -10,8 +10,10 @@
 ///                  resolving: ladder ─▶ _ping, /version over the route
 ///                    │   └─ no answer ─▶ ladder again without that route
 ///                    ├─▶ ready ─▶ queries run
-///                    └─▶ failed (no route, unreachable, version refused)
+///                    └─▶ failed (no route, unreachable, version refused,
+///                          a chosen path that is no socket path)
 ///   new link, changed sockets or tools, a route that drops ─▶ resolving
+///   a new endpoint choice (CN-09) ─▶ resolving with it
 ///   a query while failed ─▶ resolving again
 ///   failed unreachable or on a link error while a watch holds ─▶
 ///     resolving again after 5 s, 10 s, ... 2 min
@@ -88,10 +90,11 @@ Duration Function() _monotonicClock() {
 }
 
 /// Owned by the engine isolate, which hands it the Docker queries,
-/// watches and container log streams and tells it what changed: [update]
-/// after a server's [LinkState], [probed] for each probe answer,
-/// [disconnect], [forget] for servers that left the fleet or changed
-/// endpoint, [retain] for the fleet and [close].
+/// watches, container log streams and endpoint choices ([setEndpoint])
+/// and tells it what changed: [update] after a server's [LinkState],
+/// [probed] for each probe answer, [disconnect], [forget] for servers
+/// that left the fleet or changed endpoint, [retain] for the fleet and
+/// [close].
 final class DockerRouter {
   /// [linkFor] gives a server's ready link, null while it has none.
   /// [quotas] holds each server's channel slots, shared with the log
@@ -123,6 +126,11 @@ final class DockerRouter {
 
   final Map<String, _Session> _sessions = {};
   final Map<String, HostProfile> _profiles = {};
+
+  /// Each server's socket choice (CN-09); a server without one finds its
+  /// socket itself. Kept apart from the sessions, which a disconnect
+  /// ends, so a choice holds across links until the server is forgotten.
+  final Map<String, DockerEndpointSocket> _choices = {};
 
   /// The session of each open container log stream, by stream id.
   final Map<String, _Session> _logOwners = {};
@@ -262,6 +270,29 @@ final class DockerRouter {
       ?.reader
       .end(const LogStreamEnded(LogStreamEndReason.closed));
 
+  /// Takes [request], a server's endpoint choice (CN-09, D54): a session
+  /// lets its endpoint go and resolves again with it. The same choice
+  /// again, or one for a server outside the fleet, does nothing.
+  void setEndpoint(SetDockerEndpoint request) {
+    final SetDockerEndpoint(:serverId, :choice) = request;
+    if (!_fleet.contains(serverId) || _choiceOf(serverId) == choice) return;
+
+    switch (choice) {
+      case DockerEndpointAuto():
+        _choices.remove(serverId);
+      case final DockerEndpointSocket socket:
+        _choices[serverId] = socket;
+    }
+    final session = _sessions[serverId];
+    if (session == null) return;
+    _drop(session);
+    session.retries = 0;
+    _pump(session);
+  }
+
+  DockerEndpointChoice _choiceOf(String serverId) =>
+      _choices[serverId] ?? const DockerEndpointAuto();
+
   /// Follows [serverId]'s link: a new link resolves the endpoint again,
   /// and none leaves it waiting.
   void update(String serverId) {
@@ -287,12 +318,13 @@ final class DockerRouter {
     if (_sessions.remove(serverId) case final session?) _end(session);
   }
 
-  /// Ends the sessions of [serverIds] and forgets their probe answers:
-  /// they left the fleet, or their endpoint now names another machine
-  /// (SYN-08).
+  /// Ends the sessions of [serverIds] and forgets their probe answers and
+  /// endpoint choices: they left the fleet, or their endpoint now names
+  /// another machine (SYN-08).
   void forget(Iterable<String> serverIds) {
     for (final serverId in serverIds) {
       _profiles.remove(serverId);
+      _choices.remove(serverId);
       disconnect(serverId);
     }
   }
@@ -305,6 +337,7 @@ final class DockerRouter {
       {
         ..._sessions.keys,
         ..._profiles.keys,
+        ..._choices.keys,
       }.where((serverId) => !fleet.contains(serverId)),
     );
   }
@@ -392,7 +425,12 @@ final class DockerRouter {
     final epoch = session.epoch;
     _state(session, DockerEndpointPhase.resolving);
 
-    final outcome = await _connect(session.quota, link, profile);
+    final outcome = await _connect(
+      session.quota,
+      link,
+      profile,
+      _choices[session.serverId],
+    );
     if (epoch != session.epoch ||
         !identical(_sessions[session.serverId], session)) {
       if (outcome case _Ready(:final endpoint)) {
@@ -474,19 +512,33 @@ final class DockerRouter {
     });
   }
 
-  /// Finds a route and negotiates over it (03 §5.8, §5.9). A route the
-  /// engine does not answer on is passed over and the ladder runs again;
-  /// each pass excludes one more route, so the loop ends.
+  /// Finds a route and negotiates over it (03 §5.8, §5.9), trying
+  /// [choice]'s socket first (CN-09). A route the engine does not answer
+  /// on is passed over and the ladder runs again; each pass excludes one
+  /// more route, so the loop ends.
   Future<_Outcome> _connect(
     ChannelQuota quota,
     SshLink link,
     HostProfile profile,
+    DockerEndpointSocket? choice,
   ) async {
+    final override = choice?.socketPath;
+    // Checked before the ladder, which would throw: a stored or sent
+    // path is the app's input, not a programming error.
+    if (override != null && dockerSocketPathProblem(override) != null) {
+      return const _Failed(DockerEndpointFailure.invalidChoice);
+    }
+
     final excluded = <DockerRoute>{};
     while (true) {
       final DockerRouteResult found;
       try {
-        found = await DockerLadder.resolve(link, profile, excluding: excluded);
+        found = await DockerLadder.resolve(
+          link,
+          profile,
+          override: override,
+          excluding: excluded,
+        );
       } on Object {
         // A link failure other than a forwarding refusal (D04). Anything
         // else thrown here would leave the session resolving for good.
@@ -664,6 +716,14 @@ final class DockerRouter {
         case DockerImagesQuery():
           final images = await client.listImages();
           return read(DockerImagesPayload(images.value), images.warnings);
+        case DockerComposeQuery():
+          return read(switch (await endpoint.stacks.detectCli()) {
+            final cli? => DockerComposePayload(cli),
+            null => const DockerQueryFailed(
+              DockerQueryFailure.connectionFailed,
+              detail: 'the compose CLI check failed',
+            ),
+          }, const []);
         case DockerStackFileQuery(:final project, :final path):
           return read(
             await endpoint.stacks.readFile(client, project, path),
@@ -863,8 +923,9 @@ final class DockerRouter {
     }
   }
 
-  /// Sends [session]'s state; waiting goes out once while the mode
-  /// stays, since nothing else in it changes.
+  /// Sends [session]'s state, with the server's endpoint choice; waiting
+  /// goes out once while the mode and the choice stay, since nothing
+  /// else in it changes.
   void _state(
     _Session session,
     DockerEndpointPhase phase, {
@@ -874,10 +935,16 @@ final class DockerRouter {
     DockerNoRouteReason? noRouteReason,
   }) {
     final lowSession = _lowSession(session);
-    if (session.sent case DockerEndpointState(
-      phase: DockerEndpointPhase.waiting,
-      lowSession: final was,
-    ) when phase == DockerEndpointPhase.waiting && was == lowSession) {
+    final choice = _choiceOf(session.serverId);
+    if (session.sent
+        case DockerEndpointState(
+          phase: DockerEndpointPhase.waiting,
+          lowSession: final was,
+          choice: final chosen,
+        )
+        when phase == DockerEndpointPhase.waiting &&
+            was == lowSession &&
+            chosen == choice) {
       return;
     }
     _emit(
@@ -889,6 +956,7 @@ final class DockerRouter {
         lowSession: lowSession,
         failure: failure,
         noRouteReason: noRouteReason,
+        choice: choice,
       ),
     );
   }
@@ -909,6 +977,7 @@ final class DockerRouter {
         lowSession: lowSession,
         failure: sent.failure,
         noRouteReason: sent.noRouteReason,
+        choice: sent.choice,
       ),
     );
     if (lowSession && session.endpoint?.route.rank != DockerRank.streamlocal) {

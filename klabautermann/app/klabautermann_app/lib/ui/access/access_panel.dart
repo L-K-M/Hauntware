@@ -3,6 +3,7 @@ import 'package:flutter/services.dart'
     show Clipboard, ClipboardData, PlatformException;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import '../../controllers/docker_controller.dart';
 import '../../controllers/fleet_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
@@ -41,8 +42,12 @@ String fixCommandText(AccessFix fix) => fix.commandLine
 /// [HostProfile], with SAF-08's root-equivalence notice. Each row shows
 /// its state in an icon and a word, its reason and, where one exists, a
 /// fix command the user copies and runs; the app never runs it. Until the
-/// probe answers every row is unknown, never zero. Read-only: the
-/// runtime (CN-09) is detected, and choosing one arrives with M3 (D54).
+/// probe answers every row is unknown, never zero. The streamlocal and
+/// compose rows come from the server's Docker endpoint
+/// ([dockerAccessFacts]): while the tab shows, the Docker controller
+/// reads the compose CLIs once the endpoint is ready. The runtime row
+/// (CN-09) says when a socket was chosen in the Docker tab's engine
+/// strip (D54), which is where it changes.
 class AccessPanel extends StatelessWidget {
   const AccessPanel({
     super.key,
@@ -69,8 +74,12 @@ class AccessPanel extends StatelessWidget {
         valueListenable: monitoring.profileFor(serverId),
         // Keyed: the workspace reuses this panel for the next server, whose
         // rows start with nothing copied and the column at its top.
-        builder: (context, profile, _) =>
-            _AccessBody(key: ValueKey(serverId), profile: profile),
+        builder: (context, profile, _) => _AccessBody(
+          key: ValueKey(serverId),
+          profile: profile,
+          docker: monitoring.docker,
+          serverId: serverId,
+        ),
       ),
     ),
   );
@@ -119,9 +128,16 @@ enum _CopyOutcome { copied, failed }
 typedef _Copy = ({AccessItem item, String command, _CopyOutcome outcome});
 
 class _AccessBody extends StatefulWidget {
-  const _AccessBody({super.key, required this.profile});
+  const _AccessBody({
+    super.key,
+    required this.profile,
+    required this.docker,
+    required this.serverId,
+  });
 
   final HostProfile? profile;
+  final DockerController docker;
+  final String serverId;
 
   @override
   State<_AccessBody> createState() => _AccessBodyState();
@@ -132,6 +148,20 @@ class _AccessBodyState extends State<_AccessBody> {
   /// copied, so a copy clears every other row's line about an earlier
   /// one, which a user could otherwise paste into a root shell.
   _Copy? _lastCopy;
+
+  // Keyed by server, so one state holds one server's Access view for the
+  // Docker controller, which reads its compose CLIs meanwhile.
+  @override
+  void initState() {
+    super.initState();
+    widget.docker.openAccess(widget.serverId);
+  }
+
+  @override
+  void dispose() {
+    widget.docker.closeAccess(widget.serverId);
+    super.dispose();
+  }
 
   Future<void> _copy(AccessItem item, String command) async {
     var outcome = _CopyOutcome.copied;
@@ -151,11 +181,34 @@ class _AccessBodyState extends State<_AccessBody> {
 
   @override
   Widget build(BuildContext context) {
+    // Re-read on every build, as the header does: a server that left the
+    // fleet and came back has new listenables (SYN-08).
+    final endpoint = widget.docker.endpointFor(widget.serverId);
+    final compose = widget.docker.composeFor(widget.serverId);
+    return ListenableBuilder(
+      listenable: Listenable.merge([endpoint, compose]),
+      builder: (context, _) => _buildRows(
+        context,
+        dockerAccessFacts(
+          endpoint.value,
+          compose: switch (compose.value) {
+            DockerComposePayload(:final composeCli) => composeCli,
+            _ => null,
+          },
+          composeCheckFailed: compose.value is DockerQueryFailed,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRows(BuildContext context, DockerAccessFacts docker) {
     final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final textScaler = MediaQuery.textScalerOf(context);
     final profile = widget.profile;
-    final access = profile == null ? null : evaluateAccess(profile);
+    final access = profile == null
+        ? null
+        : evaluateAccess(profile, docker: docker);
     final rootShellNote = access == null
         ? null
         : _rootShellNote(l10n, access.row(AccessItem.sudoNoPassword));
@@ -202,7 +255,7 @@ class _AccessBodyState extends State<_AccessBody> {
                     _AccessRowTile(
                       item: row.item,
                       status: row.status,
-                      reason: _reasonText(l10n, row.reason, profile),
+                      reason: _reasonText(l10n, row.reason, profile, docker),
                       rootEquivalent: row.rootEquivalent,
                       fix: row.fix,
                       lastCopy: _lastCopy,
@@ -526,7 +579,8 @@ class _RootBadge extends StatelessWidget {
 
 /// One line pair per engine socket: which engine and where, then whether
 /// the account can use it and what that equals (SAF-08). A `podman-docker`
-/// install may serve the Docker path, which the API tells once M3 connects.
+/// install may serve the Docker path, which the API tells once the engine
+/// connects (M13).
 List<Widget> _engineLines(BuildContext context, List<EngineEndpoint> engines) {
   final l10n = AppLocalizations.of(context);
   final theme = Theme.of(context);
@@ -597,7 +651,38 @@ String _reasonText(
   AppLocalizations l10n,
   AccessReason reason,
   HostProfile profile,
+  DockerAccessFacts docker,
 ) {
+  // The access check gives these reasons only with the fact they name.
+  switch ((reason, docker.compose?.pluginVersion, docker.compose)) {
+    case (AccessReason.composePlugin, final version?, _):
+      return l10n.accessReasonComposePlugin(version);
+    case (
+      AccessReason.composeStandaloneOnly,
+      _,
+      ComposeFacts(standaloneVersion: final version?),
+    ):
+      return l10n.accessReasonComposeStandaloneOnly(version);
+    case (
+      AccessReason.composeLegacyOnly,
+      _,
+      ComposeFacts(standaloneVersion: final version?),
+    ):
+      return l10n.accessReasonComposeLegacyOnly(version);
+    default:
+      break;
+  }
+  if (docker.chosenSocket case final chosen?) {
+    switch (reason) {
+      case AccessReason.runtimeChosenManually:
+        return l10n.accessReasonRuntimeChosen(chosen);
+      case AccessReason.runtimeChosenUnavailable:
+        return l10n.accessReasonRuntimeChosenUnavailable(chosen);
+      default:
+        break;
+    }
+  }
+
   // The access check gives a version reason only with a version.
   if (profile.systemdVersion case final version?) {
     switch (reason) {
@@ -627,7 +712,16 @@ String _reasonText(
     AccessReason.rootlessSocket => l10n.accessReasonRootlessSocket,
     AccessReason.socketNotWritable => l10n.accessReasonSocketNotWritable,
     AccessReason.noEngineSocket => l10n.accessReasonNoEngineSocket,
-    AccessReason.pendingDockerSupport => l10n.accessReasonPendingDocker,
+    AccessReason.dockerEndpointPending =>
+      l10n.accessReasonDockerEndpointPending,
+    AccessReason.streamlocalAllowed => l10n.accessReasonStreamlocalAllowed,
+    AccessReason.streamlocalDisabled => l10n.accessReasonStreamlocalDisabled,
+    AccessReason.streamlocalSocketDenied =>
+      l10n.accessReasonStreamlocalSocketDenied,
+    AccessReason.streamlocalUntested => l10n.accessReasonStreamlocalUntested,
+    AccessReason.noCompose => l10n.accessReasonNoCompose,
+    AccessReason.composeNotChecked => l10n.accessReasonComposeNotChecked,
+    AccessReason.composeCheckFailed => l10n.accessReasonComposeCheckFailed,
     AccessReason.systemdJson ||
     AccessReason.systemdTextFallback ||
     AccessReason.systemdOlderThanTested ||
@@ -638,5 +732,11 @@ String _reasonText(
     AccessReason.engineCliWithoutSocket =>
       l10n.accessReasonEngineCliWithoutSocket,
     AccessReason.noEngine => l10n.accessReasonNoEngine,
+    // Worded above with their facts.
+    AccessReason.composePlugin ||
+    AccessReason.composeStandaloneOnly ||
+    AccessReason.composeLegacyOnly ||
+    AccessReason.runtimeChosenManually ||
+    AccessReason.runtimeChosenUnavailable => l10n.accessReasonProbeUnavailable,
   };
 }

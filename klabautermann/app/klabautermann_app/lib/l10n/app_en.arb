@@ -1425,7 +1425,7 @@
   },
   "accessItemStreamlocal": "Streamlocal forwarding",
   "@accessItemStreamlocal": {
-    "description": "Access tab row title: whether the SSH server allows forwarding to a Unix socket, which Docker support uses. 'Streamlocal' is OpenSSH's term; keep it."
+    "description": "Access tab row title: whether the SSH server allows forwarding to a Unix socket, which the Docker tab uses. 'Streamlocal' is OpenSSH's term; keep it."
   },
   "accessItemCompose": "Compose plugin",
   "@accessItemCompose": {
@@ -1495,9 +1495,64 @@
   "@accessReasonNoEngineSocket": {
     "description": "Access tab row reason: none of the known engine socket paths exists."
   },
-  "accessReasonPendingDocker": "Checked once Docker support arrives.",
-  "@accessReasonPendingDocker": {
-    "description": "Access tab row reason for streamlocal forwarding and the compose plugin, which the app checks only from the release with Docker support."
+  "accessReasonDockerEndpointPending": "Checked when Klabautermann looks for this server's Docker engine, after it connects.",
+  "@accessReasonDockerEndpointPending": {
+    "description": "Access tab row reason for streamlocal forwarding before the engine has looked for the server's Docker endpoint (no connection yet, or still looking)."
+  },
+  "accessReasonStreamlocalAllowed": "The SSH server forwards the engine socket, the fastest route to Docker.",
+  "@accessReasonStreamlocalAllowed": {
+    "description": "Access tab row reason: the SSH server forwards the Docker engine's Unix socket (streamlocal, transport rank 1)."
+  },
+  "accessReasonStreamlocalDisabled": "The SSH server refused to forward the engine socket (AllowStreamLocalForwarding or DisableForwarding in its sshd_config). Docker goes through a slower relay on the server when it has one.",
+  "@accessReasonStreamlocalDisabled": {
+    "description": "Access tab row reason: the SSH server refused to forward a socket the account can use. AllowStreamLocalForwarding and DisableForwarding are sshd_config option names; keep them."
+  },
+  "accessReasonStreamlocalSocketDenied": "The SSH server could not open the engine socket as your account, which cannot use it. The Docker socket row shows how access is granted.",
+  "@accessReasonStreamlocalSocketDenied": {
+    "description": "Access tab row reason: the SSH server could not open the engine socket because the login account may not use it; 'Docker socket' is the accessItemDockerSocket row title."
+  },
+  "accessReasonStreamlocalUntested": "Not tested: no engine socket could be tried. The Docker tab says why.",
+  "@accessReasonStreamlocalUntested": {
+    "description": "Access tab row reason: the Docker endpoint failed before any socket could be tried (none found, the check failed, or the engine did not answer)."
+  },
+  "accessReasonComposePlugin": "Version {version}.",
+  "@accessReasonComposePlugin": {
+    "description": "Access tab row reason: the docker compose plugin is installed; version is its version as it printed it, such as 2.29.7.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "accessReasonComposeStandaloneOnly": "Only the standalone docker-compose {version} is installed. Stacks show read-only and their sources are not verified.",
+  "@accessReasonComposeStandaloneOnly": {
+    "description": "Access tab row reason: only the standalone docker-compose binary (Compose v2) is installed; version is its version.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "accessReasonComposeLegacyOnly": "Only Compose v1 ({version}) is installed, unmaintained since 2023. Stacks show read-only.",
+  "@accessReasonComposeLegacyOnly": {
+    "description": "Access tab row reason: only the Python Compose v1 binary is installed; version is its version, such as 1.29.2.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "accessReasonNoCompose": "Neither docker compose nor docker-compose is installed.",
+  "@accessReasonNoCompose": {
+    "description": "Access tab row reason: no compose command was found on the server. Both are command names; keep them."
+  },
+  "accessReasonComposeNotChecked": "Checked once Klabautermann reaches this server's Docker engine.",
+  "@accessReasonComposeNotChecked": {
+    "description": "Access tab row reason for the compose plugin before the Docker endpoint is ready."
+  },
+  "accessReasonComposeCheckFailed": "The check for docker compose failed on this server.",
+  "@accessReasonComposeCheckFailed": {
+    "description": "Access tab row reason: the command that looks for the compose plugin failed."
   },
   "accessReasonSystemdJson": "Version {version}: unit and timer lists are read in full.",
   "@accessReasonSystemdJson": {
@@ -1548,6 +1603,24 @@
   "accessReasonNoEngine": "No Docker or Podman engine was found.",
   "@accessReasonNoEngine": {
     "description": "Access tab and Docker tab: no engine socket and no engine command."
+  },
+  "accessReasonRuntimeChosen": "Chosen manually on this device: {path}",
+  "@accessReasonRuntimeChosen": {
+    "description": "Access tab runtime row reason: the user chose this server's Docker engine socket in the Docker tab (CN-09); path is the socket's path on the server.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "accessReasonRuntimeChosenUnavailable": "{path} was chosen on this device, but Docker does not use it: it did not answer, so another socket or none is in use.",
+  "@accessReasonRuntimeChosenUnavailable": {
+    "description": "Access tab runtime row reason: the socket the user chose is not the one in use; path is the chosen socket's path on the server.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
   },
   "accessRootEquivalentBadge": "Root-equivalent",
   "@accessRootEquivalentBadge": {
@@ -1633,7 +1706,7 @@
   "@accessEngineNotUsable": {
     "description": "Access tab and Docker tab: the account cannot write to this engine socket."
   },
-  "accessRuntimeAlias": "Podman can also answer on Docker's socket path. Docker support will tell them apart.",
+  "accessRuntimeAlias": "Podman can also answer on Docker's socket path. Once connected, the server header names the engine that answers.",
   "@accessRuntimeAlias": {
     "description": "Access tab and Docker tab: note under a socket at Docker's path, which a podman-docker install may serve."
   },
@@ -3371,6 +3444,10 @@
   "@dockerTransportLinkError": {
     "description": "The server header's Docker transport label (03 §5.9, E4) when the SSH connection failed while the routes were tried."
   },
+  "dockerTransportInvalidChoice": "No Engine API route: the chosen socket path is not valid",
+  "@dockerTransportInvalidChoice": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the socket path chosen for the server is not an absolute path."
+  },
   "dockerLowSession": "Low-session mode",
   "@dockerLowSession": {
     "description": "Server header: the server allows few SSH sessions, so Docker shares them sparingly (03 §5.2)."
@@ -3465,6 +3542,10 @@
   "@dockerGateLinkError": {
     "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the SSH connection failed meanwhile."
   },
+  "dockerGateInvalidChoice": "The socket path chosen for this server is not a valid absolute path. Choose another socket below.",
+  "@dockerGateInvalidChoice": {
+    "description": "Docker tab, shown instead of its panels under accessPanelHiddenTitle: the chosen socket path is not valid; the socket picker follows below."
+  },
   "dockerRetry": "Try again",
   "@dockerRetry": {
     "description": "Docker tab: asks again for the Docker endpoint or the engine details after a failure."
@@ -3552,6 +3633,72 @@
   "dockerNoticeNotSaved": "Klabautermann could not save that you dismissed the root-equivalence note, so it shows again after a restart.",
   "@dockerNoticeNotSaved": {
     "description": "Toast: dismissing the Docker tab's root-equivalence notice could not be saved."
+  },
+  "dockerSocketLabel": "Socket",
+  "@dockerSocketLabel": {
+    "description": "Docker tab: label beside the picker that chooses which engine socket the app uses for this server (CN-09)."
+  },
+  "dockerSocketAutomatic": "Find automatically",
+  "@dockerSocketAutomatic": {
+    "description": "Docker socket picker option: the app finds the engine socket itself."
+  },
+  "dockerSocketCustomCurrent": "Custom: {path}",
+  "@dockerSocketCustomCurrent": {
+    "description": "Docker socket picker option: the custom socket path chosen for this server.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerSocketCustomAction": "Custom path…",
+  "@dockerSocketCustomAction": {
+    "description": "Docker socket picker option that opens a dialog to type a socket path."
+  },
+  "dockerSocketNotInUse": "{path} was chosen but did not answer, so the sockets found are tried instead.",
+  "@dockerSocketNotInUse": {
+    "description": "Docker tab, under the socket picker: the chosen socket is not the one in use; path is the chosen socket.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerSocketNotSaved": "Klabautermann could not save the socket choice, so it applies only until Klabautermann quits.",
+  "@dockerSocketNotSaved": {
+    "description": "Toast when the socket choice could not be written to the device settings."
+  },
+  "dockerSocketCustomTitle": "Custom engine socket",
+  "@dockerSocketCustomTitle": {
+    "description": "Title of the dialog that takes a custom Docker engine socket path."
+  },
+  "dockerSocketCustomBody": "Klabautermann tries this socket first. If it does not answer, the sockets it finds are tried instead.",
+  "@dockerSocketCustomBody": {
+    "description": "Body of the custom socket dialog."
+  },
+  "dockerSocketCustomField": "Socket path",
+  "@dockerSocketCustomField": {
+    "description": "Label of the custom socket dialog's text field."
+  },
+  "dockerSocketCustomHint": "/run/user/1000/docker.sock",
+  "@dockerSocketCustomHint": {
+    "description": "Hint in the custom socket dialog's field: an example socket path on a Linux server. Keep it as is."
+  },
+  "dockerSocketCustomUse": "Use",
+  "@dockerSocketCustomUse": {
+    "description": "Custom socket dialog button that applies the typed path."
+  },
+  "dockerSocketCustomCancel": "Cancel",
+  "@dockerSocketCustomCancel": {
+    "description": "Custom socket dialog button that closes it without a change."
+  },
+  "dockerSocketPathNotAbsolute": "Enter an absolute path, starting with /.",
+  "@dockerSocketPathNotAbsolute": {
+    "description": "Custom socket dialog error: the typed path does not start with a slash."
+  },
+  "dockerSocketPathUnsafe": "The path cannot contain line breaks or NUL characters.",
+  "@dockerSocketPathUnsafe": {
+    "description": "Custom socket dialog error: the typed path holds a line break or a NUL character."
   },
   "dockerContainersColumnName": "Name",
   "@dockerContainersColumnName": {

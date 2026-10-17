@@ -5,6 +5,10 @@ import 'package:meta/meta.dart';
 import 'package:seance_core/catalog.dart' show syncLocalDirectory;
 import 'package:seance_core/seance_core.dart' show uuidV4;
 
+import '../docker/docker_ladder.dart' show dockerSocketPathProblem;
+import '../engine/protocol.dart'
+    show DockerEndpointCustom, DockerEndpointDetected, DockerEndpointSocket;
+
 /// The device settings file under the app's support directory (03 §4.10).
 const String deviceSettingsFileName = 'settings.json';
 
@@ -24,11 +28,43 @@ const String _announceBandsKey =
     'klabautermann.accessibility.announceThresholdBands';
 const String _rootEquivalenceNoticeKey =
     'klabautermann.docker.rootEquivalenceNoticeDismissed';
+const String _endpointOverridesKey = 'klabautermann.docker.endpointOverrides';
+
+// The fields of one server's entry under [_endpointOverridesKey].
+const String _overrideChoiceField = 'choice';
+const String _overrideSocketField = 'socketPath';
+const String _overrideEndpointField = 'endpoint';
+const String _overrideDetected = 'detected';
+const String _overrideCustom = 'custom';
 
 /// Replaces a file's contents. [DeviceSettingsStore] writes the settings
 /// document and the copy of a damaged file through it.
 typedef DeviceSettingsWriter =
     Future<void> Function(File target, List<int> bytes);
+
+/// One server's engine socket chosen on this device (CN-09, D54), with
+/// the endpoint it was chosen for, so a server that now names another
+/// machine (SYN-08) loses it even when the change happened while the app
+/// was not running.
+@immutable
+final class DockerEndpointOverride {
+  const DockerEndpointOverride(this.choice, {required this.endpoint});
+
+  final DockerEndpointSocket choice;
+
+  /// The server's endpoint as the app keys it when the choice was made;
+  /// opaque to the store, which only compares it.
+  final String endpoint;
+
+  @override
+  bool operator ==(Object other) =>
+      other is DockerEndpointOverride &&
+      other.choice == choice &&
+      other.endpoint == endpoint;
+
+  @override
+  int get hashCode => Object.hash(choice, endpoint);
+}
 
 /// What went wrong with `settings.json` when the store opened.
 enum DeviceSettingsIssueKind {
@@ -100,8 +136,9 @@ final class DeviceSettingsReadOnlyException implements Exception {
 /// This device's `settings.json` (03 §4.10): the device id, the appearance,
 /// whether the first-run coverage card was dismissed, whether screen
 /// readers hear threshold-band changes (D60), whether the Docker tab's
-/// root-equivalence notice was dismissed (SAF-08) and, later, the monitor
-/// set and per-server device preferences.
+/// root-equivalence notice was dismissed (SAF-08), each server's engine
+/// socket chosen on this device (CN-09) and, later, the monitor set and
+/// other per-server device preferences.
 ///
 /// The app's isolate owns it: the composition root opens it once and the
 /// controllers write through it. The desktop settings window runs no store
@@ -277,6 +314,96 @@ final class DeviceSettingsStore {
   Future<void> dismissRootEquivalenceNotice() async {
     _values[_rootEquivalenceNoticeKey] = true;
     await _save();
+  }
+
+  /// The engine socket chosen for each server on this device (CN-09,
+  /// D54), by server id: `klabautermann.docker.endpointOverrides`. A
+  /// server without an entry finds its socket itself. Entries read
+  /// leniently: one that is not an object, names no known choice, holds
+  /// a path [dockerSocketPathProblem] refuses or no endpoint is skipped,
+  /// as is a value that is not an object, rather than failing the file.
+  Map<String, DockerEndpointOverride> get dockerEndpointOverrides => {
+    for (final MapEntry(:key, :value) in _rawEndpointOverrides.entries)
+      if (_readOverride(value) case final override?) key: override,
+  };
+
+  /// Stores [override] as [serverId]'s choice, or removes it when null
+  /// (the engine finds the socket itself), and writes the document. The
+  /// other servers' entries stay as they were read, a newer build's
+  /// included. Throws when the write fails or this session is
+  /// read-only; the value stays in memory either way.
+  Future<void> setDockerEndpointOverride(
+    String serverId,
+    DockerEndpointOverride? override,
+  ) async {
+    final entries = _rawEndpointOverrides;
+    if (override == null) {
+      entries.remove(serverId);
+    } else {
+      entries[serverId] = {
+        _overrideChoiceField: switch (override.choice) {
+          DockerEndpointDetected() => _overrideDetected,
+          DockerEndpointCustom() => _overrideCustom,
+        },
+        _overrideSocketField: override.choice.socketPath,
+        _overrideEndpointField: override.endpoint,
+      };
+    }
+    _values[_endpointOverridesKey] = entries;
+    await _save();
+  }
+
+  /// Drops the choice of every server [endpoints] does not list, or whose
+  /// stored endpoint differs from the one it lists (SYN-08): the fleet
+  /// lost the server, or its id now names another machine. [endpoints]
+  /// is the whole fleet, keyed as [DockerEndpointOverride.endpoint] is.
+  /// Returns the server ids dropped, and writes the document only when
+  /// there are any; throws as [setDockerEndpointOverride] does.
+  Future<Set<String>> purgeDockerEndpointOverrides(
+    Map<String, String> endpoints,
+  ) async {
+    final entries = _rawEndpointOverrides;
+    final dropped = {
+      for (final MapEntry(:key, :value) in entries.entries)
+        if (endpoints[key] == null ||
+            switch (value) {
+              {_overrideEndpointField: final String endpoint} =>
+                endpoint != endpoints[key],
+              _ => true,
+            })
+          key,
+    };
+    if (dropped.isEmpty) return dropped;
+
+    entries.removeWhere((serverId, _) => dropped.contains(serverId));
+    _values[_endpointOverridesKey] = entries;
+    await _save();
+    return dropped;
+  }
+
+  /// A copy of the stored entries, each as read; none when the value is
+  /// not an object.
+  Map<String, Object?> get _rawEndpointOverrides =>
+      switch (_values[_endpointOverridesKey]) {
+        final Map<String, Object?> entries => {...entries},
+        _ => {},
+      };
+
+  static DockerEndpointOverride? _readOverride(Object? value) {
+    if (value case {
+      _overrideChoiceField: final String choice,
+      _overrideSocketField: final String path,
+      _overrideEndpointField: final String endpoint,
+    } when dockerSocketPathProblem(path) == null) {
+      final socket = switch (choice) {
+        _overrideDetected => DockerEndpointDetected(path),
+        _overrideCustom => DockerEndpointCustom(path),
+        _ => null,
+      };
+      if (socket == null) return null;
+      return DockerEndpointOverride(socket, endpoint: endpoint);
+    }
+    return null;
   }
 
   /// Mints the device id when there is none and writes the document when

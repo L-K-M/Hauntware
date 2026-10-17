@@ -14,6 +14,7 @@ final class FleetServer {
     this.address,
     this.searchText,
     this.locatorConflict,
+    this.endpoint = '',
   });
 
   /// The row for [entry]; its address leaves out the default port.
@@ -24,6 +25,7 @@ final class FleetServer {
       address: _address(entry),
       searchText: entry.searchText,
       locatorConflict: entry.locatorConflict,
+      endpoint: _endpoint(entry),
     );
   }
 
@@ -42,6 +44,20 @@ final class FleetServer {
   /// The ids of the servers whose host-key pins would collide with this
   /// one's (03 §4.6); see [FleetEntry.locatorConflict].
   final List<String>? locatorConflict;
+
+  /// The machine the entry reaches, as a key that changes when its login,
+  /// host, port or jump route does (SYN-08): a device preference made for
+  /// the server keeps it and is dropped once it differs. Empty for a
+  /// server not built from a [FleetEntry].
+  final String endpoint;
+
+  /// `user@host:port`, then each jump hop as its source names it. The
+  /// local account a missing login stands for is left out: it is the
+  /// same on this device for as long as the key is kept.
+  static String _endpoint(FleetEntry entry) => [
+    '${entry.user ?? ''}@${entry.host}:${entry.port}',
+    ...?entry.jumpRoute,
+  ].join(' ');
 
   static String _address(FleetEntry entry) {
     final login = entry.user == null ? '' : '${entry.user}@';

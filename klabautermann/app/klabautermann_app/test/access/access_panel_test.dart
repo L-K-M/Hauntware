@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_fonts/testing.dart' show loadBundledMonoFonts;
 import 'package:ghost_ui/ghost_ui.dart' show contrastRatio;
+import 'package:klabautermann_app/controllers/docker_endpoint_choices.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
@@ -12,6 +13,7 @@ import 'package:klabautermann_app/ui/access/access_panel.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../support/charts.dart';
+import '../support/docker.dart';
 import '../support/fake_engine.dart';
 import '../support/harness.dart';
 import 'profiles.dart';
@@ -123,7 +125,19 @@ void main() {
     expect(find.text('Missing'), findsNWidgets(3));
     expect(find.text('OK'), findsNWidgets(2));
     expect(find.text('Unknown'), findsNWidgets(2));
-    expect(find.text('Checked once Docker support arrives.'), findsNWidgets(2));
+    expect(
+      find.text(
+        "Checked when Klabautermann looks for this server's Docker engine, "
+        'after it connects.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        "Checked once Klabautermann reaches this server's Docker engine.",
+      ),
+      findsOneWidget,
+    );
     expect(
       find.text('Version 252: unit and timer lists are read in full.'),
       findsOneWidget,
@@ -143,6 +157,179 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Your account cannot use it.'), findsOneWidget);
+  });
+
+  group('the Docker endpoint\'s rows (CN-24, CN-09)', () {
+    Finder row(String title) => find.ancestor(
+      of: find.text(title),
+      matching: find.byType(MergeSemantics),
+    );
+
+    String rowText(WidgetTester tester, String title) => tester
+        .widgetList<Text>(
+          find.descendant(of: row(title).first, matching: find.byType(Text)),
+        )
+        .map((text) => text.data)
+        .join('\n');
+
+    List<DockerQuery> composeQueries(AppHarness harness) => [
+      for (final query in harness.engine.sentOfType<DockerQuery>().cast())
+        if (query.query is DockerComposeQuery) query,
+    ];
+
+    testWidgets('streamlocal follows the route, and compose is read once the '
+        'endpoint is ready', (tester) async {
+      final harness = await _openWeb1(tester, _desktop, profile: debianHost());
+      await _openTab(tester, 'Access');
+      expect(composeQueries(harness), isEmpty);
+
+      harness.engine.emit(dockerReady('srv-1'));
+      await tester.pumpAndSettle();
+      expect(
+        rowText(tester, 'Streamlocal forwarding'),
+        'Streamlocal forwarding\nOK\nThe SSH server forwards the engine '
+        'socket, the fastest route to Docker.',
+      );
+      expect(composeQueries(harness), hasLength(1));
+
+      final cases = <DockerComposeCli, String>{
+        const DockerComposeCli(
+          pluginVersion: '2.29.7',
+          standaloneVersion: '1.29.2',
+        ): 'OK\nVersion 2.29.7.',
+        const DockerComposeCli(standaloneVersion: '2.29.7'):
+            'Missing\nOnly the standalone docker-compose 2.29.7 is '
+            'installed. Stacks show read-only and their sources are not '
+            'verified.',
+        const DockerComposeCli(standaloneVersion: '1.29.2'):
+            'Missing\nOnly Compose v1 (1.29.2) is installed, unmaintained '
+            'since 2023. Stacks show read-only.',
+        const DockerComposeCli():
+            'Missing\nNeither docker compose nor '
+            'docker-compose is installed.',
+      };
+      for (final MapEntry(key: cli, value: want) in cases.entries) {
+        harness.engine.emit(
+          DockerListChanged(
+            serverId: 'srv-1',
+            list: DockerWatchList.stacks,
+            payload: DockerStacksPayload(
+              const ComposeGrouping(projects: [], unmanaged: []),
+              composeCli: cli,
+            ),
+            at: DateTime(2026, 10, 17),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(rowText(tester, 'Compose plugin'), 'Compose plugin\n$want');
+      }
+
+      // A relay means sshd refused the socket; a new route reads the
+      // compose CLIs again, and a failed check says so.
+      harness.engine.emit(dockerReady('srv-1', rank: DockerRank.cliRelay));
+      await tester.pumpAndSettle();
+      expect(
+        rowText(tester, 'Streamlocal forwarding'),
+        startsWith('Streamlocal forwarding\nMissing\nThe SSH server refused'),
+      );
+      expect(composeQueries(harness), hasLength(2));
+      harness.engine.emit(
+        dockerAnswer(
+          composeQueries(harness).last,
+          const DockerQueryFailed(DockerQueryFailure.connectionFailed),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        rowText(tester, 'Compose plugin'),
+        'Compose plugin\nUnknown\nThe check for docker compose failed on '
+        'this server.',
+      );
+    });
+
+    testWidgets('a socket the account cannot use, and a failure that tried '
+        'none', (tester) async {
+      final harness = await _openWeb1(tester, _desktop, profile: debianHost());
+      await _openTab(tester, 'Access');
+
+      harness.engine.emit(
+        dockerNoRoute('srv-1', DockerNoRouteReason.socketDenied),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        rowText(tester, 'Streamlocal forwarding'),
+        'Streamlocal forwarding\nMissing\nThe SSH server could not open the '
+        'engine socket as your account, which cannot use it. The Docker '
+        'socket row shows how access is granted.',
+      );
+
+      harness.engine.emit(dockerNoRoute('srv-1', DockerNoRouteReason.noSocket));
+      await tester.pumpAndSettle();
+      expect(
+        rowText(tester, 'Streamlocal forwarding'),
+        'Streamlocal forwarding\nUnknown\nNot tested: no engine socket could '
+        'be tried. The Docker tab says why.',
+      );
+      expect(composeQueries(harness), isEmpty);
+    });
+
+    testWidgets('the runtime row says a socket chosen on this device, and '
+        'when it is not in use', (tester) async {
+      const custom = '/srv/engine.sock';
+      final choices = DockerEndpointChoices(
+        stored: const {
+          'srv-1': DockerEndpointOverride(
+            DockerEndpointCustom(custom),
+            endpoint: '',
+          ),
+        },
+      );
+      addTearDown(choices.dispose);
+      final harness = await pumpApp(
+        tester,
+        size: _desktop,
+        servers: twoServers,
+        dockerEndpointChoices: choices,
+      );
+      await tester.tap(find.text('web-1'));
+      await tester.pumpAndSettle();
+      harness.engine.emit(HostProfileChanged('srv-1', debianHost()));
+      await tester.pumpAndSettle();
+      await _openTab(tester, 'Access');
+
+      harness.engine.emit(
+        DockerEndpointState(
+          serverId: 'srv-1',
+          phase: DockerEndpointPhase.ready,
+          route: dockerReady('srv-1', socketPath: custom, mode: null).route,
+          choice: const DockerEndpointCustom(custom),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        rowText(tester, 'Container runtime'),
+        startsWith(
+          'Container runtime\nOK\nChosen manually on this device: $custom',
+        ),
+      );
+
+      harness.engine.emit(
+        DockerEndpointState(
+          serverId: 'srv-1',
+          phase: DockerEndpointPhase.ready,
+          route: dockerReady('srv-1').route,
+          choice: const DockerEndpointCustom(custom),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        rowText(tester, 'Container runtime'),
+        startsWith(
+          'Container runtime\nMissing\n$custom was chosen on this device, '
+          'but Docker does not use it',
+        ),
+      );
+    });
   });
 
   testWidgets('copies a fix to the clipboard and sends the engine '
