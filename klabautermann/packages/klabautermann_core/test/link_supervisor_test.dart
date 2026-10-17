@@ -3,7 +3,9 @@ import 'dart:math';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/links/link_connector.dart';
+import 'package:klabautermann_core/src/fleet/synced_fleet.dart';
 import 'package:klabautermann_core/src/links/link_supervisor.dart';
+import 'package:seance_core/catalog.dart' show EndpointPin;
 import 'package:seance_core/seance_core.dart'
     show
         AuthMethod,
@@ -174,6 +176,7 @@ void main() {
   LinkSupervisor make({
     BackgroundLinkPolicy policy = BackgroundLinkPolicy.keepOpen,
     double random = 0,
+    ServerConfig? Function(String serverId)? configFor,
   }) => LinkSupervisor(
     connect:
         (
@@ -195,8 +198,9 @@ void main() {
           calls.add(call);
           return call._result.future;
         },
-    configFor: (id) =>
-        id.startsWith('s') && !gone.contains(id) ? _config(id) : null,
+    configFor:
+        configFor ??
+        (id) => id.startsWith('s') && !gone.contains(id) ? _config(id) : null,
     emit: events.add,
     policy: policy,
     startTimer: clock.start,
@@ -235,6 +239,40 @@ void main() {
 
     await clock.elapse(const Duration(seconds: 1));
     expect(fired, [for (var i = 0; i < 40; i++) i]);
+  });
+
+  test('a background connect never dials a synced server whose endpoint '
+      'is not confirmed, nor one a sync changed while it backed off '
+      '(SAF-09)', () async {
+    final pin = EndpointPin(
+      serverId: 's1',
+      host: '192.0.2.10',
+      port: 22,
+      username: 'me',
+      jumpRouteIds: const [],
+      confirmedAt: DateTime.utc(2026),
+    );
+    var synced = SyncedFleet([_config('s1')]);
+    supervisor = make(configFor: (id) => synced.serverConfig(id));
+
+    expect(supervisor.connect('s1', purpose: _background), isFalse);
+    await clock.elapse(kConnectJitter);
+    expect(calls, isEmpty);
+
+    synced = SyncedFleet([_config('s1')], pins: {'s1': pin});
+    final link = await linked();
+    link.become(const SshLinkClosed(SshLinkClosedReason.pingTimeout));
+    await clock.elapse(Duration.zero);
+    expect(statuses().last, isA<LinkBackoff>());
+
+    // The host moved on another device while the link backed off.
+    synced = SyncedFleet(
+      [_config('s1').copyWith(host: '198.51.100.7')],
+      pins: {'s1': pin},
+    );
+    await clock.elapse(const Duration(minutes: 5));
+    expect(calls, hasLength(1), reason: 'only the user\'s confirmed dial');
+    expect(statuses().last, _ownerClosed);
   });
 
   test('an unknown server is refused', () {

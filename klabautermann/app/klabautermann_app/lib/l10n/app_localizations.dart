@@ -3286,6 +3286,102 @@ abstract class AppLocalizations {
   /// **'You can\'t connect to this server yet: it comes from an earlier import that kept only its address. Import your SSH config again to connect.'**
   String get connectRejectedAddressOnly;
 
+  /// Banner on a server's workspace or screen when the engine will not connect a synced server because its endpoint (host, port, user, jump route) is not confirmed on this device or changed since (03 §4.7, SAF-09). The user confirms it from the notice over the fleet list, whose button is endpointsReview.
+  ///
+  /// In en, this message translates to:
+  /// **'You can\'t connect to this server yet: its address comes from your sync account and isn\'t confirmed on this device, or it changed since you confirmed it. Choose Review over the server list to check and confirm it.'**
+  String get connectRejectedEndpointNotConfirmed;
+
+  /// Notice over the fleet list while synced servers wait for endpoint confirmation on this device (03 §4.3 step 3, SAF-09): new from the sync account, or changed since they were confirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} synced server waits for you to confirm its address.} other{{count} synced servers wait for you to confirm their addresses.}}'**
+  String endpointsPendingNotice(int count);
+
+  /// Button on endpointsPendingNotice that opens the endpoint confirmation list.
+  ///
+  /// In en, this message translates to:
+  /// **'Review'**
+  String get endpointsReview;
+
+  /// Title of the endpoint confirmation list (03 §4.3 step 3).
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm server addresses'**
+  String get endpointsTitle;
+
+  /// Explanation at the top of the endpoint confirmation list (SAF-09): any device on the account can rewrite a server's address, and a background connect would then hand a credential to the new host.
+  ///
+  /// In en, this message translates to:
+  /// **'These servers come from your sync account. Klabautermann connects only to addresses you confirm on this device, so an address changed on another device cannot receive your sign-in unnoticed. Check each host, port, user and jump route before you confirm it.'**
+  String get endpointsBody;
+
+  /// Label of the search field of the endpoint confirmation list; it matches names, users and addresses.
+  ///
+  /// In en, this message translates to:
+  /// **'Search servers'**
+  String get endpointsSearch;
+
+  /// Line of an endpoint confirmation row naming the jump hosts the server is reached through, first hop first.
+  ///
+  /// In en, this message translates to:
+  /// **'via {route}'**
+  String endpointsRoute(String route);
+
+  /// Between the jump hosts in endpointsRoute, from the first hop towards the server.
+  ///
+  /// In en, this message translates to:
+  /// **' → '**
+  String get endpointsRouteSeparator;
+
+  /// Line of an endpoint confirmation row whose server, or a jump host it goes through, was changed by a sync after this device confirmed it (03 §4.7).
+  ///
+  /// In en, this message translates to:
+  /// **'Changed since you confirmed it'**
+  String get endpointsChanged;
+
+  /// Shown in place of the rows when the search of the endpoint confirmation list matches no server.
+  ///
+  /// In en, this message translates to:
+  /// **'No servers match your search.'**
+  String get endpointsNoMatch;
+
+  /// Shown in place of the rows when no synced server waits for confirmation any more.
+  ///
+  /// In en, this message translates to:
+  /// **'Every synced server\'s address is confirmed on this device.'**
+  String get endpointsNoneLeft;
+
+  /// Button of the endpoint confirmation list that confirms every row the search shows, whatever its toggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm all shown'**
+  String get endpointsConfirmAllShown;
+
+  /// Main button of the endpoint confirmation list: confirms the rows whose toggles are on; disabled while none is.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Confirm selected} one{Confirm {count} server} other{Confirm {count} servers}}'**
+  String endpointsConfirmSelected(int count);
+
+  /// Toast after the confirmed servers left the list; Klabautermann may now connect to them.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Confirmed {count} server address.} other{Confirmed {count} server addresses.}}'**
+  String endpointsConfirmed(int count);
+
+  /// Under the endpoint confirmation list when a confirmed server stays listed because a jump host on its route changed and needs its own confirmation (D64).
+  ///
+  /// In en, this message translates to:
+  /// **'Some servers still need confirming: confirm the jump hosts they go through too.'**
+  String get endpointsStillPending;
+
+  /// Under the endpoint confirmation list when the engine could not save the confirmation or stopped before answering.
+  ///
+  /// In en, this message translates to:
+  /// **'The confirmation could not be saved on this device, so these servers stay unconfirmed. Try again.'**
+  String get endpointsFailed;
+
   /// Heading of the accessibility settings on the General settings tab.
   ///
   /// In en, this message translates to:
