@@ -361,11 +361,13 @@ void main() {
       0,
       reason: '$output',
     );
+    // `docker save` and the `docker load` it pipes into start together,
+    // so their stubs log in either order.
+    expect(fixtureLifetime(), contains(startsWith('docker save ')));
     expect(
       fixtureLifetime(),
       containsAllInOrder([
         startsWith('docker pull --quiet mirror.gcr.io/library/busybox:'),
-        startsWith('docker save '),
         allOf(
           startsWith('ssh '),
           endsWith(' klab@127.0.0.1 docker load --quiet'),
