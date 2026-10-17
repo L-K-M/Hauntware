@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:klabautermann_core/src/docker/duplex_adapters.dart';
 import 'package:klabautermann_docker/klabautermann_docker.dart' as docker;
 import 'package:seance_core/seance_core.dart'
     show
         AuthMethod,
-        ByteDuplex,
         HostKeyVerdict,
         InMemoryHostKeyStore,
         ServerConfig,
@@ -61,33 +61,8 @@ Future<SshLink> connectDockerHost(
 /// [socket] over [link]. The test's teardown closes it.
 docker.DockerHttpClient streamlocalClient(SshLink link, String socket) {
   final http = docker.DockerHttpClient(
-    () async => _StreamlocalDuplex(await link.openUnixStream(socket)),
+    () async => SshDuplexAdapter(await link.openUnixStream(socket)),
   );
   addTearDown(http.close);
   return http;
-}
-
-/// seance_core's duplex as klabautermann_docker's seam, its half-close
-/// the sink's close (channel EOF with the read side open). The engine's
-/// own adapter comes with M3's transport PR (D04); this one serves the
-/// fixture suites until then.
-final class _StreamlocalDuplex implements docker.ByteDuplex {
-  _StreamlocalDuplex(this._channel);
-
-  final ByteDuplex _channel;
-
-  @override
-  Stream<List<int>> get stream => _channel.stream;
-
-  @override
-  StreamSink<List<int>> get sink => _channel.sink;
-
-  @override
-  Future<void> closeWrite() => _channel.sink.close();
-
-  @override
-  Future<void> close() => _channel.close();
-
-  @override
-  Future<void> get done => _channel.done;
 }
