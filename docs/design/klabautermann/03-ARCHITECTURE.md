@@ -246,7 +246,8 @@ D50 LXC values · D51 Access tab · D52 runtime placement · D53 integration
 placement · D54 runtime override in M3 · D55 no health overlay in the MVP
 · D56 log search through `planchette_core` · D57 timer triggers · D58
 cron zone rules · D59 capability cache · D60 threshold announcements ·
-D61 host-key pins and re-pin.
+D61 host-key pins and re-pin ·
+D62 sync state files and the keystore port.
 Proposals awaiting the owner close the section; they are not decisions.
 
 ### Shape and scope
@@ -969,6 +970,57 @@ Proposals awaiting the owner close the section; they are not decisions.
   instance would take every pinned server as first seen, so a
   man-in-the-middle would meet a first-use review instead of a block);
   writing the file without the lock (two instances race, 4.10).
+- **D62. Sync state files and the keystore port (K49a, M2).** The
+  catalog library's `PinVerdictStore`, `SyncTripwireStore` and
+  `SyncEnrollmentState` seams get files of their own under the support
+  directory (4.10), built in `klabautermann_core/lib/src/catalog/` for
+  the engine, which runs enrollment and rounds (D18):
+  `pin_verdicts.json` (`negativePins`, `keptVerdicts`),
+  `sync_tripwires.json` (`trippedIds`) and `sync_enrollment.json`
+  (`passphraseUnverified`, `notices`, `account`), each with a `version`
+  (1). None goes into `settings.json`, which the app isolate owns, or
+  the record store, whose quarantine would erase them. The enrollment
+  file holds no device id: the store is handed the one `settings.json`
+  holds (`klabautermann.sync.deviceId`) and never mints one. The three
+  share one rule set: a damaged file is renamed to
+  `<name>.corrupt-<UTC time>` and the store starts empty (a damaged
+  enrollment file therefore reads as not enrolled, so no round runs
+  until the next enrollment, which sets the push hold again); a file
+  that cannot be read or renamed, or one from a newer schema, is left as
+  it is and no change is saved that session; writes are whole-file and
+  atomic through `writeFileAtomically` and queue in call order; they
+  happen only with `SupportDirectoryAccess.exclusive`, so an unguarded
+  process reads the files, renames nothing and keeps changes in memory,
+  as the capability cache does (D59). They hold no secret and keep the
+  process default mode, like `host_keys.json`. The `SyncCredentialStore`
+  (`KeystoreSyncCredentialStore`) stays engine-side over a pure-Dart
+  `SyncKeystore` port named after `ghost_keystore`'s `MasterKeyManager`
+  (put, get and delete an API key; read and write the master key), with
+  the entry names `klabautermann.vault.masterKey.v1` and
+  `klabautermann.apikey.` and the token name `sync.token` (4.5). Its
+  enrollment re-key stages both vault generations in the shared
+  `FileVaultStore` journal before the keystore write, and reads the
+  installed key without minting, before and after a failed write
+  (`probeKeystore(hasExistingVault: true)` in the binding): a key minted
+  there would open neither generation. Why the port: `ghost_keystore`
+  is a Flutter plugin package this pure-Dart package cannot depend on
+  (3.2, `tool/guards.yaml` pure packages), and its platform channels
+  answer only the app's root isolate, while the engine is a plain
+  `Isolate.spawn` with no Flutter binding. So the app binds
+  `MasterKeyManager` and answers the port's calls over the engine
+  protocol, as Poltergeist's UI isolate answers its engine's trash
+  channel (`PA/services/engine_session.dart`); K49b adds that request
+  pair and the binding. Not yet built: the app's dependency on
+  `ghost_keystore` adds `flutter_secure_storage`, whose Linux plugin
+  needs `libsecret-1-dev` and `libjsoncpp-dev` in the
+  `klabautermann_client` CI job (a root-shared file, 06), so it lands
+  with K49b. *Rejected:* `BackgroundIsolateBinaryMessenger` in the
+  engine (needs a Flutter import and an app-owned engine entry point,
+  and every keystore plugin's background-isolate support verified per
+  platform); the keys sent to the engine at start (the token and master
+  key would sit in engine memory before any sync runs, and an enrollment
+  still has to write them back); the state kept in `settings.json`
+  (the engine would write the app isolate's file through the protocol).
 
 ### Privilege and safety
 
@@ -1784,6 +1836,10 @@ re-push (c1 §2.4).
   `poltergeist.vault.masterKey.v1` [V]), loaded through `ghost_keystore`'s
   `hasExistingVault`-aware path. macOS uses the legacy login keychain
   (`MacOsOptions(usesDataProtectionKeychain: false)`), like both siblings.
+  As built in M2 (K49a, D62): the engine's `SyncCredentialStore` works
+  over a `SyncKeystore` port that the app answers with `ghost_keystore`,
+  since the plugin's channels answer only the root isolate; the binding
+  and its protocol requests land with K49b.
 - **Synced secrets.** Applied only when the device `syncSecrets` switch is
   on, the server has `syncSecret: true`, it is not excluded, and the record
   passes the freshness floor (c1 §2.2). Otherwise the app prompts and stores
@@ -1959,7 +2015,8 @@ platform identities in 04, section 12.3):
 |---|---|---|---|
 | `servers.json`, `sync_records.json` | Catalog mirror and materialized list | catalog library | MVP |
 | `vault.json`, `vault.json.rekey` | Credentials and re-key journal | `SC/src/store/` | MVP |
-| `host_keys.json`, verdict and tripwire files | Pins and quarantine state. From M2 the engine pins through the catalog library's `FileHostKeyStore`, one instance per engine, and writes `host_keys.json` only while the process holds the directory alone; otherwise it reads the file once and keeps pins in memory (D61) | catalog library | MVP |
+| `host_keys.json`, `pin_verdicts.json`, `sync_tripwires.json` | Pins and quarantine state. From M2 the engine pins through the catalog library's `FileHostKeyStore`, one instance per engine, and writes `host_keys.json` only while the process holds the directory alone; otherwise it reads the file once and keeps pins in memory (D61). As built in M2 (K49a, D62), the verdict and tripwire files are named `pin_verdicts.json` (negative pins and kept verdicts) and `sync_tripwires.json` (tripped record ids), owned by `klabautermann_core` over the catalog library's seams. A damaged file is renamed to `<name>.corrupt-<UTC time>` and the store starts empty; one it cannot read or rename, or one from a newer schema, is left as it is and no change is saved that run; nothing is written or renamed without exclusive access | catalog library; the verdict and tripwire files `klabautermann_core` [E] | MVP |
+| `sync_enrollment.json` [E] | Enrollment state (M2, K49a, D62): the push hold, the raised notices and the enrolled account (server URL, user name, mode); never the token or vault key, which stay in the keystore (4.5), and not the device id, which stays in `settings.json`. Kept like the verdict files; a damaged file reads as not enrolled | `klabautermann_core` [E] | MVP |
 | `endpoint_pins.json` | Confirmed endpoints | catalog library | MVP |
 | `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config`, replaced whole by each import; never pushed (D14). Schema 3 (M2) holds each host's alias, host, port, user, `IdentityFile` and `ProxyJump` with the values ssh would use (10.1): the effective host (`%h` expanded, lowercased unless an address) and port, the first `IdentityFile` that is not `none`, and the `ProxyJump` as written; under `hops` it holds the same for each other name a stored route gives. An older file holds addresses only: schema 1 (M1) kept no `IdentityFile` or `ProxyJump` and kept `HostName` as written, `%h` included, and schema 2 read each host's values from its first block alone. Its hosts are listed as stored, with no `jumpRoute`, `authKind` or `locatorConflict`, and get no connect config until the next import rewrites the file. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
 | `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), whether threshold-band changes are announced (`klabautermann.accessibility.announceThresholdBands`, M2, D60; anything but `false` announces), monitor set, per-server device preferences | app | MVP |
