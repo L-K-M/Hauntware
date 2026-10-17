@@ -122,3 +122,13 @@ export 'package:klabautermann_docker/klabautermann_docker.dart'
 export 'package:klabautermann_host/klabautermann_host.dart'
     show ExternalMonitorReport, ExternalMonitorUnit;
 export 'src/sampling/sample_results.dart' show externalMonitorsIn;
+// The Overview's threshold-band announcements (A11Y-15, D60): the rule
+// model's hysteresis evaluator, whose `for` durations debounce a band.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show
+        RulePhase,
+        ThresholdBound,
+        ThresholdOp,
+        ThresholdRule,
+        ThresholdState,
+        evaluateThreshold;

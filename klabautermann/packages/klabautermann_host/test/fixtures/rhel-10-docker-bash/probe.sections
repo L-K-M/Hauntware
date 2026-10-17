@@ -1,0 +1,97 @@
+### kernel ok
+Linux 6.18.44-fc-v139 x86_64
+### distro ok
+NAME="Red Hat Enterprise Linux"
+VERSION="10.2 (Coughlan)"
+RELEASE_TYPE=stable
+ID="rhel"
+ID_LIKE="centos fedora"
+VERSION_ID="10.2"
+PLATFORM_ID="platform:el10"
+PRETTY_NAME="Red Hat Enterprise Linux 10.2 (Coughlan)"
+ANSI_COLOR="0;31"
+LOGO="fedora-logo-icon"
+CPE_NAME="cpe:/o:redhat:enterprise_linux:10.2"
+HOME_URL="https://www.redhat.com/"
+VENDOR_NAME="Red Hat"
+VENDOR_URL="https://www.redhat.com/"
+DOCUMENTATION_URL="https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/10"
+BUG_REPORT_URL="https://issues.redhat.com/"
+
+REDHAT_BUGZILLA_PRODUCT="Red Hat Enterprise Linux 10"
+REDHAT_BUGZILLA_PRODUCT_VERSION=10.2
+REDHAT_SUPPORT_PRODUCT="Red Hat Enterprise Linux"
+REDHAT_SUPPORT_PRODUCT_VERSION="10.2"
+### init ok
+pid1_comm=sleep
+systemd_dir=no
+systemctl_rc=0
+systemctl_version=systemd 257 (257-23.el10_2.2-g009f2a8)
+### virt ok
+virt_rc=0
+virt=docker
+container_rc=0
+container=docker
+### lxcfs ok
+mounts=
+### identity ok
+uid=0
+user=root
+groups=root
+### elev ok
+sudo_version=
+sudo_noninteractive=
+doas=absent
+doas_noninteractive=
+run0=present
+printf=builtin
+### tools ok
+journalctl=/usr/bin/journalctl
+crontab=
+ss=/usr/sbin/ss
+ip=/usr/sbin/ip
+lsblk=/usr/bin/lsblk
+findmnt=/usr/bin/findmnt
+smartctl=
+sensors=
+docker=
+podman=
+socat=
+timeout=/usr/bin/timeout
+setsid=/usr/bin/setsid
+ncdu=
+gdu=
+sadf=
+logger=/usr/bin/logger
+systemd-run=/usr/bin/systemd-run
+systemd-analyze=/usr/bin/systemd-analyze
+apt-get=
+dnf=/usr/bin/dnf
+dnf5=
+apk=
+pacman=
+zypper=
+nvidia-smi=
+dmesg=/usr/bin/dmesg
+tail=/usr/bin/tail
+### kfeat ok
+psi=yes
+cgroup_v2=no
+### locale ok
+c_utf8=yes
+### sockets ok
+/var/run/docker.sock no no
+/run/podman/podman.sock no no
+/run/user/0/docker.sock no no
+/run/user/0/podman/podman.sock no no
+### session ok
+ssh_connection=
+ppid=7
+ppid_comm=dart:capture_fi
+### clock ok
+epoch=1792173370
+offset=+0000
+timedatectl_error=yes
+### linger ok
+xdg_runtime_dir=
+linger_error=yes

@@ -12,6 +12,8 @@
 import 'package:flutter/services.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 
+import '../../controllers/announcement_controller.dart'
+    show AnnouncementNotSavedException;
 import '../../controllers/appearance_controller.dart'
     show AppearanceNotSavedException;
 import '../../theme/app_theme.dart';
@@ -46,10 +48,13 @@ enum SettingsLinkMethod {
   /// The Appearance tab's theme-mode switch; the argument is a
   /// [ThemeModePreference] name.
   setThemeMode,
+
+  /// The General tab's A11Y-15 switch; the argument is a bool (D60).
+  setAnnounceThresholdBands,
 }
 
 /// The keys of every JSON object on the link, spelled once for both sides.
-enum SettingsLinkKey { appearance, palette, mode }
+enum SettingsLinkKey { appearance, palette, mode, announceThresholdBands }
 
 /// The palette's stored form, bound to Klabautermann's style.
 const _themeCodec = GhostThemeCodec(klabautermannThemeStyle);
@@ -79,6 +84,10 @@ enum SettingsLinkError {
   /// the Appearance tab words it the same in both places.
   notSaved,
 
+  /// As [notSaved], for the A11Y-15 switch: the window rebuilds the
+  /// [AnnouncementNotSavedException].
+  announcementNotSaved,
+
   /// Anything else: the change did not happen.
   failed,
 }
@@ -88,6 +97,8 @@ enum SettingsLinkError {
 PlatformException encodeLinkError(Object error) => PlatformException(
   code: switch (error) {
     AppearanceNotSavedException() => SettingsLinkError.notSaved.name,
+    AnnouncementNotSavedException() =>
+      SettingsLinkError.announcementNotSaved.name,
     _ => SettingsLinkError.failed.name,
   },
   message: '$error',
@@ -98,6 +109,9 @@ Exception decodeLinkError(PlatformException error) {
   final message = error.message ?? error.code;
   return switch (SettingsLinkError.values.asNameMap()[error.code]) {
     SettingsLinkError.notSaved => AppearanceNotSavedException(message),
+    SettingsLinkError.announcementNotSaved => AnnouncementNotSavedException(
+      message,
+    ),
     SettingsLinkError.failed || null => SettingsLinkException(message),
   };
 }

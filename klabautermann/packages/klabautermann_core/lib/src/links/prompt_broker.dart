@@ -19,8 +19,8 @@ enum PromptAnswerResult {
   notOpen,
 
   /// The answer does not fit the prompt: another [PromptKind]'s answer, or
-  /// a keyboard-interactive answer with a response count other than the
-  /// question count. The prompt stays open.
+  /// keyboard-interactive responses whose count is not the question
+  /// count. The prompt stays open.
   doesNotFit,
 }
 
@@ -121,9 +121,12 @@ final class PromptBroker {
   static bool _fits(PromptRequest request, PromptAnswer answer) =>
       switch (request) {
         HostKeyPromptRequest() => answer is PromptTrustAnswer,
+        // Declining takes a cancel: no response list stands for it, so an
+        // empty one to questions does not fit.
         KeyboardInteractivePromptRequest(:final questions) =>
-          answer is PromptResponsesAnswer &&
-              answer.responses.length == questions.length,
+          answer is PromptCancelAnswer ||
+              answer is PromptResponsesAnswer &&
+                  answer.responses.length == questions.length,
         CredentialPromptRequest() ||
         ElevationPromptRequest() => answer is PromptSecretAnswer,
       };

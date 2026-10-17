@@ -4,6 +4,7 @@ import 'package:flutter/services.dart' show SystemChannels;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/controllers/prompt_controller.dart';
 import 'package:klabautermann_app/ui/inspector_pane.dart';
 import 'package:klabautermann_app/ui/overview_panel.dart';
 import 'package:klabautermann_app/ui/server_surfaces.dart';
@@ -208,8 +209,10 @@ void main() {
       restarted,
       linkGrace: Duration.zero,
     );
+    final prompts = PromptController(restarted);
     addTearDown(() async {
       monitoring.dispose();
+      prompts.dispose();
       await restarted.close();
     });
 
@@ -217,8 +220,10 @@ void main() {
       KlabautermannApp(
         fleet: harness.fleet,
         monitoring: monitoring,
+        prompts: prompts,
         appearance: harness.appearance,
         coverage: harness.coverage,
+        announcements: harness.announcements,
       ),
     );
     await tester.pumpAndSettle();

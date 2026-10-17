@@ -37,6 +37,13 @@ void main() {
       expect(subscriptions.streamsFor('srv-2'), {SampleStream.fs});
       expect(subscriptions.streamsFor('srv-3'), isEmpty);
       expect(subscriptions.servers, {'srv-1', 'srv-2'});
+      // What a refresh reads: one subscription's own streams.
+      expect(subscriptions.streamsOf('srv-1', 'overview'), {
+        SampleStream.core,
+        SampleStream.fs,
+      });
+      expect(subscriptions.streamsOf('srv-1', 'system'), isNull);
+      expect(subscriptions.streamsOf('srv-3', 'row'), isNull);
     });
 
     test('dropping one surface keeps the streams another names', () {

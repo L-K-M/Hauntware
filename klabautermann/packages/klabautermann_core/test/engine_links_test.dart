@@ -13,6 +13,7 @@ import 'package:seance_core/seance_core.dart'
     show
         HostKey,
         HostKeyPrompter,
+        KeyboardInteractiveChallenge,
         KeyboardInteractiveResponder,
         ServerConfig,
         SshConnectException,
@@ -269,6 +270,62 @@ void main() {
     final dialed = dials.single;
     expect((dialed.config.host, dialed.config.username), ('192.0.2.10', 'me'));
     expect(dialed.onKeyboardInteractive, isNotNull, reason: 'interactive');
+  });
+
+  test('a cancelled keyboard-interactive prompt fails the connect as the '
+      'user\'s refusal', () async {
+    // The server asks one question; dartssh2 closes the connection on any
+    // other response count.
+    final engine = await _Engine.start(
+      support.path,
+      linksEnabled: true,
+      dial:
+          ({
+            required config,
+            required credentials,
+            required tofu,
+            required onHostKey,
+            onKeyboardInteractive,
+            resolveJumpHost,
+          }) async {
+            final responses = await onKeyboardInteractive!(
+              KeyboardInteractiveChallenge(
+                server: config,
+                prompts: ['Code:'],
+                name: '',
+                instruction: '',
+              ),
+            );
+            if (responses.length != 1) {
+              throw SshConnectException(
+                'closed',
+                Exception('count'),
+                SshConnectionLog(),
+              );
+            }
+            return _Link();
+          },
+    );
+    await engine.import(_webConfig);
+
+    engine.send(const Connect(_web));
+    expect(await engine.next(), _connecting);
+    final prompt = await engine.next() as Prompt;
+    final request = prompt.request as KeyboardInteractivePromptRequest;
+    expect(request.user, 'me');
+    expect(request.questions, ['Code:']);
+    expect(await engine.next(), isA<LinkState>());
+
+    engine.send(AnswerPrompt(prompt.promptId, const PromptCancelAnswer()));
+    expect(
+      await engine.next(),
+      _state(
+        const LinkClosed(
+          LinkClosedReason.connectFailed,
+          failure: LinkFailureKind.keyboardInteractiveCancelled,
+        ),
+      ),
+    );
   });
 
   test('Connect for a server outside the fleet is rejected, a jump hop '
@@ -572,18 +629,46 @@ void main() {
       );
     });
 
-    test('a reused id, a follow and a server outside the fleet are '
-        'rejected', () async {
+    test('a reused id and a server outside the fleet are rejected', () async {
       final engine = await startEngine();
       engine
         ..send(window('log-0'))
-        ..send(window('log-0'))
-        ..send(window('log-1', follow: true))
+        ..send(window('log-0', follow: true))
         ..send(window('log-2', serverId: 'ssh-config:gone'));
       expect(await engine.next(), isA<LogStreamState>());
       expect(await engine.rejected(), 'OpenLogStream');
       expect(await engine.rejected(), 'OpenLogStream');
-      expect(await engine.rejected(), 'OpenLogStream');
+    });
+
+    test('a follow (K26) reads its window, then each new entry, and '
+        'Disconnect ends it as failed', () async {
+      final engine = await startEngine();
+      engine.send(const Connect(_web));
+      expect(await engine.next(), _connecting);
+      expect(await engine.next(), _ready);
+      engine.send(window('log-0', follow: true));
+      expect(await engine.next(), stream('log-0', const LogStreamRunning()));
+      expect(
+        link.commands.single,
+        endsWith("'-u' 'nginx.service' '-n' '50' '-f'"),
+      );
+
+      final process = await link.process(0);
+      for (final message in ['old', 'new']) {
+        process.emitText(
+          '${jsonEncode({'__CURSOR': 's=$message', 'MESSAGE': message})}\n',
+        );
+        final batch = await engine.next() as LogBatch;
+        expect((batch.records.single as JournalRecord).message, message);
+      }
+
+      engine.send(const Disconnect(_web));
+      expect(
+        await engine.next(),
+        stream('log-0', const LogStreamEnded(LogStreamEndReason.failed)),
+      );
+      await pumpEventQueue();
+      expect(process.closeCalls, 1);
     });
 
     test('CloseStream ends a running window as closed', () async {

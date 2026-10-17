@@ -191,9 +191,12 @@ export 'package:seance_core/catalog.dart'
 export 'package:seance_core/catalog.dart'
     show
         ConflictAwareHostKeyStore,
+        FileHostKeyStore,
         HostKeyInstallResult,
         HostKeyMutationGate,
         InMemoryConflictAwareHostKeyStore;
+export 'package:seance_core/catalog.dart'
+    show FileVaultStore, VaultRekeyJournal, VaultRekeyOutcome;
 export 'package:seance_core/catalog.dart'
     show
         EnrollmentResult,

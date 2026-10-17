@@ -22,29 +22,16 @@ import 'dart:io';
 import 'src/engine_budget.dart';
 
 Future<void> main(List<String> args) async {
-  final options = <String, String>{};
-  var heap = HeapReadings.off;
-  for (var i = 0; i < args.length; i++) {
-    if (args[i] == '--heap') {
-      if (const bool.fromEnvironment('dart.vm.product')) {
-        _usage('--heap needs the VM service of `dart run`');
-      }
-      heap = HeapReadings.afterFullCollection;
-      continue;
-    }
-    final name = args[i].startsWith('--') ? args[i].substring(2) : '';
-    if (!const {
-          'scenario',
-          'seconds',
-          'warmup',
-          'log-rate',
-          'fixtures',
-          'out',
-        }.contains(name) ||
-        i + 1 == args.length) {
-      _usage('unexpected argument ${args[i]}');
-    }
-    options[name] = args[++i];
+  final Map<String, String> options;
+  final HeapReadings heap;
+  try {
+    (:options, :heap) = parseBudgetArgs(args);
+  } on FormatException catch (error) {
+    _usage(error.message);
+  }
+  if (heap != HeapReadings.off &&
+      const bool.fromEnvironment('dart.vm.product')) {
+    _usage('--heap needs the VM service of `dart run`');
   }
 
   final scenario =

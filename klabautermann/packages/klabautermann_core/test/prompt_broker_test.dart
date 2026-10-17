@@ -197,6 +197,51 @@ void main() {
     expect(((await secrets[1])! as PromptSecretAnswer).secret, isNull);
   });
 
+  test('a keyboard-interactive cancel ends the prompt at once', () async {
+    final answer = broker
+        .attempt('ssh-config:web')
+        .ask(host: 'h', port: 22, request: _twoQuestions);
+
+    // No response list declines: an empty one is the wrong count.
+    expect(
+      broker.answer('prompt-1', const PromptResponsesAnswer([])),
+      PromptAnswerResult.doesNotFit,
+    );
+    expect(
+      broker.answer('prompt-1', const PromptCancelAnswer()),
+      PromptAnswerResult.answered,
+    );
+
+    expect(await answer, isA<PromptCancelAnswer>());
+    expect(timers.single.isActive, isFalse);
+    // Answered, not withdrawn: the prompt event is the only one.
+    expect(events.single, isA<Prompt>());
+    expect(
+      broker.answer('prompt-1', const PromptCancelAnswer()),
+      PromptAnswerResult.notOpen,
+    );
+  });
+
+  test('only a keyboard-interactive prompt takes a cancel', () async {
+    final attempt = broker.attempt('ssh-config:web');
+    for (final request in const <PromptRequest>[
+      _hostKey,
+      CredentialPromptRequest(user: 'me'),
+      ElevationPromptRequest(user: 'me'),
+    ]) {
+      unawaited(attempt.ask(host: 'h', port: 22, request: request));
+    }
+
+    for (final promptId in ['prompt-1', 'prompt-2', 'prompt-3']) {
+      expect(
+        broker.answer(promptId, const PromptCancelAnswer()),
+        PromptAnswerResult.doesNotFit,
+        reason: promptId,
+      );
+    }
+    attempt.end();
+  });
+
   test('a host-key prompt takes only a trust answer', () async {
     final answer = broker
         .attempt('ssh-config:web')

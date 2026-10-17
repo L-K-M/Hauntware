@@ -4,24 +4,28 @@ import 'package:flutter/material.dart';
 import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 import 'package:ghost_ui/ghost_ui.dart' show showTopToast;
 
+import '../controllers/announcement_controller.dart';
 import '../controllers/appearance_controller.dart';
 import '../l10n/app_localizations.dart';
 import '../services/settings_window/settings_window_link.dart';
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 
 /// Settings (03 §10.2): the seven planned tabs as placeholders, except
-/// Appearance, which already drives the app's appearance. A route on
+/// General, which holds A11Y-15's switch (D60), and Appearance, which
+/// already drives the app's appearance. A route on
 /// phones (and wherever the desktop window cannot open); on desktop the
 /// same page fills the settings window (`settings_window_app.dart`).
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
     super.key,
     required this.appearance,
+    required this.announcements,
     this.initialTab = SettingsTab.general,
     this.tabRequests,
   });
 
   final AppearanceSettings appearance;
+  final AnnouncementSettings announcements;
 
   /// The tab the page opens on, read once when it is first built: the
   /// settings window keys each page it shows by generation, so opening on
@@ -89,9 +93,71 @@ class _SettingsPageState extends State<SettingsPage>
         controller: _tabs,
         children: [
           for (final tab in SettingsTab.values)
-            tab == SettingsTab.appearance
-                ? AppearanceTab(appearance: widget.appearance)
-                : const PlaceholderPaneBody(),
+            switch (tab) {
+              SettingsTab.general => GeneralTab(
+                announcements: widget.announcements,
+              ),
+              SettingsTab.appearance => AppearanceTab(
+                appearance: widget.appearance,
+              ),
+              _ => const PlaceholderPaneBody(),
+            },
+        ],
+      ),
+    );
+  }
+}
+
+/// The General tab: A11Y-15's switch for threshold-band announcements
+/// (D60), which the Overview's health card links to.
+class GeneralTab extends StatelessWidget {
+  const GeneralTab({super.key, required this.announcements});
+
+  final AnnouncementSettings announcements;
+
+  /// As [AppearanceTab._setMode]: the switch moves only once the app took
+  /// the change, and a change it took but could not save says so.
+  Future<void> _set(BuildContext context, bool announce) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final l10n = AppLocalizations.of(context);
+    try {
+      await announcements.setAnnounceThresholdBands(announce);
+    } on AnnouncementNotSavedException catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) {
+        showTopToast(overlay, message: l10n.settingsAnnounceNotSaved);
+      }
+    } on Exception catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) {
+        showTopToast(overlay, message: l10n.settingsAnnounceNotChanged);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return ListenableBuilder(
+      listenable: announcements,
+      builder: (context, _) => ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          Semantics(
+            header: true,
+            child: Text(
+              l10n.settingsAccessibilityTitle,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+          ),
+          const SizedBox(height: 4),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: announcements.value,
+            onChanged: (announce) => unawaited(_set(context, announce)),
+            title: Text(l10n.settingsAnnounceBands),
+            subtitle: Text(l10n.settingsAnnounceBandsDetail),
+          ),
         ],
       ),
     );

@@ -1,7 +1,12 @@
-# Declares the `shell` tag of the real-shell tests: the sampler session's
-# and the capture tool's runs against dash and bash. package:test reads
+# Declares the `shell` tag of the real-shell tests (the sampler session's
+# and the capture tool's runs against dash and bash), the `integration`
+# tag of the sshd fixture tests, the `runner-vm` tag of the runner VM's
+# systemd tests and the `soak` tag of the fixture soak. package:test reads
 # dart_test.yaml from the working directory, so this file serves runs
 # from this package; runs from klabautermann/ (CI) load
-# klabautermann/dart_test.yaml, which repeats the tag.
+# klabautermann/dart_test.yaml, which repeats the tags.
 tags:
   shell:
+  integration:
+  runner-vm:
+  soak:
