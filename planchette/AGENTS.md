@@ -35,8 +35,9 @@ packages/
                           seams; outside the workspace
   ghost_servers/          server surfaces shared by Séance and Poltergeist
                           (today the server list's sectioning, the
-                          status-dot vocabulary and the host-key prompt),
-                          over seance_protocol and ghost_ui; outside the
+                          status-dot vocabulary and the host-key and
+                          keyboard-interactive prompts), over
+                          seance_protocol and ghost_ui; outside the
                           workspace
 app/
   planchette_app/         Flutter client — NOT a workspace member (it needs
