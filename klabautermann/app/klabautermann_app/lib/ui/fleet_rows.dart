@@ -15,7 +15,7 @@ import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import 'chart_strings.dart';
 import 'charts/charts.dart';
-import 'fleet_rail.dart' show FleetEmptyState, linkStatusWord;
+import 'fleet_rail.dart' show FleetEmptyState, linkFailureText, linkStatusWord;
 import 'fleet_row_state.dart';
 import 'sidebar_kit.dart';
 
@@ -394,6 +394,9 @@ class FleetServerRow extends StatelessWidget {
         ? null
         : pressureSummary(cells, chartStrings, stale: reading!.stale);
     final conflict = _conflictWarning(l10n);
+    // Why the link failed takes a sentence, more than a fixed-height row
+    // has room for, so only the tooltip and the label carry it.
+    final failure = linkFailureText(l10n, link);
     // Nothing known paints no dot and shows no word, as in Séance; a
     // screen reader still hears the link's word.
     final label = indicator.label;
@@ -405,6 +408,7 @@ class FleetServerRow extends StatelessWidget {
       ?server.address,
       ?label,
       ?indicator.detail,
+      ?failure,
       ?freshness,
       ?pressure,
       ?conflict,
@@ -434,6 +438,7 @@ class FleetServerRow extends StatelessWidget {
         server.displayName,
         ?server.address,
         l10n.statusSemantics(label ?? linkStatusWord(l10n, link)),
+        ?failure,
         ?freshness,
         ?pressure,
         ?conflict,

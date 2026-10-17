@@ -1856,11 +1856,15 @@ revocation and concurrent login/deletion lifecycle work remain separate.
   durability across reopen.
 - `packages/seance_sync_server/test/integration_test.dart` — real client vs live server,
   two devices converge over HTTP; bad-login rejection.
-- `app/seance_app/test/host_key_dialog_test.dart` — TOFU dialog first-use +
+- `host_key_dialog_test.dart`, in Planchette's `ghost_servers` package
+  since 2026-10-16 with the dialog it tests — TOFU dialog first-use +
   hard changed-key block; rapid double trust/cancel and callbacks from an
   obscured dialog cannot pop any route but the dialog's own; the review
   stays scrollable and reachable in constrained layouts (warning and both
   fingerprints scroll into view, buttons stay on screen).
+  `app/seance_app/test/host_key_dialog_capture_test.dart` pins Séance's
+  delegate: both variants, the pinned key's own type in the changed
+  review, and real-font PNGs under `SEANCE_CAPTURE=1`.
 - `app/seance_app/test/keyboard_interactive_dialog_test.dart` — keyboard-
   interactive prompts are obscured, reveal per field, fit above a phone
   keyboard, dispose controllers after the exit animation, and cannot pop any
