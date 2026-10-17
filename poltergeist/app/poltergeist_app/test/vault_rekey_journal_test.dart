@@ -1,14 +1,13 @@
 // Ported from Séance app/seance_app/test/vault_rekey_journal_test.dart @
-// ded9228 — the FileVaultStore journal cases verbatim; the AppServices
-// groups adapted onto Poltergeist's seams (startup settle lives in
-// main.dart, the re-key driver in SecureSyncCredentialStore).
-import 'dart:convert';
+// ded9228 — the AppServices groups adapted onto Poltergeist's seams
+// (startup settle lives in main.dart, the re-key driver in
+// SecureSyncCredentialStore). The FileVaultStore journal cases moved to
+// seance_core's test/store/vault_rekey_journal_test.dart with the store.
 import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:poltergeist_app/services/file_stores.dart';
 import 'package:poltergeist_app/services/secure_master_key.dart';
 import 'package:poltergeist_app/services/sync_credentials.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
@@ -118,186 +117,6 @@ void main() {
 
   tearDown(() async {
     await directory.delete(recursive: true);
-  });
-
-  /// The state a process leaves behind when it dies inside the re-key: both
-  /// generations staged, and whatever the keystore had got to by then.
-  Future<void> crashMidRekey({required List<int> installed}) async {
-    final store = FileVaultStore(vaultFile);
-    await SecretVault(store, oldKey).putSecrets([secret('a'), secret('b')]);
-    await store.stageRekey(currentKey: oldKey, newKey: newKey);
-    await MasterKeyManager(keystore).setKeystoreKey(installed);
-  }
-
-  group('FileVaultStore re-key journal', () {
-    test('a crash before the keystore write leaves the old key working',
-        () async {
-      await crashMidRekey(installed: oldKey);
-
-      // A fresh store is the next launch: it finds the journal and settles it
-      // against the key the keystore actually kept.
-      final reopened = FileVaultStore(vaultFile);
-      expect(await reopened.settleRekey(oldKey), VaultRekeyOutcome.adopted);
-      final vault = SecretVault(reopened, oldKey);
-      expect((await vault.getSecret('a'))!.value, 'value-a');
-      expect((await vault.getSecret('b'))!.value, 'value-b');
-      expect(await journalFile.exists(), isFalse);
-    });
-
-    test('a crash after the keystore write leaves the new key working',
-        () async {
-      await crashMidRekey(installed: newKey);
-
-      final reopened = FileVaultStore(vaultFile);
-      expect(await reopened.settleRekey(newKey), VaultRekeyOutcome.adopted);
-      final vault = SecretVault(reopened, newKey);
-      expect((await vault.getSecret('a'))!.value, 'value-a');
-      expect((await vault.getSecret('b'))!.value, 'value-b');
-      expect(await journalFile.exists(), isFalse);
-
-      // The generation actually committed to the vault file is the new one,
-      // so the next launch needs no journal to read it.
-      final next = SecretVault(FileVaultStore(vaultFile), newKey);
-      expect((await next.getSecret('a'))!.value, 'value-a');
-    });
-
-    test('a key matching neither generation drops the journal, not the '
-        'vault', () async {
-      await crashMidRekey(installed: oldKey);
-
-      // Neither staged generation can be opened, so neither is recoverable.
-      // What matters is that the store does not stay wedged behind a journal
-      // nothing can clear.
-      final reopened = FileVaultStore(vaultFile);
-      expect(await reopened.settleRekey(secureRandomBytes(32)),
-          VaultRekeyOutcome.discarded);
-      expect(await journalFile.exists(), isFalse);
-      expect(
-          directory.listSync().any((f) => f.path.contains('.corrupt')),
-          isTrue);
-
-      // The stored vault is untouched: staging never wrote it.
-      expect(
-          (await SecretVault(reopened, oldKey).getSecret('a'))!.value,
-          'value-a');
-      // And ordinary mutations are allowed again.
-      await SecretVault(reopened, oldKey).putSecret(secret('c'));
-      expect(
-          (await SecretVault(reopened, oldKey).getSecret('c'))!.value,
-          'value-c');
-    });
-
-    test('a stray or damaged journal never blocks a vault read', () async {
-      await SecretVault(FileVaultStore(vaultFile), oldKey)
-          .putSecret(secret('a'));
-      // The trap this guards: a journal no code path created and none could
-      // clear, failing every read from here on.
-      await journalFile.writeAsString('not json at all');
-
-      final vault = SecretVault(FileVaultStore(vaultFile), oldKey);
-      expect((await vault.getSecret('a'))!.value, 'value-a');
-      expect(await journalFile.exists(), isFalse);
-      expect(
-          directory.listSync().any((f) => f.path.contains('.corrupt')),
-          isTrue);
-    });
-
-    test('an entry the current key cannot open survives the re-key',
-        () async {
-      final store = FileVaultStore(vaultFile);
-      await SecretVault(store, oldKey).putSecret(secret('live'));
-      // An orphan left sealed under a key nobody holds any more. Re-keying
-      // must not fail on it, and must not delete it either.
-      await SecretVault(store, secureRandomBytes(32))
-          .putSecret(secret('lost'));
-
-      await store.stageRekey(currentKey: oldKey, newKey: newKey);
-      expect(await store.settleRekey(newKey), VaultRekeyOutcome.adopted);
-
-      final vault = SecretVault(store, newKey);
-      expect((await vault.getSecret('live'))!.value, 'value-live');
-      expect(await store.getSecretBlob('lost'), isNotNull);
-    });
-
-    test('credentials are not mutable while a re-key is staged', () async {
-      final store = FileVaultStore(vaultFile);
-      await SecretVault(store, oldKey).putSecret(secret('a'));
-      await store.stageRekey(currentKey: oldKey, newKey: newKey);
-
-      // A write now would persist the stored generation, which settling may
-      // then replace with the staged one, silently undoing it.
-      await expectLater(
-        () => SecretVault(store, oldKey).putSecret(secret('b')),
-        throwsA(isA<StateError>()),
-      );
-      await expectLater(
-        () => store.stageRekey(currentKey: oldKey, newKey: newKey),
-        throwsA(isA<StateError>()),
-      );
-    });
-
-    test('the journal stores no plaintext', () async {
-      final store = FileVaultStore(vaultFile);
-      await SecretVault(store, oldKey).putSecret(secret('a'));
-      await store.stageRekey(currentKey: oldKey, newKey: newKey);
-
-      final staged = await journalFile.readAsString();
-      expect(staged, isNot(contains('value-a')));
-      // Both halves: the journal carries a generation under each key, so a
-      // writer that leaked key material would leak either one.
-      expect(staged, isNot(contains(base64.encode(newKey))));
-      expect(staged, isNot(contains(base64.encode(oldKey))));
-    });
-
-    test('a valid journal never blocks a vault read', () async {
-      await crashMidRekey(installed: oldKey);
-
-      // The damaged-journal case is covered above; this is the other half,
-      // and the reason staging leaves `vault.json` alone. The unwired code
-      // made the sidecar authoritative and refused every read while one
-      // existed.
-      final vault = SecretVault(FileVaultStore(vaultFile), oldKey);
-      expect((await vault.getSecret('a'))!.value, 'value-a');
-      expect(await journalFile.exists(), isTrue);
-    });
-
-    test('settling again after a crash mid-commit is harmless', () async {
-      await crashMidRekey(installed: newKey);
-      final staged = await journalFile.readAsString();
-      expect(await FileVaultStore(vaultFile).settleRekey(newKey),
-          VaultRekeyOutcome.adopted);
-      // settleRekey flushes the vault and *then* clears the sidecar, so a
-      // process dying between the two leaves a journal beside a vault that
-      // already holds the adopted generation. The next launch settles it
-      // again, which has to be a no-op rather than a second rewrite.
-      await journalFile.writeAsString(staged);
-
-      final reopened = FileVaultStore(vaultFile);
-      expect(await reopened.settleRekey(newKey), VaultRekeyOutcome.adopted);
-      expect((await SecretVault(reopened, newKey).getSecret('a'))!.value,
-          'value-a');
-      expect(await journalFile.exists(), isFalse);
-    });
-
-    test('a journal that is not even valid UTF-8 is damage, not a failed '
-        'read', () async {
-      await crashMidRekey(installed: oldKey);
-      // `readAsString` reports malformed UTF-8 as a FileSystemException, the
-      // same type a locked or unreadable file raises. Reading bytes and
-      // decoding them here is what keeps the two apart, so this content has
-      // to be quarantined like any other damage rather than retried forever.
-      await journalFile.writeAsBytes([0xff, 0xfe, 0xfd]);
-
-      final store = FileVaultStore(vaultFile);
-      expect(await store.settleRekey(oldKey), VaultRekeyOutcome.none);
-      expect(
-          (await SecretVault(store, oldKey).getSecret('a'))!.value,
-          'value-a');
-      expect(await journalFile.exists(), isFalse);
-      expect(
-          directory.listSync().any((f) => f.path.contains('.corrupt')),
-          isTrue);
-    });
   });
 
   group('SecureSyncCredentialStore re-keys through the journal', () {

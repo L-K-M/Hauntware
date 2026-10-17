@@ -14,7 +14,7 @@ const _hostKey = HostKeyPromptRequest(
   fingerprintSha256: 'SHA256:abc',
 );
 
-/// The re-pin review of a key that replaced the pinned one (D60), under
+/// The re-pin review of a key that replaced the pinned one (D61), under
 /// another algorithm.
 const _changedKey = HostKeyPromptRequest(
   keyType: 'ecdsa-sha2-nistp256',

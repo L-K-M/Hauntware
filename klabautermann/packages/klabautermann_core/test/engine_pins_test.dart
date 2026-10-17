@@ -366,7 +366,7 @@ void main() {
     });
   });
 
-  test('a Connect to a fleet server without a config says why (D60)', () async {
+  test('a Connect to a fleet server without a config says why (D61)', () async {
     // A schema 1 store kept addresses only, so the engine maps no config
     // until the next import.
     File(

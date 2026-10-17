@@ -6,20 +6,36 @@ import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'access/access_panel.dart' show AccessPage;
 import 'access/panel_gate.dart';
+import 'coverage.dart' show pausesInBackground;
 import 'inspector_pane.dart' show PlaceholderPaneBody;
+import 'jobs_panel.dart';
 import 'logs/logs_panel.dart';
 import 'overview_panel.dart';
 import 'connect_rejected_banner.dart';
+import 'processes_panel.dart';
 import 'server_coverage.dart';
 import 'server_header.dart';
 import 'server_surfaces.dart';
+import 'services_panel.dart';
+import 'system_panel.dart';
+
+/// Why a server screen closed itself, which its route pops with for the
+/// fleet list under it.
+enum ServerScreenExit {
+  /// Its server left the fleet (SYN-08).
+  leftFleet,
+}
 
 /// The pushed server screen of 03 §10.5: the server's title, the server
-/// header, and the bottom bar (Overview, Docker, Logs, More). The
-/// destinations' bodies land with their panels.
+/// header, and the bottom bar (Overview, Docker, Logs, More). More lists
+/// the other panels, which open full-screen; Docker's body lands with M3.
 ///
 /// The server stays open while the screen is pushed, and only the
-/// selected destination's panel samples its streams (03 §6.4).
+/// selected destination's panel samples its streams (03 §6.4); a panel
+/// that samples pulls to refresh (PLT-02). On iOS and Android the header
+/// says that reading stops in the background (PLT-04). A server that
+/// leaves the fleet (SYN-08) closes the screen with everything opened
+/// over it, and its route pops with [ServerScreenExit.leftFleet].
 class ServerDetailPage extends StatefulWidget {
   const ServerDetailPage({
     super.key,
@@ -42,6 +58,15 @@ class ServerDetailPage extends StatefulWidget {
     ServerPanel.logs,
   ];
 
+  /// The panels More lists, in the desktop tab strip's order.
+  static const List<ServerPanel> morePanels = [
+    ServerPanel.processes,
+    ServerPanel.services,
+    ServerPanel.jobs,
+    ServerPanel.system,
+    ServerPanel.access,
+  ];
+
   @override
   State<ServerDetailPage> createState() => _ServerDetailPageState();
 }
@@ -55,14 +80,43 @@ class _ServerDetailPageState extends State<ServerDetailPage>
     vsync: this,
   );
 
+  /// Set once the screen closes because its server left the fleet.
+  bool _closing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.fleet.addListener(_onFleetChanged);
+  }
+
   @override
   void dispose() {
+    widget.fleet.removeListener(_onFleetChanged);
     _destinations.dispose();
     super.dispose();
   }
 
-  /// Pushes the Access tab, where a hidden panel's link leads (03 §10.4);
-  /// More lists it with the other panels later (03 §10.5).
+  /// SYN-08 (task #50): a server that left the fleet, removed by a sync
+  /// or left out of a new import, has nothing left to show, as the
+  /// desktop workspace's selection clears. The screen closes with
+  /// everything it opened (More's panels, the Access tab, sheets and
+  /// dialogs), back to the fleet list, which says why.
+  void _onFleetChanged() {
+    final serverId = widget.server.id;
+    if (_closing || widget.fleet.servers.any((s) => s.id == serverId)) return;
+    // The fleet list is the route below; a screen with none has nowhere
+    // to go back to.
+    final route = ModalRoute.of(context);
+    if (route == null || !route.isActive || route.isFirst) return;
+
+    _closing = true;
+    Navigator.of(context)
+      ..popUntil((other) => other == route)
+      ..pop(ServerScreenExit.leftFleet);
+  }
+
+  /// Pushes the Access tab, which More lists and a hidden panel's link
+  /// leads to (03 §10.4).
   void _openAccess() => Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (context) => AccessPage(
@@ -73,6 +127,24 @@ class _ServerDetailPageState extends State<ServerDetailPage>
       ),
     ),
   );
+
+  /// Opens one of More's panels full-screen (03 §10.5).
+  void _openPanel(ServerPanel panel) {
+    if (panel == ServerPanel.access) {
+      _openAccess();
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => _PanelPage(
+          server: widget.server,
+          monitoring: widget.monitoring,
+          panel: panel,
+          onOpenAccess: _openAccess,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -103,6 +175,11 @@ class _ServerDetailPageState extends State<ServerDetailPage>
             fleet: widget.fleet,
             monitoring: widget.monitoring,
             showTitle: false,
+            // PLT-04, said plainly where the platform reports the
+            // background (AppActivityReporter).
+            limitations: [
+              if (pausesInBackground(context)) l10n.coverageBackgroundBody,
+            ],
           ),
           banner: Column(
             mainAxisSize: MainAxisSize.min,
@@ -133,6 +210,7 @@ class _ServerDetailPageState extends State<ServerDetailPage>
                     surface: panel.name,
                     streams: panel.streams,
                     visible: _destinations.index == index,
+                    pullToRefresh: panel.streams.isNotEmpty,
                     child: switch (panel) {
                       ServerPanel.overview => OverviewPanel(
                         monitoring: widget.monitoring,
@@ -153,8 +231,7 @@ class _ServerDetailPageState extends State<ServerDetailPage>
                     },
                   ),
                 ),
-              // More: the other panels, pushed further (03 §10.5).
-              const PlaceholderPaneBody(),
+              _MoreList(onOpen: _openPanel),
             ],
           ),
         ),
@@ -182,4 +259,114 @@ const Map<ServerPanel, IconData> _destinationIcons = {
   ServerPanel.overview: Icons.speed_outlined,
   ServerPanel.docker: Icons.inventory_2_outlined,
   ServerPanel.logs: Icons.article_outlined,
+  ServerPanel.processes: Icons.list_alt_outlined,
+  ServerPanel.services: Icons.miscellaneous_services_outlined,
+  ServerPanel.jobs: Icons.schedule_outlined,
+  ServerPanel.system: Icons.dns_outlined,
+  ServerPanel.access: Icons.admin_panel_settings_outlined,
 };
+
+/// More's destination (03 §10.5): the panels the bottom bar has no room
+/// for, each opening full-screen.
+class _MoreList extends StatelessWidget {
+  const _MoreList({required this.onOpen});
+
+  final ValueChanged<ServerPanel> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return ListView(
+      children: [
+        for (final panel in ServerDetailPage.morePanels)
+          ListTile(
+            leading: Icon(_destinationIcons[panel]),
+            title: Text(panel.label(l10n)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => onOpen(panel),
+          ),
+      ],
+    );
+  }
+}
+
+/// One of More's panels full-screen (03 §10.5): its narrow layout under
+/// an app bar naming it and the server, sampling while it shows and
+/// pulling to refresh (PLT-02), with the return banner the server screen
+/// under it shows (03 §9.5 item 6). That screen holds the server open.
+/// The Services panel opens a unit's log lines in a sheet.
+class _PanelPage extends StatelessWidget {
+  const _PanelPage({
+    required this.server,
+    required this.monitoring,
+    required this.panel,
+    required this.onOpenAccess,
+  });
+
+  final FleetServer server;
+  final MonitoringController monitoring;
+  final ServerPanel panel;
+
+  /// Pushes the Access tab, where a hidden panel's link leads.
+  final VoidCallback onOpenAccess;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final serverId = server.id;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          l10n.serverPanelPageTitle(panel.label(l10n), server.displayName),
+        ),
+      ),
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            BackgroundReturnBanner(monitoring: monitoring, serverId: serverId),
+            Expanded(
+              child: GatedPanel(
+                monitoring: monitoring,
+                serverId: serverId,
+                panel: panel,
+                onOpenAccess: onOpenAccess,
+                child: SampledSurface(
+                  monitoring: monitoring,
+                  serverId: serverId,
+                  surface: panel.name,
+                  streams: panel.streams,
+                  visible: true,
+                  pullToRefresh: true,
+                  child: switch (panel) {
+                    ServerPanel.processes => ProcessesPanel(
+                      monitoring: monitoring,
+                      serverId: serverId,
+                      visible: true,
+                    ),
+                    ServerPanel.services => ServicesPanel(
+                      monitoring: monitoring,
+                      serverId: serverId,
+                      visible: true,
+                      logPlacement: UnitLogPlacement.sheet,
+                    ),
+                    ServerPanel.jobs => JobsPanel(
+                      monitoring: monitoring,
+                      serverId: serverId,
+                      visible: true,
+                    ),
+                    ServerPanel.system => SystemPanel(
+                      monitoring: monitoring,
+                      serverId: serverId,
+                    ),
+                    _ => const PlaceholderPaneBody(),
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

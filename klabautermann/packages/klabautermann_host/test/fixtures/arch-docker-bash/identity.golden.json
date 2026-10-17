@@ -1,0 +1,28 @@
+{
+  "result": {
+    "osRelease": {
+      "fields": {
+        "NAME": "Arch Linux",
+        "PRETTY_NAME": "Arch Linux",
+        "ID": "arch",
+        "BUILD_ID": "rolling",
+        "VERSION_ID": "20261011.0.609700",
+        "ANSI_COLOR": "38;2;23;147;209",
+        "HOME_URL": "https://archlinux.org/",
+        "DOCUMENTATION_URL": "https://wiki.archlinux.org/",
+        "SUPPORT_URL": "https://bbs.archlinux.org/",
+        "BUG_REPORT_URL": "https://gitlab.archlinux.org/groups/archlinux/-/issues",
+        "PRIVACY_POLICY_URL": "https://terms.archlinux.org/docs/privacy-policy/",
+        "LOGO": "archlinux-logo"
+      }
+    },
+    "kernelName": "Linux",
+    "kernelRelease": "6.18.44-fc-v139",
+    "kernelArch": "x86_64",
+    "hostnamectl": {},
+    "timeoutAbsent": false
+  },
+  "warnings": [
+    "identity: hostnamectl block is not JSON, using os-release fallback"
+  ]
+}

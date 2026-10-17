@@ -107,8 +107,9 @@ class _FleetRailState extends State<FleetRail> {
 }
 
 /// The localized word for a [LinkStatus]: the text half of the dot
-/// vocabulary (03 §10.3), used wherever the dot's colour needs words. The
-/// reasons a status carries are worded by the surfaces that explain them.
+/// vocabulary (03 §10.3), used wherever the dot's colour needs words. A
+/// closed link's failure is worded by [linkFailureText]; the other
+/// reasons a status carries, by the surfaces that explain them.
 String linkStatusWord(AppLocalizations l10n, LinkStatus status) {
   return switch (status) {
     LinkIdle() => l10n.statusDisconnected,
@@ -127,6 +128,43 @@ String linkStatusWord(AppLocalizations l10n, LinkStatus status) {
       l10n.statusFailed,
     LinkClosed() => l10n.statusConnectionLost,
   };
+}
+
+/// What the engine found behind a closed link, with what to do about it,
+/// or null for any other status and for a close it did not classify. The
+/// server header shows it under its facts and the fleet row in its
+/// tooltip and label. The client limitations keep 03 §5.3's words.
+///
+/// The two key-file kinds say to load the key into ssh-agent and drop
+/// the `IdentityFile` line that names it: no prompt asks for a passphrase,
+/// the Flatpak grants no key files (04 §12.1), and a server whose import
+/// names a key file offers only that file (03 §2, proposals awaiting the
+/// owner).
+String? linkFailureText(AppLocalizations l10n, LinkStatus status) {
+  if (status case LinkClosed(:final failure?)) {
+    return switch (failure) {
+      LinkFailureKind.unreachable => l10n.linkFailureUnreachable,
+      LinkFailureKind.timedOut => l10n.linkFailureTimedOut,
+      LinkFailureKind.authenticationRejected =>
+        l10n.linkFailureAuthenticationRejected,
+      LinkFailureKind.credentialUnavailable =>
+        l10n.linkFailureCredentialUnavailable,
+      LinkFailureKind.keyPassphraseRequired =>
+        l10n.linkFailureKeyPassphraseRequired,
+      LinkFailureKind.keyFileHiddenBySandbox =>
+        l10n.linkFailureKeyFileHiddenBySandbox,
+      LinkFailureKind.hostKeyDeclined => l10n.linkFailureHostKeyDeclined,
+      LinkFailureKind.keyboardInteractiveCancelled =>
+        l10n.linkFailureKeyboardInteractiveCancelled,
+      LinkFailureKind.unsupportedAlgorithm =>
+        l10n.linkFailureUnsupportedAlgorithm,
+      LinkFailureKind.insecureAlgorithmsOnly =>
+        l10n.linkFailureInsecureAlgorithmsOnly,
+      LinkFailureKind.keyExchangeTimedOut =>
+        l10n.linkFailureKeyExchangeTimedOut,
+    };
+  }
+  return null;
 }
 
 /// The rail's empty state (03 §10.2, M1a): a short invitation, because the

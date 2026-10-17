@@ -9,6 +9,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'app.dart';
+import 'controllers/announcement_controller.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitoring_controller.dart';
@@ -115,7 +116,7 @@ Future<void> main(List<String> args) async {
   // the prompt controller below shows the host-key and keyboard prompts
   // a connect raises. The engine writes its capability cache and
   // `host_keys.json` only while this process holds the directory alone;
-  // otherwise it keeps this run's pins in memory (D59, D60).
+  // otherwise it keeps this run's pins in memory (D59, D61).
   final engine = await IsolateEngineClient.spawn(
     supportDirectory: supportDirectory.path,
     linksEnabled: true,
@@ -153,11 +154,18 @@ Future<void> main(List<String> args) async {
     saveDismissal: settings.dismissFirstRunCard,
   );
 
+  // A11Y-15's switch (D60), kept per device in settings.json.
+  final announcements = AnnouncementController(
+    announceThresholdBands: settings.announceThresholdBands,
+    save: settings.setAnnounceThresholdBands,
+  );
+
   // Desktop only: the runners there host the settings window; phones keep
   // the settings route.
   final settingsWindow = settingsWindowHostFor(
     defaultTargetPlatform,
     appearance: appearance,
+    announcements: announcements,
   );
 
   runApp(
@@ -167,6 +175,7 @@ Future<void> main(List<String> args) async {
       prompts: prompts,
       appearance: appearance,
       coverage: coverage,
+      announcements: announcements,
       settingsIssue: settings.issue,
       importStoreIssue: importStoreIssue,
       instanceLockIssue: instanceLockIssue,

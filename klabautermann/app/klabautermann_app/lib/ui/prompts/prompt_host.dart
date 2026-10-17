@@ -33,7 +33,7 @@ import '../../theme/app_theme.dart';
 /// - A first-seen host key is the first-use review, answered with
 ///   [PromptTrustAnswer]. A changed key blocks the link (03 §4.6); the
 ///   user's next connect to the blocked server asks again with the pinned
-///   key, which the changed-key review shows beside the new one (D60).
+///   key, which the changed-key review shows beside the new one (D61).
 /// - Keyboard-interactive questions are answered with
 ///   [PromptResponsesAnswer] in question order, or [PromptCancelAnswer]
 ///   on Cancel.
@@ -129,7 +129,7 @@ class _PromptHostState extends State<PromptHost> {
       case final HostKeyPromptRequest request:
         unawaited(
           _ask(prompt, const PromptTrustAnswer(false), (dialogKey) async {
-            // A pinned key makes it the changed-key review (D60), which
+            // A pinned key makes it the changed-key review (D61), which
             // only the user's connect to a blocked server raises.
             final trusted = await showGhostHostKeyDialog(
               context,

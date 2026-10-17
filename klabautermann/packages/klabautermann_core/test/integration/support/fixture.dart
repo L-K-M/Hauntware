@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/engine/engine_isolate.dart'
+    show engineMain;
 import 'package:test/test.dart';
 
 /// Why the fixture suites skip: run.sh exports the fixture's environment.
@@ -13,6 +15,10 @@ const fixtureSkipReason =
 const directServer = 'ssh-config:direct';
 const agentServer = 'ssh-config:agent';
 const behindServer = 'ssh-config:behind';
+
+/// The fleet server of the [i]th alias of the sampled host
+/// ([FixtureEngine.startAliases]).
+String aliasServer(int i) => 'ssh-config:alias-$i';
 
 /// The Compose services of klabautermann/test/integration.
 enum FixtureService {
@@ -120,6 +126,20 @@ Host hop
   IdentityFile $identityFile
 ''';
 
+  /// [count] aliases of the sampled host, `alias-0` on, each with the key
+  /// file: separate fleet servers, each dialing a link of its own to the
+  /// one sshd, as 03 §11.4's ten hosts do in the soak.
+  String _aliasSshConfig(int count) => [
+    for (var i = 0; i < count; i++)
+      '''
+Host alias-$i
+  HostName $_host
+  Port $_port
+  User $_user
+  IdentityFile $identityFile
+''',
+  ].join('\n');
+
   /// Each endpoint a host-key prompt may name, with the fingerprints of the
   /// service that answers there.
   Future<Map<Endpoint, Set<String>>> hostKeys() async {
@@ -212,14 +232,14 @@ Host hop
 /// shells end with their links.
 final class FixtureEngine {
   FixtureEngine._(
-    this._fixture,
+    this._evidenceDirectory,
     this._client,
     this._events,
     this._support, {
     required this._ownsSupport,
   });
 
-  final Fixture _fixture;
+  final String? _evidenceDirectory;
   final IsolateEngineClient _client;
   final StreamIterator<EngineEvent> _events;
   final Directory _support;
@@ -249,17 +269,63 @@ final class FixtureEngine {
     String name, {
     Directory? support,
     SupportDirectoryAccess access = SupportDirectoryAccess.unguarded,
+  }) => launch(
+    name: name,
+    runtimeDirectory: fixture._runtimeDirectory,
+    sshConfig: fixture._sshConfig,
+    hosts: 4,
+    evidenceDirectory: fixture._evidenceDirectory,
+    support: support,
+    access: access,
+  );
+
+  /// Starts an engine through [entryPoint], which wraps the engine's own
+  /// (`link_meter.dart`), and imports [count] aliases of the sampled host
+  /// ([aliasServer]). [name] titles the event log it leaves in
+  /// [evidenceDirectory].
+  static Future<FixtureEngine> startAliases(
+    Fixture fixture,
+    String name, {
+    required int count,
+    required String evidenceDirectory,
+    required void Function(EngineStart start) entryPoint,
+  }) => launch(
+    name: name,
+    runtimeDirectory: fixture._runtimeDirectory,
+    sshConfig: fixture._aliasSshConfig(count),
+    hosts: count,
+    evidenceDirectory: evidenceDirectory,
+    entryPoint: entryPoint,
+  );
+
+  /// Starts an engine that keeps its files under [runtimeDirectory] and
+  /// imports [sshConfig], which names [hosts] hosts, for a host other than
+  /// the Compose fixture, such as the runner VM (`runner_vm.dart`). [name]
+  /// titles the event log it leaves in [evidenceDirectory], if any.
+  /// [entryPoint] replaces the engine's. The engine runs in a support
+  /// directory of its own under [runtimeDirectory], deleted when it
+  /// stops, unless [support] names one the caller keeps, which the engine
+  /// reads with [access].
+  static Future<FixtureEngine> launch({
+    required String name,
+    required String runtimeDirectory,
+    required String sshConfig,
+    required int hosts,
+    String? evidenceDirectory,
+    void Function(EngineStart start) entryPoint = engineMain,
+    Directory? support,
+    SupportDirectoryAccess access = SupportDirectoryAccess.unguarded,
   }) async {
     final directory =
-        support ??
-        await Directory(fixture._runtimeDirectory).createTemp('engine-');
+        support ?? await Directory(runtimeDirectory).createTemp('engine-');
     final client = await IsolateEngineClient.spawn(
       supportDirectory: directory.path,
       linksEnabled: true,
       supportDirectoryAccess: access,
+      entryPoint: entryPoint,
     );
     final engine = FixtureEngine._(
-      fixture,
+      evidenceDirectory,
       client,
       StreamIterator(client.events),
       directory,
@@ -268,9 +334,9 @@ final class FixtureEngine {
     addTearDown(() => engine.stop(name));
 
     await engine.until<CatalogReplaced>();
-    engine.send(ImportSshConfig(fixture._sshConfig));
+    engine.send(ImportSshConfig(sshConfig));
     await engine.until<SshConfigImported>(
-      (event) => event.importedCount == 4 && event.skippedCount == 0,
+      (event) => event.importedCount == hosts && event.skippedCount == 0,
     );
     return engine;
   }
@@ -306,6 +372,36 @@ final class FixtureEngine {
       if (event is Prompt && T != Prompt) {
         fail('unexpected prompt: ${_describe(event)}');
       }
+    }
+  }
+
+  /// Reads events for [duration], handing each to [onEvent], without
+  /// keeping them in [seen] or the event log: a soak's samples would grow
+  /// both. Other events than samples are logged. A prompt fails the test,
+  /// as in [until].
+  Future<void> pump(
+    Duration duration,
+    void Function(EngineEvent event) onEvent,
+  ) async {
+    final deadline = _clock.elapsed + duration;
+    while (true) {
+      final left = deadline - _clock.elapsed;
+      if (left <= Duration.zero) return;
+
+      // A read the deadline cuts short stays pending for the next caller,
+      // as in [until]; the timeout's timer goes when the read completes.
+      final pending = _pending ??= _events.moveNext();
+      final arrived = await pending
+          .then<bool?>((arrived) => arrived)
+          .timeout(left, onTimeout: () => null);
+      if (arrived == null) return;
+
+      _pending = null;
+      expect(arrived, isTrue, reason: 'the engine stopped');
+      final event = _events.current;
+      if (event is! Sample) note('< ${_describe(event)}');
+      if (event is Prompt) fail('unexpected prompt: ${_describe(event)}');
+      onEvent(event);
     }
   }
 
@@ -422,7 +518,7 @@ final class FixtureEngine {
       await _events.cancel();
       await _client.shutdown();
       if (_ownsSupport) await _support.delete(recursive: true);
-      if (_fixture._evidenceDirectory case final directory?) {
+      if (_evidenceDirectory case final directory?) {
         final file = File('$directory/${name.replaceAll(' ', '-')}.events');
         await file.create(recursive: true);
         await file.writeAsString('$_log');
@@ -455,7 +551,19 @@ String _describe(EngineEvent event) => switch (event) {
     'Prompt $serverId $host:$port ${request.kind.name}',
   RequestRejected(:final requestName, :final reason) =>
     'RequestRejected $requestName: $reason',
+  LogStreamState(:final streamId, :final status) =>
+    'LogStreamState $streamId ${_logStatus(status)}',
+  LogBatch(:final streamId, :final records, :final dropped) =>
+    'LogBatch $streamId ${records.length} records, $dropped dropped',
   _ => '${event.runtimeType}',
+};
+
+String _logStatus(LogStreamStatus status) => switch (status) {
+  LogStreamWaiting(:final reason) => 'waiting ${reason.name}',
+  LogStreamRunning(:final reader, :final continuity) =>
+    'running ${reader.name} ${continuity.name}',
+  LogStreamEnded(:final reason, :final detail) =>
+    'ended ${reason.name}${detail == null ? '' : ' ($detail)'}',
 };
 
 String _status(LinkStatus status) => switch (status) {

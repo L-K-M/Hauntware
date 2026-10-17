@@ -107,7 +107,7 @@ void main() {
       expect(fleet.serverConfig('ssh-config-hop:v@j')?.username, 'v');
       expect(fleet.serverConfig('ssh-config:c'), isNull);
 
-      // A connect to a host without a config says why (D60): here, the
+      // A connect to a host without a config says why (D61): here, the
       // login name of the host or of a hop on its route.
       expect(
         [

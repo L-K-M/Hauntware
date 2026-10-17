@@ -85,7 +85,7 @@ typedef LinkConnect =
 ///   answers (c2 R10).
 /// - A blocked server stays blocked, but the user's request to one a
 ///   changed host key blocked reviews that key ([ChangedHostKey.review],
-///   D60): trusting it re-pins and connects, declining blocks again.
+///   D61): trusting it re-pins and connects, declining blocks again.
 /// - No attempt starts while the app is in the background; under
 ///   [BackgroundLinkPolicy.closeAfterGrace] links close after
 ///   [kBackgroundGracePeriod] and redial on return.
@@ -495,12 +495,24 @@ final class LinkSupervisor {
 
   /// A failure of an unattended attempt that an interactive one may not
   /// meet: a declined first-seen host key, or a sign-in that may have
-  /// needed answers, rejected or not classified.
+  /// needed answers, rejected or not classified. A key that needs a
+  /// passphrase is not one until the passphrase prompt lands (K45b): no
+  /// prompt asks for it yet, so the interactive attempt would fail the
+  /// same way. Exhaustive, so a new kind takes a decision here.
   static bool _promptMayResolve(LinkFailureKind? failure) => switch (failure) {
     null ||
     LinkFailureKind.hostKeyDeclined ||
     LinkFailureKind.authenticationRejected => true,
-    _ => false,
+    LinkFailureKind.keyPassphraseRequired => false,
+    // The user's own answer to the questions; asking again would repeat it.
+    LinkFailureKind.keyboardInteractiveCancelled => false,
+    LinkFailureKind.unreachable ||
+    LinkFailureKind.timedOut ||
+    LinkFailureKind.credentialUnavailable ||
+    LinkFailureKind.keyFileHiddenBySandbox ||
+    LinkFailureKind.unsupportedAlgorithm ||
+    LinkFailureKind.insecureAlgorithmsOnly ||
+    LinkFailureKind.keyExchangeTimedOut => false,
   };
 
   void _onLinkState(_Server server, SshLinkState state) {

@@ -9,7 +9,7 @@ import '../l10n/app_localizations.dart';
 const double _bannerMaxShare = 0.2;
 
 /// On a server's workspace or screen, why the engine could not connect it
-/// ([MonitoringController.connectRejections], D60): it has no config to
+/// ([MonitoringController.connectRejections], D61): it has no config to
 /// dial with, and what the user can do about it. It shows until the next
 /// connect of the server, which a new import sends.
 class ConnectRejectedBanner extends StatelessWidget {
