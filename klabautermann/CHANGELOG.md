@@ -99,3 +99,8 @@
   host's, Klabautermann disconnects it, forgets what it cached about it
   and asks you again. Servers you imported from `~/.ssh/config` need no
   confirmation on the device that imported them.
+- The fleet list on desktops and phones is sectioned as in Séance: your
+  synced servers sit under Servers, grouped by their Séance groups in
+  sections you can fold, and your imports follow under Imported. Pin a
+  synced server to the top from its menu (right-click, Shift+F10, the Menu
+  key or a long-press); pins are kept on this device only.

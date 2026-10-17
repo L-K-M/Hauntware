@@ -75,7 +75,7 @@ export RELEASE_POST_BUMP='"${RELEASE_DART_BIN}" "'"$ROOT"'/tool/release_version/
 # the configured Dart binary to the audit driver.
 # shellcheck disable=SC2016 # The engine expands hook variables at invocation.
 export RELEASE_PRE_TAG='DART_EXECUTABLE="${RELEASE_DART_BIN}" "'"$ROOT"'/scripts/refresh-seance-release-audit.sh"'
-export RELEASE_CI_NOTE="CI (release.yml) will now test all four products, build every client (Planchette desktop, the Séance and Poltergeist apps incl. APK/IPA; Klabautermann clients join at its preview milestone) plus the Séance sync server + Docker image, and publish the GitHub Release for <tag>."
+export RELEASE_CI_NOTE="CI (release.yml) will now test all four products, build every client (Planchette incl. APK, the Séance and Poltergeist apps incl. APK/IPA; Klabautermann clients join at its preview milestone) plus the Séance sync server + Docker image, and publish the GitHub Release for <tag>."
 export RELEASE_INVOKED_AS="scripts/release.sh"
 
 BIN="${LKM_RELEASE_BIN:-lkm-release}"
