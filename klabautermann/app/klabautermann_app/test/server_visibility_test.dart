@@ -105,9 +105,13 @@ void main() {
     expect(find.byType(OverviewPanel), findsOneWidget);
     expect(find.byType(PlaceholderPaneBody), findsNothing);
 
-    // An engine with links off rejects the connect; nothing shows it.
+    // A connect the engine rejects as no server it can dial shows
+    // nothing (a ConnectRejected would show a banner).
     engine.emit(
-      const RequestRejected('Connect', 'links are off in this engine'),
+      const RequestRejected(
+        'Connect',
+        'no fleet server srv-1 the engine can dial',
+      ),
     );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);

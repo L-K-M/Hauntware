@@ -723,7 +723,7 @@ void main() {
       var notified = 0;
       monitoring.connectRejections.addListener(() => notified++);
       monitoring.openServer('srv-1');
-      engine.emit(const RequestRejected('Connect', 'links are off'));
+      engine.emit(const RequestRejected('Connect', 'no fleet server srv-1'));
       await settle();
       expect(notified, 0);
       expect(monitoring.connectRejections.value, isEmpty);
@@ -1109,7 +1109,7 @@ void main() {
         ..setAppActivity(AppActivity.background)
         ..setAppActivity(AppActivity.foreground);
 
-      // Subscribed, but the engine never said it sampled (links off):
+      // Subscribed, but the engine never said it sampled (no link yet):
       // a pause stops nothing.
       timed
         ..openServer('srv-1')

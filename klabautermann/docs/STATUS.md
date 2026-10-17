@@ -26,8 +26,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   to a 30 s cap, less up to 30 % of downward jitter (so the first
   restart comes after 0.7 s to 1 s). Tested against a scripted process
   and local dash and bash (a SIGSTOP stall included). Only the sampling
-  scheduler (K22) starts it, behind links the app leaves off (below), and
-  no SSH fixture test covers it.
+  scheduler (K22) starts it, over the links the app turns on (K44b,
+  below), and no SSH fixture test covers it.
 - Spike S2 part 1: `klabautermann_core/tool/capture_fixtures.dart
   measure` runs the real program locally under dash and bash (as
   `sh -s`, and as `<login shell> -c '<start command>'` the way sshd
@@ -118,8 +118,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   (`notEvaluated` beyond). Timer rows still come only from
   `TimersResult`, the zone tables end early in 2038, and the runs do not
   model Debian's cron ignoring `CRON_TZ` or BusyBox crond running every
-  job by the clock. The app's engine samples nothing while links are off
-  (K44).
+  job by the clock. The app's engine samples them since K44b turned links
+  on.
 - Cron parser (M2, 03 §7.7, JOB-01, K23c, #228): in system crontabs
   (`/etc/crontab`, `/etc/cron.d`) `parseCron` reads the user field after
   an `@` macro too, as cronie's `load_entry` does, and skips with a
@@ -151,8 +151,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   line follows. With links on, the log service (K25a, below) runs the
   `journalctl`, `dmesg --json` and `tail -n` window reads; follows are
   K26, and the jobs panel (K36) is the first view that needs
-  `timer_detail`. The app's engine runs none of them while links are off
-  (K44). The fixtures are hand-written.
+  `timer_detail`. The app's engine runs them since K44b turned links on.
+  The fixtures are hand-written.
 - Access rules (M2, `klabautermann_host` `access/`): the CN-24 rows from
   a `HostProfile` (passwordless sudo, journal group with the LOG-04
   notice, Docker socket rights with the SAF-08 flag, systemd version,
@@ -189,8 +189,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   gains the nullable `jumpRoute`, `authKind`, `searchText` and
   `locatorConflict`. The fleet controller keeps link statuses and probe
   answers only for listed servers, and the rail words every status.
-  Only an engine with links on sends link states and prompts, and the
-  app leaves links off (below). The engine sends no probe answers and
+  Only an engine with links on sends link states and prompts, as the
+  app's does since K44b (below). The engine sends no probe answers and
   fills the new fleet fields only for imports (below).
 - Protocol v3 sampling (M2, 03 §10.1, K16a, #193): `Subscribe` and
   `Unsubscribe` name one surface's subscription and its `SampleStream`s
@@ -201,7 +201,7 @@ M2, the host read MVP, is the current milestone. What is on main:
   `SamplingState`, `Gap` and `HostProfileChanged` join. Sampling joined v3
   without a bump. The engine keys subscriptions by server and subscription
   id and keeps the cadence profile. Only an engine with links on samples
-  and sends these events (K22), and the app leaves links off (below).
+  and sends these events (K22), as the app's does since K44b (below).
 - Sample pipeline (M2, 03 §6.4, §10.1, K23, #207): `klabautermann_core`'s
   `ServerSamplePipeline` turns one server's sampler outcomes into
   `Sample`, `Gap`, `SamplingState` and `HostProfileChanged` events; the
@@ -238,8 +238,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   last unsubscribe and leaving the fleet close the samplers. After a
   missed fast deadline the restarted fast sampler's start is a dead-peer
   hint, and the supervisor closes a link silent for 20 s as
-  `pingTimeout` and redials. The scheduler exists only with links on, so
-  the app's engine samples nothing until K44; a real-link test of the
+  `pingTimeout` and redials. The scheduler exists only with links on,
+  which the app's engine has since K44b; a real-link test of the
   hint and the reconnect waits for K24.
 - Capability cache and argument masking (M2, 03 §4.10, §6.1, §8.9, D59,
   CN-02, SAF-07, SYN-08, K27, #230): the engine keeps each fleet
@@ -261,9 +261,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   credentials, with shell-word extents inside `-c` lines and at most
   65,536 tokens read per procs reading. A short option's separate value
   (`sshpass -p`), `curl -u user:pass` and header values are not masked
-  yet (03 §8.9). With links off no probe answers and no procs row
-  crosses, so the app's engine finds no cache file and masks nothing
-  until K44.
+  yet (03 §8.9). Since K44b turned links on in the app, its engine caches
+  the profiles its probes answer and masks the procs rows it reads.
 - Spike S5 part 1 (M2, 03 §11.4, K29a, #220):
   `klabautermann_core/tool/engine_budget.dart` replays the host fixtures
   for ten hosts at the Phone cadence (or every host reading `core` every
@@ -288,8 +287,9 @@ M2, the host read MVP, is the current milestone. What is on main:
   PID as unknown; `JournalEntry.timestampUtc` no longer throws on such a
   time. Logs joined v3 without a bump. With links on, the engine routes
   windows to the log service and rejects follows until K26 (K25a and
-  K25b, below); with links off, as in the app, it rejects every
-  `OpenLogStream` and ignores `CloseStream`.
+  K25b, below); with links off (the engine's default, which the app
+  overrides since K44b), it rejects every `OpenLogStream` and ignores
+  `CloseStream`.
 - Log service (M2, 03 §7.6, LOG-01, LOG-03, LOG-22, SVC-04, K25a, #221):
   `klabautermann_core`'s `LogService` reads one window (`follow: false`)
   over a server's link: up to 500 journal records newest first from
@@ -319,7 +319,7 @@ M2, the host read MVP, is the current milestone. What is on main:
   when its link is lost or replaced; a waiting read waits for the next
   link. The background pauses reads as `LogStreamWaiting(background)`,
   and the foreground runs them again from the start. The app's engine
-  keeps links off (K44), so it still rejects every open.
+  has links on since K44b, so it serves the app's reads.
 - Link connector (M2, `klabautermann_core` `links/`, K17, #197): the
   engine's credential source (no vault yet; key files read at connect time
   after `~` expansion, at most 1 MiB, each attempt recorded best effort in
@@ -331,9 +331,10 @@ M2, the host read MVP, is the current milestone. What is on main:
   over an injected pin store (in memory for now). Only interactive
   connects prompt: background connects decline a first-seen host key and
   offer no keyboard-interactive, and a changed key blocks the link. There
-  is no passphrase prompt and no prompt dialog in the app yet. The engine
-  wires the connector and the broker in behind links the app leaves off
-  (below).
+  is no passphrase prompt yet; the app shows the host-key and
+  keyboard-interactive prompts (K43). The engine
+  wires the connector and the broker in behind links, which the app
+  turns on since K44b (below).
 - Link supervisor (M2, 03 §5.1, §5.12, K19a, #206): `LinkSupervisor`
   holds at most one link and one dial per server over the link
   connector, with at most 4 attempts in flight across the fleet (D19).
@@ -359,11 +360,13 @@ M2, the host read MVP, is the current milestone. What is on main:
   `Connect`, `Disconnect` and `SetAppActivity` to the link supervisor and
   `AnswerPrompt` to the prompt broker, and dials through the link
   connector with an in-memory pin store. `Connect` is the user's
-  connect, so it may prompt; one for a server the engine cannot dial gets
-  `RequestRejected`. Phones close links in the background (D34);
-  desktops keep them. `EngineStart.linksEnabled` gates the whole stack
-  and is false in `main.dart` (a contract test holds it) until
-  `host_keys.json` and the app's prompts land (K44). With links off,
+  connect, so it may prompt; one for an id outside the fleet gets
+  `RequestRejected`, and one for a fleet server without a config gets
+  `ConnectRejected` (K44a). Phones close links in the background (D34);
+  desktops keep them. `EngineStart.linksEnabled` gates the whole stack.
+  It is off unless given, and `main.dart` turns it on since K44b (a
+  contract test holds it on), after pins in `host_keys.json` (K44a) and the
+  app's prompts (K43) landed. With links off,
   `Connect` is rejected, `Disconnect` and `SetAppActivity` change nothing,
   and nothing dials. A server that leaves the fleet is forgotten: its link
   and attempts end without a `LinkState`, its subscriptions go, and a
@@ -397,8 +400,10 @@ M2, the host read MVP, is the current milestone. What is on main:
   run: a restarted engine would be a new client with new controllers, and
   the app remounts its tree when handed them (D44), but nothing restarts
   the engine yet: `main.dart` spawns it once per launch. The app's engine
-  runs with links off, so it rejects `Connect` and ignores `Disconnect`
-  and `SetAppActivity`, and the app shows nothing for the rejection. The
+  runs with links on since K44b, so `Connect` dials, `Disconnect` closes
+  the link and `SetAppActivity` reaches the supervisor; the app shows
+  nothing for a `RequestRejected` of `Connect` (an id outside the
+  fleet), and shows a `ConnectRejected` on the server's views (K44a). The
   Overview's sparklines show the rings (K32a, below); the coverage
   card's chart draws a separate `core` history (K39b, below), and the
   fleet rows use the clock for a reading's age (below).
@@ -418,9 +423,10 @@ M2, the host read MVP, is the current milestone. What is on main:
   K14's locator flag shows as a warning whose words a tap shows. Link
   changes are announced, through a live region where the platform takes no
   announcements; samples and probe answers are not. Rows subscribe nothing
-  until the monitor set (K30), and the app's engine sends no link states
-  or samples (links are off until K44) and no probe answers (K20), so in a
-  real run rows show the name, address, filter and locator warning only.
+  until the monitor set (K30), and the app's engine sends no probe
+  answers (K20). It sends link states and samples since K44b turned links
+  on, so in a real run a row shows its link state once its server is
+  opened, and its readings while a view holds them.
 - Server header and Overview part 1 (M2, 03 §10.2, §10.4, OV-01, OV-03,
   OV-04, MEM-01, MEM-02, K32a, #223): the desktop workspace and the
   phone's server screen open with a header showing the link state as a
@@ -444,10 +450,9 @@ M2, the host read MVP, is the current milestone. What is on main:
   80 and 90 %, as the fleet rows do. Every figure uses IEC units, and a
   test keeps `ghostFormatFileSize` and `ghostFormatByteRate` out of
   `lib/`. Not yet: `CoreHeatmap`, a load sparkline and a radial `Gauge`.
-  The app's engine samples nothing and sends no profile while links are
-  off (K44), so in a real run the header shows no live link state and
-  "Runtime: not checked yet", and the Overview waits for its first
-  reading.
+  Since K44b turned links on, the app's engine connects an opened server,
+  samples it and sends its profile, so the header shows the live link
+  state and the detected runtime and the Overview shows the readings.
 - Coverage part 1 (M2, 03 §9.5 items 1, 2 and 4, K39a, #210): a
   first-run card heads the desktop workspace and the phone's fleet list
   until "Got it", which `settings.json` keeps (below). A coverage chip at
@@ -460,8 +465,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   latest `SamplingState` and the phase before it. The Overview's
   freshness line (K32a, above) and the inspector's coverage (K39b,
   below) use the formatter's words; the fleet rows word their age
-  with their own strings. The app's engine sends no `SamplingState`
-  while links are off (K44).
+  with their own strings. The app's engine sends `SamplingState` since
+  K44b turned links on.
 - Coverage part 2 (M2, 03 §9.5 items 3, 5 and 6, K39b, #226): each
   server's Overview ends with a coverage card: the T0 badge with what
   live reading is doing (or the tier's rule before the engine says), a
@@ -478,11 +483,10 @@ M2, the host read MVP, is the current milestone. What is on main:
   `Gap` breaks the sparklines' rings, so they no longer join across a
   pause. Phones, and iOS or Android tablets in the desktop layout, show
   a dismissible return banner after a background pause of a server the
-  engine was sampling, at most a fifth of the screen high. The app's
-  engine sends no samples, `SamplingState` or `Gap` while links are off
-  (K44), so in a real run the card is still looking for an external
-  monitor, the chart is empty, the inspector says "No data yet" and the
-  banner never shows.
+  engine was sampling, at most a fifth of the screen high. Since K44b
+  turned links on, the app's engine sends samples, `SamplingState` and
+  `Gap`, so the card, the chart, the inspector and the banner follow a
+  connected server's readings.
 - System tab (M2, 03 §10.4, K37, #209): the desktop workspace's System
   tab shows identity with virtualization (SYS-01), uptime and boot time
   (BOOT-01), total receive and transmit rates (NET-01), and usage and
@@ -496,9 +500,9 @@ M2, the host read MVP, is the current milestone. What is on main:
   three-column table takes over below a width that grows with the text
   scale. `MonitoringController` keeps each server's latest host profile
   and latest reading per stream, and drops them with the server (SYN-08).
-  The app's engine samples nothing and sends no profile while links are
-  off (K44), so the tab waits for its first reading; phones reach it with
-  K40.
+  Since K44b turned links on, the app's engine samples a connected server
+  and sends its profile, so the tab shows its readings; phones reach it
+  with K40.
 - Services tab (M2, 03 §7.5, SVC-01, SVC-02, SVC-04, K34, #216): the
   desktop workspace's Services tab lists the `units` stream's units in
   the sortable table with their load, active and sub states, filtered by
@@ -512,10 +516,10 @@ M2, the host read MVP, is the current milestone. What is on main:
   returns and focus follows. The page reads SVC-04's 50-record journal
   window through `MonitoringController.openLogRead`, which opens it
   through `MonitoringController.logs` (`LogStreams`, shared with the Logs
-  panel, below), and says what the read is doing. The app's engine
-  samples nothing and refuses every log read while links are off (K44),
-  so the list waits for its first reading and the page says unit logs
-  are not available in this version; phones reach the tab with K40.
+  panel, below), and says what the read is doing. Since K44b turned links
+  on, the app's engine samples a connected server and serves its log
+  reads, so the list and the page show what the server returns; phones
+  reach the tab with K40.
 - Access tab and panel gating (M2, 03 §10.4, CN-24, CN-09, SAF-08, D51,
   K38, #218): the desktop workspace's Access tab runs K04's access check
   over the probe's latest `HostProfile`
@@ -530,9 +534,9 @@ M2, the host read MVP, is the current milestone. What is on main:
   a capability the probe answered does not build its panel: a notice in
   its place names what is missing and links to Access, which the desktop
   selects with focus moved in and a phone pushes. The Docker tab reads
-  "Arrives with Docker support" until M3 (D54). The app's engine sends no
-  `HostProfileChanged` while links are off (K44), so in a real run every
-  row reads unknown and no panel hides.
+  "Arrives with Docker support" until M3 (D54). Since K44b turned links
+  on, the app's engine sends `HostProfileChanged` for a connected server,
+  so the rows and the panel gating follow its probe.
 - Localization contract (D35, A11Y-05):
   `app/klabautermann_app/test/localization_contract_test.dart` runs the
   suite's shared scanner (`tool/l10n_contract`, 03 §3.5 F1b) over `lib/`
@@ -658,8 +662,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   would refuse. Where that second reading would route a host through
   itself or into a jumphost loop, ssh cannot be taking it, so the host
   keeps the first reading's values (as a bastion under `Host * !bastion`
-  does). Only an engine with links on dials them, and the app leaves
-  links off (above).
+  does). Only an engine with links on dials them, as the app's does
+  since K44b (above).
 - Final-pass hops (M2, 03 §10.1, K14b, #222): the import no longer
   checks a hop that keeps its first pass against that hop's final pass
   where ssh's final pass already fails before the hop: for the hops of a
@@ -674,9 +678,12 @@ M2, the host read MVP, is the current milestone. What is on main:
   AppImage through the shared `scripts/package-linux-common.sh`) and
   `scripts/build-flatpak.sh` with `flatpak/ch.lkmc.klabautermann.yml`.
   The flatpak grants read-only `~/.ssh/config` for the FL-02 import and
-  nothing else under `~/.ssh` (04 §12.1); widening it waits for links in
-  the app (K44), whose identity-file reads (K17, above) need it, and the
-  owner's sign-off. Locally the scripts have only run on stub bundles;
+  nothing else under `~/.ssh` (04 §12.1). Links are on in the app since
+  K44b, and their identity-file reads (K17, above) need the wider grant,
+  which waits for the owner's sign-off (O1): until then the Flatpak
+  build cannot read a host's `IdentityFile`, and signs in through an
+  ssh-agent only for hosts that name none. Locally the scripts have only
+  run on stub bundles;
   CI's Linux client leg runs them on the real release bundle, with
   appimagetool and flatpak-builder.
 - Client CI legs: `klabautermann_client` in the root `ci.yml` builds
@@ -840,9 +847,9 @@ M2, the host read MVP, is the current milestone. What is on main:
   journal access, dropped with the server (SYN-08). That rule holds
   because the engine answers each open it accepts before the next
   request (03 §10.1). With links on the engine refuses follows until
-  K26. The app's engine refuses every open and sends no host profile
-  while links are off (K44), so the panel shows the refusal with Retry
-  and no notice.
+  K26. Since K44b turned links on, the app's engine serves the panel's
+  reads over the server's link and sends the host profile that LOG-04's
+  notice follows.
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.
