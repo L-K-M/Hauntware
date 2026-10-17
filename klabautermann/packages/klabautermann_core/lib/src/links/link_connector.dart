@@ -306,8 +306,6 @@ final class LinkConnector {
         failure: LinkFailureKind.timedOut,
       ),
       // Not classified, among them an ssh-agent that could not be reached.
-      // The client limitations of 03 §5.3 wait for seance_core to type
-      // them.
       _ => LinkConnectFailed(error),
     };
   }
@@ -338,6 +336,13 @@ final class LinkConnector {
         // reads first; without one, a key-exchange signature did not
         // verify, which no failure kind names.
         SshConnectFailureKind.hostKeyRefused => null,
+        // The client limitations of 03 §5.3, under the same names.
+        SshConnectFailureKind.unsupportedAlgorithm =>
+          LinkFailureKind.unsupportedAlgorithm,
+        SshConnectFailureKind.insecureAlgorithmsOnly =>
+          LinkFailureKind.insecureAlgorithmsOnly,
+        SshConnectFailureKind.keyExchangeTimedOut =>
+          LinkFailureKind.keyExchangeTimedOut,
         SshConnectFailureKind.other => null,
       };
 }
