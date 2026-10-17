@@ -186,12 +186,19 @@ void main() {
   test('no service publishes an engine port or binds a host socket', () {
     for (final MapEntry(key: name, value: service) in services().entries) {
       for (final port in (service['ports'] as YamlList?) ?? YamlList()) {
-        expect(port['target'], isNot(anyOf(2375, 2376)), reason: name);
-        expect(port['published'], isNot(anyOf('2375', '2376')), reason: name);
+        // YAML reads 2375 as an int and "2375" as a string; reject both.
+        for (final key in ['target', 'published']) {
+          expect('${port[key]}', isNot(anyOf('2375', '2376')), reason: name);
+        }
       }
       for (final volume in (service['volumes'] as YamlList?) ?? YamlList()) {
         expect('$volume', isNot(contains('docker.sock')), reason: name);
         expect('$volume', isNot(matches(r':/(var/)?run(:|$)')), reason: name);
+        // The host's run directory holds its socket wherever it is mounted.
+        final source = volume is YamlMap
+            ? '${volume['source']}'
+            : '$volume'.split(':').first;
+        expect(source, isNot(matches(r'^/(var/)?run/?$')), reason: name);
       }
     }
   });
@@ -263,8 +270,8 @@ void main() {
       'klabautermann/dart_test.yaml',
       'klabautermann/packages/klabautermann_core/dart_test.yaml',
     ]) {
-      final tags = loadYaml(read(path))['tags'] as YamlMap;
-      expect(tags.containsKey('docker'), isTrue, reason: path);
+      final tags = loadYaml(read(path))['tags'] as YamlMap?;
+      expect(tags?.containsKey('docker'), isTrue, reason: path);
     }
   });
 

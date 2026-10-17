@@ -99,7 +99,13 @@ void main() {
 
     expect(ping.isPodman, isFalse);
     expect(ping.apiVersion, isNotNull);
-    expect(version.version, '29.9.1');
+    expect(
+      version.version,
+      '29.9.1',
+      reason:
+          'the dind image pin in test/integration/docker-compose.yml; '
+          'bump both together',
+    );
     expect(version.apiVersion, ping.apiVersion);
     final serverMax = version.apiVersion!;
     expect(

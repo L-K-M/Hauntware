@@ -70,7 +70,8 @@ docker run --detach --pull never --name coolify-app \
   sh -c 'while :; do sleep 60; done' >/dev/null
 
 health() {
-  docker inspect --format '{{.State.Health.Status}}' "$1"
+  docker inspect --format '{{.State.Health.Status}}' "$1" 2>/dev/null \
+    || echo missing
 }
 attempt=0
 until [ "$(health demo-web-1)" = healthy ] \

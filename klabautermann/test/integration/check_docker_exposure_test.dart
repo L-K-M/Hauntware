@@ -19,7 +19,11 @@ Map<String, Object?> _config({
       'privileged': true,
       'command': ['dockerd', '--host=$_socket', '--group=990'],
       'volumes': [
-        {'type': 'volume', 'source': 'docker-run', 'target': '/run/docker'},
+        {
+          'type': 'volume',
+          'source': 'docker-run',
+          'target': '/run/docker-fixture',
+        },
       ],
       ...dind,
     },
@@ -27,7 +31,11 @@ Map<String, Object?> _config({
       'image': 'klabautermann-docker-sshd:fixture',
       'volumes': [
         {'type': 'bind', 'source': '/repo/config', 'target': '/etc/ssh/x'},
-        {'type': 'volume', 'source': 'docker-run', 'target': '/run/docker'},
+        {
+          'type': 'volume',
+          'source': 'docker-run',
+          'target': '/run/docker-fixture',
+        },
       ],
       'ports': [
         {'target': 22, 'host_ip': '127.0.0.1', 'published': '2244'},
@@ -107,6 +115,11 @@ void main() {
       '/run/',
       '/var',
       '/',
+      '/run/user',
+      '/run/user/',
+      '/run/user/1000',
+      '/run/user/1000/tmp',
+      '/var/run/user/1000',
     ]) {
       test('rejects a bind of $source', () {
         final errors = findDockerExposureErrors(_config(sshd: _bind(source)));
@@ -124,6 +137,44 @@ void main() {
             {'type': 'bind', 'source': '/var/runner', 'target': '/a'},
             {'type': 'bind', 'source': '/run/fixture/keys', 'target': '/b'},
             {'type': 'volume', 'source': 'docker-run', 'target': '/var/run'},
+          ],
+        },
+      );
+      expect(findDockerExposureErrors(config), isEmpty);
+    });
+
+    for (final device in <Object>[
+      {
+        'source': '/var/run/docker.sock',
+        'target': '/var/run/docker.sock',
+        'permissions': 'rwm',
+      },
+      {'source': '/run/user/1000/docker.sock', 'target': '/y'},
+      '/run/docker.sock:/run/docker.sock:rwm',
+    ]) {
+      test('rejects a device mapping of $device', () {
+        final errors = findDockerExposureErrors(
+          _config(
+            sshd: {
+              'devices': [device],
+            },
+          ),
+        );
+        expect(errors, hasLength(1));
+        expect(errors.single, startsWith('docker-sshd maps the host device '));
+      });
+    }
+
+    test('accepts other devices', () {
+      final config = _config(
+        sshd: {
+          'devices': [
+            {
+              'source': '/dev/fuse',
+              'target': '/dev/fuse',
+              'permissions': 'rwm',
+            },
+            '/dev/null:/dev/x',
           ],
         },
       );

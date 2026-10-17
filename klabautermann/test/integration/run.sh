@@ -107,7 +107,7 @@ fingerprint() {
 # file, against the host key read from the container (seed_docker_host).
 docker_host_ssh() {
   ssh -F /dev/null -i "$runtime_dir/identity" -o IdentitiesOnly=yes \
-    -o BatchMode=yes -o StrictHostKeyChecking=yes \
+    -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 \
     -o UserKnownHostsFile="$runtime_dir/known_hosts" \
     -p "$docker_port" "$fixture_user@127.0.0.1" "$@"
 }

@@ -5,7 +5,8 @@
 // a Docker engine reachable from the host or its network:
 //
 // - a published 2375 or 2376, the engine's TCP ports, on any address;
-// - a bind mount of a host docker.sock, or of a directory that holds one;
+// - a bind mount or device of a host docker.sock, of a directory that
+//   holds one, or of a rootless engine's /run/user tree;
 // - `privileged` on any service but dind (and a Podman one, 03 §11.3);
 // - a dind service whose command does not run dockerd with an explicit,
 //   Unix-only --host: with no command, or with options only, the dind
@@ -23,6 +24,10 @@ const _privilegedServices = {'dind', 'podman'};
 /// Where a host keeps its Docker socket: `/var/run` is `/run` on most
 /// hosts, but not on every one.
 const _hostSockets = ['/var/run/docker.sock', '/run/docker.sock'];
+
+/// Where rootless engines keep their sockets: `/run/user/<uid>/docker.sock`.
+/// The uid varies, so the whole tree counts as holding a socket.
+const _rootlessSocketRoots = ['/var/run/user', '/run/user'];
 
 const _socketName = 'docker.sock';
 const _dindService = 'dind';
@@ -46,7 +51,8 @@ List<String> findDockerExposureErrors(Map<String, Object?> config) {
 
     errors
       ..addAll(_portErrors(name, value['ports']))
-      ..addAll(_bindErrors(name, value['volumes']));
+      ..addAll(_bindErrors(name, value['volumes']))
+      ..addAll(_deviceErrors(name, value['devices']));
     if (value['privileged'] == true && !_privilegedServices.contains(name)) {
       errors.add('$name runs privileged outside dind');
     }
@@ -101,11 +107,32 @@ Iterable<String> _bindErrors(String name, Object? volumes) sync* {
   }
 }
 
+/// `devices:` hands a service a host path just as a bind does. Compose
+/// renders each entry as a map with a `source`; the short `src:dst:perms`
+/// string form is handled too.
+Iterable<String> _deviceErrors(String name, Object? devices) sync* {
+  if (devices is! List) return;
+  for (final device in devices) {
+    final source = device is Map
+        ? '${device['source']}'
+        : '$device'.split(':').first;
+    if (_holdsHostSocket(source)) {
+      yield '$name maps the host device $source, which is or holds '
+          '$_socketName';
+    }
+  }
+}
+
 bool _holdsHostSocket(String source) {
   final path = source.length > 1 && source.endsWith('/')
       ? source.substring(0, source.length - 1)
       : source;
   if (path == '/' || path.split('/').last == _socketName) return true;
+  if (_rootlessSocketRoots.any(
+    (root) => path == root || path.startsWith('$root/'),
+  )) {
+    return true;
+  }
   return _hostSockets.any(
     (socket) => socket == path || socket.startsWith('$path/'),
   );
