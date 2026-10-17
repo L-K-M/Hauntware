@@ -81,6 +81,10 @@ void main() {
           extra: {
             for (final (name, port) in [
               ('neg-nostreamlocal', 2245),
+              ('neg-disableforwarding', 2246),
+              ('neg-notcp', 2247),
+              ('neg-permitopen', 2248),
+              ('neg-maxsessions2', 2249),
               ('neg-restrict', 2250),
             ])
               name: {

@@ -35,6 +35,11 @@ enum _Outcome {
   /// sshd refused it, and seance_core classified the refusal as forwarding
   /// disabled.
   forwardDisabled,
+
+  /// sshd refused it, and seance_core classified it some other way. No
+  /// variant expects this, so the test fails, after the evidence is
+  /// written.
+  otherRefusal,
 }
 
 /// A forwarding variant of the Docker host, and what its OpenSSH does with
@@ -258,14 +263,18 @@ void main() {
 typedef _Attempt = ({_Outcome outcome, Object evidence});
 
 /// Runs [open], which opens a channel and uses it, and reports what sshd
-/// did. A failure other than a forwarding refusal fails the test.
+/// did. A refusal classified other than as forwarding disabled reads as
+/// [_Outcome.otherRefusal], which the variant comparison fails on once
+/// the evidence is recorded.
 Future<_Attempt> _attempt(Future<void> Function() open) async {
   try {
     await open();
     return (outcome: _Outcome.opened, evidence: 'opened');
   } on ChannelOpenException catch (error) {
-    expect(error.refusal, ChannelRefusal.forwardDisabled, reason: '$error');
-    return (outcome: _Outcome.forwardDisabled, evidence: _evidence(error));
+    final outcome = error.refusal == ChannelRefusal.forwardDisabled
+        ? _Outcome.forwardDisabled
+        : _Outcome.otherRefusal;
+    return (outcome: outcome, evidence: _evidence(error));
   }
 }
 
@@ -293,7 +302,11 @@ Future<ChannelOpenException?> _refusal(Future<Object?> open) async {
 /// The identification string sshd sends at [endpoint] before key
 /// exchange (RFC 4253 §4.2), such as `SSH-2.0-OpenSSH_9.9`.
 Future<String> _identification(Endpoint endpoint) async {
-  final socket = await Socket.connect(endpoint.host, endpoint.port);
+  final socket = await Socket.connect(
+    endpoint.host,
+    endpoint.port,
+    timeout: const Duration(seconds: 10),
+  );
   try {
     final line = await socket
         .cast<List<int>>()
