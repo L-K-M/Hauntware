@@ -55,7 +55,9 @@ Future<CredentialDialogResult?> showCredentialDialog(
 }
 
 // Kept beside the answer type rather than in the adapter, which would
-// otherwise import this file back.
+// otherwise import this file back. [GhostKeyPassphraseReply] never comes:
+// it answers only the passphrase-only form, and ghostCredentialRequestOf
+// always asks for a key file.
 CredentialDialogResult? _resultOf(GhostCredentialReply? reply) =>
     switch (reply) {
       null => null,
@@ -71,4 +73,7 @@ CredentialDialogResult? _resultOf(GhostCredentialReply? reply) =>
           keyPassphrase: keyPassphrase,
           saveToVault: saveToVault,
         ),
+      GhostKeyPassphraseReply() => throw StateError(
+        'Poltergeist never raises the passphrase-only credential prompt',
+      ),
     };
