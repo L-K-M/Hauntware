@@ -100,6 +100,15 @@ void main() {
             follow: false,
           ),
         ),
+        OpenLogStream(
+          streamId: 'stream-2',
+          spec: LogStreamSpec(
+            serverId: 'srv-1',
+            source: const ContainerLogSource('db'),
+            window: 100,
+            follow: true,
+          ),
+        ),
         const CloseStream('stream-1'),
         const DockerQuery(
           serverId: 'srv-1',
@@ -898,6 +907,11 @@ void main() {
         throwsA(isA<AssertionError>()),
         reason: 'a file tail has no cursor',
       );
+      expect(
+        () => spec(source: const ContainerLogSource('db'), afterCursor: 's=1'),
+        throwsA(isA<AssertionError>()),
+        reason: 'a container log has no cursor',
+      );
       final bounded = JournalLogSource(until: DateTime.utc(2026, 10, 15));
       expect(
         () => spec(source: bounded, follow: true),
@@ -945,6 +959,11 @@ void main() {
                     ),
                     const KernelRecord(message: 'no level'),
                     const FileRecord('GET / HTTP/1.1 200'),
+                    ContainerRecord(
+                      stream: ContainerLogStream.stderr,
+                      at: DateTime.utc(2026, 10, 17, 10, 0, 0, 0, 3),
+                      text: 'warn: slow',
+                    ),
                   ],
                   dropped: 41,
                 ),
@@ -957,6 +976,7 @@ void main() {
         KernelRecord,
         KernelRecord,
         FileRecord,
+        ContainerRecord,
       ]);
       expect(() => batch.records.clear(), throwsUnsupportedError);
 
@@ -985,6 +1005,10 @@ void main() {
       expect(unleveled.priority, isNull);
 
       expect((batch.records[3] as FileRecord).text, 'GET / HTTP/1.1 200');
+      final container = batch.records[4] as ContainerRecord;
+      expect(container.stream, ContainerLogStream.stderr);
+      expect(container.at, DateTime.utc(2026, 10, 17, 10, 0, 0, 0, 3));
+      expect(container.text, 'warn: slow');
 
       final empty = await roundTrip(const JournalRecord()) as JournalRecord;
       expect(empty.fields, isEmpty);

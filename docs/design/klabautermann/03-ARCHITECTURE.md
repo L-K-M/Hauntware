@@ -4909,8 +4909,8 @@ the engine in `engine_isolate.dart` beside it):
   `dmesg --json` only as a fallback), and one file by absolute path
   (LOG-22). There is no text filter: LOG-05 searches the records the
   view holds, and `journalctl -g` waits for LOG-06 (v1). Container logs
-  (CTX-01) are no source until M3, so the M1 scaffold's `docker` source
-  and untyped `target` are gone. A window reads the newest `window` records and
+  (CTX-01) joined with M3 as their own typed source (below), so the M1
+  scaffold's `docker` source and untyped `target` are gone. A window reads the newest `window` records and
   ends; they arrive newest first, so `afterCursor`, a journal record's
   cursor, reads on to older records, as `journalctl --reverse
   --after-cursor` does. journalctl refuses `--since` with a cursor, so
@@ -5112,6 +5112,47 @@ the engine in `engine_isolate.dart` beside it):
   at a time on a relay, the CPU % taken against the previous read, so
   a container's first read has none. The last unwatch, Disconnect,
   fleet removal and an endpoint change end it all.
+- **Version 3 (M3 container logs).** Container logs joined version 3
+  the same way (D07), as a log source rather than Docker rows (M7):
+  `ContainerLogSource(containerId)` opens through `OpenLogStream`, its
+  lines arrive in `LogBatch` as `ContainerRecord(stream, at, text)`
+  (stdout or stderr; a TTY container's one stream as stdout; `at` the
+  daemon's timestamp to the microsecond), and `LogStreamState` reports
+  it with the journal's statuses. It takes no cursor. A follow waits
+  for the Docker endpoint as waiting for the link, and a failed
+  endpoint ends it as failed. `LogStreamEndReason` gained
+  `logDriverUnreadable`, whose detail names the driver: `none`, a
+  remote driver whose dual-logging cache the container turns off
+  (`cache-disabled`), or on Podman, which keeps no such cache, any
+  driver but `k8s-file`, `json-file` and `journald`; a cache turned
+  off daemon-wide, which inspect does not show, reads so from the
+  logs request's 501. A gone container ends as missing. As built, the
+  engine inspects the container for `Config.Tty` and the log driver,
+  then asks for the last `window` lines with `follow` and
+  `timestamps=1`, on a connection of its own. The framing follows
+  `resolveLogFraming`, so `Config.Tty` decides when no `Content-Type`
+  came, as from Docker 20.10 and Podman. A multiplexed frame without a
+  trailing newline leaves its line open, and the next frame of that
+  stream continues it without its own timestamp, which joins the
+  lines Podman splits over two frames; a raw stream splits on
+  newlines only. Lines are cut at 256 KiB, and the journal follow's
+  ring (5,000 lines, 4 MiB) and pace (a batch per 50 ms at most) apply,
+  with lines the ring drops counted in `dropped`. When the endpoint
+  drops, a follow pauses with its ring kept and resumes over the next
+  one with `since` at the newest line received and no tail, dropping
+  re-sent lines up to that timestamp (`dropInclusiveSince`), so it
+  reports `complete`; lines at that very nanosecond that never arrived
+  are dropped too. A response that ends, as when the container
+  stops, reads again over the same endpoint after 1 s, doubling to
+  30 s [E], since the newest line, so a follow outlasts a restart; a
+  window ends once its response does. On relay ranks a running follow
+  holds a follower slot and a window a short-action slot (2 each, with
+  the learned-limit rule), from shares the Docker session keeps apart
+  from the host log reads' until D09 joins them, and others wait for a
+  channel; streamlocal costs none. Container log streams count apart from the
+  host's, up to 16 per server, and ids stay unique across both. The
+  background does not pause them yet. CloseStream, Disconnect, fleet
+  removal and an endpoint change end them.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period

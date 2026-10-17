@@ -88,7 +88,8 @@ final class EngineStart {
 /// prompt broker (03 §5.1), a [Connect] to a fleet server without a
 /// config gets [ConnectRejected] (D61), [OpenLogStream] and
 /// [CloseStream] go to the log streams, which read each window over its
-/// server's link (03 §5.2, §7.6), a [DockerQuery] goes to its server's
+/// server's link (03 §5.2, §7.6), or for a [ContainerLogSource] over its
+/// server's Docker session (03 §7.12), a [DockerQuery] goes to its server's
 /// Docker session, which finds and negotiates the endpoint over the link
 /// once the probe has answered and reports it as [DockerEndpointState]
 /// (03 §5.8, §5.9), [DockerWatch] and [DockerUnwatch] go to that session,
@@ -389,6 +390,16 @@ void engineMain(
       case SetCadenceProfile(:final profile):
         sampling.profile = profile;
         scheduler?.profileChanged();
+      case OpenLogStream(spec: LogStreamSpec(source: ContainerLogSource())):
+        // The log router keeps every stream id; the Docker session reads.
+        final reason = switch ((logs, docker)) {
+          (final logs?, final docker?) =>
+            logs.claim(message.streamId)
+                ? docker.openLogs(message)
+                : 'stream id ${message.streamId} was used before',
+          _ => 'links are off in this engine',
+        };
+        if (reason != null) reject(message, reason);
       case OpenLogStream():
         final reason = switch (logs) {
           null => 'links are off in this engine',
@@ -397,6 +408,7 @@ void engineMain(
         if (reason != null) reject(message, reason);
       case CloseStream(:final streamId):
         logs?.closeStream(streamId);
+        docker?.closeLogs(streamId);
       case DockerQuery():
         switch (docker) {
           case null:

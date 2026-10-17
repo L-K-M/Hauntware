@@ -130,6 +130,13 @@ import '../docker/docker_ladder.dart'
 /// containers it wants stats for, and [DockerListChanged] carries each
 /// list as a typed [DockerPayload] in place of the opaque `DockerEvent`
 /// record, which is gone.
+///
+/// Container logs then joined v3 the same way (03 §7.12 CTX-01):
+/// [ContainerLogSource] reads one container's logs over its server's
+/// Docker endpoint as [ContainerRecord]s through the same
+/// [OpenLogStream], [LogBatch] and [LogStreamState], and
+/// [LogStreamEndReason] gained `logDriverUnreadable`, whose detail names
+/// the driver.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -1199,8 +1206,9 @@ final class LogStreamSpec {
     this.afterCursor,
   }) : assert(window >= 0, 'window counts records'),
        assert(
-         afterCursor == null || source is! FileLogSource,
-         'a file tail has no cursor',
+         afterCursor == null ||
+             (source is! FileLogSource && source is! ContainerLogSource),
+         'a file tail and a container log have no cursor',
        ),
        assert(
          !follow || source is! JournalLogSource || source.until == null,
@@ -1221,7 +1229,9 @@ final class LogStreamSpec {
 
   /// A [JournalRecord.cursor] the read continues after, in the stream's
   /// order: a window reads older records, a follow the ones written after
-  /// it. File tails and `dmesg` have no cursor. Null starts at the newest
+  /// it. File tails, `dmesg` and container logs have no cursor: a
+  /// container follow resumes after its newest line itself, as long as
+  /// the stream stays open. Null starts at the newest
   /// record. journalctl refuses `--since` together with a cursor, so with
   /// one the engine applies [JournalLogSource.since] itself: a window ends
   /// with [LogStreamEndReason.oldestReached] at the first record older
@@ -1229,8 +1239,9 @@ final class LogStreamSpec {
   final String? afterCursor;
 }
 
-/// Where an [OpenLogStream] reads (03 §7.6). Container logs (CTX-01) are
-/// not a source yet: they come from the Docker Engine API with M3.
+/// Where an [OpenLogStream] reads (03 §7.6, §7.12): the host's journal,
+/// kernel log or a file over its link, or a container's logs over its
+/// Docker endpoint.
 @immutable
 sealed class LogSource {
   const LogSource();
@@ -1285,6 +1296,21 @@ final class FileLogSource extends LogSource {
   /// The absolute path, typed or picked from the common paths; the engine
   /// validates it (03 §8.8) before it quotes it into the command.
   final String path;
+}
+
+/// One container's logs through the Docker Engine API (CTX-01, 03 §5.6),
+/// read as [ContainerRecord]s: `GET /containers/{id}/logs` with
+/// `timestamps=1`, its last [LogStreamSpec.window] lines, then the new
+/// ones for a follow. A follow outlasts the container's stops: it reads
+/// on, after the newest line it delivered, once the container runs
+/// again. The read waits for the server's Docker endpoint
+/// ([DockerEndpointState]) as [LogStreamWaitReason.link].
+final class ContainerLogSource extends LogSource {
+  const ContainerLogSource(this.containerId);
+
+  /// The container's id, or its name; the engine validates it before it
+  /// puts it in a path.
+  final String containerId;
 }
 
 /// A syslog severity as journald and the kernel record it, most urgent
@@ -1376,6 +1402,24 @@ final class FileRecord extends LogRecord {
   final String text;
 }
 
+/// One line of a container's log (CTX-01), as the engine assembled it
+/// from the API's frames (03 §5.6): a line the engine split across
+/// frames arrives whole, without its line break.
+final class ContainerRecord extends LogRecord {
+  const ContainerRecord({required this.stream, required this.text, this.at});
+
+  final ContainerLogStream stream;
+
+  /// When the engine received the line, by the daemon's clock, to the
+  /// microsecond; null when the line carried no timestamp.
+  final DateTime? at;
+  final String text;
+}
+
+/// The container stream a [ContainerRecord] came from. A TTY container
+/// has one stream, read as [stdout].
+enum ContainerLogStream { stdout, stderr }
+
 /// A log stream's state behind [LogStreamState]. Compares by value, as
 /// [LinkStatus] does, because a status that crosses the boundary may
 /// arrive as a copy.
@@ -1450,7 +1494,8 @@ enum LogReader {
 
 /// The stream ended for [reason], and nothing more arrives for it.
 /// [detail] is the host's error output when the host ended it, control
-/// characters stripped, or null.
+/// characters stripped, the daemon's message for a container's logs, the
+/// driver's name for [LogStreamEndReason.logDriverUnreadable], or null.
 final class LogStreamEnded extends LogStreamStatus {
   const LogStreamEnded(this.reason, {this.detail});
 
@@ -1463,7 +1508,9 @@ final class LogStreamEnded extends LogStreamStatus {
 
 /// What a [LogStreamWaiting] stream waits for.
 enum LogStreamWaitReason {
-  /// The server's link; [LinkState] says why it is not ready.
+  /// The server's link; [LinkState] says why it is not ready. Container
+  /// logs also wait here for the Docker endpoint over it, which
+  /// [DockerEndpointState] reports.
   link,
 
   /// A free session channel: reads of its kind already hold their share
@@ -1494,7 +1541,8 @@ enum LogStreamEndReason {
   /// unit name or path its validation rejects (03 §8.8).
   invalid,
 
-  /// The tool or file the source reads is absent on the host.
+  /// The tool, file or container the source reads is absent on the
+  /// host.
   missing,
 
   /// The host refused the read, such as a file only `adm` or root may
@@ -1503,6 +1551,12 @@ enum LogStreamEndReason {
 
   /// The read failed otherwise.
   failed,
+
+  /// The container's logging driver keeps no logs the API can read (03
+  /// §7.12 CTX-01): `none`, or a remote driver with Docker's dual-logging
+  /// cache disabled, or on Podman, which has no such cache, any but
+  /// `k8s-file`, `json-file` and `journald`. [LogStreamEnded.detail] names the driver.
+  logDriverUnreadable,
 }
 
 /// What a [DockerQuery] reads (03 §7.12 to §7.14).

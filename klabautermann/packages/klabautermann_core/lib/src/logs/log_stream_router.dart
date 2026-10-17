@@ -112,6 +112,11 @@ final class LogStreamRouter {
     return null;
   }
 
+  /// Records [streamId] for an open another router serves, a container's
+  /// logs, and returns false when an earlier open used it, so ids stay
+  /// unique across every log stream (03 §10.1).
+  bool claim(String streamId) => _usedIds.add(streamId);
+
   /// [CloseStream]: ends [streamId] as closed, stopping its read. Does
   /// nothing when the stream is not open.
   void closeStream(String streamId) {

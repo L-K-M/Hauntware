@@ -87,6 +87,7 @@ void main() {
               FileRecord(:final text) => text,
               JournalRecord(:final message) => message ?? '',
               KernelRecord(:final message) => message,
+              ContainerRecord(:final text) => text,
             },
       ];
 
