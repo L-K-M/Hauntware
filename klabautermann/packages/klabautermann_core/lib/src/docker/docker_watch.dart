@@ -11,8 +11,10 @@
 ///     └─ 250 ms batch ─▶ ids: one list filtered to them, merged in
 ///                        lists: read again
 ///   stream lost ─▶ open again after 1 s, 2 s, ... 30 s
+///   no channel for the stream (a relay's follower share full, or
+///     low-session mode; M9) ─▶ re-list every 15 s, trying it again then
 ///   every 5 s ─▶ one-shot stats for statsFor (4 at once on streamlocal,
-///                one at a time on a relay) ─▶ deltas
+///                one at a time on a relay or in low-session mode) ─▶ deltas
 ///   stacks sent with a project not checked ─▶ check its files, then
 ///                send the stacks again with its verdict
 ///   detach (endpoint dropped) keeps the lists and the resume point;
@@ -41,8 +43,13 @@ const kDockerStatsInterval = Duration(seconds: 5);
 
 /// One-shot stats reads at once over streamlocal (03 §7.12 CST-01). A
 /// relay reads one at a time: each connection there holds a session
-/// channel (M9).
+/// channel (M9). So does low-session mode, on every rank.
 const kDockerStatsInFlight = 4;
+
+/// How often the watched lists are read again while the events stream
+/// has no channel (M9 [E]): a relay whose follower share is full, or
+/// low-session mode.
+const kDockerListPoll = Duration(seconds: 15);
 
 /// The most containers one batch re-reads by id [E]; more re-list them
 /// all.
@@ -76,13 +83,34 @@ abstract interface class DockerWatchTarget {
   /// while it runs.
   Future<T> use<T>(Future<T> Function(DockerClient client) read);
 
-  /// A client over a connection of its own, for the events stream. On a
-  /// relay it holds a session channel as a follower does (M9); D09
-  /// accounts for it.
-  DockerClient openStream();
+  /// Whether 03 §5.2's low-session mode holds, which reads stats one at
+  /// a time (M9).
+  bool get lowSession;
+
+  /// A connection of its own for the events stream, or null when it gets
+  /// no channel: on a relay it takes a follower slot, and gets none in
+  /// low-session mode (M9).
+  DockerStreamLease? openEvents();
 
   /// The endpoint's stack checks (03 §7.16 STK-01).
   StackSources get stacks;
+}
+
+/// A stream's client over a connection of its own, with the channel slot
+/// it holds on a relay, which [close] gives back (M9).
+final class DockerStreamLease {
+  DockerStreamLease(this.client, {this._release});
+
+  final DockerClient client;
+  void Function()? _release;
+
+  /// Closes the connection and gives back its slot; once.
+  Future<void> close() {
+    final release = _release;
+    _release = null;
+    release?.call();
+    return client.close();
+  }
 }
 
 /// [failure] read from a Docker call that threw [error], and whether the
@@ -143,7 +171,7 @@ final class DockerWatcher {
   // reads under way when it went drop their answers.
   DockerWatchTarget? _target;
   int _epoch = 0;
-  DockerClient? _stream;
+  DockerStreamLease? _stream;
   StreamSubscription<String>? _events;
   bool _opening = false;
   int _retries = 0;
@@ -251,6 +279,7 @@ final class DockerWatcher {
     _epoch++;
     _lostAt ??= _now();
     _opening = false;
+    // _retry also paces the re-lists without a stream.
     for (final timer in [_retry, _batch, _statsTimer]) {
       timer?.cancel();
     }
@@ -275,9 +304,19 @@ final class DockerWatcher {
     return detach();
   }
 
+  /// Closes the events stream, which gives way to re-lists (low-session
+  /// mode, M9); the stream's loss opens it again, or finds no channel.
+  void yieldStream() => unawaited(_stream?.close());
+
   // -- events ---------------------------------------------------------
 
   Future<void> _open(DockerWatchTarget target, int epoch) async {
+    final lease = target.openEvents();
+    if (lease == null) {
+      _pollLists(epoch);
+      return;
+    }
+
     final lostAt = _lostAt;
     final since =
         lostAt != null && _now().difference(lostAt) <= eventGapThreshold
@@ -290,7 +329,8 @@ final class DockerWatcher {
     }
 
     _opening = true;
-    final client = _stream = target.openStream();
+    _stream = lease;
+    final client = lease.client;
     try {
       final response = await client.requestLines(
         'GET',
@@ -334,6 +374,24 @@ final class DockerWatcher {
     _retries++;
     _retry?.cancel();
     _retry = _startTimer(delay < _retryCap ? delay : _retryCap, () {
+      _retry = null;
+      if (_target case final target? when epoch == _epoch) {
+        unawaited(_open(target, epoch));
+      }
+    });
+  }
+
+  /// Without a stream every watched list is read in full now and again
+  /// after [kDockerListPoll], when the stream is tried again. The stream
+  /// counts as lost, so one that opens later resumes as after a loss.
+  void _pollLists(int epoch) {
+    _lostAt ??= _now();
+    for (final list in _fetched(_lists)) {
+      _due(list, fresh: true);
+    }
+    unawaited(_refresh());
+    _retry?.cancel();
+    _retry = _startTimer(kDockerListPoll, () {
       _retry = null;
       if (_target case final target? when epoch == _epoch) {
         unawaited(_open(target, epoch));
@@ -652,7 +710,9 @@ final class DockerWatcher {
     }
 
     final width = math.min(
-      target.rank == DockerRank.streamlocal ? kDockerStatsInFlight : 1,
+      target.rank == DockerRank.streamlocal && !target.lowSession
+          ? kDockerStatsInFlight
+          : 1,
       queue.length,
     );
     await Future.wait([for (var i = 0; i < width; i++) worker()]);

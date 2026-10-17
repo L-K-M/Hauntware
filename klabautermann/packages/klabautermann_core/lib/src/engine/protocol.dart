@@ -144,6 +144,10 @@ import '../docker/docker_ladder.dart'
 /// and the [DockerComposeCli] found, and [DockerStackFileQuery] reads a
 /// verified stack's file, answered by [DockerStackFilePayload] or
 /// [DockerStackFileFailed].
+///
+/// Low-session mode then set [DockerEndpointState.lowSession] (03 §5.2,
+/// M9), which goes out again when a link learns a session limit; no
+/// message changed shape.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -856,8 +860,12 @@ final class DockerEndpointState extends EngineEvent {
   /// The API version every path uses (03 §5.8); set while ready.
   final ApiVersion? negotiatedApi;
 
-  /// Whether 03 §5.2's low-session mode holds. Always false until the
-  /// mode arrives (M3's D09).
+  /// Whether 03 §5.2's low-session mode holds: the server's link learned
+  /// a session limit (M9). On a relay the events stream gives way to
+  /// re-lists and the follows share one slot with the host's; on every
+  /// rank the host follows are held to one and stats are read one at a
+  /// time. The state goes out again when it changes, and a new link ends
+  /// it.
   final bool lowSession;
 
   /// Why the endpoint failed; set exactly while failed.

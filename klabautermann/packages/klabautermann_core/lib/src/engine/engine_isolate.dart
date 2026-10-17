@@ -15,6 +15,7 @@ import '../fleet/ssh_config_import_store.dart';
 import '../fleet/synced_fleet.dart';
 import '../links/credential_source.dart';
 import '../links/host_key_pins.dart';
+import '../links/channel_quota.dart';
 import '../links/link_connector.dart';
 import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
@@ -136,6 +137,11 @@ void engineMain(
   // answer.
   DockerRouter? docker;
 
+  // Each server's channel slots, one quota for both routers, so the host
+  // log reads and the Docker session's channels count against the same
+  // shares (M9).
+  final channelQuotas = ChannelQuotas();
+
   // FL-02's imported hosts, in D13's device-local store (03 §4.10),
   // opened before the first request is handled. Each import replaces the
   // last; the engine keeps them so its later fleet snapshots (sync rounds,
@@ -222,8 +228,16 @@ void engineMain(
         docker?.probed(serverId, profile);
       },
     );
-    logs = LogStreamRouter(linkFor: links.link, emit: uiPort.send);
-    docker = DockerRouter(linkFor: links.link, emit: uiPort.send);
+    logs = LogStreamRouter(
+      linkFor: links.link,
+      emit: uiPort.send,
+      quotas: channelQuotas,
+    );
+    docker = DockerRouter(
+      linkFor: links.link,
+      emit: uiPort.send,
+      quotas: channelQuotas,
+    );
   }
 
   // Rebuilds the fleet from the store. A server that left it is forgotten
@@ -244,6 +258,7 @@ void engineMain(
     sampling.fleet = fleetIds;
     scheduler?.retain(fleetIds);
     logs?.retain(fleetIds);
+    channelQuotas.retain(fleetIds);
     links?.forget(before.difference(fleetIds));
     final forgotten = {
       for (final id in before)
