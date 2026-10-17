@@ -2565,4 +2565,140 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get overviewHostWaiting =>
       'Waiting for the operating system and kernel.';
+
+  @override
+  String get syncSignInTooltip =>
+      'Sign in to your Séance account to list its servers';
+
+  @override
+  String syncNowTooltip(String username, String host) {
+    return 'Synchronize with $host as $username';
+  }
+
+  @override
+  String get syncSignInTitle => 'Sign in to your Séance account';
+
+  @override
+  String get syncSignInBody =>
+      'Klabautermann lists the servers you keep in Séance. Sign in with the server address, account name, password and encryption passphrase you use in Séance.';
+
+  @override
+  String get syncServerAddress => 'Server address';
+
+  @override
+  String get syncAccountName => 'Account name';
+
+  @override
+  String get syncPassword => 'Password';
+
+  @override
+  String get syncPassphrase => 'Encryption passphrase';
+
+  @override
+  String get syncPassphraseHelper => 'Often the same as your password.';
+
+  @override
+  String get syncConfirmTitle => 'Before you sign in';
+
+  @override
+  String get syncFleetAssertion =>
+      'Every device that uses this account runs Séance 0.9.0 or later.';
+
+  @override
+  String get syncFleetAssertionDetail =>
+      'Older Séance releases can mistake records from other apps for servers.';
+
+  @override
+  String get syncDisclosureAccountKey =>
+      'Your encryption passphrase opens the records of every app on this account, Séance and Poltergeist included.';
+
+  @override
+  String get syncDisclosurePullOnly =>
+      'Klabautermann only reads this account. It publishes nothing: no servers, host keys or passwords.';
+
+  @override
+  String get syncSignInAction => 'Sign in';
+
+  @override
+  String get syncSignedIn =>
+      'Signed in. Your Séance servers are now in the fleet.';
+
+  @override
+  String get syncPassphraseUnverified =>
+      'No record on the account has confirmed your encryption passphrase yet. If servers are missing, sign in again with the passphrase you use in Séance.';
+
+  @override
+  String get syncValidationServerAddress =>
+      'Enter the server address, starting with https:// or http://.';
+
+  @override
+  String get syncValidationUrlCredentials =>
+      'Leave your account name and password out of the server address.';
+
+  @override
+  String get syncValidationAccountName => 'Enter your account name.';
+
+  @override
+  String get syncValidationPassword => 'Enter your password.';
+
+  @override
+  String get syncValidationPassphrase => 'Enter your encryption passphrase.';
+
+  @override
+  String get syncFailedDirectoryShared =>
+      'Sync is off because Klabautermann could not check whether another copy of it is running.';
+
+  @override
+  String get syncFailedNoDeviceId =>
+      'Sync is off because this device\'s settings file could not be read or saved.';
+
+  @override
+  String get syncFailedOtherAccount =>
+      'This device is already signed in to another account.';
+
+  @override
+  String get syncFailedKdfDowngrade =>
+      'The server asked for weaker password protection than Klabautermann accepts, so nothing was sent. The server may have been tampered with.';
+
+  @override
+  String get syncFailedCredentials =>
+      'The server did not accept this account name and password.';
+
+  @override
+  String get syncFailedSession =>
+      'The server no longer accepts this device\'s sign-in. Sign in again.';
+
+  @override
+  String get syncFailedUnreachable =>
+      'The sync server could not be reached. Check the address and your connection.';
+
+  @override
+  String get syncFailedServer =>
+      'The sync server reported an error. Try again later.';
+
+  @override
+  String get syncFailedKeystore =>
+      'The system keychain could not store or hand over the sync keys. Unlock it and try again.';
+
+  @override
+  String get syncFailedStore =>
+      'A sync file could not be saved, so the sign-in was not kept.';
+
+  @override
+  String get syncFailed => 'Sync failed.';
+
+  @override
+  String syncFileRecovered(String fileName, String keptAs) {
+    return 'The sync file $fileName could not be read and was cleared. The old file is kept as $keptAs.';
+  }
+
+  @override
+  String syncFileLeftAsIs(String fileName) {
+    return 'The sync file $fileName could not be read, so it was left as it is. Sync changes will not be kept after a restart.';
+  }
+
+  @override
+  String syncFileNewer(String fileName) {
+    return 'The sync file $fileName was saved by a newer version of Klabautermann. Sync changes will not be kept after a restart.';
+  }
 }

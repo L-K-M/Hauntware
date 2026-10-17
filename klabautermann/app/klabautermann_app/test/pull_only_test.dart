@@ -3,15 +3,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/fake_ssh_config.dart';
+import 'support/sync_sign_in.dart';
 import 'support/harness.dart';
 
 /// Whether [request] could push catalog records or write server-side
 /// state. Pull-only from the start (03 D14): the catalog applies pulled
 /// records and never seals dirty ones, so no UI path may send these.
 bool _pushesOrWrites(EngineRequest request) => switch (request) {
-  // Enrollment and sync rounds write catalog state; a round can seal and
-  // push once the engine's push policy opens (D14 keeps it closed).
-  EnrollSync() || RunSyncRound() => true,
+  // Enrollment and sync rounds are allowed only while the engine's
+  // coordinator runs under PushPolicy.none: it then applies pulled
+  // records and seals, writes back and pushes none (D14). Should the
+  // policy open, they would push.
+  EnrollSync() || RunSyncRound() => engineSyncPushPolicy != PushPolicy.none,
   // The action path mutates a host and its operation records.
   PlanAction() || RunAction() => true,
   // Alert acknowledgement and dismissal write `klabautermann:alertstatus`
@@ -32,9 +35,10 @@ void main() {
 
     // Exercise every control the scaffold ships: select a server, collapse
     // the section, import ~/.ssh/config (FL-02), open the settings route
-    // and switch the theme, run a sampler subscription the way the
-    // monitor set will drive it (03 §10.1), then answer the engine's
-    // prompts. The traffic this produces is the traffic to judge.
+    // and switch the theme, sign in to the sync account and run a round
+    // (03 §4.3), run a sampler subscription the way the monitor set will
+    // drive it (03 §10.1), then answer the engine's prompts. The traffic
+    // this produces is the traffic to judge.
     await tester.tap(find.text('web-1'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Hide section'));
@@ -53,6 +57,20 @@ void main() {
     await tester.tap(find.text('Appearance'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Dark'));
+    await tester.pumpAndSettle();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await signInThroughTheSheet(tester, harness.engine);
+    await tester.tap(find.text('Synchronize'));
+    await tester.pump();
+    expect(harness.engine.sentOfType<RunSyncRound>(), hasLength(1));
+    harness.engine.emit(
+      const SyncStatus(
+        SyncPhase.succeeded,
+        operation: SyncOperation.round,
+        account: testSyncAccount,
+      ),
+    );
     await tester.pumpAndSettle();
     harness.monitoring.subscribe('srv-1', 'row', const {SampleStream.overview});
     harness.monitoring.unsubscribe('srv-1', 'row');

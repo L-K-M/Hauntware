@@ -6,9 +6,12 @@ import 'package:meta/meta.dart';
 import 'package:seance_core/seance_core.dart' show ImportedHost, SshLink;
 
 import '../capabilities/capability_cache.dart';
+import '../catalog/engine_sync.dart';
+import '../catalog/keystore_channel.dart';
 import '../fleet/imported_fleet.dart';
 import '../fleet/ssh_config_entries.dart';
 import '../fleet/ssh_config_import_store.dart';
+import '../fleet/synced_fleet.dart';
 import '../links/credential_source.dart';
 import '../links/host_key_pins.dart';
 import '../links/link_connector.dart';
@@ -32,6 +35,7 @@ final class EngineStart {
     required this.supportDirectory,
     this.linksEnabled = false,
     this.supportDirectoryAccess = SupportDirectoryAccess.unguarded,
+    this.deviceId,
   });
 
   /// The client isolate's port.
@@ -53,6 +57,12 @@ final class EngineStart {
   /// and purges its capability cache and writes its host-key pins there
   /// only then (03 §4.10, D59, D61).
   final SupportDirectoryAccess supportDirectoryAccess;
+
+  /// This install's sync authorship id from `settings.json`
+  /// (`klabautermann.sync.deviceId`, 03 §4.10), which the app read after
+  /// taking the instance lock; null when that file gave none, and sync is
+  /// then refused.
+  final String? deviceId;
 }
 
 /// The engine isolate's entry point (03 D18): one isolate owns the SSH links,
@@ -75,16 +85,21 @@ final class EngineStart {
 /// prompt broker (03 §5.1), a [Connect] to a fleet server without a
 /// config gets [ConnectRejected] (D61), [OpenLogStream] and
 /// [CloseStream] go to the log streams, which read each window over its
-/// server's link (03 §5.2, §7.6), [Shutdown] ends every log stream and
-/// exits, and every other 03 §10.1 row gets [RequestRejected] until its
-/// milestone lands.
+/// server's link (03 §5.2, §7.6), [EnrollSync] and [RunSyncRound] run
+/// pull-only sync one at a time beside the request queue (03 §4.3, D63),
+/// answered by [SyncStatus] and, when they succeed, the fleet,
+/// [AnswerKeystore] completes the keystore call it names ahead of the
+/// queue, [Shutdown] ends every log stream and exits, and every other
+/// 03 §10.1 row gets [RequestRejected] until its milestone lands.
 ///
 /// [dial] replaces `SshLink.connect`, so tests can run the engine's links
-/// without a network. [subscriptions], when given, holds the sampling
-/// subscriptions, so tests can read them.
+/// without a network, and [syncTransport] the sync server's HTTP client.
+/// [subscriptions], when given, holds the sampling subscriptions, so
+/// tests can read them.
 void engineMain(
   EngineStart start, {
   @visibleForTesting LinkDialer dial = SshLink.connect,
+  @visibleForTesting SyncTransportFactory syncTransport = httpSyncTransport,
   @visibleForTesting SamplingSubscriptions? subscriptions,
 }) {
   final uiPort = start.uiPort;
@@ -121,11 +136,19 @@ void engineMain(
   // The login name for imported hosts and hops that name no user.
   final localUser = localUserName(Platform.environment);
 
-  // The fleet the engine serves, with the config of each server and hop it
-  // can dial, and its server ids. Synced entries lead it once the catalog
-  // library lands (F3).
+  // The fleet the engine serves: the sync account's servers, then the
+  // imports, with the config of each import and hop it can dial, and its
+  // server ids. Synced servers get no config until their endpoints are
+  // confirmed (03 §4.7, K41).
+  var synced = const <FleetEntry>[];
   late ImportedFleet fleet;
   var fleetIds = <String>{};
+  List<FleetEntry> fleetEntries() => [...synced, ...fleet.entries];
+
+  // The OS keystore, which the app answers (D62), and pull-only sync,
+  // opened with the import store.
+  final keystore = ChannelSyncKeystore(uiPort.send);
+  late final EngineSync sync;
 
   // What the engine asks the user while it connects, keyed by prompt id
   // (03 §10.1).
@@ -134,16 +157,18 @@ void engineMain(
   // The host-key pins (03 §4.6, D61): `host_keys.json` while the process
   // holds the support directory alone, otherwise that file's pins read
   // once and kept in memory. One store for the engine's lifetime (P14),
-  // which catalog sync shares once it lands (K49). Opening it reads
-  // nothing; the first connect loads the file.
+  // shared by its links and the sync coordinator (D63), since two over one
+  // file would each write back their own pins. Opening it reads nothing;
+  // the first connect or sync operation loads the file.
   final hostKeys = openHostKeyPins(
     start.supportDirectory,
     access: start.supportDirectoryAccess,
   );
 
   // One link per server (03 §5.1, §5.12), dialed through the connector.
-  // None while links are off, so nothing in the engine can dial.
-  // Phones close their links in the background (D34); desktops keep them.
+  // None while links are off, so nothing in the engine can dial. Pins go
+  // to the shared host-key store above. Phones close their links in the
+  // background (D34); desktops keep them.
   final links = start.linksEnabled
       ? LinkSupervisor(
           connect: LinkConnector(
@@ -196,7 +221,7 @@ void engineMain(
       detail: imports.detail,
     );
     final before = fleetIds;
-    fleetIds = {for (final entry in fleet.entries) entry.serverId};
+    fleetIds = {for (final entry in fleetEntries()) entry.serverId};
     sampling.fleet = fleetIds;
     scheduler?.retain(fleetIds);
     logs?.retain(fleetIds);
@@ -219,6 +244,50 @@ void engineMain(
     }
   }
 
+  // Pull-only sync, one operation at a time in request order, beside the
+  // request queue rather than in it: an enrollment waits on the network,
+  // a key derivation and the app's keystore answers, which arrive as
+  // requests, and links, sampling and imports go on meanwhile.
+  var syncTail = Future<void>.value();
+  void runSync(SyncOperation operation, Future<SyncStatus> Function() body) {
+    syncTail = syncTail.then((_) async {
+      uiPort.send(
+        SyncStatus(
+          SyncPhase.running,
+          operation: operation,
+          account: sync.account,
+        ),
+      );
+      final SyncStatus status;
+      try {
+        status = await body();
+        // The fleet first, so it shows the servers when the answer arrives.
+        if (status.phase == SyncPhase.succeeded) {
+          synced = syncedFleetEntries(await sync.servers());
+          refreshFleet();
+        }
+      } on Object catch (error) {
+        // EngineSync answers every failure itself; this keeps the chain
+        // alive should that, or the fleet refresh, ever slip: a chained
+        // operation runs only after the one before it completes normally.
+        uiPort.send(
+          SyncStatus(
+            SyncPhase.failed,
+            operation: operation,
+            account: sync.account,
+            failure: SyncFailure.other,
+            detail: '$error',
+          ),
+        );
+        return;
+      }
+      if (status.phase == SyncPhase.succeeded) {
+        uiPort.send(CatalogReplaced(fleetEntries()));
+      }
+      uiPort.send(status);
+    });
+  }
+
   Future<void> handle(Object? message) async {
     switch (message) {
       case Hello(:final protocolVersion):
@@ -233,12 +302,18 @@ void engineMain(
           return;
         }
         uiPort.send(
-          EngineReady(kEngineProtocolVersion, importStoreIssue: imports.issue),
+          EngineReady(
+            kEngineProtocolVersion,
+            importStoreIssue: imports.issue,
+            syncAccount: sync.account,
+            syncStoreIssues: sync.issues,
+          ),
         );
-        // The fleet as the engine starts: the imports an earlier run saved
-        // (none when the store was empty or unusable), so the rail shows
-        // them before the user does anything.
-        uiPort.send(CatalogReplaced(fleet.entries));
+        // The fleet as the engine starts: the servers the last sync left
+        // and the imports an earlier run saved (none when the stores were
+        // empty or unusable), so the rail shows them before the user does
+        // anything.
+        uiPort.send(CatalogReplaced(fleetEntries()));
       case Connect(:final serverId):
         sendCachedProfile(serverId);
         // The app sends it when the user opens the server (03 §10.1), so
@@ -325,7 +400,7 @@ void engineMain(
         final saved = await imports.replace(result.hosts, hops: result.hops);
         capabilities?.fleetSave = saved ? FleetSave.saved : FleetSave.unsaved;
         refreshFleet();
-        uiPort.send(CatalogReplaced(fleet.entries));
+        uiPort.send(CatalogReplaced(fleetEntries()));
         uiPort.send(
           SshConfigImported(
             importedCount: result.hosts.length,
@@ -333,6 +408,10 @@ void engineMain(
             saved: saved,
           ),
         );
+      case EnrollSync():
+        runSync(SyncOperation.enroll, () => sync.enroll(message));
+      case RunSyncRound():
+        runSync(SyncOperation.round, sync.runRound);
       case Shutdown():
         // Each stream's end goes out before the isolate does, and its
         // process goes with the isolate.
@@ -368,6 +447,15 @@ void engineMain(
         ),
       ).then((store) async {
         imports = store;
+        sync = await EngineSync.open(
+          supportDirectory: Directory(start.supportDirectory),
+          access: start.supportDirectoryAccess,
+          deviceId: start.deviceId,
+          hostKeys: hostKeys,
+          keystore: keystore,
+          transport: syncTransport,
+        );
+        synced = syncedFleetEntries(await sync.servers());
         refreshFleet();
         capabilities = await CapabilityCache.open(
           Directory(start.supportDirectory),
@@ -383,6 +471,13 @@ void engineMain(
         );
       });
   commands.listen((message) {
+    // Answered at once rather than queued: the sync operation that asked
+    // waits on it, and a slow request ahead in the queue, such as an
+    // import's save, would hold it up.
+    if (message is AnswerKeystore) {
+      keystore.answer(message);
+      return;
+    }
     queue = queue.then((_) => handle(message));
   });
 }

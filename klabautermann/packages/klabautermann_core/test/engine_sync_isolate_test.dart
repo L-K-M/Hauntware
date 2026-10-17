@@ -1,0 +1,169 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/engine/engine_isolate.dart';
+import 'package:test/test.dart';
+
+import 'support/fake_sync_server.dart';
+
+const _deviceId = '6f1c2f0e-3c5e-4d7a-9b1e-0a2b3c4d5e6f';
+const _account = SyncAccountInfo(
+  baseUrl: 'https://sync.example.com',
+  username: fakeSyncUser,
+);
+
+// The engine's sync wiring (03 §4.3, §10.1, D62, D63): the requests, the
+// keystore pair answered ahead of the request queue, and the fleet after
+// an enrollment. EngineSync's own rules are in catalog/engine_sync_test.
+void main() {
+  late Directory support;
+
+  setUp(() => support = Directory.systemTemp.createTempSync('klab-sync-'));
+  tearDown(() => support.deleteSync(recursive: true));
+
+  Future<(IsolateEngineClient, StreamIterator<EngineEvent>)> spawn({
+    SupportDirectoryAccess access = SupportDirectoryAccess.exclusive,
+    void Function(EngineStart start) entryPoint = engineMain,
+  }) async {
+    final client = await IsolateEngineClient.spawn(
+      supportDirectory: support.path,
+      supportDirectoryAccess: access,
+      deviceId: _deviceId,
+      entryPoint: entryPoint,
+    );
+    addTearDown(client.shutdown);
+    final events = StreamIterator(client.events);
+    addTearDown(events.cancel);
+    // The startup fleet.
+    expect(await events.moveNext(), isTrue);
+    return (client, events);
+  }
+
+  /// The events up to the end of the next sync operation, answering each
+  /// keystore request from [keystore] as the app's binding would.
+  Future<List<EngineEvent>> untilSyncEnds(
+    IsolateEngineClient client,
+    StreamIterator<EngineEvent> events,
+    MemoryKeystore keystore,
+  ) async {
+    final seen = <EngineEvent>[];
+    while (await events.moveNext()) {
+      final event = events.current;
+      seen.add(event);
+      if (event case KeystoreRequest(:final requestId, :final operation)) {
+        final KeystoreResult result = switch (operation) {
+          KeystorePutApiKey(:final name, :final value) =>
+            await keystore
+                .putApiKey(name, value)
+                .then((_) => const KeystoreDone()),
+          KeystoreGetApiKey(:final name) => KeystoreApiKey(
+            await keystore.getApiKey(name),
+          ),
+          KeystoreDeleteApiKey() => const KeystoreDone(),
+          KeystoreReadMasterKey() => KeystoreMasterKey(
+            switch (keystore.masterKey) {
+              final key? => Uint8List.fromList(key),
+              null => null,
+            },
+          ),
+          KeystoreWriteMasterKey(:final key) =>
+            await keystore
+                .writeMasterKey(key)
+                .then((_) => const KeystoreDone()),
+        };
+        client.send(AnswerKeystore(requestId, result));
+      }
+      if (event is SyncStatus && event.phase != SyncPhase.running) break;
+    }
+    return seen;
+  }
+
+  test('sync is refused while another instance may use the files', () async {
+    final (client, events) = await spawn(
+      access: SupportDirectoryAccess.unguarded,
+    );
+
+    client.send(const RunSyncRound());
+
+    final seen = await untilSyncEnds(client, events, MemoryKeystore());
+    expect(
+      [
+        for (final event in seen.cast<SyncStatus>())
+          (event.phase, event.failure),
+      ],
+      [
+        (SyncPhase.running, null),
+        (SyncPhase.failed, SyncFailure.directoryShared),
+      ],
+    );
+  });
+
+  test('a round asks the app for the keystore and reads its answers', () async {
+    File('${support.path}/sync_enrollment.json').writeAsStringSync(
+      '{"version":1,"passphraseUnverified":false,"notices":[],'
+      '"account":{"baseUrl":"https://sync.example.com","username":"ops",'
+      '"mode":"shared"}}',
+    );
+    File('${support.path}/sync_tripwires.json').writeAsStringSync('[]');
+    final (client, events) = await spawn();
+    expect(client.ready.syncAccount, _account);
+    expect(
+      [for (final issue in client.ready.syncStoreIssues) issue.fileName],
+      ['sync_tripwires.json'],
+    );
+
+    client.send(const RunSyncRound());
+    final keystore = MemoryKeystore()..apiKeys['sync.token'] = 'token-1';
+    final seen = await untilSyncEnds(client, events, keystore);
+
+    expect(
+      [
+        for (final event in seen.whereType<KeystoreRequest>())
+          event.operation.runtimeType,
+      ],
+      [KeystoreGetApiKey, KeystoreReadMasterKey],
+    );
+    final end = seen.last as SyncStatus;
+    expect(end.failure, SyncFailure.keystoreUnavailable);
+    expect(end.detail, 'no vault key');
+  });
+
+  test('an enrollment lists the synced servers before it answers, and a '
+      'later round pushes nothing', () async {
+    final server = await FakeSyncServer.create();
+    await server.seedServer(fakeServer('srv-a', 'alpha'));
+    final (client, events) = await spawn(
+      entryPoint: (start) => engineMain(start, syncTransport: server.transport),
+    );
+    final keystore = MemoryKeystore();
+
+    client.send(
+      const EnrollSync(
+        baseUrl: 'https://sync.example.com',
+        username: fakeSyncUser,
+        password: fakeSyncPassword,
+        encryptionPassphrase: fakeSyncPassword,
+      ),
+    );
+    final enrolled = await untilSyncEnds(client, events, keystore);
+
+    final fleet = enrolled.whereType<CatalogReplaced>().single;
+    expect(enrolled.indexOf(fleet), lessThan(enrolled.length - 1));
+    expect(
+      [for (final entry in fleet.entries) (entry.serverId, entry.origin)],
+      [('srv-a', FleetEntryOrigin.synced)],
+    );
+    final status = enrolled.last as SyncStatus;
+    expect(status.phase, SyncPhase.succeeded, reason: status.detail);
+    expect(status.account, _account);
+    expect(keystore.apiKeys['sync.token'], 'token-1');
+
+    // The fake server throws on any push, which would fail the round.
+    client.send(const RunSyncRound());
+    final round = await untilSyncEnds(client, events, keystore);
+    final roundStatus = round.last as SyncStatus;
+    expect(roundStatus.phase, SyncPhase.succeeded, reason: roundStatus.detail);
+  });
+}

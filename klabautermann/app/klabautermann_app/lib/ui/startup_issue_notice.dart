@@ -8,7 +8,9 @@ import 'package:klabautermann_core/klabautermann_core.dart'
         DeviceSettingsIssueKind,
         ImportStoreIssue,
         ImportStoreIssueKind,
-        InstanceLockUnavailable;
+        InstanceLockUnavailable,
+        SyncStoreIssue,
+        SyncStoreIssueKind;
 
 import '../l10n/app_localizations.dart';
 
@@ -18,22 +20,25 @@ const Duration _noticeDuration = Duration(seconds: 10);
 /// Tells the user once, after the first frame, what went wrong with the
 /// device-local files when the app started: the app's `settings.json`
 /// ([settingsIssue]), the engine's `ssh_config_imports.json`
-/// ([importStoreIssue]) and the instance lock ([instanceLockIssue]), as
+/// ([importStoreIssue]), the engine's sync state files
+/// ([syncStoreIssues]) and the instance lock ([instanceLockIssue]), as
 /// Séance does for its own settings file. A silent reset, changes that
 /// will not be kept, or a missing guard against a second instance is not
-/// something to leave the user to find out. Shows nothing when all are
-/// null.
+/// something to leave the user to find out. Shows nothing when there is
+/// none.
 class StartupIssueNotice extends StatefulWidget {
   const StartupIssueNotice({
     super.key,
     required this.settingsIssue,
     required this.importStoreIssue,
+    this.syncStoreIssues = const [],
     required this.instanceLockIssue,
     required this.child,
   });
 
   final DeviceSettingsIssue? settingsIssue;
   final ImportStoreIssue? importStoreIssue;
+  final List<SyncStoreIssue> syncStoreIssues;
   final InstanceLockUnavailable? instanceLockIssue;
   final Widget child;
 
@@ -47,9 +52,11 @@ class _StartupIssueNoticeState extends State<StartupIssueNotice> {
     super.initState();
     final settingsIssue = widget.settingsIssue;
     final importStoreIssue = widget.importStoreIssue;
+    final syncStoreIssues = widget.syncStoreIssues;
     final instanceLockIssue = widget.instanceLockIssue;
     if (settingsIssue == null &&
         importStoreIssue == null &&
+        syncStoreIssues.isEmpty &&
         instanceLockIssue == null) {
       return;
     }
@@ -63,6 +70,7 @@ class _StartupIssueNoticeState extends State<StartupIssueNotice> {
         if (settingsIssue != null) settingsIssueMessage(l10n, settingsIssue),
         if (importStoreIssue != null)
           importStoreIssueMessage(l10n, importStoreIssue),
+        for (final issue in syncStoreIssues) syncStoreIssueMessage(l10n, issue),
         if (instanceLockIssue != null) l10n.instanceLockUnavailable,
       ]) {
         showTopToast(overlay, message: message, duration: _noticeDuration);
@@ -99,6 +107,19 @@ String importStoreIssueMessage(AppLocalizations l10n, ImportStoreIssue issue) {
     ),
     ImportStoreIssueKind.leftAsIs => l10n.importsFileLeftAsIs,
     ImportStoreIssueKind.newerVersion => l10n.importsFileNewer,
+  };
+}
+
+/// The user-facing sentence for a sync state file [issue].
+String syncStoreIssueMessage(AppLocalizations l10n, SyncStoreIssue issue) {
+  return switch (issue.kind) {
+    // The engine sets where it kept the damaged file for this kind.
+    SyncStoreIssueKind.recovered => l10n.syncFileRecovered(
+      issue.fileName,
+      _fileName(issue.preservedAs!),
+    ),
+    SyncStoreIssueKind.leftAsIs => l10n.syncFileLeftAsIs(issue.fileName),
+    SyncStoreIssueKind.newerVersion => l10n.syncFileNewer(issue.fileName),
   };
 }
 

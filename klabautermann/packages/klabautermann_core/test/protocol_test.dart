@@ -67,8 +67,14 @@ void main() {
       final requests = <EngineRequest>[
         const Hello(),
         const Shutdown(),
-        const EnrollSync(),
+        const EnrollSync(
+          baseUrl: 'https://sync.example.com',
+          username: 'ops',
+          password: 'pw',
+          encryptionPassphrase: 'pp',
+        ),
         const RunSyncRound(),
+        AnswerKeystore(3, KeystoreMasterKey(Uint8List.fromList([1, 2]))),
         const ConfirmEndpoints(['a', 'b']),
         const SetMonitorSet(['a']),
         const Connect('srv-1'),
@@ -135,7 +141,16 @@ void main() {
         const ConnectRejected('srv-1', ConnectRejectedReason.noLoginName),
         CatalogReplaced(const [_webEntry]),
         const SshConfigImported(importedCount: 1, skippedCount: 0, saved: true),
-        const SyncStatus(SyncPhase.running),
+        const SyncStatus(
+          SyncPhase.failed,
+          operation: SyncOperation.enroll,
+          account: SyncAccountInfo(
+            baseUrl: 'https://sync.example.com',
+            username: 'ops',
+          ),
+          failure: SyncFailure.credentialsRejected,
+        ),
+        const KeystoreRequest(4, KeystorePutApiKey('sync.token', 't')),
         const EndpointChanged('srv-1'),
         const LinkState('srv-1', LinkReady()),
         const Reachability('srv-1', ReachabilityStatus.online),

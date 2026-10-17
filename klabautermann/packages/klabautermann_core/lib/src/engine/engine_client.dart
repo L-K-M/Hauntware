@@ -65,8 +65,9 @@ final class IsolateEngineClient implements EngineClient {
   /// the [Hello]/[EngineReady] handshake, so a returned client is ready
   /// for feature requests. [linksEnabled] turns on the engine's SSH links
   /// ([EngineStart.linksEnabled]); they stay off unless a caller asks.
-  /// [supportDirectoryAccess] lets it write its caches
-  /// ([EngineStart.supportDirectoryAccess]).
+  /// [supportDirectoryAccess] lets it write its caches and sync
+  /// ([EngineStart.supportDirectoryAccess]), and [deviceId] is the
+  /// install's sync authorship id ([EngineStart.deviceId]).
   ///
   /// Throws [StateError] when the engine exits or refuses [Hello] before
   /// it is ready. [entryPoint] lets tests substitute a misbehaving engine.
@@ -75,6 +76,7 @@ final class IsolateEngineClient implements EngineClient {
     bool linksEnabled = false,
     SupportDirectoryAccess supportDirectoryAccess =
         SupportDirectoryAccess.unguarded,
+    String? deviceId,
     @visibleForTesting void Function(EngineStart start) entryPoint = engineMain,
   }) async {
     final fromEngine = ReceivePort('klabautermann engine events');
@@ -86,6 +88,7 @@ final class IsolateEngineClient implements EngineClient {
         supportDirectory: supportDirectory,
         linksEnabled: linksEnabled,
         supportDirectoryAccess: supportDirectoryAccess,
+        deviceId: deviceId,
       ),
       onExit: exitPort.sendPort,
     );
