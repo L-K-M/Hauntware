@@ -18,6 +18,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fleetSectionServers => 'Servers';
 
   @override
+  String get fleetSectionPinned => 'Pinned';
+
+  @override
+  String get fleetSectionImported => 'Imported';
+
+  @override
+  String get fleetRowPin => 'Pin to top';
+
+  @override
+  String get fleetRowUnpin => 'Unpin';
+
+  @override
+  String get fleetPinNotSaved =>
+      'Klabautermann could not save your pinned servers, so the change lasts only until it quits.';
+
+  @override
   String get fleetEmptyTitle => 'No servers yet';
 
   @override

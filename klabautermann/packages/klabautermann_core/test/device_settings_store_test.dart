@@ -9,6 +9,7 @@ const _deviceIdKey = 'klabautermann.sync.deviceId';
 const _appearanceKey = 'klabautermann.appearance';
 const _firstRunCardKey = 'klabautermann.coverage.firstRunCardDismissed';
 const _announceBandsKey = 'klabautermann.accessibility.announceThresholdBands';
+const _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
 
 final _uuidV4 = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
@@ -184,6 +185,61 @@ void main() {
           (await DeviceSettingsStore.open(file)).announceThresholdBands,
           isTrue,
         );
+      },
+    );
+
+    test('keeps pinned servers across reloads, sorted on disk', () async {
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.pinnedServerIds, isEmpty);
+      await store.setPinnedServerIds({'srv-b', 'srv-a'});
+      final reopened = await DeviceSettingsStore.open(file);
+
+      expect(reopened.pinnedServerIds, {'srv-a', 'srv-b'});
+      expect(document(), {
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _pinnedServersKey: ['srv-a', 'srv-b'],
+      });
+
+      await reopened.setPinnedServerIds({});
+      expect((await DeviceSettingsStore.open(file)).pinnedServerIds, isEmpty);
+    });
+
+    for (final (name, value) in [
+      ('a string', 'srv-a'),
+      ('a map', {'srv-a': true}),
+      ('items that are not strings', ['srv-a', 7, null]),
+    ]) {
+      test('pinned servers holding $name read what they can', () async {
+        writeDocument({
+          _versionKey: 1,
+          _deviceIdKey: 'device-a',
+          _pinnedServersKey: value,
+        });
+
+        final store = await DeviceSettingsStore.open(file);
+
+        expect(store.issue, isNull);
+        expect(store.pinnedServerIds, value is List ? {'srv-a'} : isEmpty);
+      });
+    }
+
+    test(
+      'pins a read-only session cannot save stay in memory and throw',
+      () async {
+        writeDocument({_versionKey: 2, _deviceIdKey: 'device-a'});
+        final store = await DeviceSettingsStore.open(file);
+        final before = file.readAsStringSync();
+
+        await expectLater(
+          store.setPinnedServerIds({'srv-a'}),
+          throwsA(isA<DeviceSettingsReadOnlyException>()),
+        );
+
+        expect(store.pinnedServerIds, {'srv-a'});
+        expect(file.readAsStringSync(), before);
       },
     );
 
