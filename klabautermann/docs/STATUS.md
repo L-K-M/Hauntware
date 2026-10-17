@@ -178,8 +178,17 @@ M2, the host read MVP, is the current milestone. What is on main:
   with `--host`, Podman's `--url`) or 4 (socat, then `nc -U`), with one
   exec probe per refused socket telling missing, denied and disabled
   apart; rank 3 says "needs admin mode" until M4. The streamlocal and
-  relay-process duplexes are tested over fakes only; nothing calls them
-  until the engine's Docker session (D05).
+  relay-process duplexes are tested over fakes only.
+- Docker session (M3, D05, 03 §5.8, §10.1): with links on, a
+  `DockerQuery` (engine, containers, one container, images) opens its
+  server's session, which runs the ladder once the probe has answered,
+  passes over a route whose engine does not answer `_ping`/`/version`,
+  negotiates (floor 1.41, max 1.55), names Podman from
+  `Libpod-API-Version` and reports `DockerEndpointState`. Results are
+  typed; inspect `Path`/`Args`, `Entrypoint`/`Cmd` and health output
+  cross masked, and the list drops its command line. Tested over fakes
+  only; no app surface yet (D12), no `/system/df` (D03), no watch or
+  events (D06), no low-session mode (D09).
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and

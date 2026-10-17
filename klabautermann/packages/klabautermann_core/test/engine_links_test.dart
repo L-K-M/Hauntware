@@ -28,6 +28,7 @@ import 'package:seance_core/seance_core.dart'
 import 'package:test/test.dart';
 
 import 'support/answering_link.dart';
+import 'support/forwarding_link.dart';
 import 'support/scripted_link.dart';
 
 const _web = 'ssh-config:web';
@@ -719,6 +720,80 @@ void main() {
       );
       expect(await engine.next(), isA<CatalogReplaced>());
       expect(await engine.next(), isA<SshConfigImported>());
+    });
+  });
+
+  group('Docker queries (03 §5.9, §10.1)', () {
+    DockerQuery query(String queryId, {String serverId = _web}) => DockerQuery(
+      serverId: serverId,
+      queryId: queryId,
+      query: const DockerEngineQuery(),
+    );
+
+    Matcher failed(String queryId, DockerQueryFailure failure) =>
+        isA<DockerResult>()
+            .having((r) => r.queryId, 'queryId', queryId)
+            .having(
+              (r) => r.payload,
+              'payload',
+              isA<DockerQueryFailed>().having(
+                (f) => f.failure,
+                'failure',
+                failure,
+              ),
+            );
+
+    test('with links off, a query is rejected', () async {
+      final engine = await startEngine(linksEnabled: false);
+      await engine.import(_webConfig);
+      engine.send(query('q-0'));
+      expect(await engine.rejected(), 'DockerQuery');
+    });
+
+    test('a query waits for its server\'s link, then for its probe, and '
+        'one outside the fleet is answered as such', () async {
+      final link = ForwardingLink();
+      final engine = await _Engine.start(
+        support.path,
+        linksEnabled: true,
+        dial:
+            ({
+              required config,
+              required credentials,
+              required tofu,
+              required onHostKey,
+              onKeyboardInteractive,
+              resolveJumpHost,
+            }) async => link,
+      );
+      await engine.import(_webConfig);
+
+      engine
+        ..send(query('q-0'))
+        ..send(query('q-1', serverId: 'ssh-config:gone'));
+      expect(
+        await engine.next(),
+        failed('q-0', DockerQueryFailure.linkUnavailable),
+      );
+      expect(
+        await engine.next(),
+        isA<DockerEndpointState>()
+            .having((s) => s.serverId, 'serverId', _web)
+            .having((s) => s.phase, 'phase', DockerEndpointPhase.waiting)
+            .having((s) => s.label, 'label', DockerRouteLabel.none),
+      );
+      expect(await engine.next(), failed('q-1', DockerQueryFailure.notInFleet));
+
+      engine.send(const Connect(_web));
+      expect(await engine.next(), _connecting);
+      expect(await engine.next(), _ready);
+      // Nothing samples, so no probe answers.
+      engine.send(query('q-2'));
+      expect(
+        await engine.next(),
+        failed('q-2', DockerQueryFailure.profileUnknown),
+      );
+      expect(link.opens, isEmpty);
     });
   });
 }

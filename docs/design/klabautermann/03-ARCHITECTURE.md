@@ -3915,7 +3915,11 @@ CI.
   (`docker login -p`, `sshpass -p`, `redis-cli -a`), `curl -u user:pass`
   and header values (`Authorization: Bearer`). Masking the argument after
   any `-p`, `-a` or `-u` would also hide `ssh -p 22`, `mkdir -p` and
-  `sudo -u`, so the trade-off is left to a follow-up after K33.
+  `sudo -u`, so the trade-off is left to a follow-up after K33. From
+  M3 (D05) the engine masks an inspected container's `Path` and `Args`,
+  and its `Entrypoint` and `Cmd`, by the same rules, each pair read as
+  one command line, and each health check's output as one argument;
+  the container list drops its command line.
 - Reveal (M2, the Processes tab): a tap on a masked argument in a
   process's details shows it there for 30 s, and it is masked again
   sooner when the details close or the app turns inactive, as it loses
@@ -4522,7 +4526,7 @@ shows there.
 | `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `RefreshSubscription(serverId, subscriptionId)` (a phone's pull to refresh, PLT-02), `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
-| `DockerQuery(serverId, query)` | `DockerResult`, `DockerEvent` |
+| `DockerQuery(serverId, queryId, query)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason)`, `DockerEvent` (opaque until the event lists) |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(preview)`, `ActionProgress`, `ActionFinished` |
 | `AnswerPrompt(promptId, answer)` (trust, responses or cancel, secret) | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
 | `SetAppActivity(activity)` (foreground or background; D34, D45) | no event: it changes what runs |
@@ -5039,6 +5043,42 @@ the engine in `engine_isolate.dart` beside it):
   key without minting, write it) and `AnswerKeystore` carries its
   result (done, a value, or refused with a diagnostic); a write the app
   refuses throws in the engine, and a read reads as none.
+- **Version 3 (M3 Docker reads).** Docker queries joined version 3 the
+  same way (D05). Within it the protocol shape is decided here rather
+  than in a numbered row: `DockerQuery` carries the app's `queryId`,
+  which the result echoes and the engine does not check for reuse, and
+  a sealed spec in place of an endpoint kind and API arguments: the
+  engine panel (`/info` with the `/version` negotiated over), the
+  container list, one container's inspect and the image list.
+  `/system/df` and stack files join with their PRs. `DockerResult`
+  carries a sealed payload of `klabautermann_docker`'s plain-data
+  models instead of decoded JSON: the list drops each container's
+  command line, and one container crosses as `ContainerDetails`, whose
+  `Path` and `Args`, `Entrypoint` and `Cmd` (each pair read as one
+  command line) and health-check output the engine masks with the
+  process-argument rules of 8.9. A query that reads nothing is answered
+  with a typed failure (not in the fleet, no link, no probe answer yet,
+  endpoint failed, too many waiting, no container named, gone, daemon
+  error, connection failed, cancelled), so every query gets one result;
+  with links off the engine rejects it as before. `DockerEndpointState`
+  goes out once a query names the server and on each change: waiting
+  (no ready link or probe answer), resolving, ready with the route
+  (rank, socket, runtime, mode, SAF-08 root equivalence) and the
+  negotiated version, or failed with a typed reason (no route with the
+  ladder's reason, unreachable, below the client floor, below the
+  server minimum, version unknown, link error). The runtime is the
+  API's: `Libpod-API-Version` on `_ping`, or a Podman component in
+  `/version`, names Podman behind a Docker path. `lowSession` stays false until low-session mode lands. The
+  engine runs one session per queried server over its ready link, once
+  that link's probe has answered (the device cache's copy is not
+  used); a route over which `_ping` or `/version` fails is passed
+  over and the ladder runs again without it. A new link, a
+  probe answer with other sockets, tools or sudo, or a connection that
+  drops resolves again; a failure stands until the next query. On
+  relay ranks the pool holds at most the short-action share's 2
+  connections and closes them after 30 s without a query [E]. Watches,
+  the endpoint override and typed list events are not in the protocol
+  yet.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period

@@ -8,6 +8,7 @@ import 'package:seance_core/seance_core.dart' show ImportedHost, SshLink;
 import '../capabilities/capability_cache.dart';
 import '../catalog/engine_sync.dart';
 import '../catalog/keystore_channel.dart';
+import '../docker/docker_router.dart';
 import '../fleet/imported_fleet.dart';
 import '../fleet/ssh_config_entries.dart';
 import '../fleet/ssh_config_import_store.dart';
@@ -45,9 +46,10 @@ final class EngineStart {
   final String supportDirectory;
 
   /// Whether the engine opens SSH links (03 §5.1, §10.1). Without them it
-  /// has no link supervisor, sampling scheduler or log streams: [Connect]
-  /// and [OpenLogStream] get [RequestRejected] and nothing dials, samples
-  /// or reads, [CloseStream], [Disconnect], [RefreshSubscription] and
+  /// has no link supervisor, sampling scheduler, log streams or Docker
+  /// sessions: [Connect], [OpenLogStream] and [DockerQuery] get
+  /// [RequestRejected] and nothing dials, samples or reads,
+  /// [CloseStream], [Disconnect], [RefreshSubscription] and
   /// [SetAppActivity] change nothing, subscriptions are only recorded,
   /// and no [Prompt] is ever open. The app's composition root leaves
   /// them off; tests turn them on.
@@ -85,9 +87,12 @@ final class EngineStart {
 /// prompt broker (03 §5.1), a [Connect] to a fleet server without a
 /// config gets [ConnectRejected] (D61), [OpenLogStream] and
 /// [CloseStream] go to the log streams, which read each window over its
-/// server's link (03 §5.2, §7.6), [EnrollSync] and [RunSyncRound] run
-/// pull-only sync one at a time beside the request queue (03 §4.3, D63),
-/// answered by [SyncStatus] and, when they succeed, the fleet,
+/// server's link (03 §5.2, §7.6), a [DockerQuery] goes to its server's
+/// Docker session, which finds and negotiates the endpoint over the link
+/// once the probe has answered and reports it as [DockerEndpointState]
+/// (03 §5.8, §5.9), [EnrollSync] and [RunSyncRound] run pull-only sync
+/// one at a time beside the request queue (03 §4.3, D63), answered by
+/// [SyncStatus] and, when they succeed, the fleet,
 /// [AnswerKeystore] completes the keystore call it names ahead of the
 /// queue, [Shutdown] ends every log stream and exits, and every other
 /// 03 §10.1 row gets [RequestRejected] until its milestone lands.
@@ -121,6 +126,11 @@ void engineMain(
   // The log streams over each server's ready link (03 §7.6); none while
   // links are off. They follow every LinkState as the scheduler does.
   LogStreamRouter? logs;
+
+  // Each queried server's Docker endpoint over its ready link (03 §5.9);
+  // none while links are off. It follows every LinkState and probe
+  // answer.
+  DockerRouter? docker;
 
   // FL-02's imported hosts, in D13's device-local store (03 §4.10),
   // opened before the first request is handled. Each import replaces the
@@ -188,6 +198,7 @@ void engineMain(
             if (event is LinkState) {
               scheduler?.update(event.serverId);
               logs?.update(event.serverId);
+              docker?.update(event.serverId);
             }
           },
           policy: Platform.isAndroid || Platform.isIOS
@@ -202,16 +213,20 @@ void engineMain(
       emit: uiPort.send,
       deadPeerHint: links.deadPeerHint,
       clearDeadPeerHint: links.clearDeadPeerHint,
-      probed: (serverId, profile) =>
-          unawaited(capabilities?.probed(serverId, profile)),
+      probed: (serverId, profile) {
+        unawaited(capabilities?.probed(serverId, profile));
+        docker?.probed(serverId, profile);
+      },
     );
     logs = LogStreamRouter(linkFor: links.link, emit: uiPort.send);
+    docker = DockerRouter(linkFor: links.link, emit: uiPort.send);
   }
 
   // Rebuilds the fleet from the store. A server that left it is forgotten
   // (03 §5.1): its samplers, link and attempts end and its subscriptions
   // go. One that keeps its id under another endpoint loses its cached
-  // profile, which describes another machine (SYN-08).
+  // profile and its Docker session, which describe another machine
+  // (SYN-08).
   void refreshFleet() {
     final previous = fleetIds.isEmpty ? null : fleet;
     fleet = ImportedFleet(
@@ -226,14 +241,16 @@ void engineMain(
     scheduler?.retain(fleetIds);
     logs?.retain(fleetIds);
     links?.forget(before.difference(fleetIds));
-    unawaited(
-      capabilities?.forget({
-        for (final id in before)
-          if (!fleetIds.contains(id) ||
-              previous?.endpointOf(id) != fleet.endpointOf(id))
-            id,
-      }),
-    );
+    final forgotten = {
+      for (final id in before)
+        if (!fleetIds.contains(id) ||
+            previous?.endpointOf(id) != fleet.endpointOf(id))
+          id,
+    };
+    docker
+      ?..forget(forgotten)
+      ..retain(fleetIds);
+    unawaited(capabilities?.forget(forgotten));
   }
 
   // A server's cached profile goes out when a request first names it,
@@ -340,6 +357,7 @@ void engineMain(
         // Its streams end before its link closes, so none reports
         // waiting for that link first.
         logs?.disconnect(serverId);
+        docker?.disconnect(serverId);
         links?.disconnect(serverId);
       case SetAppActivity(:final activity):
         links?.setActivity(activity);
@@ -376,6 +394,13 @@ void engineMain(
         if (reason != null) reject(message, reason);
       case CloseStream(:final streamId):
         logs?.closeStream(streamId);
+      case DockerQuery():
+        switch (docker) {
+          case null:
+            reject(message, 'links are off in this engine');
+          case final docker:
+            docker.query(message);
+        }
       case ImportSshConfig(:final text):
         final ({
           List<ImportedHost> hosts,
@@ -416,6 +441,7 @@ void engineMain(
         // Each stream's end goes out before the isolate does, and its
         // process goes with the isolate.
         unawaited(logs?.close());
+        unawaited(docker?.close());
         commands.close();
         Isolate.exit();
       case EngineRequest():
