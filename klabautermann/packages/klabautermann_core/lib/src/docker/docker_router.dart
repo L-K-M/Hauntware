@@ -220,7 +220,8 @@ final class DockerRouter {
         _pump(session);
       case _Failed(:final failure, :final route, :final noRouteReason):
         session.failed = true;
-        _answerWaiting(session, DockerQueryFailure.endpointUnavailable);
+        // The state that explains the failure goes out first, so an app
+        // reading it on a failed answer never sees `resolving`.
         _state(
           session,
           DockerEndpointPhase.failed,
@@ -228,6 +229,7 @@ final class DockerRouter {
           failure: failure,
           noRouteReason: noRouteReason,
         );
+        _answerWaiting(session, DockerQueryFailure.endpointUnavailable);
     }
   }
 
