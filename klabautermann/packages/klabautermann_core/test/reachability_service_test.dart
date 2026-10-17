@@ -191,7 +191,16 @@ void main() {
     expect(events, isEmpty);
 
     await clock.elapse(Duration.zero);
-    expect(events, hasLength(3));
+    // The jump-routed server is answered when it joins and again by the
+    // first sweep, which reports every server.
+    expect(
+      [for (final e in events) (e.serverId, e.status)],
+      unorderedEquals([
+        ('up', ReachabilityStatus.online),
+        ('inner', ReachabilityStatus.unknown),
+        ('inner', ReachabilityStatus.unknown),
+      ]),
+    );
   });
 
   test('a server with a link is answered online without a probe', () async {
