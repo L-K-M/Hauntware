@@ -5776,6 +5776,15 @@ timer and the directories; the system sshd, its config and port 22 stay
 untouched. The accounts with sudo, `systemd-run`, linger, the elevation
 prelude and the detached runners remain for later legs.
 
+As built in M3 (D10), the Docker host's image
+(`klabautermann/test/integration/sshd/Dockerfile.docker`) builds `FROM`
+the same Poltergeist base and copies the static `docker` CLI and its
+Compose plugin from the official `docker:<ver>-cli` image, pinned by
+digest, in a build stage, in place of the new frozen base above: a new
+GHCR package starts private (06), and `fixture-images.yml` stays as it
+is. The Docker services start with the others rather than under a
+`docker` profile.
+
 ### 11.4 Performance budgets (gated from M2)
 
 - Fast tick at most 2.5 KB, plus 30 B for each CPU beyond 32 (D48), and
