@@ -726,6 +726,18 @@ Host gw
           LinkFailureKind.authenticationRejected,
         ),
         SshConnectFailureKind.hostKeyRefused: (refused, null),
+        SshConnectFailureKind.unsupportedAlgorithm: (
+          refused,
+          LinkFailureKind.unsupportedAlgorithm,
+        ),
+        SshConnectFailureKind.insecureAlgorithmsOnly: (
+          refused,
+          LinkFailureKind.insecureAlgorithmsOnly,
+        ),
+        SshConnectFailureKind.keyExchangeTimedOut: (
+          refused,
+          LinkFailureKind.keyExchangeTimedOut,
+        ),
       };
 
       test('covers every kind but other', () {
