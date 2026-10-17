@@ -253,7 +253,8 @@ final class MonitoringController extends ChangeNotifier {
 
   /// Why the engine could not connect each server whose last [Connect] it
   /// rejected with [ConnectRejected] (D61): it has no config to dial with
-  /// until the user imports their SSH config again. Only servers a view
+  /// until the user imports their SSH config again, or a synced server's
+  /// endpoint waits for confirmation (03 §4.7). Only servers a view
   /// holds are kept. A server's entry goes when this controller sends its
   /// next [Connect], which the next fleet does for each one it still
   /// lists, since that fleet may give it a config.
@@ -536,6 +537,11 @@ final class MonitoringController extends ChangeNotifier {
             _connect(serverId);
           }
         }
+      case EndpointChanged(:final serverId):
+        // The engine closed the link and dials the server no more until
+        // the user confirms it again; a view still open connects again so
+        // its rejection says why.
+        if (_openViews.containsKey(serverId)) _connect(serverId);
       case ConnectRejected(:final serverId, :final reason):
         // Only for a server a view still holds: one whose views all left
         // has nothing to show it on. One answered after its server left

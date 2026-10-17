@@ -93,13 +93,28 @@ final class SshConfigImportRejected extends SshConfigImportOutcome {
   final String reason;
 }
 
+/// How one [FleetController.confirmEndpoints] ended.
+enum EndpointConfirmResult {
+  /// Every server asked for is confirmed, or left the fleet meanwhile.
+  confirmed,
+
+  /// Some are still waiting: a jump host they connect through changed
+  /// and needs its own confirmation (D64).
+  stillPending,
+
+  /// The engine could not save a pin, or stopped before it answered;
+  /// those servers stay unconfirmed.
+  failed,
+}
+
 /// The fleet concern (03 §10.1): the server list from [CatalogReplaced]
 /// snapshots, per-server link statuses from [LinkState] and probe results
-/// from [Reachability] events, the workspace's selection, and the desktop
-/// ssh_config import (FL-02).
-/// Pull-only by construction (D14): the one request it sends,
-/// [ImportSshConfig], changes the engine's device-local import store and
-/// never a catalog record.
+/// from [Reachability] events, the workspace's selection, the desktop
+/// ssh_config import (FL-02) and the synced servers' endpoint
+/// confirmation (03 §4.3 step 3, §4.7).
+/// Pull-only by construction (D14): the requests it sends,
+/// [ImportSshConfig] and [ConfirmEndpoints], change the engine's
+/// device-local files and never a catalog record.
 final class FleetController extends ChangeNotifier {
   /// [servers] seeds the list until the engine's first [CatalogReplaced].
   /// [sshConfig] is null on platforms without an ssh_config, which hides
@@ -119,6 +134,9 @@ final class FleetController extends ChangeNotifier {
 
   List<FleetServer> _servers;
 
+  /// The synced servers whose endpoints wait for confirmation.
+  List<FleetEntry> _pendingEndpoints = const [];
+
   /// The ids [_servers] lists: the only servers statuses are kept for.
   Set<String> _serverIds;
 
@@ -134,10 +152,21 @@ final class FleetController extends ChangeNotifier {
   /// time, so the next answer always belongs to this completer.
   Completer<SshConfigImportOutcome>? _importAnswer;
 
+  /// The servers the [ConfirmEndpoints] in flight names, and its answer.
+  /// The dialog sends one at a time.
+  Set<String> _confirming = const {};
+  Completer<EndpointConfirmResult>? _confirmAnswer;
+
   bool _engineStopped = false;
   bool _disposed = false;
 
   List<FleetServer> get servers => _servers;
+
+  /// The synced servers this device has not confirmed, or whose endpoint
+  /// changed since (03 §4.7), in fleet order: the confirmation list.
+  /// The engine dials none of them. Imports never appear: they count as
+  /// confirmed on the device that imported them.
+  List<FleetEntry> get pendingEndpoints => _pendingEndpoints;
 
   /// The workspace's server, or null for its empty state.
   String? get selectedServerId => _selectedServerId;
@@ -218,6 +247,37 @@ final class FleetController extends ChangeNotifier {
     }
   }
 
+  /// Confirms the endpoints of [serverIds] as listed (03 §4.3 step 3,
+  /// SAF-09) and completes once the engine answered. A call while one
+  /// runs joins it.
+  Future<EndpointConfirmResult> confirmEndpoints(Iterable<String> serverIds) {
+    if (_confirmAnswer case final running?) return running.future;
+    if (_disposed || _engineStopped) {
+      return Future.value(EndpointConfirmResult.failed);
+    }
+
+    final ids = serverIds.toList();
+    try {
+      _engine.send(ConfirmEndpoints(ids));
+    } on StateError {
+      return Future.value(EndpointConfirmResult.failed);
+    }
+    _confirming = ids.toSet();
+    return (_confirmAnswer = Completer()).future;
+  }
+
+  /// Ends the confirmation in flight with [result]. The engine answers
+  /// with the fleet, after a rejection when a pin was not saved; a sync
+  /// round's fleet arriving first answers it as well, which only shows
+  /// pins the engine already saved.
+  void _completeConfirm(EndpointConfirmResult result) {
+    final answer = _confirmAnswer;
+    if (answer == null) return;
+    _confirmAnswer = null;
+    _confirming = const {};
+    answer.complete(result);
+  }
+
   void _completeImport(SshConfigImportOutcome outcome) {
     final answer = _importAnswer;
     if (answer == null || answer.isCompleted) return;
@@ -232,6 +292,12 @@ final class FleetController extends ChangeNotifier {
         _keep(_reachability, serverId, status);
       case CatalogReplaced(:final entries):
         _replaceFleet(entries);
+        final pending = {for (final entry in _pendingEndpoints) entry.serverId};
+        _completeConfirm(
+          _confirming.any(pending.contains)
+              ? EndpointConfirmResult.stillPending
+              : EndpointConfirmResult.confirmed,
+        );
       case SshConfigImported(
         :final importedCount,
         :final skippedCount,
@@ -247,9 +313,11 @@ final class FleetController extends ChangeNotifier {
       case RequestRejected(:final requestName, :final reason)
           when requestName == '$ImportSshConfig':
         _completeImport(SshConfigImportRejected(reason));
-      // EndpointChanged refreshes one entry once F3's catalog lands;
+      case RequestRejected(:final requestName)
+          when requestName == '$ConfirmEndpoints':
+        _completeConfirm(EndpointConfirmResult.failed);
+      // The fleet after an EndpointChanged lists the server as pending;
       // everything else belongs to other concerns.
-      case EndpointChanged():
       case EngineEvent():
         break;
     }
@@ -257,6 +325,13 @@ final class FleetController extends ChangeNotifier {
 
   void _replaceFleet(List<FleetEntry> entries) {
     _servers = List.unmodifiable(entries.map(FleetServer.fromEntry));
+    _pendingEndpoints = List.unmodifiable(
+      entries.where(
+        (entry) =>
+            entry.endpoint != null &&
+            entry.endpoint != EndpointConfirmation.confirmed,
+      ),
+    );
     // A selection the new fleet no longer lists would leave the workspace
     // titled after a server that is gone.
     if (_selectedServerId != null &&
@@ -285,6 +360,7 @@ final class FleetController extends ChangeNotifier {
   void _onEngineDone() {
     _engineStopped = true;
     _completeImport(const SshConfigImportRejected('the engine stopped'));
+    _completeConfirm(EndpointConfirmResult.failed);
   }
 
   @override
@@ -293,6 +369,7 @@ final class FleetController extends ChangeNotifier {
     _completeImport(
       const SshConfigImportRejected('the fleet controller was disposed'),
     );
+    _completeConfirm(EndpointConfirmResult.failed);
     unawaited(_events.cancel());
     super.dispose();
   }
