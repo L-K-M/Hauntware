@@ -9,6 +9,7 @@ import 'package:ghost_servers/ghost_servers.dart';
 import 'package:seance_core/seance_core.dart';
 
 import '../app_state.dart';
+import '../services/missing_credential.dart';
 import '../theme.dart';
 
 /// Séance's status words: the package's defaults are Séance's own.
@@ -72,6 +73,35 @@ GhostKeyboardPrompt ghostKeyboardPromptOf(
   instruction: challenge.instruction,
   prompts: challenge.prompts,
 );
+
+/// The credential prompt for a server this device has no credential for
+/// (CRED-05): Séance's pasted-key form, titled with the server's label.
+GhostCredentialRequest ghostCredentialRequestOf({
+  required String serverLabel,
+  required AuthMethod authMethod,
+}) => GhostCredentialRequest(
+  authMethod: authMethod,
+  endpointLabel: serverLabel,
+  keyField: GhostKeyField.pastedPem,
+);
+
+/// The shared prompt's answer as the credential-required tab supplies it.
+/// The vault offer is never made, since the recovery flow always saves, so
+/// [GhostCredentialReply.saveToVault] carries nothing here. [UseSshAgent]
+/// never comes from the prompt: the tab offers the agent as its own button,
+/// beside the one that opens the prompt, and supplies it directly.
+/// [GhostKeyPassphraseReply] never comes either: it answers only the
+/// passphrase-only form, and [ghostCredentialRequestOf] always asks for a
+/// pasted key.
+MissingCredential missingCredentialOf(GhostCredentialReply reply) =>
+    switch (reply) {
+      GhostPasswordReply(:final password) => MissingPassword(password),
+      GhostPrivateKeyReply(:final privateKeyPem, :final keyPassphrase) =>
+        MissingPrivateKey(privateKeyPem, passphrase: keyPassphrase),
+      GhostKeyPassphraseReply() => throw StateError(
+        'Séance never raises the passphrase-only credential prompt',
+      ),
+    };
 
 /// The theme's status colours ([StatusColors]) as the package takes them.
 GhostStatusColors seanceStatusColors(BuildContext context) => GhostStatusColors(
