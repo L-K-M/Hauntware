@@ -229,6 +229,33 @@ void main() {
     expect(find.byKey(const ValueKey('font.choice.menlo')), findsNothing);
   });
 
+  testWidgets('phone search exposes matches above the preview and keyboard', (
+    tester,
+  ) async {
+    await open(tester, size: const Size(390, 844));
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    await tester.enterText(
+      find.byKey(const ValueKey('font.search')),
+      'Geist Mono',
+    );
+    await tester.pumpAndSettle();
+    final row = find.byKey(const ValueKey('font.choice.Geist Mono'));
+    expect(row.hitTestable(), findsOneWidget);
+    expect(find.byKey(const ValueKey('font.sample')), findsNothing);
+
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    expect(tester.testTextInput.isVisible, isFalse);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('font.search')))
+          .controller!
+          .text,
+      isEmpty,
+    );
+    expect(sample(tester).fontFamily, BundledMonoFont.geistMono.family);
+  });
+
   for (final size in [const Size(320, 640), const Size(640, 320)]) {
     testWidgets('fits $size with enlarged text and keeps Apply reachable', (
       tester,

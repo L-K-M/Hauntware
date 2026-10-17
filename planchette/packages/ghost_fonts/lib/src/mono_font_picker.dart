@@ -284,7 +284,9 @@ class _MonoFontPickerState extends State<_MonoFontPicker> {
     required _PickerLayout layout,
   }) {
     final rows = <Widget Function()>[
-      if (layout == _PickerLayout.compact) () => _preview(),
+      // Keep search results immediately reachable above a phone keyboard.
+      if (layout == _PickerLayout.compact && _search.text.trim().isEmpty)
+        () => _preview(),
       if (choices.isEmpty)
         () => Padding(
           padding: const EdgeInsets.all(24),
@@ -343,10 +345,14 @@ class _MonoFontPickerState extends State<_MonoFontPicker> {
         ),
         trailing: selected ? const Icon(Icons.check) : null,
         onTap: () {
-          setState(() => _family = choice.value);
+          setState(() {
+            _family = choice.value;
+            if (layout == _PickerLayout.compact) _search.clear();
+          });
           // On phones the detail sits above the list; bring the new sample
           // back into view instead of leaving the change off screen.
           if (layout == _PickerLayout.compact) {
+            FocusScope.of(context).unfocus();
             _scroll.animateTo(
               0,
               duration: const Duration(milliseconds: 180),
