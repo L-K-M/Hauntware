@@ -580,9 +580,9 @@ Proposals awaiting the owner close the section; they are not decisions.
   own READY deadline [E], and a fast request keeps 5 s [E]. A slow
   request's deadline is derived from the guarded commands its collectors
   can run, each bounded by `timeout 10` (6.2), plus a margin [E], instead
-  of a fixed 30 s: the probe alone can run 16 guarded commands
+  of a fixed 30 s: the probe alone can run 17 guarded commands
   (`Collector.guardedCommands` declares each collector's count, and a test
-  ties it to the fragment text), up to 160 s when each runs into its
+  ties it to the fragment text), up to 170 s when each runs into its
   timeout, and a fixed deadline would keep restarting a slow but working
   sampler. Without `timeout` on the host (6.3) the commands run unguarded,
   and the derived deadline still bounds the request. Supersedes the slow
@@ -2538,7 +2538,14 @@ shown as unknown, never as zero.
   `/proc/<pid>/cmdline`. The program is a constant assembled in
   `klabautermann_host` from collector fragments and contains no user-supplied
   text. It ends by printing a READY marker. The client sends nothing else until
-  it has read READY.
+  it has read READY. As built in M4 (E07, collector-set version 8), the
+  line before READY is `\036<nonce> SELF <pid> <ppid>`, the sampler
+  shell's `$$` and `$PPID`: the start command execs `env`, which execs
+  `sh -s`, so these are the channel's process and the sshd process
+  serving the session, two of 8.6's protected targets. A READY of this
+  version without SELF before it ends the session; one of another
+  version is a version mismatch first, as an older program prints no
+  SELF.
 - **Requests.** Each request is one shell command line:
   `hw_t <seq> <collector>...` for a tick, `hw_o <seq> <collector> <arg>...`
   for an on-demand read (for example one unit's `systemctl show`). Collector
@@ -2654,6 +2661,7 @@ source for every runner, including the T1 scripts (9.3).
 | `units` | slow | `systemctl list-units --all --output=json` (systemd 246+), else `--plain --no-legend`; `systemctl --failed` | 15 s while visible; 60 s for the health card | same | same |
 | `timers`, `cron` | slow | `systemctl list-timers --all --output=json`; `crontab -l`; `/etc/crontab`; `/etc/cron.d/*`; `cron.{hourly,...}` | 60 s while visible | same | on demand |
 | `timer_detail` | slow | `systemctl show -p TimersCalendar -p TimersMonotonic -p RandomizedDelayUSec -- <timer>` (D57) | on demand | same | same |
+| `ops` | slow | the `<id>.json` records of both operation directories of 7.17, at most 50 per directory, each cut at 4 KiB [E] | on connect (E17) | same | same |
 | `identity` | slow | `/etc/os-release`, `uname`, `hostnamectl --json=short` (systemd 249+) | once per session | same | same |
 | `temps`, `gpu`, `smart` (v1) | slow | hwmon and thermal sysfs, `nvidia-smi --query-gpu=...`, `smartctl -n standby -j` | 10 s, 30 s, 10 min | same | on demand |
 | `packages` (v1) | slow | `apt-get -s upgrade`, `dnf check-update`, ... (7.8) | on demand, 60 min | on demand | on demand |
@@ -2716,13 +2724,13 @@ the probe (6.1), until one is answered on that link: a probe that brings
 no reply goes out again after 15 s [E], as an owed read does, each
 later one after twice the last wait, up to 15 min [E], and on a later
 run on the same link. A probe that hangs holds the slow sampler for its
-whole deadline, so the cap bounds the readings it loses to about 15 %
+whole deadline, so the cap bounds the readings it loses to about 16 %
 of the time. Until it settles the slow sampler sends
 nothing else and, for a server whose profile the engine does not know
 yet, the fast sampler waits too, so the first readings already withhold
 what a container host's `/proc` would supply (D50); a slow sampler that
 fails to start releases the fast one, and probes once it is ready. That
-wait lasts at most the probe's deadline, 165 s for its 16 guarded
+wait lasts at most the probe's deadline, 175 s for its 17 guarded
 commands (6.2, D47), and holds only while the engine knows no profile
 for the server. There D50, which never shows the host's figures as the
 container's, takes precedence over 6.2's rule that a hung slow collector
@@ -3559,6 +3567,27 @@ matching row applies:
   older than 7 days [E] are pruned on connect, those in the root directory
   by the next root-run wrapper or in admin mode. Never `/tmp`. Both
   directories are rows in the host write inventory (8.11).
+
+As built in M4 (E07, `klabautermann_host/lib/src/parse/ops.dart`), the
+slow `ops` collector lists
+`${XDG_STATE_HOME:-$HOME/.local/state}/klabautermann/ops` (a relative
+`XDG_STATE_HOME` is ignored) and `/var/lib/klabautermann/ops`, each as
+one guarded `sh -c` of a constant
+listing script. It reads regular files named `<16 hex>.json`, not
+symlinks, temp files or logs, at most 50 per directory through
+`head -c 4097`, and frames each as `rec <kind> <id> <status> <bytes>`
+plus exactly that many bytes, so record text cannot forge another; a
+`dir <kind> ok|absent|denied <count> <path>` line ends each listing and
+reports the resolved path and the full count. A record is the one-line
+JSON object E08's wrapper writes, every key present:
+`{"v":1,"id","state":"running"|"done","pid","startTicks","unit","exit",
+"startedAt","endedAt"}`, with `pid` the wrapper's `$$`, `startTicks`
+field 22 of its `/proc/<pid>/stat`, `unit`
+`klabautermann-op-<id>.service` or null, `exit` and `endedAt` null while
+running, and null times where `date` has no `%s`. The parser rejects,
+never reads as an operation, a record cut at 4 KiB, one of another
+version, a malformed one, and a forged one: its `id` differs from its
+file name or its `unit` names another unit. Re-attach itself is E17's.
 
 ### 7.18 Backups (BAK)
 

@@ -36,7 +36,10 @@ const kSamplerStartCommand =
 /// Version 6 adds the on-demand `timer_detail` to the slow sampler (D57).
 /// Version 7 reads a guarded command BusyBox's `timeout` stopped as a
 /// timeout.
-const kCollectorSetVersion = '7';
+/// Version 8 adds the `SELF` marker before READY, the probe's
+/// `run0 --no-ask-password true` check and the slow `ops` collector
+/// (03 §7.17).
+const kCollectorSetVersion = '8';
 
 /// The most `procs` rows one reply carries (D48). With more processes the
 /// fragment keeps the union of the [kProcsRowCap] / 2 with the highest CPU
@@ -114,13 +117,15 @@ const collectorFragments = <Collector, String>{
   Collector.timers: _kTimersFragment,
   Collector.cron: _kCronFragment,
   Collector.timerDetail: _kTimerDetailFragment,
+  Collector.ops: _kOpsFragment,
 };
 
 /// Assembles the program text for [kind]: the nonce line first, then the
 /// shared helpers, then the fragments of every collector on that sampler,
-/// then nothing else; the program's own last output line is the READY
-/// marker (03 §6.2 "The client sends nothing else until it has read
-/// READY").
+/// then nothing else; the program's last two output lines are the `SELF`
+/// marker, which carries the sampler shell's `$$` and `$PPID` for the
+/// protected targets (03 §8.6), and the READY marker (03 §6.2 "The client
+/// sends nothing else until it has read READY").
 ///
 /// [nonce] must be 32 lowercase hex digits as produced by [generateNonce].
 String buildSamplerProgram({required SamplerKind kind, required String nonce}) {
@@ -135,7 +140,9 @@ String buildSamplerProgram({required SamplerKind kind, required String nonce}) {
   for (final c in collectors) {
     b.writeln(collectorFragments[c]);
   }
-  b.write(_kReady);
+  b
+    ..write(_kSelf)
+    ..write(_kReady);
   return b.toString();
 }
 
@@ -625,8 +632,10 @@ _probe_elev() {
   fi
   if command -v run0 >/dev/null 2>&1; then
     _o="$_o${NL}run0=present"
+    hw_qrun run0 --no-ask-password true >/dev/null 2>&1
+    _o="$_o${NL}run0_noninteractive=$?"
   else
-    _o="$_o${NL}run0=absent"
+    _o="$_o${NL}run0=absent${NL}run0_noninteractive="
   fi
   _p=$(command -V printf 2>/dev/null)
   case $_p in
@@ -973,6 +982,99 @@ c_timer_detail() {
   o=$(hw_run systemctl show -p TimersCalendar -p TimersMonotonic -p RandomizedDelayUSec -- "$1" </dev/null 2>&1); _rd=$?
   st=$(hw_st "$_rd" "$o")
 }
+""";
+
+/// The login user's operation directory below
+/// `${XDG_STATE_HOME:-$HOME/.local/state}` (03 §7.17); the `ops` fragment
+/// ignores a relative `XDG_STATE_HOME`, as the XDG base directory
+/// specification says.
+const kOpsUserSubdirectory = 'klabautermann/ops';
+
+/// The root-owned operation directory (03 §7.17).
+const kOpsRootDirectory = '/var/lib/klabautermann/ops';
+
+/// The most records the `ops` collector reads from one directory [E]; the
+/// directory's `dir` line still counts every well-named record.
+const kOpsRecordCap = 50;
+
+/// The most bytes of one record the `ops` collector sends [E]; a longer
+/// file is cut there and marked `truncated`.
+const kOpsRecordBytes = 4096;
+
+/// `ops` (03 §7.17): the detached-operation records of both operation
+/// directories, for re-attach. Each directory is one guarded command, an
+/// `sh -c` of the constant listing script `_HW_OPS` with the directory's
+/// kind and path as positional parameters, so a hung home directory costs
+/// one `timeout 10` and the fragment declares two guarded commands.
+///
+/// For each regular file (not a symlink) named `<16 hex digits>.json`, at
+/// most [kOpsRecordCap] of them in glob order, the script prints
+///
+///     rec <kind> <id> <status> <bytes>
+///     <exactly bytes bytes of the record>
+///
+/// and last one `dir <kind> <state> <count> <path>` line, where `state` is
+/// `ok`, `absent` or `denied` and `count` the well-named records found. A
+/// record's `status` is `ok`, `truncated` (cut at [kOpsRecordBytes]),
+/// `denied` or `error`; no bytes follow the last two. The byte counts frame
+/// the records as sections are framed, so record text cannot forge another
+/// record (`LC_ALL=C` makes `${#c}` count bytes), and a listing its timeout
+/// cut short has no `dir` line. `head -c 4097` bounds each read; the
+/// sentinels printed after it and after each listing keep the trailing
+/// newlines that command substitution would drop, so a listing cut after
+/// a whole record leaves that record framed. The script sends its own stderr to /dev/null,
+/// so a shell's warning (bash's about a NUL byte) cannot land between
+/// records.
+const _kOpsFragment = r"""
+_HW_OPS='exec 2>/dev/null
+k=$1; d=$2; n=0; t=0
+if [ ! -e "$d" ]; then printf "dir %s absent 0 %s\n" "$k" "$d"; exit 0; fi
+if [ ! -d "$d" ] || [ ! -r "$d" ] || [ ! -x "$d" ]; then
+  printf "dir %s denied 0 %s\n" "$k" "$d"; exit 0
+fi
+for f in "$d"/*.json; do
+  [ -f "$f" ] && [ ! -L "$f" ] || continue
+  i=${f##*/}; i=${i%.json}
+  case $i in *[!0-9a-f]*) continue ;; esac
+  [ ${#i} -eq 16 ] || continue
+  t=$((t + 1))
+  [ $n -lt 50 ] || continue
+  n=$((n + 1))
+  if [ ! -r "$f" ]; then printf "rec %s %s denied 0\n\n" "$k" "$i"; continue; fi
+  c=$(head -c 4097 "$f"; r=$?; printf x; exit $r); r=$?
+  c=${c%x}
+  if [ $r -ne 0 ]; then printf "rec %s %s error 0\n\n" "$k" "$i"; continue; fi
+  s=ok
+  if [ ${#c} -gt 4096 ]; then c=${c%?}; s=truncated; fi
+  printf "rec %s %s %s %s\n%s\n" "$k" "$i" "$s" ${#c} "$c"
+done
+printf "dir %s ok %s %s\n" "$k" "$t" "$d"'
+
+c_ops() {
+  st=ok; o=''
+  if ! command -v head >/dev/null 2>&1; then st=missing; return 0; fi
+  _u=${XDG_STATE_HOME:-$HOME/.local/state}
+  case $_u in /*) ;; *) _u=$HOME/.local/state ;; esac
+  _a=$(hw_run sh -c "$_HW_OPS" sh user "$_u/klabautermann/ops" </dev/null 2>&1; _r=$?; printf x; exit $_r); _ra=$?
+  _b=$(hw_run sh -c "$_HW_OPS" sh root /var/lib/klabautermann/ops </dev/null 2>&1; _r=$?; printf x; exit $_r); _rb=$?
+  o="${_a%x}${_b%x}"
+  case $(hw_st "$_ra" ''):$(hw_st "$_rb" '') in
+    ok:ok)
+      st=ok ;;
+    *:timeout | timeout:*)
+      st=timeout ;;
+    *)
+      st=error ;;
+  esac
+}
+""";
+
+/// The `SELF` marker (03 §6.2, §8.6), printed just before READY: the
+/// sampler shell's PID and its parent's. `kSamplerStartCommand` execs
+/// `env`, which execs `sh -s`, so `$$` is the process sshd started for
+/// the channel and `$PPID` the sshd process serving the session.
+const _kSelf = r"""
+printf '\036%s SELF %s %s\n' "$N" "$$" "$PPID"
 """;
 
 /// The READY marker is the program's last output line (03 §6.2).

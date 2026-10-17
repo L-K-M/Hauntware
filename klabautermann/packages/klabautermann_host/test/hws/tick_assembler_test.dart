@@ -1,5 +1,5 @@
-// Tick assembler tests (03 §6.2): READY and its collector-set version,
-// complete replies, replies lost to framing errors, and the out-of-order
+// Tick assembler tests (03 §6.2): SELF, READY and its collector-set
+// version, complete replies, replies lost to framing errors, and the out-of-order
 // markers that end a session.
 import 'dart:convert';
 
@@ -19,7 +19,9 @@ List<int> _section(String collector, String payload) {
   ];
 }
 
-final _ready = _marker('READY HWS/1 $kCollectorSetVersion');
+final _self = _marker('SELF 4242 4241');
+
+final _ready = [..._self, ..._marker('READY HWS/1 $kCollectorSetVersion')];
 
 List<int> _reply(int seq) => [
   ..._marker('B $seq 12.50'),
@@ -49,6 +51,9 @@ void main() {
       'tick 1 12.5 overview,core',
       'tick 2 12.5 overview,core',
     ]);
+
+    final ready = events.first as HwsSessionReady;
+    expect((ready.pid, ready.parentPid), (4242, 4241));
 
     final tick = events[1] as HwsTick;
     expect(utf8.decode(tick.section('core')!.payload), contains('3.00'));
@@ -128,6 +133,46 @@ void main() {
       expect(assembler.push(_reply(2)), isEmpty);
     });
 
+    test('a version 7 program, which prints no SELF', () {
+      // The READY version check (03 §6.3) runs before the SELF check, so
+      // an older program reads as the mismatch it is.
+      expect(_assemble([..._marker('READY HWS/1 7'), ..._reply(1)]), [
+        'failed versionMismatch',
+      ]);
+      expect(kCollectorSetVersion, '8');
+    });
+
+    test('a READY of this version without SELF', () {
+      expect(
+        _assemble([
+          ..._marker('READY HWS/1 $kCollectorSetVersion'),
+          ..._reply(1),
+        ]),
+        ['failed outOfOrder'],
+      );
+    });
+
+    for (final bad in [
+      'SELF',
+      'SELF 1',
+      'SELF 0 1',
+      'SELF x 1',
+      'SELF 1 2 3',
+    ]) {
+      test('a malformed SELF: "$bad"', () {
+        expect(_assemble([..._marker(bad), ..._ready]), ['failed noReady']);
+      });
+    }
+
+    test('a parent PID of 0 is valid', () {
+      final events = HwsTickAssembler(nonce: nonce).push([
+        ..._marker('SELF 7 0'),
+        ..._marker('READY HWS/1 $kCollectorSetVersion'),
+      ]);
+      final ready = events.single as HwsSessionReady;
+      expect((ready.pid, ready.parentPid), (7, 0));
+    });
+
     test('no READY within the preamble cap', () {
       final events = _assemble([
         ...List.filled(kMaxPreambleBytes + 1, 0x78),
@@ -145,6 +190,8 @@ void main() {
 
     final outOfOrder = <String, List<int>>{
       'a second READY': [..._ready, ..._ready],
+      'a second SELF before READY': [..._self, ..._ready],
+      'a SELF after READY': [..._ready, ..._self],
       'a section outside a reply': [
         ..._ready,
         ..._section('core', 'x'),
