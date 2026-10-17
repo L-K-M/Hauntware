@@ -1,5 +1,74 @@
 # Séance ports and pin audits
 
+## Keystore move, F3c (2026-10-16)
+
+Poltergeist's `MasterKeyManager` moves into a new Planchette package,
+`planchette/packages/ghost_keystore` (`../../docs/design/catalog-library.md`
+section 9, row 8 of section 13; 03 D7). The package wraps
+`flutter_secure_storage`, so it cannot live in pure-Dart `seance_core`;
+it depends on that plugin and on `seance_protocol` (for
+`secureRandomBytes`) only. The manager takes each product's entry names,
+so Séance and Klabautermann can use it without sharing an entry.
+`poltergeist_app/lib/services/secure_master_key.dart` stays as the app's
+binding: it re-exports the moved names, keeps `VaultLockedException`, and
+builds the manager over Poltergeist's entries through
+`poltergeistMasterKeyManager`, which `main.dart` and the tests call.
+
+| Left `poltergeist_app/lib/services/secure_master_key.dart` | Now `ghost_keystore/lib/src/master_key_manager.dart` |
+|---|---|
+| `MasterKeyManager([storage])` | `MasterKeyManager({masterKeyEntry, apiKeyPrefix, storage})` |
+| `KeystoreException`, `KeystoreStatus` | unchanged |
+| (Séance only) `MasterKeyUnavailableException`, `probeKeystore`'s `hasExistingVault` | from `seance_app/lib/services/secure_master_key.dart` |
+
+- Entries: Poltergeist passes `poltergeist.vault.masterKey.v1` and
+  `poltergeist.apikey.`. The manager appends an API-key name to the
+  prefix without a separator, so the sync token stays
+  `poltergeist.apikey.sync.token` and the retained token
+  `poltergeist.apikey.sync.token.retained.v1`. The default storage is
+  unchanged: `MacOsOptions(usesDataProtectionKeychain: false)`, the
+  legacy login keychain. The app keeps its exact
+  `flutter_secure_storage: 10.3.1` pin, so the plugin's native code and
+  default options stay the same; the package admits `^10.3.1`, which
+  also covers Séance's 10.3.2.
+- Bodies: unchanged apart from the entry names becoming constructor
+  arguments, a product-neutral `putApiKey` doc and Séance's
+  `hasExistingVault` guard. The guard defaults to false and Poltergeist
+  passes nothing, so the probe reads, mints and reports exactly as
+  before; it throws `MasterKeyUnavailableException` only when a caller
+  passes true and the keystore answers with no key. Poltergeist adopting
+  the guard is a behaviour change for its own PR.
+- `MasterKeyUnavailableException` has a product-neutral `toString`.
+  Séance's text names Séance and stays in Séance until its switch: the
+  copy each app shows stays app-side (CL section 3).
+- Proof: `test/services/keystore_identity_test.dart` runs every keystore
+  operation Poltergeist performs, through the production construction
+  and the sync token stores, over a healthy, a locked and a corrupt
+  keystore on Linux, macOS, Windows, Android and iOS. It records each
+  call at the plugin's method channel (method, entry, value and the
+  resolved options map) and compares the transcript with one captured
+  from the pre-move class. A fuller capture of the same run (57,416
+  bytes, sha256
+  `04317dfb74c5cc4a3544539fcba98404bc9b9b4765c7690ce5a872eae6bcd9b4`)
+  was byte-identical before and after the move.
+- Tests: the locked-keystore group of `test/keystore_resilience_test.dart`
+  (5 tests) moves to `ghost_keystore/test/master_key_manager_test.dart`,
+  changed only in construction and formatting. The entry-name and
+  locked-message tests stay. The package adds the mint/refuse matrix
+  around `hasExistingVault` (modelled on Séance's `master_key_test.dart`),
+  literal entry-name tests for the three products and a test of the
+  macOS default options. The app's localization allowlist drops the
+  moved literals.
+- Left in the app: `VaultLockedException` (thrown by the vault and the
+  sync credential store, not the manager), the sync credential bindings
+  (`sync_credentials.dart`) and the entry names. Poltergeist has no app
+  lock.
+- Registration (04 section 12.2): owned pubspec at the suite version,
+  the release tool's owned list, the `planchette_flutter` CI job and the
+  release gate (resolve, analyze, test, format), `scripts/test.sh` and
+  `planchette/AGENTS.md`. Nothing under `seance/` changes, so the
+  pin-audit record stays as it is. Séance's own `MasterKeyManager` is
+  not switched here.
+
 ## Pure stores move, F3b-2 (2026-10-16)
 
 Poltergeist's `FileVaultStore` and its re-key journal move into
@@ -666,6 +735,11 @@ port candidates.
   1, PR #32); and concurrent probes can race the create-on-first-run
   read-check-write (review round 1). Both are source defects; upstream
   first per 04 §6, not local divergences.
+- 2026-10-16 (F3c): `MasterKeyManager`, `KeystoreException` and
+  `KeystoreStatus` left this file for `planchette/packages/ghost_keystore`
+  (see "Keystore move, F3c" above). The file keeps `VaultLockedException`
+  and binds the manager to Poltergeist's entries. The port-back
+  candidates above now apply to the package.
 
 ## app/poltergeist_app/lib/services/file_stores.dart
 
@@ -752,6 +826,10 @@ port candidates.
   read/write/delete case is dropped with that class; the locked-message
   case is kept.
 - Port-back candidates: none.
+- 2026-10-16 (F3c): the locked-keystore group moved to
+  `ghost_keystore/test/master_key_manager_test.dart` with the manager
+  (see "Keystore move, F3c" above). The entry-name and locked-message
+  tests stay here.
 
 ## app/poltergeist_app/test/vault_rekey_journal_test.dart
 

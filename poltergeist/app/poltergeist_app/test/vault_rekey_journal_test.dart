@@ -126,7 +126,7 @@ void main() {
     setUp(() {
       vaultStore = FileVaultStore(vaultFile);
       credentials = SecureSyncCredentialStore(
-        keys: MasterKeyManager(keystore),
+        keys: poltergeistMasterKeyManager(keystore),
         vaultJournal: vaultStore,
       );
     });
@@ -134,7 +134,7 @@ void main() {
     /// A vault holding one credential, opened by the key the keystore
     /// holds.
     Future<void> enrolled() async {
-      await MasterKeyManager(keystore).setKeystoreKey(oldKey);
+      await poltergeistMasterKeyManager(keystore).setKeystoreKey(oldKey);
       await SecretVault(vaultStore, oldKey).putSecret(secret('a'));
     }
 
@@ -235,7 +235,8 @@ void main() {
       keystore.locked = false;
       keystore.lockAfterWrite = false;
       final reopened = FileVaultStore(vaultFile);
-      final installed = await MasterKeyManager(keystore).probeKeystore();
+      final installed =
+          await poltergeistMasterKeyManager(keystore).probeKeystore();
       expect(await reopened.settleRekey(installed!),
           VaultRekeyOutcome.adopted);
       expect((await SecretVault(reopened, newKey).getSecret('a'))!.value,

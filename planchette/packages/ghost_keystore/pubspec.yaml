@@ -1,0 +1,30 @@
+name: ghost_keystore
+description: >-
+  The OS-keystore master key and API-key entries shared by Seance,
+  Poltergeist and Klabautermann: MasterKeyManager over
+  flutter_secure_storage, parameterized by each product's entry names so
+  every product keeps its own entries.
+version: 1.9.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+  flutter: '>=3.47.2'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # The OS keystore (macOS/iOS Keychain, Android Keystore, Linux Secret
+  # Service, Windows Credential Manager). Each app pins the exact version
+  # in its own pubspec; this range admits both apps' current locks.
+  flutter_secure_storage: ^10.3.1
+  # secureRandomBytes for the minted master key. The protocol package,
+  # never seance_core: Poltergeist consumes this package and must not
+  # inherit dartssh2.
+  seance_protocol:
+    path: ../../../seance/packages/seance_protocol
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
