@@ -15,7 +15,9 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         ProcsSelection,
         SystemdUnit,
         TimersSnapshot,
-        UnitsSnapshot;
+        UnitsSnapshot,
+        EngineMode,
+        EngineRuntime;
 // A masked process argument (03 §8.9): its display and toString carry the
 // mask, so the app shows a secret only through the reveal action. The
 // Docker models are plain data too: no field holds a function, and the
@@ -33,8 +35,6 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
         HealthStatus,
         ImageSummary,
         MaskedValue;
-import 'package:klabautermann_host/klabautermann_host.dart'
-    show EngineMode, EngineRuntime;
 import 'package:meta/meta.dart';
 
 import '../docker/docker_ladder.dart'

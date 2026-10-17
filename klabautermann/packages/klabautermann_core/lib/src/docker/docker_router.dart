@@ -4,7 +4,8 @@
 /// over it and runs the queries.
 ///
 /// ```text
-///   first query ─▶ waiting (no link, or no probe answer on it)
+///   first query ─▶ waiting (no link, or no probe answer on it): the
+///                    │ query is answered at once with that failure
 ///                    │ link ready and probed
 ///                    ▼
 ///                  resolving: ladder ─▶ _ping, /version over the route
@@ -64,8 +65,10 @@ final class DockerRouter {
   final Set<Future<void>> _closing = {};
   Set<String> _fleet = const {};
 
-  /// Accepts [request]: it runs once its server's endpoint is ready, and
-  /// every query gets exactly one [DockerResult].
+  /// Accepts [request]: while its server has no ready link or no probe
+  /// answer it is answered at once with that failure; otherwise it waits
+  /// for the endpoint to resolve and runs once it is ready. Every query
+  /// gets exactly one [DockerResult].
   void query(DockerQuery request) {
     if (!_fleet.contains(request.serverId)) {
       return _answer(request, DockerQueryFailure.notInFleet);

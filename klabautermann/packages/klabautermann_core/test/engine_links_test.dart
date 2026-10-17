@@ -782,7 +782,16 @@ void main() {
             .having((s) => s.phase, 'phase', DockerEndpointPhase.waiting)
             .having((s) => s.label, 'label', DockerRouteLabel.none),
       );
-      expect(await engine.next(), failed('q-1', DockerQueryFailure.notInFleet));
+      expect(
+        await engine.next(),
+        isA<DockerResult>()
+            .having((r) => r.serverId, 'serverId', 'ssh-config:gone')
+            .having(
+              (r) => r,
+              'result',
+              failed('q-1', DockerQueryFailure.notInFleet),
+            ),
+      );
 
       engine.send(const Connect(_web));
       expect(await engine.next(), _connecting);

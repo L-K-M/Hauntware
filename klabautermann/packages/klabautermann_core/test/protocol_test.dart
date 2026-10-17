@@ -231,6 +231,7 @@ void main() {
                 ),
               )
               as DockerQuery;
+      expect(query.serverId, 'srv-1');
       expect(query.queryId, 'q-7');
       expect((query.query as DockerContainerQuery).containerId, 'db');
 
