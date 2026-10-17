@@ -2,9 +2,10 @@
 /// the record coordinator with its handler seam and write path, the
 /// persistent record store, the server-config store and its sync tuples,
 /// enrollment, the host-key and pin-verdict seams, the file-backed
-/// host-key store, endpoint pins and their file store, record crypto, the read-only server catalog, and the
-/// file primitives behind the stores' default writer. A secondary library
-/// of `seance_core`: import it beside
+/// host-key and vault stores, endpoint pins and their file store, record
+/// crypto, the read-only server catalog, and the file primitives behind
+/// the stores' default writer. A secondary library of `seance_core`:
+/// import it beside
 /// `package:seance_core/seance_core.dart`.
 ///
 /// Poltergeist drives the coordinator with its `bookmark:` handler; its
@@ -73,13 +74,13 @@ export 'src/catalog/server_config_store.dart'
         SyncTrackingServerStore,
         serverStoreQuarantinePath;
 export 'src/catalog/sync_tuple.dart' show SyncTuple;
-// F3b's file-backed host-key store (docs/design/catalog-library.md
-// section 8) and the corrupt-file quarantine the F3b stores share, which
-// Poltergeist's vault store uses until it moves here too. Exported here
-// rather than from seance_core.dart, where `FileHostKeyStore` would clash
-// with the Séance app's own store until the app switches.
-export 'src/store/corrupt_file_quarantine.dart' show quarantineCorruptFile;
+// F3b's file-backed host-key and vault stores
+// (docs/design/catalog-library.md section 8). Exported here rather than
+// from seance_core.dart, where these names would clash with the Séance
+// app's own stores until the app switches.
 export 'src/store/file_host_key_store.dart' show FileHostKeyStore;
+export 'src/store/file_vault_store.dart'
+    show FileVaultStore, VaultRekeyJournal, VaultRekeyOutcome;
 // The endpoint pins' file store (D16, 03-ARCHITECTURE.md 4.7), beside
 // the host-key store whose conventions it shares.
 export 'src/store/file_endpoint_pin_store.dart'
