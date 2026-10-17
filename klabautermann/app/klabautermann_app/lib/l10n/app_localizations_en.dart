@@ -3652,4 +3652,90 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dockerStackGone => 'This stack has no containers any more.';
+
+  @override
+  String get dockerStackFilesView => 'View files';
+
+  @override
+  String get dockerStackFilesUnverified =>
+      'Its files show only once its source is verified.';
+
+  @override
+  String dockerStackFileTitle(String project) {
+    return '$project: files';
+  }
+
+  @override
+  String get dockerStackFileClose => 'Close';
+
+  @override
+  String dockerStackFileReading(String file) {
+    return 'Reading $file…';
+  }
+
+  @override
+  String dockerStackFileEditorLabel(String file) {
+    return '$file, read-only';
+  }
+
+  @override
+  String dockerStackFileMasked(int count, int seconds) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count values are masked. Reveal values shows them for $seconds seconds.',
+      one: '1 value is masked. Reveal values shows it for $seconds seconds.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerStackFileReveal => 'Reveal values';
+
+  @override
+  String get dockerStackFileHide => 'Hide values';
+
+  @override
+  String dockerStackFileTruncated(String size, String limit) {
+    return 'This file is $size, so only its complete lines within the first $limit show.';
+  }
+
+  @override
+  String dockerStackFileFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'unknownStack': 'No container belongs to this stack any more.',
+      'notVerified':
+          'This stack\'s source is no longer verified, so its files do not show.',
+      'notStackFile': 'This path is none of the stack\'s files.',
+      'notFound': 'There is no file at this path on the host.',
+      'permissionDenied':
+          'Your account cannot read this file. Reading it through sudo needs admin mode, which arrives in a later milestone.',
+      'notRegularFile':
+          'This path is a link, a directory or another special file, which is not read.',
+      'readFailed':
+          'The file could not be read, or it changed while it was read.',
+      'other': 'The file could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerStackFileQueryFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'notInFleet': 'This server is no longer in the fleet.',
+      'linkUnavailable': 'There is no connection to this server.',
+      'profileUnknown': 'The server\'s capability check has not answered yet.',
+      'endpointUnavailable': 'The Docker engine cannot be reached.',
+      'tooManyQueries':
+          'This server already has as many Docker reads waiting as Klabautermann allows.',
+      'daemonError':
+          'The engine refused or failed to list the stack\'s containers.',
+      'connectionFailed':
+          'The connection to the engine failed while reading the file.',
+      'cancelled': 'The read stopped before it ran.',
+      'other': 'The file could not be read.',
+    });
+    return '$_temp0';
+  }
 }

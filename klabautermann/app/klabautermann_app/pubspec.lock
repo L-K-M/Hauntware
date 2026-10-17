@@ -609,6 +609,13 @@ packages:
       relative: true
     source: path
     version: "1.9.0"
+  planchette_editor:
+    dependency: "direct main"
+    description:
+      path: "../../../planchette/packages/planchette_editor"
+      relative: true
+    source: path
+    version: "1.9.0"
   platform:
     dependency: transitive
     description:

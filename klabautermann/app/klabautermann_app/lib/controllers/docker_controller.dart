@@ -47,6 +47,12 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 /// stacks carry the full container list, so details views follow it as
 /// they follow the container watch's.
 ///
+/// A stack file view reads one file of a verified stack at a time
+/// ([readStackFile], 03 §7.16 STK-04, M11): one [DockerStackFileQuery]
+/// per read, whose answer goes to the view that asked and is not kept
+/// here, since the file is read fresh for each query and masked by the
+/// engine.
+///
 /// A details view that shows a container ([openContainer]) has it
 /// inspected (03 §7.12 CTR-03, CTR-04): one [DockerContainerQuery] as the
 /// first view opens, and another whenever the container's row in a
@@ -156,6 +162,46 @@ final class DockerController {
     server.stacksWatchId = null;
     if (watchId == null || _stopped) return;
     _send(DockerUnwatch(serverId: serverId, watchId: watchId));
+  }
+
+  /// Reads [path], one of the compose project [project]'s files, on
+  /// [serverId] (STK-04): a [DockerStackFilePayload] whose spans are
+  /// masked by the engine, a [DockerStackFileFailed] saying why the
+  /// engine read no file, or a [DockerQueryFailed] when the query could
+  /// not run, as when the engine stops or the server leaves the fleet
+  /// first. Nothing of the answer stays here.
+  Future<DockerPayload> readStackFile(
+    String serverId, {
+    required String project,
+    required String path,
+  }) {
+    if (!_listed(serverId)) {
+      return Future.value(
+        const DockerQueryFailed(DockerQueryFailure.notInFleet),
+      );
+    }
+    if (_stopped) {
+      return Future.value(
+        const DockerQueryFailed(DockerQueryFailure.cancelled),
+      );
+    }
+
+    final queryId = 'stack-file-${_count++}';
+    _send(
+      DockerQuery(
+        serverId: serverId,
+        queryId: queryId,
+        query: DockerStackFileQuery(project: project, path: path),
+      ),
+    );
+    if (_stopped) {
+      return Future.value(
+        const DockerQueryFailed(DockerQueryFailure.cancelled),
+      );
+    }
+    final read = Completer<DockerPayload>();
+    _server(serverId).fileReads[queryId] = read;
+    return read.future;
   }
 
   /// An Images view shows [serverId]; [unwatchImages] says it no longer
@@ -521,6 +567,10 @@ final class DockerController {
       case DockerResult(:final serverId, :final queryId, :final payload):
         final server = _servers[serverId];
         if (server == null) return;
+        if (server.fileReads.remove(queryId) case final read?) {
+          read.complete(payload);
+          return;
+        }
         if (server.engineQuery != queryId) {
           _takeInspect(serverId, server, queryId, payload);
           return;
@@ -578,6 +628,7 @@ final class DockerController {
         final ids = _fleetIds = {for (final entry in entries) entry.serverId};
         _servers.removeWhere((serverId, server) {
           if (ids.contains(serverId)) return false;
+          server.endFileReads(DockerQueryFailure.notInFleet);
           server.dispose();
           return true;
         });
@@ -591,6 +642,7 @@ final class DockerController {
     _stopped = true;
     for (final server in _servers.values) {
       server.engineQuery = null;
+      server.endFileReads(DockerQueryFailure.cancelled);
       for (final inspected in server.inspected.values) {
         if (inspected.queryId == null) continue;
         inspected.queryId = null;
@@ -894,7 +946,21 @@ final class _DockerServer {
   /// The containers details views show, by full id.
   final Map<String, _InspectedContainer> inspected = {};
 
+  /// The stack file reads in flight, by query id, each completed with
+  /// the engine's answer.
+  final Map<String, Completer<DockerPayload>> fileReads = {};
+
+  /// Answers every stack file read in flight with [failure]: the engine
+  /// will not.
+  void endFileReads(DockerQueryFailure failure) {
+    for (final read in fileReads.values) {
+      read.complete(DockerQueryFailed(failure));
+    }
+    fileReads.clear();
+  }
+
   void dispose() {
+    endFileReads(DockerQueryFailure.cancelled);
     endpoint.dispose();
     engine.dispose();
     containers.dispose();

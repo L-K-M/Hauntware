@@ -45,6 +45,10 @@ dependencies:
   # search with its case folding.
   planchette_core:
     path: ../../../planchette/packages/planchette_core
+  # The stack file view (STK-04, 03 §7.16): Planchette's shared editor
+  # with editing locked, as Poltergeist's compare view shows a file.
+  planchette_editor:
+    path: ../../../planchette/packages/planchette_editor
   # getApplicationSupportDirectory() for settings.json (03 §4.10); pinned
   # to Poltergeist's version.
   path_provider: 2.1.6

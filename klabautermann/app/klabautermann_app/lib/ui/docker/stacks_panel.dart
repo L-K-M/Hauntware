@@ -10,6 +10,7 @@ import 'container_details.dart' show openContainerDetails;
 import 'containers_panel.dart'
     show ContainerHealthBadge, DockerNotice, containerStateText;
 import 'containers_view.dart';
+import 'stack_file_view.dart' show openStackFiles;
 import 'stacks_view.dart';
 
 /// The panel width from which the stacks show as a list beside the
@@ -604,7 +605,8 @@ class StackOverviewPage extends StatelessWidget {
 /// it, where its files are as its labels record them, and its services
 /// with their images, containers, states, health and ports. A container
 /// opens its details ([openContainerDetails]): in the desktop inspector,
-/// or on a page of its own.
+/// or on a page of its own. A verified stack opens its files
+/// ([openStackFiles], STK-04); any other says they show only once it is.
 ///
 /// It follows the server's stack list, which the Stacks sub-tab's watch
 /// keeps current, and says so once the stack leaves it.
@@ -711,6 +713,28 @@ class StackOverview extends StatelessWidget {
             ),
           if (project.version case final version?)
             _Fact(label: l10n.dockerStackComposeVersion, values: [version]),
+          // STK-04: verified sources only.
+          if (verdict is StackVerified)
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: OutlinedButton.icon(
+                onPressed: () => openStackFiles(
+                  context,
+                  monitoring: monitoring,
+                  serverId: serverId,
+                  project: project,
+                ),
+                icon: const Icon(Icons.description_outlined),
+                label: Text(l10n.dockerStackFilesView),
+              ),
+            )
+          else
+            Text(
+              l10n.dockerStackFilesUnverified,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
         ],
       ),
       _Section(

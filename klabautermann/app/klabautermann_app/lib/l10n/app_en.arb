@@ -4483,5 +4483,99 @@
   "dockerStackGone": "This stack has no containers any more.",
   "@dockerStackGone": {
     "description": "Stack overview: the stack left the list, as its last container was removed."
+  },
+  "dockerStackFilesView": "View files",
+  "@dockerStackFilesView": {
+    "description": "Stack overview: opens the verified stack's compose and environment files, read-only (STK-04)."
+  },
+  "dockerStackFilesUnverified": "Its files show only once its source is verified.",
+  "@dockerStackFilesUnverified": {
+    "description": "Stack overview: in place of the files button, for a stack whose source is not verified (STK-04: verified sources only)."
+  },
+  "dockerStackFileTitle": "{project}: files",
+  "@dockerStackFileTitle": {
+    "description": "The stack file view's title. project is the compose project's name, server data.",
+    "placeholders": {
+      "project": {
+        "type": "String",
+        "example": "web"
+      }
+    }
+  },
+  "dockerStackFileClose": "Close",
+  "@dockerStackFileClose": {
+    "description": "Tooltip of the button that closes the stack file view on the desktop."
+  },
+  "dockerStackFileReading": "Reading {file}…",
+  "@dockerStackFileReading": {
+    "description": "Stack file view: shown while the file is read. file is the file's name, such as compose.yaml.",
+    "placeholders": {
+      "file": {
+        "type": "String",
+        "example": "compose.yaml"
+      }
+    }
+  },
+  "dockerStackFileEditorLabel": "{file}, read-only",
+  "@dockerStackFileEditorLabel": {
+    "description": "Stack file view: what a screen reader hears for the file's text, which cannot be edited. file is the file's name.",
+    "placeholders": {
+      "file": {
+        "type": "String",
+        "example": "compose.yaml"
+      }
+    }
+  },
+  "dockerStackFileMasked": "{count, plural, =1{1 value is masked. Reveal values shows it for {seconds} seconds.} other{{count} values are masked. Reveal values shows them for {seconds} seconds.}}",
+  "@dockerStackFileMasked": {
+    "description": "Stack file view: secrets in the file show as asterisks (SAF-07); a reveal is temporary and stays on this device.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerStackFileReveal": "Reveal values",
+  "@dockerStackFileReveal": {
+    "description": "Stack file view: shows the masked values for a while."
+  },
+  "dockerStackFileHide": "Hide values",
+  "@dockerStackFileHide": {
+    "description": "Stack file view: masks the revealed values again before their time is up."
+  },
+  "dockerStackFileTruncated": "This file is {size}, so only its complete lines within the first {limit} show.",
+  "@dockerStackFileTruncated": {
+    "description": "Stack file view: the file is larger than Klabautermann reads (M11). size and limit are sizes in IEC units.",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "1.4 MiB"
+      },
+      "limit": {
+        "type": "String",
+        "example": "1 MiB"
+      }
+    }
+  },
+  "dockerStackFileFailed": "{reason, select, unknownStack{No container belongs to this stack any more.} notVerified{This stack's source is no longer verified, so its files do not show.} notStackFile{This path is none of the stack's files.} notFound{There is no file at this path on the host.} permissionDenied{Your account cannot read this file. Reading it through sudo needs admin mode, which arrives in a later milestone.} notRegularFile{This path is a link, a directory or another special file, which is not read.} readFailed{The file could not be read, or it changed while it was read.} other{The file could not be read.}}",
+  "@dockerStackFileFailed": {
+    "description": "Stack file view: why the engine read no file (STK-04). reason is the engine's failure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerStackFileQueryFailed": "{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server's capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} daemonError{The engine refused or failed to list the stack's containers.} connectionFailed{The connection to the engine failed while reading the file.} cancelled{The read stopped before it ran.} other{The file could not be read.}}",
+  "@dockerStackFileQueryFailed": {
+    "description": "Stack file view: why the read could not run. reason is the engine's failure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
   }
 }

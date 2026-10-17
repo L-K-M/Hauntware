@@ -218,7 +218,7 @@ M2, the host read MVP, is the current milestone. What is on main:
   file over SFTP, at most 1 MiB, masked in the engine. Tested over
   fakes only, plus the `test -f` quoting in a real `sh`; the `--hash`
   output shape comes from Compose's source and awaits D21's run; the
-  app shows the stacks since D17 (below) and no file yet (D18).
+  app shows the stacks since D17 and their files since D18 (below).
 - Low-session mode (M3, D09, 03 §5.2, M9): one `ChannelQuota` per
   server serves the host log reads and the Docker session, so on relay
   ranks the pooled connection (one, in a short-action slot until its
@@ -336,6 +336,25 @@ M2, the host read MVP, is the current milestone. What is on main:
   A failed read keeps the last list with why and a retry, and
   low-session mode is named on a relay. Tested against the fake engine
   only.
+- Stack files in the app (M3, D18, 03 §7.16, §8.9, §10.4): a verified
+  stack's overview offers "View files", which opens a dialog on the
+  desktop and a page on phones; any other stack says its files show
+  only once its source is verified. A picker lists the compose files,
+  the recorded environment files and the working directory's `.env`,
+  each once, as the engine's rule names them; the file picked is read
+  with one `DockerStackFileQuery` (the controller keeps no answer) and
+  shown in `planchette_editor`, now an app dependency, with editing
+  locked and its English strings. The engine's masks show as
+  asterisks; "Reveal values" shows them for 30 s in the view's state
+  only, masked again when the app turns inactive, on "Hide values" or
+  another file. A file over 1 MiB says its size and that only its
+  complete lines within 1 MiB show; each `StackFileFailure` has its
+  wording, a denied read saying that the sudo read needs admin mode,
+  which arrives later, and a read that could not run or failed offers
+  a retry. Nothing else is read: the engine never captures `config`
+  output. The editor's text field reads a mask as its asterisks; the
+  count of masked values is said beside it. Tested against the fake
+  engine only.
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and

@@ -474,6 +474,8 @@ void main() {
     await tester.tap(_row('web'));
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(_inOverview(find.text('web-db-1')));
+    await tester.pumpAndSettle();
     await tester.tap(_inOverview(find.text('web-db-1')));
     await tester.pumpAndSettle();
     expect(find.byType(ContainerDetailsPage), findsOneWidget);

@@ -672,6 +672,120 @@ void main() {
     });
   });
 
+  group('stack file reads (STK-04)', () {
+    test(
+      'one query per read, answered to the reader and kept nowhere',
+      () async {
+        final read = docker.readStackFile(
+          'srv-1',
+          project: 'web',
+          path: '/srv/web/compose.yaml',
+        );
+        final query = queries().single;
+        expect(query.serverId, 'srv-1');
+        expect(
+          query.query,
+          isA<DockerStackFileQuery>()
+              .having((q) => q.project, 'project', 'web')
+              .having((q) => q.path, 'path', '/srv/web/compose.yaml'),
+        );
+
+        // Another reader's answer, and one for no read, leave it waiting.
+        final other = docker.readStackFile(
+          'srv-1',
+          project: 'web',
+          path: '/srv/web/.env',
+        );
+        await emit(
+          dockerAnswer(
+            queries().last,
+            const DockerStackFileFailed(StackFileFailure.notFound),
+          ),
+        );
+        expect(
+          await other,
+          isA<DockerStackFileFailed>().having(
+            (f) => f.failure,
+            'failure',
+            StackFileFailure.notFound,
+          ),
+        );
+
+        final file = DockerStackFilePayload(
+          project: 'web',
+          path: '/srv/web/compose.yaml',
+          size: 9,
+          text: [MaskedValue.plain('services:')],
+        );
+        await emit(dockerAnswer(query, file));
+        expect(await read, same(file));
+        expect(queries().last.queryId, isNot(query.queryId));
+      },
+    );
+
+    test('a read the engine will not answer ends with why', () async {
+      final leaving = docker.readStackFile(
+        'srv-1',
+        project: 'web',
+        path: '/srv/web/compose.yaml',
+      );
+      final staying = docker.readStackFile(
+        'srv-2',
+        project: 'web',
+        path: '/srv/web/compose.yaml',
+      );
+      await emit(
+        CatalogReplaced([
+          const FleetEntry(
+            serverId: 'srv-2',
+            label: 'web-2',
+            host: 'web-2.example.net',
+            port: kSshDefaultPort,
+            origin: FleetEntryOrigin.sshConfig,
+          ),
+        ]),
+      );
+      expect(
+        await leaving,
+        isA<DockerQueryFailed>().having(
+          (f) => f.failure,
+          'failure',
+          DockerQueryFailure.notInFleet,
+        ),
+      );
+      final unlisted = await docker.readStackFile(
+        'srv-1',
+        project: 'web',
+        path: '/srv/web/compose.yaml',
+      );
+      expect(
+        (unlisted as DockerQueryFailed).failure,
+        DockerQueryFailure.notInFleet,
+      );
+      expect(queries(), hasLength(2), reason: 'not sent for a server gone');
+
+      await engine.close();
+      await pumpEventQueue();
+      expect(
+        await staying,
+        isA<DockerQueryFailed>().having(
+          (f) => f.failure,
+          'failure',
+          DockerQueryFailure.cancelled,
+        ),
+      );
+      final stopped = await docker.readStackFile(
+        'srv-2',
+        project: 'web',
+        path: '/srv/web/compose.yaml',
+      );
+      expect(
+        (stopped as DockerQueryFailed).failure,
+        DockerQueryFailure.cancelled,
+      );
+    });
+  });
+
   group('container details (CTR-03, CTR-04)', () {
     final at = DateTime(2026, 10, 15, 14, 30);
 

@@ -4845,6 +4845,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This stack has no containers any more.'**
   String get dockerStackGone;
+
+  /// Stack overview: opens the verified stack's compose and environment files, read-only (STK-04).
+  ///
+  /// In en, this message translates to:
+  /// **'View files'**
+  String get dockerStackFilesView;
+
+  /// Stack overview: in place of the files button, for a stack whose source is not verified (STK-04: verified sources only).
+  ///
+  /// In en, this message translates to:
+  /// **'Its files show only once its source is verified.'**
+  String get dockerStackFilesUnverified;
+
+  /// The stack file view's title. project is the compose project's name, server data.
+  ///
+  /// In en, this message translates to:
+  /// **'{project}: files'**
+  String dockerStackFileTitle(String project);
+
+  /// Tooltip of the button that closes the stack file view on the desktop.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get dockerStackFileClose;
+
+  /// Stack file view: shown while the file is read. file is the file's name, such as compose.yaml.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading {file}…'**
+  String dockerStackFileReading(String file);
+
+  /// Stack file view: what a screen reader hears for the file's text, which cannot be edited. file is the file's name.
+  ///
+  /// In en, this message translates to:
+  /// **'{file}, read-only'**
+  String dockerStackFileEditorLabel(String file);
+
+  /// Stack file view: secrets in the file show as asterisks (SAF-07); a reveal is temporary and stays on this device.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 value is masked. Reveal values shows it for {seconds} seconds.} other{{count} values are masked. Reveal values shows them for {seconds} seconds.}}'**
+  String dockerStackFileMasked(int count, int seconds);
+
+  /// Stack file view: shows the masked values for a while.
+  ///
+  /// In en, this message translates to:
+  /// **'Reveal values'**
+  String get dockerStackFileReveal;
+
+  /// Stack file view: masks the revealed values again before their time is up.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide values'**
+  String get dockerStackFileHide;
+
+  /// Stack file view: the file is larger than Klabautermann reads (M11). size and limit are sizes in IEC units.
+  ///
+  /// In en, this message translates to:
+  /// **'This file is {size}, so only its complete lines within the first {limit} show.'**
+  String dockerStackFileTruncated(String size, String limit);
+
+  /// Stack file view: why the engine read no file (STK-04). reason is the engine's failure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, unknownStack{No container belongs to this stack any more.} notVerified{This stack\'s source is no longer verified, so its files do not show.} notStackFile{This path is none of the stack\'s files.} notFound{There is no file at this path on the host.} permissionDenied{Your account cannot read this file. Reading it through sudo needs admin mode, which arrives in a later milestone.} notRegularFile{This path is a link, a directory or another special file, which is not read.} readFailed{The file could not be read, or it changed while it was read.} other{The file could not be read.}}'**
+  String dockerStackFileFailed(String reason);
+
+  /// Stack file view: why the read could not run. reason is the engine's failure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server\'s capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} daemonError{The engine refused or failed to list the stack\'s containers.} connectionFailed{The connection to the engine failed while reading the file.} cancelled{The read stopped before it ran.} other{The file could not be read.}}'**
+  String dockerStackFileQueryFailed(String reason);
 }
 
 class _AppLocalizationsDelegate
