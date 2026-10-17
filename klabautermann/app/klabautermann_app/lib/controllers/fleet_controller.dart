@@ -11,6 +11,8 @@ final class FleetServer {
   const FleetServer({
     required this.id,
     required this.displayName,
+    this.origin = FleetEntryOrigin.synced,
+    this.group,
     this.address,
     this.searchText,
     this.locatorConflict,
@@ -21,6 +23,8 @@ final class FleetServer {
     return FleetServer(
       id: entry.serverId,
       displayName: entry.label,
+      origin: entry.origin,
+      group: entry.group,
       address: _address(entry),
       searchText: entry.searchText,
       locatorConflict: entry.locatorConflict,
@@ -31,6 +35,14 @@ final class FleetServer {
   final String id;
 
   final String displayName;
+
+  /// Where the entry came from: the rail sections synced servers by their
+  /// groups and pins, and lists imports in a section of their own.
+  final FleetEntryOrigin origin;
+
+  /// The synced record's group as the user spelled it, or null; see
+  /// [FleetEntry.group].
+  final String? group;
 
   /// Host or `user@host` for the row's subtitle (03 §10.3), with `:port`
   /// when the port is not 22.
@@ -95,21 +107,27 @@ final class SshConfigImportRejected extends SshConfigImportOutcome {
 
 /// The fleet concern (03 §10.1): the server list from [CatalogReplaced]
 /// snapshots, per-server link statuses from [LinkState] and probe results
-/// from [Reachability] events, the workspace's selection, and the desktop
-/// ssh_config import (FL-02).
+/// from [Reachability] events, the workspace's selection, the servers
+/// pinned to the top of the list (03 §10.3), and the desktop ssh_config
+/// import (FL-02).
 /// Pull-only by construction (D14): the one request it sends,
 /// [ImportSshConfig], changes the engine's device-local import store and
-/// never a catalog record.
+/// never a catalog record, and pins stay on this device.
 final class FleetController extends ChangeNotifier {
   /// [servers] seeds the list until the engine's first [CatalogReplaced].
   /// [sshConfig] is null on platforms without an ssh_config, which hides
-  /// the import (see [sshConfigSourceFor]).
+  /// the import (see [sshConfigSourceFor]). [pinnedServerIds] are the pins
+  /// `settings.json` restored, and [savePins] writes the set back; without
+  /// it, as in most tests, pins are held in memory only.
   FleetController(
     this._engine, {
     List<FleetServer> servers = const [],
     this._sshConfig,
+    Set<String> pinnedServerIds = const {},
+    this._savePins,
   }) : _servers = List.unmodifiable(servers),
-       _serverIds = {for (final server in servers) server.id} {
+       _serverIds = {for (final server in servers) server.id},
+       _pinnedServerIds = Set.unmodifiable(pinnedServerIds) {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
   }
 
@@ -121,6 +139,11 @@ final class FleetController extends ChangeNotifier {
 
   /// The ids [_servers] lists: the only servers statuses are kept for.
   Set<String> _serverIds;
+
+  /// Kept for servers the fleet does not list too, so a pinned server that
+  /// a sync drops and brings back returns pinned, as in Séance.
+  Set<String> _pinnedServerIds;
+  final Future<void> Function(Set<String> ids)? _savePins;
 
   final Map<String, LinkStatus> _linkStatuses = {};
   final Map<String, ReachabilityStatus> _reachability = {};
@@ -165,6 +188,28 @@ final class FleetController extends ChangeNotifier {
 
   /// Whether an import is running; surfaces disable their entry meanwhile.
   bool get isImportingSshConfig => _import != null;
+
+  /// The ids pinned to the top of the list on this device (03 §10.3).
+  /// The list pins synced servers only; see [FleetServer.origin].
+  Set<String> get pinnedServerIds => _pinnedServerIds;
+
+  /// Pins [serverId] to the top of the list; see [_setPins].
+  Future<void> pin(String serverId) =>
+      _setPins({..._pinnedServerIds, serverId});
+
+  /// Takes [serverId] off the pinned shortlist; see [_setPins].
+  Future<void> unpin(String serverId) =>
+      _setPins({..._pinnedServerIds}..remove(serverId));
+
+  /// Applies [ids] at once and saves them. A save that fails rethrows and
+  /// the change stays until the app quits, so the caller can say it was
+  /// not kept. Nothing is saved when [ids] changes nothing.
+  Future<void> _setPins(Set<String> ids) async {
+    if (setEquals(ids, _pinnedServerIds)) return;
+    _pinnedServerIds = Set.unmodifiable(ids);
+    notifyListeners();
+    await _savePins?.call(_pinnedServerIds);
+  }
 
   void select(String? serverId) {
     if (serverId == _selectedServerId) return;

@@ -3,6 +3,26 @@
   "appTitle": "Klabautermann",
   "fleetTitle": "Fleet",
   "fleetSectionServers": "Servers",
+  "fleetSectionPinned": "Pinned",
+  "@fleetSectionPinned": {
+    "description": "Fleet list section header over the synced servers pinned to the top on this device (03 §10.3); drawn in caps."
+  },
+  "fleetSectionImported": "Imported",
+  "@fleetSectionImported": {
+    "description": "Fleet list section header over the servers imported from this device's SSH config (FL-02), listed apart from the synced servers and their groups; drawn in caps."
+  },
+  "fleetRowPin": "Pin to top",
+  "@fleetRowPin": {
+    "description": "A synced fleet row's menu verb that lists the server under the Pinned section on this device."
+  },
+  "fleetRowUnpin": "Unpin",
+  "@fleetRowUnpin": {
+    "description": "A pinned fleet row's menu verb that returns the server to its section."
+  },
+  "fleetPinNotSaved": "Klabautermann could not save your pinned servers, so the change lasts only until it quits.",
+  "@fleetPinNotSaved": {
+    "description": "Top toast when pinning or unpinning a server could not be written to the device's settings file; the change holds for this session."
+  },
   "fleetEmptyTitle": "No servers yet",
   "fleetEmptyBody": "Add a server to start monitoring your fleet.",
   "serversCount": "{count, plural, =0{no servers} =1{1 server} other{{count} servers}}",
