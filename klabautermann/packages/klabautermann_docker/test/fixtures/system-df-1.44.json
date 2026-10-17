@@ -10,7 +10,7 @@
       "Size": 8200000,
       "SharedSize": 0,
       "Labels": {},
-      "Containers": 2
+      "Containers": 4
     },
     {
       "Id": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
@@ -76,8 +76,8 @@
     {
       "Id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
       "Names": ["/job-1"],
-      "Image": "redis:7.4",
-      "ImageID": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+      "Image": "alpine:3.21",
+      "ImageID": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
       "Command": "redis-cli ping",
       "Created": 1780001200,
       "SizeRw": 30000,
@@ -89,8 +89,8 @@
     {
       "Id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
       "Names": ["/init-1"],
-      "Image": "busybox:1.37",
-      "ImageID": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+      "Image": "alpine:3.21",
+      "ImageID": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
       "Command": "true",
       "Created": 1780001300,
       "SizeRw": 400,

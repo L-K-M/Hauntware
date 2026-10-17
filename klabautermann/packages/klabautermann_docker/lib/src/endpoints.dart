@@ -436,7 +436,8 @@ extension DockerEndpoints on DockerClient {
   /// `GET /system/df` (03 §5.8, §7.1 OV-05): per-type totals and
   /// reclaimable space, read through the negotiated shape gate. Slow on
   /// large hosts, so callers fetch it on demand, apart from the lists.
-  /// [type] limits the work to one object type.
+  /// [type] limits the work to one object type; daemons below API 1.42
+  /// ignore it and report every type.
   Future<DockerParseResult<SystemDf>> systemDf({
     SystemDfType? type,
     Duration? timeout,
