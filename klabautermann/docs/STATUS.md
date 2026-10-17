@@ -187,8 +187,18 @@ M2, the host read MVP, is the current milestone. What is on main:
   `Libpod-API-Version` and reports `DockerEndpointState`. Results are
   typed; inspect `Path`/`Args`, `Entrypoint`/`Cmd` and health output
   cross masked, and the list drops its command line. Tested over fakes
-  only; no app surface yet (D12), no `/system/df` (D03), no watch or
-  events (D06), no low-session mode (D09).
+  only; no `/system/df` (D03), no watch or events (D06), no
+  low-session mode (D09).
+- Docker in the app (M3, D12, 03 §5.9, §8.4, §10.2): a Docker controller
+  per engine run asks for each server's endpoint as its link comes up
+  and keeps its `DockerEndpointState`; the server header names the
+  transport in every mode (E4) with SAF-08's engine badge, the
+  low-session indicator (always off until D09) and the runtime the API
+  names (M13). The Docker tab waits, looks or says why no route works
+  (with the Access link and a retry), then shows SAF-08's notice until
+  it is dismissed on the device (`settings.json`), the engine strip
+  (DKE-01) and the Containers, Images and Stacks sub-tabs, still empty
+  (D13, D16, D17). Tested against the fake engine only.
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and
@@ -792,8 +802,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   the detected runtime read-only (CN-09). A tab whose host panels all lack
   a capability the probe answered does not build its panel: a notice in
   its place names what is missing and links to Access, which the desktop
-  selects with focus moved in and a phone pushes. The Docker tab reads
-  "Arrives with Docker support" until M3 (D54). Since K44b turned links
+  selects with focus moved in and a phone pushes. The Docker tab follows
+  its Docker endpoint since M3 (D12, above). Since K44b turned links
   on, the app's engine sends `HostProfileChanged` for a connected server,
   so the rows and the panel gating follow its probe.
 - Localization contract (D35, A11Y-05):

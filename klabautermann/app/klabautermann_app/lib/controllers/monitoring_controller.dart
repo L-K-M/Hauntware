@@ -5,6 +5,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../ui/charts/series_ring.dart';
 import '../ui/charts/time_series.dart';
+import 'docker_controller.dart';
 import 'log_reads.dart';
 import 'log_streams.dart';
 
@@ -144,6 +145,7 @@ final class MonitoringController extends ChangeNotifier {
   }) : _clock = _FreshnessClock(now) {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
     logs = LogStreams(_engine);
+    docker = DockerController(_engine);
   }
 
   /// The log streams panels open, and each server's journal access for
@@ -152,6 +154,11 @@ final class MonitoringController extends ChangeNotifier {
   /// sends every [OpenLogStream] the app sends, [openLogRead]'s included,
   /// since a rejection names no stream.
   late final LogStreams logs;
+
+  /// Each server's Docker endpoint, which the server header names, and
+  /// the engine details the Docker tab shows (03 §5.9, §10.2): a concern
+  /// of its own for this engine run, listening beside [logs].
+  late final DockerController docker;
 
   final EngineClient _engine;
   final Duration _linkGrace;
@@ -627,6 +634,7 @@ final class MonitoringController extends ChangeNotifier {
   void dispose() {
     unawaited(_events.cancel());
     logs.dispose();
+    docker.dispose();
     _onEngineDone();
     for (final refresh in _refreshes.toList()) {
       refresh.finish();
