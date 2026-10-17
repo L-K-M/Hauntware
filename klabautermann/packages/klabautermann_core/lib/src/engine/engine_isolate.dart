@@ -47,9 +47,10 @@ final class EngineStart {
 
   /// Whether the engine opens SSH links (03 §5.1, §10.1). Without them it
   /// has no link supervisor, sampling scheduler, log streams or Docker
-  /// sessions: [Connect], [OpenLogStream] and [DockerQuery] get
-  /// [RequestRejected] and nothing dials, samples or reads,
-  /// [CloseStream], [Disconnect], [RefreshSubscription] and
+  /// sessions: [Connect], [OpenLogStream], [DockerQuery] and
+  /// [DockerWatch] get [RequestRejected] and nothing dials, samples or
+  /// reads, [CloseStream], [DockerUnwatch], [Disconnect],
+  /// [RefreshSubscription] and
   /// [SetAppActivity] change nothing, subscriptions are only recorded,
   /// and no [Prompt] is ever open. The app's composition root leaves
   /// them off; tests turn them on.
@@ -90,7 +91,9 @@ final class EngineStart {
 /// server's link (03 §5.2, §7.6), a [DockerQuery] goes to its server's
 /// Docker session, which finds and negotiates the endpoint over the link
 /// once the probe has answered and reports it as [DockerEndpointState]
-/// (03 §5.8, §5.9), [EnrollSync] and [RunSyncRound] run pull-only sync
+/// (03 §5.8, §5.9), [DockerWatch] and [DockerUnwatch] go to that session,
+/// which follows the engine's events into [DockerListChanged] lists
+/// (03 §7.12), [EnrollSync] and [RunSyncRound] run pull-only sync
 /// one at a time beside the request queue (03 §4.3, D63), answered by
 /// [SyncStatus] and, when they succeed, the fleet,
 /// [AnswerKeystore] completes the keystore call it names ahead of the
@@ -401,6 +404,15 @@ void engineMain(
           case final docker:
             docker.query(message);
         }
+      case DockerWatch():
+        switch (docker) {
+          case null:
+            reject(message, 'links are off in this engine');
+          case final docker:
+            docker.watch(message);
+        }
+      case DockerUnwatch():
+        docker?.unwatch(message);
       case ImportSshConfig(:final text):
         final ({
           List<ImportedHost> hosts,

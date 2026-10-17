@@ -23,6 +23,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
 import 'package:klabautermann_docker/klabautermann_docker.dart'
     show
         ApiVersion,
+        ComposeGrouping,
         ContainerHostConfig,
         ContainerMount,
         ContainerNetworkSettings,
@@ -123,6 +124,12 @@ import '../docker/docker_ladder.dart'
 /// the id and carries a sealed [DockerPayload] of typed, masked values
 /// instead of decoded JSON, and [DockerEndpointState] reports the route,
 /// the runtime as the Docker API names it and the negotiated version.
+///
+/// Docker watches then joined v3 the same way (03 §7.12 DKE-02, CST-01):
+/// [DockerWatch] and [DockerUnwatch] name the lists a view shows and the
+/// containers it wants stats for, and [DockerListChanged] carries each
+/// list as a typed [DockerPayload] in place of the opaque `DockerEvent`
+/// record, which is gone.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -370,6 +377,45 @@ final class DockerQuery extends EngineRequest {
   final String queryId;
 
   final DockerQuerySpec query;
+}
+
+/// Watches [lists] on [serverId]'s engine (03 §7.12 DKE-02, CST-01), as
+/// [DockerListChanged] events, until [DockerUnwatch] or the session
+/// ends. While any watch holds, the engine follows the engine's
+/// `/events` and reads a list again when an event changes it; with
+/// [DockerWatchList.stats] it reads one-shot stats for [statsFor]'s
+/// containers at the list cadence. A watch with a [watchId] the server
+/// already holds replaces it, which is how a view reports the rows it
+/// shows now. Like a [DockerQuery], it opens the server's endpoint, and
+/// it starts once the endpoint is ready. A watch the engine cannot hold
+/// is answered with a [DockerQueryFailed] list for each of its [lists].
+final class DockerWatch extends EngineRequest {
+  const DockerWatch({
+    required this.serverId,
+    required this.watchId,
+    required this.lists,
+    this.statsFor = const {},
+  });
+
+  final String serverId;
+
+  /// The app's own id for the watch, unique per server.
+  final String watchId;
+  final Set<DockerWatchList> lists;
+
+  /// The containers, by id, whose stats [DockerWatchList.stats] reads:
+  /// the rows on screen (CST-01). At most [kDockerStatsForMax].
+  final Set<String> statsFor;
+}
+
+/// Ends the [DockerWatch] [watchId] on [serverId]. The last one ends the
+/// server's `/events` stream and stats reads; ending a watch the server
+/// does not hold does nothing.
+final class DockerUnwatch extends EngineRequest {
+  const DockerUnwatch({required this.serverId, required this.watchId});
+
+  final String serverId;
+  final String watchId;
 }
 
 /// Previews an operation: the engine answers [ActionPlanned] and nothing runs
@@ -810,13 +856,29 @@ final class DockerEndpointState extends EngineEvent {
   DockerRouteLabel get label => route?.rank.label ?? DockerRouteLabel.none;
 }
 
-/// One Docker Engine `/events` record (03 §10.1); kept opaque until the
-/// Docker events model lands in its milestone.
-final class DockerEvent extends EngineEvent {
-  const DockerEvent(this.serverId, this.payload);
+/// [list] on [serverId], as a [DockerWatch] asked for it (03 §7.12
+/// DKE-02, CST-01): the whole list each time, read at [at] by the
+/// engine's clock. The payload is [DockerContainersPayload],
+/// [DockerImagesPayload], [DockerStacksPayload] or [DockerStatsPayload]
+/// by [list], or [DockerQueryFailed] when the read failed.
+final class DockerListChanged extends EngineEvent {
+  const DockerListChanged({
+    required this.serverId,
+    required this.list,
+    required this.payload,
+    required this.at,
+    this.fullRelist = false,
+  });
 
   final String serverId;
-  final Map<String, Object?> payload;
+  final DockerWatchList list;
+  final DockerPayload payload;
+  final DateTime at;
+
+  /// Whether the list was read from nothing rather than after events: a
+  /// watch's first read, or one after the events stream was lost for
+  /// over 60 s or could not resume, so changes in between went unseen.
+  final bool fullRelist;
 }
 
 /// The plan [PlanAction] computed: what would run, in the user's words, and
@@ -1475,7 +1537,31 @@ final class DockerImagesQuery extends DockerQuerySpec {
   const DockerImagesQuery();
 }
 
-/// What a [DockerResult] carries.
+/// A list a [DockerWatch] follows (03 §7.12 to §7.14).
+enum DockerWatchList {
+  /// Every container (CTR-01), as [DockerContainersPayload].
+  containers,
+
+  /// The image list (IMG-01), as [DockerImagesPayload].
+  images,
+
+  /// The containers grouped by compose project (STK-01), as
+  /// [DockerStacksPayload].
+  stacks,
+
+  /// One-shot stats for the watch's `statsFor` (CST-01), as
+  /// [DockerStatsPayload].
+  stats,
+}
+
+/// The most watches one server holds [E]: a Docker view holds one or two.
+const kDockerWatchesMax = 16;
+
+/// The most containers one watch reads stats for [E]: more rows than a
+/// screen shows.
+const kDockerStatsForMax = 64;
+
+/// What a [DockerResult] or [DockerListChanged] carries.
 @immutable
 sealed class DockerPayload {
   const DockerPayload();
@@ -1512,6 +1598,47 @@ final class DockerImagesPayload extends DockerPayload {
   final List<ImageSummary> images;
 }
 
+/// The containers grouped by compose project (STK-01), from the same
+/// list [DockerContainersPayload] carries.
+final class DockerStacksPayload extends DockerPayload {
+  const DockerStacksPayload(this.grouping);
+
+  final ComposeGrouping grouping;
+}
+
+/// One stats round over a watch's `statsFor` (CST-01): a row for each
+/// running container that answered, in no set order.
+final class DockerStatsPayload extends DockerPayload {
+  const DockerStatsPayload(this.stats);
+
+  final List<ContainerListStats> stats;
+}
+
+/// One container's list stats (03 §7.12 CST-01), read at [at] by the
+/// engine's clock.
+@immutable
+final class ContainerListStats {
+  const ContainerListStats({
+    required this.containerId,
+    required this.at,
+    this.cpuPercent,
+    this.memoryUsed,
+    this.memoryLimit,
+  });
+
+  final String containerId;
+  final DateTime at;
+
+  /// CPU % by the spec formula over the time since the previous read,
+  /// so null on a container's first one (one-shot `precpu_stats` is not
+  /// meaningful, 03 §5.6).
+  final double? cpuPercent;
+
+  /// Bytes in use less `inactive_file` (cgroup v2) or the cache (v1).
+  final int? memoryUsed;
+  final int? memoryLimit;
+}
+
 /// The query read nothing, for [failure]; [detail] is the daemon's own
 /// message or the transport error, for diagnostics.
 final class DockerQueryFailed extends DockerPayload {
@@ -1521,7 +1648,7 @@ final class DockerQueryFailed extends DockerPayload {
   final String? detail;
 }
 
-/// Why a [DockerQuery] read nothing.
+/// Why a [DockerQuery] or a watched list read nothing.
 enum DockerQueryFailure {
   /// The server is not in the fleet.
   notInFleet,
@@ -1537,10 +1664,12 @@ enum DockerQueryFailure {
   /// query looks for it again.
   endpointUnavailable,
 
-  /// The server already holds the most queries waiting for its endpoint.
+  /// The server already holds the most queries waiting for its endpoint,
+  /// or the most watches.
   tooManyQueries,
 
-  /// The query names no container.
+  /// The query names no container, or the watch names more stats
+  /// containers than [kDockerStatsForMax].
   invalidQuery,
 
   /// The object is gone (404); a list query shows what remains.
