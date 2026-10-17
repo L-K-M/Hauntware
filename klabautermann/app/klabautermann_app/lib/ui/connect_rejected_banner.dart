@@ -10,8 +10,9 @@ const double _bannerMaxShare = 0.2;
 
 /// On a server's workspace or screen, why the engine could not connect it
 /// ([MonitoringController.connectRejections], D61): it has no config to
-/// dial with, and what the user can do about it. It shows until the next
-/// connect of the server, which a new import sends.
+/// dial with or its endpoint is not confirmed, and what the user can do
+/// about it. It shows until the next connect of the server, which a new
+/// import or confirmation sends.
 class ConnectRejectedBanner extends StatelessWidget {
   const ConnectRejectedBanner({
     super.key,
@@ -58,6 +59,8 @@ class ConnectRejectedBanner extends StatelessWidget {
                             l10n.connectRejectedNoLoginName,
                           ConnectRejectedReason.addressOnlyImport =>
                             l10n.connectRejectedAddressOnly,
+                          ConnectRejectedReason.endpointNotConfirmed =>
+                            l10n.connectRejectedEndpointNotConfirmed,
                         },
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: colors.onErrorContainer,

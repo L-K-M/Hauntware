@@ -3286,6 +3286,12 @@ abstract class AppLocalizations {
   /// **'You can\'t connect to this server yet: it comes from an earlier import that kept only its address. Import your SSH config again to connect.'**
   String get connectRejectedAddressOnly;
 
+  /// Banner on a server's workspace or screen when the engine will not connect a synced server because its endpoint (host, port, user, jump route) is not confirmed on this device or changed since (03 §4.7, SAF-09). The user confirms it from the notice over the fleet list, whose button is endpointsReview.
+  ///
+  /// In en, this message translates to:
+  /// **'You can\'t connect to this server yet: its address comes from your sync account and isn\'t confirmed on this device, or it changed since you confirmed it. Choose Review over the server list to check and confirm it.'**
+  String get connectRejectedEndpointNotConfirmed;
+
   /// Heading of the accessibility settings on the General settings tab.
   ///
   /// In en, this message translates to:

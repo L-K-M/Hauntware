@@ -3,11 +3,15 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:meta/meta.dart';
-import 'package:seance_core/seance_core.dart' show ImportedHost, SshLink;
+import 'package:seance_core/catalog.dart'
+    show EndpointPin, endpointPinsFileName;
+import 'package:seance_core/seance_core.dart'
+    show ImportedHost, ServerConfig, SshLink;
 
 import '../capabilities/capability_cache.dart';
 import '../catalog/engine_sync.dart';
 import '../catalog/keystore_channel.dart';
+import '../fleet/endpoint_pins.dart';
 import '../fleet/imported_fleet.dart';
 import '../fleet/ssh_config_entries.dart';
 import '../fleet/ssh_config_import_store.dart';
@@ -87,7 +91,11 @@ final class EngineStart {
 /// [CloseStream] go to the log streams, which read each window over its
 /// server's link (03 §5.2, §7.6), [EnrollSync] and [RunSyncRound] run
 /// pull-only sync one at a time beside the request queue (03 §4.3, D63),
-/// answered by [SyncStatus] and, when they succeed, the fleet,
+/// answered by [SyncStatus] and, when they succeed, the fleet, after an
+/// [EndpointChanged] for each confirmed endpoint a round changed (03
+/// §4.7), [ConfirmEndpoints] pins synced endpoints and answers with the
+/// fleet, a [Connect] to an unconfirmed synced server gets
+/// [ConnectRejected],
 /// [AnswerKeystore] completes the keystore call it names ahead of the
 /// queue, [Shutdown] ends every log stream and exits, and every other
 /// 03 §10.1 row gets [RequestRejected] until its milestone lands.
@@ -138,12 +146,26 @@ void engineMain(
 
   // The fleet the engine serves: the sync account's servers, then the
   // imports, with the config of each import and hop it can dial, and its
-  // server ids. Synced servers get no config until their endpoints are
-  // confirmed (03 §4.7, K41).
-  var synced = const <FleetEntry>[];
+  // server ids. A synced server has a config only while its endpoint is
+  // confirmed on this device (03 §4.7, SAF-09), so neither the user nor
+  // a background connect dials it otherwise. Imports count as confirmed
+  // on the device that imported them (03 §4.3, owner question O6's
+  // default).
+  var syncedServers = const <ServerConfig>[];
+  var synced = SyncedFleet.empty;
   late ImportedFleet fleet;
   var fleetIds = <String>{};
-  List<FleetEntry> fleetEntries() => [...synced, ...fleet.entries];
+  List<FleetEntry> fleetEntries() => [...synced.entries, ...fleet.entries];
+  ServerConfig? configOf(String id) =>
+      synced.serverConfig(id) ?? fleet.serverConfig(id);
+
+  // The endpoints this device confirmed (D16): `endpoint_pins.json` while
+  // the process holds the support directory alone, otherwise memory only.
+  // One store for the engine's lifetime, as for the host-key pins.
+  final endpointPins = openEndpointPins(
+    start.supportDirectory,
+    access: start.supportDirectoryAccess,
+  );
 
   // The OS keystore, which the app answers (D62), and pull-only sync,
   // opened with the import store.
@@ -177,12 +199,11 @@ void engineMain(
             ),
             hostKeys: hostKeys,
             prompts: prompts,
-            hopConfig: (id) => fleet.serverConfig(id),
+            hopConfig: configOf,
             dial: dial,
           ).connect,
           // Fleet entries only: the fleet's hop configs serve their routes.
-          configFor: (id) =>
-              fleetIds.contains(id) ? fleet.serverConfig(id) : null,
+          configFor: (id) => fleetIds.contains(id) ? configOf(id) : null,
           emit: (event) {
             uiPort.send(event);
             if (event is LinkState) {
@@ -236,6 +257,52 @@ void engineMain(
     );
   }
 
+  // Lists [servers] against this device's pins. A pin the store cannot
+  // read counts as none, so its server waits to be confirmed.
+  Future<SyncedFleet> listSynced(List<ServerConfig> servers) async {
+    final pins = <String, EndpointPin>{};
+    for (final server in servers) {
+      try {
+        if (await endpointPins.pinFor(server.id) case final pin?) {
+          pins[server.id] = pin;
+        }
+      } on Object {
+        continue;
+      }
+    }
+    return SyncedFleet(servers, pins: pins);
+  }
+
+  // Takes [next] as the synced fleet. A server the engine could dial, and
+  // no longer may although the account still holds it, had its endpoint
+  // changed by a sync (03 §4.7, SYN-08): the app hears it, its link and
+  // log streams close, and its cached profile goes, which describes
+  // another machine. Nothing redials it until the user confirms it again.
+  void applySynced(SyncedFleet next) {
+    final changed = {
+      for (final id in synced.confirmedIds)
+        if (next.lists(id) && !next.confirmedIds.contains(id)) id,
+    };
+    synced = next;
+    refreshFleet();
+    for (final id in changed) {
+      uiPort.send(EndpointChanged(id));
+      logs?.disconnect(id);
+      links?.disconnect(id);
+    }
+    if (changed.isNotEmpty) unawaited(capabilities?.forget(changed));
+  }
+
+  // Lists the synced servers again with the pins as they stand. A
+  // confirmation in the request queue and a sync round beside it both
+  // relist; one whose servers a round replaced while it read the pins
+  // leaves the fleet to that round's own relist, which reads them later.
+  Future<void> relistSynced() async {
+    final servers = syncedServers;
+    final next = await listSynced(servers);
+    if (identical(servers, syncedServers)) applySynced(next);
+  }
+
   // A server's cached profile goes out when a request first names it,
   // since the startup events reach only the app's first listener.
   void sendCachedProfile(String serverId) {
@@ -263,8 +330,8 @@ void engineMain(
         status = await body();
         // The fleet first, so it shows the servers when the answer arrives.
         if (status.phase == SyncPhase.succeeded) {
-          synced = syncedFleetEntries(await sync.servers());
-          refreshFleet();
+          syncedServers = await sync.servers();
+          await relistSynced();
         }
       } on Object catch (error) {
         // EngineSync answers every failure itself; this keeps the chain
@@ -328,7 +395,8 @@ void engineMain(
           // A fleet server without a config is the user's to fix, so the
           // app is told why; any other id is not a server it lists.
           switch (fleetIds.contains(serverId)
-              ? fleet.missingConfigReason(serverId)
+              ? synced.missingConfigReason(serverId) ??
+                    fleet.missingConfigReason(serverId)
               : null) {
             case final reason?:
               uiPort.send(ConnectRejected(serverId, reason));
@@ -408,6 +476,24 @@ void engineMain(
             saved: saved,
           ),
         );
+      case ConfirmEndpoints(:final serverIds):
+        // Each pin is saved before it counts. One that cannot be saved
+        // leaves its server unconfirmed, and the app is told before the
+        // fleet, so the fleet's answer ends the request either way; the
+        // others still count.
+        Object? failure;
+        for (final pin in synced.pinsFor(serverIds, DateTime.now())) {
+          try {
+            await endpointPins.confirm(pin);
+          } on Object catch (error) {
+            failure ??= error;
+          }
+        }
+        if (failure != null) {
+          reject(message, '$endpointPinsFileName not saved: $failure');
+        }
+        await relistSynced();
+        uiPort.send(CatalogReplaced(fleetEntries()));
       case EnrollSync():
         runSync(SyncOperation.enroll, () => sync.enroll(message));
       case RunSyncRound():
@@ -455,7 +541,8 @@ void engineMain(
           keystore: keystore,
           transport: syncTransport,
         );
-        synced = syncedFleetEntries(await sync.servers());
+        syncedServers = await sync.servers();
+        synced = await listSynced(syncedServers);
         refreshFleet();
         capabilities = await CapabilityCache.open(
           Directory(start.supportDirectory),
@@ -469,6 +556,16 @@ void engineMain(
             ImportStoreIssueKind.recovered || null => CachePurge.removedServers,
           },
         );
+        // Only a confirmed endpoint is dialed, so a profile cached for a
+        // synced server not confirmed now describes another machine.
+        final unconfirmed = {
+          for (final entry in synced.entries)
+            if (entry.endpoint != EndpointConfirmation.confirmed)
+              entry.serverId,
+        };
+        if (unconfirmed.isNotEmpty) {
+          unawaited(capabilities!.forget(unconfirmed));
+        }
       });
   commands.listen((message) {
     // Answered at once rather than queued: the sync operation that asked

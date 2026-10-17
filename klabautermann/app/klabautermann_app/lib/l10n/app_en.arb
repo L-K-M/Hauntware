@@ -2986,6 +2986,10 @@
   "@connectRejectedAddressOnly": {
     "description": "Banner on a server's workspace or screen when the engine cannot connect it because the saved import predates the format that keeps sign-in and jump-host details (03 §4.10, schema 1 or 2; D61). A new import of the SSH config fixes it."
   },
+  "connectRejectedEndpointNotConfirmed": "You can't connect to this server yet: its address comes from your sync account and isn't confirmed on this device, or it changed since you confirmed it. Choose Review over the server list to check and confirm it.",
+  "@connectRejectedEndpointNotConfirmed": {
+    "description": "Banner on a server's workspace or screen when the engine will not connect a synced server because its endpoint (host, port, user, jump route) is not confirmed on this device or changed since (03 §4.7, SAF-09). The user confirms it from the notice over the fleet list, whose button is endpointsReview."
+  },
   "settingsAccessibilityTitle": "Accessibility",
   "@settingsAccessibilityTitle": {
     "description": "Heading of the accessibility settings on the General settings tab."

@@ -2441,6 +2441,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'You can\'t connect to this server yet: it comes from an earlier import that kept only its address. Import your SSH config again to connect.';
 
   @override
+  String get connectRejectedEndpointNotConfirmed =>
+      'You can\'t connect to this server yet: its address comes from your sync account and isn\'t confirmed on this device, or it changed since you confirmed it. Choose Review over the server list to check and confirm it.';
+
+  @override
   String get settingsAccessibilityTitle => 'Accessibility';
 
   @override
