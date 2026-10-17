@@ -176,7 +176,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   maths.
 - Docker transport (M3, D04, 03 §5.3, §5.9): `klabautermann_core`'s
   `DockerLadder.resolve` picks rank 1 (streamlocal), 2 (`dial-stdio`
-  with `--host`, Podman's `--url`) or 4 (socat, then `nc -U`), with one
+  with `--host`, Podman's `--url`) or 4 (socat, then `nc -U` when the
+  probe's `nc -h` lists `-U`, which BusyBox's does not), with one
   exec probe per refused socket telling missing, denied and disabled
   apart; rank 3 says "needs admin mode" until M4. The streamlocal and
   relay-process duplexes are tested over fakes only.
@@ -230,8 +231,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   `DockerEndpointState.lowSession`, on streamlocal too; a new link ends
   it. A failed endpoint (unreachable, link error) is looked for again
   while a watch holds, after 5 s doubling to 2 min. Tested over fakes
-  only at learned limits of 2 to 4; D22 checks `MaxSessions 2` on a
-  real sshd, and the app shows no mode yet (D12).
+  at learned limits of 2 to 4 and on a real `MaxSessions 2` (D22,
+  below); the app shows no mode yet (D12).
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and
@@ -1186,6 +1187,26 @@ M2, the host read MVP, is the current milestone. What is on main:
   `vault` service and a dangling image. D20's own HTTP client is
   confirmed; `dart:io`'s is not re-run (M1). Locally the suite takes
   about 46 s.
+- Docker fallback on the negative variants (M3, D22, 03 §5.2, §5.9,
+  §11.3, exits E3 and E4): `docker_fallback_test.dart` (tags
+  `integration`, `docker`) runs the real engine on each variant. The
+  five that refuse streamlocal land on rank 2, labelled `cliRelay`
+  ("via docker CLI relay (limited streams)"), where the container list,
+  a log follow with no line lost, stats with CPU % from the second
+  round and a `docker run` listed through the events stream in about
+  0.1 s all work. `MaxSessions 2` keeps rank 1: the first stack check's
+  session is refused, the link learns 2 and `lowSession` is set; the
+  events stream and a container follow carry on, a host follow waits
+  for a channel, and since the two samplers hold both sessions the
+  stack checks read "check failed" after the link's 15 s open timeout.
+  `klab-nocli`, a new Docker-host account in the `docker` group whose
+  `PATH` has no CLI, socat or `nc -U`, lands on none with `noRelay`.
+  Two engine fixes came with it: the ladder offers `nc -U` only for an
+  `nc` that lists `-U` (BusyBox's left that account "unreachable"), and
+  a short action refused at `MaxSessions` runs again while the learned
+  limit tightens. Rank 4 is not exercised: the fixture has no socat.
+  Each variant's route, label and timings go to `fixture/fallback/` in
+  the evidence. Locally the suite takes about 55 s.
 - Desktop settings window (03 §10.2, D32): on macOS, Linux and Windows,
   Settings opens in a native window of its own through `ghost_desktop`'s
   `GhostSettingsWindowHost`; phones, and a desktop runner that cannot

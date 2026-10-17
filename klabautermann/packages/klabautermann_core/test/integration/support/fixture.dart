@@ -26,6 +26,9 @@ String aliasServer(int i) => 'ssh-config:alias-$i';
 const dockerServer = 'ssh-config:docker';
 const noSocketServer = 'ssh-config:docker-nosock';
 
+/// The fleet alias [FixtureEngine.startDockerVariant] imports.
+const variantServer = 'ssh-config:variant';
+
 /// The Compose services of klabautermann/test/integration.
 enum FixtureService {
   /// The sampled host, published on loopback and reached by the jump host
@@ -389,6 +392,35 @@ final class FixtureEngine {
         hosts: 2,
         evidenceDirectory: fixture._evidenceDirectory,
       );
+
+  /// Starts an engine as [start] does that imports one host,
+  /// [variantServer]: [service], one of the Docker host's sshd services,
+  /// as [user] with the key file. Returns it with the host-key
+  /// fingerprints [connect] trusts at that endpoint.
+  static Future<(FixtureEngine, Map<Endpoint, Set<String>>)> startDockerVariant(
+    Fixture fixture,
+    String name,
+    FixtureService service, {
+    required String user,
+  }) async {
+    final endpoint = await fixture.endpoint(service);
+    final hostKeys = {endpoint: await fixture.hostKeyFingerprints(service)};
+    final engine = await launch(
+      name: name,
+      runtimeDirectory: fixture._runtimeDirectory,
+      sshConfig:
+          '''
+Host variant
+  HostName ${endpoint.host}
+  Port ${endpoint.port}
+  User $user
+  IdentityFile ${fixture.identityFile}
+''',
+      hosts: 1,
+      evidenceDirectory: fixture._evidenceDirectory,
+    );
+    return (engine, hostKeys);
+  }
 
   /// Starts an engine through [entryPoint], which wraps the engine's own
   /// (`link_meter.dart`), and imports [count] aliases of the sampled host

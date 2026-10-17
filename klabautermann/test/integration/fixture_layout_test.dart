@@ -126,6 +126,24 @@ void main() {
     ]);
   });
 
+  test("the no-CLI account's login shell leaves the CLI off its PATH", () {
+    // docker_fallback_test.dart's account with no relay (M3 D22).
+    const shell = '/usr/local/libexec/fixture-nocli-shell';
+    expect(
+      read('klabautermann/test/integration/sshd/Dockerfile.docker'),
+      contains('COPY nocli-shell.sh $shell'),
+    );
+    final setup = read('klabautermann/test/integration/sshd/docker-setup.sh');
+    expect(setup, contains("readonly nocli_shell='$shell'"));
+    expect(setup, contains('add_account "\$nocli_user" "\$nocli_shell"'));
+    final path = RegExp(r'^PATH=(\S+)$', multiLine: true)
+        .firstMatch(read('klabautermann/test/integration/sshd/nocli-shell.sh'))!
+        .group(1)!
+        .split(':');
+    expect(path, isNot(contains('/usr/local/bin')));
+    expect(path, contains('/usr/bin'));
+  });
+
   test('the jump host forwards ahead of the common config', () {
     // sshd keeps the first value it reads (sshd_config(5)): the common
     // config's refusal would win over a later line.
