@@ -261,9 +261,15 @@ void engineMain(
       final SyncStatus status;
       try {
         status = await body();
+        // The fleet first, so it shows the servers when the answer arrives.
+        if (status.phase == SyncPhase.succeeded) {
+          synced = syncedFleetEntries(await sync.servers());
+          refreshFleet();
+        }
       } on Object catch (error) {
         // EngineSync answers every failure itself; this keeps the chain
-        // alive should that ever slip.
+        // alive should that, or the fleet refresh, ever slip: a chained
+        // operation runs only after the one before it completes normally.
         uiPort.send(
           SyncStatus(
             SyncPhase.failed,
@@ -275,10 +281,7 @@ void engineMain(
         );
         return;
       }
-      // The fleet first, so it shows the servers when the answer arrives.
       if (status.phase == SyncPhase.succeeded) {
-        synced = syncedFleetEntries(await sync.servers());
-        refreshFleet();
         uiPort.send(CatalogReplaced(fleetEntries()));
       }
       uiPort.send(status);

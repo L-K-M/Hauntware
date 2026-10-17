@@ -228,7 +228,12 @@ final class EngineSync {
       return _failed(operation, SyncFailure.otherAccount, null);
     }
 
-    final api = _transport(baseUrl);
+    final SyncTransport api;
+    try {
+      api = _transport(baseUrl);
+    } on Object catch (error) {
+      return _failedWith(operation, error);
+    }
     try {
       final credentials = KeystoreSyncCredentialStore(
         keystore: _keystore,

@@ -36,7 +36,8 @@ void main() {
       ..nextPullError = null
       ..unreachable = null
       ..pushes = 0
-      ..transports = 0;
+      ..transports = 0
+      ..clearRecords();
   });
 
   tearDown(() => support.deleteSync(recursive: true));

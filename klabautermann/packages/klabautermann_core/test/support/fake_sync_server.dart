@@ -49,6 +49,12 @@ final class FakeSyncServer {
   var pushes = 0;
   var transports = 0;
 
+  /// Forgets the seeded records, so each test starts from an empty account.
+  void clearRecords() {
+    _records.clear();
+    _seq = 0;
+  }
+
   /// Seals [server] as a `serverConfig` record under the account key and
   /// seeds it.
   Future<void> seedServer(ServerConfig server, {int updatedAt = 1}) async {

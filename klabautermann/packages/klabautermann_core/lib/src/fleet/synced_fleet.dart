@@ -51,5 +51,10 @@ List<String>? _jumpRoute(ServerConfig server, Map<String, ServerConfig> byId) {
     hops.add(hop?.label ?? next);
     next = hop?.jumpHostId;
   }
-  return hops.isEmpty ? null : List.unmodifiable(hops.reversed);
+  // A server that names itself as its jump host adds no hop above, yet
+  // its route is broken, not direct.
+  if (hops.isEmpty) {
+    return server.jumpHostId == null ? null : List.unmodifiable([server.label]);
+  }
+  return List.unmodifiable(hops.reversed);
 }

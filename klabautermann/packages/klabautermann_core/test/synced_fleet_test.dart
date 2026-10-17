@@ -68,6 +68,7 @@ void main() {
       _server('lost', jumpHostId: 'gone'),
       _server('x', jumpHostId: 'y'),
       _server('y', jumpHostId: 'x'),
+      _server('self', jumpHostId: 'self'),
     ]);
 
     expect(
@@ -79,6 +80,7 @@ void main() {
         'lost': ['gone'],
         'x': ['label-y'],
         'y': ['label-x'],
+        'self': ['label-self'],
       },
     );
   });
