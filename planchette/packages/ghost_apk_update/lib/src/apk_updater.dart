@@ -21,7 +21,7 @@ class ApkRelease {
   /// The size in bytes the release publishes.
   final int size;
 
-  /// The published SHA-256 digest as lower-case hex.
+  /// The published SHA-256 digest as hex, in either case.
   final String sha256;
 
   @override
@@ -230,7 +230,7 @@ class ApkUpdater extends ChangeNotifier {
       hash.close();
 
       if (received != release.size ||
-          digest.value.toString() != release.sha256) {
+          digest.value.toString() != release.sha256.toLowerCase()) {
         throw const _VerificationFailed();
       }
       return await partial.rename(apk.path);

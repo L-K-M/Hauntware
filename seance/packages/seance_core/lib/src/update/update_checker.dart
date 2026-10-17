@@ -150,9 +150,9 @@ class UpdateChecker {
   /// is left out rather than failing the check.
   static Map<String, ReleaseAsset> _assets(Object? json) {
     if (json is! List) return const {};
-    return {
+    return Map.unmodifiable({
       for (final entry in json)
         if (ReleaseAsset.tryParse(entry) case final asset?) asset.name: asset,
-    };
+    });
   }
 }

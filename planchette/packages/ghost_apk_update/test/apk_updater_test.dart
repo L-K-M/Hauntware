@@ -243,11 +243,26 @@ void main() {
   test('a second Install while one opens does not stack installers', () async {
     final updater = ApkUpdater(client: serving(apkBytes), installer: installer);
     await updater.update(release);
-    expect(installer.installed, hasLength(1));
+    installer.installed.clear();
 
+    // A double tap on Install: the second call lands mid-attempt.
     await Future.wait([updater.update(release), updater.update(release)]);
 
-    expect(installer.installed, hasLength(2));
+    expect(installer.installed, hasLength(1));
+  });
+
+  test('an upper-case published digest still verifies', () async {
+    final updater = ApkUpdater(client: serving(apkBytes), installer: installer);
+
+    await updater.update(
+      ApkRelease(
+        url: release.url,
+        size: release.size,
+        sha256: release.sha256.toUpperCase(),
+      ),
+    );
+
+    expect(updater.state, isA<ApkUpdateReady>());
   });
 
   test('a missing plugin is an installer failure, not an escape', () async {

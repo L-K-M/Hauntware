@@ -91,6 +91,8 @@ void main() {
           asset('seance-android.apk'),
           asset('no-digest.apk', digest: null),
           asset('md5.apk', digest: 'md5:0123'),
+          asset('short.apk', digest: 'sha256:${digest.substring(1)}'),
+          asset('not-hex.apk', digest: 'sha256:${'g' * 64}'),
           asset('plain-http.apk', url: 'http://example.com/a.apk'),
           asset('empty.apk', size: 0),
           'not an asset',
@@ -107,12 +109,20 @@ void main() {
           'seance-android.apk');
       expect(apk.size, 74211084);
       expect(apk.sha256, digest.toLowerCase());
+      // A caller cannot edit the check's answer in place.
+      expect(() => info.assets.clear(), throwsUnsupportedError);
     });
 
-    test('a release without assets reports none', () async {
-      final checker = checkerReturning(
-          jsonEncode({'tag_name': 'v0.3.0', 'assets': 'garbage'}));
-      expect((await checker.check('0.2.0'))!.assets, isEmpty);
+    test('a release without assets, or with malformed ones, reports none',
+        () async {
+      for (final release in [
+        {'tag_name': 'v0.3.0'},
+        {'tag_name': 'v0.3.0', 'assets': []},
+        {'tag_name': 'v0.3.0', 'assets': 'garbage'},
+      ]) {
+        final info = await checkerReturning(jsonEncode(release)).check('0.2.0');
+        expect(info!.assets, isEmpty);
+      }
     });
 
     test('reports nothing when up to date', () async {
