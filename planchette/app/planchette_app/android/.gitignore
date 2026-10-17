@@ -1,0 +1,15 @@
+gradle-wrapper.jar
+/.gradle
+/captures/
+/gradlew
+/gradlew.bat
+/local.properties
+GeneratedPluginRegistrant.java
+.cxx/
+
+# Private signing keys stay ignored. The release key is deliberately public,
+# matching Séance and Poltergeist's stable sideload identity.
+key.properties
+**/*.keystore
+**/*.jks
+!app/ci-release.jks

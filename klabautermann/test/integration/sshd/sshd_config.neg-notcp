@@ -1,0 +1,6 @@
+# A negative variant of the Docker host (03 §5.3, §11.3; M3 D11): local
+# TCP forwarding off, streamlocal left at its default. The common config
+# sets the same value; it is spelled out so the variant does not hang on
+# a shared file's line.
+AllowTcpForwarding no
+Include /etc/ssh/fixture/sshd_config.common
