@@ -22,14 +22,19 @@ final class SyncedFleet {
     this._byId,
     this._routes,
     this._pins,
+    this._unreadable,
     this.confirmedIds,
+    this.unreadableIds,
   );
 
   /// Lists [servers] against the endpoints this device confirmed, [pins]
-  /// by server id.
+  /// by server id. [unreadable] names the servers whose pins the store
+  /// could not read: they count as unpinned, so nothing dials them, but
+  /// a server behind or at one is in [unreadableIds].
   factory SyncedFleet(
     List<ServerConfig> servers, {
     Map<String, EndpointPin> pins = const {},
+    Set<String> unreadable = const {},
   }) {
     final byId = {for (final server in servers) server.id: server};
     final routes = {
@@ -87,9 +92,16 @@ final class SyncedFleet {
       byId,
       routes,
       Map.unmodifiable(pins),
+      Set.unmodifiable(unreadable),
       Set.unmodifiable({
         for (final MapEntry(key: id, value: state) in states.entries)
           if (state == EndpointConfirmation.confirmed) id,
+      }),
+      Set.unmodifiable({
+        for (final server in servers)
+          if (unreadable.contains(server.id) ||
+              routes[server.id]!.any(unreadable.contains))
+            server.id,
       }),
     );
   }
@@ -108,14 +120,24 @@ final class SyncedFleet {
 
   final Map<String, EndpointPin> _pins;
 
+  /// The ids whose pins the store could not read.
+  final Set<String> _unreadable;
+
   /// The servers whose endpoints are confirmed, the only ones dialed.
   final Set<String> confirmedIds;
+
+  /// The servers whose own pin, or a jump host's on their route, the
+  /// store could not read, so whether their endpoint changed is unknown.
+  /// None is in [confirmedIds].
+  final Set<String> unreadableIds;
 
   /// Whether the account holds the server [id].
   bool lists(String id) => _byId.containsKey(id);
 
   /// The config of the synced server or jump host [id] while its endpoint
-  /// is confirmed; null otherwise, so nothing dials it.
+  /// is confirmed; null otherwise, so nothing dials it. Safe because a
+  /// sync never drops a pin: a changed server leaves [confirmedIds] while
+  /// its old pin stays, and [pinsFor] never replaces a hop's pin.
   ServerConfig? serverConfig(String id) =>
       confirmedIds.contains(id) ? _byId[id] : null;
 
@@ -131,7 +153,8 @@ final class SyncedFleet {
   /// route that this device never confirmed. A hop confirmed before keeps
   /// its pin: when a sync changed it, it waits for its own confirmation,
   /// so confirming a server behind it never accepts the hop's new
-  /// endpoint unseen. Ids the account does not hold, and servers no pin
+  /// endpoint unseen. A hop whose pin the store could not read counts as
+  /// pinned, for the same reason. Ids the account does not hold, and servers no pin
   /// can describe (an empty host or hop id, a port out of range), are
   /// skipped.
   List<EndpointPin> pinsFor(Iterable<String> ids, DateTime now) {
@@ -157,7 +180,7 @@ final class SyncedFleet {
       if (!lists(id)) continue;
       add(id);
       for (final hop in _routes[id]!) {
-        if (!_pins.containsKey(hop)) add(hop);
+        if (!_pins.containsKey(hop) && !_unreadable.contains(hop)) add(hop);
       }
     }
     return List.unmodifiable(pins.values);

@@ -137,13 +137,13 @@ class _EndpointConfirmationDialogState
           overlay,
           message: l10n.endpointsConfirmed(serverIds.length),
         );
+      // In both, the toggles stay, so trying again is one press; the
+      // selection counts only the rows the fleet still lists.
       case EndpointConfirmResult.stillPending:
         setState(() {
-          _selected.removeAll(serverIds);
           _busy = false;
           _error = l10n.endpointsStillPending;
         });
-      // The toggles stay, so trying again is one press.
       case EndpointConfirmResult.failed:
         setState(() {
           _busy = false;
@@ -181,7 +181,14 @@ class _EndpointConfirmationDialogState
         const SizedBox(height: 16),
         TextField(
           controller: _search,
-          autofocus: true,
+          // On a touch device focus would raise the keyboard over the
+          // rows the list is for; a desktop keeps keyboard-first focus.
+          autofocus: switch (theme.platform) {
+            TargetPlatform.macOS ||
+            TargetPlatform.linux ||
+            TargetPlatform.windows => true,
+            _ => false,
+          },
           autocorrect: false,
           decoration: InputDecoration(
             labelText: l10n.endpointsSearch,
@@ -255,8 +262,10 @@ class _EndpointConfirmationDialogState
       // On a short screen (a landscape phone at large text) the actions
       // scroll with the rows, which they would otherwise squeeze to
       // nothing; elsewhere they stay in view under one scroll for the
-      // text, the search and the rows (A11Y-09).
-      return LayoutBuilder(
+      // text, the search and the rows (A11Y-09). While a confirmation
+      // runs, Back and the barrier leave the list open, so its answer
+      // still shows here; Close stays the way out should it never come.
+      final body = LayoutBuilder(
         builder: (context, box) {
           const padding = EdgeInsets.fromLTRB(24, 24, 24, 8);
           if (box.maxHeight < _pinnedActionsMinHeight) {
@@ -282,6 +291,7 @@ class _EndpointConfirmationDialogState
           );
         },
       );
+      return PopScope(canPop: !_busy, child: body);
     },
   );
 }

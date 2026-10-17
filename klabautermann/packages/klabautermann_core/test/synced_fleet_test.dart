@@ -174,13 +174,42 @@ void main() {
       expect(edgePin.jumpRouteIds, isEmpty);
       expect(webPin.confirmedAt, at);
 
-      final moved = SyncedFleet([
-        edge.copyWith(host: 'moved.example.com'),
-        web,
-      ], pins: pinsOf([edge, web]));
+      // A sync moved the hop after both were confirmed: its old pin
+      // stays, and confirming the server behind it again neither re-pins
+      // the hop nor makes the server dialable through the moved hop.
+      final old = pinsOf([edge, web]);
+      final movedEdge = edge.copyWith(host: 'moved.example.com');
+      final moved = SyncedFleet([movedEdge, web], pins: old);
+      final again = moved.pinsFor(['web'], at);
+      expect([for (final pin in again) pin.serverId], ['web']);
+
+      final after = SyncedFleet(
+        [movedEdge, web],
+        pins: {...old, for (final pin in again) pin.serverId: pin},
+      );
+      expect(states(after), {
+        'edge': EndpointConfirmation.changed,
+        'web': EndpointConfirmation.changed,
+      });
+      expect(after.serverConfig('web'), isNull);
+      expect(after.serverConfig('edge'), isNull);
+    });
+
+    test('a pin the store could not read fails closed, marks the servers '
+        'behind it, and is never replaced', () {
+      final pins = pinsOf([edge, web])..remove('edge');
+      final fleet = SyncedFleet(
+        [edge, web, _server('solo')],
+        pins: pins,
+        unreadable: {'edge'},
+      );
+
+      expect(fleet.confirmedIds, isEmpty);
+      expect(fleet.serverConfig('web'), isNull);
+      expect(fleet.unreadableIds, {'edge', 'web'});
       expect(
         [
-          for (final pin in moved.pinsFor(['web'], at)) pin.serverId,
+          for (final pin in fleet.pinsFor(['web'], at)) pin.serverId,
         ],
         ['web'],
       );

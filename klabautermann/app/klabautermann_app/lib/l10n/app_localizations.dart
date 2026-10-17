@@ -3295,7 +3295,7 @@ abstract class AppLocalizations {
   /// Notice over the fleet list while synced servers wait for endpoint confirmation on this device (03 §4.3 step 3, SAF-09): new from the sync account, or changed since they were confirmed.
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, =1{1 synced server waits for you to confirm its address.} other{{count} synced servers wait for you to confirm their addresses.}}'**
+  /// **'{count, plural, one{{count} synced server waits for you to confirm its address.} other{{count} synced servers wait for you to confirm their addresses.}}'**
   String endpointsPendingNotice(int count);
 
   /// Button on endpointsPendingNotice that opens the endpoint confirmation list.
@@ -3361,13 +3361,13 @@ abstract class AppLocalizations {
   /// Main button of the endpoint confirmation list: confirms the rows whose toggles are on; disabled while none is.
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, =0{Confirm selected} =1{Confirm 1 server} other{Confirm {count} servers}}'**
+  /// **'{count, plural, =0{Confirm selected} one{Confirm {count} server} other{Confirm {count} servers}}'**
   String endpointsConfirmSelected(int count);
 
   /// Toast after the confirmed servers left the list; Klabautermann may now connect to them.
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, =1{Confirmed 1 server address.} other{Confirmed {count} server addresses.}}'**
+  /// **'{count, plural, one{Confirmed {count} server address.} other{Confirmed {count} server addresses.}}'**
   String endpointsConfirmed(int count);
 
   /// Under the endpoint confirmation list when a confirmed server stays listed because a jump host on its route changed and needs its own confirmation (D64).

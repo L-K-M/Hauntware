@@ -4,10 +4,11 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/capabilities/capability_cache.dart';
 import 'package:klabautermann_core/src/engine/engine_isolate.dart';
 import 'package:klabautermann_core/src/fleet/endpoint_pins.dart';
 import 'package:seance_core/catalog.dart'
-    show EndpointPin, FileEndpointPinStore;
+    show EndpointPin, EndpointPinStore, FileEndpointPinStore;
 import 'package:seance_core/seance_core.dart' show ServerConfig;
 import 'package:test/test.dart';
 
@@ -16,6 +17,29 @@ import 'support/fake_sync_server.dart';
 
 const _deviceId = '6f1c2f0e-3c5e-4d7a-9b1e-0a2b3c4d5e6f';
 const _srv = 'srv-a';
+
+/// A synced id the capability cache names a file for (a UUID).
+const _uuid = '0b5e7c1a-2d3f-4a6b-8c9d-0e1f2a3b4c5d';
+
+/// Endpoint pins whose reads fail while [failReads] is set, as the file
+/// store's do when it cannot read `endpoint_pins.json`.
+final class _FlakyPins implements EndpointPinStore {
+  _FlakyPins(this._inner);
+
+  final EndpointPinStore _inner;
+  bool failReads = false;
+
+  @override
+  Future<EndpointPin?> pinFor(String serverId) => failReads
+      ? Future.error(const FileSystemException('unreadable'))
+      : _inner.pinFor(serverId);
+
+  @override
+  Future<void> confirm(EndpointPin pin) => _inner.confirm(pin);
+
+  @override
+  Future<void> drop(String serverId) => _inner.drop(serverId);
+}
 
 /// The engine run in this isolate, as in the links tests, so a test holds
 /// the link its dial hands out, with keystore requests answered from
@@ -33,6 +57,7 @@ final class _Engine {
     required List<ServerConfig> dials,
     required List<AnsweringLink> links,
     SupportDirectoryAccess access = SupportDirectoryAccess.exclusive,
+    EndpointPinStore? pins,
   }) async {
     final port = ReceivePort();
     final messages = StreamIterator<Object?>(port);
@@ -58,8 +83,12 @@ final class _Engine {
             return links.last;
           },
       syncTransport: server.transport,
+      endpointPinStore: pins,
     );
-    expect(await messages.moveNext(), isTrue);
+    expect(
+      await messages.moveNext().timeout(const Duration(seconds: 10)),
+      isTrue,
+    );
     final engine = _Engine._(messages.current as SendPort, messages)
       ..send(const Hello());
     expect(await engine.next(), isA<EngineReady>());
@@ -89,7 +118,8 @@ final class _Engine {
     KeystoreGetApiKey(:final name) => KeystoreApiKey(
       await keystore.getApiKey(name),
     ),
-    KeystoreDeleteApiKey() => const KeystoreDone(),
+    KeystoreDeleteApiKey(:final name) =>
+      await keystore.deleteApiKey(name).then((_) => const KeystoreDone()),
     KeystoreReadMasterKey() => KeystoreMasterKey(switch (keystore.masterKey) {
       final key? => Uint8List.fromList(key),
       null => null,
@@ -131,11 +161,14 @@ final class _Engine {
   }
 }
 
-EndpointConfirmation? _endpointIn(List<EngineEvent> events) => events
+EndpointConfirmation? _endpointIn(
+  List<EngineEvent> events, {
+  String serverId = _srv,
+}) => events
     .whereType<CatalogReplaced>()
     .last
     .entries
-    .singleWhere((entry) => entry.serverId == _srv)
+    .singleWhere((entry) => entry.serverId == serverId)
     .endpoint;
 
 // 03 §4.3 step 3, §4.7, SAF-09, SYN-08: the engine dials a synced server
@@ -158,12 +191,14 @@ void main() {
 
   Future<_Engine> start({
     SupportDirectoryAccess access = SupportDirectoryAccess.exclusive,
+    EndpointPinStore? pins,
   }) => _Engine.start(
     support.path,
     server: server,
     dials: dials,
     links: links,
     access: access,
+    pins: pins,
   );
 
   test('a synced server dials only once confirmed, and a sync that moves '
@@ -278,9 +313,120 @@ void main() {
     await owned.confirm(pin);
     expect(file.existsSync(), isTrue);
 
-    // An unguarded engine lists no synced server and confirms nothing.
+    // An engine holding the directory enrolls and confirms the server, so
+    // the directory holds the synced catalog and its pin. An engine run
+    // in this isolate cannot shut down (Shutdown exits the isolate), so
+    // it is left idle.
+    final held = await start();
+    await held.enroll();
+    held.send(const ConfirmEndpoints([_srv]));
+    expect(_endpointIn([await held.next()]), EndpointConfirmation.confirmed);
+
+    // An unguarded engine still lists no synced server (D63), so nothing
+    // in the directory is confirmed or dialed through it.
     final engine = await start(access: SupportDirectoryAccess.unguarded);
     engine.send(const ConfirmEndpoints([_srv]));
     expect((await engine.next() as CatalogReplaced).entries, isEmpty);
+    engine.send(const Connect(_srv));
+    expect((await engine.next() as RequestRejected).requestName, 'Connect');
+    expect(dials, isEmpty);
+  });
+
+  test('a pin the store cannot read fails closed without counting as an '
+      'endpoint change (SYN-08)', () async {
+    await server.seedServer(fakeServer(_uuid, 'bravo'));
+    final pins = _FlakyPins(
+      FileEndpointPinStore(File('${support.path}/endpoint_pins.json')),
+    );
+    final engine = await start(pins: pins);
+    await engine.enroll();
+    engine.send(const ConfirmEndpoints([_uuid]));
+    expect(
+      _endpointIn([await engine.next()], serverId: _uuid),
+      EndpointConfirmation.confirmed,
+    );
+
+    // A profile cached for the server, as a probe would have left it.
+    final cacheFile = File(
+      '${support.path}/$capabilityCacheDirectoryName/'
+      '${capabilityCacheFileName(_uuid)}',
+    );
+    final cache = await CapabilityCache.open(
+      support,
+      access: SupportDirectoryAccess.exclusive,
+      fleet: const {_uuid},
+      purge: CachePurge.never,
+    );
+    await cache.probed(_uuid, HostProfile(systemdVersion: 252));
+    expect(cacheFile.existsSync(), isTrue);
+
+    engine
+      ..send(
+        const Subscribe(
+          serverId: _uuid,
+          subscriptionId: 'overview',
+          streams: {SampleStream.core},
+        ),
+      )
+      ..send(const Connect(_uuid));
+    await engine.until<Sample>();
+
+    /// Runs a round and returns its events without samples.
+    Future<List<EngineEvent>> round() async {
+      engine.send(const RunSyncRound());
+      return [
+        for (final event in await engine.untilSyncEnds())
+          if (event is! Sample) event,
+      ];
+    }
+
+    void expectUntouched(List<EngineEvent> events) {
+      expect(events.whereType<EndpointChanged>(), isEmpty);
+      expect(events.whereType<LinkState>(), isEmpty);
+      expect(links.single.closes, 0);
+      expect(cacheFile.existsSync(), isTrue);
+    }
+
+    // Unreadable: not dialable, yet no change.
+    pins.failReads = true;
+    final failed = await round();
+    expectUntouched(failed);
+    expect(
+      _endpointIn(failed, serverId: _uuid),
+      isNot(EndpointConfirmation.confirmed),
+    );
+    engine.send(const Connect(_uuid));
+    expect(
+      (await engine.until<ConnectRejected>()).reason,
+      ConnectRejectedReason.endpointNotConfirmed,
+    );
+
+    // Readable again: confirmed, still no change.
+    pins.failReads = false;
+    final recovered = await round();
+    expectUntouched(recovered);
+    expect(
+      _endpointIn(recovered, serverId: _uuid),
+      EndpointConfirmation.confirmed,
+    );
+
+    // A move while the store fails is caught once it reads again.
+    await server.seedServer(
+      fakeServer(_uuid, 'bravo').copyWith(host: 'moved.example.com'),
+      updatedAt: 2,
+    );
+    pins.failReads = true;
+    expectUntouched(await round());
+
+    pins.failReads = false;
+    final moved = await round();
+    expect(moved.whereType<EndpointChanged>().single.serverId, _uuid);
+    expect(_endpointIn(moved, serverId: _uuid), EndpointConfirmation.changed);
+    expect(links.single.closes, 1);
+    final sw = Stopwatch()..start();
+    while (cacheFile.existsSync()) {
+      if (sw.elapsed > const Duration(seconds: 5)) fail('file not purged');
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
   });
 }

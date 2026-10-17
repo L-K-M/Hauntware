@@ -2450,7 +2450,7 @@ class AppLocalizationsEn extends AppLocalizations {
       count,
       locale: localeName,
       other: '$count synced servers wait for you to confirm their addresses.',
-      one: '1 synced server waits for you to confirm its address.',
+      one: '$count synced server waits for you to confirm its address.',
     );
     return '$_temp0';
   }
@@ -2495,7 +2495,7 @@ class AppLocalizationsEn extends AppLocalizations {
       count,
       locale: localeName,
       other: 'Confirm $count servers',
-      one: 'Confirm 1 server',
+      one: 'Confirm $count server',
       zero: 'Confirm selected',
     );
     return '$_temp0';
@@ -2507,7 +2507,7 @@ class AppLocalizationsEn extends AppLocalizations {
       count,
       locale: localeName,
       other: 'Confirmed $count server addresses.',
-      one: 'Confirmed 1 server address.',
+      one: 'Confirmed $count server address.',
     );
     return '$_temp0';
   }

@@ -4,7 +4,7 @@ import 'dart:isolate';
 
 import 'package:meta/meta.dart';
 import 'package:seance_core/catalog.dart'
-    show EndpointPin, endpointPinsFileName;
+    show EndpointPin, EndpointPinStore, endpointPinsFileName;
 import 'package:seance_core/seance_core.dart'
     show ImportedHost, ServerConfig, SshLink;
 
@@ -103,12 +103,14 @@ final class EngineStart {
 /// [dial] replaces `SshLink.connect`, so tests can run the engine's links
 /// without a network, and [syncTransport] the sync server's HTTP client.
 /// [subscriptions], when given, holds the sampling subscriptions, so
-/// tests can read them.
+/// tests can read them, and [endpointPinStore] replaces the endpoint pins
+/// [openEndpointPins] opens, so tests can fail their reads.
 void engineMain(
   EngineStart start, {
   @visibleForTesting LinkDialer dial = SshLink.connect,
   @visibleForTesting SyncTransportFactory syncTransport = httpSyncTransport,
   @visibleForTesting SamplingSubscriptions? subscriptions,
+  @visibleForTesting EndpointPinStore? endpointPinStore,
 }) {
   final uiPort = start.uiPort;
   final commands = ReceivePort('klabautermann engine commands');
@@ -162,10 +164,12 @@ void engineMain(
   // The endpoints this device confirmed (D16): `endpoint_pins.json` while
   // the process holds the support directory alone, otherwise memory only.
   // One store for the engine's lifetime, as for the host-key pins.
-  final endpointPins = openEndpointPins(
-    start.supportDirectory,
-    access: start.supportDirectoryAccess,
-  );
+  final endpointPins =
+      endpointPinStore ??
+      openEndpointPins(
+        start.supportDirectory,
+        access: start.supportDirectoryAccess,
+      );
 
   // The OS keystore, which the app answers (D62), and pull-only sync,
   // opened with the import store.
@@ -258,30 +262,56 @@ void engineMain(
   }
 
   // Lists [servers] against this device's pins. A pin the store cannot
-  // read counts as none, so its server waits to be confirmed.
+  // read fails closed: its server waits to be confirmed and nothing dials
+  // it, but it is listed as unreadable rather than changed. The file
+  // store throws only FileSystemException, for a file it cannot read
+  // (corrupt files are quarantined and read as empty); anything else is
+  // a bug and propagates.
   Future<SyncedFleet> listSynced(List<ServerConfig> servers) async {
     final pins = <String, EndpointPin>{};
+    final unreadable = <String>{};
     for (final server in servers) {
       try {
         if (await endpointPins.pinFor(server.id) case final pin?) {
           pins[server.id] = pin;
         }
-      } on Object {
-        continue;
+      } on FileSystemException {
+        unreadable.add(server.id);
       }
     }
-    return SyncedFleet(servers, pins: pins);
+    return SyncedFleet(servers, pins: pins, unreadable: unreadable);
   }
 
-  // Takes [next] as the synced fleet. A server the engine could dial, and
-  // no longer may although the account still holds it, had its endpoint
-  // changed by a sync (03 §4.7, SYN-08): the app hears it, its link and
-  // log streams close, and its cached profile goes, which describes
-  // another machine. Nothing redials it until the user confirms it again.
+  // The synced servers whose endpoints count as confirmed when the next
+  // fleet is compared: those confirmed in the last one, and those whose
+  // pin, or a hop's, could not be read since they were, so a change made
+  // while the store failed is caught once it reads again. A server whose
+  // pin could not be read at startup is here too, as its cached profile
+  // was kept.
+  var trustedIds = const <String>{};
+
+  // Takes [next] as the synced fleet. A trusted server that the account
+  // still holds and that is no longer confirmed, with its pins read, had
+  // its endpoint changed by a sync (03 §4.7, SYN-08): the app hears it,
+  // its link and log streams close, and its cached profile goes, which
+  // describes another machine. Nothing redials it until the user
+  // confirms it again. One whose pins could not be read is only not
+  // dialed for now: a store failure is no endpoint change. A server the
+  // account no longer holds needs nothing here: refreshFleet drops it
+  // from fleetIds, so its link, streams, samplers and cached profile go
+  // with the retain and forget there (03 §5.1).
   void applySynced(SyncedFleet next) {
     final changed = {
-      for (final id in synced.confirmedIds)
-        if (next.lists(id) && !next.confirmedIds.contains(id)) id,
+      for (final id in trustedIds)
+        if (next.lists(id) &&
+            !next.confirmedIds.contains(id) &&
+            !next.unreadableIds.contains(id))
+          id,
+    };
+    trustedIds = {
+      ...next.confirmedIds,
+      for (final id in trustedIds)
+        if (next.unreadableIds.contains(id)) id,
     };
     synced = next;
     refreshFleet();
@@ -543,6 +573,7 @@ void engineMain(
         );
         syncedServers = await sync.servers();
         synced = await listSynced(syncedServers);
+        trustedIds = {...synced.confirmedIds, ...synced.unreadableIds};
         refreshFleet();
         capabilities = await CapabilityCache.open(
           Directory(start.supportDirectory),
@@ -557,10 +588,12 @@ void engineMain(
           },
         );
         // Only a confirmed endpoint is dialed, so a profile cached for a
-        // synced server not confirmed now describes another machine.
+        // synced server not confirmed now describes another machine. One
+        // whose pins could not be read keeps it until they read.
         final unconfirmed = {
           for (final entry in synced.entries)
-            if (entry.endpoint != EndpointConfirmation.confirmed)
+            if (entry.endpoint != EndpointConfirmation.confirmed &&
+                !synced.unreadableIds.contains(entry.serverId))
               entry.serverId,
         };
         if (unconfirmed.isNotEmpty) {

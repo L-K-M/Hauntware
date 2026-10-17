@@ -292,6 +292,10 @@ final class FleetController extends ChangeNotifier {
         _keep(_reachability, serverId, status);
       case CatalogReplaced(:final entries):
         _replaceFleet(entries);
+        // Any fleet settles a confirm in flight, including one a sync
+        // round or an import sent ahead of this confirm's answer: it can
+        // only miss the pins just saved, so a wrong verdict is at worst
+        // the conservative stillPending, never a false confirmed.
         final pending = {for (final entry in _pendingEndpoints) entry.serverId};
         _completeConfirm(
           _confirming.any(pending.contains)

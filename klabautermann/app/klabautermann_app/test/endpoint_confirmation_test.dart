@@ -51,7 +51,8 @@ final _fleet = CatalogReplaced([
 /// The fleet with [confirmed] confirmed too.
 CatalogReplaced _after(Set<String> confirmed) => CatalogReplaced([
   for (final entry in _fleet.entries)
-    if (confirmed.contains(entry.serverId))
+    if (entry.origin == FleetEntryOrigin.synced &&
+        confirmed.contains(entry.serverId))
       _synced(entry.serverId, EndpointConfirmation.confirmed)
     else
       entry,
@@ -79,6 +80,21 @@ Future<void> _openList(WidgetTester tester) async {
   await tester.pumpAndSettle();
   expect(find.text(_title), findsOneWidget);
 }
+
+/// Whether the row of [serverId] in the list is checked.
+bool _checked(WidgetTester tester, String serverId) => tester
+    .widget<CheckboxListTile>(
+      find.ancestor(
+        of: _inList(find.text('label-$serverId')),
+        matching: find.byType(CheckboxListTile),
+      ),
+    )
+    .value!;
+
+bool _searchFocused(WidgetTester tester) => tester
+    .widget<EditableText>(_inList(find.byType(EditableText)))
+    .focusNode
+    .hasFocus;
 
 List<List<String>> _confirmed(AppHarness harness) => [
   for (final request in harness.engine.sentOfType<ConfirmEndpoints>())
@@ -215,7 +231,57 @@ void main() {
       ),
       findsOneWidget,
     );
+
+    // The toggle stays, so trying again is one press.
+    expect(_checked(tester, 'a'), isTrue);
+    final again = find.widgetWithText(FilledButton, 'Confirm 1 server');
+    expect(tester.widget<FilledButton>(again).onPressed, isNotNull);
+    await tester.tap(again);
+    await tester.pump();
+    expect(_confirmed(harness), [
+      ['a'],
+      ['a'],
+    ]);
   });
+
+  testWidgets('Back and the barrier leave the list open while a '
+      'confirmation runs, and close it after', (tester) async {
+    final harness = await _withPending(tester);
+    await _openList(tester);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Confirm all shown'));
+    await tester.pump();
+    // The progress bar runs, so nothing settles while it shows.
+    const closing = Duration(seconds: 1);
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pump(closing);
+    expect(find.text(_title), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pump(closing);
+    expect(find.text(_title), findsOneWidget);
+
+    // The answer shows in the list that stayed open.
+    harness.engine.emit(_fleet);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Some servers still need'), findsOneWidget);
+
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pumpAndSettle();
+    expect(find.text(_title), findsNothing);
+  });
+
+  testWidgets('the search takes the focus on a desktop', (tester) async {
+    await _withPending(tester);
+    await _openList(tester);
+    expect(_searchFocused(tester), isTrue);
+  }, variant: TargetPlatformVariant.desktop());
+
+  testWidgets('the search leaves the focus alone on a touch device, so no '
+      'keyboard covers the rows', (tester) async {
+    await _withPending(tester, size: _phone);
+    await _openList(tester);
+    expect(_searchFocused(tester), isFalse);
+  }, variant: TargetPlatformVariant.mobile());
 
   testWidgets('rows toggle from the keyboard and read as checkboxes', (
     tester,
@@ -250,7 +316,7 @@ void main() {
     expect(_confirmed(harness), [
       ['a'],
     ]);
-  });
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 
   for (final size in [_phone, const Size(360, 640), const Size(568, 320)]) {
     testWidgets('the list fits at 200 % text on a ${size.width.round()} x '
