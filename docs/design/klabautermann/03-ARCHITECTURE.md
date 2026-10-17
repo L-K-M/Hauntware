@@ -2353,6 +2353,25 @@ nothing, so reconnecting ends the mode. Stack logs merged through one
 | `nologin` shell or `ForceCommand` | Restricted account | Read-only reachability; explanation |
 | Link ping timeout | Dead peer | Backoff; stale values turn grey |
 
+As built in M3 (D11,
+`klabautermann_core/test/integration/docker_refusal_test.dart`), the
+fixture's negative Docker hosts (11.3) confirm the streamlocal row on
+the base's OpenSSH 10.6. `AllowStreamLocalForwarding no`,
+`DisableForwarding yes`, `AllowTcpForwarding no`, `PermitOpen
+127.0.0.1:1` and an `authorized_keys` `restrict` key each refuse
+`direct-streamlocal` to a socket the account may write with reason 2
+(`SSH2_OPEN_CONNECT_FAILED`) and "open failed", the same answer the
+socket's `EACCES` gets, so only the exec probe tells them apart, and
+`seance_core` classifies every one as `ChannelRefusal.forwardDisabled`.
+`AllowTcpForwarding no` and `PermitOpen` refuse it through the local TCP
+permissions sshd applies to socket paths (sshd logs "Received request to
+connect to path ..., but the request was denied"), the other three
+through its streamlocal check ("refused streamlocal port forward"); no
+variant still forwards. `direct-tcpip` refusals carry reason 1
+(`SSH2_OPEN_ADMINISTRATIVELY_PROHIBITED`). `MaxSessions 2` refuses the
+third session with reason 2 and "open failed", and the link learns a
+limit of 2 and reports `SshLinkDegraded(sessionLimitLearned)`.
+
 ### 5.4 Docker Engine API over the forwarded socket
 
 - `SshLink.openUnixStream(path)` opens OpenSSH `direct-streamlocal@openssh.com`
@@ -6065,6 +6084,16 @@ digest, in a build stage, in place of the new frozen base above: a new
 GHCR package starts private (06), and `fixture-images.yml` stays as it
 is. The Docker services start with the others rather than under a
 `docker` profile.
+
+As built in M3 (D11), six negative variants of the Docker host,
+`neg-nostreamlocal`, `neg-disableforwarding`, `neg-notcp`,
+`neg-permitopen`, `neg-maxsessions2` and `neg-restrict` on 127.0.0.1
+ports 2245 to 2250, share its image, accounts and socket. The first
+five put their setting ahead of the common config's `Include`;
+`neg-restrict` runs the Docker host's own config and signs in with the
+run's keys behind `restrict` (`authorized_keys.restrict`, which `run.sh`
+writes). The claim above that the common config's `AllowTcpForwarding
+no` refuses streamlocal holds on OpenSSH 10.6 (5.3).
 
 As built in M3 (D21), `klabautermann_core/test/integration/
 docker_engine_test.dart` (tags `integration` and `docker`, so `run.sh`

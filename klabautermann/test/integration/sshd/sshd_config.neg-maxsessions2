@@ -1,0 +1,7 @@
+# A negative variant of the Docker host (03 §5.2, §11.3; M3 D11): the
+# Docker host's config with two sessions per connection, the low-session
+# mode's trigger. sshd keeps the first value it reads (sshd_config(5)),
+# so both lines come before the Include of the common config.
+AllowTcpForwarding local
+MaxSessions 2
+Include /etc/ssh/fixture/sshd_config.common

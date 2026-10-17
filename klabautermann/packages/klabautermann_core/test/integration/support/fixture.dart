@@ -40,7 +40,16 @@ enum FixtureService {
 
   /// The Docker engine behind the Docker host, whose socket is
   /// /run/docker-fixture/docker.sock in its container.
-  dind('dind');
+  dind('dind'),
+
+  /// The Docker host's negative variants (M3 D11), each refusing with one
+  /// sshd setting or key option.
+  noStreamlocal('neg-nostreamlocal'),
+  disableForwarding('neg-disableforwarding'),
+  noTcp('neg-notcp'),
+  permitOpen('neg-permitopen'),
+  maxSessions2('neg-maxsessions2'),
+  restrict('neg-restrict');
 
   const FixtureService(this.composeName);
 
@@ -104,6 +113,17 @@ final class Fixture {
   /// Where the Docker suites dial the Docker host.
   Endpoint get dockerHost => (host: _host, port: _dockerPort);
 
+  /// Where [service] publishes its SSH port, refused unless on loopback
+  /// as run.sh's `published_port` does. The negative variants have no
+  /// variable of their own: Compose names their ports.
+  Future<Endpoint> endpoint(FixtureService service) async {
+    final address = (await compose(['port', service.composeName, '22'])).trim();
+    if (address.split(':') case [final host, final port] when host == _host) {
+      return (host: host, port: int.parse(port));
+    }
+    fail('${service.composeName} publishes on $address, not on $_host');
+  }
+
   /// The key file the `IdentityFile` hosts sign in with.
   String get identityFile => _variable('IDENTITY_FILE');
 
@@ -119,6 +139,16 @@ final class Fixture {
         final path? when path.isNotEmpty => '$path/fixture',
         _ => null,
       };
+
+  /// Writes [contents] to [name] under the evidence directory, when
+  /// run.sh collects evidence.
+  Future<void> recordEvidence(String name, String contents) async {
+    final directory = _evidenceDirectory;
+    if (directory == null) return;
+    final file = File('$directory/$name');
+    await file.parent.create(recursive: true);
+    await file.writeAsString(contents);
+  }
 
   /// The client config the engine imports: [directServer] with the key
   /// file, [agentServer] with the agent, and [behindServer] through the
