@@ -4,6 +4,7 @@ import 'package:path/path.dart' as paths;
 
 import 'document_windows.dart';
 import 'document_workspace.dart';
+import 'document_store.dart';
 
 final class AppDocumentDialogs implements DocumentDialogs {
   AppDocumentDialogs(this.navigatorKey, {this.pickers});
@@ -26,6 +27,22 @@ final class AppDocumentDialogs implements DocumentDialogs {
     }
     final files = await openFiles(confirmButtonText: 'Open');
     return [for (final file in files) file.path];
+  }
+
+  Future<String?> pickDirectory() {
+    final window = pickers;
+    if (window != null && window.available) return window.pickDirectory();
+    return getDirectoryPath(confirmButtonText: 'Open Folder');
+  }
+
+  /// Key picking shares the window-owned dialog and bounded UTF-8 reader.
+  Future<String?> pickKeyText() async {
+    final selected = await pickOpenFiles();
+    if (selected.isEmpty) return null;
+    if (selected.length != 1) {
+      throw const FormatException('Choose one private-key file.');
+    }
+    return (await LocalDocumentStore().load(selected.single)).text;
   }
 
   @override

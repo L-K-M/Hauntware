@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as paths;
+import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:ghost_ui/ghost_ui.dart'
     show
         GhostCommandRow,
@@ -26,12 +28,16 @@ import 'services/app_settings.dart';
 import 'services/document_windows.dart';
 import 'services/document_workspace.dart';
 import 'services/settings_dialog.dart';
+import 'services/workspace_remote_files.dart';
+import 'ui/workspace_servers_dialog.dart';
+import 'ui/workspace_remote_folder_dialog.dart';
 import 'ui/document_windows_root.dart';
 import 'theme/planchette_theme.dart';
 import 'widgets/command_palette.dart';
 import 'widgets/disk_notice.dart';
 import 'widgets/document_status_bar.dart';
 import 'widgets/tab_strip.dart';
+import 'widgets/folder_browser.dart';
 
 /// The color the native window shows before the first Flutter frame. Must be
 /// the same surface the app paints, or the window flashes a different color on
@@ -62,6 +68,8 @@ class PlanchetteApp extends StatelessWidget {
     this.window,
     this.menuSlot,
     this.onQuit,
+    this.pickFolder,
+    this.remoteFiles,
   });
 
   /// This window's documents. Equals `window.workspace` when [window] is
@@ -84,6 +92,8 @@ class PlanchetteApp extends StatelessWidget {
   /// is the active one. Null keeps the in-window `PlatformMenuBar`.
   final MenuBarSlot? menuSlot;
   final Future<void> Function()? onQuit;
+  final Future<String?> Function()? pickFolder;
+  final Future<WorkspaceRemoteFiles> Function()? remoteFiles;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -101,6 +111,8 @@ class PlanchetteApp extends StatelessWidget {
         window: window,
         menuSlot: menuSlot,
         onQuit: onQuit,
+        pickFolder: pickFolder,
+        remoteFiles: remoteFiles,
       ),
     ),
   );
@@ -113,12 +125,16 @@ class _DocumentShell extends StatefulWidget {
     this.window,
     this.menuSlot,
     this.onQuit,
+    this.pickFolder,
+    this.remoteFiles,
   });
   final DocumentWorkspace workspace;
   final SettingsController settings;
   final DocumentWindow? window;
   final MenuBarSlot? menuSlot;
   final Future<void> Function()? onQuit;
+  final Future<String?> Function()? pickFolder;
+  final Future<WorkspaceRemoteFiles> Function()? remoteFiles;
 
   @override
   State<_DocumentShell> createState() => _DocumentShellState();
@@ -135,6 +151,7 @@ class _DocumentShellState extends State<_DocumentShell>
   static final bool _supportsDrop =
       Platform.isLinux || Platform.isMacOS || Platform.isWindows;
   bool _dropping = false;
+  bool _openingWorkspace = false;
   FocusNode? _lastTextFocus;
 
   /// desktop_drop reports a drag's exit from inside the widget update that
@@ -308,6 +325,139 @@ class _DocumentShellState extends State<_DocumentShell>
   }
 
   void _saveAll() => unawaited(workspace.saveAll());
+
+  Future<void> _workspaceAction(Future<void> Function() action) async {
+    if (_openingWorkspace || workspace.interactionLocked) return;
+    setState(() => _openingWorkspace = true);
+    try {
+      await action();
+      if (mounted &&
+          !workspace.folders.isOpen &&
+          workspace.folders.error != null) {
+        workspace.reportError(
+          'Could not open folder: ${workspace.folders.error}',
+        );
+      }
+    } on Object catch (error) {
+      if (mounted) workspace.reportError('Could not open workspace: $error');
+    } finally {
+      if (mounted) setState(() => _openingWorkspace = false);
+    }
+  }
+
+  void _openFolder() => unawaited(
+    _workspaceAction(() async {
+      final picker = widget.pickFolder;
+      if (picker == null) return;
+      final folder = await workspace.chooseWorkspace(picker);
+      if (folder != null && mounted) await workspace.folders.openLocal(folder);
+    }),
+  );
+
+  void _openContainingFolder() => unawaited(
+    _workspaceAction(() async {
+      final tab = workspace.active;
+      if (tab?.path == null || tab?.publication != null) return;
+      await workspace.folders.openLocal(paths.dirname(tab!.path!));
+    }),
+  );
+
+  void _openServer() => unawaited(
+    _workspaceAction(() async {
+      final create = widget.remoteFiles;
+      if (create == null) return;
+      final files = await create();
+      if (!mounted) return;
+      final connection = await workspace.chooseWorkspace(() async {
+        final server = await showWorkspaceServersDialog(context, files.catalog);
+        if (server == null || !mounted) return null;
+        final root = await showRemoteWorkspaceRoot(context, server);
+        if (root == null || !mounted) return null;
+        final connection = await files.connect(
+          server,
+          windowId: 'window-${window?.serial ?? identityHashCode(workspace)}',
+        );
+        return (connection: connection, root: root);
+      });
+      if (connection == null) return;
+      if (!mounted) {
+        await connection.connection.channel.close();
+        return;
+      }
+      await workspace.folders.openRemote(
+        connection.connection.server,
+        connection.connection.channel,
+        connection.connection.status,
+        root: connection.root,
+      );
+    }),
+  );
+
+  void _openBrowserEntry(RemoteFileEntry entry) => unawaited(
+    _workspaceAction(() async {
+      final server = workspace.folders.server;
+      if (server == null) {
+        await workspace.open(entry.path);
+        return;
+      }
+      final create = widget.remoteFiles;
+      if (create == null) return;
+      final files = await create();
+      final copy = await workspace.chooseWorkspace(
+        () => files.openFile(server, entry),
+      );
+      if (copy != null && mounted) {
+        await workspace.openManaged(copy.path, copy.publication);
+      }
+    }),
+  );
+
+  void _recoverRemoteEdits() => unawaited(
+    _workspaceAction(() async {
+      final create = widget.remoteFiles;
+      if (create == null) return;
+      final copies = await (await create()).localCopies();
+      if (!mounted) return;
+      final copy = await workspace.chooseWorkspace(
+        () => showDialog<RemoteWorkspaceDocument>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Recover Remote Edits'),
+            content: SizedBox(
+              width: 520,
+              child: copies.isEmpty
+                  ? const Text('No remote edits are awaiting upload.')
+                  : ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 400),
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: [
+                          for (final copy in copies)
+                            ListTile(
+                              title: Text(copy.publication.displayPath),
+                              subtitle: const Text(
+                                'Saved locally. Open its server before retrying upload.',
+                              ),
+                              onTap: () => Navigator.pop(context, copy),
+                            ),
+                        ],
+                      ),
+                    ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (copy != null && mounted) {
+        await workspace.openManaged(copy.path, copy.publication);
+      }
+    }),
+  );
   void _revert() {
     final tab = workspace.active;
     if (tab != null) unawaited(workspace.revert(tab));
@@ -423,7 +573,7 @@ class _DocumentShellState extends State<_DocumentShell>
           label: 'Copy Full Path',
           icon: Icons.copy,
           enabled: tab.path != null,
-          onTap: () => _copyPath(tab.path),
+          onTap: () => _copyPath(tab.sourcePath),
         ),
       ],
     );
@@ -437,7 +587,7 @@ class _DocumentShellState extends State<_DocumentShell>
     }
   }
 
-  void _copyActivePath() => _copyPath(workspace.active?.path);
+  void _copyActivePath() => _copyPath(workspace.active?.sourcePath);
 
   void _nextTab({bool previous = false}) {
     final tabs = workspace.documents;
@@ -653,6 +803,40 @@ class _DocumentShellState extends State<_DocumentShell>
           shortcut: _shortcut(LogicalKeyboardKey.keyO),
           enabled: unlocked,
         ),
+        if (widget.pickFolder != null)
+          _Command(
+            'Open Folder…',
+            _openFolder,
+            enabled: unlocked && !_openingWorkspace,
+            shortcut: _shortcut(LogicalKeyboardKey.keyO, shift: true),
+          ),
+        if (widget.remoteFiles != null)
+          _Command(
+            'Open Server…',
+            _openServer,
+            enabled: unlocked && !_openingWorkspace,
+          ),
+        if (widget.remoteFiles != null)
+          _Command(
+            'Recover Remote Edits…',
+            _recoverRemoteEdits,
+            enabled: unlocked && !_openingWorkspace,
+          ),
+        _Command(
+          'Open Containing Folder',
+          _openContainingFolder,
+          enabled:
+              unlocked &&
+              !_openingWorkspace &&
+              active?.path != null &&
+              active?.publication == null,
+        ),
+        if (workspace.folders.isOpen)
+          _Command(
+            'Close Folder Workspace',
+            () => unawaited(workspace.folders.close()),
+            enabled: unlocked && !_openingWorkspace,
+          ),
         const _Separator(),
         _Command(
           'Save',
@@ -662,7 +846,7 @@ class _DocumentShellState extends State<_DocumentShell>
           enabled: ready,
         ),
         _Command(
-          'Save As…',
+          active?.publication == null ? 'Save As…' : 'Save a Local Copy…',
           () => _save(saveAs: true),
           mnemonic: 'a',
           shortcut: _shortcut(LogicalKeyboardKey.keyS, shift: true),
@@ -676,7 +860,8 @@ class _DocumentShellState extends State<_DocumentShell>
           mnemonic: 'l',
           shortcut: mac ? _shortcut(LogicalKeyboardKey.keyS, alt: true) : null,
           enabled:
-              unlocked && workspace.documents.any((tab) => tab.editor.isDirty),
+              unlocked &&
+              workspace.documents.any((tab) => tab.hasUnsavedChanges),
         ),
         // No shortcut: no platform convention names one, Cmd+R and Ctrl+R
         // mean other things elsewhere, and a revert cannot be undone.
@@ -1375,137 +1560,145 @@ class _DocumentShellState extends State<_DocumentShell>
                   )
                 : const BoxDecoration(),
             child: Scaffold(
-              body: Column(
-                // Chrome rows span the window and start at the leading edge;
-                // a centered column floated the menu bar mid-window.
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (!mac) _menuBar(menus),
-                  TabStrip(
-                    tabs: [
-                      for (final tab in tabs)
-                        (
-                          id: tab.id,
-                          name: workspace.labelFor(tab),
-                          tooltip: tab.path ?? tab.name,
-                          dirty: tab.editor.isDirty,
-                          closable: !tab.busy,
-                          flashRequest: tab.flashRequest,
-                        ),
-                    ],
-                    activeId: active?.id,
-                    enabled: !workspace.interactionLocked,
-                    busy: active?.busy == true,
-                    onSelect: (id) =>
-                        _select(tabs.firstWhere((t) => t.id == id)),
-                    onClose: (id) => unawaited(
-                      workspace.closeTab(tabs.firstWhere((t) => t.id == id)),
+              body: _workspaceLayout(
+                menus,
+                Column(
+                  // Chrome rows span the window and start at the leading edge;
+                  // a centered column floated the menu bar mid-window.
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TabStrip(
+                      tabs: [
+                        for (final tab in tabs)
+                          (
+                            id: tab.id,
+                            name: workspace.labelFor(tab),
+                            tooltip: tab.displayPath,
+                            dirty: tab.hasUnsavedChanges,
+                            closable: !tab.busy,
+                            flashRequest: tab.flashRequest,
+                          ),
+                      ],
+                      activeId: active?.id,
+                      enabled: !workspace.interactionLocked,
+                      busy: active?.busy == true,
+                      onSelect: (id) =>
+                          _select(tabs.firstWhere((t) => t.id == id)),
+                      onClose: (id) => unawaited(
+                        workspace.closeTab(tabs.firstWhere((t) => t.id == id)),
+                      ),
+                      onContextMenu: (id, position) => _showTabMenu(
+                        position,
+                        tabs.firstWhere((t) => t.id == id),
+                      ),
+                      onNew: _new,
+                      onOpen: () => unawaited(workspace.openDialog()),
+                      onSave: _documentReady ? _save : null,
+                      newTooltip: 'New (${_keyLabel(LogicalKeyboardKey.keyN)})',
+                      openTooltip:
+                          'Open… (${_keyLabel(LogicalKeyboardKey.keyO)})',
+                      saveTooltip:
+                          'Save (${_keyLabel(LogicalKeyboardKey.keyS)})',
                     ),
-                    onContextMenu: (id, position) => _showTabMenu(
-                      position,
-                      tabs.firstWhere((t) => t.id == id),
-                    ),
-                    onNew: _new,
-                    onOpen: () => unawaited(workspace.openDialog()),
-                    onSave: _documentReady ? _save : null,
-                    newTooltip: 'New (${_keyLabel(LogicalKeyboardKey.keyN)})',
-                    openTooltip:
-                        'Open… (${_keyLabel(LogicalKeyboardKey.keyO)})',
-                    saveTooltip: 'Save (${_keyLabel(LogicalKeyboardKey.keyS)})',
-                  ),
-                  if (workspace.error case final error?)
-                    _errorBanner(
-                      key: const ValueKey('workspace-error-banner'),
-                      message: error,
-                      onDismiss: workspace.clearError,
-                    ),
-                  if (settings.error case final error?)
-                    _errorBanner(
-                      key: const ValueKey('settings-error-banner'),
-                      message: error,
-                      onDismiss: settings.clearError,
-                    ),
-                  Expanded(
-                    child: tabs.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
+                    if (workspace.error case final error?)
+                      _errorBanner(
+                        key: const ValueKey('workspace-error-banner'),
+                        message: error,
+                        onDismiss: workspace.clearError,
+                      ),
+                    if (settings.error case final error?)
+                      _errorBanner(
+                        key: const ValueKey('settings-error-banner'),
+                        message: error,
+                        onDismiss: settings.clearError,
+                      ),
+                    if (active?.publication != null) _remoteNotice(active!),
+                    Expanded(
+                      child: tabs.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.description_outlined,
+                                    size: 48,
+                                    color: scheme.primary,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'Start with a blank page',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleLarge,
+                                  ),
+                                  const SizedBox(height: 20),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // Offered only when they would act, like the
+                                      // strip's buttons (from #36).
+                                      FilledButton(
+                                        onPressed: workspace.interactionLocked
+                                            ? null
+                                            : _new,
+                                        child: const Text('New document'),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      OutlinedButton(
+                                        onPressed: workspace.interactionLocked
+                                            ? null
+                                            : () => unawaited(
+                                                workspace.openDialog(),
+                                              ),
+                                        child: const Text('Open…'),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            )
+                          : IndexedStack(
+                              index: tabs.indexOf(active!),
                               children: [
-                                Icon(
-                                  Icons.description_outlined,
-                                  size: 48,
-                                  color: scheme.primary,
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Start with a blank page',
-                                  style: Theme.of(context).textTheme.titleLarge,
-                                ),
-                                const SizedBox(height: 20),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    // Offered only when they would act, like the
-                                    // strip's buttons (from #36).
-                                    FilledButton(
-                                      onPressed: workspace.interactionLocked
-                                          ? null
-                                          : _new,
-                                      child: const Text('New document'),
+                                for (final tab in tabs)
+                                  PlanchetteEditor(
+                                    key: ValueKey(tab.id),
+                                    // Only what the user chose: the editor supplies
+                                    // the platform's monospace stack and the line
+                                    // height beneath it.
+                                    textStyle: TextStyle(
+                                      fontFamily: settings.value.fontFamily,
+                                      fontSize: _fontSize.toDouble(),
                                     ),
-                                    const SizedBox(width: 12),
-                                    OutlinedButton(
-                                      onPressed: workspace.interactionLocked
-                                          ? null
-                                          : () => unawaited(
-                                              workspace.openDialog(),
-                                            ),
-                                      child: const Text('Open…'),
-                                    ),
-                                  ],
-                                ),
+                                    ligatures: settings.value.ligatures,
+                                    controller: tab.editor,
+                                    isActive: tab == active,
+                                    banner: _diskNotice(tab),
+                                    // App-only clickable status; the shared
+                                    // editor keeps its passive default.
+                                    statusBuilder: (context, controller) =>
+                                        DocumentStatusBar(
+                                          controller: controller,
+                                        ),
+                                    // No editingLocked here: the workspace locks
+                                    // each controller the moment a dialog opens
+                                    // and unlocks it the moment it closes. A view
+                                    // lock would clear only on the next rebuild,
+                                    // refusing a save made before it.
+                                    //
+                                    // A locked field cannot take the typing the
+                                    // placeholder invites.
+                                    placeholder:
+                                        tab.path == null &&
+                                            !workspace.interactionLocked
+                                        ? ghostLineFor(tab.id)
+                                        : null,
+                                  ),
                               ],
                             ),
-                          )
-                        : IndexedStack(
-                            index: tabs.indexOf(active!),
-                            children: [
-                              for (final tab in tabs)
-                                PlanchetteEditor(
-                                  key: ValueKey(tab.id),
-                                  // Only what the user chose: the editor supplies
-                                  // the platform's monospace stack and the line
-                                  // height beneath it.
-                                  textStyle: TextStyle(
-                                    fontFamily: settings.value.fontFamily,
-                                    fontSize: _fontSize.toDouble(),
-                                  ),
-                                  ligatures: settings.value.ligatures,
-                                  controller: tab.editor,
-                                  isActive: tab == active,
-                                  banner: _diskNotice(tab),
-                                  // App-only clickable status; the shared
-                                  // editor keeps its passive default.
-                                  statusBuilder: (context, controller) =>
-                                      DocumentStatusBar(controller: controller),
-                                  // No editingLocked here: the workspace locks
-                                  // each controller the moment a dialog opens
-                                  // and unlocks it the moment it closes. A view
-                                  // lock would clear only on the next rebuild,
-                                  // refusing a save made before it.
-                                  //
-                                  // A locked field cannot take the typing the
-                                  // placeholder invites.
-                                  placeholder:
-                                      tab.path == null &&
-                                          !workspace.interactionLocked
-                                      ? ghostLineFor(tab.id)
-                                      : null,
-                                ),
-                            ],
-                          ),
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1523,6 +1716,60 @@ class _DocumentShellState extends State<_DocumentShell>
       }
     }
     return body;
+  }
+
+  Widget _workspaceLayout(List<_ShellMenu> menus, Widget editor) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      if (!mac) _menuBar(menus),
+      Expanded(
+        child: workspace.folders.isOpen
+            ? WorkspaceSplitView(
+                browser: FolderBrowser(
+                  workspace: workspace.folders,
+                  onOpen: _openBrowserEntry,
+                  enabled: !workspace.interactionLocked && !_openingWorkspace,
+                ),
+                editor: editor,
+              )
+            : editor,
+      ),
+    ],
+  );
+
+  Widget _remoteNotice(DocumentTab tab) {
+    final pending = tab.publication!.pending;
+    final state = tab.busy
+        ? 'Saving to server…'
+        : tab.editor.isDirty
+        ? 'Unsaved editor changes'
+        : pending
+        ? 'Saved locally. Upload pending.'
+        : 'Saved to server';
+    return Semantics(
+      liveRegion: true,
+      child: Material(
+        color: pending
+            ? Theme.of(context).colorScheme.secondaryContainer
+            : Theme.of(context).colorScheme.surfaceContainerLow,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${tab.displayPath}\n$state',
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (pending && _documentReady)
+                TextButton(onPressed: _save, child: const Text('Retry upload')),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   /// Tabs without edits take an outside change silently; everything else
