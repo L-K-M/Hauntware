@@ -13,6 +13,7 @@ import '../../theme/app_theme.dart' show klabautermannThemeStyle;
 import '../processes_panel.dart' show kRevealDuration;
 import '../processes_view.dart' show argumentText, clipProcessText;
 import 'container_details_view.dart';
+import 'container_logs.dart';
 import 'containers_panel.dart' show ContainerHealthBadge;
 import 'containers_view.dart';
 
@@ -82,9 +83,10 @@ void openContainerDetails(
   );
 }
 
-/// The desktop inspector's body while it shows a container: its name and
-/// a close button over its details. It takes keyboard focus as it opens,
-/// so the details are read next, and Escape inside it closes it.
+/// The desktop inspector's body while it shows a container: its name, a
+/// button that opens its logs ([openContainerLogs]) and a close button
+/// over its details. It takes keyboard focus as it opens, so the details
+/// are read next, and Escape inside it closes it.
 class ContainerInspectorBody extends StatefulWidget {
   const ContainerInspectorBody({
     super.key,
@@ -145,6 +147,16 @@ class _ContainerInspectorBodyState extends State<ContainerInspectorBody> {
                   ),
                 ),
                 IconButton(
+                  tooltip: l10n.dockerLogsShow,
+                  icon: const Icon(Icons.article_outlined),
+                  onPressed: () => openContainerLogs(
+                    context,
+                    monitoring: widget.monitoring,
+                    serverId: widget.inspected.serverId,
+                    container: container,
+                  ),
+                ),
+                IconButton(
                   focusNode: _close,
                   tooltip: l10n.dockerDetailsClose,
                   icon: const Icon(Icons.close),
@@ -169,7 +181,8 @@ class _ContainerInspectorBodyState extends State<ContainerInspectorBody> {
 }
 
 /// A container's details on a page of its own, as a phone pushes it
-/// (03 §10.5), under an app bar that names it.
+/// (03 §10.5), under an app bar that names it and opens its logs in a
+/// bottom sheet ([openContainerLogs]).
 class ContainerDetailsPage extends StatelessWidget {
   const ContainerDetailsPage({
     super.key,
@@ -184,7 +197,23 @@ class ContainerDetailsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(containerNameOf(container))),
+    appBar: AppBar(
+      title: Text(containerNameOf(container)),
+      actions: [
+        Builder(
+          builder: (context) => IconButton(
+            tooltip: AppLocalizations.of(context).dockerLogsShow,
+            icon: const Icon(Icons.article_outlined),
+            onPressed: () => openContainerLogs(
+              context,
+              monitoring: monitoring,
+              serverId: serverId,
+              container: container,
+            ),
+          ),
+        ),
+      ],
+    ),
     body: SafeArea(
       child: ContainerDetailsView(
         monitoring: monitoring,

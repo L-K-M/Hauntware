@@ -2134,6 +2134,12 @@ abstract class AppLocalizations {
   /// **'Debug'**
   String get logLevelDebug;
 
+  /// Spoken name of the stdout or stderr mark at the start of a container's log line, after its time (CTX-01); the screen shows the stream's technical name.
+  ///
+  /// In en, this message translates to:
+  /// **'{stream, select, stderr{standard error} other{standard output}}'**
+  String logContainerStream(String stream);
+
   /// A row in a log view where lines arrived faster than the view could keep and were left out; count is how many.
   ///
   /// In en, this message translates to:
@@ -4425,6 +4431,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Masked values stay masked here.'**
   String get dockerDetailsRawNote;
+
+  /// Tooltip of the button on a container's details, and the container row's menu item, that opens the container's logs (CTX-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Show logs'**
+  String get dockerLogsShow;
+
+  /// Under a container's name above its logs, in the Docker tab's log pane on desktops and in the bottom sheet on phones.
+  ///
+  /// In en, this message translates to:
+  /// **'Logs'**
+  String get dockerLogsTitle;
+
+  /// Tooltip of the button that closes a container's logs.
+  ///
+  /// In en, this message translates to:
+  /// **'Close logs'**
+  String get dockerLogsClose;
+
+  /// Shown in place of a container's logs when reading them ended without a line.
+  ///
+  /// In en, this message translates to:
+  /// **'This container has no log lines.'**
+  String get dockerLogsEmpty;
+
+  /// Shown in place of a container's logs when its logging driver keeps no logs the engine can read back (CTX-01): the none driver; on Podman, a driver other than json-file, k8s-file and journald; on Docker, a remote driver with Docker's dual-logging cache disabled; or a driver the engine could not name. driver is the driver's name as Docker reports it, such as splunk; driver and cache names stay as they are.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, none{This container keeps no logs: driver none.} podman{Podman cannot read this container\'s logs: driver {driver}. Podman reads only the json-file, k8s-file and journald drivers.} cacheDisabled{Docker cannot read this container\'s logs: driver {driver}, cache disabled. Docker reads another driver\'s logs only through its local cache.} other{Docker cannot read this container\'s logs: its logging driver keeps none it can read.}}'**
+  String dockerLogsDriverUnreadable(String reason, String driver);
 }
 
 class _AppLocalizationsDelegate

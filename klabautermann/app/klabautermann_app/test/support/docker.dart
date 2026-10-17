@@ -241,3 +241,32 @@ ContainerDetails dockerContainerDetails(
     },
   ),
 );
+
+/// One line of a container's log (CTX-01) as the engine delivers it, on
+/// stdout unless told otherwise. Pass a local [at], so nothing depends
+/// on the test machine's zone.
+ContainerRecord containerLine(
+  String text, {
+  ContainerLogStream stream = ContainerLogStream.stdout,
+  DateTime? at,
+}) => ContainerRecord(stream: stream, text: text, at: at);
+
+/// The log streams [requests] opened for [containerId]'s logs, oldest
+/// first.
+List<OpenLogStream> containerLogOpens(
+  List<EngineRequest> requests,
+  String containerId,
+) => [
+  for (final request in requests)
+    if (request case OpenLogStream(
+      spec: LogStreamSpec(source: ContainerLogSource(containerId: final id)),
+    ) when id == containerId)
+      request,
+];
+
+/// [records] on [streamId], [dropped] lines lost before them.
+LogBatch containerLogBatch(
+  String streamId,
+  List<ContainerRecord> records, {
+  int dropped = 0,
+}) => LogBatch(streamId: streamId, records: records, dropped: dropped);
