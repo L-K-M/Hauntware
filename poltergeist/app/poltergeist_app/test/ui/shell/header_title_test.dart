@@ -74,14 +74,16 @@ void main() {
     final supportDir = Directory.systemTemp.createTempSync('pg-title-');
     addTearDown(() => supportDir.deleteSync(recursive: true));
     final bookmarks = FakeBookmarkStore();
-    final session = await startEngineSession(
-      supportDirectoryPath: supportDir.path,
-      fallbackHome: fallbackHome,
-      bookmarks: bookmarks,
-      navigatorKey: navigatorKey,
-      pinStore: InMemoryHostKeyStore(),
-      incidentStore: InMemoryIncidentStore(),
-      spawn: (config) async => engine,
+    final session = await tester.runAsync(
+      () => startEngineSession(
+        supportDirectoryPath: supportDir.path,
+        fallbackHome: fallbackHome,
+        bookmarks: bookmarks,
+        navigatorKey: navigatorKey,
+        pinStore: InMemoryHostKeyStore(),
+        incidentStore: InMemoryIncidentStore(),
+        spawn: (config) async => engine,
+      ),
     );
     addTearDown(session!.shutdown);
     await tester.pumpWidget(
@@ -150,6 +152,7 @@ void main() {
       'App storage',
     );
     expect(find.text('app_flutter'), findsNothing);
+    // Toolbar title plus each pane's tab and location title.
     expect(find.text('App storage'), findsNWidgets(5));
     expect(tooltip(_appStorage), findsOneWidget);
     final pane = activePane(tester);
@@ -164,6 +167,7 @@ void main() {
     await tester.tap(find.byKey(ValueKey('${pane.paneTabId}.path.ancestors')));
     await tester.pumpAndSettle();
     expect(find.text('app_flutter'), findsNothing);
+    // The other pane's tab and location title, plus the ancestor menu.
     expect(find.text('App storage'), findsNWidgets(3));
   });
 
@@ -205,5 +209,29 @@ void main() {
     await tester.tap(crumb);
     await tester.pumpAndSettle();
     expect(pane.location?.path, _appStorage);
+  });
+
+  testWidgets('app storage labels survive engine path canonicalization', (
+    tester,
+  ) async {
+    final scratch = Directory.systemTemp.createTempSync('pg-storage-alias-');
+    addTearDown(() => scratch.deleteSync(recursive: true));
+    final storage = Directory('${scratch.path}/app_flutter')..createSync();
+    final canonicalPath = storage.resolveSymbolicLinksSync();
+    final alias = Link('${scratch.path}/alias')..createSync(storage.path);
+    engine.localChannels
+      ..clear()
+      ..addAll([
+        session_test.FakeAppBrowseChannel(homePath: canonicalPath),
+        session_test.FakeAppBrowseChannel(homePath: canonicalPath),
+      ]);
+    await pumpApp(tester, fallbackHome: alias.path);
+
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('header.title'))).data,
+      'App storage',
+    );
+    expect(find.text('app_flutter'), findsNothing);
+    expect(activePane(tester).location?.path, canonicalPath);
   });
 }

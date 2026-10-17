@@ -390,7 +390,7 @@ final class EngineSession {
   final BookmarkRepository _bookmarks;
   final ApplicationErrorReporter _errors;
 
-  /// The app-owned local home, also used to label restored tabs before
+  /// The canonical app-owned local home, used to label restored tabs before
   /// their browse channels open.
   final String? fallbackHome;
 
@@ -785,13 +785,19 @@ Future<EngineSession?> startEngineSession({
       (trashServerBinder ??
       () => TrashChannelServer.bind(onError: errors.report))();
   final AppEngine engine;
+  final String? canonicalHome;
   try {
+    // Match the browse engine's realpath so Android's /data/user/0 and
+    // /data/data aliases name the same app-storage location.
+    canonicalHome = fallbackHome == null
+        ? null
+        : await LocalFileSystem().canonicalize(fallbackHome);
     engine = await spawn(
       EngineConfig(
         hostKeyPins: pins,
         incidents: incidents,
         trashRequests: trashServer?.requests,
-        fallbackHome: fallbackHome,
+        fallbackHome: canonicalHome,
       ),
     );
   } on Object catch (error, stackTrace) {
@@ -806,7 +812,7 @@ Future<EngineSession?> startEngineSession({
   try {
     return EngineSession._(
       engine: engine,
-      fallbackHome: fallbackHome,
+      fallbackHome: canonicalHome,
       pinStore: pinsStore,
       incidentStore: incidentsStore,
       bookmarks: bookmarks,
