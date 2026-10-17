@@ -110,8 +110,15 @@ final class SyncController extends ChangeNotifier {
     detail: 'the engine stopped',
   );
 
+  /// Settles every pending call as the engine stopping would, since no
+  /// answer can reach a disposed controller, and refuses later calls.
   @override
   void dispose() {
+    _engineStopped = true;
+    for (final (operation, answer) in _waiting) {
+      answer.complete(_stopped(operation));
+    }
+    _waiting.clear();
     unawaited(_events.cancel());
     super.dispose();
   }
