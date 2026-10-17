@@ -200,12 +200,16 @@ Host alias-$i
     final logged = (await logs(service)).length;
     await exec(service, ['sh', '-c', 'rm -f /etc/ssh/ssh_host_*']);
     await compose(['restart', service.name]);
+    var lines = const <String>[];
     for (var i = 0; i < 60; i++) {
-      final lines = (await logs(service)).skip(logged);
+      lines = (await logs(service)).skip(logged).toList();
       if (lines.any((line) => line.startsWith('Server listening on'))) return;
       await Future<void>.delayed(const Duration(milliseconds: 500));
     }
-    fail('${service.name} did not listen again after its new host keys');
+    fail(
+      '${service.name} did not listen again after its new host keys; '
+      'it logged:\n${lines.join('\n')}',
+    );
   }
 
   /// The lines [service] has logged so far.

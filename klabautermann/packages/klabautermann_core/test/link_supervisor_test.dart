@@ -458,6 +458,25 @@ void main() {
       expect(calls, hasLength(2));
     });
 
+    test('a review given up after trusting the key leaves no block', () async {
+      supervisor.connect('s1', purpose: _interactive);
+      final review = calls.last..onPhase!(const LinkAuthenticating());
+      supervisor.disconnect('s1');
+      await clock.elapse(Duration.zero);
+
+      expect(statuses().last, const LinkClosed(LinkClosedReason.closedByOwner));
+      // The given-up dial returns before the next one starts.
+      review.fail(LinkFailureKind.unreachable);
+      await clock.elapse(Duration.zero);
+      supervisor.connect('s1', purpose: _background);
+      await clock.elapse(const Duration(seconds: 5));
+      expect(calls, hasLength(3));
+      expect(
+        (calls.last.purpose, calls.last.changedKey),
+        (_background, ChangedHostKey.block),
+      );
+    });
+
     test('a review that fails otherwise follows the usual rules', () async {
       supervisor.connect('s1', purpose: _interactive);
       calls.last.fail(LinkFailureKind.unreachable);

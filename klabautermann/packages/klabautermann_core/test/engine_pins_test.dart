@@ -179,7 +179,9 @@ final class _Engine {
   ]) async {
     send(Connect(serverId));
     expect(await nextStatus(serverId), const LinkConnecting());
-    final prompt = await nextLinkEvent(serverId) as Prompt;
+    final event = await nextLinkEvent(serverId);
+    expect(event, isA<Prompt>(), reason: 'a host-key prompt expected');
+    final prompt = event as Prompt;
     expect(await nextStatus(serverId), isA<LinkNeedsUser>());
     send(AnswerPrompt(prompt.promptId, PromptTrustAnswer(trust)));
     return prompt.request as HostKeyPromptRequest;
