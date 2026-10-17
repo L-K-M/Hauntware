@@ -48,7 +48,12 @@ import 'package:klabautermann_docker/klabautermann_docker.dart';
 import 'package:klabautermann_host/klabautermann_host.dart'
     show EngineRuntime, HostProfile;
 import 'package:seance_core/seance_core.dart'
-    show RemoteCommandResult, SshLink, SshLinkClosed;
+    show
+        ChannelOpenException,
+        ChannelRefusal,
+        RemoteCommandResult,
+        SshLink,
+        SshLinkClosed;
 
 import '../engine/protocol.dart';
 import '../links/channel_quota.dart';
@@ -409,6 +414,7 @@ final class DockerRouter {
           run: (command, {required timeout, required maxOutputBytes}) =>
               _shortAction(
                 session,
+                link,
                 () => link.run(
                   command,
                   timeout: timeout,
@@ -697,15 +703,36 @@ final class DockerRouter {
     }
   }
 
-  /// Runs [action] once a short-action slot of [session]'s quota is
-  /// free, and frees it after (M9).
+  /// Runs [action] on [link] once a short-action slot of [session]'s
+  /// quota is free, and frees it after (M9).
+  ///
+  /// An action whose session channel sshd refuses at its `MaxSessions`
+  /// runs again while each refusal tightens the limit the link learned:
+  /// at that limit the link queues an open instead of sending it (03
+  /// §5.2), so the command that taught it would otherwise fail where the
+  /// next one waits. The link counts the opens in flight when it learns,
+  /// so two refused at once can teach it one too many first. Without
+  /// this, the stack check that found the limit read "check failed",
+  /// and its verdict stood, where the next check would have queued and
+  /// run (M3 D22).
   static Future<RemoteCommandResult> _shortAction(
     _Session session,
+    SshLink link,
     Future<RemoteCommandResult> Function() action,
   ) async {
     await session.quota.acquire(ChannelShare.shortAction);
     try {
-      return await action();
+      while (true) {
+        final before = link.seen.learnedSessionLimit;
+        try {
+          return await action();
+        } on ChannelOpenException catch (e) {
+          final learned = link.seen.learnedSessionLimit;
+          final tightened =
+              learned != null && (before == null || learned < before);
+          if (e.refusal != ChannelRefusal.sessionLimit || !tightened) rethrow;
+        }
+      }
     } finally {
       session.quota.give(ChannelShare.shortAction);
     }
