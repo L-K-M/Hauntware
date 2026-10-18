@@ -14,10 +14,13 @@ const runnerVmSkipReason =
     'GitHub-hosted Ubuntu runner';
 
 /// The fleet aliases of the client config each engine imports: the
-/// account outside every journal group (LOG-04), and the one in
-/// `systemd-journal`.
+/// account outside every journal group (LOG-04), the one in
+/// `systemd-journal`, and the two with password sudo, the second without
+/// a cached credential (M4 E29).
 const limitedServer = 'ssh-config:limited';
 const journalServer = 'ssh-config:journal';
+const sudoServer = 'ssh-config:sudo';
+const nocacheServer = 'ssh-config:nocache';
 
 /// The groups whose members read the whole journal (03 §8.1).
 const journalGroups = {'systemd-journal', 'adm', 'wheel'};
@@ -94,6 +97,27 @@ final class RunnerVm {
   /// The account with linger on, and none of sudo.
   String get lingerUser => _variable('LINGER_USER');
 
+  /// The account with password sudo and `timestamp_timeout=0`, which
+  /// takes 8.3's rung 4, and its password (M4 E29).
+  String get nocacheUser => _variable('NOCACHE_USER');
+  Future<String> nocachePassword() async =>
+      (await File(_variable('NOCACHE_PASSWORD_FILE')).readAsString()).trim();
+
+  /// The accounts with a crontab of their own, whose one line names the
+  /// credential `secret-<user>`, which a read must mask.
+  List<String> get crontabUsers => _variable('CRONTAB_USERS').split(' ');
+
+  /// The test service the actions suite starts, stops, restarts and
+  /// reloads, and what its reload prints to the journal.
+  String get testService => _variable('TEST_SERVICE');
+  String get reloadMessage => _variable('RELOAD_MESSAGE');
+
+  /// The timer whose service the actions suite runs now, that service,
+  /// and what it prints to the journal.
+  String get jobTimer => _variable('JOB_TIMER');
+  String get jobService => _variable('JOB_SERVICE');
+  String get jobMessage => _variable('JOB_MESSAGE');
+
   /// The account whose only sudo rule is NOPASSWD for [dockerCli].
   String get dockerUser => _variable('DOCKER_USER');
   String get dockerCli => _variable('DOCKER_CLI');
@@ -142,15 +166,28 @@ Host journal
   Port $_port
   User $journalUser
   IdentityFile $_identityFile
+
+Host sudo
+  HostName $_host
+  Port $_port
+  User $sudoUser
+  IdentityFile $_identityFile
+
+Host nocache
+  HostName $_host
+  Port $_port
+  User $nocacheUser
+  IdentityFile $_identityFile
 ''';
 
-  /// An engine that imports [limitedServer] and [journalServer]. [name]
-  /// titles its event log in the evidence directory.
+  /// An engine that imports [limitedServer], [journalServer],
+  /// [sudoServer] and [nocacheServer]. [name] titles its event log in the
+  /// evidence directory.
   Future<FixtureEngine> engine(String name) => FixtureEngine.launch(
     name: name,
     runtimeDirectory: _runtimeDirectory,
     sshConfig: _sshConfig,
-    hosts: 2,
+    hosts: 4,
     evidenceDirectory: _evidenceDirectory,
   );
 
