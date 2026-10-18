@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:klabautermann_host/klabautermann_host.dart' show HostProfile;
+import 'package:klabautermann_host/klabautermann_host.dart'
+    show HostProfile, OpDirectoryKind;
 import 'package:meta/meta.dart';
 import 'package:seance_core/catalog.dart'
     show EndpointPin, EndpointPinStore, endpointPinsFileName;
@@ -31,7 +32,9 @@ import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
 import '../logs/log_stream_router.dart';
 import '../operations/confirmation.dart';
-import '../operations/operation_plan.dart' show PlanAttempt;
+import '../operations/detached_runner.dart';
+import '../operations/operation_plan.dart'
+    show DockerTargetUnchanged, PlanAttempt, StackConfigUnchanged;
 import '../operations/operation_runner.dart';
 import '../operations/operation_tracker.dart';
 import '../operations/operations_shown.dart';
@@ -39,6 +42,7 @@ import '../operations/plan_registry.dart';
 import '../operations/plan_types.dart' show RequiredLevel;
 import '../operations/plans/docker_plans.dart';
 import '../operations/plans/host_plans.dart';
+import '../operations/plans/redeploy_plan.dart';
 import '../operations/protected_targets.dart';
 import '../sampling/sampling_scheduler.dart';
 import '../sampling/subscriptions.dart';
@@ -361,17 +365,74 @@ void engineMain(
         final router = docker;
         if (router == null) return RevalidationFailure.unreadable;
         try {
-          return await router.useEndpoint(
+          return await router.useStacks(
             serverId,
-            (client, _) => revalidateDockerTarget(client, check),
+            (client, _, stacks) => switch (check) {
+              final StackConfigUnchanged stack => revalidateStackConfig(
+                stacks,
+                stack,
+              ),
+              final DockerTargetUnchanged target => revalidateDockerTarget(
+                client,
+                target,
+              ),
+              _ => Future.value(RevalidationFailure.unreadable),
+            },
           );
         } on Object {
           return RevalidationFailure.unreadable;
         }
       },
-      // A record that cannot be written is lost; the run itself stands.
-      finished: (result) =>
-          unawaited(audit.recordRun(result).catchError((Object _) {})),
+      launch: (serverId, plan, session) async {
+        final link = links.link(serverId);
+        final uid = profiles[serverId]?.uid;
+        final runner = plan.detachedRunner!;
+        final id = newOpId();
+        if (link == null || uid == null) {
+          return (
+            id: id,
+            dir: null,
+            pid: null,
+            failure: LaunchFailure.transport,
+            exitCode: null,
+          );
+        }
+        final launched = await launchDetached(
+          link: link,
+          runner: runner,
+          uid: uid,
+          argv: detachedArgv(plan),
+          id: id,
+          session: session,
+        );
+        if (launched.failure == null) {
+          await operations?.launched(
+            serverId,
+            id,
+            directory: runner.runsAsRoot
+                ? OpDirectoryKind.root
+                : OpDirectoryKind.user,
+            launch: OperationLaunch(
+              action: '${plan.intent.runtimeType}',
+              targetName: plan.targetName,
+              steps: [for (final step in plan.steps) step.display],
+              tier: plan.tier,
+              startedAt: DateTime.now().toUtc(),
+            ),
+          );
+        }
+        return launched;
+      },
+      // A record that cannot be written is lost; the run itself stands. A
+      // started detached operation is audited with its result, once the
+      // app has shown it (03 §7.17).
+      finished: (result) {
+        if (result.plan.detached &&
+            result.finished.outcome == ActionOutcome.succeeded) {
+          return;
+        }
+        unawaited(audit.recordRun(result).catchError((Object _) {}));
+      },
     );
     scheduler = SamplingScheduler(
       subscriptions: sampling,
@@ -895,8 +956,30 @@ void engineMain(
                   ),
                 );
           case RedeployStack():
-            refuse(ActionRefusalReason.notImplemented);
-            return;
+            final router = docker;
+            if (router == null) {
+              refuse(ActionRefusalReason.engineUnavailable);
+              return;
+            }
+            attempt = router
+                .useStacks(
+                  serverId,
+                  (client, route, stacks) => planRedeploy(intent, (
+                    client: client,
+                    route: route,
+                    stacks: stacks,
+                    profile: profile,
+                    adminMode: admin?.session(serverId) != null,
+                    protection: protection,
+                    loginUser: profile.user ?? 'login user',
+                  )),
+                )
+                .catchError(
+                  (Object _) => (
+                    plan: null,
+                    refusal: ActionRefusalReason.engineUnavailable,
+                  ),
+                );
         }
         // Not awaited: planning reads over the link, and the queue keeps
         // serving the app meanwhile.

@@ -1,7 +1,9 @@
 // Runs a confirmed operation plan (03 §8.5, M4 E12): it re-validates the
 // target against what the preview saw, then runs the plan's own steps in
 // order, the ones the preview showed, and reports each step and the end.
-// A step that fails stops the plan; nothing after it runs.
+// A step that fails stops the plan; nothing after it runs. A detached
+// plan's steps run on the host instead, as one operation the runner
+// launches (03 §7.17, M4 E18).
 import 'package:klabautermann_docker/klabautermann_docker.dart'
     show DockerException;
 import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
@@ -16,6 +18,7 @@ import 'package:seance_core/seance_core.dart'
 import '../admin/admin_mode.dart' show AdminSession;
 import '../docker/docker_router.dart' show DockerEndpointUnavailable;
 import '../engine/protocol.dart';
+import 'detached_runner.dart' show LaunchFailure, LaunchResult;
 import 'operation_plan.dart';
 import 'plan_types.dart';
 
@@ -24,11 +27,18 @@ import 'plan_types.dart';
 /// it throws ends the run as a transport failure.
 typedef ApiStepRunner = Future<int> Function(String serverId, ApiStep step);
 
-/// Checks a [DockerTargetUnchanged] on [serverId]: null when unchanged.
+/// Checks a [DockerTargetUnchanged] or a [StackConfigUnchanged] on
+/// [serverId] through its Docker endpoint: null when unchanged.
 typedef DockerRevalidator =
-    Future<RevalidationFailure?> Function(
+    Future<RevalidationFailure?> Function(String serverId, Revalidation check);
+
+/// Launches a detached [plan] on [serverId] as its runner row says,
+/// through [session]'s elevation where the row needs it (03 §7.17).
+typedef DetachedLauncher =
+    Future<LaunchResult> Function(
       String serverId,
-      DockerTargetUnchanged check,
+      OperationPlan plan,
+      AdminSession? session,
     );
 
 /// What became of one run, for the audit log (8.10, E12b).
@@ -49,6 +59,7 @@ final class OperationRunner {
     required this._emit,
     this._api,
     this._docker,
+    this._launch,
     this._finished,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now;
@@ -57,6 +68,7 @@ final class OperationRunner {
   final void Function(EngineEvent event) _emit;
   final ApiStepRunner? _api;
   final DockerRevalidator? _docker;
+  final DetachedLauncher? _launch;
   final void Function(OperationResult result)? _finished;
   final DateTime Function() _now;
 
@@ -115,6 +127,30 @@ final class OperationRunner {
         if (found != null) {
           return failed(ActionFailure.revalidation, revalidation: found);
         }
+      }
+
+      if (plan.detachedRunner case final runner?) {
+        final launch = _launch;
+        if (launch == null) return failed(ActionFailure.unsupportedStep);
+        if (runner.elevated && session == null) {
+          return failed(ActionFailure.elevationRefused);
+        }
+        final launched = await launch(serverId, plan, session);
+        return switch (launched.failure) {
+          null => ActionFinished(
+            planId: planId,
+            outcome: ActionOutcome.succeeded,
+            operationId: launched.id,
+          ),
+          LaunchFailure.elevationRefused => failed(
+            ActionFailure.elevationRefused,
+          ),
+          LaunchFailure.transport => failed(ActionFailure.transport),
+          LaunchFailure.noDirectory || LaunchFailure.failed => failed(
+            ActionFailure.launchFailed,
+            exitCode: launched.exitCode,
+          ),
+        };
       }
 
       for (var i = 0; i < plan.steps.length; i++) {
@@ -197,10 +233,10 @@ final class OperationRunner {
           _kTicksGone => RevalidationFailure.processGone,
           _ => RevalidationFailure.unreadable,
         };
-      case final DockerTargetUnchanged docker:
-        final check = _docker;
-        if (check == null) return RevalidationFailure.unreadable;
-        return check(serverId, docker);
+      case DockerTargetUnchanged() || StackConfigUnchanged():
+        final docker = _docker;
+        if (docker == null) return RevalidationFailure.unreadable;
+        return docker(serverId, check);
     }
   }
 

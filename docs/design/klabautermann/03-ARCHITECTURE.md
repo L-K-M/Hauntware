@@ -3647,6 +3647,30 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   is never logged, cached or synced. The operation runs detached (7.17),
   as the login user unless it needs root, against the selected engine, and
   uses the registry credentials of the identity it runs as (7.17).
+- **As built (M4 E18).** `operations/plans/redeploy_plan.dart` plans
+  `RedeployStack` over the endpoint (`DockerRouter.useStacks`).
+  - A project without containers is no target; a manager's labels
+    refuse it (`stackManaged`, no act anyway); a verdict other than
+    verified refuses it (`stackUnverified`), and the standalone
+    `docker-compose` alone `legacyComposeOnly`.
+  - `config --services` and `--profile '*' config --services` list the
+    services; both print names only. A running service only the second
+    names is left as it is, with the `profileGatedServices` warning. A
+    container whose service neither names is an orphan, listed in the
+    preview. Without the second list an orphan may be such a service,
+    and the preview warns `profilesUnknown`.
+  - The steps are `config -q` with its output on `/dev/null`, `pull`
+    and `up -d` (`--remove-orphans` only on request, typed), each with
+    `--host` and every recorded `-f` and `--env-file`. The runner row
+    comes from 7.17's table at planning (the login user's until rank 3,
+    E16), with its host writes and the `setsid` logout warning.
+  - Right before the launch the runner re-validates the containers' ids
+    and runs `config --hash '*'` again, which must print the hash each
+    named service's containers carry. Then it launches one operation,
+    `/bin/sh -c '<step> && <step> && <step>'`, and answers
+    `ActionFinished` with the operation's id; a failed launch is
+    `launchFailed` with the launcher's status. The result is audited
+    once the app has shown it (E17b), not at the launch.
 - **Ownership (STK-10, MVP).** 8.7.
 - **v1.** Edit compose and `.env` (STK-07) through the edit pipeline (8.5):
   `planchette_editor`, `boundedUnifiedDiff`, `validateText` YAML checks plus
@@ -5738,7 +5762,10 @@ the engine in `engine_isolate.dart` beside it):
   compose -p <p> --project-directory <d> -f <f>... --env-file <e>...
   config --hash '*'` prints a hash per service, each compared with the
   label of that service's containers, one-off containers aside: equal
-  is verified; a different or missing service is `hashMismatch`; a
+  is verified; a different hash, or no service printed at all, is
+  `hashMismatch`; a service the run does not print (one the files no
+  longer name, or one only a profile enables) says nothing about the
+  files, and STK-06 lists it (M4 E18); a
   refused flag or other output is `cliCouldNotHash`; another failure is
   `configFailed`, its error text dropped unread. The docker CLI checks
   a Podman engine too, through `--host`. Each exec takes a short-action

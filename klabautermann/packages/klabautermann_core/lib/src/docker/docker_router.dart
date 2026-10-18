@@ -136,6 +136,26 @@ final class DockerRouter {
   Future<T> useEndpoint<T>(
     String serverId,
     Future<T> Function(DockerClient client, DockerEndpointRoute route) body,
+  ) => _use(serverId, (endpoint) => body(endpoint.client, endpoint.route));
+
+  /// [useEndpoint] with the endpoint's [StackSources] too (M4 E18: the
+  /// redeploy planner and its re-validation).
+  Future<T> useStacks<T>(
+    String serverId,
+    Future<T> Function(
+      DockerClient client,
+      DockerEndpointRoute route,
+      StackSources stacks,
+    )
+    body,
+  ) => _use(
+    serverId,
+    (endpoint) => body(endpoint.client, endpoint.route, endpoint.stacks),
+  );
+
+  Future<T> _use<T>(
+    String serverId,
+    Future<T> Function(_Endpoint endpoint) body,
   ) async {
     if (!_fleet.contains(serverId)) {
       throw const DockerEndpointUnavailable(DockerQueryFailure.notInFleet);
@@ -150,7 +170,7 @@ final class DockerRouter {
     session.idle = null;
     endpoint.inFlight++;
     try {
-      return await body(endpoint.client, endpoint.route);
+      return await body(endpoint);
     } on DockerException catch (e) {
       if ((e is DockerTransportException || e is DockerProtocolException) &&
           identical(session.endpoint, endpoint)) {

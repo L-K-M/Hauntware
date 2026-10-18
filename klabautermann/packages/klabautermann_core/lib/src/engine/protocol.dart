@@ -1041,9 +1041,13 @@ final class ActionFinished extends EngineEvent {
     this.exitCode,
     this.httpStatus,
     this.revalidation,
+    this.operationId,
   });
 
   final String planId;
+
+  /// For a detached plan, [ActionOutcome.succeeded] means its operation
+  /// started; it then runs on the host as [operationId] (03 §7.17).
   final ActionOutcome outcome;
   final ActionFailure? failure;
 
@@ -1059,6 +1063,10 @@ final class ActionFinished extends EngineEvent {
 
   /// What re-validation found, with [ActionFailure.revalidation].
   final RevalidationFailure? revalidation;
+
+  /// The detached operation a started plan runs as, which
+  /// [OperationsChanged] lists.
+  final String? operationId;
 }
 
 /// Why a plan failed.
@@ -1089,6 +1097,10 @@ enum ActionFailure {
   /// A detached operation ended before it recorded a result (03 §7.17):
   /// its wrapper was killed, at logout or by a reboot.
   interrupted,
+
+  /// A detached operation did not start: its directory could not be
+  /// resolved, or `systemd-run` or `setsid` failed, with [exitCode].
+  launchFailed,
 }
 
 /// What re-validation found changed (03 §8.5).
@@ -1127,7 +1139,7 @@ final class ActionRefused extends EngineEvent {
 
 /// Why an [ActionRefused] refused; the app words each (D35).
 enum ActionRefusalReason {
-  /// The action's planner has not landed yet (STK-06 lands with E18).
+  /// The action has no planner in this engine.
   notImplemented,
 
   /// No previewed plan has the id, or it already ran.
@@ -1174,6 +1186,23 @@ enum ActionRefusalReason {
   /// The stack's services depend on each other in a cycle, so there is no
   /// order to act in (STK-03).
   dependencyCycle,
+
+  /// A manager's labels mark the stack, and a redeploy offers no act
+  /// anyway (STK-06, 03 §8.7).
+  stackManaged,
+
+  /// The stack's files are not verified as its source (STK-01), so its
+  /// commands cannot be rebuilt from them (STK-06).
+  stackUnverified,
+
+  /// Only the legacy `docker-compose` is installed, which stays read-only
+  /// (STK-05).
+  legacyComposeOnly,
+
+  /// The detached operation needs root and the account's passwordless
+  /// sudo reaches only `docker`, which cannot start a root runner (03
+  /// §7.17).
+  sudoRightMissing,
 }
 
 /// Why [UserCrontabs] read no crontab.
@@ -2931,6 +2960,8 @@ final class ActionPreview {
     this.ownership,
     this.protected,
     this.followUnit,
+    this.orphans = const [],
+    this.warnings = const {},
   });
 
   final ActionIntent intent;
@@ -2959,6 +2990,12 @@ final class ActionPreview {
   /// The unit whose journal shows the run's effect, from the run's start:
   /// JOB-08's timer service (03 §7.7).
   final String? followUnit;
+
+  /// The stack's containers whose service its files no longer name,
+  /// which `--remove-orphans` would remove (STK-06).
+  final List<String> orphans;
+
+  final Set<PlanWarning> warnings;
 }
 
 /// A running plan's end state (03 §10.1).

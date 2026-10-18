@@ -3123,6 +3123,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'transport': 'the connection failed during the run.',
       'unsupportedStep': 'this version cannot run one of its steps.',
       'adminRequired': 'it needs admin mode.',
+      'launchFailed': 'its operation could not be started on the server.',
       'other': 'it failed.',
     });
     return '$target did not finish: $_temp0';
@@ -3157,6 +3158,13 @@ class AppLocalizationsEn extends AppLocalizations {
           'Containers use this image. Remove them first, or force the removal.',
       'dependencyCycle':
           'The stack\'s services depend on each other in a loop, so there is no order to act in.',
+      'stackManaged': 'A manager deploys this stack. Redeploy it there.',
+      'stackUnverified':
+          'The stack\'s files are not verified as its source, so it cannot be redeployed from them.',
+      'legacyComposeOnly':
+          'Only the legacy docker-compose is installed, which Klabautermann does not run.',
+      'sudoRightMissing':
+          'This needs root, and your sudo rule allows only docker.',
       'other': 'The action was refused.',
     });
     return '$_temp0';
@@ -3333,6 +3341,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'transport': 'The connection failed during the run.',
       'unsupportedStep': 'This version could not run a step.',
       'adminRequired': 'It needed admin mode.',
+      'launchFailed': 'Its operation could not be started on the server.',
       'other': 'It failed.',
     });
     return '$_temp0';

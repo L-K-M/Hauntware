@@ -8,8 +8,9 @@
 ///     ├─ test -f each config file (one exec) ─▶ missing
 ///     │    └─▶ source not on host (deployed by the marked manager)
 ///     ├─ compose CLI, looked for once: none, standalone only ─▶ unverified
-///     └─ compose config --hash '*' (one exec) ─▶ every service's hash
-///          matches its containers' label ─▶ verified, else unverified
+///     └─ compose config --hash '*' (one exec) ─▶ every service it
+///          prints matches its containers' label, and one does
+///          ─▶ verified, else unverified
 ///   stack file of a verified project ─▶ SFTP stat, read at most 1 MiB
 ///     ─▶ masked spans (03 §8.9)
 /// ```
@@ -172,6 +173,43 @@ final class StackSources {
     return _read(project, path, kind);
   }
 
+  // -- redeploy (STK-06) ----------------------------------------------
+
+  /// The services [project]'s files name, every profile's with
+  /// [allProfiles]: `config --services`, whose output is names only.
+  /// Null when the run failed or printed something else, as a CLI
+  /// without `--profile '*'` does.
+  Future<Set<String>?> serviceNames(
+    ComposeProject project, {
+    bool allProfiles = false,
+  }) async {
+    final ComposeInvocation invocation;
+    try {
+      invocation = composeConfig(
+        socketPath: _socketPath,
+        project: project.name,
+        projectDirectory: project.workingDir,
+        configFiles: project.configFiles,
+        envFiles: project.environmentFiles,
+        profiles: [if (allProfiles) '*'],
+        services: true,
+      );
+    } on ArgumentError {
+      return null;
+    }
+    final result = await _command(invocation.argv);
+    if (result == null || !result.succeeded || result.truncated) return null;
+    return parseComposeServiceNames(result.stdout);
+  }
+
+  /// Each service's hash from [hashArgv], a `config --hash '*'` run a
+  /// plan built; null when it failed or printed something else.
+  Future<Map<String, String>?> serviceHashes(List<String> hashArgv) async {
+    final result = await _command(hashArgv);
+    if (result == null || !result.succeeded || result.truncated) return null;
+    return parseComposeServiceHashes(result.stdout);
+  }
+
   // -- verification ---------------------------------------------------
 
   Future<StackVerdict> _check(ComposeProject project) async {
@@ -292,8 +330,10 @@ final class StackSources {
   }
 
   /// Runs `config --hash '*'` and compares each service's hash with its
-  /// containers' labels. Its error text is read only to tell a CLI
-  /// without the flag form from a config that fails.
+  /// containers' labels. A service it does not print is one the files no
+  /// longer name, or one only a profile enables: STK-06 lists it, and it
+  /// says nothing about the files. Its error text is read only to tell a
+  /// CLI without the flag form from a config that fails.
   Future<StackVerdict> _compareHashes(
     ComposeInvocation invocation,
     Map<String, Set<String>> expected,
@@ -319,12 +359,18 @@ final class StackSources {
     if (hashes == null) {
       return const StackUnverified(StackUnverifiedReason.cliCouldNotHash);
     }
+    var matched = false;
     for (final MapEntry(key: service, value: labels) in expected.entries) {
-      if (labels.length != 1 || hashes[service] != labels.single) {
+      final hash = hashes[service];
+      if (hash == null) continue;
+      if (labels.length != 1 || hash != labels.single) {
         return const StackUnverified(StackUnverifiedReason.hashMismatch);
       }
+      matched = true;
     }
-    return const StackVerified();
+    return matched
+        ? const StackVerified()
+        : const StackUnverified(StackUnverifiedReason.hashMismatch);
   }
 
   /// Runs [argv] through 03 §8.8's quoting; null when the link failed.
