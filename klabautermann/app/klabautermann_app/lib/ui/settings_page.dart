@@ -8,11 +8,12 @@ import '../controllers/announcement_controller.dart';
 import '../controllers/appearance_controller.dart';
 import '../l10n/app_localizations.dart';
 import '../services/settings_window/settings_window_link.dart';
+import 'about_dialog.dart';
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 
 /// Settings (03 §10.2): the seven planned tabs as placeholders, except
-/// General, which holds A11Y-15's switch (D60), and Appearance, which
-/// already drives the app's appearance. A route on
+/// General, which holds A11Y-15's switch (D60) and the about row (M16),
+/// and Appearance, which already drives the app's appearance. A route on
 /// phones (and wherever the desktop window cannot open); on desktop the
 /// same page fills the settings window (`settings_window_app.dart`).
 class SettingsPage extends StatefulWidget {
@@ -20,12 +21,17 @@ class SettingsPage extends StatefulWidget {
     super.key,
     required this.appearance,
     required this.announcements,
+    required this.appVersion,
     this.initialTab = SettingsTab.general,
     this.tabRequests,
   });
 
   final AppearanceSettings appearance;
   final AnnouncementSettings announcements;
+
+  /// The running build's version for the about row; null when the
+  /// platform could not tell (`readAppVersion`).
+  final String? appVersion;
 
   /// The tab the page opens on, read once when it is first built: the
   /// settings window keys each page it shows by generation, so opening on
@@ -96,6 +102,7 @@ class _SettingsPageState extends State<SettingsPage>
             switch (tab) {
               SettingsTab.general => GeneralTab(
                 announcements: widget.announcements,
+                appVersion: widget.appVersion,
               ),
               SettingsTab.appearance => AppearanceTab(
                 appearance: widget.appearance,
@@ -109,11 +116,21 @@ class _SettingsPageState extends State<SettingsPage>
 }
 
 /// The General tab: A11Y-15's switch for threshold-band announcements
-/// (D60), which the Overview's health card links to.
+/// (D60), which the Overview's health card links to, and the about row
+/// (M16): the app title with its preview label and the version, opening
+/// the About dialog. Phones have no About command, so this row is their
+/// way to the dialog.
 class GeneralTab extends StatelessWidget {
-  const GeneralTab({super.key, required this.announcements});
+  const GeneralTab({
+    super.key,
+    required this.announcements,
+    required this.appVersion,
+  });
 
   final AnnouncementSettings announcements;
+
+  /// As [SettingsPage.appVersion].
+  final String? appVersion;
 
   /// As [AppearanceTab._setMode]: the switch moves only once the app took
   /// the change, and a change it took but could not save says so.
@@ -157,6 +174,21 @@ class GeneralTab extends StatelessWidget {
             onChanged: (announce) => unawaited(_set(context, announce)),
             title: Text(l10n.settingsAnnounceBands),
             subtitle: Text(l10n.settingsAnnounceBandsDetail),
+          ),
+          const SizedBox(height: 24),
+          Semantics(
+            header: true,
+            child: Text(
+              l10n.settingsAboutTitle,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+          ),
+          const SizedBox(height: 4),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.appTitle),
+            subtitle: Text(appVersionLine(l10n, appVersion)),
+            onTap: () => showAppAboutDialog(context, version: appVersion),
           ),
         ],
       ),

@@ -104,3 +104,7 @@
   sections you can fold, and your imports follow under Imported. Pin a
   synced server to the top from its menu (right-click, Shift+F10, the Menu
   key or a long-press); pins are kept on this device only.
+- Until v1 the app calls itself Klabautermann (preview). About
+  Klabautermann, in the application menu on macOS and the Help menu on
+  Linux and Windows, shows the version and the licence, and Settings >
+  General shows the version and opens the same dialog on every device.

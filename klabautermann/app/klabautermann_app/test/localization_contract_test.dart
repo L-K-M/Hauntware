@@ -38,6 +38,14 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // settings route, which is what the user sees.
     "'while opening the settings window'",
   },
+  // The preview label's marker, which tests tie the ARB title and the
+  // Linux package description to; never displayed by itself.
+  'lib/app_identity.dart': {"'(preview)'"},
+  // A diagnostic; the About dialog shows its own ARB text
+  // (aboutVersionUnknown) when the version cannot be read.
+  'lib/services/app_version.dart': {
+    r"'The app version could not be read: $error'",
+  },
   'lib/main.dart': {
     // A file path inside the app's support directory.
     r"'${supportDirectory.path}${Platform.pathSeparator}$name'",
@@ -284,6 +292,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The command registry's ids, keys of the menus and shortcuts.
   'lib/ui/menus/app_commands.dart': {
+    "'app.about'",
     "'app.settings'",
     "'fleet.importSshConfig'",
     "'app.quit'",

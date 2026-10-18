@@ -54,7 +54,16 @@ enum SettingsLinkMethod {
 }
 
 /// The keys of every JSON object on the link, spelled once for both sides.
-enum SettingsLinkKey { appearance, palette, mode, announceThresholdBands }
+enum SettingsLinkKey {
+  appearance,
+  palette,
+  mode,
+  announceThresholdBands,
+
+  /// The running build's version for the about row, a string or null:
+  /// the window's engine registers no plugins to read it itself.
+  appVersion,
+}
 
 /// The palette's stored form, bound to Klabautermann's style.
 const _themeCodec = GhostThemeCodec(klabautermannThemeStyle);

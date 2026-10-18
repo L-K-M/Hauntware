@@ -1163,12 +1163,14 @@ M2, the host read MVP, is the current milestone. What is on main:
     §4.10 records the file).
   - Menus from one command registry (`lib/ui/menus/`, Poltergeist's
     shape): `PlatformMenuBar` on macOS, a Flutter menu bar strip on Linux
-    and Windows, none on phones. Registered: Settings… (⌘, on macOS,
-    Ctrl+, elsewhere; in the application menu on macOS, File elsewhere),
-    Import from ~/.ssh/config (File, desktops, disabled while an import
-    runs) and Quit (File, Linux and Windows, the close button's path). On
-    macOS AppKit adds About, Services, the hide trio, Quit (⌘Q), Enter
-    Full Screen (View) and Minimize, Zoom and Bring All to Front (Window).
+    and Windows, none on phones. Registered: About Klabautermann (first
+    in the application menu on macOS, Help elsewhere; below), Settings…
+    (⌘, on macOS, Ctrl+, elsewhere; in the application menu on macOS,
+    File elsewhere), Import from ~/.ssh/config (File, desktops, disabled
+    while an import runs) and Quit (File, Linux and Windows, the close
+    button's path). On macOS AppKit adds Services, the hide trio, Quit
+    (⌘Q), Enter Full Screen (View) and Minimize, Zoom and Bring All to
+    Front (Window).
     The same registry binds the shortcuts. No command is a toggle, so
     `klabautermann/menu_checks` stays reserved.
 
@@ -1177,6 +1179,21 @@ M2, the host read MVP, is the current milestone. What is on main:
   client CI legs compile the macOS runner;
   `app/klabautermann_app/test/desktop_chrome_runner_test.dart` also
   guards its wiring on Linux.
+- Preview label (E26, M16; 04 §12.3): until v1 the app title is
+  "Klabautermann (preview)" (`appTitle`), tied by tests to
+  `kPreviewLabel` in `lib/app_identity.dart`, as is the `.deb`
+  description of `scripts/package-linux.sh`. About Klabautermann, on
+  every desktop, opens the app's About dialog (Material's, with the
+  title, the version and the Unlicense line, and View licenses);
+  Settings > General has an about row with the title and version that
+  opens it everywhere, phones included. On macOS the command replaces
+  AppKit's About panel, which shows `CFBundleName`, an identity that
+  stays unchanged (owner question Q3). The version comes from
+  `package_info_plus`, read once in `main`; the settings window's
+  engine has no plugins, so the snapshot of the settings link carries
+  it. The release asset names keep their label from the packaging
+  scripts; the release job and notes are E32's. M7 drops the label in
+  one change.
 - Single desktop instance (03 §4.10): on macOS, Linux and Windows the
   composition root takes an exclusive, non-blocking advisory lock on
   `instance.lock` in the support directory (`klabautermann_core`'s
@@ -1342,14 +1359,18 @@ between PRs. M1 adds gates of its own:
   Hide Klabautermann, Hide Others, Show All, Quit Klabautermann ⌘Q),
   File (Import from ~/.ssh/config), View (Enter Full Screen) and Window
   (Minimize, Zoom, Bring All to Front), with no tab commands; each item
-  does what it says. ⌘, opens Settings from the main window, from a
+  does what it says. About Klabautermann opens the app's About dialog
+  ("Klabautermann (preview)", the build's version, the Unlicense line),
+  never AppKit's panel. ⌘, opens Settings from the main window, from a
   focused text field, and with Settings in front (it comes forward).
   There is no Edit menu yet: ⌘C, ⌘V, ⌘X, ⌘A and ⌘Z still work in a text
-  field in both windows. Linux and Windows: a File menu strip above the
-  content with Import from ~/.ssh/config, Settings… (Ctrl+, shown and
-  working) and Quit, which closes the app the way the close button does.
-  The import item is dimmed while an import runs. Phones and tablets show
-  no menu. Open: needs a person on each OS; the widget tests check the
+  field in both windows. Linux and Windows: a menu strip above the
+  content with File (Import from ~/.ssh/config, Settings… with Ctrl+,
+  shown and working, and Quit, which closes the app the way the close
+  button does) and Help (About Klabautermann, the same dialog). The
+  import item is dimmed while an import runs. Phones and tablets show
+  no menu. On every OS, Settings > General's about row shows the
+  build's version, in the settings window too, and opens the dialog. Open: needs a person on each OS; the widget tests check the
   model and the Flutter side of `PlatformMenuBar`, not AppKit's menu.
 - Single desktop instance (03 §4.10), once per desktop OS from a build
   that includes the lock. With Klabautermann running, launch it again

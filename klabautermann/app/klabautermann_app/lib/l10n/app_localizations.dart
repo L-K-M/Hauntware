@@ -94,10 +94,10 @@ abstract class AppLocalizations {
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[Locale('en')];
 
-  /// No description provided for @appTitle.
+  /// The app's title, with the preview label until v1 (04 §12.3): the task switcher, the About dialog and the about row on the General settings tab. Klabautermann is the display name, an identity: never translated.
   ///
   /// In en, this message translates to:
-  /// **'Klabautermann'**
+  /// **'Klabautermann (preview)'**
   String get appTitle;
 
   /// No description provided for @fleetTitle.
@@ -309,6 +309,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Window'**
   String get menuWindow;
+
+  /// Title of the Help menu (Linux and Windows, where it holds About Klabautermann).
+  ///
+  /// In en, this message translates to:
+  /// **'Help'**
+  String get menuHelp;
+
+  /// The menu command that opens the About dialog: first in the macOS application menu, in the Help menu on Linux and Windows. Klabautermann is the display name: never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'About Klabautermann'**
+  String get aboutCommand;
+
+  /// The running build's version in the About dialog and the about row on the General settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version}'**
+  String aboutVersion(String version);
+
+  /// In place of aboutVersion when the platform could not tell the app's version.
+  ///
+  /// In en, this message translates to:
+  /// **'Version unknown'**
+  String get aboutVersionUnknown;
+
+  /// The app's licence line in the About dialog. Klabautermann and Unlicense are names: never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann is free and unencumbered software released into the public domain under the Unlicense.'**
+  String get aboutLicence;
 
   /// No description provided for @statusConnected.
   ///
@@ -3441,6 +3471,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The setting could not be changed.'**
   String get settingsAnnounceNotChanged;
+
+  /// Heading of the about row on the General settings tab, which shows the app's title and version and opens the About dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get settingsAboutTitle;
 
   /// Screen-reader announcement (A11Y-15) when a value on a server's Overview has crossed into the warning or critical band, or back below the warning level; metric names the value (CPU, Memory, Disk /var), value is its percentage.
   ///

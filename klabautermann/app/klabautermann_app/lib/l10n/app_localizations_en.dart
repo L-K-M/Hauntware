@@ -9,7 +9,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'Klabautermann';
+  String get appTitle => 'Klabautermann (preview)';
 
   @override
   String get fleetTitle => 'Fleet';
@@ -156,6 +156,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get menuWindow => 'Window';
+
+  @override
+  String get menuHelp => 'Help';
+
+  @override
+  String get aboutCommand => 'About Klabautermann';
+
+  @override
+  String aboutVersion(String version) {
+    return 'Version $version';
+  }
+
+  @override
+  String get aboutVersionUnknown => 'Version unknown';
+
+  @override
+  String get aboutLicence =>
+      'Klabautermann is free and unencumbered software released into the public domain under the Unlicense.';
 
   @override
   String get statusConnected => 'Connected';
@@ -2552,6 +2570,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsAnnounceNotChanged => 'The setting could not be changed.';
+
+  @override
+  String get settingsAboutTitle => 'About';
 
   @override
   String overviewBandAnnouncement(String metric, String value, String band) {
