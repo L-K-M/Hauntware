@@ -9,6 +9,7 @@
 @Tags(['shell'])
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -89,8 +90,13 @@ Future<_Run> _runOps(
     ..write(buildSamplerProgram(kind: SamplerKind.slow, nonce: nonce))
     ..write(encodeOnDemandRequest(1, Collector.ops, const [], quote: (w) => w));
   await proc.stdin.close();
-  await outDone.timeout(const Duration(seconds: 20));
-  await errDone.timeout(const Duration(seconds: 20));
+  try {
+    await outDone.timeout(const Duration(seconds: 20));
+    await errDone.timeout(const Duration(seconds: 20));
+  } on TimeoutException {
+    proc.kill();
+    rethrow;
+  }
   expect(await proc.exitCode, 0, reason: 'stderr: $err');
 
   HwsSessionReady? ready;
@@ -244,9 +250,47 @@ void main() {
           ...latin1.encode('dir root absent 0 $kOpsRootDirectory\n'),
         ]).value;
         final user = listing.directories[OpDirectoryKind.user]!;
-        expect((user.count, user.listed, user.capped), (55, 50, true));
+        expect(
+          (user.count, user.listed, user.capped),
+          (kOpsRecordCap + 5, kOpsRecordCap, true),
+        );
         expect(listing.records, hasLength(kOpsRecordCap));
         expect(listing.rejected, isEmpty);
+      });
+
+      test('records count bytes under a UTF-8 locale', () {
+        // The framing counts bytes: a multibyte record read under a UTF-8
+        // locale must not shift the record after it.
+        final dir = _scratch(path);
+        final ops = Directory('${dir.path}/ops')..createSync();
+        File('${ops.path}/0000000000000001.json').writeAsStringSync('é' * 2100);
+        final running = File(
+          '${_recordsRoot()}/0123456789abcdef.json',
+        ).readAsStringSync();
+        File('${ops.path}/0000000000000002.json').writeAsStringSync(
+          running.replaceAll('0123456789abcdef', '0000000000000002'),
+        );
+        final r = Process.runSync(
+          shellIn(dir),
+          ['-c', _listingScript(), 'sh', 'user', ops.path],
+          environment: {
+            'LC_ALL': 'C.UTF-8',
+            'PATH': '${dir.path}/bin:/usr/bin:/bin',
+          },
+          stdoutEncoding: null,
+        );
+        expect(r.exitCode, 0);
+        final listing = parseOps([
+          ...r.stdout as List<int>,
+          ...latin1.encode('dir root absent 0 $kOpsRootDirectory\n'),
+        ]);
+        expect(listing.warnings, isEmpty);
+        expect(
+          listing.value.directories[OpDirectoryKind.user]!.state,
+          OpDirectoryState.ok,
+        );
+        expect(listing.value.records.map((r) => r.id), ['0000000000000002']);
+        expect(listing.value.rejected.single.reason, OpRejection.truncated);
       });
 
       test('an unlistable directory is denied', () {

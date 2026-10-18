@@ -142,6 +142,17 @@ void main() {
       expect(kCollectorSetVersion, '8');
     });
 
+    test('a second SELF before READY', () {
+      expect(
+        _assemble([
+          ..._self,
+          ..._marker('SELF 1 2'),
+          ..._marker('READY HWS/1 $kCollectorSetVersion'),
+        ]),
+        ['failed outOfOrder'],
+      );
+    });
+
     test('a READY of this version without SELF', () {
       expect(
         _assemble([

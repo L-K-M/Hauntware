@@ -1018,7 +1018,8 @@ const kOpsRecordBytes = 4096;
 /// record's `status` is `ok`, `truncated` (cut at [kOpsRecordBytes]),
 /// `denied` or `error`; no bytes follow the last two. The byte counts frame
 /// the records as sections are framed, so record text cannot forge another
-/// record (`LC_ALL=C` makes `${#c}` count bytes), and a listing its timeout
+/// record (the script sets `LC_ALL=C` itself, so `${#c}` counts bytes
+/// whatever locale it inherits), and a listing its timeout
 /// cut short has no `dir` line. `head -c 4097` bounds each read; the
 /// sentinels printed after it and after each listing keep the trailing
 /// newlines that command substitution would drop, so a listing cut after
@@ -1026,7 +1027,7 @@ const kOpsRecordBytes = 4096;
 /// so a shell's warning (bash's about a NUL byte) cannot land between
 /// records.
 const _kOpsFragment = r"""
-_HW_OPS='exec 2>/dev/null
+_HW_OPS='LC_ALL=C; export LC_ALL; exec 2>/dev/null
 k=$1; d=$2; n=0; t=0
 if [ ! -e "$d" ]; then printf "dir %s absent 0 %s\n" "$k" "$d"; exit 0; fi
 if [ ! -d "$d" ] || [ ! -r "$d" ] || [ ! -x "$d" ]; then

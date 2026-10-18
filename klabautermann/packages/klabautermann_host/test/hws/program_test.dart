@@ -268,7 +268,7 @@ void main() {
     final start = ops.indexOf("_HW_OPS='") + "_HW_OPS='".length;
     final script = ops.substring(start, ops.indexOf("'\n", start));
     expect(script, isNot(contains("'")));
-    expect(script, startsWith('exec 2>/dev/null\n'));
+    expect(script, startsWith('LC_ALL=C; export LC_ALL; exec 2>/dev/null\n'));
   });
 
   test('the probe reads the lxcfs mounts (D50)', () {

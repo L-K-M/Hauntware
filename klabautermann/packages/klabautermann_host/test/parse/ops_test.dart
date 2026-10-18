@@ -21,7 +21,10 @@ String _recordsRoot() {
   ]) {
     if (Directory(path).existsSync()) return path;
   }
-  return 'test/parse/ops_records';
+  throw StateError(
+    'ops record fixtures not found; run the tests from the package '
+    'directory or the workspace root',
+  );
 }
 
 List<int> _fixture(String id) =>
@@ -382,7 +385,13 @@ void main() {
           ], _emptyRoot()),
         );
         expect(r.value.records, isEmpty);
+        expect(r.value.rejected, isEmpty);
         expect(r.warnings.first, contains('malformed rec line'));
+        // The parse ended, so the dir line after it was never applied.
+        expect(
+          r.value.directories[OpDirectoryKind.user]!.state,
+          OpDirectoryState.incomplete,
+        );
       });
     }
 
