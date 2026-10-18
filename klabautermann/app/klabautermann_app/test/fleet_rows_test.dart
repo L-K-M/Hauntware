@@ -428,7 +428,7 @@ void main() {
     });
 
     testWidgets('a synced row\'s menu pins and unpins it; an import has no '
-        'menu', (tester) async {
+        'pin', (tester) async {
       final saved = <Set<String>>[];
       final rows = await _pump(
         tester,
@@ -436,7 +436,13 @@ void main() {
         size: const Size(260, 720),
         savePins: (ids) async => saved.add(ids),
       );
-      expect(_row(tester, 'ssh-config:alpha').menuEntries, isNull);
+      expect(
+        _row(
+          tester,
+          'ssh-config:alpha',
+        ).menuEntries!().map((entry) => (entry as SidebarMenuAction).label),
+        ['Monitor'],
+      );
 
       await openMenu(tester, 'web-1');
       await tester.tap(find.text('Pin to top'));
@@ -453,6 +459,68 @@ void main() {
       expect(rows.fleet.pinnedServerIds, isEmpty);
       expect(saved.last, isEmpty);
       expect(find.text('PINNED'), findsNothing);
+    });
+
+    testWidgets('a row\'s menu monitors the server and stops monitoring it '
+        '(FL-21)', (tester) async {
+      final rows = await _pump(
+        tester,
+        servers: fleet,
+        size: const Size(260, 720),
+      );
+
+      await openMenu(tester, 'alpha');
+      await tester.tap(find.text('Monitor'));
+      await tester.pumpAndSettle();
+      expect(rows.fleet.monitoredServerIds, {'ssh-config:alpha'});
+
+      await openMenu(tester, 'alpha');
+      await tester.tap(find.text('Stop monitoring'));
+      await tester.pumpAndSettle();
+      expect(rows.fleet.monitoredServerIds, isEmpty);
+    });
+
+    testWidgets('Monitor is disabled for a server that cannot join, and a '
+        'full set says so', (tester) async {
+      final rows = await _pump(
+        tester,
+        servers: [
+          for (var i = 1; i <= kMonitorSetLimit + 1; i++)
+            FleetServer(id: 'srv-$i', displayName: 'server $i'),
+          const FleetServer(
+            id: 'srv-pw',
+            displayName: 'password',
+            monitorEligibility: MonitorEligibility.interactiveCredentials,
+          ),
+        ],
+        size: const Size(260, 1000),
+      );
+
+      await openMenu(tester, 'password');
+      await tester.tap(find.text('Monitor'));
+      await tester.pumpAndSettle();
+      expect(rows.fleet.monitoredServerIds, isEmpty);
+      await tester.tapAt(Offset.zero);
+      await tester.pumpAndSettle();
+
+      for (var i = 1; i <= kMonitorSetLimit; i++) {
+        await rows.fleet.setMonitored('srv-$i', monitored: true);
+      }
+      await openMenu(tester, 'server ${kMonitorSetLimit + 1}');
+      await tester.tap(find.text('Monitor'));
+      await tester.pumpAndSettle();
+
+      expect(rows.fleet.monitoredServerIds, hasLength(kMonitorSetLimit));
+      expect(
+        find.text(
+          'You can monitor up to 10 servers on this device. Stop monitoring '
+          'one first.',
+        ),
+        findsOneWidget,
+      );
+      // The toast leaves on its own.
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pumpAndSettle();
     });
 
     testWidgets('a pin that cannot be saved holds and says so', (tester) async {
