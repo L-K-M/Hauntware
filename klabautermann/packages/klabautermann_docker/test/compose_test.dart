@@ -140,6 +140,22 @@ void main() {
         hash: '*',
       );
       expect(hash.argv.sublist(hash.argv.length - 2), ['--hash', '*']);
+      final envs = composeConfig(
+        socketPath: '/run/docker.sock',
+        project: 'web',
+        envFiles: const ['/opt/web/.env', '/opt/web/prod.env'],
+        hash: '*',
+      );
+      expect(
+        envs.argv,
+        containsAllInOrder([
+          '--env-file',
+          '/opt/web/.env',
+          '--env-file',
+          '/opt/web/prod.env',
+          'config',
+        ]),
+      );
     });
 
     test('up and pull carry the output flags and services', () {
@@ -205,8 +221,14 @@ void main() {
       expect(r.value.services['db']!.profiles, ['debug']);
       expect(r.value.volumes, ['web_data']);
       expect(r.value.networks, ['default']);
-      expect(parseComposeConfigHash('abc123\n'), 'abc123');
-      expect(parseComposeConfigHash('two\nlines'), isNull);
+      expect(parseComposeServiceHashes('db 0a1b\nweb.replica 2c3d\n'), {
+        'db': '0a1b',
+        'web.replica': '2c3d',
+      });
+      // A bare hash, an empty output and help text are not the shape.
+      expect(parseComposeServiceHashes('0a1b\n'), isNull);
+      expect(parseComposeServiceHashes(''), isNull);
+      expect(parseComposeServiceHashes('Usage: docker compose config'), isNull);
     });
 
     test('parses compose version', () {

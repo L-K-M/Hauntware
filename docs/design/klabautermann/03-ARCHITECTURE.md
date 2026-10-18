@@ -5060,7 +5060,7 @@ shows there.
 | `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `RefreshSubscription(serverId, subscriptionId)` (a phone's pull to refresh, PLT-02), `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
-| `DockerQuery(serverId, queryId, query)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason)`, `DockerEvent` (opaque until the event lists) |
+| `DockerQuery(serverId, queryId, query)`, `DockerWatch(serverId, watchId, lists, statsFor)`, `DockerUnwatch(serverId, watchId)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason)`, `DockerListChanged(serverId, list, payload, at, fullRelist)` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(planId, preview)`, `ActionProgress`, `ActionFinished`, `ActionRefused(reason, intent or planId)` |
 | `AuditQuery(serverId, before, limit)` (8.10, M4) | `AuditRecords(serverId, records, more)` |
 | `SetSafetyPolicy(policy)`, `SetAdminMode(serverId, enabled)` (8.2, M4) | `AdminModeState(serverId, phase, expiresAt, retry, failure, ended)`; a refused plan's `ActionRefused` names `observeOnly` or `readOnly` |
@@ -5445,8 +5445,8 @@ the engine in `engine_isolate.dart` beside it):
   `dmesg --json` only as a fallback), and one file by absolute path
   (LOG-22). There is no text filter: LOG-05 searches the records the
   view holds, and `journalctl -g` waits for LOG-06 (v1). Container logs
-  (CTX-01) are no source until M3, so the M1 scaffold's `docker` source
-  and untyped `target` are gone. A window reads the newest `window` records and
+  (CTX-01) joined with M3 as their own typed source (below), so the M1
+  scaffold's `docker` source and untyped `target` are gone. A window reads the newest `window` records and
   ends; they arrive newest first, so `afterCursor`, a journal record's
   cursor, reads on to older records, as `journalctl --reverse
   --after-cursor` does. journalctl refuses `--since` with a cursor, so
@@ -5624,9 +5624,8 @@ the engine in `engine_isolate.dart` beside it):
   probe answer with other sockets, tools or sudo, or a connection that
   drops resolves again; a failure stands until the next query. On
   relay ranks the pool holds at most the short-action share's 2
-  connections and closes them after 30 s without a query [E]. Watches,
-  the endpoint override and typed list events are not in the protocol
-  yet.
+  connections and closes them after 30 s without a query [E]. The
+  endpoint override is not in the protocol yet.
 - **Monitor set (M2, K30).** `SetMonitorSet(ids)` replaces FL-21's set
   without a shape change. The engine keeps only the fleet servers that
   `monitorEligibilityOf` allows (4.3 step 4) and it can dial, subscribes
@@ -5641,6 +5640,124 @@ the engine in `engine_isolate.dart` beside it):
   prompt, and dials unattended again. A server that leaves the fleet or
   stops being eligible (a sync changed its endpoint) leaves the set, and
   the app's next set follows the fleet it hears.
+- **Version 3 (M3 Docker watches).** Watches joined version 3 the same
+  way (D06), and the opaque `DockerEvent` row is gone. `DockerWatch`
+  names the lists a view shows (containers, images, stacks, stats) and,
+  for stats, the container ids on screen (at most 64 [E]); a watch with
+  an id the server holds replaces it, and a server holds at most 16
+  [E]. A watch opens the endpoint as a query does, and one the engine
+  cannot hold (not in the fleet, too many ids, too many watches) is
+  answered with a failed list. `DockerListChanged` carries the whole
+  list each time as a typed payload: the containers without command
+  lines, the images, `groupComposeProjects`' grouping of the same
+  containers, or a stats round (per container CPU %, memory less
+  `inactive_file` or the cache, the limit, and the engine's time), or a
+  typed failure. `fullRelist` marks a list read from nothing: a
+  watch's first read, or one after the stream was lost for over 60 s
+  or could not resume. As built, the engine opens one `/events` stream
+  per server while any watch holds, on a connection of its own (on a
+  relay a follower-type channel that D09 accounts for), filtered to
+  container, image, volume and network events, and lists only once its
+  head has arrived. Container actions that change no list (`exec_*`,
+  `attach`, `resize`, `top`, archive and export) are skipped. Each
+  other event goes through `planEventRefresh`: events within 250 ms
+  [E] of the first are refreshed together, the containers they name
+  (up to 16 [E]) read with an `id` filter and merged in, more of them,
+  or an event without an id, re-listing them all, and image events
+  re-listing the images. A stream that ends opens again over the same
+  endpoint after 1 s, doubling to 30 s [E]; one whose endpoint drops
+  resumes over the next. Either resumes with `since` at the last
+  event's second when the stream was lost 60 s ago or less on the same
+  socket, and re-lists in full otherwise. Stats are one-shot reads of
+  the ids on screen that the list does not know as stopped, every 5 s
+  [E] after the last round, at most 4 at once on streamlocal and one
+  at a time on a relay, the CPU % taken against the previous read, so
+  a container's first read has none. The last unwatch, Disconnect,
+  fleet removal and an endpoint change end it all.
+- **Version 3 (M3 container logs).** Container logs joined version 3
+  the same way (D07), as a log source rather than Docker rows (M7):
+  `ContainerLogSource(containerId)` opens through `OpenLogStream`, its
+  lines arrive in `LogBatch` as `ContainerRecord(stream, at, text)`
+  (stdout or stderr; a TTY container's one stream as stdout; `at` the
+  daemon's timestamp to the microsecond), and `LogStreamState` reports
+  it with the journal's statuses. It takes no cursor. A follow waits
+  for the Docker endpoint as waiting for the link, and a failed
+  endpoint ends it as failed. `LogStreamEndReason` gained
+  `logDriverUnreadable`, whose detail names the driver: `none`, a
+  remote driver whose dual-logging cache the container turns off
+  (`cache-disabled`), or on Podman, which keeps no such cache, any
+  driver but `k8s-file`, `json-file` and `journald`; a cache turned
+  off daemon-wide, which inspect does not show, reads so from the
+  logs request's 501. A gone container ends as missing. As built, the
+  engine inspects the container for `Config.Tty` and the log driver,
+  then asks for the last `window` lines with `follow` and
+  `timestamps=1`, on a connection of its own. The framing follows
+  `resolveLogFraming`, so `Config.Tty` decides when no `Content-Type`
+  came, as from Docker 20.10 and Podman. A multiplexed frame without a
+  trailing newline leaves its line open, and the next frame of that
+  stream continues it without its own timestamp, which joins the
+  lines Podman splits over two frames; a raw stream splits on
+  newlines only. Lines are cut at 256 KiB, and the journal follow's
+  ring (5,000 lines, 4 MiB) and pace (a batch per 50 ms at most) apply,
+  with lines the ring drops counted in `dropped`. When the endpoint
+  drops, a follow pauses with its ring kept and resumes over the next
+  one with `since` at the newest line received and no tail, dropping
+  re-sent lines up to that timestamp (`dropInclusiveSince`), so it
+  reports `complete`; lines at that very nanosecond that never arrived
+  are dropped too. A response that ends, as when the container
+  stops, reads again over the same endpoint after 1 s, doubling to
+  30 s [E], since the newest line, so a follow outlasts a restart; a
+  window ends once its response does. On relay ranks a running follow
+  holds a follower slot and a window a short-action slot (2 each, with
+  the learned-limit rule), from shares the Docker session keeps apart
+  from the host log reads' until D09 joins them, and others wait for a
+  channel; streamlocal costs none. Container log streams count apart from the
+  host's, up to 16 per server, and ids stay unique across both. The
+  background does not pause them yet. CloseStream, Disconnect, fleet
+  removal and an endpoint change end them.
+- **Version 3 (M3 stack sources).** Stack verification and files joined
+  version 3 the same way (D08; 7.16, M11). `DockerStacksPayload` gained
+  `verdicts`, a `StackVerdict` per project: `StackVerifying`,
+  `StackVerified`, `StackUnverified(reason)` or
+  `StackSourceNotOnHost(deployedBy?)`, `deployedBy` being the manager
+  the project's labels mark (8.7), since a manager running compose in
+  its own container records paths inside it. It also gained
+  `composeCli`, the plugin's and the standalone binary's versions, the
+  standalone v1 read-only. `DockerStackFileQuery(project, path)` reads
+  a config file, a recorded environment file or the working
+  directory's `.env`, answered by `DockerStackFilePayload(project,
+  path, text, size, truncated)`, whose `text` is `MaskedValue` spans,
+  or `DockerStackFileFailed(failure)`. As built, a project's labels
+  decide at once when they name no config files, an unsafe name or
+  path (8.8), or a service container without `config-hash`; otherwise
+  one exec runs `test -f` on every config file, and a missing one reads
+  source not on host. Then the endpoint looks once for `docker compose
+  version` and `docker-compose version` in one exec; without the plugin
+  the project is unverified (no compose CLI, or the standalone binary
+  only, which does not verify). Then `docker --host unix://<socket>
+  compose -p <p> --project-directory <d> -f <f>... --env-file <e>...
+  config --hash '*'` prints a hash per service, each compared with the
+  label of that service's containers, one-off containers aside: equal
+  is verified; a different or missing service is `hashMismatch`; a
+  refused flag or other output is `cliCouldNotHash`; another failure is
+  `configFailed`, its error text dropped unread. The docker CLI checks
+  a Podman engine too, through `--host`. Each exec takes a short-action
+  slot of the Docker session's quota on every rank, so two run at once,
+  each within 30 s [E]. A verdict holds while the project's labels stay the
+  same, until a watch asks for the stacks again; the stacks list goes
+  out with `StackVerifying` for the rest and again once they are
+  checked. A file read lists the project's containers, so the verdict
+  is current, and refuses an unknown stack, a path that is none of its
+  files and an unverified stack before SFTP; then it stats the path
+  without following links (a link or other non-regular file is
+  refused, as the download is) and reads at most 1 MiB [E], cancelling
+  the transfer past it and keeping the complete lines before it, with
+  `truncated` set. Masking (8.9) covers every environment file value
+  (a quoted value to its closing quote), compose `KEY: value` and `-
+  KEY=value` lines whose key matches the pattern, a block scalar under
+  such a key, and URL credentials in both; a secret plain scalar
+  continued on later lines and flow mappings are not masked. The text
+  is neither cached nor logged.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period
