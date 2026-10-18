@@ -1611,7 +1611,8 @@ jobs:
           macos-arm64, windows-x64).
           **Poltergeist** — same client matrix as Séance (no server).
           **Klabautermann (preview)** — same client matrix as Séance (no
-          server). Its asset names carry the preview label until v1.
+          server). Until v1 its asset names carry the preview label, except
+          the .deb, which keeps Debian's versioned name.
           Séance 0.9.2 and Poltergeist 1.0.1 and earlier used `com.lkm.*`
           app IDs. Suite builds use `ch.lkmc.*`: they install as new apps
           beside those versions and start without their data.

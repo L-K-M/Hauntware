@@ -1038,7 +1038,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   bundle's signature, packages the .deb, AppImage and Flatpak, and runs
   the macOS fixtures. The root `release.yml`'s `client_klabautermann`
   job (M4 E32) builds the same five targets on a release tag and
-  attaches eight preview-labelled assets, which
+  attaches eight preview assets, all but the .deb with the preview
+  label in their names, which
   `scripts/release-manifest.txt` and `scripts/check-workflows.sh` hold
   to the release floor (decision 16).
 - Integration CI legs (M2, K47, #195): `detect_klabautermann_integration`
