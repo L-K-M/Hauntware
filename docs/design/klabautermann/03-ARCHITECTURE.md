@@ -2515,6 +2515,21 @@ TCP 2375 and 2376 are never offered. A Dropbear host older than 2024.84
 has no Unix stream forwarding and uses rank 2; 2024.84 to 2025.88 get a
 CVE-2025-14282 warning [R: r5 §1.1].
 
+As built in M4 (E16, plan M7), rank 3 is `DockerRank.sudoRelay`: a
+socket the exec probe finds the user cannot write, on a host with sudo,
+takes it while admin mode is on, with the engine CLI the probe saw
+(`docker --host` or `podman --url`, as rank 2). Each pooled connection
+starts through `ElevatedExecutor.start` with `nopasswdFirst`: `sudo -n
+--` first, which a NOPASSWD rule scoped to `docker` allows, and the
+password prelude after a refusal that wants a password. A connection
+asks for the admin session as it opens, so one opened after admin mode
+ended fails. Admin mode ending drops a sudo relay endpoint, which
+resolves again and reads `needsAdminMode`; admin mode starting resolves
+a failed endpoint again. The route's root equivalence is `sudoRelay`,
+whatever the engine. Without admin mode the ladder never offers it; a
+host with no engine CLI has no sudo relay (`noRelay`). The app's label
+and SAF-08 badge arrive with E22.
+
 ### 5.10 dartssh2 defects and mitigations (D23)
 
 c2 found these defects in 3.0.2. The last column gives their state on the

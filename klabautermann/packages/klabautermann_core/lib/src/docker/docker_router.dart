@@ -37,6 +37,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
 import 'package:seance_core/seance_core.dart'
     show RemoteCommandResult, SshLink, SshLinkClosed;
 
+import '../admin/admin_mode.dart' show AdminSession;
 import '../engine/protocol.dart';
 import '../links/channel_quota.dart';
 import '../logs/log_stream_router.dart' show kLogStreamsPerServerMax;
@@ -86,6 +87,7 @@ final class DockerRouter {
   DockerRouter({
     required this._linkFor,
     required this._emit,
+    this._adminFor,
     this._startTimer = Timer.new,
     this._now = DateTime.now,
     Duration Function()? elapsed,
@@ -93,6 +95,10 @@ final class DockerRouter {
 
   final SshLink? Function(String serverId) _linkFor;
   final void Function(EngineEvent event) _emit;
+
+  /// Each server's admin session, whose elevation the sudo relay (rank 3)
+  /// runs through; absent in an engine without admin mode.
+  final AdminSession? Function(String serverId)? _adminFor;
   final Timer Function(Duration duration, void Function() callback) _startTimer;
   final DateTime Function() _now;
   final Duration Function() _elapsed;
@@ -322,6 +328,26 @@ final class DockerRouter {
     if (_sessions.remove(serverId) case final session?) _end(session);
   }
 
+  /// Admin mode turned on or off for [serverId] (plan M7). When it ends,
+  /// a sudo relay's connections close and the route is looked for again,
+  /// which now passes over rank 3; when it starts, a route that failed
+  /// is looked for again, which may now take it.
+  void adminChanged(String serverId) {
+    final session = _sessions[serverId];
+    if (session == null) return;
+    final on = _adminFor?.call(serverId) != null;
+    if (session.endpoint case final endpoint?) {
+      if (on || endpoint.route.rank != DockerRank.sudoRelay) return;
+      _drop(session);
+      _pump(session);
+      return;
+    }
+    if (on && session.failed) {
+      session.failed = false;
+      _pump(session);
+    }
+  }
+
   /// Ends the sessions of [serverIds] and forgets their probe answers:
   /// they left the fleet, or their endpoint now names another machine
   /// (SYN-08).
@@ -419,7 +445,7 @@ final class DockerRouter {
     final epoch = session.epoch;
     _state(session, DockerEndpointPhase.resolving);
 
-    final outcome = await _connect(link, profile);
+    final outcome = await _connect(session.serverId, link, profile);
     if (epoch != session.epoch ||
         !identical(_sessions[session.serverId], session)) {
       if (outcome case _Ready(:final endpoint)) {
@@ -478,12 +504,25 @@ final class DockerRouter {
   /// Finds a route and negotiates over it (03 §5.8, §5.9). A route the
   /// engine does not answer on is passed over and the ladder runs again;
   /// each pass excludes one more route, so the loop ends.
-  Future<_Outcome> _connect(SshLink link, HostProfile profile) async {
+  Future<_Outcome> _connect(
+    String serverId,
+    SshLink link,
+    HostProfile profile,
+  ) async {
     final excluded = <DockerRoute>{};
+    // Each connection asks for the session as it opens, so a relay opened
+    // after admin mode ended fails rather than elevate.
+    Future<ByteDuplex> open(DockerRoute route) =>
+        openDockerDuplex(link, route, admin: _adminFor?.call(serverId));
     while (true) {
       final DockerRouteResult found;
       try {
-        found = await DockerLadder.resolve(link, profile, excluding: excluded);
+        found = await DockerLadder.resolve(
+          link,
+          profile,
+          excluding: excluded,
+          adminMode: _adminFor?.call(serverId) != null,
+        );
       } on Object {
         // A link failure other than a forwarding refusal (D04). Anything
         // else thrown here would leave the session resolving for good.
@@ -500,7 +539,7 @@ final class DockerRouter {
           route = r;
       }
 
-      final http = _pool(link, route);
+      final http = _pool(route, open);
       final PingInfo ping;
       final DockerServerVersion version;
       try {
@@ -532,8 +571,8 @@ final class DockerRouter {
         );
         return _Ready(
           _Endpoint(
-            () => _pool(link, route),
-            () => openDockerDuplex(link, route),
+            () => _pool(route, open),
+            () => open(route),
             http,
             route: endpointRoute,
             version: version,
@@ -558,13 +597,15 @@ final class DockerRouter {
   /// session channel, so the short-action share's size bounds the pool
   /// until low-session mode (D09) accounts for them; streamlocal costs no
   /// session, and gets 03 §5.2's 16.
-  static DockerHttpClient _pool(SshLink link, DockerRoute route) =>
-      DockerHttpClient(
-        () => openDockerDuplex(link, route),
-        maxConnections: route.rank == DockerRank.streamlocal
-            ? defaultMaxConnections
-            : ChannelShare.shortAction.limit,
-      );
+  static DockerHttpClient _pool(
+    DockerRoute route,
+    Future<ByteDuplex> Function(DockerRoute route) open,
+  ) => DockerHttpClient(
+    () => open(route),
+    maxConnections: route.rank == DockerRank.streamlocal
+        ? defaultMaxConnections
+        : ChannelShare.shortAction.limit,
+  );
 
   /// Runs [query] over [endpoint] and answers it. A connection that
   /// drops, or answers no HTTP, drops the endpoint, which resolves again;

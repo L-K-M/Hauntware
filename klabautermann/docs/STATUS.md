@@ -1381,6 +1381,10 @@ M2, the host read MVP, is the current milestone. What is on main:
   image in use, and a managed or protected target need the typed
   confirmation. A stack acts in its services' dependency order and a
   cycle refuses. The app's Docker actions arrive with E22.
+- M4 sudo relay (E16a): while admin mode is on, a Docker socket the
+  user cannot write is reached through rank 3, the engine CLI's
+  `dial-stdio` under `sudo -n` or the password prelude, one elevated exec
+  per connection. Admin mode ending drops the route.
 - M4 pull and redeploy (E18): `PlanAction` plans STK-06 for a verified,
   unmanaged stack as one detached operation of `config -q`, `pull` and
   `up -d` through the endpoint's `--host`, listing orphans and warning

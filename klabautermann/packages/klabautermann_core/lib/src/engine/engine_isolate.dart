@@ -342,8 +342,11 @@ void engineMain(
       prompts: prompts,
       emit: (event) {
         uiPort.send(event);
+        if (event is! AdminModeState) return;
+        // A sudo relay lives only while admin mode does (plan M7).
+        docker?.adminChanged(event.serverId);
         // A root result's cleanup waits for admin mode (03 §7.17).
-        if (event is AdminModeState && event.phase == AdminModePhase.on) {
+        if (event.phase == AdminModePhase.on) {
           unawaited(operations?.adminOn(event.serverId));
         }
       },
@@ -450,7 +453,11 @@ void engineMain(
           unawaited(operations?.listed(serverId, section)),
     );
     logs = LogStreamRouter(linkFor: links.link, emit: uiPort.send);
-    docker = DockerRouter(linkFor: links.link, emit: uiPort.send);
+    docker = DockerRouter(
+      linkFor: links.link,
+      emit: uiPort.send,
+      adminFor: (serverId) => admin?.session(serverId),
+    );
   }
 
   // Probes the confirmed endpoints (FL-04, 03 §5.12); none while probes
