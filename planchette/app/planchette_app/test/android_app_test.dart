@@ -89,6 +89,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Save As…'), findsOneWidget);
     expect(find.text('Settings…'), findsOneWidget);
+    expect(find.text('Open Containing Folder'), findsNothing);
+    expect(find.text('Open Folder…'), findsNothing);
+    expect(find.text('Open Server…'), findsNothing);
     tester.view.viewInsets = const FakeViewPadding(bottom: 280);
     addTearDown(tester.view.resetViewInsets);
     await tester.pumpAndSettle();

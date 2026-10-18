@@ -110,7 +110,11 @@ List<String> _wrapper(
     uid: uid ?? _uid,
     argv: argv,
   );
-  final wrapped = launch.sublist(launch.indexOf('/bin/sh'));
+  final wrapped = [
+    // A systemd row's words as the service manager hands them on.
+    for (final w in launch.sublist(launch.indexOf('/bin/sh')))
+      runner.transientUnit ? w.replaceAll(r'$$', r'$') : w,
+  ];
   return [for (final w in wrapped) w == _placeholderDir ? dir : w];
 }
 

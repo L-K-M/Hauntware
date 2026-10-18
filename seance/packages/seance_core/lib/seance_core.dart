@@ -23,6 +23,8 @@ export 'src/ssh/credential_resolver.dart';
 export 'src/ssh/elevation.dart'
     show
         ElevatedExecutor,
+        ElevatedProcess,
+        ElevationAttempt,
         ElevationException,
         ElevationFailureKind,
         ElevationProbe;
