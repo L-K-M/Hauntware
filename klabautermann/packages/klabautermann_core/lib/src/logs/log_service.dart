@@ -200,6 +200,10 @@ final class LogService {
         cursor == null
             ? HostCommands.tail(path, lines: spec.window)
             : throw const HostCommandError('a file has no cursor'),
+      // The Docker router reads them over the API.
+      ContainerLogSource() => throw const HostCommandError(
+        'container logs come from the Docker endpoint',
+      ),
     };
   }
 
@@ -217,6 +221,9 @@ final class LogService {
         _deliver(read, out, _journalWindow(out, spec.window, since: after));
       case FileLogSource():
         _deliver(read, out, _fileWindow(out, spec.window));
+      // Refused by accepts: the Docker router reads them.
+      case ContainerLogSource():
+        break;
       case KernelLogSource():
         final journal = _journalWindow(out, spec.window);
         // Without an exit code journalctl did not run to its end: a cut,

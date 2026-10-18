@@ -124,6 +124,7 @@ void main() {
         KernelRecord(:final message) => message,
         FileRecord(:final text) => text,
         JournalRecord(:final message) => message ?? '<null>',
+        ContainerRecord(:final text) => text,
       },
   ];
 

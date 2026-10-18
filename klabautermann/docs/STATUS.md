@@ -198,6 +198,17 @@ M2, the host read MVP, is the current milestone. What is on main:
   streamlocal, one at a time on a relay), all as `DockerListChanged`.
   Tested over fakes only; the app does not watch yet (D13), and
   relay channels are not counted in `ChannelQuota` until D09.
+- Container logs (M3, D07, 03 §5.6, §10.1): `ContainerLogSource`
+  streams a container's logs through `OpenLogStream` as
+  `ContainerRecord`s over the server's Docker endpoint: framing by
+  `Config.Tty` when no `Content-Type` comes (Docker 20.10, Podman),
+  Podman's lines split over two frames joined, the journal follow's
+  ring and pace, a resume after the newest line with `since` and the
+  boundary line dropped, a stopped container read again with backoff,
+  and `logDriverUnreadable` naming a driver whose logs the API cannot
+  read. On relays the streams take follower slots of their own until
+  D09. Tested over fakes only; the app opens none yet (D15), and the
+  background does not pause them.
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and
@@ -1367,6 +1378,16 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 spike S3 (E01): `capture.sh --elevation-only` drives the real
+  elevation executor in containers. It covers sudo 1.9.16p2 under four
+  timestamp and tty rules, sudo-rs 0.2.13 and Alpine's doas, as a
+  non-root account with no tty. The evidence is in `docs/evidence/s3/`,
+  with D65 in 03. Rungs 2 to 4 hold; `requiretty` and password doas
+  need rung 5. Under `timestamp_type=global` a cached record accepts a
+  wrong password, so admin-mode validation (E11) will use
+  `sudo -k -S -p '' -v`. The matrix ran locally; CI runs only its
+  contract tests, since the Alpine package pin can disappear. run0 stays
+  manual.
 - M4 command builders (E08): `klabautermann_host` builds the guarded
   kill (PRC-02), which signals only when the PID's start ticks still
   match and exits 4 for a reused PID. It also builds `timerStart`
