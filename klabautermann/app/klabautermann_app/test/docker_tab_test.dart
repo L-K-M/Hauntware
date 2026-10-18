@@ -91,8 +91,8 @@ final _failures = <(DockerEndpointState, String, String)>[
   (
     dockerNoRoute('srv-1', DockerNoRouteReason.needsAdminMode),
     'No Engine API route: the socket needs admin mode',
-    'Your account cannot use the engine socket. Reaching it through sudo '
-        'needs admin mode, which arrives in a later milestone.',
+    'Your account cannot use the engine socket. Turn on admin mode to '
+        'reach it through sudo.',
   ),
   (
     dockerNoRoute('srv-1', DockerNoRouteReason.socketDenied),

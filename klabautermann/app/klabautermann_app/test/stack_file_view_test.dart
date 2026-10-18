@@ -307,8 +307,8 @@ void main() {
       (StackFileFailure.notFound, 'There is no file at this path on the host.'),
       (
         StackFileFailure.permissionDenied,
-        'Your account cannot read this file. Reading it through sudo needs '
-            'admin mode, which arrives in a later milestone.',
+        'Your account cannot read this file. Admin mode reads it through '
+            'sudo.',
       ),
       (
         StackFileFailure.notRegularFile,
@@ -326,7 +326,12 @@ void main() {
       expect(find.byType(PlanchetteEditor), findsNothing);
       expect(
         find.text('Try again'),
-        failure == StackFileFailure.readFailed ? findsOneWidget : findsNothing,
+        // Once admin mode is on, a refused read goes through sudo.
+        switch (failure) {
+          StackFileFailure.readFailed ||
+          StackFileFailure.permissionDenied => findsOneWidget,
+          _ => findsNothing,
+        },
         reason: failure.name,
       );
       await tester.pumpWidget(const SizedBox());

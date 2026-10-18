@@ -8,6 +8,7 @@ import '../../controllers/fleet_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart' show klabautermannThemeStyle;
+import '../admin_mode_chip.dart';
 
 /// The widest the Access tab's column grows at the default text size; it
 /// grows with the text scale, so large text keeps its line length.
@@ -261,9 +262,20 @@ class _AccessBodyState extends State<_AccessBody> {
                       lastCopy: _lastCopy,
                       onCopy: (command) => _copy(row.item, command),
                       rootShellNote: rootShellNote,
-                      details: row.item == AccessItem.runtime
-                          ? _engineLines(context, access.engines)
-                          : const [],
+                      details: switch (row.item) {
+                        AccessItem.runtime => _engineLines(
+                          context,
+                          access.engines,
+                        ),
+                        // Admin mode reaches the socket through sudo.
+                        AccessItem.dockerSocket
+                            when row.reason == AccessReason.socketNotWritable &&
+                                access.row(AccessItem.sudoNoPassword).reason !=
+                                    AccessReason.noElevationTool &&
+                                adminModeOffered(context, widget.serverId) =>
+                          [TurnOnAdminModeButton(serverId: widget.serverId)],
+                        _ => const [],
+                      },
                     ),
               ],
             ),

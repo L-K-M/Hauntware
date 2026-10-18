@@ -99,3 +99,41 @@ List<String> adminNotices(BuildContext context, String serverId) {
     _ => const [],
   };
 }
+
+/// Whether [TurnOnAdminModeButton] shows for [serverId], so a caller can
+/// leave out the space around it too.
+bool adminModeOffered(BuildContext context, String serverId) {
+  final safety = SafetyScope.maybeOf(context);
+  final admin = AdminScope.maybeOf(context);
+  if (safety == null || admin == null) return false;
+  final policy = safety.value;
+  return serverSafetyIn(policy, serverId).management &&
+      !serverReadOnlyIn(policy, serverId) &&
+      !admin.isActive(serverId);
+}
+
+/// "Turn on admin mode" where something needs root (SAF-02): the Docker
+/// gate, the Access tab's socket row and an unreadable stack file. It
+/// asks the engine as the header's chip does, and shows only where the
+/// chip would offer that: actions allowed on [serverId], neither it nor
+/// the app read-only, and admin mode not on or starting.
+class TurnOnAdminModeButton extends StatelessWidget {
+  const TurnOnAdminModeButton({super.key, required this.serverId});
+
+  final String serverId;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!adminModeOffered(context, serverId)) return const SizedBox.shrink();
+
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: OutlinedButton.icon(
+        onPressed: () =>
+            AdminScope.maybeOf(context)!.setEnabled(serverId, enabled: true),
+        icon: const Icon(Icons.admin_panel_settings_outlined),
+        label: Text(AppLocalizations.of(context).adminTurnOn),
+      ),
+    );
+  }
+}

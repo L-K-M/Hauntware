@@ -8,6 +8,7 @@ import 'package:planchette_editor/planchette_editor.dart'
 
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
+import '../admin_mode_chip.dart';
 import '../processes_panel.dart' show kRevealDuration;
 import 'container_details.dart' show ContainerInspectionScope;
 import 'containers_panel.dart' show DockerNotice;
@@ -313,8 +314,15 @@ class _StackFileViewState extends State<StackFileView> {
                 ? Icons.lock_outline
                 : Icons.error_outline,
             text: l10n.dockerStackFileFailed(failure.name),
-            action: failure == StackFileFailure.readFailed ? retry : null,
+            // Once admin mode is on, reading again goes through sudo.
+            action: switch (failure) {
+              StackFileFailure.readFailed ||
+              StackFileFailure.permissionDenied => retry,
+              _ => null,
+            },
           ),
+          if (failure == StackFileFailure.permissionDenied)
+            TurnOnAdminModeButton(serverId: widget.serverId),
         ];
       case DockerQueryFailed(:final failure, :final detail):
         return [
