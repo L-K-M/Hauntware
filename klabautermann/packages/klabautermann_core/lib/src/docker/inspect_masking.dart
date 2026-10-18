@@ -16,10 +16,10 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
 import '../engine/protocol.dart';
 import '../sampling/argument_masking.dart';
 
-/// [inspect] as it may cross. `Path` and `Args` are masked as one
-/// command line, and so are `Entrypoint` and `Cmd`, the command the
-/// container was created with, so an option in one and its value in the
-/// next still mask. Each health check's output is masked as one
+/// [inspect] as it may cross. `Args` are masked as the words after the
+/// program `Path`, which crosses as it is. `Entrypoint` and `Cmd`, the
+/// command the container was created with, are masked as one command
+/// line, so an option in one and its value in the next still mask. Each health check's output is masked as one
 /// argument. One budget bounds the tokens read across them all.
 ContainerDetails maskContainerInspect(ContainerInspect inspect) {
   final budget = ArgumentMaskingBudget();

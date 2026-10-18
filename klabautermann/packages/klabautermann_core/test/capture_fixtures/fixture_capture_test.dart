@@ -54,7 +54,7 @@ void main() {
   final redactor = Redactor(const RedactionLiterals());
   final at = DateTime.utc(2026, 10, 14);
 
-  test('the fixture collectors are the tick collectors but the probe', () {
+  test('the fixture collectors are the tick collectors but probe and ops', () {
     expect(kFixtureCollectors.map((c) => c.wireName), [
       'overview',
       'core',

@@ -87,6 +87,38 @@
   ahead of your imports, and stay after a restart; select the control
   again to fetch changes. Klabautermann only reads the account and
   publishes nothing. The sign-in token and the account key are kept in
-  the system keychain. Synced servers cannot be opened yet: that waits
-  for confirming each server's address on this device. Sync is off when
-  Klabautermann cannot check whether another copy of it is running.
+  the system keychain. Sync is off when Klabautermann cannot check
+  whether another copy of it is running.
+- Klabautermann connects to a synced server only once you confirm its
+  address on this device, so an address changed on another device cannot
+  receive your sign-in unnoticed. A notice over the server list counts
+  the servers waiting; Review lists each with its host, port, user and
+  jump hosts, with a search, a toggle per server and Confirm all shown.
+  Confirmed servers open and connect like imported ones. When a sync
+  changes a confirmed server's address, user or jump hosts, or a jump
+  host's, Klabautermann disconnects it, forgets what it cached about it
+  and asks you again. Servers you imported from `~/.ssh/config` need no
+  confirmation on the device that imported them.
+- The fleet list shows whether each server answers on its SSH port:
+  Online, Offline or Reachability unknown, checked about every 45
+  seconds. Only servers you imported or confirmed on this device are
+  checked; a server reached through a jump host shows Reachability
+  unknown, and phones stop checking while Klabautermann is in the
+  background.
+- The fleet list on desktops and phones is sectioned as in Séance: your
+  synced servers sit under Servers, grouped by their Séance groups in
+  sections you can fold, and your imports follow under Imported. Pin a
+  synced server to the top from its menu (right-click, Shift+F10, the Menu
+  key or a long-press); pins are kept on this device only.
+- Until v1 the app calls itself Klabautermann (preview). About
+  Klabautermann, in the application menu on macOS and the Help menu on
+  Linux and Windows, shows the version and the licence, and Settings >
+  General shows the version and opens the same dialog on every device.
+- Choose which servers Klabautermann reads continuously while it is
+  open: Monitor or Stop monitoring from a server's menu, or the switches
+  under Settings > Servers. Monitored servers show CPU, memory and disk
+  in their rows without being opened, up to 10 per device. A server can
+  be monitored once its address is confirmed on this device and it
+  signs in with an SSH agent or a key file; Settings says why one
+  cannot. Until you choose, desktops monitor up to 10 eligible servers
+  and phones none. Your choice is kept on this device only.

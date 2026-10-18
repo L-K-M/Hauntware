@@ -599,10 +599,13 @@ class PaneController extends ChangeNotifier {
   PaneController({
     required this.paneTabId,
     PaneEngineLanes? lanes,
+    String? appStoragePath,
     void Function(Object error, StackTrace stackTrace)? onError,
   }) : // Keep the lanes seam private to the pane.
        // ignore: prefer_initializing_formals
        _lanes = lanes,
+       // ignore: prefer_initializing_formals
+       _appStoragePath = appStoragePath,
        // Keep the reporter private while allowing test-only injection.
        // ignore: prefer_initializing_formals
        _onError = onError;
@@ -627,6 +630,7 @@ class PaneController extends ChangeNotifier {
   PaneServerConfigLookup? serverConfigLookup;
 
   final PaneEngineLanes? _lanes;
+  final String? _appStoragePath;
   final void Function(Object error, StackTrace)? _onError;
 
   PanePhase _phase = PanePhase.unbound;
@@ -970,6 +974,16 @@ class PaneController extends ChangeNotifier {
 
   PanePhase get phase => _phase;
   PaneLocation? get location => _location;
+
+  /// Names app storage without exposing its platform directory name.
+  /// Paths used for navigation and file operations keep their real values.
+  String pathLabel(String? path, AppLocalizations l10n) {
+    if (_location is LocalPaneLocation && path != null && path == _appStoragePath) {
+      return l10n.compactHomeThisDeviceSubtitle;
+    }
+
+    return paneLastSegment(path);
+  }
 
   /// Whether an engine session backs this pane. False panes render the
   /// no-engine state instead of failing to boot (the composition root's

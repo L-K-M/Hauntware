@@ -8,6 +8,14 @@ import 'package:seance_app/ui/font_picker.dart';
 /// dialog offers never depends on what is installed on the machine running
 /// the suite.
 void main() {
+  // This picker still serves interface fonts. The shared monospace picker
+  // tests exercise the complete bundled catalog and its detailed previews.
+  const bundledFonts = [
+    BundledMonoFont.iosevkaTerm,
+    BundledMonoFont.jetBrainsMono,
+    BundledMonoFont.firaCode,
+    BundledMonoFont.mapleMono,
+  ];
   const families = [
     SystemFontFamily(name: 'Cantarell', monospaced: false),
     SystemFontFamily(name: 'Hack', monospaced: true),
@@ -182,7 +190,7 @@ void main() {
 
   group('bundled fonts', () {
     testWidgets('lead the list, previewed in the bundled copy', (tester) async {
-      await open(tester, bundled: BundledMonoFont.values);
+      await open(tester, bundled: bundledFonts);
 
       // Below the fold with the test font's tall rows: built, not visible.
       Finder text(String s) => find.text(s, skipOffstage: false);
@@ -205,7 +213,7 @@ void main() {
     });
 
     testWidgets('picking one returns its display name', (tester) async {
-      await open(tester, bundled: BundledMonoFont.values);
+      await open(tester, bundled: bundledFonts);
       await tester.tap(find.text('Maple Mono'));
       await tester.pumpAndSettle();
       // What settings store, resolved to the bundled copy when drawn.
@@ -213,7 +221,7 @@ void main() {
     });
 
     testWidgets('marks the bundled font in force', (tester) async {
-      await open(tester, bundled: BundledMonoFont.values, current: 'fira code');
+      await open(tester, bundled: bundledFonts, current: 'fira code');
       final row = find.ancestor(
         of: find.text('Fira Code'),
         matching: find.byType(ListTile),
@@ -222,7 +230,7 @@ void main() {
     });
 
     testWidgets('the filter narrows them too', (tester) async {
-      await open(tester, bundled: BundledMonoFont.values);
+      await open(tester, bundled: bundledFonts);
       await tester.enterText(find.byType(TextField), 'jet');
       await tester.pumpAndSettle();
       expect(find.text('JetBrains Mono'), findsOneWidget);
@@ -234,12 +242,12 @@ void main() {
     ) async {
       // Mobile: no collection to read, so neither the installed section nor
       // the chip that filters it.
-      await open(tester, bundled: BundledMonoFont.values, supported: false);
+      await open(tester, bundled: bundledFonts, supported: false);
       expect(find.text('Installed'), findsNothing);
       expect(find.text('Included with Séance'), findsNothing);
       expect(find.byType(FilterChip), findsNothing);
       expect(find.text('Hack'), findsNothing);
-      for (final font in BundledMonoFont.values) {
+      for (final font in bundledFonts) {
         expect(find.text(font.displayName), findsOneWidget);
       }
     });
@@ -251,7 +259,7 @@ void main() {
       // is filtered, so no "clear the filter" advice and no empty section.
       await open(
         tester,
-        bundled: BundledMonoFont.values,
+        bundled: bundledFonts,
         available: const [
           SystemFontFamily(name: 'Fira Code', monospaced: true),
           SystemFontFamily(name: 'JetBrains Mono', monospaced: true),
@@ -271,7 +279,7 @@ void main() {
     });
 
     testWidgets('a filter matching none says so', (tester) async {
-      await open(tester, bundled: BundledMonoFont.values, supported: false);
+      await open(tester, bundled: bundledFonts, supported: false);
       await tester.enterText(find.byType(TextField), 'zzz');
       await tester.pumpAndSettle();
       expect(find.text('No font matches. Clear the filter.'), findsOneWidget);

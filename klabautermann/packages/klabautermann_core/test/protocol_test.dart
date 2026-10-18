@@ -253,6 +253,7 @@ void main() {
                 ),
               )
               as DockerQuery;
+      expect(query.serverId, 'srv-1');
       expect(query.queryId, 'q-7');
       expect((query.query as DockerContainerQuery).containerId, 'db');
 
@@ -1225,6 +1226,7 @@ void main() {
         FleetAuthKind? authKind = FleetAuthKind.agent,
         String? searchText = 'web-1 deploy@web-1.example:2222',
         List<String>? locatorConflict = const ['ssh-config:db-1'],
+        EndpointConfirmation? endpoint = EndpointConfirmation.confirmed,
       }) => FleetEntry(
         serverId: serverId,
         label: label,
@@ -1238,6 +1240,7 @@ void main() {
         authKind: authKind,
         searchText: searchText,
         locatorConflict: locatorConflict?.toList(),
+        endpoint: endpoint,
       );
 
       final web = entry();
@@ -1263,6 +1266,8 @@ void main() {
         entry(searchText: 'web-1'),
         entry(locatorConflict: null),
         entry(locatorConflict: const ['ssh-config:db-2']),
+        entry(endpoint: null),
+        entry(endpoint: EndpointConfirmation.changed),
       ]) {
         expect(web, isNot(other));
       }
@@ -1298,6 +1303,30 @@ void main() {
         expect(web.locatorConflict, isNull);
       },
     );
+
+    test('endpoint confirmation survives: every state on an entry, and '
+        'the ids it confirms', () async {
+      for (final endpoint in [null, ...EndpointConfirmation.values]) {
+        final entry = FleetEntry(
+          serverId: '0b9a6f3e-2d1c-4e5f-8a7b-6c5d4e3f2a1b',
+          label: 'db-1',
+          host: '10.0.0.4',
+          port: kSshDefaultPort,
+          origin: FleetEntryOrigin.synced,
+          endpoint: endpoint,
+        );
+        final event = await roundTrip(CatalogReplaced([entry]));
+        expect((event as CatalogReplaced).entries.single.endpoint, endpoint);
+      }
+
+      final request =
+          await roundTrip(const ConfirmEndpoints(['a', 'b']))
+              as ConfirmEndpoints;
+      expect(request.serverIds, ['a', 'b']);
+      final changed =
+          await roundTrip(const EndpointChanged('srv-1')) as EndpointChanged;
+      expect(changed.serverId, 'srv-1');
+    });
 
     test('every link status survives with its values (D46)', () async {
       final statuses = <LinkStatus>[

@@ -8,6 +8,14 @@
 /// first, then one nested disclosure row per group, sorted by name.
 /// Ungrouped servers lead so an expanded group's members, indented under it,
 /// are never followed by rows that only look like more of that group.
+///
+/// The rules read two facts of a server, its id and its group, through
+/// [GhostServerEntry]: Séance and Poltergeist section their [ServerConfig]
+/// records with [groupServers], and a host whose rows are not records
+/// (Klabautermann's fleet entries) passes its own rows to
+/// [groupServerEntries] with an adapter to that entry. The sections and rows
+/// are generic over the row type; the `Server…` names are their
+/// [ServerConfig] instantiations.
 library;
 
 import 'package:seance_protocol/seance_protocol.dart';
@@ -40,19 +48,49 @@ final class GhostServerSectionLabels {
   final String servers;
 }
 
+/// What the sectioning reads from one server: the neutral input every
+/// host's rows map to.
+final class GhostServerEntry {
+  const GhostServerEntry({required this.id, this.group});
+
+  /// The identity [groupServerEntries]' `pinnedIds` names.
+  final String id;
+
+  /// The group as the user spelled it, or null for none. Blank or padded
+  /// spellings normalize as [normalizeServerGroup] says, as a record's do.
+  final String? group;
+
+  @override
+  bool operator ==(Object other) =>
+      other is GhostServerEntry && id == other.id && group == other.group;
+
+  @override
+  int get hashCode => Object.hash(id, group);
+}
+
+/// The adapter [groupServers] sections a [ServerConfig] through.
+GhostServerEntry _serverConfigEntry(ServerConfig server) =>
+    GhostServerEntry(id: server.id, group: server.group);
+
+/// One named group under SERVERS, of [ServerConfig] records.
+typedef ServerGroupSection = GhostServerGroup<ServerConfig>;
+
+/// The rail's sections for one list of [ServerConfig] records.
+typedef ServerSidebarSections = GhostServerSections<ServerConfig>;
+
 /// One named group under SERVERS.
-class ServerGroupSection {
+class GhostServerGroup<T> {
   /// The group's name as the user spelled it.
   final String name;
 
   /// Members, in the order they arrived (the store sorts by label).
-  final List<ServerConfig> servers;
+  final List<T> servers;
 
   /// The identity this group is collapsed and re-found by, stable across a
   /// re-sort and across a member being renamed.
   final String key;
 
-  const ServerGroupSection({
+  const GhostServerGroup({
     required this.name,
     required this.servers,
     required this.key,
@@ -60,17 +98,17 @@ class ServerGroupSection {
 }
 
 /// The rail's sections for one list of servers.
-class ServerSidebarSections {
+class GhostServerSections<T> {
   /// The pinned shortlist, in the list's own order.
-  final List<ServerConfig> pinned;
+  final List<T> pinned;
 
   /// SERVERS' members that are in no group.
-  final List<ServerConfig> ungrouped;
+  final List<T> ungrouped;
 
   /// SERVERS' named groups, sorted by key.
-  final List<ServerGroupSection> groups;
+  final List<GhostServerGroup<T>> groups;
 
-  const ServerSidebarSections({
+  const GhostServerSections({
     required this.pinned,
     required this.ungrouped,
     required this.groups,
@@ -82,7 +120,15 @@ class ServerSidebarSections {
       groups.fold<int>(0, (sum, group) => sum + group.servers.length);
 }
 
-/// [servers] split into the rail's sections.
+/// [servers] split into the rail's sections; see [groupServerEntries].
+ServerSidebarSections groupServers(
+  List<ServerConfig> servers, {
+  Set<String> pinnedIds = const {},
+}) => groupServerEntries(servers, _serverConfigEntry, pinnedIds: pinnedIds);
+
+/// [servers] split into the rail's sections, each read through [entryOf].
+/// A host holding [GhostServerEntry] values passes them with an identity
+/// adapter.
 ///
 /// Grouping is case-insensitive ([serverGroupKey]); the spelling shown is the
 /// one on the first member in [servers] order, so a group does not rename
@@ -93,24 +139,26 @@ class ServerSidebarSections {
 /// be true of one row, and a duplicate row is the kind of thing a user fixes
 /// by unpinning. Its group's count drops accordingly, which is honest about
 /// what folding that group away now hides.
-ServerSidebarSections groupServers(
-  List<ServerConfig> servers, {
+GhostServerSections<T> groupServerEntries<T>(
+  List<T> servers,
+  GhostServerEntry Function(T server) entryOf, {
   Set<String> pinnedIds = const {},
 }) {
   // Order within the shortlist is the list's own (the store sorts by label),
   // not the order things were pinned in — a shortlist that reshuffles itself
   // as you pin is harder to aim at than one that stays alphabetical.
-  final pinned = <ServerConfig>[];
-  final ungrouped = <ServerConfig>[];
-  final byKey = <String, List<ServerConfig>>{};
+  final pinned = <T>[];
+  final ungrouped = <T>[];
+  final byKey = <String, List<T>>{};
   final names = <String, String>{};
 
   for (final server in servers) {
-    if (pinnedIds.contains(server.id)) {
+    final entry = entryOf(server);
+    if (pinnedIds.contains(entry.id)) {
       pinned.add(server);
       continue;
     }
-    final group = normalizeServerGroup(server.group);
+    final group = normalizeServerGroup(entry.group);
     if (group == null) {
       ungrouped.add(server);
       continue;
@@ -121,23 +169,30 @@ ServerSidebarSections groupServers(
   }
 
   final keys = byKey.keys.toList()..sort();
-  return ServerSidebarSections(
+  return GhostServerSections(
     pinned: pinned,
     ungrouped: ungrouped,
     groups: [
       for (final key in keys)
-        ServerGroupSection(name: names[key]!, servers: byKey[key]!, key: key),
+        GhostServerGroup(name: names[key]!, servers: byKey[key]!, key: key),
     ],
   );
 }
 
-/// One rendered line of the server list.
-sealed class ServerListRow {
-  const ServerListRow();
+/// The [ServerConfig] instantiations of the rows below.
+typedef ServerListRow = GhostServerListRow<ServerConfig>;
+typedef ServerSectionRow = GhostServerSectionRow<ServerConfig>;
+typedef ServerGroupHeaderRow = GhostServerGroupHeaderRow<ServerConfig>;
+typedef ServerRow = GhostServerRow<ServerConfig>;
+
+/// One rendered line of the server list. The headers carry the row type
+/// only so one sealed family covers every line of a list.
+sealed class GhostServerListRow<T> {
+  const GhostServerListRow();
 }
 
 /// A top-level section header: PINNED or SERVERS.
-final class ServerSectionRow extends ServerListRow {
+final class GhostServerSectionRow<T> extends GhostServerListRow<T> {
   final String title;
   final String key;
 
@@ -146,7 +201,7 @@ final class ServerSectionRow extends ServerListRow {
   final int count;
   final bool collapsed;
 
-  const ServerSectionRow({
+  const GhostServerSectionRow({
     required this.title,
     required this.key,
     required this.count,
@@ -155,13 +210,13 @@ final class ServerSectionRow extends ServerListRow {
 }
 
 /// A group's nested disclosure row under SERVERS.
-final class ServerGroupHeaderRow extends ServerListRow {
+final class GhostServerGroupHeaderRow<T> extends GhostServerListRow<T> {
   final String name;
   final String key;
   final int count;
   final bool collapsed;
 
-  const ServerGroupHeaderRow({
+  const GhostServerGroupHeaderRow({
     required this.name,
     required this.key,
     required this.count,
@@ -169,13 +224,13 @@ final class ServerGroupHeaderRow extends ServerListRow {
   });
 }
 
-final class ServerRow extends ServerListRow {
-  final ServerConfig server;
+final class GhostServerRow<T> extends GhostServerListRow<T> {
+  final T server;
 
   /// 1 under a group's disclosure row, 0 elsewhere.
   final int depth;
 
-  const ServerRow(this.server, {this.depth = 0});
+  const GhostServerRow(this.server, {this.depth = 0});
 }
 
 /// Flatten [sections] into the rows to render, dropping the members of any
@@ -193,31 +248,31 @@ final class ServerRow extends ServerListRow {
 /// header is then the one place its dot can show.
 ///
 /// [labels] titles the two section headers; the default is Séance's copy.
-List<ServerListRow> serverListRows({
-  required ServerSidebarSections sections,
+List<GhostServerListRow<T>> serverListRows<T>({
+  required GhostServerSections<T> sections,
   required Set<String> collapsedKeys,
   Set<String> keptSections = const {},
   GhostServerSectionLabels labels = const GhostServerSectionLabels(),
 }) {
-  final rows = <ServerListRow>[];
+  final rows = <GhostServerListRow<T>>[];
   if (sections.pinned.isNotEmpty || keptSections.contains(kPinnedKey)) {
     final collapsed = collapsedKeys.contains(kPinnedKey);
     rows.add(
-      ServerSectionRow(
+      GhostServerSectionRow(
         title: labels.pinned,
         key: kPinnedKey,
         count: sections.pinned.length,
         collapsed: collapsed,
       ),
     );
-    if (!collapsed) rows.addAll(sections.pinned.map(ServerRow.new));
+    if (!collapsed) rows.addAll(sections.pinned.map(GhostServerRow.new));
   }
 
   final unpinned = sections.unpinnedCount;
   if (unpinned == 0 && !keptSections.contains(kServersKey)) return rows;
   final collapsed = collapsedKeys.contains(kServersKey);
   rows.add(
-    ServerSectionRow(
+    GhostServerSectionRow(
       title: labels.servers,
       key: kServersKey,
       count: unpinned,
@@ -226,11 +281,11 @@ List<ServerListRow> serverListRows({
   );
   if (collapsed) return rows;
 
-  rows.addAll(sections.ungrouped.map(ServerRow.new));
+  rows.addAll(sections.ungrouped.map(GhostServerRow.new));
   for (final group in sections.groups) {
     final folded = collapsedKeys.contains(group.key);
     rows.add(
-      ServerGroupHeaderRow(
+      GhostServerGroupHeaderRow(
         name: group.name,
         key: group.key,
         count: group.servers.length,
@@ -239,7 +294,7 @@ List<ServerListRow> serverListRows({
     );
     if (folded) continue;
     for (final server in group.servers) {
-      rows.add(ServerRow(server, depth: 1));
+      rows.add(GhostServerRow(server, depth: 1));
     }
   }
   return rows;
@@ -252,9 +307,9 @@ List<ServerListRow> serverListRows({
 /// unless a live server is among the hidden, and then its header stays to
 /// say so. Only whole sections need it. A group the filter empties goes,
 /// and its members fall to SERVERS' header, which this keeps.
-Set<String> sectionsHoldingLive(
-  ServerSidebarSections whole,
-  bool Function(ServerConfig server) isLive,
+Set<String> sectionsHoldingLive<T>(
+  GhostServerSections<T> whole,
+  bool Function(T server) isLive,
 ) => {
   if (whole.pinned.any(isLive)) kPinnedKey,
   if (whole.ungrouped.any(isLive) ||

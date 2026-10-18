@@ -1,0 +1,94 @@
+{
+  "LayersSize": 12300000,
+  "Images": [
+    {
+      "Id": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "ParentId": "",
+      "RepoTags": ["alpine:3.21"],
+      "RepoDigests": [],
+      "Created": 1779000000,
+      "Size": 8200000,
+      "SharedSize": 0,
+      "Labels": {},
+      "Containers": 2
+    },
+    {
+      "Id": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+      "ParentId": "",
+      "RepoTags": [],
+      "RepoDigests": [],
+      "Created": 1779000100,
+      "Size": 4100000,
+      "SharedSize": 0,
+      "Labels": {},
+      "Containers": 0
+    }
+  ],
+  "Containers": [
+    {
+      "Id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "Names": ["/web-1"],
+      "Image": "alpine:3.21",
+      "ImageID": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "Command": "httpd -f",
+      "Created": 1780001000,
+      "SizeRw": 1000,
+      "SizeRootFs": 8201000,
+      "Labels": {},
+      "State": "running",
+      "Status": "Up 2 hours",
+      "Health": { "Status": "none", "FailingStreak": 0 }
+    },
+    {
+      "Id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "Names": ["/job-1"],
+      "Image": "alpine:3.21",
+      "ImageID": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "Command": "true",
+      "Created": 1780001200,
+      "SizeRw": 30000,
+      "SizeRootFs": 8230000,
+      "Labels": {},
+      "State": "exited",
+      "Status": "Exited (0) 5 minutes ago",
+      "Health": { "Status": "none", "FailingStreak": 0 }
+    }
+  ],
+  "Volumes": [
+    {
+      "CreatedAt": "2026-05-01T10:00:00Z",
+      "Driver": "local",
+      "Labels": null,
+      "Mountpoint": "/var/lib/docker/volumes/web_data/_data",
+      "Name": "web_data",
+      "Options": null,
+      "Scope": "local",
+      "UsageData": { "Size": 500000, "RefCount": 1 }
+    }
+  ],
+  "BuildCache": [],
+  "ImageUsage": {
+    "ActiveCount": 1,
+    "TotalCount": 2,
+    "Reclaimable": 4100000,
+    "TotalSize": 12300000
+  },
+  "ContainerUsage": {
+    "ActiveCount": 1,
+    "TotalCount": 2,
+    "Reclaimable": 30000,
+    "TotalSize": 31000
+  },
+  "VolumeUsage": {
+    "ActiveCount": 1,
+    "TotalCount": 1,
+    "Reclaimable": 0,
+    "TotalSize": 500000
+  },
+  "BuildCacheUsage": {
+    "ActiveCount": 0,
+    "TotalCount": 0,
+    "Reclaimable": 0,
+    "TotalSize": 0
+  }
+}

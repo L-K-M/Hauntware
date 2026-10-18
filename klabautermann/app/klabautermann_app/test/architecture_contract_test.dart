@@ -33,15 +33,17 @@ void main() {
     }
   });
 
-  // The engine's own default is off (EngineStart.linksEnabled), so the
-  // app connects only because the composition root asks.
-  test('the composition root spawns the engine with links on (03 '
-      '§10.1)', () {
+  // The engine's own defaults are off (EngineStart.linksEnabled,
+  // EngineStart.probesEnabled), so the app connects and probes only
+  // because the composition root asks.
+  test('the composition root spawns the engine with links and probes on '
+      '(03 §10.1, §5.12)', () {
     final main = File('lib/main.dart').readAsStringSync();
     final spawn = RegExp(r'IsolateEngineClient\.spawn\(([^;]*)\);');
 
     expect(spawn.allMatches(main), hasLength(1));
     expect(spawn.firstMatch(main)![1], contains('linksEnabled: true'));
+    expect(spawn.firstMatch(main)![1], contains('probesEnabled: true'));
   });
 
   test('declares no SSH, protocol or sibling-core dependency', () {

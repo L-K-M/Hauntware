@@ -1,7 +1,8 @@
 /// Assembles HWS/1 frame events into replies (03 §6.2).
 ///
-/// [HwsFrameParser] checks bytes; this layer checks the session: READY
-/// comes first and carries this client's collector-set version, and each
+/// [HwsFrameParser] checks bytes; this layer checks the session: `SELF`
+/// and then READY come first, READY carries this client's collector-set
+/// version, and each
 /// reply is a `B`, its sections and the `E` with the same sequence
 /// number. A framing error loses the reply it interrupted, if any, and
 /// the reply whose end marker the parser resynchronizes on (one loss when
@@ -15,7 +16,7 @@ import 'program.dart' show kCollectorSetVersion;
 
 /// Upper bound on the sections in one reply. A tick emits one section per
 /// requested collector and the probe one per area, so the program's
-/// largest reply (every collector once) holds 21 today. Past the cap the
+/// largest reply (every collector once) holds 22 today. Past the cap the
 /// session fails, which keeps one reply's memory within this many
 /// [kMaxSectionBytes].
 const kMaxReplySections = 32;
@@ -31,8 +32,9 @@ enum HwsSessionFault {
   /// [kCollectorSetVersion] (03 §6.3).
   versionMismatch,
 
-  /// A second READY, a section or end outside a reply, a begin inside
-  /// one, or an end whose sequence number differs from its begin.
+  /// A READY of this version without `SELF` before it, a second `SELF`
+  /// or READY, a section or end outside a reply, a begin inside one, or
+  /// an end whose sequence number differs from its begin.
   outOfOrder,
 
   /// A reply held more than [kMaxReplySections] sections.
@@ -47,10 +49,22 @@ sealed class HwsTickEvent {
 /// READY carried this client's collector-set version; requests may now be
 /// written (03 §6.2).
 final class HwsSessionReady extends HwsTickEvent {
-  const HwsSessionReady(this.version);
+  const HwsSessionReady(
+    this.version, {
+    required this.pid,
+    required this.parentPid,
+  });
 
   /// The collector-set version the program printed.
   final String version;
+
+  /// The sampler shell's PID from the `SELF` marker, a protected target
+  /// (03 §8.6).
+  final int pid;
+
+  /// The sampler shell's parent PID from the `SELF` marker: the sshd
+  /// process serving the session, or 0 outside its PID namespace.
+  final int parentPid;
 }
 
 /// One complete reply to a tick or on-demand request.
@@ -113,6 +127,9 @@ final class HwsTickAssembler {
   final HwsFrameParser _parser;
   _Phase _phase = _Phase.awaitingReady;
 
+  /// The `SELF` marker, which comes just before READY.
+  HwsSelf? _self;
+
   // The reply under assembly. [_openSeq] stays set through a resync, so
   // the reply the framing error interrupted is reported lost too.
   int? _openSeq;
@@ -133,6 +150,11 @@ final class HwsTickAssembler {
 
   void _onEvent(HwsEvent e, List<HwsTickEvent> out) {
     switch ((_phase, e)) {
+      case (_Phase.awaitingReady, final HwsSelf self) when _self == null:
+        _self = self;
+
+      // The version is checked first: a program of another version may
+      // print no `SELF` at all, and the mismatch is the better diagnosis.
       case (_Phase.awaitingReady, HwsReady(:final version)):
         if (version != kCollectorSetVersion) {
           _fail(
@@ -142,8 +164,15 @@ final class HwsTickAssembler {
           );
           return;
         }
+        final self = _self;
+        if (self == null) {
+          _fail(out, HwsSessionFault.outOfOrder, 'READY without SELF');
+          return;
+        }
         _phase = _Phase.idle;
-        out.add(HwsSessionReady(version));
+        out.add(
+          HwsSessionReady(version, pid: self.pid, parentPid: self.parentPid),
+        );
 
       case (_Phase.awaitingReady, HwsFramingError(:final reason)):
         _fail(out, HwsSessionFault.noReady, reason);
@@ -205,6 +234,7 @@ final class HwsTickAssembler {
 
   static String _label(HwsEvent e) => switch (e) {
     HwsReady(:final version) => 'READY $version',
+    HwsSelf(:final pid, :final parentPid) => 'SELF $pid $parentPid',
     HwsBegin(:final seq) => 'B $seq',
     HwsSection(:final collector) => 'S $collector',
     HwsEnd(:final seq) => 'E $seq',

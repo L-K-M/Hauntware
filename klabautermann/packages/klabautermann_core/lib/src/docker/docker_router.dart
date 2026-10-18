@@ -4,7 +4,8 @@
 /// over it and runs the queries.
 ///
 /// ```text
-///   first query ─▶ waiting (no link, or no probe answer on it)
+///   first query ─▶ waiting (no link, or no probe answer on it): the
+///                    │ query is answered at once with that failure
 ///                    │ link ready and probed
 ///                    ▼
 ///                  resolving: ladder ─▶ _ping, /version over the route
@@ -94,8 +95,10 @@ final class DockerRouter {
   final Set<Future<void>> _closing = {};
   Set<String> _fleet = const {};
 
-  /// Accepts [request]: it runs once its server's endpoint is ready, and
-  /// every query gets exactly one [DockerResult].
+  /// Accepts [request]: while its server has no ready link or no probe
+  /// answer it is answered at once with that failure; otherwise it waits
+  /// for the endpoint to resolve and runs once it is ready. Every query
+  /// gets exactly one [DockerResult].
   void query(DockerQuery request) {
     if (!_fleet.contains(request.serverId)) {
       return _answer(request, DockerQueryFailure.notInFleet);
@@ -380,6 +383,15 @@ final class DockerRouter {
         _pump(session);
       case _Failed(:final failure, :final route, :final noRouteReason):
         session.failed = true;
+        // The state that explains the failure goes out first, so an app
+        // reading it on a failed answer never sees `resolving`.
+        _state(
+          session,
+          DockerEndpointPhase.failed,
+          route: route,
+          failure: failure,
+          noRouteReason: noRouteReason,
+        );
         _answerWaiting(session, DockerQueryFailure.endpointUnavailable);
         _endLogs(
           session,
@@ -387,13 +399,6 @@ final class DockerRouter {
             LogStreamEndReason.failed,
             detail: 'no Docker endpoint: ${failure.name}',
           ),
-        );
-        _state(
-          session,
-          DockerEndpointPhase.failed,
-          route: route,
-          failure: failure,
-          noRouteReason: noRouteReason,
         );
     }
   }

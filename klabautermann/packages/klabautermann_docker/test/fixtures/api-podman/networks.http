@@ -1,0 +1,16 @@
+HTTP/1.1 200 OK
+Api-Version: 1.44
+Content-Type: application/json
+Libpod-Api-Version: 5.8.7
+Server: Libpod/5.8.7 (linux)
+X-Reference-Id: 0x16fa71182018
+Date: Sat, 17 Oct 2026 16:14:49 GMT
+Transfer-Encoding: chunked
+
+800
+[{"Name":"demo_default","Id":"be53e0a85d965587fc7681754ebf4329a6f0d0dfa0bd470daba9446e6cb1944d","Created":"2026-10-17T16:14:34.707196357Z","Scope":"local","Driver":"bridge","EnableIPv4":false,"EnableIPv6":false,"IPAM":{"Driver":"default","Options":{"driver":"host-local"},"Config":[{"Subnet":"10.89.0.0/24","Gateway":"10.89.0.1"}]},"Internal":false,"Attachable":false,"Ingress":false,"ConfigFrom":{"Network":""},"ConfigOnly":false,"Containers":{"52f55d5d3e99f09d923133b6e9bda7361ccd4b751f2b419b19992c147f359c3f":{"Name":"demo-cache-1","EndpointID":"","MacAddress":"06:d8:7d:98:89:32","IPv4Address":"10.89.0.3/24","IPv6Address":""},"75adbaf41ef919572c9f74967df5adcdaafb160fe3674ad4dcf64c4bff55b528":{"Name":"demo-web-1","EndpointID":"","MacAddress":"5e:ec:91:5b:e6:4f","IPv4Address":"10.89.0.2/24","IPv6Address":""}},"Options":{},"Labels":{"com.docker.compose.network":"default","com.docker.compose.project":"demo","com.docker.compose.version":"5.6.0"}},{"Name":"bridge","Id":"2f259bab93aaaaa2542ba43ef33eb990d0999ee1b9924b557b7be53c0b7a1bb9","Created":"2026-10-17T16:14:34.721354689Z","Scope":"local","Driver":"bridge","EnableIPv4":false,"EnableIPv6":false,"IPAM":{"Driver":"default","Options":{"driver":"host-local"},"Config":[{"Subnet":"10.88.0.0/16","Gateway":"10.88.0.1"}]},"Internal":false,"Attachable":false,"Ingress":false,"ConfigFrom":{"Network":""},"ConfigOnly":false,"Containers":{"4de087acda04fb31cdc4b7dfa3415919b6aa9995e6efae3c0b0c0849402d1fd5":{"Name":"web","EndpointID":"","MacAddress":"42:81:8a:63:09:a3","IPv4Address":"10.88.0.6/16","IPv6Address":""},"5a8dee9364726072e5165374c96fd3802ee65e9ca08d7a7efc0b7116724de0a0":{"Name":"tty","EndpointID":"","MacAddress":"76:f0:66:03:99:65","IPv4Address":"10.88.0.2/16","IPv6Address":""},"61a3e6688d30748c8d7e3a91db1352fbfff5ae2d544351007ee99dab87716b4d":{"Name":"coolify-app","EndpointID":"","MacAddress":"0e:b0:c2:c7:5a:30","IPv4Address":"10.88.0.4/16","IPv6Address":""},"70a364f353f0fe53de91a087d05d5b881f3cc03e3c191edf09c9f72ba6f4e095":{"Name":"worker","EndpointID":"","MacAddress":"82:e
+10e
+d:25:71:97:9c","IPv4Address":"10.88.0.7/16","IPv6Address":""},"aa6a2a8bb88ac9dbe968c9b02534f1a3657504369fee3fcb68f81a0f62ff5434":{"Name":"paused","EndpointID":"","MacAddress":"4a:f4:d1:68:2f:b9","IPv4Address":"10.88.0.3/16","IPv6Address":""}},"Options":{},"Labels":{}}]
+
+0
+

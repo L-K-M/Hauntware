@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Build the desktop app for this host and stage it under dist/.
-# Usage: scripts/build.sh [--debug] [--install] [--flatpak] [app]
+# Build the desktop app for this host, or an Android APK, under dist/.
+# Usage: scripts/build.sh [--debug] [--install] [--flatpak] [app|android]
 # --install additionally installs the app for the current user/host.
 set -euo pipefail
 
@@ -8,24 +8,31 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mode=release
 install=false
 flatpak=false
+target=""
 for argument in "$@"; do
   case "$argument" in
     --debug) mode=debug ;;
     --install) install=true ;;
     --flatpak) flatpak=true ;;
     app) ;;
+    android) target=android ;;
     --help|-h)
-      echo 'Usage: scripts/build.sh [--debug] [--install] [--flatpak] [app]'
+      echo 'Usage: scripts/build.sh [--debug] [--install] [--flatpak] [app|android]'
       exit 0 ;;
     *) echo "Unknown argument: $argument" >&2; exit 1 ;;
   esac
 done
-case "$(uname -s)" in
+if [[ -z "$target" ]]; then
+  case "$(uname -s)" in
   Darwin) target=macos ;;
   Linux) target=linux ;;
   MINGW*|MSYS*|CYGWIN*) target=windows ;;
   *) echo 'This host is not a supported desktop platform.' >&2; exit 1 ;;
-esac
+  esac
+fi
+if [[ "$target" == android ]] && $flatpak; then
+  echo '--flatpak requires a Linux desktop build.' >&2; exit 1
+fi
 command -v flutter >/dev/null || { echo 'Flutter is required.' >&2; exit 1; }
 app="$root/app/planchette_app"
 [[ -d "$app/$target" ]] || { echo "Missing committed $target scaffold." >&2; exit 1; }
@@ -41,10 +48,18 @@ fi
 (
   cd "$app"
   flutter pub get
-  flutter build "$target" "--$mode"
+  build_target="$target"
+  [[ "$target" == android ]] && build_target=apk
+  flutter build "$build_target" "--$mode"
 )
 mkdir -p "$root/dist"
 case "$target" in
+  android)
+    destination="$root/dist/planchette-android.apk"
+    cp "$app/build/app/outputs/flutter-apk/app-$mode.apk" "$destination"
+    if $install; then
+      adb install -r "$destination"
+    fi ;;
   macos)
     source="$app/build/macos/Build/Products/$configuration/Planchette.app"
     destination="$root/dist/Planchette.app"

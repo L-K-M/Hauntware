@@ -15,6 +15,9 @@ bool _pushesOrWrites(EngineRequest request) => switch (request) {
   // records and seals, writes back and pushes none (D14). Should the
   // policy open, they would push.
   EnrollSync() || RunSyncRound() => engineSyncPushPolicy != PushPolicy.none,
+  // Endpoint confirmation writes the device-local endpoint_pins.json,
+  // which never syncs (03 §4.9).
+  ConfirmEndpoints() => false,
   // The action path mutates a host and its operation records.
   PlanAction() || RunAction() => true,
   // Alert acknowledgement and dismissal write `klabautermann:alertstatus`
