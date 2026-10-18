@@ -11,10 +11,89 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 
 import 'document_workspace_test.dart' show FakeDialogs;
 
+const _remotePath = '/config.txt';
+
+// Keep the remote POSIX namespace separate from the host's native file paths.
+class _RemoteFiles implements RemoteFileSystem {
+  _RemoteFiles(this._root);
+  final String _root;
+  final _local = LocalFileSystem();
+
+  String _localPath(String path) =>
+      paths.joinAll([_root, ...paths.posix.split(path).skip(1)]);
+
+  RemoteFileEntry _withPath(RemoteFileEntry entry, String path) =>
+      RemoteFileEntry(
+        path: path,
+        name: entry.name,
+        type: entry.type,
+        size: entry.size,
+        uid: entry.uid,
+        gid: entry.gid,
+        accessedAt: entry.accessedAt,
+        modifiedAt: entry.modifiedAt,
+        mode: entry.mode,
+        contentSha256: entry.contentSha256,
+      );
+
+  @override
+  Future<RemoteFileEntry> stat(String path, {bool followLinks = true}) async =>
+      _withPath(
+        await _local.stat(_localPath(path), followLinks: followLinks),
+        path,
+      );
+
+  @override
+  Future<RemoteFileEntry> download(
+    String path,
+    StreamSink<List<int>> destination, {
+    RemoteTransferProgress? onProgress,
+    RemoteTransferCancellation? cancellation,
+    bool computeHash = true,
+  }) async => _withPath(
+    await _local.download(
+      _localPath(path),
+      destination,
+      onProgress: onProgress,
+      cancellation: cancellation,
+      computeHash: computeHash,
+    ),
+    path,
+  );
+
+  @override
+  Future<RemoteFileEntry> upload(
+    String path,
+    Stream<List<int>> content, {
+    int? length,
+    bool overwrite = false,
+    int? preserveMode,
+    RemoteFileEntry? expectedTarget,
+    RemoteTransferProgress? onProgress,
+    RemoteTransferCancellation? cancellation,
+    bool computeHash = true,
+  }) async => _withPath(
+    await _local.upload(
+      _localPath(path),
+      content,
+      length: length,
+      overwrite: overwrite,
+      preserveMode: preserveMode,
+      expectedTarget: expectedTarget,
+      onProgress: onProgress,
+      cancellation: cancellation,
+      computeHash: computeHash,
+    ),
+    path,
+  );
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 class _Connections implements ConnectionManager {
-  _Connections(this.root);
-  final String root;
-  final fs = LocalFileSystem();
+  _Connections(String root) : fs = _RemoteFiles(root);
+  final _RemoteFiles fs;
   bool offline = false;
   final opened = <String>[];
   @override
@@ -23,7 +102,7 @@ class _Connections implements ConnectionManager {
     required String paneTabId,
   }) async {
     opened.add(serverId);
-    return _Browse(fs, root);
+    return _Browse(fs, '/');
   }
 
   @override
@@ -114,7 +193,8 @@ void main() {
   );
 
   setUp(() async {
-    directory = await Directory.systemTemp.createTemp('planchette-remote-');
+    final temp = await Directory.systemTemp.createTemp('planchette-remote-');
+    directory = Directory(await temp.resolveSymbolicLinks());
     final root = await Directory(paths.join(directory.path, 'remote')).create();
     remote = await File(
       paths.join(root.path, 'config.txt'),
@@ -147,7 +227,7 @@ void main() {
   >
   open() async {
     final connection = await files.connect(server, windowId: 'window-1');
-    final entry = await connections.fs.stat(remote.path);
+    final entry = await connections.fs.stat(_remotePath);
     final copy = await files.openFile(connection.server, entry);
     await workspace.openManaged(copy.path, copy.publication);
     return (connection: connection, document: copy);
@@ -156,7 +236,8 @@ void main() {
   test(
     'guarded local save publishes through the managed checkout queue',
     () async {
-      await open();
+      final opened = await open();
+      expect(opened.document.publication.sourcePath, _remotePath);
       final tab = workspace.active!;
       expect(tab.displayPath, contains('user@server:22'));
       tab.editor.text.text = 'edited';
@@ -172,7 +253,7 @@ void main() {
     final second = await files.connect(server, windowId: 'window-2');
     final copy = await files.openFile(
       second.server,
-      await connections.fs.stat(remote.path),
+      await connections.fs.stat(_remotePath),
     );
     expect(copy.path, opened.document.path);
     expect(copy.publication, same(opened.document.publication));
@@ -185,7 +266,7 @@ void main() {
       final connection = await files.connect(server, windowId: 'window-1');
       final copy = await files.openFile(
         connection.server,
-        await connections.fs.stat(remote.path),
+        await connections.fs.stat(_remotePath),
       );
       final target = await File(
         paths.join(directory.path, 'private.txt'),
@@ -261,7 +342,7 @@ void main() {
     expect(other.server.id, isNot(first.connection.server.id));
     final copy = await files.openFile(
       other.server,
-      await connections.fs.stat(remote.path),
+      await connections.fs.stat(_remotePath),
     );
     expect(copy.path, isNot(first.document.path));
     expect(first.document.publication.displayPath, contains('user@server:22'));

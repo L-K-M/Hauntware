@@ -40,7 +40,9 @@ void main() {
   late Directory directory;
   late FolderWorkspace workspace;
   setUp(() async {
-    directory = await Directory.systemTemp.createTemp('planchette-folders-');
+    final temp = await Directory.systemTemp.createTemp('planchette-folders-');
+    // Windows temp paths can use short names that the browser canonicalizes.
+    directory = Directory(await temp.resolveSymbolicLinks());
     workspace = FolderWorkspace();
   });
   tearDown(() async {
