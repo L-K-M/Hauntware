@@ -391,6 +391,15 @@ Future<({TestLink link, List<int> exits})> _streamAs(String user) async {
   final link = await openTestLink(timeout: const Duration(seconds: 30));
   addTearDown(link.link.close);
   final exits = <int>[];
+  final processes = <Process>[];
+  // A test that fails mid-stream leaves its command reading stdin. Ending
+  // that stdin ends it; a signal would stop only `setsid`, not the shell
+  // under it.
+  addTearDown(() {
+    for (final process in processes) {
+      process.stdin.close().ignore();
+    }
+  });
   link.peer.onExec = (channel, command) {
     Process? process;
     final early = <int>[];
@@ -398,8 +407,8 @@ Future<({TestLink link, List<int> exits})> _streamAs(String user) async {
     void write(List<int> data) {
       try {
         process!.stdin.add(data);
-      } on Object {
-        // A refusing sudo exits before reading its stdin.
+      } on StateError {
+        // The peer already closed the stdin of a command that ended.
       }
     }
 
@@ -423,6 +432,9 @@ Future<({TestLink link, List<int> exits})> _streamAs(String user) async {
         command,
       ], workingDirectory: '/');
       process = started;
+      processes.add(started);
+      // A refusing sudo exits before reading its stdin; the broken pipe
+      // surfaces here.
       started.stdin.done.ignore();
       if (early.isNotEmpty) write(early);
       if (eof) started.stdin.close().ignore();

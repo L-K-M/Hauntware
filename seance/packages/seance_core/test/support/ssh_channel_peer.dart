@@ -300,6 +300,10 @@ final class SshChannelPeer {
   // ---- observations --------------------------------------------------------
 
   final channels = <SshPeerChannel>[];
+
+  /// Channel opens received, counted on arrival, before any
+  /// [channelOpenDelay]: a test sees that an open is pending.
+  var channelOpensSeen = 0;
   var sessionOpenRequests = 0;
   var sessionOpensRefused = 0;
   var globalRequestsSeen = 0;
@@ -380,6 +384,7 @@ final class SshChannelPeer {
   }
 
   void _onChannelOpen(SSH_Message_Channel_Open message) {
+    channelOpensSeen++;
     if (ignoreChannelOpens) return;
     final delay = channelOpenDelay;
     if (delay == null) {

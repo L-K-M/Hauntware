@@ -137,7 +137,8 @@ enum ElevationAttempt {
   /// a NOPASSWD rule scoped to one command (`NOPASSWD: /usr/bin/docker`)
   /// fails that probe by design but lets this argv run (§8.3 rung 2, for
   /// the §5.9 rank 3 relay). When sudo refuses only for want of a password,
-  /// the probed rung follows, so password sudo still reaches the prelude.
+  /// the probed rung follows, so password sudo still reaches the prelude;
+  /// without a password the prelude cannot run, and that refusal is final.
   /// Without sudo, or on a root login, this is [probed].
   nopasswdFirst,
 }
@@ -501,6 +502,9 @@ final class ElevatedProcess implements RemoteProcess {
   @override
   Future<RemoteExit> get exit => _exitCompleter.future;
 
+  /// Signals the current rung's process. Between rungs, while the next one
+  /// opens, there is none: the refused tool has exited and the command has
+  /// not started, so the signal is dropped.
   @override
   void signal(RemoteSignal signal) => _process?.signal(signal);
 
@@ -527,7 +531,11 @@ final class ElevatedProcess implements RemoteProcess {
     );
     _process = process;
     _started = false;
-    _mayFallBack = _rung + 1 < _rungs.length && !_closeRequested;
+    // Stdin written while this rung opened counts toward the bound too.
+    _mayFallBack =
+        _rung + 1 < _rungs.length &&
+        !_closeRequested &&
+        (_replay?.length ?? 0) <= replayLimit;
     _seenStderr.clear();
     _heldStderr.clear();
 
@@ -560,7 +568,9 @@ final class ElevatedProcess implements RemoteProcess {
       },
       onError: (Object error, StackTrace stackTrace) {
         settleStdout();
-        _stdoutController.addError(error, stackTrace);
+        if (!_stdoutController.isClosed) {
+          _stdoutController.addError(error, stackTrace);
+        }
       },
       onDone: () {
         settleStdout();
@@ -569,7 +579,11 @@ final class ElevatedProcess implements RemoteProcess {
     );
     process.stderr.listen(
       _onStderr,
-      onError: _stderrController.addError,
+      onError: (Object error, StackTrace stackTrace) {
+        if (!_stderrController.isClosed) {
+          _stderrController.addError(error, stackTrace);
+        }
+      },
       onDone: () {
         if (!stderrDone.isCompleted) stderrDone.complete();
       },
@@ -604,6 +618,7 @@ final class ElevatedProcess implements RemoteProcess {
   /// or, after the last byte, ends the stream.
   void _drainStdout() {
     while (_stdoutQueue.isNotEmpty &&
+        !_stdoutController.isClosed &&
         _stdoutController.hasListener &&
         !_stdoutController.isPaused) {
       final data = _stdoutQueue.removeFirst();
@@ -626,6 +641,9 @@ final class ElevatedProcess implements RemoteProcess {
       final room = _classifyLimit - _seenStderr.length;
       _seenStderr.add(data.length <= room ? data : data.sublist(0, room));
     }
+    // After [_fail] the stream is closed while the channel may still
+    // deliver; what arrives then has nowhere to go.
+    if (_stderrController.isClosed) return;
     if (!_mayFallBack) {
       _stderrController.add(data);
       return;

@@ -882,8 +882,8 @@ void main() {
   });
 
   group('ElevatedExecutor.start against the wire fixture', () {
-    Future<TestLink> quietLink({SshConnectionLog? log}) async {
-      final link = await openTestLink(log: log);
+    Future<TestLink> quietLink() async {
+      final link = await openTestLink();
       addTearDown(link.link.close);
       // Every reply below is scripted by the test, step by step.
       link.peer.onExec = SshChannelPeer.execQuietFollower;
@@ -1288,6 +1288,90 @@ void main() {
       });
     });
 
+    test('more stdin than the replay keeps, written while the next rung '
+        'opens, makes that rung the last', () async {
+      final link = await quietLink();
+      final executor = ElevatedExecutor(link.link, _passwordSudo);
+
+      final process = await executor.start(
+        ['docker', 'load'],
+        password: _password,
+        attempt: ElevationAttempt.nopasswdFirst,
+      );
+      link.peer.channelOpenDelay = const Duration(milliseconds: 200);
+      _finish(
+        await _channel(link.peer, 0),
+        exit: 1,
+        stderr: _e8PasswordRequired,
+      );
+      // The prelude's open is pending, so no rung reads stdin yet.
+      await _eventually(() => link.peer.channelOpensSeen == 2);
+      process.stdin.add(List.filled(ElevatedProcess.replayLimit + 1, 0x41));
+      // The open delay runs on the real clock.
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      final prelude = await _channel(link.peer, 1);
+      await _eventually(
+        () => prelude.stdinBytes.length > ElevatedProcess.replayLimit,
+      );
+      _finish(prelude, exit: 1, stderr: _e8PasswordRequired);
+
+      expect(
+        await process.refusal,
+        isA<ElevationException>().having(
+          (e) => e.kind,
+          'kind',
+          ElevationFailureKind.passwordRequired,
+        ),
+      );
+      // Rung 4 would have needed a replay larger than the bound.
+      expect(link.peer.channels, hasLength(2));
+    });
+
+    test('a fallback rung that cannot open fails exit and refusal', () async {
+      final link = await quietLink();
+      final executor = ElevatedExecutor(link.link, _passwordSudo);
+
+      final process = await executor.start(
+        ['id'],
+        password: _password,
+        attempt: ElevationAttempt.nopasswdFirst,
+      );
+      // Only exit is awaited: the unobserved refusal must not surface as
+      // an uncaught error, which would fail this test.
+      link.peer.sessionChannelLimit = 0;
+      _finish(
+        await _channel(link.peer, 0),
+        exit: 1,
+        stderr: _e8PasswordRequired,
+      );
+
+      await expectLater(process.exit, throwsA(isA<ChannelOpenException>()));
+      expect(await _collect(process.stderr), isEmpty);
+    });
+
+    test('output after a failed exit is dropped, not thrown', () async {
+      final remote = _ScriptedProcess();
+      final executor = ElevatedExecutor(_OneProcessLink(remote), _nopasswdSudo);
+
+      final process = await executor.start(['id']);
+      final stdout = <int>[];
+      final stderr = <int>[];
+      process.stdout.listen(stdout.addAll, onError: (Object _) {});
+      process.stderr.listen(stderr.addAll);
+      remote.exitCompleter.completeError(StateError('channel reset'));
+      await expectLater(process.exit, throwsStateError);
+      await expectLater(process.refusal, throwsStateError);
+      // A dying channel may still deliver; the closed streams drop it.
+      remote.stderrController.add(utf8.encode('late\n'));
+      remote.stdoutController
+        ..add(utf8.encode('late\n'))
+        ..addError(StateError('late error'));
+      await pumpEventQueue();
+
+      expect(stdout, isEmpty);
+      expect(stderr, isEmpty);
+    });
+
     test('close ends the process and opens no further rung', () async {
       final link = await quietLink();
       final executor = ElevatedExecutor(link.link, _passwordSudo);
@@ -1452,6 +1536,9 @@ void main() {
                 ),
               );
             }
+            // Inside the zone, so whatever closing prints is scanned too;
+            // the tear-down's second close is a no-op.
+            await link.link.close();
           },
           zoneSpecification: ZoneSpecification(
             print: (_, _, _, line) => printed.add(line),
@@ -1731,14 +1818,57 @@ Future<ProcessResult> _runWithFakeSudo(
   );
 }
 
+/// An [SshLink] whose every start hands back [process]. Nothing else on
+/// it is used.
+final class _OneProcessLink implements SshLink {
+  _OneProcessLink(this.process);
+
+  final RemoteProcess process;
+
+  @override
+  Future<RemoteProcess> start(String command, {PtyRequest? pty}) async =>
+      process;
+
+  @override
+  Object? noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// A [RemoteProcess] the test drives by hand, including an [exit] that
+/// fails, which a real channel never does.
+final class _ScriptedProcess implements RemoteProcess {
+  final stdoutController = StreamController<List<int>>();
+  final stderrController = StreamController<List<int>>();
+  final exitCompleter = Completer<RemoteExit>();
+  final _stdin = StreamController<List<int>>();
+
+  @override
+  Stream<List<int>> get stdout => stdoutController.stream;
+
+  @override
+  Stream<List<int>> get stderr => stderrController.stream;
+
+  @override
+  StreamSink<List<int>> get stdin => _stdin.sink;
+
+  @override
+  Future<RemoteExit> get exit => exitCompleter.future;
+
+  @override
+  void signal(RemoteSignal signal) {}
+
+  @override
+  Future<void> close() async {}
+}
+
 /// Waits for [condition]; the fixture answers on the same event loop, so a
 /// bounded number of turns is enough and no real delay is involved.
 Future<void> _eventually(bool Function() condition) async {
-  for (var attempt = 0; attempt < 5000; attempt++) {
-    if (condition()) return;
+  for (var attempt = 0; !condition(); attempt++) {
+    if (attempt == 5000) {
+      fail('The fixture never reported the expected wire traffic.');
+    }
     await Future<void>.delayed(Duration.zero);
   }
-  fail('The fixture never reported the expected wire traffic.');
 }
 
 /// The peer's channel number [index], once the client opened it.
