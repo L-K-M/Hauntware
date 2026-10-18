@@ -905,6 +905,30 @@ void main() {
       ]);
     });
 
+    testWidgets('the picker confirms font and ligatures together', (tester) async {
+      await pumpAppearance(tester);
+      await tester.tap(find.byTooltip('Choose a font'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('font.search')), 'Geist Mono');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('font.choice.Geist Mono')));
+      await tester.pumpAndSettle();
+      expect(backend.calls, isEmpty);
+
+      final samples = tester.widgetList<Text>(preview);
+      expect(samples.last.textSpan!.style!.fontFamily, BundledMonoFont.geistMono.family);
+      expect(samples.last.textSpan!.style!.fontFeatures, contains(const FontFeature('ss11')));
+      await tester.tap(find.byKey(const ValueKey('font.ligatures')));
+      await tester.tap(find.byKey(const ValueKey('font.apply')));
+      await tester.pumpAndSettle();
+
+      expect(previewStyle(tester).fontFeatures, contains(const FontFeature.disable('ss11')));
+      expect(backend.calls, [
+        'setTerminalAppearance(${kDefaultTerminalFontSize.toDouble()}, Geist Mono, '
+            '${TerminalPalette.followApp}, ${TerminalLigatures.off})',
+      ]);
+    });
+
     testWidgets('the terminal size slider writes through when it settles', (
       tester,
     ) async {

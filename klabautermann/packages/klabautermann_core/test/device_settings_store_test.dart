@@ -10,6 +10,7 @@ const _appearanceKey = 'klabautermann.appearance';
 const _firstRunCardKey = 'klabautermann.coverage.firstRunCardDismissed';
 const _announceBandsKey = 'klabautermann.accessibility.announceThresholdBands';
 const _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
+const _monitorSetKey = 'klabautermann.monitorSet';
 
 final _uuidV4 = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
@@ -242,6 +243,66 @@ void main() {
         expect(file.readAsStringSync(), before);
       },
     );
+
+    test('keeps the monitor set across reloads, sorted on disk, beside '
+        'keys it does not know (FL-21)', () async {
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        'klabautermann.future': 'kept',
+      });
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.monitorSet, isNull, reason: 'never chosen: the default');
+      await store.setMonitorSet({'srv-b', 'srv-a'});
+      final reopened = await DeviceSettingsStore.open(file);
+
+      expect(reopened.monitorSet, {'srv-a', 'srv-b'});
+      expect(document(), {
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        'klabautermann.future': 'kept',
+        _monitorSetKey: ['srv-a', 'srv-b'],
+      });
+
+      // An empty set is a choice of its own, not the default.
+      await reopened.setMonitorSet({});
+      expect((await DeviceSettingsStore.open(file)).monitorSet, isEmpty);
+    });
+
+    for (final (name, value, expected) in [
+      ('a string', 'srv-a', null),
+      ('a map', {'srv-a': true}, null),
+      ('items that are not strings', ['srv-a', 7, null], {'srv-a'}),
+    ]) {
+      test('a monitor set holding $name reads what it can', () async {
+        writeDocument({
+          _versionKey: 1,
+          _deviceIdKey: 'device-a',
+          _monitorSetKey: value,
+        });
+
+        final store = await DeviceSettingsStore.open(file);
+
+        expect(store.issue, isNull);
+        expect(store.monitorSet, expected);
+      });
+    }
+
+    test('a monitor set a read-only session cannot save stays in memory '
+        'and throws', () async {
+      writeDocument({_versionKey: 2, _deviceIdKey: 'device-a'});
+      final store = await DeviceSettingsStore.open(file);
+      final before = file.readAsStringSync();
+
+      await expectLater(
+        store.setMonitorSet({'srv-a'}),
+        throwsA(isA<DeviceSettingsReadOnlyException>()),
+      );
+
+      expect(store.monitorSet, {'srv-a'});
+      expect(file.readAsStringSync(), before);
+    });
 
     test('a damaged announcement setting reads as on', () async {
       writeDocument({

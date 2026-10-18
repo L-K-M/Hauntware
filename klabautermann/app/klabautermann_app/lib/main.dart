@@ -12,6 +12,7 @@ import 'app.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/fleet_controller.dart';
+import 'controllers/monitor_set.dart';
 import 'controllers/monitoring_controller.dart';
 import 'controllers/prompt_controller.dart';
 import 'controllers/sync_controller.dart';
@@ -122,9 +123,12 @@ Future<void> main(List<String> args) async {
   // directory alone; otherwise it keeps this run's pins in memory (D59,
   // D61, D63). It gets the device id read above, after the lock, so
   // enrollment never reads an id another process may have minted.
+  // Probes are on too (FL-04): the engine probes confirmed endpoints and
+  // the fleet rows show the answers.
   final engine = await IsolateEngineClient.spawn(
     supportDirectory: supportDirectory.path,
     linksEnabled: true,
+    probesEnabled: true,
     supportDirectoryAccess: supportDirectoryAccessFor(instanceLock),
     deviceId: settings.deviceId,
   );
@@ -148,6 +152,12 @@ Future<void> main(List<String> args) async {
     // settings.json as Séance keeps its pins.
     pinnedServerIds: settings.pinnedServerIds,
     savePins: settings.setPinnedServerIds,
+    // FL-21's monitor set (03 §4.3 step 4), device-local in settings.json:
+    // until the user chooses one, every eligible server on a desktop and
+    // none on a phone.
+    monitorSet: settings.monitorSet,
+    monitorSetDefault: monitorSetDefaultFor(defaultTargetPlatform),
+    saveMonitorSet: settings.setMonitorSet,
   );
   // Spawned once per launch: a restarted engine would be a new client
   // with new controllers over it, whose seq floors start empty (D44), and
@@ -184,6 +194,7 @@ Future<void> main(List<String> args) async {
     defaultTargetPlatform,
     appearance: appearance,
     announcements: announcements,
+    monitorSet: fleet.monitorSettings,
   );
 
   runApp(

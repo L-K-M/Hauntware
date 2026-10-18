@@ -9,7 +9,8 @@ import 'package:klabautermann_core/src/engine/engine_isolate.dart';
 import 'package:klabautermann_core/src/fleet/endpoint_pins.dart';
 import 'package:seance_core/catalog.dart'
     show EndpointPin, EndpointPinStore, FileEndpointPinStore;
-import 'package:seance_core/seance_core.dart' show ServerConfig;
+import 'package:seance_core/seance_core.dart'
+    show ProbeStatus, Prober, ServerConfig, TcpBannerProber;
 import 'package:test/test.dart';
 
 import 'support/answering_link.dart';
@@ -41,6 +42,22 @@ final class _FlakyPins implements EndpointPinStore {
   Future<void> drop(String serverId) => _inner.drop(serverId);
 }
 
+/// Records each probe's `host:port` and answers online, as a reachable
+/// host would.
+final class _RecordingProber implements Prober {
+  final probed = <String>[];
+
+  @override
+  Future<ProbeStatus> probe(
+    String host,
+    int port, {
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
+    probed.add('$host:$port');
+    return ProbeStatus.online;
+  }
+}
+
 /// The engine run in this isolate, as in the links tests, so a test holds
 /// the link its dial hands out, with keystore requests answered from
 /// [keystore] as the app's binding would and left out of [next].
@@ -56,8 +73,10 @@ final class _Engine {
     required FakeSyncServer server,
     required List<ServerConfig> dials,
     required List<AnsweringLink> links,
+    List<bool>? prompting,
     SupportDirectoryAccess access = SupportDirectoryAccess.exclusive,
     EndpointPinStore? pins,
+    Prober? prober,
   }) async {
     final port = ReceivePort();
     final messages = StreamIterator<Object?>(port);
@@ -67,6 +86,7 @@ final class _Engine {
         uiPort: port.sendPort,
         supportDirectory: supportDirectory,
         linksEnabled: true,
+        probesEnabled: prober != null,
         supportDirectoryAccess: access,
         deviceId: _deviceId,
       ),
@@ -80,10 +100,13 @@ final class _Engine {
             resolveJumpHost,
           }) async {
             dials.add(config);
+            // Only the user's connect may ask anything (03 §4.5).
+            prompting?.add(onKeyboardInteractive != null);
             return links.last;
           },
       syncTransport: server.transport,
       endpointPinStore: pins,
+      prober: prober ?? const TcpBannerProber(),
     );
     expect(
       await messages.moveNext().timeout(const Duration(seconds: 10)),
@@ -179,6 +202,7 @@ void main() {
   late FakeSyncServer server;
   late List<ServerConfig> dials;
   late List<AnsweringLink> links;
+  late List<bool> prompting;
 
   setUp(() async {
     support = Directory.systemTemp.createTempSync('klab-endpoints-');
@@ -186,19 +210,23 @@ void main() {
     await server.seedServer(fakeServer(_srv, 'alpha'));
     dials = [];
     links = [AnsweringLink()];
+    prompting = [];
   });
   tearDown(() => support.deleteSync(recursive: true));
 
   Future<_Engine> start({
     SupportDirectoryAccess access = SupportDirectoryAccess.exclusive,
     EndpointPinStore? pins,
+    Prober? prober,
   }) => _Engine.start(
     support.path,
     server: server,
     dials: dials,
     links: links,
+    prompting: prompting,
     access: access,
     pins: pins,
+    prober: prober,
   );
 
   test('a synced server dials only once confirmed, and a sync that moves '
@@ -267,6 +295,93 @@ void main() {
     engine.send(const Connect(_srv));
     await engine.until<Sample>();
     expect(dials.last.host, 'moved.example.com');
+  });
+
+  // FL-04, 03 §5.12: a probe is a TCP connect, so it would hand the
+  // user's address to whoever rewrote an unconfirmed endpoint.
+  test('probes reach only confirmed endpoints, stop when a sync moves one '
+      'and report a jump-routed import unknown', () async {
+    await server.seedServer(fakeServer('srv-b', 'beta'));
+    final prober = _RecordingProber();
+    final engine = await start(prober: prober);
+    await engine.enroll();
+
+    /// Reads answers until every one of [ids] has one, and returns the
+    /// latest of each.
+    Future<Map<String, ReachabilityStatus>> answersFor(Set<String> ids) async {
+      final answers = <String, ReachabilityStatus>{};
+      while (!answers.keys.toSet().containsAll(ids)) {
+        final answer = await engine.until<Reachability>();
+        answers[answer.serverId] = answer.status;
+      }
+      return answers;
+    }
+
+    engine.send(const ConfirmEndpoints([_srv]));
+    expect(await answersFor({_srv}), {_srv: ReachabilityStatus.online});
+    expect(prober.probed, ['alpha.example.com:22']);
+
+    engine.send(
+      const ImportSshConfig(
+        'Host web\n  HostName web.example.com\n  User deploy\n'
+        'Host inner\n  HostName inner.example.com\n  User deploy\n'
+        '  ProxyJump web\n',
+      ),
+    );
+    final answers = await answersFor({'ssh-config:web', 'ssh-config:inner'});
+    expect(answers['ssh-config:web'], ReachabilityStatus.online);
+    expect(answers['ssh-config:inner'], ReachabilityStatus.unknown);
+    expect(prober.probed.toSet(), {
+      'alpha.example.com:22',
+      'web.example.com:22',
+    });
+
+    // Another device moves the confirmed server: nothing probes it until
+    // the user confirms the new endpoint.
+    await server.seedServer(
+      fakeServer(_srv, 'alpha').copyWith(host: 'moved.example.com'),
+      updatedAt: 2,
+    );
+    engine.send(const RunSyncRound());
+    final round = await engine.untilSyncEnds();
+    expect(round.whereType<EndpointChanged>().single.serverId, _srv);
+    expect(
+      round.whereType<Reachability>().map((answer) => answer.serverId),
+      isNot(contains(_srv)),
+    );
+
+    engine.send(const ConfirmEndpoints([_srv]));
+    while (!prober.probed.contains('moved.example.com:22')) {
+      await engine.until<Reachability>();
+    }
+    expect(
+      prober.probed.where((target) => target.startsWith('beta.')),
+      isEmpty,
+      reason: 'the unconfirmed server is never probed',
+    );
+  });
+
+  test('the background holds probes back until the foreground', () async {
+    final prober = _RecordingProber();
+    final engine = await start(prober: prober);
+    await engine.enroll();
+
+    engine
+      ..send(const SetAppActivity(AppActivity.background))
+      ..send(const ConfirmEndpoints([_srv]));
+    expect(
+      _endpointIn([await engine.until<CatalogReplaced>()]),
+      EndpointConfirmation.confirmed,
+    );
+    // One more answer gives a probe the confirmation started time to
+    // report.
+    engine.send(const ConfirmEndpoints([]));
+    expect(await engine.next(), isA<CatalogReplaced>());
+    expect(prober.probed, isEmpty);
+
+    engine.send(const SetAppActivity(AppActivity.foreground));
+    expect((await engine.until<Reachability>()).serverId, _srv);
+    expect(prober.probed, ['alpha.example.com:22']);
   });
 
   test('a pin that cannot be saved leaves the server unconfirmed and says '
@@ -428,5 +543,106 @@ void main() {
       if (sw.elapsed > const Duration(seconds: 5)) fail('file not purged');
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
+  });
+
+  group('the monitor set (FL-21, 03 §4.3 step 4)', () {
+    const web = 'ssh-config:web';
+    const webConfig = 'Host web\n  HostName 192.0.2.10\n  User me\n';
+
+    Future<void> import(_Engine engine, String config) async {
+      engine.send(ImportSshConfig(config));
+      await engine.until<SshConfigImported>();
+    }
+
+    test('samples a confirmed synced server over an unattended link, and '
+        'loses it when a sync moves the server', () async {
+      final engine = await start();
+      await engine.enroll();
+
+      engine.send(const SetMonitorSet([_srv]));
+      final refused = await engine.next() as RequestRejected;
+      expect(refused.requestName, 'SetMonitorSet');
+      expect(refused.reason, contains(_srv), reason: 'not confirmed yet');
+      await pumpEventQueue();
+      expect(dials, isEmpty);
+
+      engine.send(const ConfirmEndpoints([_srv]));
+      await engine.until<CatalogReplaced>();
+      // No view connects or subscribes: the set alone samples it.
+      engine.send(const SetMonitorSet([_srv]));
+      final sample = await engine.until<Sample>();
+      expect((sample.serverId, sample.stream), (_srv, SampleStream.overview));
+      expect(prompting, [false], reason: 'background connects never ask');
+
+      await server.seedServer(
+        fakeServer(_srv, 'alpha').copyWith(host: 'moved.example.com'),
+        updatedAt: 2,
+      );
+      engine.send(const RunSyncRound());
+      await engine.untilSyncEnds();
+      expect(links.single.closes, 1);
+      expect(links.single.running, isEmpty, reason: 'sampling stopped');
+
+      // Confirming the new endpoint does not bring it back: the app sends
+      // its set again after the fleet it hears.
+      engine.send(const ConfirmEndpoints([_srv]));
+      await engine.until<CatalogReplaced>();
+      await pumpEventQueue();
+      expect(dials, hasLength(1));
+    });
+
+    test('a set of more than ten is rejected whole, and ids outside the '
+        'fleet are skipped by name', () async {
+      final engine = await start();
+      final ids = [for (var i = 1; i <= kMonitorSetLimit + 1; i++) 's$i'];
+      await import(
+        engine,
+        [
+          for (final id in ids) 'Host $id\n  HostName 192.0.2.1\n  User me\n',
+        ].join(),
+      );
+
+      engine.send(const SetMonitorSet(['ssh-config:s1', 'ssh-config:gone']));
+      final skipped = await engine.until<RequestRejected>();
+      expect(skipped.reason, contains('ssh-config:gone'));
+      expect(skipped.reason, isNot(contains('ssh-config:s1')));
+      await engine.until<Sample>();
+
+      engine.send(SetMonitorSet([for (final id in ids) 'ssh-config:$id']));
+      final refused = await engine.until<RequestRejected>();
+      expect(refused.reason, contains('more than $kMonitorSetLimit'));
+      await pumpEventQueue();
+      expect(dials, hasLength(1), reason: 'the last set stands');
+      expect(links.single.closes, 0);
+    });
+
+    test('a view\'s Disconnect keeps a monitored server\'s link, and '
+        'leaving the set keeps the link a view holds', () async {
+      final engine = await start();
+      await import(engine, webConfig);
+      final link = links.single;
+
+      engine
+        ..send(const SetMonitorSet([web]))
+        ..send(const Connect(web))
+        ..send(const Disconnect(web));
+      await engine.until<Sample>();
+      expect(link.closes, 0, reason: 'the monitor set holds it');
+
+      engine
+        ..send(const Connect(web))
+        ..send(const SetMonitorSet([]));
+      await pumpEventQueue();
+      expect(link.closes, 0, reason: 'the open view holds it');
+      expect(link.running, isEmpty, reason: 'nothing subscribes now');
+
+      engine.send(const Disconnect(web));
+      expect(
+        (await engine.until<LinkState>()).status,
+        const LinkClosed(LinkClosedReason.closedByOwner),
+      );
+      expect(link.closes, 1);
+      expect(dials, hasLength(1));
+    });
   });
 }

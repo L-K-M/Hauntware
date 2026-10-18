@@ -202,8 +202,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   `locatorConflict`. The fleet controller keeps link statuses and probe
   answers only for listed servers, and the rail words every status.
   Only an engine with links on sends link states and prompts, as the
-  app's does since K44b (below). The engine sends no probe answers and
-  fills the new fleet fields only for imports (below).
+  app's does since K44b (below). The engine sends probe answers since
+  K20 (below) and fills the new fleet fields only for imports (below).
 - Protocol v3 sampling (M2, 03 §10.1, K16a, #193): `Subscribe` and
   `Unsubscribe` name one surface's subscription and its `SampleStream`s
   (D45; the health card's failed units are a `failedUnits` stream of their
@@ -438,6 +438,22 @@ M2, the host read MVP, is the current milestone. What is on main:
   records. Engine unit tests use a fake dialer; K24's fixture tests
   (below) dial a containerized sshd, and no manual run against a real
   server has happened yet.
+- Reachability probes (M2, 03 §4.7, §5.12, FL-04, K20): the engine's
+  `ReachabilityService` runs `seance_core`'s `ProbeService` (a TCP
+  connect to the SSH port, 45 s jittered sweeps, at most 6 at once) over
+  the fleet entries with a connect config and a confirmed endpoint:
+  imports (O6's default) and confirmed synced servers, never an
+  unconfirmed or changed one. Each sweep sends a `Reachability` per
+  target; a server behind a jump host is reported unknown without a
+  probe, and one holding a link is answered online. Probing starts after
+  `Hello`'s fleet, sweeps at once for a new or moved target, stops for
+  a server before the fleet or `EndpointChanged` that removes it goes
+  out, and pauses with `SetAppActivity` in the background (phones only
+  send it). `EngineStart.probesEnabled`, off unless given, gates it
+  apart from links, and `main.dart` turns it on (the contract test holds
+  it). The fleet controller drops the answer of a server whose endpoint
+  waits for confirmation. Tested with a fake prober, under a fake clock
+  for the service; no real host has been probed from the app.
 - Shared host-key file store (M2, `seance_core`, 03 D3, F3b-1, #242):
   Poltergeist's `FileHostKeyStore` and its corrupt-file quarantine moved
   into `seance_core` (`package:seance_core/catalog.dart`, re-exported by
@@ -604,11 +620,34 @@ M2, the host read MVP, is the current milestone. What is on main:
   cadence; they give way where the name and state word would not fit.
   K14's locator flag shows as a warning whose words a tap shows. Link
   changes are announced, through a live region where the platform takes no
-  announcements; samples and probe answers are not. Rows subscribe nothing
-  until the monitor set (K30), and the app's engine sends no probe
-  answers (K20). It sends link states and samples since K44b turned links
-  on, so in a real run a row shows its link state once its server is
-  opened, and its readings while a view holds them.
+  announcements; samples and probe answers are not. Rows subscribe
+  nothing; the engine samples `overview` for the monitor set (K30, below),
+  and the app's engine sends probe answers since K20 (below). It sends
+  link states and samples since K44b turned links on, so in a real run a
+  row shows its link state once its server is opened or monitored, and
+  its readings while a view or the monitor set holds them.
+- Monitor set (M2, FL-21, 03 §4.3 step 4, §10.1, K30): every fleet row's
+  menu offers Monitor or Stop monitoring, and Settings > Servers (the
+  route, and the desktop window through the `setMonitored` link method)
+  lists the fleet with a switch per server, why a server cannot join,
+  and the count out of 10. Eligible: a confirmed endpoint (imports count
+  as confirmed) and agent or key-file sign-in, by
+  `monitorEligibilityOf`, which the engine enforces too. Until the user
+  chooses, desktops monitor the first 10 eligible servers and phones
+  none; a choice is kept as `klabautermann.monitorSet` in
+  `settings.json`, without the ids that left the fleet or stopped being
+  eligible. The engine samples each member's `overview` under its own
+  subscription over an unattended link, keeps that link when a view
+  disconnects, and drops a member that leaves the fleet or whose
+  endpoint a sync changes; `SetMonitorSet` with more than 10 ids is
+  rejected whole, and ineligible ids are skipped by name. The coverage
+  chip and sheet count the set. Tested in the engine (unattended dial,
+  samples without a view, the limit, skipped ids, a moved server, a
+  view's disconnect), the store (round trip, damaged values, read-only),
+  the controller (defaults per platform, eligibility, limit, purge on
+  save, not-saved), the row menu and both settings surfaces. Not
+  checked: a jump host's credentials, and an encrypted key file, which
+  fails the unattended connect until K45; on a real device, unverified.
 - Server header and Overview part 1 (M2, 03 §10.2, §10.4, OV-01, OV-03,
   OV-04, MEM-01, MEM-02, K32a, #223): the desktop workspace and the
   phone's server screen open with a header showing the link state as a
@@ -1105,6 +1144,22 @@ M2, the host read MVP, is the current milestone. What is on main:
   pings, negotiates and lists over `SshLink.openUnixStream`, reaches the
   second path, and sees `klab-nosock` refused. Locally it adds about
   16 s to `run.sh` with the images cached.
+- Recorded Docker API corpus (M3, 03 §11.1, D21, D01): `capture.sh`
+  also runs `capture_docker_api.sh`, which starts digest-pinned rootful
+  daemons in privileged containers (unix socket only, nothing published,
+  labelled and removed with their volumes on exit): Docker 20.10.24,
+  25.0.5, 29.0.4 and 29.7.2 at their native maxima 1.41, 1.44, 1.52 and
+  1.55, and Podman 5.8.7's compat service (1.44). In each,
+  `klabautermann_docker/tool/capture_api.dart` drives the package's own
+  HTTP client over the socket, seeds containers (health passing and
+  failing, a 2,000-line job, TTY, paused, a compose project, a Coolify
+  container, fake low-entropy secrets), an image, a network and a
+  volume, and records 30 exchanges as raw response bytes into
+  `klabautermann_docker/test/fixtures/api-*/`. Check mode compares a
+  fresh capture by structure, never by value; `--docker-api-only`
+  [`--update`] runs only these. The committed corpus comes from a local
+  cgroup v1 run; replay tests follow in D02, and rootless daemons stay
+  unrecorded.
 - Negative sshd variants and refusal evidence (M3, 03 §5.3, §11.3,
   D11): six Docker hosts on 127.0.0.1:2245 to 2250 refuse with
   `AllowStreamLocalForwarding no`, `DisableForwarding yes`,

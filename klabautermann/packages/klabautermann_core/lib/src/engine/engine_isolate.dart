@@ -6,13 +6,15 @@ import 'package:meta/meta.dart';
 import 'package:seance_core/catalog.dart'
     show EndpointPin, EndpointPinStore, endpointPinsFileName;
 import 'package:seance_core/seance_core.dart'
-    show ImportedHost, ServerConfig, SshLink;
+    show ImportedHost, Prober, ServerConfig, SshLink, TcpBannerProber;
 
 import '../capabilities/capability_cache.dart';
 import '../catalog/engine_sync.dart';
 import '../catalog/keystore_channel.dart';
 import '../fleet/endpoint_pins.dart';
 import '../fleet/imported_fleet.dart';
+import '../fleet/monitor_set.dart';
+import '../fleet/reachability_service.dart';
 import '../fleet/ssh_config_entries.dart';
 import '../fleet/ssh_config_import_store.dart';
 import '../fleet/synced_fleet.dart';
@@ -38,6 +40,7 @@ final class EngineStart {
     required this.uiPort,
     required this.supportDirectory,
     this.linksEnabled = false,
+    this.probesEnabled = false,
     this.supportDirectoryAccess = SupportDirectoryAccess.unguarded,
     this.deviceId,
   });
@@ -56,6 +59,14 @@ final class EngineStart {
   /// and no [Prompt] is ever open. The app's composition root leaves
   /// them off; tests turn them on.
   final bool linksEnabled;
+
+  /// Whether the engine probes the reachability of the fleet's confirmed
+  /// endpoints (FL-04, 03 §5.12), apart from [linksEnabled]: a probe is a
+  /// TCP connect, not a link. Without it nothing probes and no
+  /// [Reachability] is sent; with it, [SetAppActivity] pauses probing
+  /// even while links are off. The app's composition root turns it on;
+  /// tests that do not probe leave it off, so they open no sockets.
+  final bool probesEnabled;
 
   /// Whether this process alone uses [supportDirectory]: the engine writes
   /// and purges its capability cache and writes its host-key pins there
@@ -95,19 +106,28 @@ final class EngineStart {
 /// [EndpointChanged] for each confirmed endpoint a round changed (03
 /// §4.7), [ConfirmEndpoints] pins synced endpoints and answers with the
 /// fleet, a [Connect] to an unconfirmed synced server gets
-/// [ConnectRejected],
+/// [ConnectRejected], [SetMonitorSet] samples its eligible servers'
+/// `overview` over links dialed unattended (FL-21, 03 §4.3 step 4),
 /// [AnswerKeystore] completes the keystore call it names ahead of the
 /// queue, [Shutdown] ends every log stream and exits, and every other
 /// 03 §10.1 row gets [RequestRejected] until its milestone lands.
 ///
+/// With probes on, the fleet's confirmed endpoints are probed once the
+/// app has the fleet ([Hello]'s answer), and each answer goes out as a
+/// [Reachability]; a server behind a jump host is reported unknown, the
+/// background pauses the probes, and a server that leaves the fleet or
+/// loses its confirmation is no longer probed (03 §4.7, §5.12).
+///
 /// [dial] replaces `SshLink.connect`, so tests can run the engine's links
-/// without a network, and [syncTransport] the sync server's HTTP client.
+/// without a network, [prober] the probes' TCP connect, and
+/// [syncTransport] the sync server's HTTP client.
 /// [subscriptions], when given, holds the sampling subscriptions, so
 /// tests can read them, and [endpointPinStore] replaces the endpoint pins
 /// [openEndpointPins] opens, so tests can fail their reads.
 void engineMain(
   EngineStart start, {
   @visibleForTesting LinkDialer dial = SshLink.connect,
+  @visibleForTesting Prober prober = const TcpBannerProber(),
   @visibleForTesting SyncTransportFactory syncTransport = httpSyncTransport,
   @visibleForTesting SamplingSubscriptions? subscriptions,
   @visibleForTesting EndpointPinStore? endpointPinStore,
@@ -220,6 +240,16 @@ void engineMain(
               : BackgroundLinkPolicy.keepOpen,
         )
       : null;
+  // FL-21's monitor set (03 §4.3 step 4, §6.4): the servers whose
+  // `overview` the fleet rows read while the app is in the foreground,
+  // whether or not a view shows them, over links dialed unattended so
+  // nothing prompts. It holds eligible fleet servers only. The servers
+  // a view holds a link to ([Connect] without its [Disconnect] yet) are
+  // kept beside it: a server that leaves the set keeps the link a view
+  // holds, and a view that leaves keeps a monitored server's link.
+  var monitored = const <String>{};
+  final viewed = <String>{};
+
   if (links != null) {
     scheduler = SamplingScheduler(
       subscriptions: sampling,
@@ -231,6 +261,61 @@ void engineMain(
           unawaited(capabilities?.probed(serverId, profile)),
     );
     logs = LogStreamRouter(linkFor: links.link, emit: uiPort.send);
+  }
+
+  // Probes the confirmed endpoints (FL-04, 03 §5.12); none while probes
+  // are off. A server with a link is answered online without a probe.
+  final reachability = start.probesEnabled
+      ? ReachabilityService(
+          emit: uiPort.send,
+          hasLink: (id) => links?.link(id) != null,
+          prober: prober,
+        )
+      : null;
+
+  // Whether the app has had a fleet. Probing waits for it, since the app
+  // keeps answers only for servers its fleet lists.
+  var fleetSent = false;
+  void probeFleet() {
+    if (!fleetSent) return;
+    reachability?.update(probeTargets(fleetEntries(), configOf));
+  }
+
+  // The fleet servers the monitor set may hold now: those the shared rule
+  // allows and the engine can dial, which an import naming no user lacks
+  // on a system that names no local account.
+  Set<String> monitorEligibleIds() => {
+    for (final entry in fleetEntries())
+      if (monitorEligibilityOf(entry) == MonitorEligibility.eligible &&
+          configOf(entry.serverId) != null)
+        entry.serverId,
+  };
+
+  // Makes [next], eligible fleet servers only, the monitor set: a server
+  // that joins gets its subscription and an unattended connect, and one
+  // that leaves loses both, its link only when no view holds it.
+  void applyMonitorSet(Set<String> next) {
+    final before = monitored;
+    monitored = Set.unmodifiable(next);
+    for (final serverId in before.difference(next)) {
+      sampling.unsubscribe(
+        Unsubscribe(serverId: serverId, subscriptionId: monitorSubscriptionId),
+      );
+      scheduler?.update(serverId);
+      if (viewed.contains(serverId)) continue;
+      logs?.disconnect(serverId);
+      links?.disconnect(serverId);
+    }
+    for (final serverId in next.difference(before)) {
+      final subscription = Subscribe(
+        serverId: serverId,
+        subscriptionId: monitorSubscriptionId,
+        streams: const {SampleStream.overview},
+      );
+      sampling.subscribe(subscription);
+      scheduler?.subscribed(subscription);
+      links?.connect(serverId, purpose: ConnectPurpose.background);
+    }
   }
 
   // Rebuilds the fleet from the store. A server that left it is forgotten
@@ -251,6 +336,17 @@ void engineMain(
     scheduler?.retain(fleetIds);
     logs?.retain(fleetIds);
     links?.forget(before.difference(fleetIds));
+    viewed.retainAll(fleetIds);
+    // A monitored server that left the fleet or is no longer eligible (a
+    // sync changed its endpoint, an import its credentials) leaves the
+    // set; the app hears the fleet and sends its own set again.
+    if (monitored.isNotEmpty) {
+      applyMonitorSet(monitored.intersection(monitorEligibleIds()));
+    }
+    // Before the caller sends the fleet or an EndpointChanged, so no
+    // probe of a server starts, and no answer for it goes out, once the
+    // app hears it left or lost its pin.
+    probeFleet();
     unawaited(
       capabilities?.forget({
         for (final id in before)
@@ -411,6 +507,8 @@ void engineMain(
         // empty or unusable), so the rail shows them before the user does
         // anything.
         uiPort.send(CatalogReplaced(fleetEntries()));
+        fleetSent = true;
+        probeFleet();
       case Connect(:final serverId):
         sendCachedProfile(serverId);
         // The app sends it when the user opens the server (03 §10.1), so
@@ -418,10 +516,12 @@ void engineMain(
         // blocked it reviews the key (D61).
         if (links == null) {
           reject(message, 'links are off in this engine');
-        } else if (!links.connect(
+        } else if (links.connect(
           serverId,
           purpose: ConnectPurpose.interactive,
         )) {
+          viewed.add(serverId);
+        } else {
           // A fleet server without a config is the user's to fix, so the
           // app is told why; any other id is not a server it lists.
           switch (fleetIds.contains(serverId)
@@ -435,14 +535,24 @@ void engineMain(
           }
         }
       case Disconnect(:final serverId):
+        viewed.remove(serverId);
+        // A monitored server keeps its link for the monitor set. One
+        // without a link yet gives up the view's attempt, and with it any
+        // prompt the view raised, and goes on dialing unattended.
+        final monitoredServer = monitored.contains(serverId);
+        if (monitoredServer && links?.link(serverId) != null) return;
         // Its streams end before its link closes, so none reports
         // waiting for that link first.
         logs?.disconnect(serverId);
         links?.disconnect(serverId);
+        if (monitoredServer) {
+          links?.connect(serverId, purpose: ConnectPurpose.background);
+        }
       case SetAppActivity(:final activity):
         links?.setActivity(activity);
         scheduler?.activity = activity;
         logs?.activity = activity;
+        reachability?.activity = activity;
       case AnswerPrompt(:final promptId, :final answer):
         switch (prompts.answer(promptId, answer)) {
           case PromptAnswerResult.answered:
@@ -524,6 +634,21 @@ void engineMain(
         }
         await relistSynced();
         uiPort.send(CatalogReplaced(fleetEntries()));
+      case SetMonitorSet(:final serverIds):
+        // The app offers only what the engine allows (FL-21), so a
+        // rejection means the two saw different fleets; the app's next
+        // set follows the fleet that answers it.
+        final requested = serverIds.toSet();
+        if (requested.length > kMonitorSetLimit) {
+          reject(message, 'more than $kMonitorSetLimit servers');
+          return;
+        }
+        final eligible = monitorEligibleIds();
+        applyMonitorSet(requested.intersection(eligible));
+        final skipped = requested.difference(eligible);
+        if (skipped.isNotEmpty) {
+          reject(message, 'not eligible fleet servers: ${skipped.join(', ')}');
+        }
       case EnrollSync():
         runSync(SyncOperation.enroll, () => sync.enroll(message));
       case RunSyncRound():
