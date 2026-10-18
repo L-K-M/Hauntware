@@ -972,9 +972,11 @@ const _sudoTexts = <_RefusalText>[
   (ElevationFailureKind.ttyRequired, 'you must have a tty'),
 ];
 
-/// sudo-rs 0.2, from its sources [U: spike S3 replaces these with recorded
-/// fixtures]. sudo-rs keeps some of sudo's spellings, so sudo's texts are
-/// checked too.
+/// sudo-rs 0.2. Spike S3 recorded the wrong-password and
+/// password-required texts from 0.2.13 (test/fixtures/elevation/); the
+/// attempt-count and policy texts come from its sources, as S3 had no
+/// account outside sudoers. sudo-rs keeps some of sudo's spellings, so
+/// sudo's texts are checked too.
 const _sudoRsTexts = <_RefusalText>[
   (ElevationFailureKind.wrongPassword, 'Authentication failed'),
   (ElevationFailureKind.wrongPassword, 'incorrect authentication attempt'),
@@ -987,11 +989,14 @@ const _sudoRsTexts = <_RefusalText>[
 
 /// doas prints through `err(3)`, so its refusals are whole `doas: ` lines;
 /// anchoring keeps a command's own "Operation not permitted" out [R].
+/// Spike S3 recorded OpenDoas 6.8.2's "Authentication required" and its
+/// refusal of a password on a pipe (test/fixtures/elevation/).
 final _doasTexts = <_RefusalText>[
   (
     ElevationFailureKind.passwordRequired,
     RegExp(r'^doas: (?:Authorization|Authentication) required$'),
   ),
+  (ElevationFailureKind.ttyRequired, RegExp(r'^doas: a tty is required$')),
   (
     ElevationFailureKind.notInSudoers,
     RegExp(r'^doas: Operation not permitted$'),
