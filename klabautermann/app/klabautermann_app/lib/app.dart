@@ -13,6 +13,7 @@ import 'package:klabautermann_core/klabautermann_core.dart'
 import 'controllers/announcement_controller.dart';
 import 'controllers/appearance_controller.dart';
 import 'controllers/coverage_controller.dart';
+import 'controllers/docker_notice_controller.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitoring_controller.dart';
 import 'controllers/prompt_controller.dart';
@@ -21,6 +22,7 @@ import 'l10n/app_localizations.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'theme/app_theme.dart';
 import 'ui/adaptive_shell.dart';
+import 'ui/docker/docker_panel.dart' show DockerNoticeScope;
 import 'ui/macos_toolbar_band.dart';
 import 'ui/menus/app_commands.dart';
 import 'ui/menus/app_menu_host.dart';
@@ -46,6 +48,7 @@ class KlabautermannApp extends StatelessWidget {
     required this.appearance,
     required this.coverage,
     required this.announcements,
+    required this.dockerNotice,
     this.sync,
     this.settingsIssue,
     this.importStoreIssue,
@@ -70,6 +73,10 @@ class KlabautermannApp extends StatelessWidget {
   /// Whether threshold-band changes are announced (A11Y-15, D60); like
   /// [appearance], it outlives an engine run.
   final AnnouncementController announcements;
+
+  /// Whether the Docker tab still shows SAF-08's notice on this device
+  /// (03 §8.4); like [appearance], it outlives an engine run.
+  final DockerNoticeController dockerNotice;
 
   /// The sync account (03 §4.3), one engine run's like [fleet]; null in
   /// tests that leave sync out, which shows the sync control idle.
@@ -161,12 +168,15 @@ class KlabautermannApp extends StatelessWidget {
           themeMode: themes.themeMode,
           // The band is reserved above every route, so nothing
           // interactive lands under the traffic lights. The Overview reads
-          // the announcement switch on every route, the phone's pushed
-          // server screen included.
-          builder: (context, child) => AnnouncementScope(
-            announce: announcements,
-            openSettings: (context) => unawaited(_openSettings(context)),
-            child: withMacosToolbarBand(toolbarBand, child: child!),
+          // the announcement switch, and the Docker tab its notice, on
+          // every route, the phone's pushed server screen included.
+          builder: (context, child) => DockerNoticeScope(
+            notice: dockerNotice,
+            child: AnnouncementScope(
+              announce: announcements,
+              openSettings: (context) => unawaited(_openSettings(context)),
+              child: withMacosToolbarBand(toolbarBand, child: child!),
+            ),
           ),
           // The shell's settings callback and the menus' commands need a
           // context under the MaterialApp's Navigator; the

@@ -6,7 +6,7 @@ import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'access/access_panel.dart';
 import 'access/panel_gate.dart';
-import 'inspector_pane.dart' show PlaceholderPaneBody;
+import 'docker/docker_panel.dart';
 import 'jobs_panel.dart';
 import 'logs/logs_panel.dart';
 import 'overview_panel.dart';
@@ -206,6 +206,11 @@ class _PanelsState extends State<_Panels> {
                       serverId: serverId,
                       visible: tabs.index == index,
                     ),
+                    ServerPanel.docker => DockerPanel(
+                      monitoring: monitoring,
+                      serverId: serverId,
+                      visible: tabs.index == index,
+                    ),
                     ServerPanel.system => SystemPanel(
                       monitoring: monitoring,
                       serverId: serverId,
@@ -215,7 +220,6 @@ class _PanelsState extends State<_Panels> {
                       serverId: serverId,
                       focusNode: _accessFocus,
                     ),
-                    _ => const PlaceholderPaneBody(),
                   },
                 ),
               ),

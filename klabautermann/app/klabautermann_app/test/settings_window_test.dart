@@ -12,6 +12,7 @@ import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
+import 'package:klabautermann_app/controllers/docker_notice_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitor_set.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
@@ -344,11 +345,13 @@ void main() {
       final monitoring = MonitoringController(engine);
       final prompts = PromptController(engine);
       final coverage = CoverageController(firstRunCardDismissed: true);
+      final dockerNotice = DockerNoticeController();
       addTearDown(() async {
         fleet.dispose();
         monitoring.dispose();
         prompts.dispose();
         coverage.dispose();
+        dockerNotice.dispose();
         await engine.close();
       });
       final remote = await connectWindow(tester, tab);
@@ -364,6 +367,7 @@ void main() {
                 appearance: main,
                 coverage: coverage,
                 announcements: announcements,
+                dockerNotice: dockerNotice,
               ),
             ),
             Expanded(child: SettingsWindowApp(remote: remote)),

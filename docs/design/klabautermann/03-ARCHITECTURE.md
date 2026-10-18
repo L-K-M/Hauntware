@@ -2198,7 +2198,7 @@ platform identities in 04, section 12.3):
 | `sync_enrollment.json` [E] | Enrollment state (M2, K49a, D62): the push hold, the raised notices and the enrolled account (server URL, user name, mode); never the token or vault key, which stay in the keystore (4.5), and not the device id, which stays in `settings.json`. Kept like the verdict files; a damaged file reads as not enrolled | `klabautermann_core` [E] | MVP |
 | `endpoint_pins.json` | Confirmed endpoints. As built in M2 (K41), written by the engine through the catalog library's `FileEndpointPinStore` only with exclusive access; otherwise pins last for the engine's run (4.7) | catalog library | MVP |
 | `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config`, replaced whole by each import; never pushed (D14). Schema 3 (M2) holds each host's alias, host, port, user, `IdentityFile` and `ProxyJump` with the values ssh would use (10.1): the effective host (`%h` expanded, lowercased unless an address) and port, the first `IdentityFile` that is not `none`, and the `ProxyJump` as written; under `hops` it holds the same for each other name a stored route gives. An older file holds addresses only: schema 1 (M1) kept no `IdentityFile` or `ProxyJump` and kept `HostName` as written, `%h` included, and schema 2 read each host's values from its first block alone. Its hosts are listed as stored, with no `jumpRoute`, `authKind` or `locatorConflict`, and get no connect config until the next import rewrites the file. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
-| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), whether threshold-band changes are announced (`klabautermann.accessibility.announceThresholdBands`, M2, D60; anything but `false` announces), the servers pinned to the top of the fleet list (`klabautermann.fleet.pinnedServerIds`, M2, 10.3; a sorted list of server ids, anything else reading as none), FL-21's monitor set as the user chose it (`klabautermann.monitorSet`, M2, K30, 4.3 step 4; a sorted list of server ids, anything else reading as never chosen, so the platform's default applies), per-server device preferences | app | MVP |
+| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), whether threshold-band changes are announced (`klabautermann.accessibility.announceThresholdBands`, M2, D60; anything but `false` announces), whether the Docker tab's root-equivalence notice was dismissed (`klabautermann.docker.rootEquivalenceNoticeDismissed`, M3, 8.4; anything but `true` shows it again), the servers pinned to the top of the fleet list (`klabautermann.fleet.pinnedServerIds`, M2, 10.3; a sorted list of server ids, anything else reading as none), FL-21's monitor set as the user chose it (`klabautermann.monitorSet`, M2, K30, 4.3 step 4; a sorted list of server ids, anything else reading as never chosen, so the platform's default applies), per-server device preferences | app | MVP |
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
 | `instance.lock` [E] | Empty. One desktop instance per support directory (built in M2): the composition root takes an exclusive, non-blocking advisory lock on it after the settings window's branch and before `settings.json` and `window_state.json` open and the engine isolate starts, so one process mints the device id and writes these files, and holds it for the life of the process; the file is never deleted. A second instance opens no other file and only says it is already running, until the user quits it. A lock that fails for another reason (no write access, no lock support) lets the app run unguarded and says so at startup. Phones run one process per app and take none | app, through `klabautermann_core`'s `InstanceLock` | MVP |
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
@@ -5586,8 +5586,20 @@ tab:
   notice heads the tab whatever the rows say; docker-group advice adds
   its own warning naming the rootless alternative, and 8.4's admin-mode
   alternative joins it once admin mode exists.
-- The Docker tab reads "arrives with Docker support" over the detected
-  runtime (D54), read-only, on every host until M3.
+- The Docker tab follows its server's Docker endpoint instead of the
+  probe (as built in M3, D12, `app/klabautermann_app/lib/ui/docker/`):
+  "waiting for the connection" or "looking for the Docker engine" while
+  the endpoint waits or resolves, 5.9's exact reason with the Access
+  link and a retry once it failed, and the tab itself once it is ready.
+  The engine reports an endpoint only after a `DockerQuery` names the
+  server, so the app's Docker controller sends one engine query each
+  time a server's link comes up; the engine follows the link from
+  there. The tab heads with 8.4's notice until it is dismissed once on
+  the device (`settings.json`), then the engine strip (DKE-01: the
+  engine as the API names it, the negotiated API version, the product
+  and version, and the host's OS and architecture, read while the tab
+  shows), over the Containers, Images and Stacks sub-tabs, whose bodies
+  land with their panels.
 
 As built in M2 (`app/klabautermann_app/lib/ui/system_panel.dart`), the
 System tab shows SYS-01's identity, BOOT-01's uptime and boot time,
@@ -5621,9 +5633,15 @@ the link state, the coverage chip, the detected runtime and, under
 them, why a closed link failed when the engine classified it: each
 failure kind of 10.1 in a sentence that says what to do, 5.3's client
 limitations in their own words, and PLT-04's background line on an iOS
-or Android phone's screen (10.5). The transport label, privilege
-badges, admin mode and the read-only and low-session indicators come
-with their subsystems.
+or Android phone's screen (10.5). As built in M3 (D12), it also names
+the Docker transport in every mode (5.9, E4): waiting, looking for a
+route, the rank's label once ready, or no route with its reason; it
+carries 8.4's badge for the engine the route reaches (a socket the
+probe cannot classify reads as root-equivalent) and the low-session
+indicator while the endpoint reports it. Once a route is found, the
+runtime is the engine the API names there (M13), without the Docker
+path caveat. Admin mode, the sudo relay's badge and the read-only
+indicator come with their subsystems.
 The state resolves through `ghost_servers`' indicator under the rail
 rule, as the server's row does, as a dot, an icon and a word, with
 the link's own word where the indicator shows none; the kit keeps its

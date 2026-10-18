@@ -5,6 +5,7 @@ import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
+import 'package:klabautermann_app/controllers/docker_notice_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/controllers/prompt_controller.dart';
@@ -32,6 +33,7 @@ final class AppHarness {
     required this.appearance,
     required this.coverage,
     required this.announcements,
+    required this.dockerNotice,
     required this.sync,
   });
 
@@ -42,6 +44,7 @@ final class AppHarness {
   final AppearanceController appearance;
   final CoverageController coverage;
   final AnnouncementController announcements;
+  final DockerNoticeController dockerNotice;
   final SyncController sync;
 
   void dispose() {
@@ -51,6 +54,7 @@ final class AppHarness {
     appearance.dispose();
     coverage.dispose();
     announcements.dispose();
+    dockerNotice.dispose();
     sync.dispose();
   }
 }
@@ -71,7 +75,8 @@ final class AppHarness {
 /// [syncStoreIssues] what it reported about its sync files. [coverage]
 /// replaces a controller whose first-run card was
 /// already dismissed, so the card shows only in the tests that want it.
-/// [announcements] replaces an in-memory A11Y-15 switch that is on.
+/// [announcements] replaces an in-memory A11Y-15 switch that is on, and
+/// [dockerNotice] an in-memory SAF-08 notice not yet dismissed.
 /// [appVersion] stands in for what `readAppVersion` read.
 /// [linkGrace] defaults to zero, which disconnects a server as its last
 /// view closes: the tree unmounts at the end of every test, and the test
@@ -84,6 +89,7 @@ Future<AppHarness> pumpApp(
   AppearanceController? appearance,
   CoverageController? coverage,
   AnnouncementController? announcements,
+  DockerNoticeController? dockerNotice,
   DeviceSettingsIssue? settingsIssue,
   ImportStoreIssue? importStoreIssue,
   InstanceLockUnavailable? instanceLockIssue,
@@ -107,6 +113,7 @@ Future<AppHarness> pumpApp(
     appearance: appearance ?? AppearanceController(),
     coverage: coverage ?? CoverageController(firstRunCardDismissed: true),
     announcements: announcements ?? AnnouncementController(),
+    dockerNotice: dockerNotice ?? DockerNoticeController(),
     sync: SyncController(engine, account: syncAccount),
   );
   addTearDown(() async {
@@ -122,6 +129,7 @@ Future<AppHarness> pumpApp(
       appearance: harness.appearance,
       coverage: harness.coverage,
       announcements: harness.announcements,
+      dockerNotice: harness.dockerNotice,
       sync: harness.sync,
       settingsIssue: settingsIssue,
       importStoreIssue: importStoreIssue,
