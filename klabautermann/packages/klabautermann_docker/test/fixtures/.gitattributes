@@ -1,0 +1,3 @@
+# The recorded Docker API corpora keep the daemons' bytes exactly,
+# CRLF line ends and chunked framing included (README.md).
+api-*/*.http binary

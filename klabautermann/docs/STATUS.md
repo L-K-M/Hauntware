@@ -1128,6 +1128,22 @@ M2, the host read MVP, is the current milestone. What is on main:
   pings, negotiates and lists over `SshLink.openUnixStream`, reaches the
   second path, and sees `klab-nosock` refused. Locally it adds about
   16 s to `run.sh` with the images cached.
+- Recorded Docker API corpus (M3, 03 §11.1, D21, D01): `capture.sh`
+  also runs `capture_docker_api.sh`, which starts digest-pinned rootful
+  daemons in privileged containers (unix socket only, nothing published,
+  labelled and removed with their volumes on exit): Docker 20.10.24,
+  25.0.5, 29.0.4 and 29.7.2 at their native maxima 1.41, 1.44, 1.52 and
+  1.55, and Podman 5.8.7's compat service (1.44). In each,
+  `klabautermann_docker/tool/capture_api.dart` drives the package's own
+  HTTP client over the socket, seeds containers (health passing and
+  failing, a 2,000-line job, TTY, paused, a compose project, a Coolify
+  container, fake low-entropy secrets), an image, a network and a
+  volume, and records 30 exchanges as raw response bytes into
+  `klabautermann_docker/test/fixtures/api-*/`. Check mode compares a
+  fresh capture by structure, never by value; `--docker-api-only`
+  [`--update`] runs only these. The committed corpus comes from a local
+  cgroup v1 run; replay tests follow in D02, and rootless daemons stay
+  unrecorded.
 - Negative sshd variants and refusal evidence (M3, 03 §5.3, §11.3,
   D11): six Docker hosts on 127.0.0.1:2245 to 2250 refuse with
   `AllowStreamLocalForwarding no`, `DisableForwarding yes`,
