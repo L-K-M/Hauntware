@@ -5938,6 +5938,17 @@ and that it returned no lines for a `since` equal to the last lines'
 timestamp, where Docker's `since` is inclusive (5.6). Rootless daemons
 and real hosts are not recorded.
 
+As built in M3 (D02), `RecordedDaemon` in `klabautermann_docker`'s
+`testing.dart` replays a corpus to the real HTTP client, whole or one
+byte at a time, and `recorded_api_test.dart` runs every directory
+through negotiation, refusals, the typed endpoints and the 5.8 gates.
+Replay showed three more daemon facts. Podman's 1.44 compat layer
+sends the pre-1.52 legacy event fields as Docker 1.44 does. Podman's
+`/system/df` lists an image once per name (tag and digest reference),
+so its image count can exceed `/images/json`'s; the summary counts
+images from the list. And an idle container's CPU counter can stand
+still between two samples, which now reads as 0 % instead of unknown.
+
 ### 11.2 Cross-app regression tests added by this plan
 
 1. **Suite convergence:** a Séance `SyncCoordinator` device and a shared
@@ -6069,6 +6080,17 @@ five put their setting ahead of the common config's `Include`;
 run's keys behind `restrict` (`authorized_keys.restrict`, which `run.sh`
 writes). The claim above that the common config's `AllowTcpForwarding
 no` refuses streamlocal holds on OpenSSH 10.6 (5.3).
+
+As built in M4 (E27), a `registry` service (Distribution 3.0.0, pinned by
+digest) serves the Compose network only: it publishes and exposes
+nothing, and dind trusts it, and only it, over plain HTTP
+(`--insecure-registry=registry:5000`). `check_docker_exposure.dart`
+rejects a registry that publishes a port or leaves the Compose network,
+and any other insecure registry. `seed_docker.sh` pushes the busybox
+image as `registry:5000/klab/app:1` and seeds the mutation suites'
+targets: the stacks `redeploy`, `orphans` (whose `old` service leaves
+its file after it starts) and `managed` (`coolify.managed=true`), and a
+container `ssh-port` publishing port 22 inside dind, a protected target.
 
 ### 11.4 Performance budgets (gated from M2)
 
