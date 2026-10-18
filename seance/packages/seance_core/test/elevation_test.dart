@@ -1307,9 +1307,8 @@ void main() {
       // The prelude's open is pending, so no rung reads stdin yet.
       await _eventually(() => link.peer.channelOpensSeen == 2);
       process.stdin.add(List.filled(ElevatedProcess.replayLimit + 1, 0x41));
-      // The open delay runs on the real clock.
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      final prelude = await _channel(link.peer, 1);
+      // The delayed open lands after the write.
+      final prelude = await _delayedChannel(link.peer, 1);
       await _eventually(
         () => prelude.stdinBytes.length > ElevatedProcess.replayLimit,
       );
@@ -1326,6 +1325,35 @@ void main() {
       // Rung 4 would have needed a replay larger than the bound.
       expect(link.peer.channels, hasLength(2));
     });
+
+    test(
+      'a stop signal while the next rung opens closes it unstarted',
+      () async {
+        final link = await quietLink();
+        final executor = ElevatedExecutor(link.link, _passwordSudo);
+
+        final process = await executor.start(
+          ['docker', 'load'],
+          password: _password,
+          attempt: ElevationAttempt.nopasswdFirst,
+        );
+        link.peer.channelOpenDelay = const Duration(milliseconds: 200);
+        _finish(
+          await _channel(link.peer, 0),
+          exit: 1,
+          stderr: _e8PasswordRequired,
+        );
+        await _eventually(() => link.peer.channelOpensSeen == 2);
+        process
+          ..signal(RemoteSignal.usr1)
+          ..signal(RemoteSignal.term);
+
+        final prelude = await _delayedChannel(link.peer, 1);
+        await _eventually(() => prelude.closeFromClient);
+        expect(prelude.stdinBytes, isEmpty, reason: 'no password, no input');
+        expect(link.peer.channels, hasLength(2));
+      },
+    );
 
     test('a fallback rung that cannot open fails exit and refusal', () async {
       final link = await quietLink();
@@ -1869,6 +1897,19 @@ Future<void> _eventually(bool Function() condition) async {
     }
     await Future<void>.delayed(Duration.zero);
   }
+}
+
+/// The peer's channel number [index], once a delayed open lands on the
+/// real clock: polled until it exists, for at most five seconds.
+Future<SshPeerChannel> _delayedChannel(SshChannelPeer peer, int index) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 5));
+  while (peer.channels.length <= index) {
+    if (DateTime.now().isAfter(deadline)) {
+      fail('The fixture never opened channel $index.');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
+  return peer.channels[index];
 }
 
 /// The peer's channel number [index], once the client opened it.

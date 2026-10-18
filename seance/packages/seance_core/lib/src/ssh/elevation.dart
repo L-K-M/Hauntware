@@ -504,9 +504,25 @@ final class ElevatedProcess implements RemoteProcess {
 
   /// Signals the current rung's process. Between rungs, while the next one
   /// opens, there is none: the refused tool has exited and the command has
-  /// not started, so the signal is dropped.
+  /// not started. A signal that asks the command to stop then closes this
+  /// process instead, so the next rung never starts it; any other signal
+  /// is dropped.
   @override
-  void signal(RemoteSignal signal) => _process?.signal(signal);
+  void signal(RemoteSignal signal) {
+    if (_opening != null) {
+      if (_stopSignals.contains(signal)) unawaited(close());
+      return;
+    }
+    _process?.signal(signal);
+  }
+
+  static const _stopSignals = {
+    RemoteSignal.hup,
+    RemoteSignal.int_,
+    RemoteSignal.quit,
+    RemoteSignal.kill,
+    RemoteSignal.term,
+  };
 
   /// Closes the current rung's process, after a fallback rung that is
   /// opening, and stops any further fallback.
