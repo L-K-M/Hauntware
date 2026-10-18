@@ -1,0 +1,290 @@
+{
+  "format": 1,
+  "corpus": "api-1.55",
+  "capturedAt": "2026-10-17T16:14:25.824986Z",
+  "daemon": {
+    "runtime": "docker",
+    "version": "29.7.2",
+    "apiVersion": "1.55",
+    "minApiVersion": "1.40",
+    "image": "mirror.gcr.io/library/docker:29.7.2-dind@sha256:3ef33f2e220b79ed3ef3b99d81746f06f306cd6340e2cb7331d17ae996e74cb6",
+    "rootless": false,
+    "operatingSystem": "Alpine Linux v3.24",
+    "osType": "linux",
+    "architecture": "x86_64",
+    "kernelVersion": "6.18.44-fc-v139",
+    "cgroupVersion": "1",
+    "cgroupDriver": "cgroupfs",
+    "storageDriver": "overlayfs"
+  },
+  "images": {
+    "seed": "mirror.gcr.io/library/busybox:1.37.0@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e",
+    "seedId": "sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e",
+    "dangling": "sha256:b7e975884d897dd76bc1304cb6316480d8fc06762968b8c8e2b215a3ee85e652"
+  },
+  "seeded": {
+    "containers": {
+      "web": "e026126ba22f5db4cbda15e943b5ba4168a7f5fca7d1185b190deb9cabfe3db1",
+      "worker": "cc13a1000aa313546dfa9324f4b67aece6e8714d4be4ef4a37c70cb6df852a79",
+      "job": "f2eaca0eaff59e519928f786e01645664d9e36db615a5b2c464d453e23ce00fc",
+      "tty": "0fb12037249daad31b5e22578b9cbbd1171025b406ec91ec1c0bef98767057cd",
+      "paused": "0c384e940bb75dc9c64c49cf66a764ab1c5da2a3687cf84e95eb9c093530c6b4",
+      "demo-web-1": "16b47a778e3782cb96f56e356e220c1bb03780ba4ad13a3aeb20170043a62bcd",
+      "demo-cache-1": "20b48df98077ee0c1a42fa7314d9113dd6b065ffc1bc4121e61c1ce5b6b715a4",
+      "coolify-app": "b799a1af4dfbdb3a4a47951aeb7d69eb3499e255d175feaa25907a1947866431"
+    },
+    "networks": {
+      "demo_default": "da6273ea87998e9bd2eb5424aa2bfc413858b83e069ce29eff829528a479335b"
+    },
+    "volumes": [
+      "demo_data"
+    ],
+    "eventsWindow": {
+      "since": 1792253649,
+      "until": 1792253664
+    }
+  },
+  "exchanges": [
+    {
+      "name": "ping-head",
+      "file": "ping-head.http",
+      "request": "HEAD /_ping",
+      "status": 200,
+      "contentType": "text/plain; charset=utf-8",
+      "framing": "none"
+    },
+    {
+      "name": "ping-get",
+      "file": "ping-get.http",
+      "request": "GET /_ping",
+      "status": 200,
+      "contentType": "text/plain; charset=utf-8",
+      "framing": "length"
+    },
+    {
+      "name": "version",
+      "file": "version.http",
+      "request": "GET /version",
+      "status": 200,
+      "contentType": "application/json",
+      "framing": "length"
+    },
+    {
+      "name": "info",
+      "file": "info.http",
+      "request": "GET /v1.55/info",
+      "status": 200,
+      "contentType": "application/json",
+      "framing": "chunked"
+    },
+    {
+      "name": "containers",
+      "file": "containers.http",
+      "request": "GET /v1.55/containers/json?all=1",
+      "status": 200,
+      "contentType": "application/json",
+      "framing": "chunked"
+    },
+    {
+      "name": "containers-size",
+      "file": "containers-size.http",
+      "request": "GET /v1.55/containers/json?all=1&size=1",
+      "status": 200,
+      "contentType": "application/json",
+      "framing": "chunked"
+    },
+    {
+      "name": "inspect-web",
+      "file": "inspect-web.http",
+      "request": "GET /v1.55/containers/web/json",
+      "status": 200,
+      "contentType": "application/json",
+      "framing": "chunked"
+    },
+    {
+      "name": "inspect-worker",
+      "file": "inspect-worker.http",
+      "request": "GET /v1.55/containers/worker/json",
+      "status": 200,
+      "contentType": "application/json",
+      "framing": "chunked"
+    },
+    {
+      "name": "inspect-job",
+      "file": "inspect-job.http",
+      "request": "GET /v1.55/containers/job/json",
+      "status": 200,
+      "contentType": "application/json",
+      "framing": "chunked"
+    },
+    {
+      "name": "inspect-tty",
+      "file": "inspect-tty.http",
+      "request": "GET /v1.55/containers/tty/json",
+      "status": 200,
+      "contentType": "application/json",
+      "framing": "chunked"
+    },
+    {
+      "name": "inspect-paused",
+      "file": "inspect-paused.http",
+      "request": "GET /v1.55/containers/paused/json",
+      "status": 200,
+      "contentType": "application/json",
+      "framing": "chunked"
+    },
+    {
+      "name": "inspect-demo-web-1",
+      "file": "inspect-demo-web-1.http",
+      "request": "GET /v1.55/containers/demo-web-1/json",
+      "status": 200,
+      "contentType": "application/json",
+      "framing": "chunked"
+    },
+    {
+      "name": "inspect-demo-cache-1",
+      "file": "inspect-demo-cache-1.http",
+      "request": "GET /v1.55/containers/demo-cache-1/json",
+      "status": 200,
+      "contentType": "application/json",
+      "framing": "chunked"
+    },
+    {
+      "name": "inspect-coolify-app",
+      "file": "inspect-coolify-app.http",
+      "request": "GET /v1.55/containers/coolify-app/json",
+      "status": 200,
+      "contentType": "application/json",
+      "framing": "chunked"
+    },
+    {
+      "name": "inspect-missing",
+      "file": "inspect-missing.http",
+      "request": "GET /v1.55/containers/klab-missing/json",
+      "status": 404,
+      "contentType": "application/json",
+      "framing": "length"
+    },
+    {
+      "name": "stats-oneshot",
+      "file": "stats-oneshot.http",
+      "request": "GET /v1.55/containers/web/stats?stream=false&one-shot=true",
+      "status": 200,
+      "contentType": "application/json",
+      "framing": "length"
+    },
+    {
+      "name": "stats-stream",
+      "file": "stats-stream.http",
+      "request": "GET /v1.55/containers/web/stats?stream=1",
+      "status": 200,
+      "contentType": null,
+      "framing": "chunked",
+      "truncatedAfterLines": 2
+    },
+    {
+      "name": "logs-tail",
+      "file": "logs-tail.http",
+      "request": "GET /v1.55/containers/job/logs?stdout=1&stderr=1&timestamps=1&tail=20",
+      "status": 200,
+      "contentType": "application/vnd.docker.multiplexed-stream",
+      "framing": "chunked"
+    },
+    {
+      "name": "logs-tail-tty",
+      "file": "logs-tail-tty.http",
+      "request": "GET /v1.55/containers/tty/logs?stdout=1&stderr=1&timestamps=1&tail=20",
+      "status": 200,
+      "contentType": "application/vnd.docker.raw-stream",
+      "framing": "chunked"
+    },
+    {
+      "name": "logs-follow",
+      "file": "logs-follow.http",
+      "request": "GET /v1.55/containers/job/logs?stdout=1&stderr=1&timestamps=1&follow=1",
+      "status": 200,
+      "contentType": "application/vnd.docker.multiplexed-stream",
+      "framing": "chunked"
+    },
+    {
+      "name": "logs-since",
+      "file": "logs-since.http",
+      "request": "GET /v1.55/containers/job/logs?stdout=1&stderr=1&timestamps=1&since=1792253658.551883750",
+      "status": 200,
+      "contentType": "application/vnd.docker.multiplexed-stream",
+      "framing": "chunked"
+    },
+    {
+      "name": "images",
+      "file": "images.http",
+      "request": "GET /v1.55/images/json",
+      "status": 200,
+      "contentType": "application/json",
+      "framing": "length"
+    },
+    {
+      "name": "image-inspect",
+      "file": "image-inspect.http",
+      "request": "GET /v1.55/images/mirror.gcr.io/library/busybox:1.37.0/json",
+      "status": 200,
+      "contentType": "application/json",
+      "framing": "length"
+    },
+    {
+      "name": "networks",
+      "file": "networks.http",
+      "request": "GET /v1.55/networks",
+      "status": 200,
+      "contentType": "application/json",
+      "framing": "length"
+    },
+    {
+      "name": "volumes",
+      "file": "volumes.http",
+      "request": "GET /v1.55/volumes",
+      "status": 200,
+      "contentType": "application/json",
+      "framing": "length"
+    },
+    {
+      "name": "system-df",
+      "file": "system-df.http",
+      "request": "GET /v1.55/system/df",
+      "status": 200,
+      "contentType": "application/json",
+      "framing": "chunked"
+    },
+    {
+      "name": "events",
+      "file": "events.http",
+      "request": "GET /v1.55/events?since=1792253649&until=1792253664",
+      "status": 200,
+      "contentType": "application/jsonl",
+      "framing": "chunked"
+    },
+    {
+      "name": "below-min",
+      "file": "below-min.http",
+      "request": "GET /v1.39/info",
+      "status": 400,
+      "contentType": "application/json",
+      "framing": "length"
+    },
+    {
+      "name": "above-max",
+      "file": "above-max.http",
+      "request": "GET /v1.56/info",
+      "status": 400,
+      "contentType": "application/json",
+      "framing": "length"
+    },
+    {
+      "name": "floor-1.41",
+      "file": "floor-1.41.http",
+      "request": "GET /v1.41/info",
+      "status": 200,
+      "contentType": "application/json",
+      "framing": "chunked"
+    }
+  ]
+}

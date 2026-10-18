@@ -1,5 +1,18 @@
 # Status
 
+## Font catalog and preview picker (2026-10-17)
+
+`ghost_fonts` bundles 20 OFL families. The shared picker searches offline,
+previews real glyphs and emphasis, and confirms family and ligatures together.
+Planchette, Séance and Poltergeist use it. Defaults and stored family names
+are preserved; a saved ligatures-off choice stays off.
+
+Rendering tests check every family's fixed-width metrics and each supported
+font's ligature switch. The additional release files and licenses are pinned
+by SHA-256; the fonts are unmodified. Desktop and narrow layouts were inspected
+as rendered captures. Native macOS, Windows and mobile device checks remain
+manual.
+
 ## Problem checks (2026-10-06)
 
 The shared editor checks the formats it can read quickly and marks what
@@ -331,10 +344,11 @@ a native smoke test. No release tag has been created.
 
 ## Current limits
 
-The standalone app is desktop-only, uses one tabbed window per process, and
-does not restore documents after application exit. It accepts UTF-8 files up
+The standalone app targets Android and the three desktops, and does not
+restore documents after application exit. It accepts UTF-8 files up
 to 4 MiB; highlighting stops above 200,000 characters. File conflict guards
 are best-effort checks, not cross-process locks. Mixed line endings follow
 the selected host normalization policy. Android hard-link publication limits
-are documented in the core package; mobile runtime file I/O has not been
-verified locally.
+are documented in the core package. Android provider writes retain original
+recovery copies but cannot guarantee atomic replacement. Real-device document
+provider and keyboard flows require a manual smoke test.
