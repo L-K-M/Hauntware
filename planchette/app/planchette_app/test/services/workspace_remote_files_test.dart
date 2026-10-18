@@ -96,13 +96,28 @@ class _Connections implements ConnectionManager {
   final _RemoteFiles fs;
   bool offline = false;
   final opened = <String>[];
+
+  // Mirrors the pool after a drop: leases and opens park until it reconnects.
+  Completer<void>? reconnect;
+  var state = ServerConnectionState.connected;
+  final _status = StreamController<ServerStatus>.broadcast();
+  var leased = 0;
+  var released = 0;
+  var browseClosed = 0;
+
+  void announce(ServerConnectionState next) {
+    state = next;
+    _status.add(ServerStatus(next));
+  }
+
   @override
   Future<PaneChannel> openBrowseChannel(
     String serverId, {
     required String paneTabId,
   }) async {
+    await reconnect?.future;
     opened.add(serverId);
-    return _Browse(fs, '/');
+    return _Browse(fs, '/', () => browseClosed++);
   }
 
   @override
@@ -114,12 +129,17 @@ class _Connections implements ConnectionManager {
         message: 'Disconnected',
       );
     }
-    return _Lease(fs);
+    await reconnect?.future;
+    leased++;
+    return _Lease(fs, () => released++);
   }
 
   @override
-  Stream<ServerStatus> watchServer(String serverId) =>
-      Stream.value(const ServerStatus(ServerConnectionState.connected));
+  Stream<ServerStatus> watchServer(String serverId) async* {
+    yield ServerStatus(state);
+    yield* _status.stream;
+  }
+
   @override
   Stream<ConnectLogLine> get connectLog => const Stream.empty();
   @override
@@ -131,21 +151,23 @@ class _Connections implements ConnectionManager {
 }
 
 class _Browse implements PaneChannel {
-  _Browse(this.fs, this.homePath);
+  _Browse(this.fs, this.homePath, this._onClose);
   @override
   final RemoteFileSystem fs;
   @override
   final String homePath;
+  final void Function() _onClose;
   @override
-  Future<void> close() async {}
+  Future<void> close() async => _onClose();
   @override
   void reportFailure(RemoteFileSystem source, RemoteFileException error) {}
 }
 
 class _Lease implements TransferChannelLease {
-  _Lease(this.fs);
+  _Lease(this.fs, this._onRelease);
   @override
   final RemoteFileSystem fs;
+  final void Function() _onRelease;
   @override
   AuthenticatedEndpointIdentity get endpointIdentity =>
       const AuthenticatedEndpointIdentity(
@@ -155,7 +177,7 @@ class _Lease implements TransferChannelLease {
         fingerprintSha256: 'SHA256:test',
       );
   @override
-  Future<void> release() async {}
+  Future<void> release() async => _onRelease();
   @override
   void reportFailure(RemoteFileSystem source, RemoteFileException error) {}
 }
@@ -330,6 +352,81 @@ void main() {
       await files.connect(server, windowId: 'window-2');
       expect(await workspace.save(workspace.active!), isTrue);
       expect(await remote.readAsString(), 'recover me');
+    },
+  );
+
+  // A parked save keeps its tab busy, which refuses closing it and quitting.
+  const promptly = Duration(seconds: 10);
+
+  test(
+    'saving while the server reconnects fails promptly and keeps edits',
+    () async {
+      final opened = await open();
+      final tab = workspace.active!;
+      connections
+        ..reconnect = Completer<void>()
+        ..announce(ServerConnectionState.reconnecting);
+      tab.editor.text.text = 'offline edit';
+      expect(await workspace.save(tab).timeout(promptly), isFalse);
+      expect(tab.busy, isFalse);
+      expect(tab.editor.isSaving, isFalse);
+      expect(workspace.error, contains('reconnect'));
+      expect(await File(tab.path!).readAsString(), 'offline edit');
+      expect(await remote.readAsString(), 'original');
+      expect(opened.document.publication.pending, isTrue);
+
+      connections.reconnect!.complete();
+      connections
+        ..reconnect = null
+        ..announce(ServerConnectionState.connected);
+      expect(await workspace.save(tab), isTrue, reason: workspace.error);
+      expect(await remote.readAsString(), 'offline edit');
+      expect(opened.document.publication.pending, isFalse);
+    },
+  );
+
+  test(
+    'a drop during a parked save fails it and returns the late channel',
+    () async {
+      await open();
+      final tab = workspace.active!;
+      connections.reconnect = Completer<void>();
+      tab.editor.text.text = 'offline edit';
+      final saving = workspace.save(tab);
+      await pumpEventQueue();
+      connections.announce(ServerConnectionState.reconnecting);
+      expect(await saving.timeout(promptly), isFalse);
+      expect(tab.busy, isFalse);
+
+      connections.reconnect!.complete();
+      await pumpEventQueue();
+      expect(connections.leased, greaterThan(0));
+      expect(connections.released, connections.leased);
+    },
+  );
+
+  test(
+    'opening a server while it reconnects fails promptly and unlocks',
+    () async {
+      await open();
+      connections
+        ..reconnect = Completer<void>()
+        ..announce(ServerConnectionState.reconnecting);
+      final opening = workspace.chooseWorkspace(
+        () => files.connect(server, windowId: 'window-2'),
+      );
+      await expectLater(
+        opening.timeout(promptly),
+        throwsA(isA<RemoteFileException>()),
+      );
+      expect(workspace.interactionLocked, isFalse);
+
+      // A late grant may be the window's live binding, so it stays open.
+      final opensBeforeGrant = connections.opened.length;
+      connections.reconnect!.complete();
+      await pumpEventQueue();
+      expect(connections.opened.length, greaterThan(opensBeforeGrant));
+      expect(connections.browseClosed, 0);
     },
   );
 
