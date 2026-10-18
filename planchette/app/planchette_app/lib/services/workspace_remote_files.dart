@@ -63,6 +63,7 @@ final class WorkspaceRemoteFiles {
   final Map<String, ServerConfig> _servers = {};
   final Map<String, _RemotePublication> _publications = {};
   ConnectionManager? _connections;
+  ConnectionManager? _guarded;
   TransferQueue? _queue;
   ManagedRemoteFileStore? _store;
   CheckoutManager? _checkouts;
@@ -124,11 +125,11 @@ final class WorkspaceRemoteFiles {
       indexFile: File(paths.join(_directory.path, 'managed_remote_files.json')),
       checkoutRoot: Directory(paths.join(_directory.path, 'checkouts')),
     );
-    final transfers = _FailWhileReconnecting(connections);
-    final queue = TransferQueue(connections: transfers);
+    final guarded = _FailWhileReconnecting(connections);
+    final queue = TransferQueue(connections: guarded);
     final checkouts = CheckoutManager(
       store: store,
-      connections: transfers,
+      connections: guarded,
       queue: queue,
       onError: onError,
     );
@@ -142,6 +143,7 @@ final class WorkspaceRemoteFiles {
       rethrow;
     }
     _connections = connections;
+    _guarded = guarded;
     _queue = queue;
     _store = store;
     _checkouts = checkouts;
@@ -192,7 +194,7 @@ final class WorkspaceRemoteFiles {
   }) async {
     await _start();
     final id = _bind(server);
-    final connections = _connections!;
+    final connections = _guarded!;
     final channel = await connections.openBrowseChannel(
       id,
       paneTabId: windowId,
@@ -306,9 +308,10 @@ final class WorkspaceRemoteFiles {
   }
 }
 
-/// The pool parks lease requests until a dropped server reconnects, which may
-/// be never. A parked save keeps its tab busy and refuses quitting, so remote
-/// work fails instead; the saved local copy stays pending for the next save.
+/// The pool parks lease and browse requests until a dropped server reconnects,
+/// which may be never. A parked save keeps its tab busy and a parked Open
+/// Server keeps the window locked, both refusing quit, so remote work fails
+/// instead; the saved local copy stays pending for the next save.
 final class _FailWhileReconnecting implements ConnectionManager {
   _FailWhileReconnecting(this._pool);
   final ConnectionManager _pool;
@@ -320,29 +323,51 @@ final class _FailWhileReconnecting implements ConnectionManager {
   );
 
   @override
-  Future<TransferChannelLease> leaseTransferChannel(String serverId) async {
+  Future<TransferChannelLease> leaseTransferChannel(String serverId) =>
+      _failIfDropped(
+        serverId,
+        () => _pool.leaseTransferChannel(serverId),
+        // A parked request is granted after reconnecting; return its channel.
+        onLate: (granted) => granted.release(),
+      );
+
+  @override
+  Future<PaneChannel> openBrowseChannel(
+    String serverId, {
+    required String paneTabId,
+  }) => _failIfDropped(
+    serverId,
+    () => _pool.openBrowseChannel(serverId, paneTabId: paneTabId),
+    // Opens are idempotent per pane-tab, so a late grant may be the binding
+    // the window still browses; closing it would unbind that. It stays bound
+    // for the window's next open; [WorkspaceRemoteFiles.close] disconnects it.
+    onLate: (_) {},
+  );
+
+  /// Races [request] against the server entering `reconnecting`. The pool's
+  /// status stream replays the current state, so an already-dropped server
+  /// fails at once.
+  Future<T> _failIfDropped<T>(
+    String serverId,
+    Future<T> Function() request, {
+    required void Function(T granted) onLate,
+  }) async {
     final dropped = Completer<Never>();
     final watch = _pool.watchServer(serverId).listen((status) {
       if (status.state != ServerConnectionState.reconnecting) return;
       if (!dropped.isCompleted) dropped.completeError(_reconnecting);
     });
-    final lease = _pool.leaseTransferChannel(serverId);
+    final pending = request();
     try {
-      return await Future.any([lease, dropped.future]);
+      return await Future.any([pending, dropped.future]);
     } on Object {
-      // A parked request is granted after reconnecting; return its channel.
-      lease.then((late) => late.release(), onError: (Object _) {}).ignore();
+      pending.then(onLate, onError: (Object _) {}).ignore();
       rethrow;
     } finally {
       await watch.cancel();
     }
   }
 
-  @override
-  Future<PaneChannel> openBrowseChannel(
-    String serverId, {
-    required String paneTabId,
-  }) => _pool.openBrowseChannel(serverId, paneTabId: paneTabId);
   @override
   Stream<ServerStatus> watchServer(String serverId) =>
       _pool.watchServer(serverId);

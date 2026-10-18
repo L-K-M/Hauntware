@@ -97,12 +97,13 @@ class _Connections implements ConnectionManager {
   bool offline = false;
   final opened = <String>[];
 
-  // Mirrors the pool after a drop: leases park until it reconnects.
+  // Mirrors the pool after a drop: leases and opens park until it reconnects.
   Completer<void>? reconnect;
   var state = ServerConnectionState.connected;
   final _status = StreamController<ServerStatus>.broadcast();
   var leased = 0;
   var released = 0;
+  var browseClosed = 0;
 
   void announce(ServerConnectionState next) {
     state = next;
@@ -114,8 +115,9 @@ class _Connections implements ConnectionManager {
     String serverId, {
     required String paneTabId,
   }) async {
+    await reconnect?.future;
     opened.add(serverId);
-    return _Browse(fs, '/');
+    return _Browse(fs, '/', () => browseClosed++);
   }
 
   @override
@@ -149,13 +151,14 @@ class _Connections implements ConnectionManager {
 }
 
 class _Browse implements PaneChannel {
-  _Browse(this.fs, this.homePath);
+  _Browse(this.fs, this.homePath, this._onClose);
   @override
   final RemoteFileSystem fs;
   @override
   final String homePath;
+  final void Function() _onClose;
   @override
-  Future<void> close() async {}
+  Future<void> close() async => _onClose();
   @override
   void reportFailure(RemoteFileSystem source, RemoteFileException error) {}
 }
@@ -399,6 +402,29 @@ void main() {
       await pumpEventQueue();
       expect(connections.leased, greaterThan(0));
       expect(connections.released, connections.leased);
+    },
+  );
+
+  test(
+    'opening a server while it reconnects fails promptly and unlocks',
+    () async {
+      await open();
+      connections
+        ..reconnect = Completer<void>()
+        ..announce(ServerConnectionState.reconnecting);
+      final opening = workspace.chooseWorkspace(
+        () => files.connect(server, windowId: 'window-2'),
+      );
+      await expectLater(
+        opening.timeout(promptly),
+        throwsA(isA<RemoteFileException>()),
+      );
+      expect(workspace.interactionLocked, isFalse);
+
+      // A late grant may be the window's live binding, so it stays open.
+      connections.reconnect!.complete();
+      await pumpEventQueue();
+      expect(connections.browseClosed, 0);
     },
   );
 

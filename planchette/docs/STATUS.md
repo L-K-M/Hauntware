@@ -12,9 +12,10 @@
 - Remote editing uses Poltergeist's managed checkouts and content-checked
   uploads. Buffer edits, saved-local/upload-pending changes and successful
   remote saves have distinct states. Save All retries pending uploads.
-  Save a Local Copy exports without retargeting the remote tab. Saves and
-  opens fail promptly while a dropped server reconnects instead of keeping
-  the tab busy and blocking quit; the local copy stays pending.
+  Save a Local Copy exports without retargeting the remote tab. Saves, file
+  opens and Open Server fail promptly while a dropped server reconnects
+  instead of keeping a tab busy or the window locked and blocking quit; the
+  local copy stays pending.
 - Recover Remote Edits reopens pending copies offline after restart. Quit
   retains durable copies; explicit tab discard removes them. Managed loads
   reject symlinks, and managed saves use the shared checkout-recovery prefix.
