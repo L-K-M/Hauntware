@@ -16,6 +16,9 @@ final class AnsweringLink extends TestLinkBase {
   /// Every request line written, with the sampler that wrote it.
   final requests = <({SamplerKind kind, String line})>[];
 
+  /// The payload of each collector's on-demand `ok` section.
+  final onDemandPayloads = <String, String>{};
+
   /// Samplers whose requests get no reply, as if the process stalled.
   final stalled = <SamplerKind>{};
 
@@ -107,7 +110,8 @@ final class AnsweringProcess implements RemoteProcess {
   }
 
   /// Replies to [line] with an empty `ok` section per collector it names;
-  /// the probe (`hw_o <seq> probe`) gets no sections.
+  /// the probe (`hw_o <seq> probe`) gets no sections, and another
+  /// on-demand read [AnsweringLink.onDemandPayloads]' payload, if any.
   void answer(String line) {
     final words = line.split(' ');
     final seq = words[1];
@@ -116,6 +120,12 @@ final class AnsweringProcess implements RemoteProcess {
       for (final name in words.skip(2)) {
         b.write('\x1e$_nonce S $name ok 0\n\n');
       }
+    } else if (words[2] != 'probe') {
+      final payload = utf8.encode(_link.onDemandPayloads[words[2]] ?? '');
+      b
+        ..write('\x1e$_nonce S ${words[2]} ok ${payload.length}\n')
+        ..write(utf8.decode(payload))
+        ..write('\n');
     }
     b.write('\x1e$_nonce E $seq\n');
     _emit(b.toString());

@@ -13,6 +13,8 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         KillSignal,
         LoadAvg,
         NetRate,
+        OpDirectoryKind,
+        OpDirectoryListing,
         ProcsSelection,
         SystemdUnit,
         SystemctlVerb,
@@ -456,6 +458,18 @@ final class AuditQuery extends EngineRequest {
   final String serverId;
   final DateTime? before;
   final int limit;
+}
+
+/// Says the app has shown the result of [serverId]'s finished detached
+/// operation [id] (03 §7.17): the engine audits the result and deletes
+/// the operation's files, those in the root directory once admin mode is
+/// on. An [OperationsChanged] follows; an operation that is not listed
+/// as finished is a [RequestRejected].
+final class AcknowledgeOperation extends EngineRequest {
+  const AcknowledgeOperation(this.serverId, this.id);
+
+  final String serverId;
+  final String id;
 }
 
 /// Reads every user's crontab on [serverId] (JOB-03, 03 §7.7, M14): in
@@ -995,6 +1009,10 @@ enum ActionFailure {
   /// polkit refused a step run without elevation: admin mode would run
   /// it (03 §7.5).
   adminRequired,
+
+  /// A detached operation ended before it recorded a result (03 §7.17):
+  /// its wrapper was killed, at logout or by a reboot.
+  interrupted,
 }
 
 /// What re-validation found changed (03 §8.5).
@@ -1137,6 +1155,90 @@ final class UserCrontabs extends EngineEvent {
 
   /// Why nothing was read, or null.
   final UserCrontabsFailure? failure;
+}
+
+/// A detached operation's state as the engine sees it (03 §7.17).
+enum DetachedOperationState {
+  /// Its wrapper runs.
+  running,
+
+  /// Its wrapper recorded the command's exit status.
+  done,
+
+  /// Its record says running but its wrapper is gone, or its PID now
+  /// names another process: it was killed before it could record a
+  /// result (at logout, or by a reboot).
+  lost,
+
+  /// Its record says running and the engine could not check the wrapper.
+  unknown,
+}
+
+/// One detached operation of a server (03 §7.17), from its record and
+/// what this device remembers of it.
+@immutable
+final class DetachedOperation {
+  const DetachedOperation({
+    required this.id,
+    required this.directory,
+    required this.state,
+    this.unit,
+    this.startedAt,
+    this.endedAt,
+    this.exitCode,
+    this.action,
+    this.targetName,
+    this.acknowledged = false,
+  });
+
+  final String id;
+
+  /// The user directory for work that needs no root, the root one
+  /// otherwise.
+  final OpDirectoryKind directory;
+
+  final DetachedOperationState state;
+
+  /// `klabautermann-op-<id>.service` for a systemd runner.
+  final String? unit;
+
+  /// UTC; null where the host's `date` has no `%s`.
+  final DateTime? startedAt, endedAt;
+
+  /// The command's exit status, set when [state] is
+  /// [DetachedOperationState.done].
+  final int? exitCode;
+
+  /// The intent's kind and target, as the audit log names them, when this
+  /// device launched the operation; null for one another device launched.
+  final String? action, targetName;
+
+  /// The result was shown and acknowledged here, and the files wait for
+  /// admin mode to be deleted: the login user cannot unlink in the root
+  /// directory.
+  final bool acknowledged;
+}
+
+/// [serverId]'s detached operations (03 §7.17), sent after each `ops`
+/// read, each acknowledgement and each cleanup: the full list, so the app
+/// replaces what it had. [directories] says how far each directory was
+/// read; a directory that is denied or incomplete may hold operations
+/// the list lacks.
+final class OperationsChanged extends EngineEvent {
+  OperationsChanged(
+    this.serverId, {
+    Iterable<DetachedOperation> operations = const [],
+    Map<OpDirectoryKind, OpDirectoryListing> directories = const {},
+    this.unavailable,
+  }) : operations = List.unmodifiable(operations),
+       directories = Map.unmodifiable(directories);
+
+  final String serverId;
+  final List<DetachedOperation> operations;
+  final Map<OpDirectoryKind, OpDirectoryListing> directories;
+
+  /// Why the `ops` collector read nothing, or null.
+  final CollectorUnavailable? unavailable;
 }
 
 /// The answer to an [AuditQuery]: [records] newest first, and whether

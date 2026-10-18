@@ -32,6 +32,8 @@ import '../links/prompt_broker.dart';
 import '../logs/log_stream_router.dart';
 import '../operations/confirmation.dart';
 import '../operations/operation_runner.dart';
+import '../operations/operation_tracker.dart';
+import '../operations/operations_shown.dart';
 import '../operations/plan_registry.dart';
 import '../operations/plan_types.dart' show RequiredLevel;
 import '../operations/plans/host_plans.dart';
@@ -178,6 +180,9 @@ void engineMain(
   // off. The safety policy the app last sent; until then every server is
   // observe-only (SAF-01).
   AdminModeController? admin;
+  // Each server's detached operations (03 §7.17), over the links; none
+  // while links are off. It opens with the support directory's files.
+  OperationTracker? operations;
   var safetyPolicy = const SafetyPolicy();
   // Previewed plans and the runner of confirmed ones (03 §8.5). A plan
   // runs only on the link generation it was planned on: each server's
@@ -294,6 +299,7 @@ void engineMain(
               } else {
                 readyLinks.remove(event.serverId);
                 admin?.linkLost(event.serverId);
+                operations?.linkLost(event.serverId);
               }
             }
           },
@@ -324,7 +330,13 @@ void engineMain(
         null => null,
       },
       prompts: prompts,
-      emit: uiPort.send,
+      emit: (event) {
+        uiPort.send(event);
+        // A root result's cleanup waits for admin mode (03 §7.17).
+        if (event is AdminModeState && event.phase == AdminModePhase.on) {
+          unawaited(operations?.adminOn(event.serverId));
+        }
+      },
     );
     runner = OperationRunner(
       linkFor: links.link,
@@ -345,6 +357,8 @@ void engineMain(
         unawaited(capabilities?.probed(serverId, profile));
         docker?.probed(serverId, profile);
       },
+      opsRead: (serverId, section) =>
+          unawaited(operations?.listed(serverId, section)),
     );
     logs = LogStreamRouter(linkFor: links.link, emit: uiPort.send);
     docker = DockerRouter(linkFor: links.link, emit: uiPort.send);
@@ -423,6 +437,7 @@ void engineMain(
     sampling.fleet = fleetIds;
     scheduler?.retain(fleetIds);
     logs?.retain(fleetIds);
+    operations?.retain(fleetIds);
     links?.forget(before.difference(fleetIds));
     viewed.retainAll(fleetIds);
     // A monitored server that left the fleet or is no longer eligible (a
@@ -809,6 +824,15 @@ void engineMain(
           limit: limit,
         );
         uiPort.send(AuditRecords(serverId, records, more: more));
+      case AcknowledgeOperation(:final serverId, :final id):
+        final tracker = operations;
+        if (tracker == null) {
+          reject(message, 'links are off');
+          return;
+        }
+        if (await tracker.acknowledge(serverId, id) case final reason?) {
+          reject(message, reason);
+        }
       case ReadUserCrontabs(:final serverId, :final requestId):
         void fail(UserCrontabsFailure failure) => uiPort.send(
           UserCrontabs(
@@ -963,6 +987,21 @@ void engineMain(
         syncedServers = await sync.servers();
         synced = await listSynced(syncedServers);
         trustedIds = {...synced.confirmedIds, ...synced.unreadableIds};
+        if (links != null) {
+          final link = links;
+          operations = OperationTracker(
+            linkFor: link.link,
+            sessionFor: (id) => admin?.session(id),
+            readOps: (id) => scheduler?.readOps(id),
+            store: await OperationsShownStore.open(
+              Directory(start.supportDirectory),
+              access: start.supportDirectoryAccess,
+            ),
+            audit: audit,
+            emit: uiPort.send,
+            deviceId: start.deviceId,
+          );
+        }
         refreshFleet();
         capabilities = await CapabilityCache.open(
           Directory(start.supportDirectory),

@@ -1326,6 +1326,11 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 detached runner, second half (E17b): the engine reads each
+  server's detached operations on connect and while one runs, checks a
+  running one's wrapper, and sends the list. An acknowledged result is
+  audited and its files deleted, the root directory's once admin mode is
+  on; old files are pruned. The log follow is next (E17c).
 - M4 detached runner, first half (E17a): the engine picks each
   operation's runner from the host profile, the work's level and admin
   mode, and launches it with a fresh id. Re-attach, results and cleanup

@@ -195,6 +195,14 @@ void main() {
       final crontabs = (await next(events)) as UserCrontabs;
       expect(crontabs.requestId, 'r-1');
       expect(crontabs.failure, UserCrontabsFailure.noLink);
+
+      // A detached operation's result is acknowledged over a link.
+      client.send(
+        const AcknowledgeOperation('ssh-config:web', '0123456789abcdef'),
+      );
+      final refused = (await next(events)) as RequestRejected;
+      expect(refused.requestName, 'AcknowledgeOperation');
+      expect(refused.reason, 'links are off');
     });
 
     test('links stay off unless spawn turns them on', () async {

@@ -2191,6 +2191,7 @@ platform identities in 04, section 12.3):
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
 | `capabilities/<name>.json` | Cached probe results, 24 h TTL; named, written only by a process that holds the directory alone, and purged as D59 decides | `klabautermann_core` | MVP |
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
+| `operations_shown.json` [E] | Detached operations this device remembers (M4, E17b, 7.17): per server and operation id, the operation's directory, whether its result was shown and audited here, and, for one this device launched, the audit record's facts (action, target, redacted steps, tier, start). An entry goes once the operation's files are gone. Kept like the sync state files: written only with exclusive access, a damaged file set aside; losing it costs a result's launch facts and the reminder of a root cleanup, which the 7-day prune covers. Never synced | `klabautermann_core` | MVP |
 | `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample) | `klabautermann_core` | v1 |
 | `alerts.jsonl` | In-app alert history, 30 days [E]; from v1.x also host alerts fetched from the inbox or read from a host spool, with source tier, server item ids and status (D42) | `klabautermann_core` | v1 |
 | `alert_inbox.json` | Inbox cursor, sender metadata (app id, allowed server), per-sender failure counts, pending item deletions; keys stay in `vault.json` | `klabautermann_core` | v1.x |
@@ -3814,6 +3815,37 @@ calls it before E17b. Decisions:
   background or in the unit, so its exit 125 never reaches the launcher.
   A refused wrapper therefore shows as a launched id with no record,
   which re-attach reports (E17b).
+
+As built in M4 (E17b, `klabautermann_core/lib/src/operations/
+operation_tracker.dart` and `operations_shown.dart`), the engine follows
+each server's operations. Decisions:
+
+- The slow sampler reads `ops` once on each link, right after the probe,
+  and again when the engine asks: after a launch, and every 15 s [E]
+  while an operation runs. Each read becomes an `OperationsChanged` with
+  the server's full list and how far each directory was read, or the
+  collector's failure.
+- A running record is checked by its wrapper's PID and start ticks with
+  the re-validation reader of 8.5, for every runner: a unit's wrapper
+  runs inside it, so no `systemctl` query is needed, and the system and
+  user managers need not be told apart. A PID that is gone or shows other
+  start ticks is `lost`: the wrapper was killed before it recorded a
+  result. A record without start ticks runs while its PID exists. A
+  check the link failed is `unknown`.
+- `AcknowledgeOperation` takes a `done` or `lost` result. The engine
+  appends its audit record (8.10): the launch's action, target, steps and
+  tier when this device launched it, otherwise the action
+  `DetachedOperation` with the id as target. A `lost` result fails as
+  `interrupted`. It then deletes the files: the user directory's over
+  the link, the root directory's through the admin session. Without one
+  the operation stays listed as acknowledged until admin mode turns on,
+  which also prunes the root directory once per admin session. A cleanup
+  that fails is retried by the next listing.
+- The user directory is pruned once per link. Nothing launches yet: E18's
+  redeploy plan is the first caller of the launch and of the tracker's
+  `launched`, which keeps the launch facts.
+- [U] A record older than 7 days is pruned even while its operation
+  runs; the operation then drops from the list.
 
 ### 7.18 Backups (BAK)
 
