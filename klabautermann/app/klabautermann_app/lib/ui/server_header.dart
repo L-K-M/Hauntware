@@ -9,6 +9,7 @@ import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import 'access/access_panel.dart' show engineNameText;
+import 'actions/detached_operations.dart';
 import 'coverage.dart' show ServerCoverageChip;
 import 'fleet_rail.dart' show linkFailureText, linkStatusWord;
 import 'fleet_row_state.dart';
@@ -81,6 +82,11 @@ class ServerHeader extends StatelessWidget {
               serverName: server.displayName,
             ),
             AdminModeChip(serverId: server.id),
+            DetachedOperationsChip(
+              serverId: server.id,
+              serverName: server.displayName,
+              monitoring: monitoring,
+            ),
           ],
         ),
         Wrap(

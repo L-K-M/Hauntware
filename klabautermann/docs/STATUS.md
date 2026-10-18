@@ -1326,6 +1326,10 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 detached operations in the app (E23, first half): a chip in the
+  server header counts running operations or results to review, and its
+  sheet shows each one's state, follows its output and clears an ended
+  result. The redeploy preview follows E18.
 - M4 Docker action planners (E15): `PlanAction` plans container state
   changes and removal, image removal and stack start, stop and restart
   over the server's Docker endpoint. Steps address the full id and are

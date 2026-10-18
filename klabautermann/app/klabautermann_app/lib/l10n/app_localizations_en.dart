@@ -3375,4 +3375,92 @@ class AppLocalizationsEn extends AppLocalizations {
   String activityTime(String date, String time) {
     return '$date $time';
   }
+
+  @override
+  String detachedChipRunning(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count operations running',
+      one: '1 operation running',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String detachedChipResults(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count operation results',
+      one: '1 operation result',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String detachedSheetTitle(String server) {
+    return 'Operations on $server';
+  }
+
+  @override
+  String get detachedIncomplete =>
+      'Some operations may be missing: an operation folder on the server could not be read.';
+
+  @override
+  String get detachedEmpty => 'No operations.';
+
+  @override
+  String get detachedLaunchedElsewhere => 'Started on another device.';
+
+  @override
+  String detachedUnnamed(String id) {
+    return 'Operation $id';
+  }
+
+  @override
+  String detachedName(String action, String target) {
+    return '$action: $target';
+  }
+
+  @override
+  String detachedRunningSince(String time) {
+    return 'Running since $time.';
+  }
+
+  @override
+  String get detachedRunning => 'Running.';
+
+  @override
+  String get detachedSucceeded => 'Finished.';
+
+  @override
+  String detachedFailed(int code) {
+    return 'Failed with exit status $code.';
+  }
+
+  @override
+  String get detachedLost =>
+      'Stopped before it finished, for example by a logout or a restart.';
+
+  @override
+  String get detachedUnknown => 'Its state could not be read.';
+
+  @override
+  String get detachedShowOutput => 'Show output';
+
+  @override
+  String get detachedAcknowledge => 'Clear';
+
+  @override
+  String get detachedCleanupWaits =>
+      'Cleared. Its files are deleted once admin mode is on.';
+
+  @override
+  String detachedOutputTitle(String name) {
+    return 'Output of $name';
+  }
+
+  @override
+  String get detachedOutputClose => 'Close output';
 }

@@ -78,6 +78,7 @@ final class OperationsController extends ChangeNotifier {
   late final StreamSubscription<EngineEvent> _events;
   Completer<PlanAnswer>? _pending;
   final Map<String, RunState> _runs = {};
+  final Map<String, OperationsChanged> _detached = {};
   final Map<String, String> _targets = {};
   final _ends = StreamController<(String planId, RunState state)>.broadcast();
   bool _engineStopped = false;
@@ -94,6 +95,30 @@ final class OperationsController extends ChangeNotifier {
   /// Each run's end, finished or refused, as it happens: the result toast
   /// listens here.
   Stream<(String planId, RunState state)> get ends => _ends.stream;
+
+  /// [serverId]'s detached operations (03 §7.17) as the engine last listed
+  /// them, launched here or elsewhere; none before the first list.
+  List<DetachedOperation> detachedOf(String serverId) =>
+      _detached[serverId]?.operations ?? const [];
+
+  /// Whether [serverId]'s operation directories could not all be read, so
+  /// the list may lack operations.
+  bool detachedIncomplete(String serverId) {
+    final changed = _detached[serverId];
+    if (changed == null) return false;
+    return changed.unavailable != null ||
+        changed.directories.values.any(
+          (listing) =>
+              listing.state == OpDirectoryState.denied ||
+              listing.state == OpDirectoryState.incomplete,
+        );
+  }
+
+  /// Tells the engine the user saw [id]'s result, which audits it and
+  /// deletes its files (at once in the user directory, the root one's
+  /// once admin mode is on). The next list drops or marks it.
+  void acknowledge(String serverId, String id) =>
+      _send(AcknowledgeOperation(serverId, id));
 
   /// Asks the engine to plan [intent]. A stopped engine answers
   /// [ActionRefusalReason.noLink].
@@ -160,6 +185,9 @@ final class OperationsController extends ChangeNotifier {
         notifyListeners();
       case ActionFinished(:final planId):
         _end(planId, RunFinished(event));
+      case OperationsChanged(:final serverId):
+        _detached[serverId] = event;
+        notifyListeners();
       case AuditRecords(:final serverId):
         final waiting = _auditReads[serverId];
         if (waiting == null || waiting.isEmpty) return;

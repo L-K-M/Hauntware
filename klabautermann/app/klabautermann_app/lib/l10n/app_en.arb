@@ -4100,5 +4100,124 @@
         "type": "String"
       }
     }
+  },
+  "detachedChipRunning": "{count, plural, =1{1 operation running} other{{count} operations running}}",
+  "@detachedChipRunning": {
+    "description": "Server header chip while detached operations run on the server (03 §7.17); count is how many.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "detachedChipResults": "{count, plural, =1{1 operation result} other{{count} operation results}}",
+  "@detachedChipResults": {
+    "description": "Server header chip when detached operations ended and their results wait to be seen; count is how many.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "detachedSheetTitle": "Operations on {server}",
+  "@detachedSheetTitle": {
+    "description": "Title of the sheet listing a server's detached operations; server is its display name.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "detachedIncomplete": "Some operations may be missing: an operation folder on the server could not be read.",
+  "@detachedIncomplete": {
+    "description": "Notice in the operations sheet when a directory was denied or its listing was cut short."
+  },
+  "detachedEmpty": "No operations.",
+  "@detachedEmpty": {
+    "description": "The operations sheet when the server has none."
+  },
+  "detachedLaunchedElsewhere": "Started on another device.",
+  "@detachedLaunchedElsewhere": {
+    "description": "Under an operation another device started, whose action this device does not know."
+  },
+  "detachedUnnamed": "Operation {id}",
+  "@detachedUnnamed": {
+    "description": "An operation's name when another device started it; id is its 16-character id.",
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "detachedName": "{action}: {target}",
+  "@detachedName": {
+    "description": "An operation's name: the worded action and the target it acts on.",
+    "placeholders": {
+      "action": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "detachedRunningSince": "Running since {time}.",
+  "@detachedRunningSince": {
+    "description": "A running operation's state; time is when it started, in local time.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "detachedRunning": "Running.",
+  "@detachedRunning": {
+    "description": "A running operation's state when its start time is unknown."
+  },
+  "detachedSucceeded": "Finished.",
+  "@detachedSucceeded": {
+    "description": "An operation that ended with exit status 0."
+  },
+  "detachedFailed": "Failed with exit status {code}.",
+  "@detachedFailed": {
+    "description": "An operation that ended with a non-zero exit status; code is that status.",
+    "placeholders": {
+      "code": {
+        "type": "int"
+      }
+    }
+  },
+  "detachedLost": "Stopped before it finished, for example by a logout or a restart.",
+  "@detachedLost": {
+    "description": "An operation whose runner ended without recording a result."
+  },
+  "detachedUnknown": "Its state could not be read.",
+  "@detachedUnknown": {
+    "description": "An operation whose state the engine could not determine."
+  },
+  "detachedShowOutput": "Show output",
+  "@detachedShowOutput": {
+    "description": "Button that opens an operation's output, followed live."
+  },
+  "detachedAcknowledge": "Clear",
+  "@detachedAcknowledge": {
+    "description": "Button that acknowledges an ended operation's result, which deletes its files."
+  },
+  "detachedCleanupWaits": "Cleared. Its files are deleted once admin mode is on.",
+  "@detachedCleanupWaits": {
+    "description": "Under an acknowledged operation of the root directory, whose files only admin mode can delete."
+  },
+  "detachedOutputTitle": "Output of {name}",
+  "@detachedOutputTitle": {
+    "description": "Title of the sheet following an operation's output; name is the operation's name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "detachedOutputClose": "Close output",
+  "@detachedOutputClose": {
+    "description": "Tooltip and screen reader label of the button that closes an operation's output sheet."
   }
 }

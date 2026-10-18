@@ -24,14 +24,18 @@ const int kLogsPanelWindow = 500;
 /// Turning [live] off closes the follow and keeps its entries, or reads
 /// a window when it showed none.
 class LogsPanelController extends ChangeNotifier implements LogStreamListener {
+  /// A source given here is read whatever the query says, as a file is
+  /// read: a detached operation's output (03 §7.17) has no query.
   LogsPanelController({
     required this._streams,
     required this.serverId,
+    this._source,
     this._now = DateTime.now,
   });
 
   final LogStreams _streams;
   final String serverId;
+  final LogSource? _source;
   final DateTime Function() _now;
 
   final LogViewController logs = LogViewController();
@@ -117,9 +121,12 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
   }
 
   void _open() {
-    if (!_visible || _stream != null || _kept || !_query.ready) return;
+    final source = _source;
+    if (!_visible || _stream != null || _kept) return;
+    if (source == null && !_query.ready) return;
 
-    final resume = _live && _query.source != LogSourceKind.file
+    final resume =
+        _live && source == null && _query.source != LogSourceKind.file
         ? _cursor
         : null;
     if (resume == null) {
@@ -131,7 +138,7 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
     _stream = _streams.open(
       LogStreamSpec(
         serverId: serverId,
-        source: _query.toSource(_now()),
+        source: source ?? _query.toSource(_now()),
         window: kLogsPanelWindow,
         follow: _live,
         afterCursor: resume,

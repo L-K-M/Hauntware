@@ -3879,6 +3879,22 @@ login user, so no elevation is needed. The follow is the file follow of
 the window bounds what the first batch holds, as for any file. An
 operation the engine does not list ends the stream as `invalid`.
 
+As built in M4 (E23, first half), the app shows a server's detached
+operations from `OperationsChanged`:
+- The server header's chip counts the running ones, or else the results
+  not yet acknowledged, and opens a sheet that lists each operation:
+  - its action and target, or its id when another device started it;
+  - its state;
+  - its output, followed live through `OperationLogSource`;
+  - for an ended result, a Clear button that sends
+    `AcknowledgeOperation`.
+- An acknowledged root operation says its files wait for admin mode.
+- A directory that was denied or cut short says operations may be
+  missing.
+- Each list replaces the one before, so a reconnect re-attaches.
+
+The redeploy preview's parts arrive with E18's plan.
+
 ### 7.18 Backups (BAK)
 
 - **v1.x.** One-shot database dumps from a container using its own
