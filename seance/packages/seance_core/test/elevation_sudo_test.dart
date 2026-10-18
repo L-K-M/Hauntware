@@ -5,7 +5,8 @@
 // in-process wire fixture runs each exec as the account, without a tty, the
 // way sshd runs an exec request: in a new session through `setsid`, then
 // `runuser` when the test runs as root, otherwise `sudo -n -u` (a CI user
-// with NOPASSWD sudo).
+// with NOPASSWD sudo). The `start` cases use a peer that starts each exec
+// at once and streams stdin to it as it arrives, as sshd does.
 //
 //   SEANCE_SUDO_TEST_USER           password sudo: `<user> ALL=(ALL) ALL`
 //   SEANCE_SUDO_TEST_PASSWORD       the password of the two accounts below
@@ -118,6 +119,94 @@ void main() {
       );
       expect(exits, [ElevatedExecutor.passwordRejectedExit]);
     });
+
+    test(
+      'start: the prelude streams stdin to the command as it arrives',
+      () async {
+        final user = _account('SEANCE_SUDO_TEST_USER')!;
+        final (link: link, exits: exits) = await _streamAs(user);
+        final executor = ElevatedExecutor(link.link, await _probe(user));
+
+        final process = await executor.start([
+          'sh',
+          '-c',
+          _echoLines,
+        ], password: _password);
+        final output = _Output(process);
+
+        await output.waitFor('0\n');
+        expect(await process.refusal, isNull);
+        // The command answers each line while its stdin is still open.
+        process.stdin.add(utf8.encode('one\n'));
+        await output.waitFor('0\ngot one\n');
+        process.stdin.add(utf8.encode('two\n'));
+        await output.waitFor('0\ngot one\ngot two\n');
+        await process.stdin.close();
+
+        expect((await process.exit).exitCode, 0);
+        expect(exits, [0]);
+        expect(link.peer.channels.single.execCommand, contains('sh -c '));
+      },
+    );
+
+    test(
+      'start: a wrong password is a refusal with the recorded texts',
+      () async {
+        final user = _account('SEANCE_SUDO_TEST_USER')!;
+        final (link: link, exits: exits) = await _streamAs(user);
+        final executor = ElevatedExecutor(link.link, await _probe(user));
+
+        final process = await executor.start([
+          'id',
+          '-u',
+        ], password: '$_password-wrong');
+
+        expect(
+          await process.refusal,
+          isA<ElevationException>()
+              .having((e) => e.kind, 'kind', ElevationFailureKind.wrongPassword)
+              .having(
+                (e) => e.stderr,
+                'stderr',
+                contains('incorrect password attempt'),
+              ),
+        );
+        expect(
+          (await process.exit).exitCode,
+          ElevatedExecutor.passwordRejectedExit,
+        );
+        expect(exits, [ElevatedExecutor.passwordRejectedExit]);
+      },
+    );
+
+    test('start nopasswdFirst: sudo -n asks for a password, the prelude '
+        'follows and gets the stdin sudo -n never read', () async {
+      final user = _account('SEANCE_SUDO_TEST_USER')!;
+      final (link: link, exits: exits) = await _streamAs(user);
+      final executor = ElevatedExecutor(link.link, await _probe(user));
+
+      final process = await executor.start(
+        ['sh', '-c', _echoLines],
+        password: _password,
+        attempt: ElevationAttempt.nopasswdFirst,
+      );
+      final output = _Output(process);
+      process.stdin.add(utf8.encode('early\n'));
+
+      await output.waitFor('0\ngot early\n');
+      expect(await process.refusal, isNull);
+      process.stdin.add(utf8.encode('late\n'));
+      await output.waitFor('0\ngot early\ngot late\n');
+      await process.stdin.close();
+
+      expect((await process.exit).exitCode, 0);
+      expect(exits, [1, 0]);
+      final [sudoN, prelude] = link.peer.channels;
+      expect(sudoN.execCommand, startsWith('env LC_ALL=C sudo -n -- '));
+      expect(prelude.execCommand, contains('sh -c '));
+      // sudo -n's refusal was answered by the prelude, not reported.
+      expect(output.stderr, isEmpty);
+    });
   }, skip: _skipWithout('SEANCE_SUDO_TEST_USER'));
 
   group('timestamp_timeout=0', () {
@@ -139,6 +228,34 @@ void main() {
         contains("sudo -S -p '' -- "),
       );
     });
+
+    test('start: rung 4 follows the prelude and streams stdin', () async {
+      final user = _account('SEANCE_SUDO_TEST_NOCACHE_USER')!;
+      final (link: link, exits: exits) = await _streamAs(user);
+      final executor = ElevatedExecutor(link.link, await _probe(user));
+
+      final process = await executor.start([
+        'sh',
+        '-c',
+        _echoLines,
+      ], password: _password);
+      final output = _Output(process);
+      process.stdin.add(utf8.encode('early\n'));
+
+      await output.waitFor('0\ngot early\n');
+      expect(await process.refusal, isNull);
+      process.stdin.add(utf8.encode('late\n'));
+      await output.waitFor('0\ngot early\ngot late\n');
+      await process.stdin.close();
+
+      expect((await process.exit).exitCode, 0);
+      expect(exits, [1, 0]);
+      expect(
+        link.peer.channels.last.execCommand,
+        contains("sudo -S -p '' -- "),
+      );
+      expect(output.stderr, isEmpty);
+    });
   }, skip: _skipWithout('SEANCE_SUDO_TEST_NOCACHE_USER'));
 
   group(
@@ -158,6 +275,31 @@ void main() {
           link.peer.channels.single.execCommand,
           "env LC_ALL=C sudo -n -- 'id' '-u'",
         );
+      });
+
+      test('start: sudo -n streams stdin without a password line', () async {
+        final user = _account('SEANCE_SUDO_TEST_NOPASSWD_USER')!;
+        final (link: link, exits: exits) = await _streamAs(user);
+        final executor = ElevatedExecutor(link.link, await _probe(user));
+
+        final process = await executor.start([
+          'sh',
+          '-c',
+          _echoLines,
+        ], attempt: ElevationAttempt.nopasswdFirst);
+        final output = _Output(process);
+
+        await output.waitFor('0\n');
+        expect(await process.refusal, isNull);
+        process.stdin.add(utf8.encode('one\n'));
+        await output.waitFor('0\ngot one\n');
+        await process.stdin.close();
+
+        expect((await process.exit).exitCode, 0);
+        expect(exits, [0]);
+        final channel = link.peer.channels.single;
+        expect(channel.execCommand, startsWith('env LC_ALL=C sudo -n -- '));
+        expect(utf8.decode(channel.stdinBytes), 'one\n');
       });
     },
     skip: _skipWithout('SEANCE_SUDO_TEST_NOPASSWD_USER', needsPassword: false),
@@ -239,6 +381,106 @@ Future<({TestLink link, List<int> exits})> _openAs(String user) async {
     }());
   };
   return (link: link, exits: exits);
+}
+
+/// A link whose peer starts every exec as [user] at once and streams both
+/// ways, recording each exit status: stdin goes to the process as it
+/// arrives, its output comes back as it is written.
+Future<({TestLink link, List<int> exits})> _streamAs(String user) async {
+  final prefix = await _asUser(user);
+  final link = await openTestLink(timeout: const Duration(seconds: 30));
+  addTearDown(link.link.close);
+  final exits = <int>[];
+  final processes = <Process>[];
+  // A test that fails mid-stream leaves its command reading stdin. Ending
+  // that stdin ends it; a signal would stop only `setsid`, not the shell
+  // under it.
+  addTearDown(() {
+    for (final process in processes) {
+      process.stdin.close().ignore();
+    }
+  });
+  link.peer.onExec = (channel, command) {
+    Process? process;
+    final early = <int>[];
+    var eof = false;
+    void write(List<int> data) {
+      try {
+        process!.stdin.add(data);
+      } on StateError {
+        // The peer already closed the stdin of a command that ended.
+      }
+    }
+
+    channel
+      ..onStdin = (_, data) {
+        if (process == null) {
+          early.addAll(data);
+        } else {
+          write(data);
+        }
+      }
+      ..onStdinEof = (_) {
+        eof = true;
+        process?.stdin.close().ignore();
+      };
+    unawaited(() async {
+      final started = await Process.start(prefix.first, [
+        ...prefix.skip(1),
+        'sh',
+        '-c',
+        command,
+      ], workingDirectory: '/');
+      process = started;
+      processes.add(started);
+      // A refusing sudo exits before reading its stdin; the broken pipe
+      // surfaces here.
+      started.stdin.done.ignore();
+      if (early.isNotEmpty) write(early);
+      if (eof) started.stdin.close().ignore();
+      final stdout = started.stdout.listen(channel.sendData).asFuture<void>();
+      final stderr = started.stderr.listen(channel.sendStderr).asFuture<void>();
+      final exitCode = await started.exitCode;
+      await Future.wait([stdout, stderr]);
+      exits.add(exitCode);
+      channel
+        ..sendExitStatus(exitCode)
+        ..sendEof()
+        ..sendClose();
+    }());
+  };
+  return (link: link, exits: exits);
+}
+
+/// Prints the uid, then answers each stdin line as it arrives.
+const _echoLines = r'id -u; while IFS= read -r line; do echo "got $line"; done';
+
+/// What an [ElevatedProcess] printed so far.
+final class _Output {
+  _Output(ElevatedProcess process) {
+    process.stdout.listen(_stdout.addAll);
+    process.stderr.listen(_stderr.addAll);
+  }
+
+  final _stdout = <int>[];
+  final _stderr = <int>[];
+
+  String get stderr => utf8.decode(_stderr);
+
+  /// Waits, in real time since a real sudo answers, for stdout to read
+  /// [expected].
+  Future<void> waitFor(String expected) async {
+    final deadline = DateTime.now().add(const Duration(seconds: 20));
+    while (utf8.decode(_stdout, allowMalformed: true) != expected) {
+      if (DateTime.now().isAfter(deadline)) {
+        fail(
+          'stdout read ${jsonEncode(utf8.decode(_stdout))}, not '
+          '${jsonEncode(expected)}; stderr ${jsonEncode(stderr)}',
+        );
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+  }
 }
 
 Future<List<int>> _collect(Stream<List<int>> stream) =>

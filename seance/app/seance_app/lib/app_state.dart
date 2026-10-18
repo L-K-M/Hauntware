@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:developer' as developer;
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:ghost_apk_update/ghost_apk_update.dart';
 import 'package:planchette_editor/planchette_editor.dart'
     show EditorLigatures, EditorTextSize, EditorZoom;
 import 'package:seance_core/seance_core.dart';
@@ -571,10 +573,18 @@ class AppState extends ChangeNotifier {
 
   // --- Update check ---
 
+  /// The release asset an Android build updates itself from; the release
+  /// manifest (scripts/release-manifest.txt) names it.
+  static const androidReleaseAsset = 'seance-android.apk';
+
   /// Set when a newer release exists on GitHub; drives the "update available"
-  /// affordance. The app never downloads or installs — it only links out.
+  /// affordance. Desktop and iOS builds only link out; see [apkUpdater].
   UpdateInfo? updateInfo;
   final UpdateChecker _updateChecker;
+
+  /// Downloads and opens the release APK once the user chooses Update.
+  /// Null off Android, where nothing is ever downloaded.
+  final ApkUpdater? apkUpdater;
 
   /// Keeps the process anchored to the OS while sessions are connecting or
   /// connected, so backgrounding the app on Android doesn't let the OS freeze
@@ -585,9 +595,11 @@ class AppState extends ChangeNotifier {
   AppState(
     this.services, {
     UpdateChecker? updateChecker,
+    ApkUpdater? apkUpdater,
     BackgroundKeepAlive? keepAlive,
     this._openSshSession = _connectThrough,
   }) : _updateChecker = updateChecker ?? UpdateChecker(),
+       apkUpdater = apkUpdater ?? (Platform.isAndroid ? ApkUpdater() : null),
        _keepAlive = keepAlive ?? BackgroundKeepAlive();
 
   /// The host-key prompt as the SSH layer wants it, reading [hostKeyPrompter]
@@ -2317,8 +2329,8 @@ class AppState extends ChangeNotifier {
 
   /// Best-effort check for a newer GitHub release than [currentVersion]. If one
   /// exists (and the user hasn't opted out), [updateInfo] is set so the UI can
-  /// offer a link to the releases page. Never downloads or installs; any error
-  /// (offline, rate-limited) is swallowed silently.
+  /// offer the release page, or on Android [installUpdate]. The check itself
+  /// never downloads; any error (offline, rate-limited) is swallowed silently.
   Future<void> checkForUpdate(String currentVersion) async {
     if (!services.settings.checkForUpdates) return;
     final info = await _updateChecker.check(currentVersion);
@@ -2432,9 +2444,30 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The verified APK [updateInfo] offers this build, or null when it cannot
+  /// update in place: off Android, or a release without a digested APK.
+  ApkRelease? get updateApk {
+    final asset = updateInfo?.assets[androidReleaseAsset];
+    if (apkUpdater == null || asset == null) return null;
+    return ApkRelease(
+      url: asset.downloadUrl,
+      size: asset.size,
+      sha256: asset.sha256,
+    );
+  }
+
+  /// Download [updateApk] and open the system installer: the user chose to
+  /// update. Progress and failures are [apkUpdater]'s state.
+  Future<void> installUpdate() async {
+    final release = updateApk;
+    if (release == null) return;
+    await apkUpdater!.update(release);
+  }
+
   /// Dismiss the update affordance for this session (a fresh launch re-checks).
   void dismissUpdateNotice() {
     if (updateInfo == null) return;
+    apkUpdater?.cancel();
     updateInfo = null;
     notifyListeners();
   }
@@ -2621,6 +2654,7 @@ class AppState extends ChangeNotifier {
     // it was holding open go.
     _keepAlive.stop();
     chat.dispose();
+    apkUpdater?.dispose();
     // Drop the callback before the service goes: it closes over `sessions`,
     // so a probe service that outlived this state would keep reading a list
     // that is no longer maintained (and keep this object alive).

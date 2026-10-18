@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 > LLM disclosure: This codebase was written with substantial help from large language models: AI coding agents working from the [`AGENTS.md`](AGENTS.md) brief in this repo.
 
-**Current version:** v<!-- version -->1.9.0<!-- /version --> · [Releases](https://github.com/L-K-M/Hauntware/releases)
+**Current version:** v<!-- version -->1.9.1<!-- /version --> · [Releases](https://github.com/L-K-M/Hauntware/releases)
 
 Desktop apps are ad-hoc signed and not notarized. After moving one to
 Applications, clear its quarantine flag, for example:
@@ -18,7 +18,7 @@ One repository, one version and one release cadence:
 
 | Product | Purpose | Clients |
 | --- | --- | --- |
-| [Planchette](planchette/README.md) | Text editor and shared editor/UI packages | Linux, macOS, Windows |
+| [Planchette](planchette/README.md) | Text editor and shared editor/UI packages | Android, Linux, macOS, Windows |
 | [Séance](seance/README.md) | SSH client and optional local terminal | Android, iOS, Linux, macOS, Windows |
 | [Poltergeist](poltergeist/README.md) | File transfer and folder synchronization | Android, iOS, Linux, macOS, Windows |
 | [Klabautermann](klabautermann/README.md) | Server management and Docker | Android, iOS, Linux, macOS, Windows |
@@ -62,7 +62,7 @@ scripts/release.sh --check
 scripts/release.sh 1.2.0 --push  # Explicit future release, not part of migration
 ```
 
-One `vX.Y.Z` tag drives all 13 released client targets (Klabautermann's five
+One `vX.Y.Z` tag drives all 14 released client targets (Klabautermann's five
 join with its preview), sync-server binaries and its container image. One
 publish point follows every required test/build and artifact/checksum check.
 Android keeps the existing committed sideload signing keys; desktop bundles

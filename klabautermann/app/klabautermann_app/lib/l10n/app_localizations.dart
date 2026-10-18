@@ -94,10 +94,10 @@ abstract class AppLocalizations {
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[Locale('en')];
 
-  /// No description provided for @appTitle.
+  /// The app's title, with the preview label until v1 (04 §12.3): the task switcher, the About dialog and the about row on the General settings tab. Klabautermann is the display name, an identity: never translated.
   ///
   /// In en, this message translates to:
-  /// **'Klabautermann'**
+  /// **'Klabautermann (preview)'**
   String get appTitle;
 
   /// No description provided for @fleetTitle.
@@ -111,6 +111,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Servers'**
   String get fleetSectionServers;
+
+  /// Fleet list section header over the synced servers pinned to the top on this device (03 §10.3); drawn in caps.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned'**
+  String get fleetSectionPinned;
+
+  /// Fleet list section header over the servers imported from this device's SSH config (FL-02), listed apart from the synced servers and their groups; drawn in caps.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported'**
+  String get fleetSectionImported;
+
+  /// A synced fleet row's menu verb that lists the server under the Pinned section on this device.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin to top'**
+  String get fleetRowPin;
+
+  /// A pinned fleet row's menu verb that returns the server to its section.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin'**
+  String get fleetRowUnpin;
+
+  /// Top toast when pinning or unpinning a server could not be written to the device's settings file; the change holds for this session.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save your pinned servers, so the change lasts only until it quits.'**
+  String get fleetPinNotSaved;
+
+  /// A fleet row's menu verb that adds the server to this device's monitor set (FL-21): Klabautermann then reads it continuously while open and its row shows CPU, memory and disk. Disabled for a server that cannot be monitored.
+  ///
+  /// In en, this message translates to:
+  /// **'Monitor'**
+  String get fleetRowMonitor;
+
+  /// A monitored fleet row's menu verb that takes the server out of this device's monitor set (FL-21); it is then read only while a view has it open.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop monitoring'**
+  String get fleetRowStopMonitoring;
+
+  /// Top toast when the user asks to monitor a server while the monitor set (FL-21) is full; limit is the most servers it holds.
+  ///
+  /// In en, this message translates to:
+  /// **'You can monitor up to {limit} servers on this device. Stop monitoring one first.'**
+  String monitorSetFull(int limit);
+
+  /// Top toast when a monitor set change applied but could not be written to the device's settings file; the change holds for this session.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save your monitored servers, so the change lasts only until it quits.'**
+  String get monitorSetNotSaved;
+
+  /// Top toast when the app did not take a monitor set change, such as one from the settings window that the app refused.
+  ///
+  /// In en, this message translates to:
+  /// **'The monitored servers could not be changed.'**
+  String get monitorSetNotChanged;
+
+  /// Why a synced server cannot join the monitor set (FL-21): this device has not confirmed its endpoint, or a sync changed it since (SAF-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm this server\'s endpoint to monitor it.'**
+  String get monitorIneligibleEndpoint;
+
+  /// Why a server cannot join the monitor set (FL-21): its sign-in needs the user's answer, and continuous reading never asks.
+  ///
+  /// In en, this message translates to:
+  /// **'Signs in with a password or a stored key, which asks you first, so it is read only while you have it open.'**
+  String get monitorIneligibleCredentials;
+
+  /// Why an imported server cannot join the monitor set (FL-21): it came from an older import, whose sign-in Klabautermann does not know until the next import.
+  ///
+  /// In en, this message translates to:
+  /// **'Import your ssh_config again to monitor this server.'**
+  String get monitorIneligibleUnknown;
 
   /// No description provided for @fleetEmptyTitle.
   ///
@@ -279,6 +357,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Window'**
   String get menuWindow;
+
+  /// Title of the Help menu (Linux and Windows, where it holds About Klabautermann).
+  ///
+  /// In en, this message translates to:
+  /// **'Help'**
+  String get menuHelp;
+
+  /// The menu command that opens the About dialog: first in the macOS application menu, in the Help menu on Linux and Windows. Klabautermann is the display name: never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'About Klabautermann'**
+  String get aboutCommand;
+
+  /// The running build's version in the About dialog and the about row on the General settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version}'**
+  String aboutVersion(String version);
+
+  /// In place of aboutVersion when the platform could not tell the app's version.
+  ///
+  /// In en, this message translates to:
+  /// **'Version unknown'**
+  String get aboutVersionUnknown;
+
+  /// The app's licence line in the About dialog. Klabautermann and Unlicense are names: never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann is free and unencumbered software released into the public domain under the Unlicense.'**
+  String get aboutLicence;
 
   /// No description provided for @statusConnected.
   ///
@@ -3286,6 +3394,102 @@ abstract class AppLocalizations {
   /// **'You can\'t connect to this server yet: it comes from an earlier import that kept only its address. Import your SSH config again to connect.'**
   String get connectRejectedAddressOnly;
 
+  /// Banner on a server's workspace or screen when the engine will not connect a synced server because its endpoint (host, port, user, jump route) is not confirmed on this device or changed since (03 §4.7, SAF-09). The user confirms it from the notice over the fleet list, whose button is endpointsReview.
+  ///
+  /// In en, this message translates to:
+  /// **'You can\'t connect to this server yet: its address comes from your sync account and isn\'t confirmed on this device, or it changed since you confirmed it. Choose Review over the server list to check and confirm it.'**
+  String get connectRejectedEndpointNotConfirmed;
+
+  /// Notice over the fleet list while synced servers wait for endpoint confirmation on this device (03 §4.3 step 3, SAF-09): new from the sync account, or changed since they were confirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} synced server waits for you to confirm its address.} other{{count} synced servers wait for you to confirm their addresses.}}'**
+  String endpointsPendingNotice(int count);
+
+  /// Button on endpointsPendingNotice that opens the endpoint confirmation list.
+  ///
+  /// In en, this message translates to:
+  /// **'Review'**
+  String get endpointsReview;
+
+  /// Title of the endpoint confirmation list (03 §4.3 step 3).
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm server addresses'**
+  String get endpointsTitle;
+
+  /// Explanation at the top of the endpoint confirmation list (SAF-09): any device on the account can rewrite a server's address, and a background connect would then hand a credential to the new host.
+  ///
+  /// In en, this message translates to:
+  /// **'These servers come from your sync account. Klabautermann connects only to addresses you confirm on this device, so an address changed on another device cannot receive your sign-in unnoticed. Check each host, port, user and jump route before you confirm it.'**
+  String get endpointsBody;
+
+  /// Label of the search field of the endpoint confirmation list; it matches names, users and addresses.
+  ///
+  /// In en, this message translates to:
+  /// **'Search servers'**
+  String get endpointsSearch;
+
+  /// Line of an endpoint confirmation row naming the jump hosts the server is reached through, first hop first.
+  ///
+  /// In en, this message translates to:
+  /// **'via {route}'**
+  String endpointsRoute(String route);
+
+  /// Between the jump hosts in endpointsRoute, from the first hop towards the server.
+  ///
+  /// In en, this message translates to:
+  /// **' → '**
+  String get endpointsRouteSeparator;
+
+  /// Line of an endpoint confirmation row whose server, or a jump host it goes through, was changed by a sync after this device confirmed it (03 §4.7).
+  ///
+  /// In en, this message translates to:
+  /// **'Changed since you confirmed it'**
+  String get endpointsChanged;
+
+  /// Shown in place of the rows when the search of the endpoint confirmation list matches no server.
+  ///
+  /// In en, this message translates to:
+  /// **'No servers match your search.'**
+  String get endpointsNoMatch;
+
+  /// Shown in place of the rows when no synced server waits for confirmation any more.
+  ///
+  /// In en, this message translates to:
+  /// **'Every synced server\'s address is confirmed on this device.'**
+  String get endpointsNoneLeft;
+
+  /// Button of the endpoint confirmation list that confirms every row the search shows, whatever its toggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm all shown'**
+  String get endpointsConfirmAllShown;
+
+  /// Main button of the endpoint confirmation list: confirms the rows whose toggles are on; disabled while none is.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Confirm selected} one{Confirm {count} server} other{Confirm {count} servers}}'**
+  String endpointsConfirmSelected(int count);
+
+  /// Toast after the confirmed servers left the list; Klabautermann may now connect to them.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Confirmed {count} server address.} other{Confirmed {count} server addresses.}}'**
+  String endpointsConfirmed(int count);
+
+  /// Under the endpoint confirmation list when a confirmed server stays listed because a jump host on its route changed and needs its own confirmation (D64).
+  ///
+  /// In en, this message translates to:
+  /// **'Some servers still need confirming: confirm the jump hosts they go through too.'**
+  String get endpointsStillPending;
+
+  /// Under the endpoint confirmation list when the engine could not save the confirmation or stopped before answering.
+  ///
+  /// In en, this message translates to:
+  /// **'The confirmation could not be saved on this device, so these servers stay unconfirmed. Try again.'**
+  String get endpointsFailed;
+
   /// Heading of the accessibility settings on the General settings tab.
   ///
   /// In en, this message translates to:
@@ -3315,6 +3519,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The setting could not be changed.'**
   String get settingsAnnounceNotChanged;
+
+  /// Heading of the about row on the General settings tab, which shows the app's title and version and opens the About dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get settingsAboutTitle;
+
+  /// Heading of the monitor set's switches (FL-21) on the Servers settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Monitoring'**
+  String get settingsMonitorTitle;
+
+  /// Explanation above the monitor set's switches on the Servers settings tab (FL-21); limit is the most servers the set holds.
+  ///
+  /// In en, this message translates to:
+  /// **'Monitored servers are read continuously while Klabautermann is open, and their rows show CPU, memory and disk. A server can be monitored once its endpoint is confirmed and it signs in with an SSH agent or a key file, without asking you. Up to {limit} servers.'**
+  String settingsMonitorDetail(int limit);
+
+  /// How many servers the monitor set holds (FL-21) out of the most it can, above its switches on the Servers settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'{monitored} of {limit} servers monitored'**
+  String settingsMonitorCount(int monitored, int limit);
+
+  /// The Servers settings tab's monitor set section while the fleet has no servers.
+  ///
+  /// In en, this message translates to:
+  /// **'No servers yet. Servers you sync or import show here.'**
+  String get settingsMonitorEmpty;
 
   /// Screen-reader announcement (A11Y-15) when a value on a server's Overview has crossed into the warning or critical band, or back below the warning level; metric names the value (CPU, Memory, Disk /var), value is its percentage.
   ///

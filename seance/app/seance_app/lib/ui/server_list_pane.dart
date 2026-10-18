@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
+import 'package:ghost_apk_update/ghost_apk_update.dart';
 import 'package:ghost_servers/ghost_servers.dart'
     show GhostServerIndicator, ghostHiddenLiveIndicator, ghostStatusDot;
+import 'package:ghost_ui/ghost_ui.dart' show ghostFormatFileSize;
 import 'package:seance_core/seance_core.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -348,7 +350,13 @@ class _ServerListPaneState extends State<ServerListPane> {
       children: [
         // A newer release exists: a dismissible banner above the list.
         if (update != null)
-          _UpdateBanner(info: update, onDismiss: state.dismissUpdateNotice),
+          _UpdateBanner(
+            info: update,
+            apk: state.updateApk,
+            updater: state.apkUpdater,
+            onUpdate: state.installUpdate,
+            onDismiss: state.dismissUpdateNotice,
+          ),
         // Proposals from connected apps wait here for review.
         InboxBanner(state: state),
         // This machine, above the servers and outside the filter: it is
@@ -987,19 +995,108 @@ class _SyncIndicator extends StatelessWidget {
 }
 
 /// A dismissible banner above the server list when a newer release exists on
-/// GitHub. It only offers a link to the releases page — Séance never
-/// downloads or installs an update; the user decides. Compact, because the
-/// rail it sits in can be 200 px wide.
+/// GitHub. Where the release carries this build's APK (Android), Update
+/// downloads it with progress here and opens the system installer, which
+/// asks the user to confirm; elsewhere the banner links to the releases
+/// page. Compact, because the rail it sits in can be 200 px wide.
 class _UpdateBanner extends StatelessWidget {
   final UpdateInfo info;
+
+  /// The APK to update in place, or null to link to the release page.
+  final ApkRelease? apk;
+  final ApkUpdater? updater;
+  final VoidCallback onUpdate;
   final VoidCallback onDismiss;
-  const _UpdateBanner({required this.info, required this.onDismiss});
+
+  const _UpdateBanner({
+    required this.info,
+    required this.apk,
+    required this.updater,
+    required this.onUpdate,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final apk = this.apk;
+    final updater = this.updater;
+    final name = 'Séance ${info.latestVersion}';
+    if (apk == null || updater == null) {
+      return _UpdateBannerFrame(
+        message: '$name is available.',
+        action: (
+          'View release',
+          () => launchUrl(
+            info.releasesUrl,
+            mode: LaunchMode.externalApplication,
+          ),
+        ),
+        onDismiss: onDismiss,
+      );
+    }
+
+    final size = ghostFormatFileSize(
+      apk.size,
+      platform: TargetPlatform.android,
+    );
+    return ListenableBuilder(
+      listenable: updater,
+      builder: (context, _) => switch (updater.state) {
+        ApkUpdateIdle() => _UpdateBannerFrame(
+          message: '$name is available ($size).',
+          action: ('Update', onUpdate),
+          onDismiss: onDismiss,
+        ),
+        // No dismiss while downloading: Cancel is the one way out.
+        ApkUpdateDownloading(:final fraction) => _UpdateBannerFrame(
+          message: 'Downloading $name…',
+          progress: fraction,
+          action: ('Cancel', updater.cancel),
+        ),
+        ApkUpdateReady() => _UpdateBannerFrame(
+          message: '$name is ready to install.',
+          action: ('Install', onUpdate),
+          onDismiss: onDismiss,
+        ),
+        ApkUpdateFailed(:final failure) => _UpdateBannerFrame(
+          message: switch (failure) {
+            ApkUpdateFailure.download => '$name could not be downloaded.',
+            ApkUpdateFailure.verification =>
+              'The $name download was damaged and was discarded.',
+            ApkUpdateFailure.installer =>
+              'Android could not open the installer.',
+          },
+          action: ('Retry', onUpdate),
+          onDismiss: onDismiss,
+        ),
+      },
+    );
+  }
+}
+
+/// The banner's chrome: a message, an optional progress bar under it, one
+/// action, and a dismiss button when [onDismiss] is set.
+class _UpdateBannerFrame extends StatelessWidget {
+  final String message;
+  final double? progress;
+  final (String, VoidCallback) action;
+  final VoidCallback? onDismiss;
+
+  const _UpdateBannerFrame({
+    required this.message,
+    required this.action,
+    this.progress,
+    this.onDismiss,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final ink = scheme.onSecondaryContainer;
+    final progress = this.progress;
+    final onDismiss = this.onDismiss;
+    final (actionLabel, onAction) = action;
     return Padding(
       padding: const EdgeInsets.fromLTRB(6, 6, 6, 2),
       child: Material(
@@ -1012,9 +1109,19 @@ class _UpdateBanner extends StatelessWidget {
               Icon(Icons.system_update_outlined, size: 16, color: ink),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  'Séance ${info.latestVersion} is available.',
-                  style: theme.textTheme.bodySmall?.copyWith(color: ink),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      message,
+                      style: theme.textTheme.bodySmall?.copyWith(color: ink),
+                    ),
+                    if (progress != null) ...[
+                      const SizedBox(height: 4),
+                      LinearProgressIndicator(value: progress, color: ink),
+                    ],
+                  ],
                 ),
               ),
               TextButton(
@@ -1022,19 +1129,17 @@ class _UpdateBanner extends StatelessWidget {
                   visualDensity: VisualDensity.compact,
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                 ),
-                onPressed: () => launchUrl(
-                  info.releasesUrl,
-                  mode: LaunchMode.externalApplication,
+                onPressed: onAction,
+                child: Text(actionLabel),
+              ),
+              if (onDismiss != null)
+                IconButton(
+                  tooltip: 'Dismiss',
+                  iconSize: 16,
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(Icons.close, color: ink),
+                  onPressed: onDismiss,
                 ),
-                child: const Text('View release'),
-              ),
-              IconButton(
-                tooltip: 'Dismiss',
-                iconSize: 16,
-                visualDensity: VisualDensity.compact,
-                icon: Icon(Icons.close, color: ink),
-                onPressed: onDismiss,
-              ),
             ],
           ),
         ),

@@ -89,13 +89,13 @@ void main() {
 
       client
         ..send(const PlanAction(ActionIntent(serverId: 'srv-1', action: 'x')))
-        ..send(const SetMonitorSet(['srv-1']));
+        ..send(const OpenTerminal(serverId: 'srv-1'));
 
       final names = [
         for (var i = 0; i < 2; i++)
           ((await next(events)) as RequestRejected).requestName,
       ];
-      expect(names, ['PlanAction', 'SetMonitorSet']);
+      expect(names, ['PlanAction', 'OpenTerminal']);
     });
 
     test('links stay off unless spawn turns them on', () async {

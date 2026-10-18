@@ -5,6 +5,7 @@ import 'package:ghost_theme/ghost_theme.dart' show GhostChrome;
 import 'package:ghost_ui/ghost_ui.dart' show SelectedTabView;
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
+import 'package:klabautermann_app/ui/fleet_rows.dart' show FleetServerList;
 import 'package:klabautermann_app/ui/server_header.dart';
 import 'package:klabautermann_app/ui/server_workspace.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -78,6 +79,20 @@ Future<AppHarness> _openWeb1(
   tester.platformDispatcher.textScaleFactorTestValue = textScale;
   addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
   final harness = await pumpApp(tester, size: size, servers: twoServers);
+  // At 200 % text on a short phone the row starts below the fold, under
+  // the coverage chip, the filter and the section header.
+  await tester.scrollUntilVisible(
+    find.text('web-1'),
+    48,
+    scrollable: find
+        .descendant(
+          of: find.byType(FleetServerList),
+          matching: find.byType(Scrollable),
+        )
+        .last,
+  );
+  await tester.ensureVisible(find.text('web-1'));
+  await tester.pumpAndSettle();
   await tester.tap(find.text('web-1'));
   await tester.pumpAndSettle();
   return harness;

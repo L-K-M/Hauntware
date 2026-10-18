@@ -14,6 +14,7 @@ import 'models/image.dart';
 import 'models/network.dart';
 import 'models/pull.dart';
 import 'models/stats.dart';
+import 'models/system_df.dart';
 import 'models/volume.dart';
 import 'stdcopy.dart';
 
@@ -430,6 +431,31 @@ extension DockerEndpoints on DockerClient {
       cancelToken: cancelToken,
     );
     return parseEngineInfo(_decodeBuffered(res.body, '/info').value);
+  }
+
+  /// `GET /system/df` (03 §5.8, §7.1 OV-05): per-type totals and
+  /// reclaimable space, read through the negotiated shape gate. Slow on
+  /// large hosts, so callers fetch it on demand, apart from the lists.
+  /// [type] limits the work to one object type; daemons below API 1.42
+  /// ignore it and report every type.
+  Future<DockerParseResult<SystemDf>> systemDf({
+    SystemDfType? type,
+    Duration? timeout,
+    DockerCancelToken? cancelToken,
+  }) async {
+    final res = await request(
+      'GET',
+      '/system/df',
+      query: {if (type != null) 'type': type.wireName},
+      timeout: timeout,
+      cancelToken: cancelToken,
+    );
+    final decoded = _decodeBuffered(res.body, '/system/df');
+    final parsed = parseSystemDf(decoded.value, shape: gates.systemDfShape);
+    return DockerParseResult(parsed.value, [
+      ...decoded.warnings,
+      ...parsed.warnings,
+    ]);
   }
 
   /// `GET /events` (03 §5.6, §7.12 DKE-02): one parsed event per line,

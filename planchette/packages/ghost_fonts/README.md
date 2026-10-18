@@ -1,30 +1,64 @@
 # ghost_fonts
 
-The monospace fonts every Ghost app bundles, so code and terminal text look
-the same everywhere and draw ligatures without anything installed.
+The 20 monospace families every Ghost app bundles, available offline.
 `BundledMonoFont` names them; `ghostMonoFontFamilies` is the stack code text
 falls back through. Apps register each family as
 `packages/ghost_fonts/<family>` from their font manifest; tests call
 `loadBundledMonoFonts()` from `package:ghost_fonts/testing.dart`.
 
-| Family | Use | Styles | Size |
-| --- | --- | --- | --- |
-| Iosevka Term | Séance terminal default | regular, bold, italic, bold italic | 1.9 MB |
-| JetBrains Mono | code and editor default | regular, bold, italic, bold italic | 1.1 MB |
-| Fira Code | choice | regular, bold (italics slanted) | 0.6 MB |
-| Maple Mono | choice | regular, bold, italic, bold italic | 1.1 MB |
+| Family | Styles | Programming ligatures |
+| --- | --- | --- |
+| Iosevka Term (terminal default) | regular, bold, italic, bold italic | `calt` |
+| JetBrains Mono (editor default) | regular, bold, italic, bold italic | `calt` |
+| Fira Code | regular, bold | `calt` |
+| Maple Mono | regular, bold, italic, bold italic | `calt` |
+| Cascadia Code | regular, bold, italic, bold italic | `calt` |
+| Victor Mono | regular, bold, italic, bold italic | `calt` |
+| Lilex | regular, bold, italic, bold italic | `calt` |
+| 0xProto | regular, bold, italic | `calt` |
+| Monaspace Neon, Argon, Xenon, Radon, Krypton | each: regular, bold, italic, bold italic | `ss01`–`ss10`, `liga` |
+| Martian Mono | regular, bold | `calt` |
+| Geist Mono | regular, bold, italic, bold italic | `ss11` |
+| Intel One Mono | regular, bold, italic, bold italic | `ss01` |
+| Fragment Mono | regular, italic | `calt` |
+| Google Sans Code | variable weight, upright and italic | none |
+| Commit Mono | regular, bold, italic, bold italic | `ss01` (math), `ss02` (arrows) |
+| Departure Mono | regular | none |
 
-All four ligate through contextual alternates (`calt`): each character keeps
-a one-cell glyph, so carets, selections and terminal cells stay on the grid.
+The engine synthesizes styles absent upstream. Google Sans Code uses its
+unmodified variable faces, with `MONO` at its default of 1. All fonts together
+occupy about 21 MiB before application compression, about 16 MiB more than the
+original four.
+
+`showMonoFontPicker` shares searchable, font-rendered rows and a larger preview
+with code, ambiguous glyphs and emphasis. Desktop uses two panes; narrow screens
+stack them in a scrollable view. A host may supply its installed-font source and
+terminal-specific preview. Nothing changes until confirmation.
+
+Ligatures default to on and remain switchable. `MonoLigatures.featuresFor`
+also controls fonts whose coding ligatures require stylistic sets; disabling
+them turns those sets off. Fonts without coding ligatures say so in the picker.
+Editors and terminals use the same feature policy. Rendering tests check real
+font metrics and glyph changes, not just feature flags.
+
+Commit Mono's `calt` also applies smart kerning, so disabling ligatures can
+change plain-letter outlines while preserving their cell advances.
 
 ## Licences
 
-The fonts are under the SIL Open Font License 1.1, none with a Reserved Font
-Name; the package code is public domain (Unlicense). `LICENSE` holds every
+The fonts are under the SIL Open Font License 1.1; the package code is public
+domain (Unlicense). `LICENSE` holds every
 text in the chunk format Flutter's build copies into each app's NOTICES, and
 a test checks there is one per family. The suite licence gate
 (`tool/license_gate`) covers Séance's component only, so it does not see
 these files.
+
+Cascadia Code reserves “Cascadia Code”; Intel One Mono reserves “Intel”;
+Monaspace reserves “Monaspace” and its five subfamily names. Their shipped files
+are unmodified. The other additional families declare no reserved names.
+Commit Mono and Departure Mono's **font** licenses are OFL, regardless of the
+licenses used for code in their repositories. Codelia is commercial and is not
+included.
 
 ## Sources
 
@@ -36,6 +70,32 @@ Unmodified release files, except Iosevka Term:
 | JetBrains Mono | [JetBrains/JetBrainsMono v2.304](https://github.com/JetBrains/JetBrainsMono/releases/tag/v2.304) | `JetBrainsMono-2.304.zip` (`6f6376c6ed2960ea8a963cd7387ec9d76e3f629125bc33d1fdcd7eb7012f7bbf`), `fonts/ttf/` |
 | Fira Code | [tonsky/FiraCode 6.2](https://github.com/tonsky/FiraCode/releases/tag/6.2) | `Fira_Code_v6.2.zip` (`0949915ba8eb24d89fd93d10a7ff623f42830d7c5ffc3ecbf960e4ecad3e3e79`), `ttf/` |
 | Maple Mono | [subframe7536/maple-font v7.9](https://github.com/subframe7536/maple-font/releases/tag/v7.9) | `MapleMono-TTF.zip` (`3a35f8f0669bef3dded9df208cc4526a6f7573210e134816e9084a8981271d75`) |
+
+The additional releases, exact archive members, source/license SHA-256 and
+shipped-file SHA-256 are pinned in [`tool/font_releases.json`](tool/font_releases.json):
+
+| Families | Release |
+| --- | --- |
+| Cascadia Code | [microsoft/cascadia-code v2407.24](https://github.com/microsoft/cascadia-code/releases/tag/v2407.24) |
+| Victor Mono | [rubjo/victor-mono v1.5.6](https://github.com/rubjo/victor-mono/releases/tag/v1.5.6), nested `public/VictorMonoAll.zip` |
+| Lilex | [mishamyrt/Lilex 2.630](https://github.com/mishamyrt/Lilex/releases/tag/2.630) |
+| 0xProto | [0xType/0xProto 2.502](https://github.com/0xType/0xProto/releases/tag/2.502) |
+| Monaspace (five families) | [githubnext/monaspace v1.400](https://github.com/githubnext/monaspace/releases/tag/v1.400), static OTFs |
+| Martian Mono | [evilmartians/mono v1.1.0](https://github.com/evilmartians/mono/releases/tag/v1.1.0), standard-width TTFs |
+| Geist Mono | [vercel/geist-font v1.8.1](https://github.com/vercel/geist-font/releases/tag/v1.8.1) |
+| Intel One Mono | [intel/intel-one-mono V1.4.0](https://github.com/intel/intel-one-mono/releases/tag/V1.4.0) |
+| Fragment Mono | [weiweihuanghuang/fragment-mono 1.21](https://github.com/weiweihuanghuang/fragment-mono/releases/tag/1.21) |
+| Google Sans Code | [googlefonts/googlesans-code v7.001](https://github.com/googlefonts/googlesans-code/releases/tag/v7.001) |
+| Commit Mono | [eigilnikolajsen/commit-mono v1.143](https://github.com/eigilnikolajsen/commit-mono/releases/tag/v1.143), hinted TTFs |
+| Departure Mono | [rektdeckard/departure-mono v1.500](https://github.com/rektdeckard/departure-mono/releases/tag/v1.500) |
+
+Google Sans Code's asset filenames omit brackets for Flutter's asset loader;
+the bytes and internal family names are unchanged. Commit Mono's license chunk
+also retains the copyright from its fonts' name table.
+
+`python3 tool/import_font_releases.py --check` verifies these files offline.
+Without `--check`, it restores the pinned files and their LICENSE chunks from
+upstream, checking digests before writing. No font toolchain is needed.
 
 Iosevka's full character set is about 8.4 MB per style. `tool/subset_iosevka.sh`
 keeps the scripts, symbols, box drawing, braille and powerline characters a

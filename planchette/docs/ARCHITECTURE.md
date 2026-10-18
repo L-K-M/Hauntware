@@ -14,7 +14,7 @@ versioned dependency updates.
 | `planchette_editor` | Editing state, highlighting, problem marks and navigation, search and replace, gutter, status, focus, editing surface, text-size range and zoom steps, and shared save/close contracts |
 | `ghost_ui` | Shared leaf UI primitives: family hues, WCAG contrast math, middle-ellipsis text, top toasts, the in-place tab view, the sidebar kit, ghost menus, and the file-list presentation helpers |
 | `ghost_desktop` | Desktop window lifecycle shared by all three apps: remembered frame, missing-monitor policy, maximized/full-screen restore, and the intercepted close path behind host-owned adapters |
-| Planchette app | Local document tabs, native menus, Open/New/Save/Save As, file-open events, and application close/quit |
+| Planchette app | Document windows/tabs, optional folder/server workspaces, native menus, file-open events, guarded saves/publication, and application close/quit |
 | Host applications | Their own windows/tabs, localized chrome, remote sessions, managed working copies, uploads, conflict resolution, and notifications |
 
 The editor depends on `planchette_core` and `ghost_ui`; apps also consume
@@ -43,6 +43,36 @@ File lists use `GhostFileRow` on desktop and `GhostFileCompactRow` on touch,
 with shared columns, kind glyphs and formatting. Hosts project filesystem
 entries into `GhostFileItem`, provide `GhostFileTheme` tokens and localized
 strings, and retain selection, gestures, drag payloads and file operations.
+
+## Optional app workspaces
+
+`FolderWorkspace` owns one local or remote browser root per window. It uses
+Poltergeist core's `LocalFileSystem`, channel pool and `sortFileEntries`,
+and renders shared `GhostFileRow` widgets. A direct-file launch opens no
+browser, catalog, keystore or network connection. Folder and server pickers
+use the document workspace's modal lock.
+
+`WorkspaceCatalog` is an app-wide, pull-only consumer of the shared encrypted
+catalog. Its stores and OS-keystore names belong to Planchette. Cached server
+listing needs no keystore; explicit sign-in/refresh uses `SyncEnrollment` and
+`RecordCoordinator` with `PushPolicy.none`. Synced credentials require consent;
+conflicting host keys retain local trust. Account changes are refused while
+the existing catalog and working copies belong to another account.
+
+`WorkspaceRemoteFiles` owns Poltergeist's `CheckoutManager`, transfer queue
+and durable checkout store. Server-scoped checkout identities include the
+endpoint and jump route, so catalog edits cannot retarget earlier copies.
+`DocumentPublication` keeps remote identity and upload state separate from
+the guarded local document. Save commits locally before publishing; failed
+uploads still block a clean close and remain retryable through Save All.
+Save a Local Copy exports without retargeting or clearing remote dirty state.
+
+Quit retains durable pending copies, because another window can cancel an
+app-wide quit. Recover Remote Edits lists these copies offline. Explicit tab
+discard removes its checkout; Reopen Closed Tab remains local-file-only.
+Reopening a closed, clean remote file downloads a fresh copy. Publication
+uses the checkout's content-digest guard; conflicts preserve local edits and
+can be exported before discarding and reopening the current server version.
 
 ## Compatibility
 
@@ -114,7 +144,12 @@ packages to the same reviewed Git revision and commit their lockfiles. A
 package update is validated in both host apps before merging the adoption
 PRs.
 
-The first standalone app targets macOS, Windows, and Linux with one tabbed
-document window. Its files are local; it has no network service, account,
-telemetry, or updater. The shared Flutter surface stays usable in the host
-apps' existing mobile flows.
+The standalone app targets Android, macOS, Windows, and Linux. Desktops use tabbed
+document windows and optional local/remote folder workspaces. It has no
+telemetry or updater. The shared Flutter surface stays usable in the host
+apps' existing mobile flows. Android starts one workspace without the desktop
+window host. Its `AndroidDocuments` service maps system document-provider
+identities onto the existing `DocumentStore` boundary; private staging reuses
+the core's UTF-8, BOM, line-ending and size rules. The native provider adapter
+checks digests before writes and verifies read-back, retaining the original
+in private recovery storage until success. Provider writes are not atomic.

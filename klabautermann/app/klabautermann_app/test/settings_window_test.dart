@@ -8,10 +8,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_desktop/ghost_desktop.dart' show GhostSettingsLinkMethod;
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:klabautermann_app/app.dart';
+import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
+import 'package:klabautermann_app/controllers/monitor_set.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/controllers/prompt_controller.dart';
 import 'package:klabautermann_app/services/settings_window/remote_settings.dart';
@@ -20,6 +22,8 @@ import 'package:klabautermann_app/services/settings_window/settings_window_link.
 import 'package:klabautermann_app/settings_window_app.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/settings_page.dart';
+import 'package:klabautermann_core/klabautermann_core.dart'
+    show MonitorEligibility;
 
 import 'support/fake_engine.dart';
 import 'support/harness.dart';
@@ -29,6 +33,9 @@ import 'support/harness.dart';
 const _control = MethodChannel('test/settings_window');
 const _appLink = MethodChannel('test/settings_link/app');
 const _windowLink = MethodChannel('test/settings_link/window');
+
+/// What the app's `readAppVersion` read, which the window cannot read.
+const _appVersion = '1.2.3';
 
 /// An app whose appearance refuses every change.
 final class _RefusingAppearance extends ChangeNotifier
@@ -87,13 +94,27 @@ void main() {
     messenger.setMockMethodCallHandler(_control, null);
   });
 
+  /// A fleet controller over a fake engine, disposed after the test.
+  FleetController newFleet([List<FleetServer> servers = const []]) {
+    final engine = FakeEngineClient();
+    final fleet = FleetController(engine, servers: servers);
+    addTearDown(() async {
+      fleet.dispose();
+      await engine.close();
+    });
+    return fleet;
+  }
+
   SettingsWindowHost newHost(
     AppearanceSettings appearance, [
     AnnouncementSettings? announcements,
+    MonitorSetSettings? monitorSet,
   ]) {
     final host = SettingsWindowHost(
       appearance: appearance,
       announcements: announcements ?? AnnouncementController(),
+      appVersion: _appVersion,
+      monitorSet: monitorSet ?? newFleet().monitorSettings,
       control: _control,
       link: _appLink,
       requestAppExit: () async => AppExitResponse.exit,
@@ -193,6 +214,8 @@ void main() {
             platform,
             appearance: appearance,
             announcements: announcements,
+            appVersion: _appVersion,
+            monitorSet: newFleet().monitorSettings,
           ),
           isNull,
           reason: '$platform',
@@ -207,6 +230,8 @@ void main() {
           platform,
           appearance: appearance,
           announcements: announcements,
+          appVersion: _appVersion,
+          monitorSet: newFleet().monitorSettings,
         );
         expect(host, isNotNull, reason: '$platform');
         host!.dispose();
@@ -229,13 +254,22 @@ void main() {
   group('the settings window', () {
     late AppearanceController appearance;
     late AnnouncementController announcements;
+    late FleetController fleet;
     late SettingsWindowHost host;
 
     setUp(() {
       runnerWithWindow();
       appearance = AppearanceController();
       announcements = AnnouncementController();
-      host = newHost(appearance, announcements);
+      fleet = newFleet(const [
+        FleetServer(id: 'srv-1', displayName: 'alpha'),
+        FleetServer(
+          id: 'srv-2',
+          displayName: 'bravo',
+          monitorEligibility: MonitorEligibility.endpointNotConfirmed,
+        ),
+      ]);
+      host = newHost(appearance, announcements, fleet.monitorSettings);
     });
 
     tearDown(() {
@@ -359,6 +393,18 @@ void main() {
       expect(find.byType(SegmentedButton<ThemeModePreference>), findsOneWidget);
     });
 
+    testWidgets('the General tab\'s about row shows the app\'s version, '
+        'which only the link can bring (M16)', (tester) async {
+      final remote = await pumpWindow(tester);
+      expect(remote.appVersion, _appVersion);
+
+      expect(find.text('Klabautermann $kPreviewLabel'), findsOneWidget);
+      await tester.tap(find.text('Version $_appVersion'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AboutDialog), findsOneWidget);
+    });
+
     testWidgets('an appearance change in the window applies to the main '
         'window through the link', (tester) async {
       final remote = await pumpBothWindows(tester, appearance);
@@ -449,6 +495,37 @@ void main() {
       });
       await tester.pumpAndSettle();
       expect(windowSwitch(), isTrue);
+    });
+
+    testWidgets('the Servers tab\'s switches change the app\'s monitor set '
+        'through the link (FL-21)', (tester) async {
+      final remote = await pumpWindow(tester, SettingsTab.servers);
+      SwitchListTile switchOf(String label) => tester.widget<SwitchListTile>(
+        find.ancestor(
+          of: find.text(label),
+          matching: find.byType(SwitchListTile),
+        ),
+      );
+      expect(find.text('0 of 10 servers monitored'), findsOneWidget);
+      expect(switchOf('alpha').value, isFalse);
+      expect(
+        switchOf('bravo').onChanged,
+        isNull,
+        reason: 'its endpoint is not confirmed',
+      );
+      expect(
+        find.text('Confirm this server\'s endpoint to monitor it.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('alpha'));
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+
+      expect(fleet.monitoredServerIds, {'srv-1'});
+      expect(remote.monitorSet.value.first.monitored, isTrue);
+      expect(switchOf('alpha').value, isTrue);
+      expect(find.text('1 of 10 servers monitored'), findsOneWidget);
     });
 
     testWidgets('a theme change in the app re-themes the showing window', (
@@ -578,6 +655,18 @@ void main() {
         ),
       );
       expect(
+        roundTrip(const MonitorSetFullException()),
+        isA<MonitorSetFullException>(),
+      );
+      expect(
+        roundTrip(const MonitorSetNotSavedException('disk full')),
+        isA<MonitorSetNotSavedException>().having(
+          (error) => error.message,
+          'message',
+          'disk full',
+        ),
+      );
+      expect(
         roundTrip(StateError('read-only appearance')),
         isA<SettingsLinkException>().having(
           (error) => error.message,
@@ -589,6 +678,23 @@ void main() {
       expect(
         decodeLinkError(PlatformException(code: 'settings-failed')),
         isA<SettingsLinkException>(),
+      );
+    });
+
+    test('the monitor set\'s candidates cross whole, every eligibility', () {
+      final candidates = [
+        for (final (index, eligibility) in MonitorEligibility.values.indexed)
+          MonitorCandidate(
+            serverId: 'srv-$index',
+            label: 'Server $index',
+            eligibility: eligibility,
+            monitored: index.isEven,
+          ),
+      ];
+
+      expect(
+        decodeMonitorCandidates(encodeMonitorCandidates(candidates)),
+        candidates,
       );
     });
 

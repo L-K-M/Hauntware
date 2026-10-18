@@ -1,7 +1,7 @@
 name: klabautermann_app
 description: Klabautermann fleet manager for servers and Docker.
 publish_to: none
-version: 1.9.0+1090099
+version: 1.9.1+1090199
 
 environment:
   sdk: ^3.12.0
@@ -66,6 +66,12 @@ dependencies:
   # resolved through ghost_desktop; pinned to that version, as Poltergeist
   # pins it.
   window_manager: 0.5.2
+  # The running build's version for the About dialog (lib/services/
+  # app_version.dart), read once by the app's isolate. Not Poltergeist's
+  # 8.3.1: that one needs win32 5, which would take
+  # flutter_secure_storage_windows back from 4.2.2 to 4.1.0, before its
+  # fixes for concurrent reads and writes losing data.
+  package_info_plus: 10.2.2
 
 dev_dependencies:
   flutter_test:

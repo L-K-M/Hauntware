@@ -172,7 +172,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   the external-monitor rule.
 - `klabautermann_docker`: pure-Dart HTTP/1.1 client, NDJSON/JSON-seq
   scanning, stdcopy, versioned API models and negotiation, compose labels
-  and grouping.
+  and grouping, and `/system/df` across its shapes with the OV-05 summary
+  maths.
 - Docker transport (M3, D04, 03 §5.3, §5.9): `klabautermann_core`'s
   `DockerLadder.resolve` picks rank 1 (streamlocal), 2 (`dial-stdio`
   with `--host`, Podman's `--url`) or 4 (socat, then `nc -U`), with one
@@ -218,8 +219,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   `locatorConflict`. The fleet controller keeps link statuses and probe
   answers only for listed servers, and the rail words every status.
   Only an engine with links on sends link states and prompts, as the
-  app's does since K44b (below). The engine sends no probe answers and
-  fills the new fleet fields only for imports (below).
+  app's does since K44b (below). The engine sends probe answers since
+  K20 (below) and fills the new fleet fields only for imports (below).
 - Protocol v3 sampling (M2, 03 §10.1, K16a, #193): `Subscribe` and
   `Unsubscribe` name one surface's subscription and its `SampleStream`s
   (D45; the health card's failed units are a `failedUnits` stream of their
@@ -454,6 +455,22 @@ M2, the host read MVP, is the current milestone. What is on main:
   records. Engine unit tests use a fake dialer; K24's fixture tests
   (below) dial a containerized sshd, and no manual run against a real
   server has happened yet.
+- Reachability probes (M2, 03 §4.7, §5.12, FL-04, K20): the engine's
+  `ReachabilityService` runs `seance_core`'s `ProbeService` (a TCP
+  connect to the SSH port, 45 s jittered sweeps, at most 6 at once) over
+  the fleet entries with a connect config and a confirmed endpoint:
+  imports (O6's default) and confirmed synced servers, never an
+  unconfirmed or changed one. Each sweep sends a `Reachability` per
+  target; a server behind a jump host is reported unknown without a
+  probe, and one holding a link is answered online. Probing starts after
+  `Hello`'s fleet, sweeps at once for a new or moved target, stops for
+  a server before the fleet or `EndpointChanged` that removes it goes
+  out, and pauses with `SetAppActivity` in the background (phones only
+  send it). `EngineStart.probesEnabled`, off unless given, gates it
+  apart from links, and `main.dart` turns it on (the contract test holds
+  it). The fleet controller drops the answer of a server whose endpoint
+  waits for confirmation. Tested with a fake prober, under a fake clock
+  for the service; no real host has been probed from the app.
 - Shared host-key file store (M2, `seance_core`, 03 D3, F3b-1, #242):
   Poltergeist's `FileHostKeyStore` and its corrupt-file quarantine moved
   into `seance_core` (`package:seance_core/catalog.dart`, re-exported by
@@ -620,11 +637,34 @@ M2, the host read MVP, is the current milestone. What is on main:
   cadence; they give way where the name and state word would not fit.
   K14's locator flag shows as a warning whose words a tap shows. Link
   changes are announced, through a live region where the platform takes no
-  announcements; samples and probe answers are not. Rows subscribe nothing
-  until the monitor set (K30), and the app's engine sends no probe
-  answers (K20). It sends link states and samples since K44b turned links
-  on, so in a real run a row shows its link state once its server is
-  opened, and its readings while a view holds them.
+  announcements; samples and probe answers are not. Rows subscribe
+  nothing; the engine samples `overview` for the monitor set (K30, below),
+  and the app's engine sends probe answers since K20 (below). It sends
+  link states and samples since K44b turned links on, so in a real run a
+  row shows its link state once its server is opened or monitored, and
+  its readings while a view or the monitor set holds them.
+- Monitor set (M2, FL-21, 03 §4.3 step 4, §10.1, K30): every fleet row's
+  menu offers Monitor or Stop monitoring, and Settings > Servers (the
+  route, and the desktop window through the `setMonitored` link method)
+  lists the fleet with a switch per server, why a server cannot join,
+  and the count out of 10. Eligible: a confirmed endpoint (imports count
+  as confirmed) and agent or key-file sign-in, by
+  `monitorEligibilityOf`, which the engine enforces too. Until the user
+  chooses, desktops monitor the first 10 eligible servers and phones
+  none; a choice is kept as `klabautermann.monitorSet` in
+  `settings.json`, without the ids that left the fleet or stopped being
+  eligible. The engine samples each member's `overview` under its own
+  subscription over an unattended link, keeps that link when a view
+  disconnects, and drops a member that leaves the fleet or whose
+  endpoint a sync changes; `SetMonitorSet` with more than 10 ids is
+  rejected whole, and ineligible ids are skipped by name. The coverage
+  chip and sheet count the set. Tested in the engine (unattended dial,
+  samples without a view, the limit, skipped ids, a moved server, a
+  view's disconnect), the store (round trip, damaged values, read-only),
+  the controller (defaults per platform, eligibility, limit, purge on
+  save, not-saved), the row menu and both settings surfaces. Not
+  checked: a jump host's credentials, and an encrypted key file, which
+  fails the unattended connect until K45; on a real device, unverified.
 - Server header and Overview part 1 (M2, 03 §10.2, §10.4, OV-01, OV-03,
   OV-04, MEM-01, MEM-02, K32a, #223): the desktop workspace and the
   phone's server screen open with a header showing the link state as a
@@ -1103,6 +1143,53 @@ M2, the host read MVP, is the current milestone. What is on main:
   digest `capture.sh` pinned, so `fedora-44` now pins the tag's current
   index digest, and the `fedora-44-docker-bash` fixture is recaptured
   from it with its goldens (collector-set version 7).
+- Docker fixture and rank-1 smoke (M3, 03 §5.4, §11.3, D10): the
+  fixture adds `dind` (Docker 29.9.1, privileged, unpublished, dockerd
+  on one Unix socket with gid 990, on a named volume) and `docker-sshd`
+  on 127.0.0.1:2244, the sshd base plus the static docker CLI and
+  Compose plugin copied from the digest-pinned CLI image, with
+  `AllowTcpForwarding local` ahead of the common config, the socket at
+  `/var/run/docker.sock` and `/run/user/<uid>/docker.sock`, `klab` in
+  `docker` and `klab-nosock` outside it. `run.sh` checks the rendered
+  config with `check_docker_exposure.dart` after Poltergeist's checker
+  (no published 2375 or 2376, no host `docker.sock` bind, `privileged`
+  only on dind or Podman, dind's dockerd on an explicit Unix `--host`),
+  loads busybox pulled by digest into dind over SSH and runs
+  `seed_docker.sh` as `klab` (stack `demo` with healthy, unhealthy and
+  TTY services, stack `gone` without its files, a Coolify-managed
+  container). `docker_link_test.dart` (tags `integration`, `docker`)
+  pings, negotiates and lists over `SshLink.openUnixStream`, reaches the
+  second path, and sees `klab-nosock` refused. Locally it adds about
+  16 s to `run.sh` with the images cached.
+- Recorded Docker API corpus (M3, 03 §11.1, D21, D01): `capture.sh`
+  also runs `capture_docker_api.sh`, which starts digest-pinned rootful
+  daemons in privileged containers (unix socket only, nothing published,
+  labelled and removed with their volumes on exit): Docker 20.10.24,
+  25.0.5, 29.0.4 and 29.7.2 at their native maxima 1.41, 1.44, 1.52 and
+  1.55, and Podman 5.8.7's compat service (1.44). In each,
+  `klabautermann_docker/tool/capture_api.dart` drives the package's own
+  HTTP client over the socket, seeds containers (health passing and
+  failing, a 2,000-line job, TTY, paused, a compose project, a Coolify
+  container, fake low-entropy secrets), an image, a network and a
+  volume, and records 30 exchanges as raw response bytes into
+  `klabautermann_docker/test/fixtures/api-*/`. Check mode compares a
+  fresh capture by structure, never by value; `--docker-api-only`
+  [`--update`] runs only these. The committed corpus comes from a local
+  cgroup v1 run; replay tests follow in D02, and rootless daemons stay
+  unrecorded.
+- Negative sshd variants and refusal evidence (M3, 03 §5.3, §11.3,
+  D11): six Docker hosts on 127.0.0.1:2245 to 2250 refuse with
+  `AllowStreamLocalForwarding no`, `DisableForwarding yes`,
+  `AllowTcpForwarding no`, `PermitOpen 127.0.0.1:1`, `MaxSessions 2`
+  and a `restrict` key. `docker_refusal_test.dart` records, on the
+  base's OpenSSH 10.6, that every forwarding variant refuses
+  streamlocal (reason 2, "open failed", `forwardDisabled`), that only
+  `AllowStreamLocalForwarding no` still opens `direct-tcpip`, that
+  `MaxSessions 2` teaches the link a limit of 2, and that `klab-nosock`
+  sees the socket, fails `test -w` and gets `EACCES` from the docker
+  CLI. Each result, with sshd's log lines, goes to
+  `$KLABAUTERMANN_EVIDENCE_DIR/fixture/refusals/`. Locally it adds
+  about 8 s to `run.sh` with the images cached.
 - Desktop settings window (03 §10.2, D32): on macOS, Linux and Windows,
   Settings opens in a native window of its own through `ghost_desktop`'s
   `GhostSettingsWindowHost`; phones, and a desktop runner that cannot
@@ -1148,12 +1235,14 @@ M2, the host read MVP, is the current milestone. What is on main:
     §4.10 records the file).
   - Menus from one command registry (`lib/ui/menus/`, Poltergeist's
     shape): `PlatformMenuBar` on macOS, a Flutter menu bar strip on Linux
-    and Windows, none on phones. Registered: Settings… (⌘, on macOS,
-    Ctrl+, elsewhere; in the application menu on macOS, File elsewhere),
-    Import from ~/.ssh/config (File, desktops, disabled while an import
-    runs) and Quit (File, Linux and Windows, the close button's path). On
-    macOS AppKit adds About, Services, the hide trio, Quit (⌘Q), Enter
-    Full Screen (View) and Minimize, Zoom and Bring All to Front (Window).
+    and Windows, none on phones. Registered: About Klabautermann (first
+    in the application menu on macOS, Help elsewhere; below), Settings…
+    (⌘, on macOS, Ctrl+, elsewhere; in the application menu on macOS,
+    File elsewhere), Import from ~/.ssh/config (File, desktops, disabled
+    while an import runs) and Quit (File, Linux and Windows, the close
+    button's path). On macOS AppKit adds Services, the hide trio, Quit
+    (⌘Q), Enter Full Screen (View) and Minimize, Zoom and Bring All to
+    Front (Window).
     The same registry binds the shortcuts. No command is a toggle, so
     `klabautermann/menu_checks` stays reserved.
 
@@ -1162,6 +1251,21 @@ M2, the host read MVP, is the current milestone. What is on main:
   client CI legs compile the macOS runner;
   `app/klabautermann_app/test/desktop_chrome_runner_test.dart` also
   guards its wiring on Linux.
+- Preview label (E26, M16; 04 §12.3): until v1 the app title is
+  "Klabautermann (preview)" (`appTitle`), tied by tests to
+  `kPreviewLabel` in `lib/app_identity.dart`, as is the `.deb`
+  description of `scripts/package-linux.sh`. About Klabautermann, on
+  every desktop, opens the app's About dialog (Material's, with the
+  title, the version and the Unlicense line, and View licenses);
+  Settings > General has an about row with the title and version that
+  opens it everywhere, phones included. On macOS the command replaces
+  AppKit's About panel, which shows `CFBundleName`, an identity that
+  stays unchanged (owner question Q3). The version comes from
+  `package_info_plus`, read once in `main`; the settings window's
+  engine has no plugins, so the snapshot of the settings link carries
+  it. The release asset names keep their label from the packaging
+  scripts; the release job and notes are E32's. M7 drops the label in
+  one change.
 - Single desktop instance (03 §4.10): on macOS, Linux and Windows the
   composition root takes an exclusive, non-blocking advisory lock on
   `instance.lock` in the support directory (`klabautermann_core`'s
@@ -1247,6 +1351,21 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- Probe and sampler additions (M4, E07, 03 §6.2, §7.17): collector-set
+  version 8 prints a `SELF <pid> <ppid>` marker before READY, which
+  `HwsSessionReady` carries for 8.6's protected targets, and the
+  assembler ends a session whose READY of this version comes without it.
+  The probe runs `run0 --no-ask-password true` when run0 exists
+  (`HostProfile.run0NonInteractive`; the probe's deadline grows to 175 s
+  for its 17 guarded commands). The slow `ops` collector lists both
+  operation directories, at most 50 records each cut at 4 KiB, framed by
+  byte counts; `parseOps` reads E08's record schema into `OpRecord` and
+  rejects truncated, malformed, other-version and forged records (an id
+  that differs from the file name, or a unit not its own). Tested with
+  record fixtures and through dash and bash (BusyBox sh where
+  installed). Nothing in the engine uses the SELF PIDs or `ops` yet:
+  E10 takes the PIDs into the protected targets, E17 runs `ops` on
+  connect, and `ops` has no platform fixture.
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.
@@ -1327,14 +1446,18 @@ between PRs. M1 adds gates of its own:
   Hide Klabautermann, Hide Others, Show All, Quit Klabautermann ⌘Q),
   File (Import from ~/.ssh/config), View (Enter Full Screen) and Window
   (Minimize, Zoom, Bring All to Front), with no tab commands; each item
-  does what it says. ⌘, opens Settings from the main window, from a
+  does what it says. About Klabautermann opens the app's About dialog
+  ("Klabautermann (preview)", the build's version, the Unlicense line),
+  never AppKit's panel. ⌘, opens Settings from the main window, from a
   focused text field, and with Settings in front (it comes forward).
   There is no Edit menu yet: ⌘C, ⌘V, ⌘X, ⌘A and ⌘Z still work in a text
-  field in both windows. Linux and Windows: a File menu strip above the
-  content with Import from ~/.ssh/config, Settings… (Ctrl+, shown and
-  working) and Quit, which closes the app the way the close button does.
-  The import item is dimmed while an import runs. Phones and tablets show
-  no menu. Open: needs a person on each OS; the widget tests check the
+  field in both windows. Linux and Windows: a menu strip above the
+  content with File (Import from ~/.ssh/config, Settings… with Ctrl+,
+  shown and working, and Quit, which closes the app the way the close
+  button does) and Help (About Klabautermann, the same dialog). The
+  import item is dimmed while an import runs. Phones and tablets show
+  no menu. On every OS, Settings > General's about row shows the
+  build's version, in the settings window too, and opens the dialog. Open: needs a person on each OS; the widget tests check the
   model and the Flutter side of `PlatformMenuBar`, not AppKit's menu.
 - Single desktop instance (03 §4.10), once per desktop OS from a build
   that includes the lock. With Klabautermann running, launch it again

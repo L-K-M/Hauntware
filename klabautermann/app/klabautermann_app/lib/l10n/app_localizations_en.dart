@@ -9,13 +9,60 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'Klabautermann';
+  String get appTitle => 'Klabautermann (preview)';
 
   @override
   String get fleetTitle => 'Fleet';
 
   @override
   String get fleetSectionServers => 'Servers';
+
+  @override
+  String get fleetSectionPinned => 'Pinned';
+
+  @override
+  String get fleetSectionImported => 'Imported';
+
+  @override
+  String get fleetRowPin => 'Pin to top';
+
+  @override
+  String get fleetRowUnpin => 'Unpin';
+
+  @override
+  String get fleetPinNotSaved =>
+      'Klabautermann could not save your pinned servers, so the change lasts only until it quits.';
+
+  @override
+  String get fleetRowMonitor => 'Monitor';
+
+  @override
+  String get fleetRowStopMonitoring => 'Stop monitoring';
+
+  @override
+  String monitorSetFull(int limit) {
+    return 'You can monitor up to $limit servers on this device. Stop monitoring one first.';
+  }
+
+  @override
+  String get monitorSetNotSaved =>
+      'Klabautermann could not save your monitored servers, so the change lasts only until it quits.';
+
+  @override
+  String get monitorSetNotChanged =>
+      'The monitored servers could not be changed.';
+
+  @override
+  String get monitorIneligibleEndpoint =>
+      'Confirm this server\'s endpoint to monitor it.';
+
+  @override
+  String get monitorIneligibleCredentials =>
+      'Signs in with a password or a stored key, which asks you first, so it is read only while you have it open.';
+
+  @override
+  String get monitorIneligibleUnknown =>
+      'Import your ssh_config again to monitor this server.';
 
   @override
   String get fleetEmptyTitle => 'No servers yet';
@@ -140,6 +187,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get menuWindow => 'Window';
+
+  @override
+  String get menuHelp => 'Help';
+
+  @override
+  String get aboutCommand => 'About Klabautermann';
+
+  @override
+  String aboutVersion(String version) {
+    return 'Version $version';
+  }
+
+  @override
+  String get aboutVersionUnknown => 'Version unknown';
+
+  @override
+  String get aboutLicence =>
+      'Klabautermann is free and unencumbered software released into the public domain under the Unlicense.';
 
   @override
   String get statusConnected => 'Connected';
@@ -2441,6 +2506,86 @@ class AppLocalizationsEn extends AppLocalizations {
       'You can\'t connect to this server yet: it comes from an earlier import that kept only its address. Import your SSH config again to connect.';
 
   @override
+  String get connectRejectedEndpointNotConfirmed =>
+      'You can\'t connect to this server yet: its address comes from your sync account and isn\'t confirmed on this device, or it changed since you confirmed it. Choose Review over the server list to check and confirm it.';
+
+  @override
+  String endpointsPendingNotice(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count synced servers wait for you to confirm their addresses.',
+      one: '$count synced server waits for you to confirm its address.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get endpointsReview => 'Review';
+
+  @override
+  String get endpointsTitle => 'Confirm server addresses';
+
+  @override
+  String get endpointsBody =>
+      'These servers come from your sync account. Klabautermann connects only to addresses you confirm on this device, so an address changed on another device cannot receive your sign-in unnoticed. Check each host, port, user and jump route before you confirm it.';
+
+  @override
+  String get endpointsSearch => 'Search servers';
+
+  @override
+  String endpointsRoute(String route) {
+    return 'via $route';
+  }
+
+  @override
+  String get endpointsRouteSeparator => ' → ';
+
+  @override
+  String get endpointsChanged => 'Changed since you confirmed it';
+
+  @override
+  String get endpointsNoMatch => 'No servers match your search.';
+
+  @override
+  String get endpointsNoneLeft =>
+      'Every synced server\'s address is confirmed on this device.';
+
+  @override
+  String get endpointsConfirmAllShown => 'Confirm all shown';
+
+  @override
+  String endpointsConfirmSelected(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Confirm $count servers',
+      one: 'Confirm $count server',
+      zero: 'Confirm selected',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String endpointsConfirmed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Confirmed $count server addresses.',
+      one: 'Confirmed $count server address.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get endpointsStillPending =>
+      'Some servers still need confirming: confirm the jump hosts they go through too.';
+
+  @override
+  String get endpointsFailed =>
+      'The confirmation could not be saved on this device, so these servers stay unconfirmed. Try again.';
+
+  @override
   String get settingsAccessibilityTitle => 'Accessibility';
 
   @override
@@ -2456,6 +2601,26 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsAnnounceNotChanged => 'The setting could not be changed.';
+
+  @override
+  String get settingsAboutTitle => 'About';
+
+  @override
+  String get settingsMonitorTitle => 'Monitoring';
+
+  @override
+  String settingsMonitorDetail(int limit) {
+    return 'Monitored servers are read continuously while Klabautermann is open, and their rows show CPU, memory and disk. A server can be monitored once its endpoint is confirmed and it signs in with an SSH agent or a key file, without asking you. Up to $limit servers.';
+  }
+
+  @override
+  String settingsMonitorCount(int monitored, int limit) {
+    return '$monitored of $limit servers monitored';
+  }
+
+  @override
+  String get settingsMonitorEmpty =>
+      'No servers yet. Servers you sync or import show here.';
 
   @override
   String overviewBandAnnouncement(String metric, String value, String band) {

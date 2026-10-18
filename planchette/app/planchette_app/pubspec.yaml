@@ -1,7 +1,7 @@
 name: planchette_app
-description: A focused desktop text editor built with the shared Planchette editor.
+description: A focused text editor built with the shared Planchette editor.
 publish_to: none
-version: 1.9.0+1090099
+version: 1.9.1+1090199
 
 environment:
   sdk: ^3.12.0
@@ -16,13 +16,22 @@ dependencies:
     path: ../../packages/ghost_desktop
   ghost_fonts:
     path: ../../packages/ghost_fonts
+  ghost_keystore:
+    path: ../../packages/ghost_keystore
+  ghost_servers:
+    path: ../../packages/ghost_servers
   ghost_ui:
     path: ../../packages/ghost_ui
   path: 1.9.1
+  path_provider: 2.1.5
   planchette_core:
     path: ../../packages/planchette_core
   planchette_editor:
     path: ../../packages/planchette_editor
+  poltergeist_core:
+    path: ../../../poltergeist/packages/poltergeist_core
+  seance_core:
+    path: ../../../seance/packages/seance_core
   window_manager: 0.5.2
 
 dev_dependencies:

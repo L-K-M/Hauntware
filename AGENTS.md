@@ -8,7 +8,7 @@ copied.
 ## Layout and toolchains
 
 - `planchette/`: pure-Dart core, shared Flutter editor/UI/desktop packages,
-  three-platform editor application.
+  four-platform editor application.
 - `seance/`: pure-Dart protocol/core/server, five-platform SSH application,
   vendored xterm and PTY implementations.
 - `poltergeist/`: pure-Dart transfer/sync packages, five-platform application,
@@ -63,7 +63,7 @@ squash the initial migration PR: original source ancestry must reach main.
 ## Releases and review
 
 Only root `scripts/release.sh` cuts suite releases through `lkm-release`.
-Child release scripts forward to root. One tag builds all 13 clients and the
+Child release scripts forward to root. One tag builds all 14 clients and the
 sync server; publication follows every gate and artifact/checksum validation.
 A release is a separate explicit task. Do not cut tags during migration.
 

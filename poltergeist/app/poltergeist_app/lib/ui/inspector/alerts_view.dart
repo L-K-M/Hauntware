@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ghost_apk_update/ghost_apk_update.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -7,6 +8,7 @@ import '../../services/drag_out_controller.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/family_hues.dart';
 import '../activity/activity_format.dart';
+import '../panes/pane_format.dart';
 import '../server_label_scope.dart';
 
 /// The verbs an alert row offers, bound by the shell (the Alerts tab
@@ -21,6 +23,8 @@ class AlertActions {
     this.reviewHostKey,
     this.reviewLocalEdits,
     this.openRelease,
+    this.installUpdate,
+    this.cancelUpdate,
   });
 
   final VoidCallback showTransfers;
@@ -29,6 +33,11 @@ class AlertActions {
   final void Function(String serverId)? reviewHostKey;
   final void Function(String serverId)? reviewLocalEdits;
   final void Function(UpdateInfo info)? openRelease;
+
+  /// Android's in-place update: download and open the installer, and
+  /// stop a running download.
+  final VoidCallback? installUpdate;
+  final VoidCallback? cancelUpdate;
 }
 
 /// D32's Alerts tab (10 §3): every live thing that needs the user, most
@@ -189,7 +198,7 @@ class _AlertRow extends StatelessWidget {
                 (l10n.alertActionShow, actions.showTransfers),
             ],
           ),
-          UpdateAvailableAlert(:final info) => (
+          UpdateAvailableAlert(:final info, apk: null) => (
             l10n.alertUpdateAvailable(info.latestVersion),
             null,
             [
@@ -197,6 +206,14 @@ class _AlertRow extends StatelessWidget {
                 (l10n.alertActionViewRelease, () => actions.openRelease!(info)),
             ],
           ),
+          UpdateAvailableAlert(:final info, :final apk?, :final download) =>
+            _updateRow(
+              l10n,
+              theme.platform,
+              info.latestVersion,
+              apk,
+              download,
+            ),
         };
 
     return Padding(
@@ -258,5 +275,46 @@ class _AlertRow extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// Android's in-place update row: Update, then the download's
+  /// progress with Cancel, then Install (the installer was backed out
+  /// of) or a failure with Retry. Dismissing also stops a download.
+  (String, String?, List<(String, VoidCallback)>) _updateRow(
+    AppLocalizations l10n,
+    TargetPlatform platform,
+    String version,
+    ApkRelease apk,
+    ApkUpdateState download,
+  ) {
+    String size(int bytes) => formatPaneSize(bytes, platform: platform);
+    final install = actions.installUpdate;
+    final cancel = actions.cancelUpdate;
+    return switch (download) {
+      ApkUpdateIdle() => (
+        l10n.alertUpdateAvailable(version),
+        l10n.alertUpdateDownloadSize(size(apk.size)),
+        [if (install != null) (l10n.alertActionUpdate, install)],
+      ),
+      ApkUpdateDownloading(:final received, :final total) => (
+        l10n.alertUpdateDownloading(version),
+        l10n.alertUpdateProgress(size(received), size(total)),
+        [if (cancel != null) (l10n.alertActionCancel, cancel)],
+      ),
+      ApkUpdateReady() => (
+        l10n.alertUpdateReady(version),
+        null,
+        [if (install != null) (l10n.alertActionInstall, install)],
+      ),
+      ApkUpdateFailed(:final failure) => (
+        l10n.alertUpdateFailed(version),
+        switch (failure) {
+          ApkUpdateFailure.download => l10n.alertUpdateFailedDownload,
+          ApkUpdateFailure.verification => l10n.alertUpdateFailedVerification,
+          ApkUpdateFailure.installer => l10n.alertUpdateFailedInstaller,
+        },
+        [if (install != null) (l10n.alertActionRetry, install)],
+      ),
+    };
   }
 }

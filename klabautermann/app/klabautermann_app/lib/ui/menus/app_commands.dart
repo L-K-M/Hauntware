@@ -4,14 +4,15 @@ import 'package:window_manager/window_manager.dart';
 
 import '../../controllers/fleet_controller.dart';
 import '../../l10n/app_localizations.dart';
+import '../about_dialog.dart';
 import '../ssh_config_import_action.dart';
 
 /// The app's top-level menus in menu-bar order (03 §10.2). [app] is the
 /// macOS application menu: commands reach it only through
-/// [CommandMenuPlacement.appMenuOnMac], never by naming it. Edit, a server
-/// menu and Help join when commands for them exist; a menu with no rows is
+/// [CommandMenuPlacement.appMenuOnMac], never by naming it. Edit and a
+/// server menu join when commands for them exist; a menu with no rows is
 /// left out.
-enum AppMenuId { app, file, view, window }
+enum AppMenuId { app, file, view, window, help }
 
 /// A command's place in a top-level menu, declared where the command is
 /// registered (Poltergeist's `CommandMenuPlacement`): menus are a rendering
@@ -77,6 +78,9 @@ final class AppCommand {
   static List<ShortcutActivator> _noActivators(TargetPlatform _) => const [];
 }
 
+/// About Klabautermann: the app's About dialog (M16), on desktops.
+const String kAppAboutCommandId = 'app.about';
+
 /// Settings…: the settings window on desktop, the route where the runner
 /// cannot open it (`KlabautermannApp`).
 const String kAppSettingsCommandId = 'app.settings';
@@ -90,6 +94,12 @@ const String kAppQuitCommandId = 'app.quit';
 /// The commands the app has a real action for today, for [platform]: no
 /// placeholders for commands that do not exist yet.
 ///
+/// - About Klabautermann, on desktops, opens the About dialog with the
+///   preview label, [appVersion] and the licence (M16). On macOS it leads
+///   the application menu in place of AppKit's About panel, which shows
+///   `CFBundleName`, an identity, and no label (04 §12.3); Help holds it
+///   elsewhere. Phones reach the dialog from Settings > General. No
+///   shortcut, as in AppKit.
 /// - Settings… opens Settings through [onOpenSettings]: ⌘, on macOS and
 ///   Ctrl+, elsewhere, as in Poltergeist and Séance. In the application
 ///   menu on macOS, in File's last section elsewhere.
@@ -103,16 +113,37 @@ const String kAppQuitCommandId = 'app.quit';
 ///   application menu, and a phone has no quit. No shortcut, as in
 ///   Poltergeist.
 ///
-/// About, the window commands (Minimize, Zoom, Bring All to Front) and
-/// Enter Full Screen are AppKit's own rows on macOS (`buildAppMenus`);
-/// Linux and Windows have no counterparts in the app yet.
+/// The window commands (Minimize, Zoom, Bring All to Front) and Enter
+/// Full Screen are AppKit's own rows on macOS (`buildAppMenus`); Linux and
+/// Windows have no counterparts in the app yet.
 List<AppCommand> buildAppCommands({
   required TargetPlatform platform,
   required FleetController fleet,
   required VoidCallback onOpenSettings,
+  required String? appVersion,
   Future<void> Function()? requestClose,
 }) {
+  final desktop = switch (platform) {
+    TargetPlatform.macOS ||
+    TargetPlatform.linux ||
+    TargetPlatform.windows => true,
+    TargetPlatform.android ||
+    TargetPlatform.iOS ||
+    TargetPlatform.fuchsia => false,
+  };
   return [
+    if (desktop)
+      AppCommand(
+        id: kAppAboutCommandId,
+        label: (l10n) => l10n.aboutCommand,
+        run: (context) async =>
+            showAppAboutDialog(context, version: appVersion),
+        menuPlacement: const CommandMenuPlacement(
+          menu: AppMenuId.help,
+          order: 10,
+          appMenuOnMac: true,
+        ),
+      ),
     if (fleet.canImportSshConfig)
       AppCommand(
         id: kFleetImportSshConfigCommandId,

@@ -4,7 +4,7 @@ Read this first. It captures what isn't obvious from the code: how to get a
 toolchain in a fresh environment, how to build/test each piece, and the
 conventions this repo family shares.
 
-Planchette is a desktop text editor (macOS, Windows, Linux) and the shared
+Planchette is a text editor (Android, macOS, Windows, Linux) and the shared
 editor foundation for [Séance](https://github.com/L-K-M/Seance) and
 [Poltergeist](https://github.com/L-K-M/Poltergeist). The shared Flutter editor
 also supports the hosts' mobile flows. Architecture and file-safety contracts
@@ -23,9 +23,9 @@ packages/
                           outside the workspace
   ghost_ui/               shared leaf UI widgets/theme tokens; outside the
                           workspace, no app or host dependencies
-  ghost_fonts/            the monospace fonts every app bundles (OFL; see
-                          its README), their names and the code stack;
-                          outside the workspace, no dependencies
+  ghost_fonts/            the bundled monospace fonts (OFL; see README),
+                          their shared picker, ligature policy and code
+                          stack; outside the workspace, Flutter only
   ghost_marks/            server badges, accents and glyph tables shared by
                           Séance and Poltergeist, over seance_protocol;
                           outside the workspace
@@ -44,6 +44,10 @@ packages/
                           product's entry names) over
                           flutter_secure_storage and seance_protocol;
                           outside the workspace
+  ghost_apk_update/       Séance's and Poltergeist's Android in-app update:
+                          download a release APK, verify its size and
+                          SHA-256, open the system installer (a Java
+                          plugin); outside the workspace
 app/
   planchette_app/         Flutter client — NOT a workspace member (it needs
                           the Flutter SDK; members must not).
@@ -76,16 +80,19 @@ dart test    packages/planchette_core
 (cd packages/ghost_theme && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_servers && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_keystore && flutter pub get && flutter analyze && flutter test)
+(cd packages/ghost_apk_update && flutter pub get && flutter analyze && flutter test)
 (cd app/planchette_app && flutter pub get && flutter analyze && flutter test)
 
 # Desktop app for this host, staged into dist/
 scripts/build.sh
 scripts/build.sh --install  # build + install the app for this host
+scripts/build.sh android    # stage dist/planchette-android.apk; --install uses adb
 ```
 
 CI (`../.github/workflows/ci.yml`) runs Dart analyze+test on every push/PR
 on three OSes, shared-editor/app analysis and tests on Linux, and release
-builds on all three desktop platforms. macOS also runs native keyboard and
+builds on Android and all three desktop platforms. Android also runs native
+document-provider I/O tests. macOS runs native keyboard and
 accessibility fixtures; Linux validates its installable packages.
 
 ## Releasing
@@ -95,8 +102,9 @@ accessibility fixtures; Linux validates its installable packages.
 `version:` in every pubspec in lockstep, keeps committed lockfiles and the
 README version line in step, commits, and tags `v<version>` — pushing that
 tag triggers `../.github/workflows/release.yml`, which tests, then builds
-and publishes the desktop app as the GitHub Release: Linux `.deb`, AppImage
-and bundle for x64, plus macOS and Windows desktop bundles.
+and publishes the app as the GitHub Release: `planchette-android.apk`, Linux
+packages for x64, plus macOS and Windows desktop bundles. Android uses its
+committed public sideload key, matching the suite's existing trust model.
 
 ```bash
 scripts/release.sh 0.2.0          # bump + commit, tag v0.2.0

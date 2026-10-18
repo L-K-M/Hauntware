@@ -1,7 +1,9 @@
 # Klabautermann's SSH integration fixture (03 §11.3, D53). Start it with
 # run.sh, which generates the client keys this file mounts, checks the
-# rendered config with Poltergeist's safety checker, runs the engine
-# suites and tears everything down. Ports publish on loopback only.
+# rendered config with Poltergeist's safety checker and the Docker
+# exposure rules (check_docker_exposure.dart), seeds the Docker engine,
+# runs the engine suites and tears everything down. Ports publish on
+# loopback only.
 name: klabautermann-integration
 
 x-sshd: &sshd
@@ -13,6 +15,21 @@ x-sshd: &sshd
     # (03 §11.3).
     - ../../../poltergeist/test/integration/sshd-common/config:/etc/ssh/fixture:ro
     - ${KLABAUTERMANN_FIXTURE_RUNTIME:?start the fixture with run.sh}/authorized_keys:/run/fixture/authorized_keys:ro
+
+# The Docker host and its negative variants: the sshd base with the
+# docker CLI, dind's socket on the shared volume, and the same accounts.
+x-docker-sshd: &docker-sshd
+  image: klabautermann-docker-sshd:fixture
+  build:
+    context: sshd
+    dockerfile: Dockerfile.docker
+  depends_on:
+    dind:
+      condition: service_healthy
+  volumes:
+    - ../../../poltergeist/test/integration/sshd-common/config:/etc/ssh/fixture:ro
+    - ${KLABAUTERMANN_FIXTURE_RUNTIME:?start the fixture with run.sh}/authorized_keys:/run/fixture/authorized_keys:ro
+    - docker-run:/run/docker-fixture
 
 # Fixed ports: `compose restart` would give an ephemeral one a new number,
 # and the engine redials the address it imported. With the fixed project
@@ -35,3 +52,111 @@ services:
         host_ip: 127.0.0.1
         published: "2242"
         protocol: tcp
+
+  # The Docker engine behind the Docker host (03 §11.3). Docker in Docker
+  # must run privileged, and only it may (check_docker_exposure.dart). The
+  # command names dockerd, so the image's entrypoint adds none of its
+  # default options, which include a TCP listener on 2375 or 2376, and
+  # dockerd listens on one Unix socket, owned by the Docker host's
+  # `docker` group, on the volume the Docker host mounts. Nothing is
+  # published.
+  dind:
+    image: mirror.gcr.io/library/docker:29.9.1-dind@sha256:3e5756e2b6dad6a5f1f5deacf0a19f9eaa2581b76ae092b2d4a118162e1d4d4e
+    privileged: true
+    command:
+      - dockerd
+      - --host=unix:///run/docker-fixture/docker.sock
+      - --group=990
+    volumes:
+      - docker-run:/run/docker-fixture
+    healthcheck:
+      test:
+        - CMD
+        - docker
+        - --host=unix:///run/docker-fixture/docker.sock
+        - version
+      interval: 60s
+      start_period: 60s
+      start_interval: 1s
+
+  # The host the Docker suites reach dind through, as the fixture user in
+  # its `docker` group or as `klab-nosock` outside it (sshd/
+  # docker-setup.sh), over direct-streamlocal to /var/run/docker.sock.
+  docker-sshd:
+    <<: *docker-sshd
+    command: /etc/klabautermann/sshd_config.docker
+    ports:
+      - target: 22
+        host_ip: 127.0.0.1
+        published: "2244"
+        protocol: tcp
+
+  # The Docker host's negative variants (03 §5.3, §11.3; M3 D11): the
+  # same image, accounts and socket, each with one setting that refuses
+  # what docker_refusal_test.dart records. sshd_config.neg-* put their
+  # setting ahead of the common config's Include, since sshd keeps the
+  # first value it reads.
+  neg-nostreamlocal:
+    <<: *docker-sshd
+    command: /etc/klabautermann/sshd_config.neg-nostreamlocal
+    ports:
+      - target: 22
+        host_ip: 127.0.0.1
+        published: "2245"
+        protocol: tcp
+
+  neg-disableforwarding:
+    <<: *docker-sshd
+    command: /etc/klabautermann/sshd_config.neg-disableforwarding
+    ports:
+      - target: 22
+        host_ip: 127.0.0.1
+        published: "2246"
+        protocol: tcp
+
+  neg-notcp:
+    <<: *docker-sshd
+    command: /etc/klabautermann/sshd_config.neg-notcp
+    ports:
+      - target: 22
+        host_ip: 127.0.0.1
+        published: "2247"
+        protocol: tcp
+
+  neg-permitopen:
+    <<: *docker-sshd
+    command: /etc/klabautermann/sshd_config.neg-permitopen
+    ports:
+      - target: 22
+        host_ip: 127.0.0.1
+        published: "2248"
+        protocol: tcp
+
+  neg-maxsessions2:
+    <<: *docker-sshd
+    command: /etc/klabautermann/sshd_config.neg-maxsessions2
+    ports:
+      - target: 22
+        host_ip: 127.0.0.1
+        published: "2249"
+        protocol: tcp
+
+  # The Docker host's own config, which forwards, signed in with keys
+  # behind the `restrict` option (run.sh writes authorized_keys.restrict),
+  # which refuses forwarding whatever sshd allows.
+  neg-restrict:
+    <<: *docker-sshd
+    command: /etc/klabautermann/sshd_config.docker
+    volumes:
+      - ../../../poltergeist/test/integration/sshd-common/config:/etc/ssh/fixture:ro
+      - ${KLABAUTERMANN_FIXTURE_RUNTIME:?start the fixture with run.sh}/authorized_keys.restrict:/run/fixture/authorized_keys:ro
+      - docker-run:/run/docker-fixture
+    ports:
+      - target: 22
+        host_ip: 127.0.0.1
+        published: "2250"
+        protocol: tcp
+
+volumes:
+  # dind's socket directory, shared with the Docker host.
+  docker-run:
