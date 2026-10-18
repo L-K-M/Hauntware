@@ -220,12 +220,16 @@ class TerminalAppearance {
       family.isEmpty ? kDefaultTerminalFont.family : resolveMonoFamily(family),
       ...SeanceTheme.monoFallback,
     ];
+    final features =
+        (ligatures == TerminalLigatures.on ? MonoLigatures.on : MonoLigatures.off)
+            .featuresFor(fallback.first);
     return TerminalAppearance(
       style: TerminalStyle(
         fontSize: clampTerminalFontSize(fontSize),
         fontFamily: fallback.first,
         fontFamilyFallback: fallback,
         ligatures: ligatures,
+        fontFeatures: features.isEmpty ? null : features,
       ),
       theme: switch (palette) {
         TerminalPalette.alwaysDark => SeanceTerminalThemes.dark,

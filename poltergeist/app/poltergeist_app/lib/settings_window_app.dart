@@ -243,7 +243,8 @@ class _SettingsWindowScreenState extends State<SettingsWindowScreen>
             const SizedBox(height: 32),
           if (editorTextSize != null)
             EditorTextSizeSection(model: editorTextSize),
-          if (editorFont != null) EditorFontSection(model: editorFont),
+          if (editorFont != null)
+            EditorFontSection(model: editorFont, textSize: editorTextSize),
         ];
       case SettingsWindowTab.editing:
         final doubleClickAction = remote.doubleClickAction;

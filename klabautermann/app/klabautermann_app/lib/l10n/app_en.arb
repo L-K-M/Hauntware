@@ -23,6 +23,43 @@
   "@fleetPinNotSaved": {
     "description": "Top toast when pinning or unpinning a server could not be written to the device's settings file; the change holds for this session."
   },
+  "fleetRowMonitor": "Monitor",
+  "@fleetRowMonitor": {
+    "description": "A fleet row's menu verb that adds the server to this device's monitor set (FL-21): Klabautermann then reads it continuously while open and its row shows CPU, memory and disk. Disabled for a server that cannot be monitored."
+  },
+  "fleetRowStopMonitoring": "Stop monitoring",
+  "@fleetRowStopMonitoring": {
+    "description": "A monitored fleet row's menu verb that takes the server out of this device's monitor set (FL-21); it is then read only while a view has it open."
+  },
+  "monitorSetFull": "You can monitor up to {limit} servers on this device. Stop monitoring one first.",
+  "@monitorSetFull": {
+    "description": "Top toast when the user asks to monitor a server while the monitor set (FL-21) is full; limit is the most servers it holds.",
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "monitorSetNotSaved": "Klabautermann could not save your monitored servers, so the change lasts only until it quits.",
+  "@monitorSetNotSaved": {
+    "description": "Top toast when a monitor set change applied but could not be written to the device's settings file; the change holds for this session."
+  },
+  "monitorSetNotChanged": "The monitored servers could not be changed.",
+  "@monitorSetNotChanged": {
+    "description": "Top toast when the app did not take a monitor set change, such as one from the settings window that the app refused."
+  },
+  "monitorIneligibleEndpoint": "Confirm this server's endpoint to monitor it.",
+  "@monitorIneligibleEndpoint": {
+    "description": "Why a synced server cannot join the monitor set (FL-21): this device has not confirmed its endpoint, or a sync changed it since (SAF-09)."
+  },
+  "monitorIneligibleCredentials": "Signs in with a password or a stored key, which asks you first, so it is read only while you have it open.",
+  "@monitorIneligibleCredentials": {
+    "description": "Why a server cannot join the monitor set (FL-21): its sign-in needs the user's answer, and continuous reading never asks."
+  },
+  "monitorIneligibleUnknown": "Import your ssh_config again to monitor this server.",
+  "@monitorIneligibleUnknown": {
+    "description": "Why an imported server cannot join the monitor set (FL-21): it came from an older import, whose sign-in Klabautermann does not know until the next import."
+  },
   "fleetEmptyTitle": "No servers yet",
   "fleetEmptyBody": "Add a server to start monitoring your fleet.",
   "serversCount": "{count, plural, =0{no servers} =1{1 server} other{{count} servers}}",
@@ -3113,6 +3150,35 @@
   "settingsAnnounceNotChanged": "The setting could not be changed.",
   "@settingsAnnounceNotChanged": {
     "description": "Toast when the app did not take a change of the threshold announcement switch."
+  },
+  "settingsMonitorTitle": "Monitoring",
+  "@settingsMonitorTitle": {
+    "description": "Heading of the monitor set's switches (FL-21) on the Servers settings tab."
+  },
+  "settingsMonitorDetail": "Monitored servers are read continuously while Klabautermann is open, and their rows show CPU, memory and disk. A server can be monitored once its endpoint is confirmed and it signs in with an SSH agent or a key file, without asking you. Up to {limit} servers.",
+  "@settingsMonitorDetail": {
+    "description": "Explanation above the monitor set's switches on the Servers settings tab (FL-21); limit is the most servers the set holds.",
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsMonitorCount": "{monitored} of {limit} servers monitored",
+  "@settingsMonitorCount": {
+    "description": "How many servers the monitor set holds (FL-21) out of the most it can, above its switches on the Servers settings tab.",
+    "placeholders": {
+      "monitored": {
+        "type": "int"
+      },
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsMonitorEmpty": "No servers yet. Servers you sync or import show here.",
+  "@settingsMonitorEmpty": {
+    "description": "The Servers settings tab's monitor set section while the fleet has no servers."
   },
   "overviewBandAnnouncement": "{metric} {value}: {band, select, warning{warning level} critical{critical level} other{back to normal}}",
   "@overviewBandAnnouncement": {

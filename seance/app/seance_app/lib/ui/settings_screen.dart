@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:ghost_fonts/ghost_fonts.dart' show BundledMonoFont;
+import 'package:ghost_fonts/ghost_fonts.dart';
 import 'package:planchette_editor/planchette_editor.dart'
     show
         EditorLigatures,
@@ -1221,16 +1221,29 @@ class _SettingsScreenState extends State<SettingsScreen>
   /// The terminal font's picker for the editor: a dismissal leaves the
   /// field alone, the default choice clears it.
   Future<void> _pickEditorFont() async {
-    final chosen = await showFontPicker(
+    final chosen = await showMonoFontPicker(
       context,
-      fonts: _systemFonts,
       current: _editorFont.text.trim(),
-      title: 'Editor font',
-      builtInLabel: 'Use ${editorDefaultFont.displayName}',
-      bundled: BundledMonoFont.values,
+      defaultFont: editorDefaultFont,
+      fontSize: _editorFontSize.toDouble(),
+      ligatures: _editorLigatures == EditorLigatures.on
+          ? MonoLigatures.on
+          : MonoLigatures.off,
+      installedFonts: _systemFonts.isSupported
+          ? () async => {
+              for (final font in await _systemFonts.families())
+                font.name: font.monospaced,
+            }
+          : null,
+      labels: const MonoFontPickerLabels(title: 'Editor font'),
     );
     if (chosen == null || !mounted) return;
-    _editorFont.text = chosen;
+    setState(() {
+      _editorFont.text = chosen.family;
+      _editorLigatures = chosen.ligatures == MonoLigatures.on
+          ? EditorLigatures.on
+          : EditorLigatures.off;
+    });
     await _persistEditorFont();
   }
 

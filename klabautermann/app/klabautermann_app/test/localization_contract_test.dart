@@ -84,7 +84,22 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The rejected requests' class names, which RequestRejected carries.
     r"'$ImportSshConfig'",
     r"'$ConfirmEndpoints'",
+    r"'$SetMonitorSet'",
+    // A rejected monitor set's debugPrint diagnostic, an ineligible
+    // server's programmer error and the not-saved diagnostic; surfaces
+    // show ARB text (monitorSetNotSaved, monitorSetNotChanged).
+    r"'$requestName: $reason'",
+    "'serverId'",
+    "'not eligible'",
+    r"'The monitor set was not saved: $error'",
   },
+  // The full set's diagnostic; surfaces show their own ARB text
+  // (monitorSetFull).
+  'lib/controllers/monitor_set.dart': {
+    r"'The monitor set already holds $kMonitorSetLimit servers'",
+  },
+  // debugPrint diagnostics beside the toasts' ARB text.
+  'lib/ui/monitor_set_feedback.dart': {r"'$error'"},
   // The diagnostic of a sync answer the stopped engine never gave;
   // surfaces show ARB text for its failure kind (syncFailed).
   'lib/controllers/sync_controller.dart': {"'the engine stopped'"},
