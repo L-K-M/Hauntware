@@ -2,6 +2,10 @@ import 'dart:io';
 
 import 'package:path/path.dart' as paths;
 import 'package:planchette_core/planchette_core.dart';
+import 'package:poltergeist_core/poltergeist_core.dart'
+    show saveBuiltInTextDocument;
+
+enum DocumentWriteTarget { local, managedRemote }
 
 /// A cheap summary of a file's state, read without opening it. Equal stamps
 /// mean the file almost certainly did not change, so the costlier digest is
@@ -23,7 +27,10 @@ final class DocumentRecoveryException implements Exception {
 
 /// The shell's filesystem boundary. Tests substitute an in-memory store.
 abstract interface class DocumentStore {
-  Future<TextDocument> load(String path);
+  Future<TextDocument> load(
+    String path, {
+    SymlinkPolicy symlinkPolicy = SymlinkPolicy.resolveOnce,
+  });
 
   /// Null when no regular file exists at [path], as when a directory has
   /// taken its place: for an open document, both mean the file is gone.
@@ -40,13 +47,16 @@ abstract interface class DocumentStore {
     required TextDocument? source,
     required String? expectedSha256,
     TextDocumentMetadata? metadata,
+    DocumentWriteTarget target = DocumentWriteTarget.local,
   });
 }
 
 final class LocalDocumentStore implements DocumentStore {
   @override
-  Future<TextDocument> load(String path) =>
-      loadTextDocument(File(path), symlinkPolicy: SymlinkPolicy.resolveOnce);
+  Future<TextDocument> load(
+    String path, {
+    SymlinkPolicy symlinkPolicy = SymlinkPolicy.resolveOnce,
+  }) => loadTextDocument(File(path), symlinkPolicy: symlinkPolicy);
 
   @override
   Future<FileStamp?> stamp(String path) async {
@@ -109,12 +119,27 @@ final class LocalDocumentStore implements DocumentStore {
     required TextDocument? source,
     required String? expectedSha256,
     TextDocumentMetadata? metadata,
+    DocumentWriteTarget target = DocumentWriteTarget.local,
   }) async {
+    if (target == DocumentWriteTarget.managedRemote && expectedSha256 == null) {
+      throw const TextDocumentException(
+        'The managed copy has no verified baseline. Reload it or save a local copy before retrying.',
+      );
+    }
     final file = File(path);
     final format = metadata ?? source?.metadata ?? const TextDocumentMetadata();
     final bom = format.utf8Bom == Utf8Bom.present;
     final ending = format.lineEnding;
-    final digest = expectedSha256 == null
+    // Managed siblings must retain the checkout store's crash-recovery names.
+    final digest = target == DocumentWriteTarget.managedRemote
+        ? await saveBuiltInTextDocument(
+            file,
+            text,
+            hasUtf8Bom: bom,
+            lineEnding: ending,
+            expectedSha256: expectedSha256,
+          )
+        : expectedSha256 == null
         ? await createTextDocument(
             file,
             text,

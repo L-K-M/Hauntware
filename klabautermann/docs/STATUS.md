@@ -179,8 +179,17 @@ M2, the host read MVP, is the current milestone. What is on main:
   with `--host`, Podman's `--url`) or 4 (socat, then `nc -U`), with one
   exec probe per refused socket telling missing, denied and disabled
   apart; rank 3 says "needs admin mode" until M4. The streamlocal and
-  relay-process duplexes are tested over fakes only; nothing calls them
-  until the engine's Docker session (D05).
+  relay-process duplexes are tested over fakes only.
+- Docker session (M3, D05, 03 §5.8, §10.1): with links on, a
+  `DockerQuery` (engine, containers, one container, images) opens its
+  server's session, which runs the ladder once the probe has answered,
+  passes over a route whose engine does not answer `_ping`/`/version`,
+  negotiates (floor 1.41, max 1.55), names Podman from
+  `Libpod-API-Version` and reports `DockerEndpointState`. Results are
+  typed; inspect `Path`/`Args`, `Entrypoint`/`Cmd` and health output
+  cross masked, and the list drops its command line. Tested over fakes
+  only; no app surface yet (D12), no `/system/df` (D03), no watch or
+  events (D06), no low-session mode (D09).
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and
@@ -202,8 +211,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   `locatorConflict`. The fleet controller keeps link statuses and probe
   answers only for listed servers, and the rail words every status.
   Only an engine with links on sends link states and prompts, as the
-  app's does since K44b (below). The engine sends no probe answers and
-  fills the new fleet fields only for imports (below).
+  app's does since K44b (below). The engine sends probe answers since
+  K20 (below) and fills the new fleet fields only for imports (below).
 - Protocol v3 sampling (M2, 03 §10.1, K16a, #193): `Subscribe` and
   `Unsubscribe` name one surface's subscription and its `SampleStream`s
   (D45; the health card's failed units are a `failedUnits` stream of their
@@ -438,6 +447,22 @@ M2, the host read MVP, is the current milestone. What is on main:
   records. Engine unit tests use a fake dialer; K24's fixture tests
   (below) dial a containerized sshd, and no manual run against a real
   server has happened yet.
+- Reachability probes (M2, 03 §4.7, §5.12, FL-04, K20): the engine's
+  `ReachabilityService` runs `seance_core`'s `ProbeService` (a TCP
+  connect to the SSH port, 45 s jittered sweeps, at most 6 at once) over
+  the fleet entries with a connect config and a confirmed endpoint:
+  imports (O6's default) and confirmed synced servers, never an
+  unconfirmed or changed one. Each sweep sends a `Reachability` per
+  target; a server behind a jump host is reported unknown without a
+  probe, and one holding a link is answered online. Probing starts after
+  `Hello`'s fleet, sweeps at once for a new or moved target, stops for
+  a server before the fleet or `EndpointChanged` that removes it goes
+  out, and pauses with `SetAppActivity` in the background (phones only
+  send it). `EngineStart.probesEnabled`, off unless given, gates it
+  apart from links, and `main.dart` turns it on (the contract test holds
+  it). The fleet controller drops the answer of a server whose endpoint
+  waits for confirmation. Tested with a fake prober, under a fake clock
+  for the service; no real host has been probed from the app.
 - Shared host-key file store (M2, `seance_core`, 03 D3, F3b-1, #242):
   Poltergeist's `FileHostKeyStore` and its corrupt-file quarantine moved
   into `seance_core` (`package:seance_core/catalog.dart`, re-exported by
@@ -606,10 +631,10 @@ M2, the host read MVP, is the current milestone. What is on main:
   changes are announced, through a live region where the platform takes no
   announcements; samples and probe answers are not. Rows subscribe
   nothing; the engine samples `overview` for the monitor set (K30, below),
-  and the app's engine sends no probe answers (K20). It sends link states
-  and samples since K44b turned links on, so in a real run a row shows
-  its link state once its server is opened or monitored, and its readings
-  while a view or the monitor set holds them.
+  and the app's engine sends probe answers since K20 (below). It sends
+  link states and samples since K44b turned links on, so in a real run a
+  row shows its link state once its server is opened or monitored, and
+  its readings while a view or the monitor set holds them.
 - Monitor set (M2, FL-21, 03 §4.3 step 4, §10.1, K30): every fleet row's
   menu offers Monitor or Stop monitoring, and Settings > Servers (the
   route, and the desktop window through the `setMonitored` link method)
@@ -1214,12 +1239,14 @@ M2, the host read MVP, is the current milestone. What is on main:
     §4.10 records the file).
   - Menus from one command registry (`lib/ui/menus/`, Poltergeist's
     shape): `PlatformMenuBar` on macOS, a Flutter menu bar strip on Linux
-    and Windows, none on phones. Registered: Settings… (⌘, on macOS,
-    Ctrl+, elsewhere; in the application menu on macOS, File elsewhere),
-    Import from ~/.ssh/config (File, desktops, disabled while an import
-    runs) and Quit (File, Linux and Windows, the close button's path). On
-    macOS AppKit adds About, Services, the hide trio, Quit (⌘Q), Enter
-    Full Screen (View) and Minimize, Zoom and Bring All to Front (Window).
+    and Windows, none on phones. Registered: About Klabautermann (first
+    in the application menu on macOS, Help elsewhere; below), Settings…
+    (⌘, on macOS, Ctrl+, elsewhere; in the application menu on macOS,
+    File elsewhere), Import from ~/.ssh/config (File, desktops, disabled
+    while an import runs) and Quit (File, Linux and Windows, the close
+    button's path). On macOS AppKit adds Services, the hide trio, Quit
+    (⌘Q), Enter Full Screen (View) and Minimize, Zoom and Bring All to
+    Front (Window).
     The same registry binds the shortcuts. No command is a toggle, so
     `klabautermann/menu_checks` stays reserved.
 
@@ -1228,6 +1255,21 @@ M2, the host read MVP, is the current milestone. What is on main:
   client CI legs compile the macOS runner;
   `app/klabautermann_app/test/desktop_chrome_runner_test.dart` also
   guards its wiring on Linux.
+- Preview label (E26, M16; 04 §12.3): until v1 the app title is
+  "Klabautermann (preview)" (`appTitle`), tied by tests to
+  `kPreviewLabel` in `lib/app_identity.dart`, as is the `.deb`
+  description of `scripts/package-linux.sh`. About Klabautermann, on
+  every desktop, opens the app's About dialog (Material's, with the
+  title, the version and the Unlicense line, and View licenses);
+  Settings > General has an about row with the title and version that
+  opens it everywhere, phones included. On macOS the command replaces
+  AppKit's About panel, which shows `CFBundleName`, an identity that
+  stays unchanged (owner question Q3). The version comes from
+  `package_info_plus`, read once in `main`; the settings window's
+  engine has no plugins, so the snapshot of the settings link carries
+  it. The release asset names keep their label from the packaging
+  scripts; the release job and notes are E32's. M7 drops the label in
+  one change.
 - Single desktop instance (03 §4.10): on macOS, Linux and Windows the
   composition root takes an exclusive, non-blocking advisory lock on
   `instance.lock` in the support directory (`klabautermann_core`'s
@@ -1313,6 +1355,21 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- Probe and sampler additions (M4, E07, 03 §6.2, §7.17): collector-set
+  version 8 prints a `SELF <pid> <ppid>` marker before READY, which
+  `HwsSessionReady` carries for 8.6's protected targets, and the
+  assembler ends a session whose READY of this version comes without it.
+  The probe runs `run0 --no-ask-password true` when run0 exists
+  (`HostProfile.run0NonInteractive`; the probe's deadline grows to 175 s
+  for its 17 guarded commands). The slow `ops` collector lists both
+  operation directories, at most 50 records each cut at 4 KiB, framed by
+  byte counts; `parseOps` reads E08's record schema into `OpRecord` and
+  rejects truncated, malformed, other-version and forged records (an id
+  that differs from the file name, or a unit not its own). Tested with
+  record fixtures and through dash and bash (BusyBox sh where
+  installed). Nothing in the engine uses the SELF PIDs or `ops` yet:
+  E10 takes the PIDs into the protected targets, E17 runs `ops` on
+  connect, and `ops` has no platform fixture.
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.
@@ -1393,14 +1450,18 @@ between PRs. M1 adds gates of its own:
   Hide Klabautermann, Hide Others, Show All, Quit Klabautermann ⌘Q),
   File (Import from ~/.ssh/config), View (Enter Full Screen) and Window
   (Minimize, Zoom, Bring All to Front), with no tab commands; each item
-  does what it says. ⌘, opens Settings from the main window, from a
+  does what it says. About Klabautermann opens the app's About dialog
+  ("Klabautermann (preview)", the build's version, the Unlicense line),
+  never AppKit's panel. ⌘, opens Settings from the main window, from a
   focused text field, and with Settings in front (it comes forward).
   There is no Edit menu yet: ⌘C, ⌘V, ⌘X, ⌘A and ⌘Z still work in a text
-  field in both windows. Linux and Windows: a File menu strip above the
-  content with Import from ~/.ssh/config, Settings… (Ctrl+, shown and
-  working) and Quit, which closes the app the way the close button does.
-  The import item is dimmed while an import runs. Phones and tablets show
-  no menu. Open: needs a person on each OS; the widget tests check the
+  field in both windows. Linux and Windows: a menu strip above the
+  content with File (Import from ~/.ssh/config, Settings… with Ctrl+,
+  shown and working, and Quit, which closes the app the way the close
+  button does) and Help (About Klabautermann, the same dialog). The
+  import item is dimmed while an import runs. Phones and tablets show
+  no menu. On every OS, Settings > General's about row shows the
+  build's version, in the settings window too, and opens the dialog. Open: needs a person on each OS; the widget tests check the
   model and the Flutter side of `PlatformMenuBar`, not AppKit's menu.
 - Single desktop instance (03 §4.10), once per desktop OS from a build
   that includes the lock. With Klabautermann running, launch it again

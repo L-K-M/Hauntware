@@ -16,6 +16,7 @@ import 'controllers/monitor_set.dart';
 import 'controllers/monitoring_controller.dart';
 import 'controllers/prompt_controller.dart';
 import 'controllers/sync_controller.dart';
+import 'services/app_version.dart';
 import 'services/engine_keystore.dart';
 import 'services/instance_guard.dart';
 import 'services/macos_titlebar.dart';
@@ -123,9 +124,12 @@ Future<void> main(List<String> args) async {
   // directory alone; otherwise it keeps this run's pins in memory (D59,
   // D61, D63). It gets the device id read above, after the lock, so
   // enrollment never reads an id another process may have minted.
+  // Probes are on too (FL-04): the engine probes confirmed endpoints and
+  // the fleet rows show the answers.
   final engine = await IsolateEngineClient.spawn(
     supportDirectory: supportDirectory.path,
     linksEnabled: true,
+    probesEnabled: true,
     supportDirectoryAccess: supportDirectoryAccessFor(instanceLock),
     deviceId: settings.deviceId,
   );
@@ -185,12 +189,17 @@ Future<void> main(List<String> args) async {
     save: settings.setAnnounceThresholdBands,
   );
 
+  // The About dialog's version (M16), read here once: the settings
+  // window's engine has no plugins and gets it over the link.
+  final appVersion = await readAppVersion();
+
   // Desktop only: the runners there host the settings window; phones keep
   // the settings route.
   final settingsWindow = settingsWindowHostFor(
     defaultTargetPlatform,
     appearance: appearance,
     announcements: announcements,
+    appVersion: appVersion,
     monitorSet: fleet.monitorSettings,
   );
 
@@ -209,6 +218,7 @@ Future<void> main(List<String> args) async {
       instanceLockIssue: instanceLockIssue,
       openSettingsWindow: settingsWindow?.open,
       toolbarBand: toolbarBand,
+      appVersion: appVersion,
     ),
   );
 }

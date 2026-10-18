@@ -51,6 +51,30 @@ void main() {
       expect(r.value.doasNonInteractive, isNull);
       expect(r.value.run0Present, isTrue);
       expect(r.value.printfBuiltin, isFalse);
+      // A probe from before collector-set version 8 has no run0 check.
+      expect(r.value.run0NonInteractive, isNull);
+    });
+
+    test('run0 --no-ask-password true is reported (8.3 rung 6)', () {
+      ProbeSection elev(String run0) => ProbeSection(
+        'elev',
+        SectionStatus.ok,
+        'sudo_version=\nsudo_noninteractive=\n'
+            'doas=absent\ndoas_noninteractive=\n$run0\nprintf=builtin',
+      );
+      for (final (lines, present, works) in [
+        ('run0=present\nrun0_noninteractive=0', true, true),
+        ('run0=present\nrun0_noninteractive=1', true, false),
+        ('run0=absent\nrun0_noninteractive=', false, null),
+      ]) {
+        final p = parseProbe([elev(lines)], _ctx).value;
+        expect(p.run0Present, present, reason: lines);
+        expect(p.run0NonInteractive, works, reason: lines);
+        final cached = HostProfile.fromJson(
+          jsonDecode(jsonEncode(p.toJson())) as Map<String, Object?>,
+        );
+        expect(cached.run0NonInteractive, works, reason: lines);
+      }
     });
   });
 

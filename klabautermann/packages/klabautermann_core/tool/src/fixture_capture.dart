@@ -13,10 +13,14 @@ import 'local_sampler.dart';
 import 'redaction.dart';
 
 /// The collectors with a `<collector>.txt` fixture: every tick
-/// collector but the probe, which is stored apart, in `probe.sections`.
+/// collector but the probe, which is stored apart, in `probe.sections`,
+/// and `ops`, whose detached-operation records describe one host's
+/// operations rather than its platform and have hand-written fixtures in
+/// `klabautermann_host/test/parse/ops_records/`.
 final kFixtureCollectors = [
   for (final c in Collector.values)
-    if (c != Collector.probe && c.argValidators.isEmpty) c,
+    if (c != Collector.probe && c != Collector.ops && c.argValidators.isEmpty)
+      c,
 ];
 
 /// A capture could not produce or write its fixture.

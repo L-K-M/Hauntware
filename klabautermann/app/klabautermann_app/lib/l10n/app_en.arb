@@ -1,6 +1,9 @@
 {
   "@@locale": "en",
-  "appTitle": "Klabautermann",
+  "appTitle": "Klabautermann (preview)",
+  "@appTitle": {
+    "description": "The app's title, with the preview label until v1 (04 §12.3): the task switcher, the About dialog and the about row on the General settings tab. Klabautermann is the display name, an identity: never translated."
+  },
   "fleetTitle": "Fleet",
   "fleetSectionServers": "Servers",
   "fleetSectionPinned": "Pinned",
@@ -145,6 +148,32 @@
   "menuWindow": "Window",
   "@menuWindow": {
     "description": "Title of the Window menu (macOS, where it holds Minimize, Zoom and Bring All to Front)."
+  },
+  "menuHelp": "Help",
+  "@menuHelp": {
+    "description": "Title of the Help menu (Linux and Windows, where it holds About Klabautermann)."
+  },
+  "aboutCommand": "About Klabautermann",
+  "@aboutCommand": {
+    "description": "The menu command that opens the About dialog: first in the macOS application menu, in the Help menu on Linux and Windows. Klabautermann is the display name: never translated."
+  },
+  "aboutVersion": "Version {version}",
+  "@aboutVersion": {
+    "description": "The running build's version in the About dialog and the about row on the General settings tab.",
+    "placeholders": {
+      "version": {
+        "type": "String",
+        "example": "1.9.1"
+      }
+    }
+  },
+  "aboutVersionUnknown": "Version unknown",
+  "@aboutVersionUnknown": {
+    "description": "In place of aboutVersion when the platform could not tell the app's version."
+  },
+  "aboutLicence": "Klabautermann is free and unencumbered software released into the public domain under the Unlicense.",
+  "@aboutLicence": {
+    "description": "The app's licence line in the About dialog. Klabautermann and Unlicense are names: never translated."
   },
   "statusConnected": "Connected",
   "statusConnecting": "Connecting",
@@ -3150,6 +3179,10 @@
   "settingsAnnounceNotChanged": "The setting could not be changed.",
   "@settingsAnnounceNotChanged": {
     "description": "Toast when the app did not take a change of the threshold announcement switch."
+  },
+  "settingsAboutTitle": "About",
+  "@settingsAboutTitle": {
+    "description": "Heading of the about row on the General settings tab, which shows the app's title and version and opens the About dialog."
   },
   "settingsMonitorTitle": "Monitoring",
   "@settingsMonitorTitle": {

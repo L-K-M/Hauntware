@@ -69,11 +69,17 @@ final class AndroidDocuments implements DocumentStore {
       (await _invoke<bool>('readOnly', {'path': path}))!;
 
   @override
-  Future<TextDocument> load(String path) async {
+  Future<TextDocument> load(
+    String path, {
+    SymlinkPolicy symlinkPolicy = SymlinkPolicy.resolveOnce,
+  }) async {
     final bytes = (await _invoke<Uint8List>('read', {'path': path}))!;
     return _staged((file) async {
       await file.writeAsBytes(bytes, flush: true);
-      final document = await loadTextDocument(file);
+      final document = await loadTextDocument(
+        file,
+        symlinkPolicy: symlinkPolicy,
+      );
       return document.copyWith(file: File(path));
     });
   }
@@ -85,28 +91,37 @@ final class AndroidDocuments implements DocumentStore {
     required TextDocument? source,
     required String? expectedSha256,
     TextDocumentMetadata? metadata,
-  }) => _staged((file) async {
-    final format = metadata ?? source?.metadata ?? const TextDocumentMetadata();
-    // Reuse the core's encoding, BOM, binary and size rules before publication.
-    final digest = await createTextDocument(
-      file,
-      text,
-      hasUtf8Bom: format.utf8Bom == Utf8Bom.present,
-      lineEnding: format.lineEnding,
-    );
-    await _invoke<void>('write', {
-      'path': path,
-      'bytes': await file.readAsBytes(),
-      'expectedSha256': expectedSha256,
+    DocumentWriteTarget target = DocumentWriteTarget.local,
+  }) async {
+    if (target != DocumentWriteTarget.local) {
+      throw const TextDocumentException(
+        'Managed remote copies require the filesystem document store.',
+      );
+    }
+    return _staged((file) async {
+      final format =
+          metadata ?? source?.metadata ?? const TextDocumentMetadata();
+      // Reuse the core's encoding, BOM, binary and size rules before publication.
+      final digest = await createTextDocument(
+        file,
+        text,
+        hasUtf8Bom: format.utf8Bom == Utf8Bom.present,
+        lineEnding: format.lineEnding,
+      );
+      await _invoke<void>('write', {
+        'path': path,
+        'bytes': await file.readAsBytes(),
+        'expectedSha256': expectedSha256,
+      });
+      return TextDocument(
+        file: File(path),
+        text: text,
+        hasUtf8Bom: format.utf8Bom == Utf8Bom.present,
+        lineEnding: format.lineEnding,
+        sha256: digest,
+      );
     });
-    return TextDocument(
-      file: File(path),
-      text: text,
-      hasUtf8Bom: format.utf8Bom == Utf8Bom.present,
-      lineEnding: format.lineEnding,
-      sha256: digest,
-    );
-  });
+  }
 
   Future<T> _staged<T>(Future<T> Function(File file) operation) async {
     final directory = await Directory.systemTemp.createTemp('planchette-');

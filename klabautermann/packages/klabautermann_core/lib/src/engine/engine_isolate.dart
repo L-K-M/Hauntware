@@ -6,14 +6,16 @@ import 'package:meta/meta.dart';
 import 'package:seance_core/catalog.dart'
     show EndpointPin, EndpointPinStore, endpointPinsFileName;
 import 'package:seance_core/seance_core.dart'
-    show ImportedHost, ServerConfig, SshLink;
+    show ImportedHost, Prober, ServerConfig, SshLink, TcpBannerProber;
 
 import '../capabilities/capability_cache.dart';
 import '../catalog/engine_sync.dart';
 import '../catalog/keystore_channel.dart';
+import '../docker/docker_router.dart';
 import '../fleet/endpoint_pins.dart';
 import '../fleet/imported_fleet.dart';
 import '../fleet/monitor_set.dart';
+import '../fleet/reachability_service.dart';
 import '../fleet/ssh_config_entries.dart';
 import '../fleet/ssh_config_import_store.dart';
 import '../fleet/synced_fleet.dart';
@@ -39,6 +41,7 @@ final class EngineStart {
     required this.uiPort,
     required this.supportDirectory,
     this.linksEnabled = false,
+    this.probesEnabled = false,
     this.supportDirectoryAccess = SupportDirectoryAccess.unguarded,
     this.deviceId,
   });
@@ -50,13 +53,22 @@ final class EngineStart {
   final String supportDirectory;
 
   /// Whether the engine opens SSH links (03 §5.1, §10.1). Without them it
-  /// has no link supervisor, sampling scheduler or log streams: [Connect]
-  /// and [OpenLogStream] get [RequestRejected] and nothing dials, samples
-  /// or reads, [CloseStream], [Disconnect], [RefreshSubscription] and
+  /// has no link supervisor, sampling scheduler, log streams or Docker
+  /// sessions: [Connect], [OpenLogStream] and [DockerQuery] get
+  /// [RequestRejected] and nothing dials, samples or reads,
+  /// [CloseStream], [Disconnect], [RefreshSubscription] and
   /// [SetAppActivity] change nothing, subscriptions are only recorded,
   /// and no [Prompt] is ever open. The app's composition root leaves
   /// them off; tests turn them on.
   final bool linksEnabled;
+
+  /// Whether the engine probes the reachability of the fleet's confirmed
+  /// endpoints (FL-04, 03 §5.12), apart from [linksEnabled]: a probe is a
+  /// TCP connect, not a link. Without it nothing probes and no
+  /// [Reachability] is sent; with it, [SetAppActivity] pauses probing
+  /// even while links are off. The app's composition root turns it on;
+  /// tests that do not probe leave it off, so they open no sockets.
+  final bool probesEnabled;
 
   /// Whether this process alone uses [supportDirectory]: the engine writes
   /// and purges its capability cache and writes its host-key pins there
@@ -90,9 +102,12 @@ final class EngineStart {
 /// prompt broker (03 §5.1), a [Connect] to a fleet server without a
 /// config gets [ConnectRejected] (D61), [OpenLogStream] and
 /// [CloseStream] go to the log streams, which read each window over its
-/// server's link (03 §5.2, §7.6), [EnrollSync] and [RunSyncRound] run
-/// pull-only sync one at a time beside the request queue (03 §4.3, D63),
-/// answered by [SyncStatus] and, when they succeed, the fleet, after an
+/// server's link (03 §5.2, §7.6), a [DockerQuery] goes to its server's
+/// Docker session, which finds and negotiates the endpoint over the link
+/// once the probe has answered and reports it as [DockerEndpointState]
+/// (03 §5.8, §5.9), [EnrollSync] and [RunSyncRound] run pull-only sync
+/// one at a time beside the request queue (03 §4.3, D63), answered by
+/// [SyncStatus] and, when they succeed, the fleet, after an
 /// [EndpointChanged] for each confirmed endpoint a round changed (03
 /// §4.7), [ConfirmEndpoints] pins synced endpoints and answers with the
 /// fleet, a [Connect] to an unconfirmed synced server gets
@@ -102,14 +117,22 @@ final class EngineStart {
 /// queue, [Shutdown] ends every log stream and exits, and every other
 /// 03 §10.1 row gets [RequestRejected] until its milestone lands.
 ///
+/// With probes on, the fleet's confirmed endpoints are probed once the
+/// app has the fleet ([Hello]'s answer), and each answer goes out as a
+/// [Reachability]; a server behind a jump host is reported unknown, the
+/// background pauses the probes, and a server that leaves the fleet or
+/// loses its confirmation is no longer probed (03 §4.7, §5.12).
+///
 /// [dial] replaces `SshLink.connect`, so tests can run the engine's links
-/// without a network, and [syncTransport] the sync server's HTTP client.
+/// without a network, [prober] the probes' TCP connect, and
+/// [syncTransport] the sync server's HTTP client.
 /// [subscriptions], when given, holds the sampling subscriptions, so
 /// tests can read them, and [endpointPinStore] replaces the endpoint pins
 /// [openEndpointPins] opens, so tests can fail their reads.
 void engineMain(
   EngineStart start, {
   @visibleForTesting LinkDialer dial = SshLink.connect,
+  @visibleForTesting Prober prober = const TcpBannerProber(),
   @visibleForTesting SyncTransportFactory syncTransport = httpSyncTransport,
   @visibleForTesting SamplingSubscriptions? subscriptions,
   @visibleForTesting EndpointPinStore? endpointPinStore,
@@ -133,6 +156,11 @@ void engineMain(
   // The log streams over each server's ready link (03 §7.6); none while
   // links are off. They follow every LinkState as the scheduler does.
   LogStreamRouter? logs;
+
+  // Each queried server's Docker endpoint over its ready link (03 §5.9);
+  // none while links are off. It follows every LinkState and probe
+  // answer.
+  DockerRouter? docker;
 
   // FL-02's imported hosts, in D13's device-local store (03 §4.10),
   // opened before the first request is handled. Each import replaces the
@@ -215,6 +243,7 @@ void engineMain(
             if (event is LinkState) {
               scheduler?.update(event.serverId);
               logs?.update(event.serverId);
+              docker?.update(event.serverId);
             }
           },
           policy: Platform.isAndroid || Platform.isIOS
@@ -239,10 +268,31 @@ void engineMain(
       emit: uiPort.send,
       deadPeerHint: links.deadPeerHint,
       clearDeadPeerHint: links.clearDeadPeerHint,
-      probed: (serverId, profile) =>
-          unawaited(capabilities?.probed(serverId, profile)),
+      probed: (serverId, profile) {
+        unawaited(capabilities?.probed(serverId, profile));
+        docker?.probed(serverId, profile);
+      },
     );
     logs = LogStreamRouter(linkFor: links.link, emit: uiPort.send);
+    docker = DockerRouter(linkFor: links.link, emit: uiPort.send);
+  }
+
+  // Probes the confirmed endpoints (FL-04, 03 §5.12); none while probes
+  // are off. A server with a link is answered online without a probe.
+  final reachability = start.probesEnabled
+      ? ReachabilityService(
+          emit: uiPort.send,
+          hasLink: (id) => links?.link(id) != null,
+          prober: prober,
+        )
+      : null;
+
+  // Whether the app has had a fleet. Probing waits for it, since the app
+  // keeps answers only for servers its fleet lists.
+  var fleetSent = false;
+  void probeFleet() {
+    if (!fleetSent) return;
+    reachability?.update(probeTargets(fleetEntries(), configOf));
   }
 
   // The fleet servers the monitor set may hold now: those the shared rule
@@ -285,7 +335,8 @@ void engineMain(
   // Rebuilds the fleet from the store. A server that left it is forgotten
   // (03 §5.1): its samplers, link and attempts end and its subscriptions
   // go. One that keeps its id under another endpoint loses its cached
-  // profile, which describes another machine (SYN-08).
+  // profile and its Docker session, which describe another machine
+  // (SYN-08).
   void refreshFleet() {
     final previous = fleetIds.isEmpty ? null : fleet;
     fleet = ImportedFleet(
@@ -307,14 +358,20 @@ void engineMain(
     if (monitored.isNotEmpty) {
       applyMonitorSet(monitored.intersection(monitorEligibleIds()));
     }
-    unawaited(
-      capabilities?.forget({
-        for (final id in before)
-          if (!fleetIds.contains(id) ||
-              previous?.endpointOf(id) != fleet.endpointOf(id))
-            id,
-      }),
-    );
+    final forgotten = {
+      for (final id in before)
+        if (!fleetIds.contains(id) ||
+            previous?.endpointOf(id) != fleet.endpointOf(id))
+          id,
+    };
+    docker
+      ?..forget(forgotten)
+      ..retain(fleetIds);
+    // Before the caller sends the fleet or an EndpointChanged, so no
+    // probe of a server starts, and no answer for it goes out, once the
+    // app hears it left or lost its pin.
+    probeFleet();
+    unawaited(capabilities?.forget(forgotten));
   }
 
   // Lists [servers] against this device's pins. A pin the store cannot
@@ -467,6 +524,8 @@ void engineMain(
         // empty or unusable), so the rail shows them before the user does
         // anything.
         uiPort.send(CatalogReplaced(fleetEntries()));
+        fleetSent = true;
+        probeFleet();
       case Connect(:final serverId):
         sendCachedProfile(serverId);
         // The app sends it when the user opens the server (03 §10.1), so
@@ -502,6 +561,7 @@ void engineMain(
         // Its streams end before its link closes, so none reports
         // waiting for that link first.
         logs?.disconnect(serverId);
+        docker?.disconnect(serverId);
         links?.disconnect(serverId);
         if (monitoredServer) {
           links?.connect(serverId, purpose: ConnectPurpose.background);
@@ -510,6 +570,7 @@ void engineMain(
         links?.setActivity(activity);
         scheduler?.activity = activity;
         logs?.activity = activity;
+        reachability?.activity = activity;
       case AnswerPrompt(:final promptId, :final answer):
         switch (prompts.answer(promptId, answer)) {
           case PromptAnswerResult.answered:
@@ -541,6 +602,13 @@ void engineMain(
         if (reason != null) reject(message, reason);
       case CloseStream(:final streamId):
         logs?.closeStream(streamId);
+      case DockerQuery():
+        switch (docker) {
+          case null:
+            reject(message, 'links are off in this engine');
+          case final docker:
+            docker.query(message);
+        }
       case ImportSshConfig(:final text):
         final ({
           List<ImportedHost> hosts,
@@ -614,6 +682,7 @@ void engineMain(
         // Each stream's end goes out before the isolate does, and its
         // process goes with the isolate.
         unawaited(logs?.close());
+        unawaited(docker?.close());
         commands.close();
         Isolate.exit();
       case EngineRequest():

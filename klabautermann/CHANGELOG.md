@@ -99,11 +99,21 @@
   host's, Klabautermann disconnects it, forgets what it cached about it
   and asks you again. Servers you imported from `~/.ssh/config` need no
   confirmation on the device that imported them.
+- The fleet list shows whether each server answers on its SSH port:
+  Online, Offline or Reachability unknown, checked about every 45
+  seconds. Only servers you imported or confirmed on this device are
+  checked; a server reached through a jump host shows Reachability
+  unknown, and phones stop checking while Klabautermann is in the
+  background.
 - The fleet list on desktops and phones is sectioned as in Séance: your
   synced servers sit under Servers, grouped by their Séance groups in
   sections you can fold, and your imports follow under Imported. Pin a
   synced server to the top from its menu (right-click, Shift+F10, the Menu
   key or a long-press); pins are kept on this device only.
+- Until v1 the app calls itself Klabautermann (preview). About
+  Klabautermann, in the application menu on macOS and the Help menu on
+  Linux and Windows, shows the version and the licence, and Settings >
+  General shows the version and opens the same dialog on every device.
 - Choose which servers Klabautermann reads continuously while it is
   open: Monitor or Stop monitoring from a server's menu, or the switches
   under Settings > Servers. Monitored servers show CPU, memory and disk
