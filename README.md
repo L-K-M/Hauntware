@@ -26,7 +26,8 @@ One repository, one version and one release cadence:
 Séance also supplies the shared encrypted sync server. Product names,
 application IDs, storage locations and keystore namespaces stay distinct.
 Klabautermann is in preview: suite releases ship its five clients under
-asset names that carry the preview label until v1.
+asset names that carry the preview label until v1, except the .deb,
+which keeps Debian's versioned name.
 
 ## Develop
 
