@@ -3193,4 +3193,59 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get jobsRunOutputClose => 'Close output';
+
+  @override
+  String jobsSourceUserCrontab(String user) {
+    return '$user\'s crontab';
+  }
+
+  @override
+  String get jobsSourceMine => 'Yours and the system\'s';
+
+  @override
+  String get jobsSourceOtherUsers => 'Other users';
+
+  @override
+  String get jobsOtherUsersReading => 'Reading other users\' crontabs.';
+
+  @override
+  String get jobsOtherUsersRefresh => 'Read again';
+
+  @override
+  String get jobsOtherUsersEmpty => 'No other user has a crontab.';
+
+  @override
+  String jobsOtherUsersFailure(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Other users\' crontabs need a connection to the server.',
+      'adminRequired': 'Other users\' crontabs need admin mode.',
+      'elevationRefused': 'Admin mode could not read the crontabs.',
+      'noSpool': 'This server keeps no crontab spool.',
+      'spoolDenied': 'Even admin mode may not list the crontab spool.',
+      'unreadable': 'The crontab spool could not be read.',
+      'transport': 'The connection failed while reading.',
+      'other': 'Other users\' crontabs could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String jobsOtherUsersUnreadable(String users) {
+    return 'Could not read the crontab of $users.';
+  }
+
+  @override
+  String jobsOtherUsersNotRead(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count more users\' crontabs were not read.',
+      one: '1 more user\'s crontab was not read.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get jobsOtherUsersMasked =>
+      'Commands are masked where they look like they hold secrets.';
 }

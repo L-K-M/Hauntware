@@ -168,4 +168,35 @@ void main() {
     admin.setEnabled('srv-1', enabled: true);
     expect(engine.sentOfType<SetAdminMode>(), isEmpty);
   });
+
+  test('a crontab read pairs the answer by request id, and a stopped '
+      'engine answers no link', () async {
+    final engine = FakeEngineClient();
+    final admin = AdminController(engine);
+    addTearDown(admin.dispose);
+
+    final first = admin.readUserCrontabs('srv-1');
+    final second = admin.readUserCrontabs('srv-1');
+    final ids = [
+      for (final ReadUserCrontabs(:requestId)
+          in engine.sentOfType<ReadUserCrontabs>().cast<ReadUserCrontabs>())
+        requestId,
+    ];
+    expect(ids.toSet(), hasLength(2));
+    engine.emit(
+      UserCrontabs(
+        serverId: 'srv-1',
+        requestId: ids.last,
+        failure: UserCrontabsFailure.noSpool,
+      ),
+    );
+    expect((await second).failure, UserCrontabsFailure.noSpool);
+
+    await engine.close();
+    expect((await first).failure, UserCrontabsFailure.noLink);
+    expect(
+      (await admin.readUserCrontabs('srv-1')).failure,
+      UserCrontabsFailure.noLink,
+    );
+  });
 }

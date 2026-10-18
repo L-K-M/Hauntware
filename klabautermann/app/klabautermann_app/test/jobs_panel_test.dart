@@ -2,18 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart';
+import 'package:klabautermann_app/controllers/admin_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/controllers/operations_controller.dart';
 import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/actions/action_entry.dart';
+import 'package:klabautermann_app/ui/admin_mode_chip.dart';
 import 'package:klabautermann_app/ui/jobs_panel.dart';
 import 'package:klabautermann_app/ui/server_safety.dart';
 import 'package:klabautermann_app/ui/sortable_table.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_host/klabautermann_host.dart'
-    show CronDirEntry, CronPeriod, MonotonicBase, OnCalendarElapse;
+    show
+        CronDirEntry,
+        CronPeriod,
+        MonotonicBase,
+        OnCalendarElapse,
+        mergeJobs,
+        parseUserCrontab;
 
 import 'support/charts.dart'
     show goldenFontFamily, goldensCompareHere, loadGoldenFonts;
@@ -127,6 +135,8 @@ Future<_Panel> _pump(
   SafetyPolicy? safety,
 }) async {
   final engine = FakeEngineClient();
+  final admin = AdminController(engine);
+  addTearDown(admin.dispose);
   final shown = ValueNotifier(visible);
   final panel = _Panel(engine, shown);
   final monitoring = MonitoringController(engine, now: () => panel.now);
@@ -147,7 +157,10 @@ Future<_Panel> _pump(
         ? null
         : (child) => SafetyScope(
             safety: policy,
-            child: OperationsScope(operations: operations, child: child),
+            child: AdminScope(
+              admin: admin,
+              child: OperationsScope(operations: operations, child: child),
+            ),
           ),
     ValueListenableBuilder(
       valueListenable: shown,
@@ -992,6 +1005,106 @@ void main() {
       expect(
         find.byKey(const ValueKey('jobs.rowActions.timer|certbot.timer')),
         findsNothing,
+      );
+    });
+  });
+
+  group('other users\' crontabs (JOB-03, M4 E21)', () {
+    const managed = SafetyPolicy(
+      servers: {_serverId: ServerSafety(management: true)},
+    );
+
+    UserCrontabs others(String requestId) {
+      final lines = parseUserCrontab(
+        '0 3 * * * /usr/local/bin/backup --token=********\n',
+        user: 'alice',
+      ).value;
+      return UserCrontabs(
+        serverId: _serverId,
+        requestId: requestId,
+        directory: '/var/spool/cron/crontabs',
+        jobs: mergeJobs(
+          cron: CronSnapshot(jobs: lines),
+          nowUtc: jobsNow,
+          zone: jobsProfile.serverZone,
+        ),
+        unreadable: const ['carol'],
+      );
+    }
+
+    testWidgets('admin mode adds the switch, which reads them read-only', (
+      tester,
+    ) async {
+      final panel = await _pump(tester, safety: managed);
+      await panel.all(tester);
+      expect(find.text('Other users'), findsNothing);
+
+      await panel.emit(
+        tester,
+        const AdminModeState(_serverId, AdminModePhase.on),
+      );
+      await tester.tap(find.text('Other users'));
+      await tester.pumpAndSettle();
+      final request =
+          panel.engine.sentOfType<ReadUserCrontabs>().single
+              as ReadUserCrontabs;
+      expect(find.text("Reading other users' crontabs."), findsOneWidget);
+
+      await panel.emit(tester, others(request.requestId));
+      expect(find.text("alice's crontab"), findsOneWidget);
+      expect(find.text('Could not read the crontab of carol.'), findsOneWidget);
+      expect(
+        find.textContaining('/usr/local/bin/backup --token=********'),
+        findsWidgets,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('jobs.others.rowActions.cron|crontab -u alice|0'),
+        ),
+        findsNothing,
+        reason: 'read-only',
+      );
+
+      await tester.tap(find.text('Read again'));
+      await tester.pumpAndSettle();
+      expect(panel.engine.sentOfType<ReadUserCrontabs>(), hasLength(2));
+
+      // Admin mode that ends takes the view with it.
+      await panel.emit(
+        tester,
+        const AdminModeState(
+          _serverId,
+          AdminModePhase.expired,
+          ended: AdminEnd.inactivity,
+        ),
+      );
+      expect(find.text("alice's crontab"), findsNothing);
+      expect(find.text('Other users'), findsNothing);
+    });
+
+    testWidgets('a failed read says why', (tester) async {
+      final panel = await _pump(tester, safety: managed);
+      await panel.all(tester);
+      await panel.emit(
+        tester,
+        const AdminModeState(_serverId, AdminModePhase.on),
+      );
+      await tester.tap(find.text('Other users'));
+      await tester.pumpAndSettle();
+      final request =
+          panel.engine.sentOfType<ReadUserCrontabs>().single
+              as ReadUserCrontabs;
+      await panel.emit(
+        tester,
+        UserCrontabs(
+          serverId: _serverId,
+          requestId: request.requestId,
+          failure: UserCrontabsFailure.spoolDenied,
+        ),
+      );
+      expect(
+        find.text('Even admin mode may not list the crontab spool.'),
+        findsOneWidget,
       );
     });
   });

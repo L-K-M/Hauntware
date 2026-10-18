@@ -256,7 +256,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The probe's tool name for crontab, looked up in its answer; never
   // rendered.
-  'lib/ui/jobs_panel.dart': {"'crontab'"},
+  'lib/ui/jobs_panel.dart': {
+    "'crontab'",
+    // The other users' table's key prefix, never shown.
+    r"'${ServerPanel.jobs.name}.others'",
+  },
   'lib/ui/logs/log_query.dart': {
     // The path rule's separators and dot parts (03 §8.8), and the empty
     // defaults of the text filters.

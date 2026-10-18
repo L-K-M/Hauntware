@@ -103,7 +103,8 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         TimerJobEntry,
         kCalendarIterationsSystemd,
         kCronHorizonDays,
-        kOwnCrontabSource;
+        kOwnCrontabSource,
+        userCrontabSource;
 export 'src/sampling/sample_results.dart' show kCronLinesEvaluated;
 // The Logs panel's LOG-04 notice: the access check's journal row (K04)
 // over the probe's HostProfile.

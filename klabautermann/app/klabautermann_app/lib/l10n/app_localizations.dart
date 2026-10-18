@@ -4227,6 +4227,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Close output'**
   String get jobsRunOutputClose;
+
+  /// A job's source when it is another user's crontab, read in admin mode (JOB-03); user is the account name.
+  ///
+  /// In en, this message translates to:
+  /// **'{user}\'s crontab'**
+  String jobsSourceUserCrontab(String user);
+
+  /// Choice on the Jobs tab's source switch: the login user's crontab, the system crontabs and the timers (the cron and timers streams).
+  ///
+  /// In en, this message translates to:
+  /// **'Yours and the system\'s'**
+  String get jobsSourceMine;
+
+  /// Choice on the Jobs tab's source switch, in admin mode: every other user's crontab, read-only (JOB-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Other users'**
+  String get jobsSourceOtherUsers;
+
+  /// Notice while the other users' crontabs are being read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading other users\' crontabs.'**
+  String get jobsOtherUsersReading;
+
+  /// Button that reads the other users' crontabs again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get jobsOtherUsersRefresh;
+
+  /// Shown when the spool holds no other user's crontab.
+  ///
+  /// In en, this message translates to:
+  /// **'No other user has a crontab.'**
+  String get jobsOtherUsersEmpty;
+
+  /// Notice when the other users' crontabs could not be read; failure is the engine's UserCrontabsFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Other users\' crontabs need a connection to the server.} adminRequired{Other users\' crontabs need admin mode.} elevationRefused{Admin mode could not read the crontabs.} noSpool{This server keeps no crontab spool.} spoolDenied{Even admin mode may not list the crontab spool.} unreadable{The crontab spool could not be read.} transport{The connection failed while reading.} other{Other users\' crontabs could not be read.}}'**
+  String jobsOtherUsersFailure(String failure);
+
+  /// Notice naming the users whose crontab could not be read; users is a comma-separated list of account names.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the crontab of {users}.'**
+  String jobsOtherUsersUnreadable(String users);
+
+  /// Notice when the spool lists more users than one read takes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more user\'s crontab was not read.} other{{count} more users\' crontabs were not read.}}'**
+  String jobsOtherUsersNotRead(int count);
+
+  /// Notice under the other users' crontabs (03 §8.9).
+  ///
+  /// In en, this message translates to:
+  /// **'Commands are masked where they look like they hold secrets.'**
+  String get jobsOtherUsersMasked;
 }
 
 class _AppLocalizationsDelegate

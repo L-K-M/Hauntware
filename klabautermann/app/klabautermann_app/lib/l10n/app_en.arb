@@ -3905,5 +3905,65 @@
   "jobsRunOutputClose": "Close output",
   "@jobsRunOutputClose": {
     "description": "Tooltip and screen reader label of the button that closes the run output sheet."
+  },
+  "jobsSourceUserCrontab": "{user}'s crontab",
+  "@jobsSourceUserCrontab": {
+    "description": "A job's source when it is another user's crontab, read in admin mode (JOB-03); user is the account name.",
+    "placeholders": {
+      "user": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsSourceMine": "Yours and the system's",
+  "@jobsSourceMine": {
+    "description": "Choice on the Jobs tab's source switch: the login user's crontab, the system crontabs and the timers (the cron and timers streams)."
+  },
+  "jobsSourceOtherUsers": "Other users",
+  "@jobsSourceOtherUsers": {
+    "description": "Choice on the Jobs tab's source switch, in admin mode: every other user's crontab, read-only (JOB-03)."
+  },
+  "jobsOtherUsersReading": "Reading other users' crontabs.",
+  "@jobsOtherUsersReading": {
+    "description": "Notice while the other users' crontabs are being read."
+  },
+  "jobsOtherUsersRefresh": "Read again",
+  "@jobsOtherUsersRefresh": {
+    "description": "Button that reads the other users' crontabs again."
+  },
+  "jobsOtherUsersEmpty": "No other user has a crontab.",
+  "@jobsOtherUsersEmpty": {
+    "description": "Shown when the spool holds no other user's crontab."
+  },
+  "jobsOtherUsersFailure": "{failure, select, noLink{Other users' crontabs need a connection to the server.} adminRequired{Other users' crontabs need admin mode.} elevationRefused{Admin mode could not read the crontabs.} noSpool{This server keeps no crontab spool.} spoolDenied{Even admin mode may not list the crontab spool.} unreadable{The crontab spool could not be read.} transport{The connection failed while reading.} other{Other users' crontabs could not be read.}}",
+  "@jobsOtherUsersFailure": {
+    "description": "Notice when the other users' crontabs could not be read; failure is the engine's UserCrontabsFailure name.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsOtherUsersUnreadable": "Could not read the crontab of {users}.",
+  "@jobsOtherUsersUnreadable": {
+    "description": "Notice naming the users whose crontab could not be read; users is a comma-separated list of account names.",
+    "placeholders": {
+      "users": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsOtherUsersNotRead": "{count, plural, =1{1 more user's crontab was not read.} other{{count} more users' crontabs were not read.}}",
+  "@jobsOtherUsersNotRead": {
+    "description": "Notice when the spool lists more users than one read takes.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "jobsOtherUsersMasked": "Commands are masked where they look like they hold secrets.",
+  "@jobsOtherUsersMasked": {
+    "description": "Notice under the other users' crontabs (03 §8.9)."
   }
 }

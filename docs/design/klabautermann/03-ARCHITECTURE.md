@@ -3420,6 +3420,14 @@ for") is left out, any other failure names the user as unreadable, and
 the jobs rows carry next runs as the `cron` stream's do. Nothing is
 cached.
 
+As built in M4 (E21c), the Jobs tab shows a source switch while admin
+mode is on: "Yours and the system's" lists the streams' rows, and
+"Other users" reads every other user's crontab through
+`ReadUserCrontabs` and lists their lines read-only, each named as that
+user's crontab, with any unreadable user, the users past the read's
+limit and the masking said above the table, and a button that reads
+them again. Admin mode that ends returns the tab to the streams' rows.
+
 ### 7.8 Packages and updates (PKG)
 
 - **v1 (read-only).** `apt-get -s upgrade` (`Inst` lines; not `apt`, whose
