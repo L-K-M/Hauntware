@@ -5994,6 +5994,17 @@ and that it returned no lines for a `since` equal to the last lines'
 timestamp, where Docker's `since` is inclusive (5.6). Rootless daemons
 and real hosts are not recorded.
 
+As built in M3 (D02), `RecordedDaemon` in `klabautermann_docker`'s
+`testing.dart` replays a corpus to the real HTTP client, whole or one
+byte at a time, and `recorded_api_test.dart` runs every directory
+through negotiation, refusals, the typed endpoints and the 5.8 gates.
+Replay showed three more daemon facts. Podman's 1.44 compat layer
+sends the pre-1.52 legacy event fields as Docker 1.44 does. Podman's
+`/system/df` lists an image once per name (tag and digest reference),
+so its image count can exceed `/images/json`'s; the summary counts
+images from the list. And an idle container's CPU counter can stand
+still between two samples, which now reads as 0 % instead of unknown.
+
 ### 11.2 Cross-app regression tests added by this plan
 
 1. **Suite convergence:** a Séance `SyncCoordinator` device and a shared
