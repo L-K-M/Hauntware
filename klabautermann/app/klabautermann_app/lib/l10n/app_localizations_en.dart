@@ -2845,4 +2845,68 @@ class AppLocalizationsEn extends AppLocalizations {
   String syncFileNewer(String fileName) {
     return 'The sync file $fileName was saved by a newer version of Klabautermann. Sync changes will not be kept after a restart.';
   }
+
+  @override
+  String get settingsSafetyReadOnly => 'Read-only everywhere';
+
+  @override
+  String get settingsSafetyReadOnlyDetail =>
+      'While this is on, no server takes an action and every action is hidden. Monitoring, logs and other reads work as before, so it is safe for screen sharing.';
+
+  @override
+  String get settingsSafetyAdminExpiry => 'Admin mode ends after';
+
+  @override
+  String settingsSafetyAdminExpiryMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String get settingsSafetyAdminExpiryDetail =>
+      'Admin mode turns off after this long without an action. It also turns off when the link drops, and on a phone when Klabautermann goes to the background.';
+
+  @override
+  String get settingsSafetyMarksTitle => 'Marked protected';
+
+  @override
+  String get settingsSafetyMarksDetail =>
+      'An action on a target you marked protected asks you to type its name first. Marks stay on this device.';
+
+  @override
+  String get settingsSafetyMarksEmpty =>
+      'You have not marked anything protected.';
+
+  @override
+  String settingsSafetyMark(String target, String server) {
+    return '$target on $server';
+  }
+
+  @override
+  String settingsSafetyMarkRemove(String target) {
+    return 'Remove the mark on $target';
+  }
+
+  @override
+  String get settingsSafetyNotSaved =>
+      'The setting changed, but it could not be saved, so it will not be kept after a restart.';
+
+  @override
+  String get settingsSafetyNotChanged => 'The setting could not be changed.';
+
+  @override
+  String get serverSafetyMenu => 'Safety';
+
+  @override
+  String get serverAllowActions => 'Allow actions';
+
+  @override
+  String get serverReadOnly => 'Read-only';
+
+  @override
+  String get serverObserveOnly =>
+      'Observe only: Klabautermann reads this server and changes nothing. To act on it, turn on Allow actions in the Safety menu.';
+
+  @override
+  String get serverReadOnlyNotice =>
+      'Read-only: actions on this server are hidden.';
 }

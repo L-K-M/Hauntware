@@ -8,6 +8,7 @@ import 'package:klabautermann_app/controllers/coverage_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/controllers/prompt_controller.dart';
+import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/controllers/sync_controller.dart';
 import 'package:klabautermann_app/services/settings_window/settings_window_link.dart';
 import 'package:klabautermann_app/services/ssh_config_source.dart';
@@ -72,6 +73,8 @@ final class AppHarness {
 /// replaces a controller whose first-run card was
 /// already dismissed, so the card shows only in the tests that want it.
 /// [announcements] replaces an in-memory A11Y-15 switch that is on.
+/// [safety], which the caller disposes, adds the safety preferences; none
+/// leaves the Safety menu and notices out.
 /// [linkGrace] defaults to zero, which disconnects a server as its last
 /// view closes: the tree unmounts at the end of every test, and the test
 /// binding fails a test that leaves a grace timer pending.
@@ -83,6 +86,7 @@ Future<AppHarness> pumpApp(
   AppearanceController? appearance,
   CoverageController? coverage,
   AnnouncementController? announcements,
+  SafetyController? safety,
   DeviceSettingsIssue? settingsIssue,
   ImportStoreIssue? importStoreIssue,
   InstanceLockUnavailable? instanceLockIssue,
@@ -120,6 +124,7 @@ Future<AppHarness> pumpApp(
       appearance: harness.appearance,
       coverage: harness.coverage,
       announcements: harness.announcements,
+      safety: safety,
       sync: harness.sync,
       settingsIssue: settingsIssue,
       importStoreIssue: importStoreIssue,

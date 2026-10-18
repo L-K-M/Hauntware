@@ -4,11 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 import 'package:ghost_ui/ghost_ui.dart' show showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show MonitorEligibility, kMonitorSetLimit;
+    show
+        MonitorEligibility,
+        ServerSafety,
+        kAdminExpiryChoices,
+        kMonitorSetLimit;
 
 import '../controllers/announcement_controller.dart';
 import '../controllers/appearance_controller.dart';
 import '../controllers/monitor_set.dart';
+import '../controllers/safety_controller.dart';
 import '../l10n/app_localizations.dart';
 import '../services/settings_window/settings_window_link.dart';
 import 'inspector_pane.dart' show PlaceholderPaneBody;
@@ -16,8 +21,8 @@ import 'monitor_set_feedback.dart';
 
 /// Settings (03 §10.2): the seven planned tabs as placeholders, except
 /// General, which holds A11Y-15's switch (D60), Appearance, which
-/// already drives the app's appearance, and Servers, which holds FL-21's
-/// monitor set (03 §4.3 step 4). A route on
+/// already drives the app's appearance, Servers, which holds FL-21's
+/// monitor set (03 §4.3 step 4), and Safety (M4 plan M4). A route on
 /// phones (and wherever the desktop window cannot open); on desktop the
 /// same page fills the settings window (`settings_window_app.dart`).
 class SettingsPage extends StatefulWidget {
@@ -26,6 +31,7 @@ class SettingsPage extends StatefulWidget {
     required this.appearance,
     required this.announcements,
     required this.monitorSet,
+    this.safety,
     this.initialTab = SettingsTab.general,
     this.tabRequests,
   });
@@ -33,6 +39,9 @@ class SettingsPage extends StatefulWidget {
   final AppearanceSettings appearance;
   final AnnouncementSettings announcements;
   final MonitorSetSettings monitorSet;
+
+  /// Null in tests that leave safety out, where the tab is a placeholder.
+  final SafetySettings? safety;
 
   /// The tab the page opens on, read once when it is first built: the
   /// settings window keys each page it shows by generation, so opening on
@@ -108,6 +117,9 @@ class _SettingsPageState extends State<SettingsPage>
                 appearance: widget.appearance,
               ),
               SettingsTab.servers => ServersTab(monitorSet: widget.monitorSet),
+              SettingsTab.safety when widget.safety != null => SafetyTab(
+                safety: widget.safety!,
+              ),
               _ => const PlaceholderPaneBody(),
             },
         ],
@@ -240,6 +252,143 @@ class ServersTab extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+/// The Safety tab (M4 plan M4): global read-only (SAF-06), admin mode's
+/// inactivity expiry (SAF-02) and the targets the user marked protected
+/// (SAF-22), each mark with a button that removes it. Per-server
+/// management and read-only live in the server header's Safety menu.
+class SafetyTab extends StatelessWidget {
+  const SafetyTab({super.key, required this.safety});
+
+  final SafetySettings safety;
+
+  /// As [AppearanceTab._setMode]: the control moves once the app took the
+  /// change, and a change it took but could not save says so.
+  Future<void> _change(BuildContext context, Future<void> Function() change) =>
+      changeSafetyWithFeedback(context, change);
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    return ListenableBuilder(
+      listenable: safety,
+      builder: (context, _) {
+        final policy = safety.value;
+        final marks = [
+          for (final MapEntry(key: serverId, value: server)
+              in policy.servers.entries)
+            for (final mark in server.marks.toList()..sort())
+              (serverId: serverId, server: server, mark: mark),
+        ];
+        return ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: policy.globalReadOnly,
+              onChanged: (readOnly) => unawaited(
+                _change(context, () => safety.setGlobalReadOnly(readOnly)),
+              ),
+              title: Text(l10n.settingsSafetyReadOnly),
+              subtitle: Text(l10n.settingsSafetyReadOnlyDetail),
+            ),
+            const SizedBox(height: 16),
+            Semantics(
+              header: true,
+              child: Text(
+                l10n.settingsSafetyAdminExpiry,
+                style: textTheme.titleSmall,
+              ),
+            ),
+            const SizedBox(height: 12),
+            SegmentedButton<Duration>(
+              segments: [
+                for (final choice in kAdminExpiryChoices)
+                  ButtonSegment(
+                    value: choice,
+                    label: Text(
+                      l10n.settingsSafetyAdminExpiryMinutes(choice.inMinutes),
+                    ),
+                  ),
+              ],
+              selected: {policy.adminExpiry},
+              onSelectionChanged: (choices) => unawaited(
+                _change(context, () => safety.setAdminExpiry(choices.first)),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              l10n.settingsSafetyAdminExpiryDetail,
+              style: textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 24),
+            Semantics(
+              header: true,
+              child: Text(
+                l10n.settingsSafetyMarksTitle,
+                style: textTheme.titleSmall,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(l10n.settingsSafetyMarksDetail, style: textTheme.bodyMedium),
+            const SizedBox(height: 8),
+            if (marks.isEmpty)
+              Text(l10n.settingsSafetyMarksEmpty, style: textTheme.labelLarge),
+            for (final (:serverId, :server, :mark) in marks)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  l10n.settingsSafetyMark(mark, safety.labelOf(serverId)),
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: l10n.settingsSafetyMarkRemove(mark),
+                  onPressed: () => unawaited(
+                    _change(
+                      context,
+                      () => safety.setServerSafety(
+                        serverId,
+                        ServerSafety(
+                          management: server.management,
+                          readOnly: server.readOnly,
+                          marks: {...server.marks}..remove(mark),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Runs [change], a safety change, and says in a top toast when it did not
+/// apply or applied without being saved: the Safety tab and the server
+/// header's switches word it the same.
+Future<void> changeSafetyWithFeedback(
+  BuildContext context,
+  Future<void> Function() change,
+) async {
+  final overlay = Overlay.of(context, rootOverlay: true);
+  final l10n = AppLocalizations.of(context);
+  try {
+    await change();
+  } on SafetyNotSavedException catch (error) {
+    debugPrint('$error');
+    if (overlay.mounted) {
+      showTopToast(overlay, message: l10n.settingsSafetyNotSaved);
+    }
+  } on Exception catch (error) {
+    debugPrint('$error');
+    if (overlay.mounted) {
+      showTopToast(overlay, message: l10n.settingsSafetyNotChanged);
+    }
   }
 }
 

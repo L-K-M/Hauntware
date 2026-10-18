@@ -1326,6 +1326,13 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 safety settings (E19a): the app keeps the safety preferences in
+  `settings.json` and applies them to the engine at spawn and on every
+  change. Settings > Safety (also in the desktop settings window) holds
+  global read-only, admin expiry and the user's marks. The server
+  header has a Safety menu with Allow actions and Read-only, and says
+  when a server is observe-only or read-only (03 §4.3 step 5). The
+  admin chip and elevation prompt follow in E19b.
 - M4 other users' crontabs (E14b): in admin mode `ReadUserCrontabs`
   lists the cron spool and reads each valid user's crontab through
   elevation, as jobs rows with next runs. Every cron command now crosses

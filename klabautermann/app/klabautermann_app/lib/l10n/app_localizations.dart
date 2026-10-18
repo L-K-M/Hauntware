@@ -3831,6 +3831,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The sync file {fileName} was saved by a newer version of Klabautermann. Sync changes will not be kept after a restart.'**
   String syncFileNewer(String fileName);
+
+  /// Switch on the Safety settings tab (SAF-06): global read-only.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only everywhere'**
+  String get settingsSafetyReadOnly;
+
+  /// Explanation under the global read-only switch on the Safety settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'While this is on, no server takes an action and every action is hidden. Monitoring, logs and other reads work as before, so it is safe for screen sharing.'**
+  String get settingsSafetyReadOnlyDetail;
+
+  /// Label above the admin mode expiry choices on the Safety settings tab (SAF-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Admin mode ends after'**
+  String get settingsSafetyAdminExpiry;
+
+  /// One admin mode expiry choice on the Safety settings tab; minutes is 5, 15, 30 or 60.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String settingsSafetyAdminExpiryMinutes(int minutes);
+
+  /// Explanation under the admin mode expiry choices on the Safety settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin mode turns off after this long without an action. It also turns off when the link drops, and on a phone when Klabautermann goes to the background.'**
+  String get settingsSafetyAdminExpiryDetail;
+
+  /// Heading of the user's protected marks on the Safety settings tab (SAF-22).
+  ///
+  /// In en, this message translates to:
+  /// **'Marked protected'**
+  String get settingsSafetyMarksTitle;
+
+  /// Explanation under the protected marks heading on the Safety settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'An action on a target you marked protected asks you to type its name first. Marks stay on this device.'**
+  String get settingsSafetyMarksDetail;
+
+  /// Shown on the Safety settings tab when the user marked no target protected.
+  ///
+  /// In en, this message translates to:
+  /// **'You have not marked anything protected.'**
+  String get settingsSafetyMarksEmpty;
+
+  /// One protected mark on the Safety settings tab: the marked unit, container or stack name, and the server's name.
+  ///
+  /// In en, this message translates to:
+  /// **'{target} on {server}'**
+  String settingsSafetyMark(String target, String server);
+
+  /// Tooltip and screen reader label of the button that removes one protected mark on the Safety settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the mark on {target}'**
+  String settingsSafetyMarkRemove(String target);
+
+  /// Toast when a safety setting applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The setting changed, but it could not be saved, so it will not be kept after a restart.'**
+  String get settingsSafetyNotSaved;
+
+  /// Toast when the app did not take a change of a safety setting.
+  ///
+  /// In en, this message translates to:
+  /// **'The setting could not be changed.'**
+  String get settingsSafetyNotChanged;
+
+  /// Tooltip and screen reader label of the server header's safety menu button, which holds the Allow actions and Read-only switches.
+  ///
+  /// In en, this message translates to:
+  /// **'Safety'**
+  String get serverSafetyMenu;
+
+  /// Switch in the server header's safety menu (SAF-01): management, off by default. While off, Klabautermann only reads the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow actions'**
+  String get serverAllowActions;
+
+  /// Switch in the server header's safety menu (SAF-06): hides every action on this server.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only'**
+  String get serverReadOnly;
+
+  /// Notice in the server header while management is off for the server (03 §4.3 step 5, SAF-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Observe only: Klabautermann reads this server and changes nothing. To act on it, turn on Allow actions in the Safety menu.'**
+  String get serverObserveOnly;
+
+  /// Notice in the server header while the server, or every server, is read-only (SAF-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only: actions on this server are hidden.'**
+  String get serverReadOnlyNotice;
 }
 
 class _AppLocalizationsDelegate

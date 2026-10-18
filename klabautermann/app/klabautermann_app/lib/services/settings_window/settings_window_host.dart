@@ -11,6 +11,8 @@ import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 import '../../controllers/announcement_controller.dart';
 import '../../controllers/appearance_controller.dart';
 import '../../controllers/monitor_set.dart';
+import '../../controllers/safety_controller.dart';
+import '../stored_safety.dart';
 import 'settings_window_link.dart';
 
 /// The settings window host for [platform], or null where Settings stays a
@@ -21,6 +23,7 @@ SettingsWindowHost? settingsWindowHostFor(
   required AppearanceSettings appearance,
   required AnnouncementSettings announcements,
   required MonitorSetSettings monitorSet,
+  required SafetySettings safety,
 }) => switch (platform) {
   TargetPlatform.macOS ||
   TargetPlatform.linux ||
@@ -28,6 +31,7 @@ SettingsWindowHost? settingsWindowHostFor(
     appearance: appearance,
     announcements: announcements,
     monitorSet: monitorSet,
+    safety: safety,
   ),
   TargetPlatform.android ||
   TargetPlatform.iOS ||
@@ -48,12 +52,14 @@ final class SettingsWindowHost {
     required AppearanceSettings appearance,
     required AnnouncementSettings announcements,
     required MonitorSetSettings monitorSet,
+    required SafetySettings safety,
     MethodChannel control = settingsWindowControlChannel,
     MethodChannel link = settingsWindowLinkChannel,
     @visibleForTesting Future<AppExitResponse> Function()? requestAppExit,
   }) : _appearance = appearance,
        _announcements = announcements,
-       _monitorSet = monitorSet {
+       _monitorSet = monitorSet,
+       _safety = safety {
     _engine = GhostSettingsWindowHost(
       control: control,
       link: link,
@@ -61,7 +67,7 @@ final class SettingsWindowHost {
       sections: GhostSettingsSections(
         snapshot: _snapshot,
         handleCall: _handleCall,
-        changes: [appearance, announcements, monitorSet],
+        changes: [appearance, announcements, monitorSet, safety],
       ),
       encodeError: encodeLinkError,
       requestAppExit: requestAppExit,
@@ -71,6 +77,7 @@ final class SettingsWindowHost {
   final AppearanceSettings _appearance;
   final AnnouncementSettings _announcements;
   final MonitorSetSettings _monitorSet;
+  final SafetySettings _safety;
   late final GhostSettingsWindowHost<SettingsTab> _engine;
 
   @visibleForTesting
@@ -91,6 +98,10 @@ final class SettingsWindowHost {
     SettingsLinkKey.appearance.name: encodeAppearance(_appearance.value),
     SettingsLinkKey.announceThresholdBands.name: _announcements.value,
     SettingsLinkKey.monitorSet.name: encodeMonitorCandidates(_monitorSet.value),
+    SettingsLinkKey.safety.name: encodeStoredSafety(_safety.value),
+    SettingsLinkKey.labels.name: {
+      for (final id in _safety.value.servers.keys) id: _safety.labelOf(id),
+    },
   };
 
   Future<Object?> _handleCall(String name, Object? argument) async {
@@ -108,6 +119,19 @@ final class SettingsWindowHost {
         await _monitorSet.setMonitored(
           change[SettingsLinkKey.serverId.name]! as String,
           monitored: change[SettingsLinkKey.monitored.name]! as bool,
+        );
+      case SettingsLinkMethod.setGlobalReadOnly:
+        await _safety.setGlobalReadOnly(argument! as bool);
+      case SettingsLinkMethod.setAdminExpiry:
+        await _safety.setAdminExpiry(Duration(minutes: argument! as int));
+      case SettingsLinkMethod.setServerSafety:
+        final change = (argument! as Map).cast<String, Object?>();
+        await _safety.setServerSafety(
+          change[SettingsLinkKey.serverId.name]! as String,
+          decodeServerSafety(
+            (change[SettingsLinkKey.safety.name]! as Map)
+                .cast<String, Object?>(),
+          ),
         );
     }
     return null;

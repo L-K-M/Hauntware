@@ -23,6 +23,7 @@ import 'services/settings_window/settings_window_host.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'services/ssh_config_source.dart';
 import 'services/stored_appearance.dart';
+import 'services/stored_safety.dart';
 import 'services/window_state.dart';
 import 'settings_window_app.dart';
 import 'ui/already_running_app.dart';
@@ -188,6 +189,20 @@ Future<void> main(List<String> args) async {
     save: settings.setAnnounceThresholdBands,
   );
 
+  // The safety preferences (M4 plan M4), device-local in settings.json and
+  // applied to the engine now, since it starts with every server
+  // observe-only, and on every change.
+  final safety = safetyFromSettings(
+    settings,
+    engine,
+    labelOf: (serverId) =>
+        fleet.servers
+            .where((server) => server.id == serverId)
+            .firstOrNull
+            ?.displayName ??
+        serverId,
+  );
+
   // Desktop only: the runners there host the settings window; phones keep
   // the settings route.
   final settingsWindow = settingsWindowHostFor(
@@ -195,6 +210,7 @@ Future<void> main(List<String> args) async {
     appearance: appearance,
     announcements: announcements,
     monitorSet: fleet.monitorSettings,
+    safety: safety,
   );
 
   runApp(
@@ -205,6 +221,7 @@ Future<void> main(List<String> args) async {
       appearance: appearance,
       coverage: coverage,
       announcements: announcements,
+      safety: safety,
       sync: sync,
       settingsIssue: settings.issue,
       importStoreIssue: importStoreIssue,

@@ -9,6 +9,8 @@ import 'package:ghost_theme/ghost_theme.dart';
 import '../../controllers/announcement_controller.dart';
 import '../../controllers/appearance_controller.dart';
 import '../../controllers/monitor_set.dart';
+import '../../controllers/safety_controller.dart';
+import '../stored_safety.dart';
 import '../../theme/app_theme.dart';
 import 'settings_window_link.dart';
 
@@ -57,6 +59,11 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     }),
   );
 
+  /// The Safety tab's model, from the latest snapshot.
+  late final RemoteSafety safety = RemoteSafety._(
+    (method, argument) => invoke(method.name, argument),
+  );
+
   @override
   void applySnapshot(Map<String, Object?> snapshot) {
     appearance._apply(
@@ -73,6 +80,12 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
         snapshot[SettingsLinkKey.monitorSet.name]! as List<Object?>,
       ),
     );
+    safety._apply(
+      decodeStoredSafety(
+        (snapshot[SettingsLinkKey.safety.name]! as Map).cast<String, Object?>(),
+      ),
+      (snapshot[SettingsLinkKey.labels.name]! as Map).cast<String, String>(),
+    );
   }
 
   @override
@@ -80,6 +93,7 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     appearance.dispose();
     announcements.dispose();
     monitorSet.dispose();
+    safety.dispose();
     super.dispose();
   }
 }
@@ -165,5 +179,50 @@ final class RemoteAppearance extends ChangeNotifier
   @override
   Future<void> setMode(ThemeModePreference mode) async {
     await _call(SettingsLinkMethod.setThemeMode, mode.name);
+  }
+}
+
+/// [SafetySettings] over the link: the app's policy and its servers'
+/// labels as the latest snapshot carries them, and changes that run in
+/// the app's isolate.
+final class RemoteSafety extends ChangeNotifier implements SafetySettings {
+  RemoteSafety._(this._call);
+
+  final Future<Object?> Function(SettingsLinkMethod method, Object? argument)
+  _call;
+
+  // The engine's own default until the first snapshot, which comes with
+  // hello.
+  SafetyPolicy _value = const SafetyPolicy();
+  Map<String, String> _labels = const {};
+
+  void _apply(SafetyPolicy policy, Map<String, String> labels) {
+    _value = policy;
+    _labels = Map.unmodifiable(labels);
+    notifyListeners();
+  }
+
+  @override
+  SafetyPolicy get value => _value;
+
+  @override
+  String labelOf(String serverId) => _labels[serverId] ?? serverId;
+
+  @override
+  Future<void> setGlobalReadOnly(bool readOnly) async {
+    await _call(SettingsLinkMethod.setGlobalReadOnly, readOnly);
+  }
+
+  @override
+  Future<void> setAdminExpiry(Duration expiry) async {
+    await _call(SettingsLinkMethod.setAdminExpiry, expiry.inMinutes);
+  }
+
+  @override
+  Future<void> setServerSafety(String serverId, ServerSafety safety) async {
+    await _call(SettingsLinkMethod.setServerSafety, {
+      SettingsLinkKey.serverId.name: serverId,
+      SettingsLinkKey.safety.name: encodeServerSafety(safety),
+    });
   }
 }

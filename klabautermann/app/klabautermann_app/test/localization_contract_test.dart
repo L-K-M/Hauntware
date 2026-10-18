@@ -65,6 +65,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/announcement_controller.dart': {
     r"'The announcement setting was not saved: $error'",
   },
+  // The not-saved diagnostic; the Safety tab and the header's Safety menu
+  // print it and show their own ARB text (settingsSafetyNotSaved).
+  'lib/controllers/safety_controller.dart': {
+    r"'The safety settings were not saved: $error'",
+  },
   'lib/controllers/fleet_controller.dart': {
     // The row subtitle's address: host or user@host, with :port when the
     // port is not 22 and an IPv6 host then bracketed before it. Machine

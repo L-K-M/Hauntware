@@ -17,6 +17,7 @@ import '../../controllers/announcement_controller.dart'
 import '../../controllers/appearance_controller.dart'
     show AppearanceNotSavedException;
 import '../../controllers/monitor_set.dart';
+import '../../controllers/safety_controller.dart' show SafetyNotSavedException;
 import '../../theme/app_theme.dart';
 
 /// On the app's engine only: `open` in, `closed` out.
@@ -56,6 +57,18 @@ enum SettingsLinkMethod {
   /// A Servers tab toggle of FL-21's monitor set; the argument is an
   /// object of [SettingsLinkKey.serverId] and [SettingsLinkKey.monitored].
   setMonitored,
+
+  /// The Safety tab's global read-only switch; the argument is a bool.
+  setGlobalReadOnly,
+
+  /// The Safety tab's admin expiry; the argument is whole minutes, one of
+  /// `kAdminExpiryChoices`.
+  setAdminExpiry,
+
+  /// A Safety tab change to one server, a removed mark; the argument is an
+  /// object of [SettingsLinkKey.serverId] and [SettingsLinkKey.safety] in
+  /// `encodeServerSafety`'s form.
+  setServerSafety,
 }
 
 /// The keys of every JSON object on the link, spelled once for both sides.
@@ -69,6 +82,8 @@ enum SettingsLinkKey {
   label,
   eligibility,
   monitored,
+  safety,
+  labels,
 }
 
 /// The palette's stored form, bound to Klabautermann's style.
@@ -140,6 +155,10 @@ enum SettingsLinkError {
   /// [MonitorSetNotSavedException].
   monitorSetNotSaved,
 
+  /// As [notSaved], for the safety settings: the window rebuilds the
+  /// [SafetyNotSavedException].
+  safetyNotSaved,
+
   /// Anything else: the change did not happen.
   failed,
 }
@@ -153,6 +172,7 @@ PlatformException encodeLinkError(Object error) => PlatformException(
       SettingsLinkError.announcementNotSaved.name,
     MonitorSetFullException() => SettingsLinkError.monitorSetFull.name,
     MonitorSetNotSavedException() => SettingsLinkError.monitorSetNotSaved.name,
+    SafetyNotSavedException() => SettingsLinkError.safetyNotSaved.name,
     _ => SettingsLinkError.failed.name,
   },
   message: '$error',
@@ -170,6 +190,7 @@ Exception decodeLinkError(PlatformException error) {
     SettingsLinkError.monitorSetNotSaved => MonitorSetNotSavedException(
       message,
     ),
+    SettingsLinkError.safetyNotSaved => SafetyNotSavedException(message),
     SettingsLinkError.failed || null => SettingsLinkException(message),
   };
 }

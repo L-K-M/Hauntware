@@ -11,6 +11,7 @@ import 'package:klabautermann_core/klabautermann_core.dart'
         SyncStoreIssue;
 
 import 'controllers/announcement_controller.dart';
+import 'controllers/safety_controller.dart';
 import 'controllers/appearance_controller.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/fleet_controller.dart';
@@ -25,6 +26,7 @@ import 'ui/macos_toolbar_band.dart';
 import 'ui/menus/app_commands.dart';
 import 'ui/menus/app_menu_host.dart';
 import 'ui/prompts/prompt_host.dart';
+import 'ui/server_safety.dart' show SafetyScope;
 import 'ui/server_surfaces.dart' show AppActivityReporter;
 import 'ui/settings_page.dart';
 import 'ui/startup_issue_notice.dart';
@@ -46,6 +48,7 @@ class KlabautermannApp extends StatelessWidget {
     required this.appearance,
     required this.coverage,
     required this.announcements,
+    this.safety,
     this.sync,
     this.settingsIssue,
     this.importStoreIssue,
@@ -69,6 +72,12 @@ class KlabautermannApp extends StatelessWidget {
   /// Whether threshold-band changes are announced (A11Y-15, D60); like
   /// [appearance], it outlives an engine run.
   final AnnouncementController announcements;
+
+  /// The safety preferences the engine enforces (M4 plan M4); like
+  /// [appearance], they outlive an engine run. Null in tests that leave
+  /// safety out: Settings then shows its placeholder and the server header
+  /// neither the Safety menu nor its notices.
+  final SafetyController? safety;
 
   /// The sync account (03 §4.3), one engine run's like [fleet]; null in
   /// tests that leave sync out, which shows the sync control idle.
@@ -157,11 +166,17 @@ class KlabautermannApp extends StatelessWidget {
           // interactive lands under the traffic lights. The Overview reads
           // the announcement switch on every route, the phone's pushed
           // server screen included.
-          builder: (context, child) => AnnouncementScope(
-            announce: announcements,
-            openSettings: (context) => unawaited(_openSettings(context)),
-            child: withMacosToolbarBand(toolbarBand, child: child!),
-          ),
+          builder: (context, child) {
+            final scoped = AnnouncementScope(
+              announce: announcements,
+              openSettings: (context) => unawaited(_openSettings(context)),
+              child: withMacosToolbarBand(toolbarBand, child: child!),
+            );
+            return switch (safety) {
+              final safety? => SafetyScope(safety: safety, child: scoped),
+              null => scoped,
+            };
+          },
           // The shell's settings callback and the menus' commands need a
           // context under the MaterialApp's Navigator; the
           // ListenableBuilder's own context sits above it.
@@ -203,6 +218,7 @@ class KlabautermannApp extends StatelessWidget {
               appearance: appearance,
               announcements: announcements,
               monitorSet: fleet.monitorSettings,
+              safety: safety,
             ),
           },
         );
