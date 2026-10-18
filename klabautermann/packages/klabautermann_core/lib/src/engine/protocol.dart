@@ -1688,8 +1688,9 @@ final class ContainerListStats {
   final DateTime at;
 
   /// CPU % by the spec formula over the time since the previous read,
-  /// so null on a container's first one (one-shot `precpu_stats` is not
-  /// meaningful, 03 §5.6).
+  /// so null on a container's first one, on the first after a read of it
+  /// failed, and on the first after a [DockerListChanged.fullRelist]
+  /// (one-shot `precpu_stats` is not meaningful, 03 §5.6).
   final double? cpuPercent;
 
   /// Bytes in use less `inactive_file` (cgroup v2) or the cache (v1).

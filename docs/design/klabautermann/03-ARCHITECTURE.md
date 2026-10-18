@@ -5268,11 +5268,15 @@ the engine in `engine_isolate.dart` beside it):
   endpoint after 1 s, doubling to 30 s [E]; one whose endpoint drops
   resumes over the next. Either resumes with `since` at the last
   event's second when the stream was lost 60 s ago or less on the same
-  socket, and re-lists in full otherwise. Stats are one-shot reads of
-  the ids on screen that the list does not know as stopped, every 5 s
-  [E] after the last round, at most 4 at once on streamlocal and one
-  at a time on a relay, the CPU % taken against the previous read, so
-  a container's first read has none. The last unwatch, Disconnect,
+  socket, and re-lists in full otherwise. A resumed stream re-lists
+  too, though not as a fresh list: the daemon replays from memory,
+  which a daemon restarted meanwhile has lost along with the
+  containers it stopped. Stats are one-shot reads of the ids on screen
+  that the list does not know as stopped, every 5 s [E] after the last
+  round, at most 4 at once on streamlocal and one at a time on a
+  relay, the CPU % taken against the previous read, so a container's
+  first read has none, nor the first after a failed read or a gap
+  over 60 s. The last unwatch, Disconnect,
   fleet removal and an endpoint change end it all.
 - **Monitor set (M2, K30).** `SetMonitorSet(ids)` replaces FL-21's set
   without a shape change. The engine keeps only the fleet servers that
