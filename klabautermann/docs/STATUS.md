@@ -1301,6 +1301,15 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 spike S3 (E01): `capture.sh --elevation-only` drives the real
+  elevation executor in containers. It covers sudo 1.9.16p2 under four
+  timestamp and tty rules, sudo-rs 0.2.13 and Alpine's doas, as a
+  non-root account with no tty. The evidence is in `docs/evidence/s3/`,
+  with D65 in 03. Rungs 2 to 4 hold; `requiretty` and password doas
+  need rung 5. Under `timestamp_type=global` a cached record accepts a
+  wrong password, so admin-mode validation (E11) will use
+  `sudo -k -v`. The matrix ran locally; CI runs only its contract
+  tests, since the Alpine package pin can disappear. run0 stays manual.
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.

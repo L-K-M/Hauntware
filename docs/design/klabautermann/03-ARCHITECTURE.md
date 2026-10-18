@@ -1130,6 +1130,44 @@ Proposals awaiting the owner close the section; they are not decisions.
   device-local storage only. *Rejected:* a `secret:` record (Séance would adopt
   an unreferenced secret into its vault as an orphan, c1 §2.4); device-only
   storage (the earlier recommendation).
+- **D65. Spike S3 confirms the ladder; admin validation ignores cached
+  credentials (M4 E01).** The spike drove seance_core's
+  `ElevatedExecutor` as a non-root account with no tty against three
+  tools: sudo 1.9.16p2 (Debian 13), sudo-rs 0.2.13 (Ubuntu 26.04) and
+  OpenDoas 6.8.2 (Alpine 3.22), in containers (`capture.sh
+  --elevation-only`; evidence and table in
+  `klabautermann/docs/evidence/s3/`).
+
+  Rungs 2 to 4 hold as 8.3 states them:
+  - blanket doas `permit nopass` runs the command in one call;
+  - the prelude shares sudo's record under `timestamp_type` `tty` and
+    `ppid`;
+  - under `timestamp_timeout=0` the rung-4 retry runs the command, with
+    sudo and with sudo-rs, and the stdin after the password line reaches
+    it.
+
+  Rung 5 is needed: `requiretty` ("sorry, you must have a tty to run
+  sudo") and password doas ("doas: a tty is required" on a pipe) both
+  refuse, and both classify as `ttyRequired`. sudo-rs's texts are
+  recorded and match the classifier. mksh's `printf` is not a builtin, so
+  the prelude stays unavailable under mksh.
+
+  The amendment: under `timestamp_type=global`, a record left by any
+  session of the account satisfies `sudo -v` without reading the
+  password, so a wrong password runs the command while the record lasts.
+  This grants nothing, since `sudo -n` works then anyway. But it means a
+  validation by the prelude cannot reject a wrong password. Admin mode's
+  validation (8.2, E11) therefore runs `sudo -k -S -p '' -v`, which
+  ignores cached records [L: sudo 1.9.16p2 refuses the wrong password
+  and records the right one]. Commands keep the prelude unchanged.
+  sudo-rs checks the password under `-k` too, but records nothing, so its
+  first command after validation takes rung 4.
+
+  *Rejected:*
+  - `sudo -k` in the prelude itself: every sudo-rs command would cost a
+    second round trip, to guard a case that grants no privilege;
+  - `sudo -K` before validation: it removes the account's records in
+    every session, the user's own terminal included.
 
 ### Persistence, alerts and tiers
 
@@ -3857,9 +3895,9 @@ exit $?
   client writes the password line, then HTTP bytes), a privileged `tee`.
 - Both sudo invocations are children of the same shell. With no terminal,
   sudo's default `timestamp_type` (tty) falls back to per-parent-PID records
-  [R: sudoers(5), per review], so `exec sudo -n` (whose parent becomes the
-  shell's parent) and a validation in another exec channel both miss the
-  cached credential. The trailing `exit $?` is load-bearing: bash execs the
+  [R: sudoers(5), per review; spike S3], so `exec sudo -n` (whose parent
+  becomes the shell's parent) and a validation in another exec channel both
+  miss the cached credential. The trailing `exit $?` is load-bearing: bash execs the
   last command of a `-c` string implicitly, which has the same effect.
 - **Verified locally [L]** (04, Appendix A, E6 and E8), sudo 1.9.15p5
   without a tty: the prelude works under dash and bash and passes the
@@ -3871,10 +3909,12 @@ exit $?
   stderr.
 - sudo's stderr is kept (never `2>/dev/null`) and classified: wrong
   password, not in sudoers, "a password is required" after a successful
-  validation, "you must have a tty" [R], sudo-rs texts [U: spike S3].
+  validation, "you must have a tty" [R], sudo-rs texts (recorded by spike
+  S3, D65).
 - `printf` must be a shell builtin so the password never appears in a
-  process argument list (dash, bash and BusyBox ash provide one [R]); the
-  probe's `command -V printf` checks it. Here-documents are not used (older
+  process argument list (dash, bash, BusyBox ash and zsh provide one; mksh's
+  is a tracked alias for `/usr/bin/printf`, spike S3); the probe's
+  `command -V printf` checks it. Here-documents are not used (older
   bash versions write them to temporary files).
 
 Fallback ladder:
@@ -3894,10 +3934,11 @@ Fallback ladder:
    (for example `timestamp_timeout=0`, verified [L]): retry once with
    `sudo -S -p '' -- <cmd>` and the password as the first stdin line; sudo
    1.9.15p5 reads exactly one line and passes the rest to the command [L];
-   sudo-rs behaviour [U: spike S3].
+   so do sudo 1.9.16p2 and sudo-rs 0.2.13 (spike S3, D65).
 5. "you must have a tty" (`requiretty`) or doas with a password: a PTY
-   channel with prompt detection, after spike S3 shows it is safe; until
-   then the access check explains the limitation.
+   channel with prompt detection, once it is shown to be safe; until then
+   the access check explains the limitation. Spike S3 recorded both
+   refusals (D65).
 6. run0: only when the probe shows it works without a password (it cannot
    read a password from a pipe [U]).
 7. polkit-granted `systemctl` verbs: no elevation, `--no-ask-password`.

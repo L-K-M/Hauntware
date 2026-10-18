@@ -12,12 +12,18 @@
 #                                          fixtures and regenerate their
 #                                          goldens
 #   test/integration/capture.sh --list     print the evidence directory and
-#                                          the capture list; needs no Docker
+#                                          what the run would capture;
+#                                          needs no Docker
 #   test/integration/capture.sh --docker-api-only [--update]
 #                                          only the recorded Docker API
 #                                          corpora (below); the other modes
 #                                          also run them after the shell
 #                                          captures
+#   test/integration/capture.sh --elevation-only [--update]
+#                                          only spike S3's elevation
+#                                          matrix (capture_elevation.sh,
+#                                          sourced below), which no other
+#                                          mode runs
 #
 # Needs Linux on x86_64 (the pinned packages and the fixtures are amd64),
 # Docker, curl, sha256sum, realpath and the Dart SDK with the klabautermann
@@ -36,6 +42,8 @@
 #   docker-api/<corpus>/  the recorded Docker API corpora of
 #                     capture_docker_api.sh, sourced below, with their
 #                     logs as logs/docker-api-<corpus>*.log
+#   elevation/        spike S3's case files and printf record, with logs
+#                     as logs/elevation-<case>.log
 #
 # The tool only ever writes redacted, reviewed files; the unredacted
 # sections never leave the container. Only --update writes inside the
@@ -134,9 +142,12 @@ readonly captures=(
 # The recorded Docker API corpora: their pins, targets and steps.
 # shellcheck source=capture_docker_api.sh
 source "$klab_dir/test/integration/capture_docker_api.sh"
+# Spike S3's elevation matrix: its pins, cases and steps.
+# shellcheck source=capture_elevation.sh
+source "$klab_dir/test/integration/capture_elevation.sh"
 
 usage() {
-  echo 'usage: capture.sh [--update | --list] [--docker-api-only]' >&2
+  echo 'usage: capture.sh [--update | --list] [--docker-api-only | --elevation-only]' >&2
   exit 2
 }
 
@@ -152,18 +163,24 @@ for arg in "$@"; do
     --update) [[ "$mode" == check ]] || usage; mode=update ;;
     --list) [[ "$mode" == check ]] || usage; mode=list ;;
     --docker-api-only) [[ "$scope" == all ]] || usage; scope=docker-api ;;
+    --elevation-only) [[ "$scope" == all ]] || usage; scope=elevation ;;
     *) usage ;;
   esac
 done
 readonly mode scope
 
 # The shell captures and images this run needs; --docker-api-only runs
-# none of the captures and needs only the image its tool runs in.
+# none of the captures and needs only the image its tool runs in, and
+# --elevation-only only the images its cases run in (Alpine's comes
+# from capture_elevation.sh).
 selected=("${captures[@]}")
 image_keys=("${!images[@]}")
 if [[ "$scope" == docker-api ]]; then
   selected=()
   image_keys=(debian-13)
+elif [[ "$scope" == elevation ]]; then
+  selected=()
+  image_keys=(debian-13 ubuntu-2604)
 fi
 readonly selected image_keys
 
@@ -185,7 +202,11 @@ if [[ "$mode" == list ]]; then
     read -r name image launch shell packages <<<"$entry"
     echo "capture $name ${images[$image]} $launch $shell${packages:+ $packages}"
   done
-  api_list
+  if [[ "$scope" == elevation ]]; then
+    elev_list
+  else
+    api_list
+  fi
   exit 0
 fi
 
@@ -239,8 +260,13 @@ if [[ "$scope" == all ]]; then
   )
 fi
 
-echo '== Compiling the Docker API capture tool, pulling its daemons'
-api_prepare
+if [[ "$scope" == elevation ]]; then
+  echo '== Compiling the elevation tool, fetching its packages'
+  elev_prepare
+else
+  echo '== Compiling the Docker API capture tool, pulling its daemons'
+  api_prepare
+fi
 
 if [[ "$scope" == all ]]; then
   echo '== Fetching the pinned Debian packages'
@@ -369,14 +395,21 @@ for entry in "${selected[@]}"; do
   fi
 done
 
-api_captures
-
-total=$((${#selected[@]} + ${#api_targets[@]}))
+if [[ "$scope" == elevation ]]; then
+  elev_captures
+  total=$((${#elev_cases[@]} + 1))
+else
+  api_captures
+  total=$((${#selected[@]} + ${#api_targets[@]}))
+fi
 if [[ "${#failed[@]}" -gt 0 ]]; then
   die "${#failed[@]} of $total captures failed or differ: ${failed[*]}"
 fi
 
-if [[ "$mode" == update ]]; then
+if [[ "$mode" == update && "$scope" == elevation ]]; then
+  echo '== Replacing the committed elevation evidence'
+  elev_update
+elif [[ "$mode" == update ]]; then
   echo '== Replacing the committed Docker API corpora'
   api_update
 fi
