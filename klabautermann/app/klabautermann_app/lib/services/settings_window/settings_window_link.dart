@@ -50,6 +50,10 @@ enum SettingsLinkMethod {
   /// [ThemeModePreference] name.
   setThemeMode,
 
+  /// The Appearance tab's editor (M4 E25); the argument is an appearance
+  /// as [encodeAppearance] writes it.
+  setAppearance,
+
   /// The General tab's A11Y-15 switch; the argument is a bool (D60).
   setAnnounceThresholdBands,
 

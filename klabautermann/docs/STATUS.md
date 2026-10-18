@@ -188,8 +188,16 @@ M2, the host read MVP, is the current milestone. What is on main:
   `Libpod-API-Version` and reports `DockerEndpointState`. Results are
   typed; inspect `Path`/`Args`, `Entrypoint`/`Cmd` and health output
   cross masked, and the list drops its command line. Tested over fakes
-  only; no app surface yet (D12), no `/system/df` (D03), no watch or
-  events (D06), no low-session mode (D09).
+  only; no app surface yet (D12), no `/system/df` (D03), no
+  low-session mode (D09).
+- Docker watches (M3, D06, 03 §7.12, §10.1): `DockerWatch` keeps the
+  container, image and stack lists current from one `/events` stream
+  per server (250 ms batches, targeted re-reads by container id,
+  resume with `since`, a full re-list after a gap over 60 s) and reads
+  one-shot list stats for the ids on screen every 5 s (4 at once on
+  streamlocal, one at a time on a relay), all as `DockerListChanged`.
+  Tested over fakes only; the app does not watch yet (D13), and
+  relay channels are not counted in `ChannelQuota` until D09.
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and
@@ -1365,6 +1373,10 @@ M2, the host read MVP, is the current milestone. What is on main:
   `sudo -k -S -p '' -v`. The matrix ran locally; CI runs only its
   contract tests, since the Alpine package pin can disappear. run0 stays
   manual.
+- M4 theme editing (E25): Settings > Appearance edits the theme with
+  ghost_theme's shared editor (presets, mode, colours, font, corners,
+  copy, paste and reset), in the app and in the desktop settings window,
+  in Klabautermann's words.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container
