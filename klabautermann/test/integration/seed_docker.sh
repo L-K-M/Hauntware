@@ -35,7 +35,7 @@ readonly stacks="$HOME/stacks"
 readonly settle_attempts=60
 readonly app_image='registry:5000/klab/app:1'
 # Seconds the registry may take to accept the push after it starts.
-readonly push_attempts=30
+readonly push_attempts=60
 
 docker image tag "$1" "$image"
 docker image tag "$1" "$app_image"

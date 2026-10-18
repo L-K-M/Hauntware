@@ -11,9 +11,10 @@
 // - a dind service whose command does not run dockerd with an explicit,
 //   Unix-only --host: with no command, or with options only, the dind
 //   image's entrypoint adds a TCP listener on 2375 or 2376;
-// - a registry service that publishes or exposes a port: the fixture's
-//   registry speaks plain HTTP and serves the Compose network only (M4
-//   E27), and dind may trust no other registry over plain HTTP.
+// - a registry service that publishes a port or leaves the default
+//   Compose network: the fixture's registry speaks plain HTTP and serves
+//   that network only (M4 E27), and dind may trust no other registry over
+//   plain HTTP.
 import 'dart:convert';
 import 'dart:io';
 
@@ -69,8 +70,7 @@ List<String> findDockerExposureErrors(Map<String, Object?> config) {
         ..addAll(_dindCommandErrors(name, value['command']))
         ..addAll(_insecureRegistryErrors(name, value['command']));
     }
-    if (name == _registryService ||
-        '${value['image']}'.contains('/registry:')) {
+    if (name == _registryService || _isRegistryImage('${value['image']}')) {
       errors.addAll(_registryErrors(name, value));
     }
   }
@@ -204,7 +204,23 @@ Iterable<String> _registryErrors(
     yield '$name sets network_mode; the fixture registry stays on the '
         'Compose network';
   }
+  // The rendered config names every service's networks, `default` alone
+  // when the file names none.
+  if (service['networks'] case final Map networks) {
+    final others = [
+      for (final network in networks.keys)
+        if (network != 'default') network,
+    ];
+    if (others.isNotEmpty) {
+      yield '$name joins ${others.join(', ')}; the fixture registry stays '
+          'on the default Compose network';
+    }
+  }
 }
+
+/// Whether [image] is the registry image, from a mirror or spelled bare.
+bool _isRegistryImage(String image) =>
+    image.contains('/registry:') || image.startsWith('registry:');
 
 /// The values of dockerd's `--host`/`-H` options in [arguments], in each
 /// spelling its flag parser accepts.

@@ -329,7 +329,16 @@ void main() {
 
     test('passes on the Compose network alone', () {
       expect(
-        findDockerExposureErrors(_config(extra: {'registry': registry})),
+        findDockerExposureErrors(
+          _config(
+            extra: {
+              'registry': {
+                ...registry,
+                'networks': {'default': null},
+              },
+            },
+          ),
+        ),
         isEmpty,
       );
     });
@@ -360,6 +369,23 @@ void main() {
         ),
       );
       expect(errors.single, contains('images sets network_mode'));
+    });
+
+    test('rejects a network beyond the default one, under a bare image', () {
+      final errors = findDockerExposureErrors(
+        _config(
+          extra: {
+            'images': {
+              'image': 'registry:3.0.0@sha256:0',
+              'networks': {'default': null, 'shared': null},
+            },
+          },
+        ),
+      );
+      expect(errors, [
+        'images joins shared; the fixture registry stays on '
+            'the default Compose network',
+      ]);
     });
   });
 }
