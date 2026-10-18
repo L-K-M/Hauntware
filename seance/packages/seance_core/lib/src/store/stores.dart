@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:seance_protocol/seance_protocol.dart';
 
-import '../hostkey/tofu.dart';
+import '../catalog/host_key_mutations.dart';
 
 const int _warningLogLevel = 900;
 const String _vaultLoggerName = 'seance.vault';
@@ -362,7 +362,7 @@ class InMemoryVaultStore implements VaultStore {
   Future<Map<String, Uint8List>> allSecretBlobs() async => Map.of(_blobs);
 }
 
-class InMemoryHostKeyStore implements HostKeyStore {
+class InMemoryHostKeyStore implements ConflictAwareHostKeyStore {
   final Map<String, HostKey> _keys = {};
 
   @override
@@ -373,6 +373,42 @@ class InMemoryHostKeyStore implements HostKeyStore {
 
   @override
   Future<void> put(HostKey key) async => _keys[key.locator] = key;
+
+  // Each body reads and writes the map with no await between, so the
+  // compare and the write cannot interleave with another call.
+  @override
+  Future<HostKeyInstallResult> putIfNoConflict(HostKey key) async {
+    final current = _keys[key.locator];
+    if (current != null && current.conflictsWith(key)) {
+      return HostKeyInstallResult.conflict;
+    }
+
+    _keys[key.locator] = key;
+    return HostKeyInstallResult.installed;
+  }
+
+  @override
+  Future<HostKeyInstallResult> replaceIfCurrent(
+    HostKey expected,
+    HostKey replacement,
+  ) async {
+    if (expected.locator != replacement.locator) {
+      throw ArgumentError.value(
+        replacement.locator,
+        'replacement',
+        'must use the expected host-key locator',
+      );
+    }
+
+    final current = _keys[expected.locator];
+    if (current == null ||
+        current.fingerprintSha256 != expected.fingerprintSha256) {
+      return HostKeyInstallResult.conflict;
+    }
+
+    _keys[replacement.locator] = replacement;
+    return HostKeyInstallResult.installed;
+  }
 }
 
 class InMemoryTombstoneStore implements TombstoneStore {

@@ -107,6 +107,11 @@ final class SettingsWindowHost {
         await _appearance.setMode(
           ThemeModePreference.values.byName(argument! as String),
         );
+      case SettingsLinkMethod.setAppearance:
+        final appearance = decodeAppearance(
+          (argument! as Map).cast<String, Object?>(),
+        );
+        await _appearance.setAppearance(appearance.palette, appearance.mode);
       case SettingsLinkMethod.setAnnounceThresholdBands:
         await _announcements.setAnnounceThresholdBands(argument! as bool);
       case SettingsLinkMethod.setMonitored:

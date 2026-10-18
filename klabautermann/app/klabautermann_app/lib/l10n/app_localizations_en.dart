@@ -382,9 +382,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsTabAlerts => 'Alerts';
 
   @override
-  String get themeLabel => 'Theme';
-
-  @override
   String get themeSystem => 'System';
 
   @override
@@ -2866,4 +2863,195 @@ class AppLocalizationsEn extends AppLocalizations {
   String syncFileNewer(String fileName) {
     return 'The sync file $fileName was saved by a newer version of Klabautermann. Sync changes will not be kept after a restart.';
   }
+
+  @override
+  String get appearanceThemeTitle => 'Theme';
+
+  @override
+  String get appearanceThemeHelpTitle => 'Themes';
+
+  @override
+  String get appearanceThemeHelp =>
+      'A theme is kept on this device only and never syncs. To use one elsewhere, copy it here and paste it into Klabautermann on the other device.';
+
+  @override
+  String get appearanceThemeFootnote =>
+      'Picking a theme copies its colours here. It is a starting point, not a mode, so everything below stays yours to change.';
+
+  @override
+  String appearancePresetTooltip(String name) {
+    return 'Use the $name theme';
+  }
+
+  @override
+  String get appearanceModeTitle => 'Mode';
+
+  @override
+  String get appearanceModeLead => 'Automatic colours follow';
+
+  @override
+  String get appearanceOwnSurfaceDark =>
+      'This theme has its own surface, so it is always dark. Set Surface to Automatic to choose a mode.';
+
+  @override
+  String get appearanceOwnSurfaceLight =>
+      'This theme has its own surface, so it is always light. Set Surface to Automatic to choose a mode.';
+
+  @override
+  String get appearanceColoursTitle => 'Colours';
+
+  @override
+  String get appearanceColoursHelpTitle => 'Automatic colours';
+
+  @override
+  String get appearanceColoursHelp =>
+      'Automatic colours are the light or dark neutrals Klabautermann ships with, as the mode picks them. Once you give the theme a surface of its own, they are mixed from that surface and the text instead. Lines and the selection may be translucent.';
+
+  @override
+  String get appearanceAccent => 'Accent';
+
+  @override
+  String get appearanceSlotSurface => 'Surface';
+
+  @override
+  String get appearanceSlotSidebar => 'Sidebar';
+
+  @override
+  String get appearanceSlotRaised => 'Headers and bars';
+
+  @override
+  String get appearanceSlotText => 'Text';
+
+  @override
+  String get appearanceSlotSecondaryText => 'Secondary text';
+
+  @override
+  String get appearanceSlotHairline => 'Lines';
+
+  @override
+  String get appearanceSlotSelection => 'Selection';
+
+  @override
+  String get appearanceSlotOnline => 'Online';
+
+  @override
+  String get appearanceSlotOffline => 'Offline';
+
+  @override
+  String get appearanceSlotConnecting => 'Connecting';
+
+  @override
+  String get appearanceSlotUnknown => 'Unknown';
+
+  @override
+  String get appearanceStatusTitle => 'Status colours';
+
+  @override
+  String get appearanceStatusFootnote =>
+      'Each status also keeps its own shape and its name, so these colours never have to say it alone.';
+
+  @override
+  String get appearanceAutomatic => 'Automatic';
+
+  @override
+  String appearanceAutomaticSemantics(String label) {
+    return '$label: Automatic';
+  }
+
+  @override
+  String appearanceChooseColour(String label) {
+    return 'Choose the $label colour';
+  }
+
+  @override
+  String appearanceChooseAutomaticColour(String label) {
+    return 'Choose a $label colour (now Automatic)';
+  }
+
+  @override
+  String get appearanceShapeTitle => 'Shape and type';
+
+  @override
+  String get appearanceInterfaceFont => 'Interface font';
+
+  @override
+  String get appearanceInterfaceFontHint => 'System default';
+
+  @override
+  String get appearanceInterfaceFontHelper =>
+      'Logs and commands keep their monospace font.';
+
+  @override
+  String get appearanceCorners => 'Corners';
+
+  @override
+  String get appearanceCornersSquare => 'Square';
+
+  @override
+  String appearanceCornersPercent(int percent) {
+    return '$percent%';
+  }
+
+  @override
+  String appearanceCornersSemantics(String label) {
+    return 'Corners $label';
+  }
+
+  @override
+  String get appearanceShareTitle => 'Share';
+
+  @override
+  String get appearanceCopyTheme => 'Copy theme';
+
+  @override
+  String get appearancePasteTheme => 'Paste theme';
+
+  @override
+  String get appearanceShareFootnote =>
+      'Copies the theme as text you can keep or send. Pasting reads what it can and leaves everything else at the default.';
+
+  @override
+  String get appearanceThemeCopied => 'Theme copied.';
+
+  @override
+  String get appearancePasteNotATheme =>
+      'The clipboard does not hold a theme. Copy one with Copy theme first.';
+
+  @override
+  String get appearanceStartOverTitle => 'Start over';
+
+  @override
+  String appearanceResetButton(String name) {
+    return 'Reset to $name';
+  }
+
+  @override
+  String get appearanceUsingOwnColours => 'Using your own colours.';
+
+  @override
+  String appearanceUsingPreset(String name) {
+    return 'Using $name.';
+  }
+
+  @override
+  String get appearanceResetTitle => 'Reset the theme?';
+
+  @override
+  String appearanceResetBody(String name) {
+    return 'Every colour, the font and the corners go back to the $name theme. The mode stays as it is.';
+  }
+
+  @override
+  String get appearanceCancel => 'Cancel';
+
+  @override
+  String get appearanceReset => 'Reset';
+
+  @override
+  String appearanceAbout(String title) {
+    return 'About $title';
+  }
+
+  @override
+  String get appearanceClose => 'Close';
 }

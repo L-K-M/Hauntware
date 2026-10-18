@@ -4,7 +4,7 @@ description: >-
   tints, badges and accent bars, the glyph and colour tables, and the mark
   and colour pickers, so identical server records draw identical marks in
   both apps.
-version: 1.9.1
+version: 1.9.2
 publish_to: none
 
 environment:

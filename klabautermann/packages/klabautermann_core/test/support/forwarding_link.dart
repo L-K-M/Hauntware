@@ -15,8 +15,8 @@ import 'package:seance_core/seance_core.dart';
 import 'scripted_link.dart';
 
 /// A daemon behind a socket that answers each request head (bodies are
-/// not read) with [respond]'s raw response, keeping the connection
-/// alive.
+/// not read) with [respond]'s raw response, or as [handle] does, keeping
+/// the connection alive.
 abstract base class FakeDaemon {
   /// The request lines received, across connections.
   final requests = <String>[];
@@ -27,6 +27,11 @@ abstract base class FakeDaemon {
 
   /// The raw HTTP response to [requestLine].
   String respond(String requestLine);
+
+  /// Answers [requestLine] on [connection]'s server end; a daemon that
+  /// streams or holds an answer overrides it.
+  void handle(String requestLine, FakeDuplexPair connection) =>
+      connection.server.sink.add(utf8.encode(respond(requestLine)));
 
   /// The client end of a fresh connection. The daemon closes its end
   /// once the client's EOF arrives.
@@ -45,7 +50,7 @@ abstract base class FakeDaemon {
           final line = pending.substring(0, pending.indexOf('\r\n'));
           requests.add(line);
           pending = pending.substring(at + 4);
-          pair.server.sink.add(utf8.encode(respond(line)));
+          handle(line, pair);
         }
       },
       onDone: () {

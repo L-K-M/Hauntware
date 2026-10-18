@@ -1,7 +1,11 @@
 // A fake Docker or Podman engine behind a socket for the engine's Docker
-// session: `_ping` and `/version` answer as the engine configured, and
-// versioned paths from the test's routes.
+// session: `_ping` and `/version` answer as the engine configured,
+// versioned paths from the test's routes, `/events` as a stream the test
+// writes to, and answers the test holds back until it releases them.
+import 'dart:async';
 import 'dart:convert';
+
+import 'package:klabautermann_docker/testing.dart';
 
 import 'forwarding_link.dart';
 
@@ -25,6 +29,62 @@ final class EngineDaemon extends FakeDaemon {
 
   /// A status and daemon message by path, ahead of everything else.
   final failures = <String, (int, String)>{};
+
+  /// Paths whose answers wait in [held] until [release].
+  bool Function(String path) hold = (_) => false;
+  final held = <(String, FakeDuplexPair)>[];
+
+  /// The open `/events` streams' connections.
+  final eventStreams = <FakeDuplexPair>[];
+
+  @override
+  void handle(String requestLine, FakeDuplexPair connection) {
+    final path = requestLine.split(' ')[1].split('?').first;
+    if (hold(path)) {
+      held.add((requestLine, connection));
+    } else if (path.endsWith('/events') && !failures.containsKey(path)) {
+      eventStreams.add(connection);
+      unawaited(
+        connection.server.done.then((_) => eventStreams.remove(connection)),
+      );
+      connection.server.sink.add(
+        utf8.encode(
+          'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n'
+          'Transfer-Encoding: chunked\r\n\r\n',
+        ),
+      );
+    } else {
+      super.handle(requestLine, connection);
+    }
+  }
+
+  /// Answers every held request.
+  void release() {
+    final answers = held.toList();
+    held.clear();
+    for (final (line, connection) in answers) {
+      super.handle(line, connection);
+    }
+  }
+
+  /// Writes [event] to every open `/events` stream.
+  void emit(Map<String, Object?> event) {
+    final line = utf8.encode('${jsonEncode(event)}\n');
+    for (final connection in eventStreams) {
+      connection.server.sink
+        ..add(utf8.encode('${line.length.toRadixString(16)}\r\n'))
+        ..add(line)
+        ..add(utf8.encode('\r\n'));
+    }
+  }
+
+  /// Ends every `/events` stream, as a daemon restart or a lost channel
+  /// does.
+  Future<void> dropEvents() async {
+    for (final connection in eventStreams.toList()) {
+      await connection.server.close();
+    }
+  }
 
   @override
   String respond(String requestLine) {
