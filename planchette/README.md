@@ -9,7 +9,7 @@ A focused text editor, and the shared editor foundation for
 
 *The pointer that spells it out.*
 
-**Current version:** v<!-- version -->1.9.1<!-- /version --> · [Releases](https://github.com/L-K-M/Hauntware/releases) (`planchette-*` assets)
+**Current version:** v<!-- version -->1.9.2<!-- /version --> · [Releases](https://github.com/L-K-M/Hauntware/releases) (`planchette-*` assets)
 
 Planchette edits UTF-8 text, configuration files, and scripts. Its
 standalone app provides document tabs, Open/New/Save/Save As,
