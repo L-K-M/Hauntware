@@ -248,7 +248,7 @@ placement · D54 runtime override in M3 · D55 no health overlay in the MVP
 cron zone rules · D59 capability cache · D60 threshold announcements ·
 D61 host-key pins and re-pin ·
 D62 sync state files and the keystore port · D63 pull-only sync in the
-engine.
+engine · D64 a server's confirmation covers its route.
 Proposals awaiting the owner close the section; they are not decisions.
 
 ### Shape and scope
@@ -580,9 +580,9 @@ Proposals awaiting the owner close the section; they are not decisions.
   own READY deadline [E], and a fast request keeps 5 s [E]. A slow
   request's deadline is derived from the guarded commands its collectors
   can run, each bounded by `timeout 10` (6.2), plus a margin [E], instead
-  of a fixed 30 s: the probe alone can run 16 guarded commands
+  of a fixed 30 s: the probe alone can run 17 guarded commands
   (`Collector.guardedCommands` declares each collector's count, and a test
-  ties it to the fragment text), up to 160 s when each runs into its
+  ties it to the fragment text), up to 170 s when each runs into its
   timeout, and a fixed deadline would keep restarting a slow but working
   sampler. Without `timeout` on the host (6.3) the commands run unguarded,
   and the derived deadline still bounds the request. Supersedes the slow
@@ -1060,7 +1060,26 @@ Proposals awaiting the owner close the section; they are not decisions.
   and key derivation); sync while unguarded with in-memory stores (an
   enrollment that a restart forgets, and a token in the keystore with no
   account behind it); synced servers as connect targets before K41
-  (SAF-09).
+  (SAF-09). As built in K41 (D64, 4.7), a synced server gets its
+  `ServerConfig` as its connect config once its endpoint is confirmed.
+- **D64. A server's confirmation covers its route (K41, M2).** A synced
+  server is dialed only while its own endpoint pin and the pin of every
+  jump host on its route that the account holds match their current
+  values, since a connect through a hop hands that hop a credential too
+  (4.7). `ConfirmEndpoints(ids)` pins each named server as it stands and,
+  with it, each hop on its route that this device never confirmed, so
+  the server the user confirmed connects. A hop confirmed before keeps
+  its pin: when a sync changed it, it is listed as changed, and every
+  server behind it waits until the user confirms the hop in its own row,
+  so confirming a server never accepts a hop's new endpoint unseen. A pin
+  is the catalog library's `EndpointPin`, whose route is the hop ids
+  first hop first; a route that loops ends with the id closing the loop.
+  *Rejected:* pinning only the named ids (a server confirmed behind a
+  hop never confirmed would stay unconfirmed with nothing in its row to
+  say why); re-pinning every hop with the server (a hop that a sync
+  rewrote would be accepted through another server's row, whose route
+  shows the hop by label only); gating a server on its own pin alone (a
+  rewritten hop would receive the hop's credential in the background).
 
 ### Privilege and safety
 
@@ -1808,7 +1827,52 @@ holds the fleet assertion and the two MVP disclosures, and its "Sign in"
 stays disabled until the assertion is ticked, so `EnrollSync` is sent
 only then. Once signed in, the control runs a round; it opens the sheet
 again while no record has confirmed the passphrase or after the server
-refused the session. Steps 3 to 5 come with K41 and K30.
+refused the session. Step 4 is built outside the sheet (K30, below);
+step 5 is not built yet.
+
+As built in M2 (K41, D64), step 3 is a notice atop the fleet rows of the
+rail and the phone's list, scrolling with them, that counts the synced
+servers waiting for confirmation (never confirmed on this device, or
+changed since) whenever there are any, so it appears right after the
+sign-in's first pull; its "Review" opens the list. Each row shows the
+server's label, `user@host:port` and the jump route by label, and says
+when the endpoint changed since it was confirmed. A search narrows the
+rows by name, user and address, each row has a checkbox toggle, "Confirm
+all shown" confirms every row the search leaves, and "Confirm selected"
+the toggled ones; either sends `ConfirmEndpoints(ids)`. The list closes
+with a toast once the engine's fleet shows them confirmed, and says so
+in place when a pin could not be saved or a server still waits for a
+changed hop. Imports never appear. Whether they should is an owner
+question still open (O6 of the M2 remaining-work plan); until it is
+answered, the plan's recommended default applies: ssh_config imports
+are device-local and count as confirmed on the device that imported
+them, so endpoint pins apply to synced servers only, and an answer the
+other way would list imports here too. Unconfirmed servers stay
+listed in the fleet; opening one shows why it does not connect.
+
+As built in M2 (K30), step 4 is a choice the user can change at any
+time rather than a sheet step: every fleet row's menu offers "Monitor"
+or "Stop monitoring", and Settings > Servers lists the fleet with a
+switch per server, a server that cannot join saying why, and the count
+out of the limit of 10. A server is eligible when its endpoint is
+confirmed (imports count as confirmed on the device that imported them)
+and the engine signs in to it with an agent or a key file
+(`monitorEligibilityOf` in `klabautermann_core`, one rule for both
+sides); a password or a key held in the vault asks the user while the
+vault does not exist (F3b), and an import from an older store has no
+known credentials until the next import. Until the user chooses, the
+set is the first 10 eligible servers in fleet order on desktops and
+none on phones, worked out from each fleet as it arrives; the first
+change saves the set in force as `klabautermann.monitorSet` (4.10), and
+each save drops ids that left the fleet or stopped being eligible. An
+eleventh server is refused with a message naming the limit. The fleet
+controller sends `SetMonitorSet` once the engine has sent a fleet and
+whenever the set in force changes; the engine checks the same rule and
+the limit again (10.1). The desktop settings window reaches the set
+through the `setMonitored` link method. Jump hosts' credentials are not
+checked: an unattended connect never prompts, so a hop that needs the
+user fails and waits for the user. An encrypted key file counts as
+eligible and fails the same way until K45's passphrase flow.
 
 ### 4.4 The catalog library
 
@@ -1981,6 +2045,28 @@ in the catalog library so Séance (which probes every configured server) and
 Poltergeist (which gates probing on a local connect,
 `PA/services/probe_settings_store.dart` [V]) can adopt it.
 
+As built in M2 (K41, D64): the engine opens the catalog library's
+`FileEndpointPinStore` over `endpoint_pins.json` only with
+`SupportDirectoryAccess.exclusive`; otherwise it keeps pins in memory,
+starting empty and reading nothing, since such an engine lists no synced
+server (D63). Each fleet entry of a synced server carries
+`endpoint` (`confirmed`, `unconfirmed`, `changed`); imports carry none
+(O6's default, 4.3). Only a confirmed server has a connect config, the
+synced `ServerConfig`, which the link supervisor and the jump-host
+resolver both read, so neither the user's `Connect` nor a background
+redial, probe or sampler dials any other synced server; the user's
+`Connect` gets `ConnectRejected(endpointNotConfirmed)`, which the
+server's views show as a banner. A sync round that leaves a confirmed
+server unconfirmed (its host, port, user or route changed, or a hop's)
+sends `EndpointChanged(serverId)`, closes its log streams and link,
+purges its capability cache (SYN-08) and then sends the fleet; the
+server's subscriptions stay, so it samples again once the user confirms
+it and its view connects. A pin that cannot be read counts as none. At
+start the engine purges the cached profiles of synced servers that are
+not confirmed. Pins of servers that leave the account are kept, which
+is the safe direction: a server that returns with the same endpoint is
+confirmed again, any other waits.
+
 ### 4.8 Synced record kinds (v1 onward)
 
 Protocol constraints: no envelope, crypto, LWW, blob layout or
@@ -2072,9 +2158,9 @@ platform identities in 04, section 12.3):
 | `vault.json`, `vault.json.rekey` | Credentials and re-key journal | `SC/src/store/` | MVP |
 | `host_keys.json`, `pin_verdicts.json`, `sync_tripwires.json` | Pins and quarantine state. From M2 the engine pins through the catalog library's `FileHostKeyStore`, one instance per engine that its links and, from K49b (D63), its sync coordinator share, and writes `host_keys.json` only while the process holds the directory alone; otherwise it reads the file once and keeps pins in memory (D61). As built in M2 (K49a, D62), the verdict and tripwire files are named `pin_verdicts.json` (negative pins and kept verdicts) and `sync_tripwires.json` (tripped record ids), owned by `klabautermann_core` over the catalog library's seams. A damaged file is renamed to `<name>.corrupt-<UTC time>` and the store starts empty; one it cannot read or rename, or one from a newer schema, is left as it is and no change is saved that run; nothing is written or renamed without exclusive access | catalog library; the verdict and tripwire files `klabautermann_core` [E] | MVP |
 | `sync_enrollment.json` [E] | Enrollment state (M2, K49a, D62): the push hold, the raised notices and the enrolled account (server URL, user name, mode); never the token or vault key, which stay in the keystore (4.5), and not the device id, which stays in `settings.json`. Kept like the verdict files; a damaged file reads as not enrolled | `klabautermann_core` [E] | MVP |
-| `endpoint_pins.json` | Confirmed endpoints | catalog library | MVP |
+| `endpoint_pins.json` | Confirmed endpoints. As built in M2 (K41), written by the engine through the catalog library's `FileEndpointPinStore` only with exclusive access; otherwise pins last for the engine's run (4.7) | catalog library | MVP |
 | `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config`, replaced whole by each import; never pushed (D14). Schema 3 (M2) holds each host's alias, host, port, user, `IdentityFile` and `ProxyJump` with the values ssh would use (10.1): the effective host (`%h` expanded, lowercased unless an address) and port, the first `IdentityFile` that is not `none`, and the `ProxyJump` as written; under `hops` it holds the same for each other name a stored route gives. An older file holds addresses only: schema 1 (M1) kept no `IdentityFile` or `ProxyJump` and kept `HostName` as written, `%h` included, and schema 2 read each host's values from its first block alone. Its hosts are listed as stored, with no `jumpRoute`, `authKind` or `locatorConflict`, and get no connect config until the next import rewrites the file. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
-| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), whether threshold-band changes are announced (`klabautermann.accessibility.announceThresholdBands`, M2, D60; anything but `false` announces), whether the Docker tab's root-equivalence notice was dismissed (`klabautermann.docker.rootEquivalenceNoticeDismissed`, M3, 8.4; anything but `true` shows it again), monitor set, per-server device preferences | app | MVP |
+| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), whether threshold-band changes are announced (`klabautermann.accessibility.announceThresholdBands`, M2, D60; anything but `false` announces), whether the Docker tab's root-equivalence notice was dismissed (`klabautermann.docker.rootEquivalenceNoticeDismissed`, M3, 8.4; anything but `true` shows it again), the servers pinned to the top of the fleet list (`klabautermann.fleet.pinnedServerIds`, M2, 10.3; a sorted list of server ids, anything else reading as none), FL-21's monitor set as the user chose it (`klabautermann.monitorSet`, M2, K30, 4.3 step 4; a sorted list of server ids, anything else reading as never chosen, so the platform's default applies), per-server device preferences | app | MVP |
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
 | `instance.lock` [E] | Empty. One desktop instance per support directory (built in M2): the composition root takes an exclusive, non-blocking advisory lock on it after the settings window's branch and before `settings.json` and `window_state.json` open and the engine isolate starts, so one process mints the device id and writes these files, and holds it for the life of the process; the file is never deleted. A second instance opens no other file and only says it is already running, until the user quits it. A lock that fails for another reason (no write access, no lock support) lets the app run unguarded and says so at startup. Phones run one process per app and take none | app, through `klabautermann_core`'s `InstanceLock` | MVP |
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
@@ -2271,6 +2357,25 @@ one priority, since `seance_core`'s `start` and `run` take none yet.
 | `nologin` shell or `ForceCommand` | Restricted account | Read-only reachability; explanation |
 | Link ping timeout | Dead peer | Backoff; stale values turn grey |
 
+As built in M3 (D11,
+`klabautermann_core/test/integration/docker_refusal_test.dart`), the
+fixture's negative Docker hosts (11.3) confirm the streamlocal row on
+the base's OpenSSH 10.6. `AllowStreamLocalForwarding no`,
+`DisableForwarding yes`, `AllowTcpForwarding no`, `PermitOpen
+127.0.0.1:1` and an `authorized_keys` `restrict` key each refuse
+`direct-streamlocal` to a socket the account may write with reason 2
+(`SSH2_OPEN_CONNECT_FAILED`) and "open failed", the same answer the
+socket's `EACCES` gets, so only the exec probe tells them apart, and
+`seance_core` classifies every one as `ChannelRefusal.forwardDisabled`.
+`AllowTcpForwarding no` and `PermitOpen` refuse it through the local TCP
+permissions sshd applies to socket paths (sshd logs "Received request to
+connect to path ..., but the request was denied"), the other three
+through its streamlocal check ("refused streamlocal port forward"); no
+variant still forwards. `direct-tcpip` refusals carry reason 1
+(`SSH2_OPEN_ADMINISTRATIVELY_PROHIBITED`). `MaxSessions 2` refuses the
+third session with reason 2 and "open failed", and the link learns a
+limit of 2 and reports `SshLinkDegraded(sessionLimitLearned)`.
+
 ### 5.4 Docker Engine API over the forwarded socket
 
 - `SshLink.openUnixStream(path)` opens OpenSSH `direct-streamlocal@openssh.com`
@@ -2328,8 +2433,8 @@ one priority, since `seance_core`'s `start` and `run` take none yet.
 
 | Stream | Endpoint | Framing | Cancel | Resume |
 |---|---|---|---|---|
-| Container logs | `GET /containers/{id}/logs?follow=1&tail=N&timestamps=1&stdout=1&stderr=1` | stdcopy 8-byte frames unless `Config.Tty` (from inspect; Docker sets `Content-Type: application/vnd.docker.multiplexed-stream` or `application/vnd.docker.raw-stream` from API 1.42; from 1.42 the header is used when present and cross-checked with `Config.Tty`; below 1.42 a current daemon labels every logs response raw-stream, and older daemons and possibly Podman's compat layer omit it [R: moby `container_routes.go` `getContainersLogs`, reported by review]); split on `\n` after demultiplexing | Close the duplex | `since=<unix seconds>.<9-digit nanoseconds>` converted from the last delivered line's RFC3339Nano timestamp (the API rejects RFC3339 with 400); `since` is inclusive, so drop re-sent lines up to and including the last delivered one [R: moby `getContainersLogs`, `loggerutils/logfile.go`, reported by review] |
-| Stats, list | `GET /containers/{id}/stats?stream=false&one-shot=true` | One JSON object | n/a | Deltas between polls client-side (one-shot `precpu_stats` not meaningful [U]) |
+| Container logs | `GET /containers/{id}/logs?follow=1&tail=N&timestamps=1&stdout=1&stderr=1` | stdcopy 8-byte frames unless `Config.Tty` (from inspect; Docker sets `Content-Type: application/vnd.docker.multiplexed-stream` or `application/vnd.docker.raw-stream` from API 1.42; from 1.42 the header is used when present and cross-checked with `Config.Tty`; below 1.42 a current daemon labels every logs response raw-stream, and older daemons and Podman's compat layer omit it [R: moby `container_routes.go` `getContainersLogs`, reported by review; recorded from Docker 20.10 and Podman 5.8 in D01]); split on `\n` after demultiplexing | Close the duplex | `since=<unix seconds>.<9-digit nanoseconds>` converted from the last delivered line's RFC3339Nano timestamp (the API rejects RFC3339 with 400); `since` is inclusive, so drop re-sent lines up to and including the last delivered one [R: moby `getContainersLogs`, `loggerutils/logfile.go`, reported by review] |
+| Stats, list | `GET /containers/{id}/stats?stream=false&one-shot=true` | One JSON object | n/a | Deltas between polls client-side (one-shot `precpu_stats` is zeroed, with a zero `preread`, on every daemon of the recorded corpus) |
 | Stats, detail | `GET /containers/{id}/stats?stream=1` | JSON lines | Close | n/a |
 | Events | `GET /events?since=&filters=` | JSON lines; `Type`, `Action`, `Actor` only (1.52 removed the legacy fields), legacy shape accepted below 1.52 | Close | `since=` last event time; full re-list after a gap over 60 s |
 | Pull progress | `POST /images/create?fromImage=&tag=` | JSON values keyed by layer `id`; `progressDetail`, `errorDetail` | Close, which cancels the pull on the daemon unless another client is pulling the same image [R: moby `image_routes.go` request context, `xfer/transfer.go` `release`, reported by review]; a pull that must outlive its view runs detached (7.14) | n/a |
@@ -2425,6 +2530,21 @@ slot until `SshLink.connect` returns. Reachability probes reuse
 `ProbeService` (`SC/src/probe/probe_service.dart:64`, 45 s jittered
 sweeps, at most 6 concurrent [V]) and run only for confirmed endpoints.
 
+As built in M2 (K20, `klabautermann_core` `fleet/reachability_service.dart`):
+the engine probes the fleet entries that have a connect config and a
+confirmed endpoint, imports included under O6's default (4.3), and so
+never an unconfirmed or changed synced server (4.7). A server routed
+through a jump host is not probed and is reported `unknown`, and one
+holding a link is answered online without a probe, as `ProbeService`
+does. Probing starts once `Hello` has had its fleet; a new or moved
+target sweeps at once, a removed one is dropped before the fleet or
+`EndpointChanged` that removes it goes out, and every sweep reports
+every target, always on a later event-loop turn than the fleet that
+lists it. `SetAppActivity` pauses the sweeps in the background, dropping
+answers in flight, and the foreground sweeps at once.
+`EngineStart.probesEnabled` gates probing apart from links; it is off
+unless given, and `main.dart` turns it on (the contract test holds it).
+
 ---
 
 ## 6. Host data collection
@@ -2477,7 +2597,14 @@ shown as unknown, never as zero.
   `/proc/<pid>/cmdline`. The program is a constant assembled in
   `klabautermann_host` from collector fragments and contains no user-supplied
   text. It ends by printing a READY marker. The client sends nothing else until
-  it has read READY.
+  it has read READY. As built in M4 (E07, collector-set version 8), the
+  line before READY is `\036<nonce> SELF <pid> <ppid>`, the sampler
+  shell's `$$` and `$PPID`: the start command execs `env`, which execs
+  `sh -s`, so these are the channel's process and the sshd process
+  serving the session, two of 8.6's protected targets. A READY of this
+  version without SELF before it ends the session; one of another
+  version is a version mismatch first, as an older program prints no
+  SELF.
 - **Requests.** Each request is one shell command line:
   `hw_t <seq> <collector>...` for a tick, `hw_o <seq> <collector> <arg>...`
   for an on-demand read (for example one unit's `systemctl show`). Collector
@@ -2593,6 +2720,7 @@ source for every runner, including the T1 scripts (9.3).
 | `units` | slow | `systemctl list-units --all --output=json` (systemd 246+), else `--plain --no-legend`; `systemctl --failed` | 15 s while visible; 60 s for the health card | same | same |
 | `timers`, `cron` | slow | `systemctl list-timers --all --output=json`; `crontab -l`; `/etc/crontab`; `/etc/cron.d/*`; `cron.{hourly,...}` | 60 s while visible | same | on demand |
 | `timer_detail` | slow | `systemctl show -p TimersCalendar -p TimersMonotonic -p RandomizedDelayUSec -- <timer>` (D57) | on demand | same | same |
+| `ops` | slow | the `<id>.json` records of both operation directories of 7.17, at most 50 per directory, each cut at 4 KiB [E] | on connect (E17) | same | same |
 | `identity` | slow | `/etc/os-release`, `uname`, `hostnamectl --json=short` (systemd 249+) | once per session | same | same |
 | `temps`, `gpu`, `smart` (v1) | slow | hwmon and thermal sysfs, `nvidia-smi --query-gpu=...`, `smartctl -n standby -j` | 10 s, 30 s, 10 min | same | on demand |
 | `packages` (v1) | slow | `apt-get -s upgrade`, `dnf check-update`, ... (7.8) | on demand, 60 min | on demand | on demand |
@@ -2655,13 +2783,13 @@ the probe (6.1), until one is answered on that link: a probe that brings
 no reply goes out again after 15 s [E], as an owed read does, each
 later one after twice the last wait, up to 15 min [E], and on a later
 run on the same link. A probe that hangs holds the slow sampler for its
-whole deadline, so the cap bounds the readings it loses to about 15 %
+whole deadline, so the cap bounds the readings it loses to about 16 %
 of the time. Until it settles the slow sampler sends
 nothing else and, for a server whose profile the engine does not know
 yet, the fast sampler waits too, so the first readings already withhold
 what a container host's `/proc` would supply (D50); a slow sampler that
 fails to start releases the fast one, and probes once it is ready. That
-wait lasts at most the probe's deadline, 165 s for its 16 guarded
+wait lasts at most the probe's deadline, 175 s for its 17 guarded
 commands (6.2, D47), and holds only while the engine knows no profile
 for the server. There D50, which never shows the host's figures as the
 container's, takes precedence over 6.2's rule that a hung slow collector
@@ -3498,6 +3626,27 @@ matching row applies:
   older than 7 days [E] are pruned on connect, those in the root directory
   by the next root-run wrapper or in admin mode. Never `/tmp`. Both
   directories are rows in the host write inventory (8.11).
+
+As built in M4 (E07, `klabautermann_host/lib/src/parse/ops.dart`), the
+slow `ops` collector lists
+`${XDG_STATE_HOME:-$HOME/.local/state}/klabautermann/ops` (a relative
+`XDG_STATE_HOME` is ignored) and `/var/lib/klabautermann/ops`, each as
+one guarded `sh -c` of a constant
+listing script. It reads regular files named `<16 hex>.json`, not
+symlinks, temp files or logs, at most 50 per directory through
+`head -c 4097`, and frames each as `rec <kind> <id> <status> <bytes>`
+plus exactly that many bytes, so record text cannot forge another; a
+`dir <kind> ok|absent|denied <count> <path>` line ends each listing and
+reports the resolved path and the full count. A record is the one-line
+JSON object E08's wrapper writes, every key present:
+`{"v":1,"id","state":"running"|"done","pid","startTicks","unit","exit",
+"startedAt","endedAt"}`, with `pid` the wrapper's `$$`, `startTicks`
+field 22 of its `/proc/<pid>/stat`, `unit`
+`klabautermann-op-<id>.service` or null, `exit` and `endedAt` null while
+running, and null times where `date` has no `%s`. The parser rejects,
+never reads as an operation, a record cut at 4 KiB, one of another
+version, a malformed one, and a forged one: its `id` differs from its
+file name or its `unit` names another unit. Re-attach itself is E17's.
 
 ### 7.18 Backups (BAK)
 
@@ -4521,12 +4670,13 @@ shows there.
 | `EnrollSync(baseUrl, username, password, encryptionPassphrase)`, `RunSyncRound` | `CatalogReplaced(entries)`, `SyncStatus(phase, operation, account, failure, passphraseUnverified)` |
 | `AnswerKeystore(requestId, result)` (D62) | `KeystoreRequest(requestId, operation)`: the engine asks the app for the OS keystore |
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
-| `ConfirmEndpoints(ids)`, `SetMonitorSet(ids)` | `EndpointChanged(serverId)` |
-| `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status), `ConnectRejected(serverId, reason)` (no config to dial with, D61) |
+| `ConfirmEndpoints(ids)` (K41, 4.7) | `CatalogReplaced(entries)` with each synced entry's `endpoint`, after `RequestRejected` when a pin could not be saved; `EndpointChanged(serverId)` when a sync changes a confirmed endpoint |
+| `SetMonitorSet(ids)` (FL-21, K30) | no event: it changes what samples; `RequestRejected` naming the ids it skipped (outside the fleet or not eligible), or for more than 10 ids, which leaves the last set |
+| `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status), `ConnectRejected(serverId, reason)` (no config to dial with, D61, or an endpoint not confirmed, 4.7) |
 | `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `RefreshSubscription(serverId, subscriptionId)` (a phone's pull to refresh, PLT-02), `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
-| `DockerQuery(serverId, queryId, query)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason)`, `DockerEvent` (opaque until the event lists) |
+| `DockerQuery(serverId, queryId, query)`, `DockerWatch(serverId, watchId, lists, statsFor)`, `DockerUnwatch(serverId, watchId)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason)`, `DockerListChanged(serverId, list, payload, at, fullRelist)` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(preview)`, `ActionProgress`, `ActionFinished` |
 | `AnswerPrompt(promptId, answer)` (trust, responses or cancel, secret) | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
 | `SetAppActivity(activity)` (foreground or background; D34, D45) | no event: it changes what runs |
@@ -5043,6 +5193,17 @@ the engine in `engine_isolate.dart` beside it):
   key without minting, write it) and `AnswerKeystore` carries its
   result (done, a value, or refused with a diagnostic); a write the app
   refuses throws in the engine, and a read reads as none.
+- **Version 3 (M2 endpoints).** Endpoint confirmation joined version 3
+  the same way (K41, D64, 4.7). `FleetEntry` gained `endpoint`, null for
+  an import; `ConnectRejectedReason` gained `endpointNotConfirmed`;
+  `ConfirmEndpoints(ids)` skips ids that are no synced server and is
+  answered by the fleet, after `RequestRejected` naming
+  `endpoint_pins.json` when a pin was not saved, so the fleet ends the
+  request either way; `EndpointChanged(serverId)` precedes the fleet of
+  the round that changed a confirmed endpoint. The fleet controller
+  keeps the waiting entries for the confirmation list, and the
+  monitoring controller sends `Connect` again for a server a view holds
+  when its endpoint changed, so its banner says why.
 - **Version 3 (M3 Docker reads).** Docker queries joined version 3 the
   same way (D05). Within it the protocol shape is decided here rather
   than in a numbered row: `DockerQuery` carries the app's `queryId`,
@@ -5054,9 +5215,10 @@ the engine in `engine_isolate.dart` beside it):
   carries a sealed payload of `klabautermann_docker`'s plain-data
   models instead of decoded JSON: the list drops each container's
   command line, and one container crosses as `ContainerDetails`, whose
-  `Path` and `Args`, `Entrypoint` and `Cmd` (each pair read as one
-  command line) and health-check output the engine masks with the
-  process-argument rules of 8.9. A query that reads nothing is answered
+  `Args` (read as the words after the program `Path`, which crosses as
+  it is), `Entrypoint` and `Cmd` (read as one command line) and
+  health-check output the engine masks with the process-argument rules
+  of 8.9. A query that reads nothing is answered
   with a typed failure (not in the fleet, no link, no probe answer yet,
   endpoint failed, too many waiting, no container named, gone, daemon
   error, connection failed, cancelled), so every query gets one result;
@@ -5076,9 +5238,60 @@ the engine in `engine_isolate.dart` beside it):
   probe answer with other sockets, tools or sudo, or a connection that
   drops resolves again; a failure stands until the next query. On
   relay ranks the pool holds at most the short-action share's 2
-  connections and closes them after 30 s without a query [E]. Watches,
-  the endpoint override and typed list events are not in the protocol
-  yet.
+  connections and closes them after 30 s without a query [E]. The
+  endpoint override is not in the protocol yet.
+- **Version 3 (M3 Docker watches).** Watches joined version 3 the same
+  way (D06), and the opaque `DockerEvent` row is gone. `DockerWatch`
+  names the lists a view shows (containers, images, stacks, stats) and,
+  for stats, the container ids on screen (at most 64 [E]); a watch with
+  an id the server holds replaces it, and a server holds at most 16
+  [E]. A watch opens the endpoint as a query does, and one the engine
+  cannot hold (not in the fleet, too many ids, too many watches) is
+  answered with a failed list. `DockerListChanged` carries the whole
+  list each time as a typed payload: the containers without command
+  lines, the images, `groupComposeProjects`' grouping of the same
+  containers, or a stats round (per container CPU %, memory less
+  `inactive_file` or the cache, the limit, and the engine's time), or a
+  typed failure. `fullRelist` marks a list read from nothing: a
+  watch's first read, or one after the stream was lost for over 60 s
+  or could not resume. As built, the engine opens one `/events` stream
+  per server while any watch holds, on a connection of its own (on a
+  relay a follower-type channel that D09 accounts for), filtered to
+  container, image, volume and network events, and lists only once its
+  head has arrived. Container actions that change no list (`exec_*`,
+  `attach`, `resize`, `top`, archive and export) are skipped. Each
+  other event goes through `planEventRefresh`: events within 250 ms
+  [E] of the first are refreshed together, the containers they name
+  (up to 16 [E]) read with an `id` filter and merged in, more of them,
+  or an event without an id, re-listing them all, and image events
+  re-listing the images. A stream that ends opens again over the same
+  endpoint after 1 s, doubling to 30 s [E]; one whose endpoint drops
+  resumes over the next. Either resumes with `since` at the last
+  event's second when the stream was lost 60 s ago or less on the same
+  socket, and re-lists in full otherwise. A resumed stream re-lists
+  too, though not as a fresh list: the daemon replays from memory,
+  which a daemon restarted meanwhile has lost along with the
+  containers it stopped. Stats are one-shot reads of the ids on screen
+  that the list does not know as stopped, every 5 s [E] after the last
+  round, at most 4 at once on streamlocal and one at a time on a
+  relay, the CPU % taken against the previous read, so a container's
+  first read has none, nor the first after a failed read or a gap
+  over 60 s. The last unwatch, Disconnect,
+  fleet removal and an endpoint change end it all.
+- **Monitor set (M2, K30).** `SetMonitorSet(ids)` replaces FL-21's set
+  without a shape change. The engine keeps only the fleet servers that
+  `monitorEligibilityOf` allows (4.3 step 4) and it can dial, subscribes
+  each one's `overview` under a subscription id of its own
+  (`engine:monitorSet`, which the app's surface ids never take) and asks
+  the link supervisor for an unattended connect, so the scheduler samples
+  it while the app is in the foreground (6.4) and 5.12's cap and jitter
+  apply. A server that leaves the set loses that subscription, and its
+  link unless a view holds one (a `Connect` without its `Disconnect`); a
+  view's `Disconnect` leaves a monitored server's ready link open, and
+  of one with no link yet it gives up the view's attempt, with any
+  prompt, and dials unattended again. A server that leaves the fleet or
+  stops being eligible (a sync changed its endpoint) leaves the set, and
+  the app's next set follows the fleet it hears.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period
@@ -5124,7 +5337,11 @@ the engine in `engine_isolate.dart` beside it):
   client hands the startup fleet to the fleet controller alone, so the
   monitoring controller has no endpoint to compare on the first import
   after launch; that purge needs the engine to report the change
-  (`EndpointChanged`) or the startup entries. The engine's
+  (`EndpointChanged`) or the startup entries. From K41 the engine
+  reports it for synced servers, and purges its own device cache, but
+  the monitoring controller still keeps the session readings across it:
+  the views and fleet rows hold their notifiers, so dropping them needs
+  a reset of each ring and box, which is left for later. The engine's
   `RequestRejected` of `Connect` (an id outside the fleet, or links off)
   shows nothing; a `ConnectRejected` shows on the server's views (M2
   pins, above). A server that leaves the fleet is sent nothing until it
@@ -5170,6 +5387,18 @@ the engine in `engine_isolate.dart` beside it):
   General, Appearance, Sync, Servers, Docker, Safety, Alerts), a route on
   mobile. The three native settings-window runners are copied and renamed
   with a ledger entry (D32).
+- As built in M4 (E26, owner question Q3): About Klabautermann is a
+  registry command on every desktop, first in the macOS application menu
+  in place of AppKit's About panel, which shows `CFBundleName` (an
+  identity, 04 §12.3), and in a Help menu on Linux and Windows. It opens
+  Material's About dialog with the title "Klabautermann (preview)", the
+  version and the Unlicense line; Settings > General has an about row
+  that opens it on every platform. The version comes from
+  `package_info_plus`, read once in `main`; the settings window's engine
+  has no plugins, so the link's snapshot carries it. Tests tie the title
+  and the `.deb` description to `kPreviewLabel`
+  (`app/klabautermann_app/lib/app_identity.dart`), and M7 drops the label
+  in one change (11.7).
 
 ### 10.3 Fleet view
 
@@ -5197,10 +5426,12 @@ link's word is announced once, connecting, authenticating and waiting to
 reconnect counting as one attempt; samples and probe answers are not.
 Where the platform takes no announcements (Android), the latest change is
 the label of a live region around the list, as in Flutter's date picker.
-Until the monitor set (FL-21) exists, a server counts as monitored
-while the app holds an `overview` or `core` reading for it in this engine
-run, and rows subscribe nothing themselves; with links off, rows show
-reachability only. The bar reads CPU busy, used out of total memory, and
+A row shows the bar while the app holds an `overview` or `core`
+reading for its server in this engine run, and rows subscribe nothing
+themselves: as built in M2 (K30), the engine samples `overview` for the
+monitor set (FL-21, 4.3 step 4), so a monitored server's row fills
+without a view, and a server a view has open shows its readings too
+until they go stale. With links off, rows show reachability only. The bar reads CPU busy, used out of total memory, and
 the root file system's `df` capacity, warns at 80 % and turns critical at
 90 % until OV-11's thresholds, and is stale once the link is down or the
 reading is older than twice its stream's slowest 6.4 cadence (60 s for
@@ -5219,11 +5450,30 @@ current text scale; elsewhere they give way, staying in the tooltip and
 the label. The warning always shows, and a touch on it shows its
 words. A closed link's failure kind takes a sentence, as under the
 server header (10.4), which only the tooltip and the label carry. A
-collapsed or filtered section that hides a live server does not yet
-say so in its header (`ghostHiddenLiveIndicator`).
+collapsed or filtered section or group that hides a live server does
+not yet say so in its header (`ghostHiddenLiveIndicator`).
 The filter (FL-05) is the kit's `SidebarFilterField`
 over `FleetEntry.searchText`, name and address standing in without it:
 every term must occur, Enter opens the first match and Esc clears.
+
+Sections (FL-06, K42): the rail and the phone list share one sectioned
+list, `ghost_servers`' sectioning over its neutral input
+(`groupServerEntries` with each row's id and `FleetEntry.group`), as
+Séance's rail draws it. PINNED lists the synced servers pinned on this
+device, in the fleet's order; a pinned server leaves its group, whose
+count drops. SERVERS follows with the other synced servers, ungrouped
+first, then one nested disclosure row per group, sorted and
+case-folded. Groups come only with synced records, so imports, which
+are never pinned, list after these under IMPORTED. Pins are
+device-local, as Séance's are: `settings.json` keeps them under
+`klabautermann.fleet.pinnedServerIds` (4.10), and a pin outlives a
+sync that drops its server and brings it back. A synced row's menu
+pins and unpins it (right-click, Shift+F10, the Menu key or a
+long-press); the row draws no "⋮", whose room the bar's measure does
+not count. Each section and group folds under its header while the
+list lives, not across launches; a live query shows every match in
+folded ones, and Enter opens the first row as the list orders it. A
+grouped row's indent counts in the room the bar measures.
 
 ### 10.4 Server view and panels
 
@@ -5313,8 +5563,9 @@ The state resolves through `ghost_servers`' indicator under the rail
 rule, as the server's row does, as a dot, an icon and a word, with
 the link's own word where the indicator shows none; the kit keeps its
 dot painter private, so the header draws the indicator's dot itself.
-The chip reads "T0: sampled only while open" until FL-21's monitor set
-exists, and opens the coverage sheet; it avoids "read only", which the
+The chip reads "T0: sampled only while open", and opens the coverage
+sheet; K30's monitor set left it as it is, since a monitored server too
+is read only while the app is open, though not only while its view is; it avoids "read only", which the
 header's read-only indicator means. The runtime is the access
 check's engines over the probe's profile, as the Access tab lists
 them, with its caveat that Podman can also answer on Docker's socket
@@ -5672,6 +5923,22 @@ the shared theme extensions and provides theme editing (the editable
 palette) and presets in the preview. v1: paste from Séance and Poltergeist
 (same JSON keys).
 
+As built in M4 (E25), the Appearance tab hosts `ghost_theme`'s
+`GhostAppearanceSection` (F4b PR 3, E05) with Klabautermann's style and
+an ARB adapter (`KlabautermannAppearanceStrings`): presets, the mode,
+every colour slot, the interface font, the corners, copy and paste of the
+theme JSON, and reset. It shows no terminal section and no installed-font
+picker. Each edit goes through `AppearanceSettings.setAppearance`: the
+app's controller applies it, repaints and saves the palette and mode
+under `klabautermann.appearance` (the M1 shape, which already held the
+whole palette, so nothing new needs reading). The desktop settings window
+sends the same edit as the `setAppearance` link method, and the snapshot
+that comes back re-themes the window. A change the app does not take
+puts the editor back on the app's appearance; one it takes but cannot
+save stays and says so. The theme mode switch remains `setMode` for any
+caller outside the editor. Pasting a sibling's theme keeps the shared
+codec's lenient reading; v1 adds nothing beyond it.
+
 ### 10.10 Localization and accessibility
 
 - ARB and `gen-l10n` from the first commit with the shared contract scanner
@@ -5720,6 +5987,38 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
 | Helper and alert delivery (v1.x, D42) | Rust unit tests of `klabautermann-inbox` and `klabautermann-notify` (format v1 validation, credential-file mode refusal, exit statuses per HTTP answer); cross-language vectors: blobs sealed in Rust open with the Dart sealing under the alert domain and vice versa, and never under `seance/v1/inbox/`; app-side fetch, validation, replay filter, an item fetched again behind a stopped cursor left on the server, two devices merging one status record, wrong-server rejection, acknowledgement and deletion against a fake inbox; end to end on the fixture host: install with hash check, a real deposit to a sync server, fetch, acknowledge, delete, revoke (exit status 2), spool fallback, uninstall leaving nothing | `klabautermann/rust` tests, `klabautermann_host/test`, `klabautermann_core/test`, integration, CI Rust job |
 | Companion parity (M9) | The shared fixture corpus through the Dart parsers and rule evaluator and through the Rust companion; identical parsed results and rule verdicts required (9.4) | `klabautermann_host/test/fixtures`, `klabautermann/rust` companion tests, CI Rust job |
 | Manual checklist | iOS background disclosure and return banner; Android battery and data use; macOS keychain prompts; RHEL 8, Ubuntu 26.04 (sudo-rs) and a Synology host | `klabautermann/docs/` |
+
+As built in M3 (D01), `klabautermann_docker/tool/capture_api.dart`,
+run by `test/integration/capture.sh` through `capture_docker_api.sh`,
+records the Docker API corpus from rootful daemons in privileged,
+digest-pinned containers: Docker 20.10.24 (API 1.41), 25.0.5 (1.44),
+29.0.4 (1.52) and 29.7.2 (1.55, the newest release at that maximum;
+29.8 serves 1.56), and Podman 5.8.7's compat service (1.44). It seeds
+each daemon through the API, then keeps every response's raw bytes,
+chunked framing included, with a manifest and provenance, in
+`api-1.41/`, `api-1.44/`, `api-1.52/`, `api-1.55/` and `api-podman/`.
+CI's capture step records them again and fails on a structural
+difference (exchanges, statuses, content types, header names, JSON key
+paths). The recordings settle three notes: Docker 20.10 and Podman send
+logs without a `Content-Type` (5.6), a one-shot `precpu_stats` is zeroed
+(5.6), and Podman answers versioned paths outside its range instead of
+refusing them, so the client-side refusal of 5.8 is the only one there.
+Capturing also showed that Podman 5.8's log follow sometimes sends one
+line as two stdcopy frames, each with its own `timestamps=1` prefix,
+and that it returned no lines for a `since` equal to the last lines'
+timestamp, where Docker's `since` is inclusive (5.6). Rootless daemons
+and real hosts are not recorded.
+
+As built in M3 (D02), `RecordedDaemon` in `klabautermann_docker`'s
+`testing.dart` replays a corpus to the real HTTP client, whole or one
+byte at a time, and `recorded_api_test.dart` runs every directory
+through negotiation, refusals, the typed endpoints and the 5.8 gates.
+Replay showed three more daemon facts. Podman's 1.44 compat layer
+sends the pre-1.52 legacy event fields as Docker 1.44 does. Podman's
+`/system/df` lists an image once per name (tag and digest reference),
+so its image count can exceed `/images/json`'s; the summary counts
+images from the list. And an idle container's CPU counter can stand
+still between two samples, which now reads as 0 % instead of unknown.
 
 ### 11.2 Cross-app regression tests added by this plan
 
@@ -5833,6 +6132,36 @@ every exit removes the accounts with their sessions, the sshd, the
 timer and the directories; the system sshd, its config and port 22 stay
 untouched. The accounts with sudo, `systemd-run`, linger, the elevation
 prelude and the detached runners remain for later legs.
+
+As built in M3 (D10), the Docker host's image
+(`klabautermann/test/integration/sshd/Dockerfile.docker`) builds `FROM`
+the same Poltergeist base and copies the static `docker` CLI and its
+Compose plugin from the official `docker:<ver>-cli` image, pinned by
+digest, in a build stage, in place of the new frozen base above: a new
+GHCR package starts private (06), and `fixture-images.yml` stays as it
+is. The Docker services start with the others rather than under a
+`docker` profile.
+
+As built in M3 (D11), six negative variants of the Docker host,
+`neg-nostreamlocal`, `neg-disableforwarding`, `neg-notcp`,
+`neg-permitopen`, `neg-maxsessions2` and `neg-restrict` on 127.0.0.1
+ports 2245 to 2250, share its image, accounts and socket. The first
+five put their setting ahead of the common config's `Include`;
+`neg-restrict` runs the Docker host's own config and signs in with the
+run's keys behind `restrict` (`authorized_keys.restrict`, which `run.sh`
+writes). The claim above that the common config's `AllowTcpForwarding
+no` refuses streamlocal holds on OpenSSH 10.6 (5.3).
+
+As built in M4 (E27), a `registry` service (Distribution 3.0.0, pinned by
+digest) serves the Compose network only: it publishes and exposes
+nothing, and dind trusts it, and only it, over plain HTTP
+(`--insecure-registry=registry:5000`). `check_docker_exposure.dart`
+rejects a registry that publishes a port or leaves the Compose network,
+and any other insecure registry. `seed_docker.sh` pushes the busybox
+image as `registry:5000/klab/app:1` and seeds the mutation suites'
+targets: the stacks `redeploy`, `orphans` (whose `old` service leaves
+its file after it starts) and `managed` (`coolify.managed=true`), and a
+container `ssh-port` publishing port 22 inside dind, a protected target.
 
 ### 11.4 Performance budgets (gated from M2)
 

@@ -1,0 +1,7 @@
+# A negative variant of the Docker host (03 §5.3, §11.3; M3 D11):
+# DisableForwarding over a config that otherwise forwards. sshd keeps
+# the first value it reads (sshd_config(5)), so both lines come before
+# the Include of the common config.
+AllowTcpForwarding local
+DisableForwarding yes
+Include /etc/ssh/fixture/sshd_config.common

@@ -1,0 +1,10 @@
+HTTP/1.1 200 OK
+Api-Version: 1.44
+Content-Type: application/json
+Docker-Experimental: false
+Ostype: linux
+Server: Docker/25.0.5 (linux)
+Date: Sat, 17 Oct 2026 16:13:38 GMT
+Content-Length: 308
+
+{"Volumes":[{"CreatedAt":"2026-10-17T16:13:25Z","Driver":"local","Labels":{"com.docker.compose.project":"demo","com.docker.compose.version":"5.6.0","com.docker.compose.volume":"data"},"Mountpoint":"/var/lib/docker/volumes/demo_data/_data","Name":"demo_data","Options":null,"Scope":"local"}],"Warnings":null}

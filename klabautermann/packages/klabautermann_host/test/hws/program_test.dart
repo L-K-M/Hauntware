@@ -99,6 +99,7 @@ void main() {
         'timers',
         'cron',
         'timer_detail',
+        'ops',
       ]) {
         expect(program, isNot(contains('c_$c()')), reason: c);
       }
@@ -115,6 +116,7 @@ void main() {
         'timers',
         'cron',
         'timer_detail',
+        'ops',
       ]) {
         expect(program, contains('c_$c()'), reason: c);
       }
@@ -165,6 +167,20 @@ void main() {
           ),
         );
         expect(program, contains('READY HWS/1 $kCollectorSetVersion'));
+      }
+    });
+
+    test('SELF prints the shell PID and its parent just before READY', () {
+      for (final kind in SamplerKind.values) {
+        final lines = buildSamplerProgram(
+          kind: kind,
+          nonce: nonce,
+        ).trimRight().split('\n');
+        expect(
+          lines[lines.length - 2],
+          r'''printf '\036%s SELF %s %s\n' "$N" "$$" "$PPID"''',
+        );
+        expect(lines.where((l) => l.contains(' SELF ')), hasLength(1));
       }
     });
 
@@ -227,6 +243,32 @@ void main() {
       expect(program, isNot(contains('HW_UTF8')));
       expect(program, isNot(contains('locale')));
     });
+  });
+
+  test('the probe asks run0 without a password (03 §8.3 rung 6)', () {
+    final probe = collectorFragments[Collector.probe]!;
+    expect(
+      probe,
+      contains('hw_qrun run0 --no-ask-password true >/dev/null 2>&1'),
+    );
+    expect(probe, contains(r'run0_noninteractive=$?'));
+    expect(probe, contains(r'run0=absent${NL}run0_noninteractive='));
+  });
+
+  test('ops lists both directories with the documented caps', () {
+    final ops = collectorFragments[Collector.ops]!;
+    expect(ops, contains(r'_u=${XDG_STATE_HOME:-$HOME/.local/state}'));
+    expect(ops, contains('"\$_u/$kOpsUserSubdirectory" </dev/null'));
+    expect(ops, contains(' sh root $kOpsRootDirectory </dev/null'));
+    expect(ops, contains('[ \$n -lt $kOpsRecordCap ] || continue'));
+    expect(ops, contains('head -c ${kOpsRecordBytes + 1} "\$f"'));
+    expect(ops, contains('if [ \${#c} -gt $kOpsRecordBytes ]; then'));
+    // The listing script is one single-quoted word: a quote inside it
+    // would end the word early.
+    final start = ops.indexOf("_HW_OPS='") + "_HW_OPS='".length;
+    final script = ops.substring(start, ops.indexOf("'\n", start));
+    expect(script, isNot(contains("'")));
+    expect(script, startsWith('LC_ALL=C; export LC_ALL; exec 2>/dev/null\n'));
   });
 
   test('the probe reads the lxcfs mounts (D50)', () {

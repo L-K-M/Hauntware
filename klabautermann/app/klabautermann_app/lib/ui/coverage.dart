@@ -198,7 +198,10 @@ class FleetCoverageChip extends StatelessWidget {
     return ListenableBuilder(
       listenable: fleet,
       builder: (context, _) {
-        final coverage = FleetCoverage.of(fleet.servers);
+        final coverage = FleetCoverage.of(
+          fleet.servers,
+          monitorSet: fleet.monitoredServerIds,
+        );
         if (coverage.serverCount == 0) return const SizedBox.shrink();
 
         return Padding(
@@ -350,7 +353,10 @@ class CoverageSheet extends StatelessWidget {
     return ListenableBuilder(
       listenable: fleet,
       builder: (context, _) {
-        final coverage = FleetCoverage.of(fleet.servers);
+        final coverage = FleetCoverage.of(
+          fleet.servers,
+          monitorSet: fleet.monitoredServerIds,
+        );
         // Continuous watching is covered only once a server is watched.
         final watching = coverage.watchedCount > 0;
         final watched = CoverageItem(

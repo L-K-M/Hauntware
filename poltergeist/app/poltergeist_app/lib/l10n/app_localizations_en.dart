@@ -1834,6 +1834,34 @@ class AppLocalizationsEn extends AppLocalizations {
       'Zoom In, Zoom Out and Actual Size in an editor change it too.';
 
   @override
+  String get editorFontPickerTitle => 'Choose a font';
+
+  @override
+  String get editorFontPickerSearch => 'Search fonts';
+
+  @override
+  String get editorFontPickerIncluded => 'Included fonts';
+
+  @override
+  String get editorFontPickerInstalled => 'Installed fonts';
+
+  @override
+  String get editorFontPickerEmpty => 'No fonts match your search.';
+
+  @override
+  String get editorFontPickerUse => 'Use font';
+
+  @override
+  String get editorFontPickerDefault => 'default';
+
+  @override
+  String get editorFontPickerMonospace => 'Monospace only';
+
+  @override
+  String get editorFontPickerNoLigatures =>
+      'This font has no programming ligatures.';
+
+  @override
   String get editorFontLabel => 'Font';
 
   @override
@@ -2126,7 +2154,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get updateCheckEnabledSubtitle =>
-      'Checks GitHub on launch and only links to the release page — it never downloads anything.';
+      'Checks GitHub on launch. Nothing is downloaded until you choose to update.';
 
   @override
   String get backupTitle => 'Bookmark backup';
@@ -6856,6 +6884,52 @@ class AppLocalizationsEn extends AppLocalizations {
   String alertUpdateAvailable(String version) {
     return 'Poltergeist $version is available';
   }
+
+  @override
+  String alertUpdateDownloadSize(String size) {
+    return '$size download';
+  }
+
+  @override
+  String alertUpdateDownloading(String version) {
+    return 'Downloading Poltergeist $version…';
+  }
+
+  @override
+  String alertUpdateProgress(String received, String total) {
+    return '$received of $total';
+  }
+
+  @override
+  String alertUpdateReady(String version) {
+    return 'Poltergeist $version is ready to install';
+  }
+
+  @override
+  String alertUpdateFailed(String version) {
+    return 'Poltergeist $version could not be installed';
+  }
+
+  @override
+  String get alertUpdateFailedDownload =>
+      'The download did not finish. Check your connection and try again.';
+
+  @override
+  String get alertUpdateFailedVerification =>
+      'The download did not match the release and was discarded.';
+
+  @override
+  String get alertUpdateFailedInstaller =>
+      'Android could not open the installer.';
+
+  @override
+  String get alertActionUpdate => 'Update';
+
+  @override
+  String get alertActionInstall => 'Install';
+
+  @override
+  String get alertActionCancel => 'Cancel';
 
   @override
   String get alertActionRetry => 'Retry';

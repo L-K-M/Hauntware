@@ -723,7 +723,7 @@ void main() {
     });
   });
 
-  group('Docker queries (03 §5.9, §10.1)', () {
+  group('Docker queries and watches (03 §5.9, §7.12, §10.1)', () {
     DockerQuery query(String queryId, {String serverId = _web}) => DockerQuery(
       serverId: serverId,
       queryId: queryId,
@@ -743,11 +743,55 @@ void main() {
               ),
             );
 
-    test('with links off, a query is rejected', () async {
+    test('with links off, a query and a watch are rejected, and an '
+        'unwatch changes nothing', () async {
       final engine = await startEngine(linksEnabled: false);
       await engine.import(_webConfig);
       engine.send(query('q-0'));
       expect(await engine.rejected(), 'DockerQuery');
+      engine
+        ..send(const DockerUnwatch(serverId: _web, watchId: 'w-0'))
+        ..send(
+          const DockerWatch(
+            serverId: _web,
+            watchId: 'w-0',
+            lists: {DockerWatchList.containers},
+          ),
+        );
+      expect(await engine.rejected(), 'DockerWatch');
+    });
+
+    test('a watch opens its server\'s session, which waits for the '
+        'link', () async {
+      final engine = await _Engine.start(
+        support.path,
+        linksEnabled: true,
+        dial:
+            ({
+              required config,
+              required credentials,
+              required tofu,
+              required onHostKey,
+              onKeyboardInteractive,
+              resolveJumpHost,
+            }) async => ForwardingLink(),
+      );
+      await engine.import(_webConfig);
+
+      engine.send(
+        const DockerWatch(
+          serverId: _web,
+          watchId: 'w-0',
+          lists: {DockerWatchList.containers},
+        ),
+      );
+      expect(
+        await engine.next(),
+        isA<DockerEndpointState>()
+            .having((s) => s.serverId, 'serverId', _web)
+            .having((s) => s.phase, 'phase', DockerEndpointPhase.waiting),
+      );
+      engine.send(const DockerUnwatch(serverId: _web, watchId: 'w-0'));
     });
 
     test('a query waits for its server\'s link, then for its probe, and '
@@ -782,7 +826,16 @@ void main() {
             .having((s) => s.phase, 'phase', DockerEndpointPhase.waiting)
             .having((s) => s.label, 'label', DockerRouteLabel.none),
       );
-      expect(await engine.next(), failed('q-1', DockerQueryFailure.notInFleet));
+      expect(
+        await engine.next(),
+        isA<DockerResult>()
+            .having((r) => r.serverId, 'serverId', 'ssh-config:gone')
+            .having(
+              (r) => r,
+              'result',
+              failed('q-1', DockerQueryFailure.notInFleet),
+            ),
+      );
 
       engine.send(const Connect(_web));
       expect(await engine.next(), _connecting);

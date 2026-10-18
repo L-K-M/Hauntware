@@ -25,6 +25,7 @@
     "doasPresent": false,
     "doasNonInteractive": null,
     "run0Present": true,
+    "run0NonInteractive": null,
     "printfBuiltin": true,
     "tools": {
       "journalctl": "/usr/bin/journalctl",

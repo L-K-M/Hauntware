@@ -7,6 +7,7 @@ import 'package:flutter/semantics.dart'
     show AccessibilityFocusBlockType, SemanticsService;
 import 'package:ghost_servers/ghost_servers.dart';
 import 'package:ghost_theme/ghost_theme.dart' show GhostChrome;
+import 'package:ghost_ui/ghost_ui.dart' show showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/fleet_controller.dart';
@@ -17,6 +18,7 @@ import 'chart_strings.dart';
 import 'charts/charts.dart';
 import 'fleet_rail.dart' show FleetEmptyState, linkFailureText, linkStatusWord;
 import 'fleet_row_state.dart';
+import 'monitor_set_feedback.dart';
 import 'sidebar_kit.dart';
 
 /// `ghost_servers`' words for a row whose link is [link] (03 §10.10's
@@ -73,23 +75,44 @@ String fleetRowAge(AppLocalizations l10n, Duration age) {
   return l10n.fleetRowAgeHours(age.inHours);
 }
 
+/// The collapse key of the imports' section. A leading space keeps it
+/// apart from every group key, as `ghost_servers`' own section keys are.
+const String _importedKey = ' imported';
+
+/// The key of the section or group header whose collapse key is [key]
+/// (`ghost_servers`' [kPinnedKey], [kServersKey] or a group's key, or the
+/// imports' section), for tests to find it by.
+@visibleForTesting
+Key fleetSectionHeaderKey(String key) => ValueKey('fleet.section.$key');
+
+/// What `ghost_servers`' sectioning reads from a row.
+GhostServerEntry _entryOf(FleetServer server) =>
+    GhostServerEntry(id: server.id, group: server.group);
+
 /// The fleet's rows under the shared filter field (FL-05, 03 §10.3), for
 /// the desktop rail and the phone's home list alike, with the screen
 /// reader told of link changes (A11Y-15).
 ///
+/// The rows are sectioned by `ghost_servers` as Séance's are (FL-06):
+/// PINNED with the synced servers pinned on this device, then SERVERS
+/// with the other synced servers, ungrouped first and then one nested
+/// disclosure row per group. Imports carry no group and are never pinned,
+/// so they list in a section of their own after these. Each section and
+/// group folds away under its header for as long as the list lives.
+///
 /// The field shows while the fleet has servers. Esc clears a query, then
-/// leaves the field; Enter opens the first match through [onOpen]. A live
-/// query shows its matches even while [collapsed] folds the rows away
-/// behind the section header, so the count under the field never
-/// describes rows nobody can see.
+/// leaves the field; Enter opens the first match as the list orders it
+/// through [onOpen]. A live query shows its matches in every folded
+/// section and group, so the count under the field never describes rows
+/// nobody can see.
 class FleetServerList extends StatefulWidget {
   const FleetServerList({
     super.key,
     required this.fleet,
     required this.monitoring,
     required this.onOpen,
-    this.collapsed = false,
     this.showSelection = false,
+    this.header,
   });
 
   final FleetController fleet;
@@ -98,11 +121,14 @@ class FleetServerList extends StatefulWidget {
   final MonitoringController monitoring;
 
   final void Function(FleetServer server) onOpen;
-  final bool collapsed;
 
   /// Draws the selected server's pill: the desktop workspace shows it,
   /// while a phone's pushed screen covers the list.
   final bool showSelection;
+
+  /// Scrolls with the rows above the first, so a notice there never
+  /// takes the rows' room on a short screen at large text (A11Y-09).
+  final Widget? header;
 
   @override
   State<FleetServerList> createState() => _FleetServerListState();
@@ -112,6 +138,9 @@ class _FleetServerListState extends State<FleetServerList> {
   String _query = '';
   final _filterFocus = FocusNode(debugLabel: 'Fleet filter');
 
+  /// The folded sections and groups, by key.
+  final Set<String> _collapsed = {};
+
   @override
   void dispose() {
     _filterFocus.dispose();
@@ -119,6 +148,107 @@ class _FleetServerListState extends State<FleetServerList> {
   }
 
   void _setQuery(String query) => setState(() => _query = query);
+
+  /// Folds or unfolds [key]. A search draws every header open, so a tap
+  /// during one changes nothing rather than a fold the user cannot see.
+  void _toggle(String key) {
+    if (_query.isNotEmpty) return;
+    setState(() {
+      if (!_collapsed.remove(key)) _collapsed.add(key);
+    });
+  }
+
+  /// The lines drawn for [servers]: `ghost_servers`' sections of the
+  /// synced ones, then the imports' section. One definition, so "the first
+  /// match" means the row the eye reads first, which pinning and group
+  /// order make differ from the fleet's.
+  List<GhostServerListRow<FleetServer>> _rows(
+    AppLocalizations l10n,
+    List<FleetServer> servers,
+    Set<String> collapsed,
+  ) {
+    final synced = <FleetServer>[];
+    final imported = <FleetServer>[];
+    for (final server in servers) {
+      switch (server.origin) {
+        case FleetEntryOrigin.synced:
+          synced.add(server);
+        case FleetEntryOrigin.sshConfig:
+          imported.add(server);
+      }
+    }
+
+    final rows = serverListRows(
+      sections: groupServerEntries(
+        synced,
+        _entryOf,
+        pinnedIds: widget.fleet.pinnedServerIds,
+      ),
+      collapsedKeys: collapsed,
+      labels: GhostServerSectionLabels(
+        pinned: l10n.fleetSectionPinned,
+        servers: l10n.fleetSectionServers,
+      ),
+    );
+    if (imported.isEmpty) return rows;
+
+    final folded = collapsed.contains(_importedKey);
+    return [
+      ...rows,
+      GhostServerSectionRow(
+        title: l10n.fleetSectionImported,
+        key: _importedKey,
+        count: imported.length,
+        collapsed: folded,
+      ),
+      if (!folded)
+        for (final server in imported) GhostServerRow(server),
+    ];
+  }
+
+  /// A row's verbs: a synced row pins to the top or comes off (an import
+  /// is never pinned), and every row joins FL-21's monitor set or leaves
+  /// it. Monitor is disabled for a server that cannot join; Settings >
+  /// Servers says why.
+  List<SidebarMenuEntry> Function() _menuFor(FleetServer server) => () {
+    final l10n = AppLocalizations.of(context);
+    final fleet = widget.fleet;
+    final pinned = fleet.pinnedServerIds.contains(server.id);
+    final monitored = fleet.monitoredServerIds.contains(server.id);
+    return [
+      if (server.origin == FleetEntryOrigin.synced)
+        SidebarMenuAction(
+          label: pinned ? l10n.fleetRowUnpin : l10n.fleetRowPin,
+          onSelected: () => unawaited(
+            _savingPins(pinned ? fleet.unpin(server.id) : fleet.pin(server.id)),
+          ),
+        ),
+      SidebarMenuAction(
+        label: monitored ? l10n.fleetRowStopMonitoring : l10n.fleetRowMonitor,
+        onSelected: server.monitorEligibility == MonitorEligibility.eligible
+            ? () => unawaited(
+                changeMonitorSetWithFeedback(
+                  context,
+                  () => fleet.setMonitored(server.id, monitored: !monitored),
+                ),
+              )
+            : null,
+      ),
+    ];
+  };
+
+  /// Waits for a pin change to save, and says so when it could not: the
+  /// change lasts until the app quits.
+  Future<void> _savingPins(Future<void> change) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final notSaved = AppLocalizations.of(context).fleetPinNotSaved;
+    try {
+      await change;
+    } on Exception catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) showTopToast(overlay, message: notSaved);
+    }
+  }
 
   void _dismissFilter() {
     if (_query.isNotEmpty) {
@@ -132,13 +262,61 @@ class _FleetServerListState extends State<FleetServerList> {
   /// typing and submitting within one frame would act on a stale list.
   void _openFirstMatch() {
     if (_query.isEmpty) return;
-    final first = widget.fleet.servers
-        .where((server) => fleetServerMatches(server, _query))
-        .firstOrNull;
+    final matches = [
+      for (final server in widget.fleet.servers)
+        if (fleetServerMatches(server, _query)) server,
+    ];
+    final first = _rows(
+      AppLocalizations.of(context),
+      matches,
+      const {},
+    ).whereType<GhostServerRow<FleetServer>>().firstOrNull;
     if (first == null) return;
     _filterFocus.unfocus();
-    widget.onOpen(first);
+    widget.onOpen(first.server);
   }
+
+  /// The widget for one of [_rows]' lines.
+  Widget _line(GhostServerListRow<FleetServer> row) => switch (row) {
+    GhostServerSectionRow(
+      :final title,
+      :final key,
+      :final count,
+      :final collapsed,
+    ) =>
+      SidebarSectionHeader(
+        key: fleetSectionHeaderKey(key),
+        title: title,
+        count: count,
+        collapsed: collapsed,
+        onToggle: () => _toggle(key),
+      ),
+    GhostServerGroupHeaderRow(
+      :final name,
+      :final key,
+      :final count,
+      :final collapsed,
+    ) =>
+      SidebarSectionHeader(
+        key: fleetSectionHeaderKey(key),
+        nested: true,
+        title: name,
+        count: count,
+        collapsed: collapsed,
+        onToggle: () => _toggle(key),
+      ),
+    GhostServerRow(:final server, :final depth) => FleetServerRow(
+      key: ValueKey(server.id),
+      server: server,
+      fleet: widget.fleet,
+      monitoring: widget.monitoring,
+      depth: depth,
+      menuEntries: _menuFor(server),
+      selected:
+          widget.showSelection && widget.fleet.selectedServerId == server.id,
+      onActivate: () => widget.onOpen(server),
+    ),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -176,18 +354,13 @@ class _FleetServerListState extends State<FleetServerList> {
                     ? _NoMatches(onClear: () => _setQuery(''))
                     : ListView(
                         children: [
-                          if (!widget.collapsed || _query.isNotEmpty)
-                            for (final server in matches)
-                              FleetServerRow(
-                                key: ValueKey(server.id),
-                                server: server,
-                                fleet: widget.fleet,
-                                monitoring: widget.monitoring,
-                                selected:
-                                    widget.showSelection &&
-                                    widget.fleet.selectedServerId == server.id,
-                                onActivate: () => widget.onOpen(server),
-                              ),
+                          ?widget.header,
+                          for (final row in _rows(
+                            l10n,
+                            matches,
+                            _query.isEmpty ? _collapsed : const {},
+                          ))
+                            _line(row),
                         ],
                       ),
               ),
@@ -236,10 +409,10 @@ const Key kFleetRowAgeKey = ValueKey('fleetRowAge');
 /// warning (03 §4.6) and a monitored server's pressure bar (FL-07) over
 /// the reading's age.
 ///
-/// A server is monitored while the app holds an `overview` or `core`
+/// A server shows the bar while the app holds an `overview` or `core`
 /// reading for it ([fleetRowReading]). Rows subscribe nothing themselves:
-/// FL-21 samples the fleet only for the monitor set, which does not exist
-/// yet, so readings come from the surfaces that show a server's panels.
+/// the engine samples `overview` for FL-21's monitor set, and the
+/// surfaces that show a server's panels read the rest.
 ///
 /// The row is one screen-reader node whose label says everything it
 /// shows; its values refresh with every sample, so it is no live region
@@ -253,6 +426,8 @@ class FleetServerRow extends StatelessWidget {
     required this.monitoring,
     required this.onActivate,
     this.selected = false,
+    this.depth = 0,
+    this.menuEntries,
   });
 
   final FleetServer server;
@@ -260,6 +435,14 @@ class FleetServerRow extends StatelessWidget {
   final MonitoringController monitoring;
   final VoidCallback onActivate;
   final bool selected;
+
+  /// 1 under a group's disclosure row (FL-06), 0 elsewhere.
+  final int depth;
+
+  /// The row's verbs, from a right-click, Shift+F10, the Menu key or a
+  /// long-press, or null for none. The row draws no "⋮" for them: the
+  /// bar's room is measured for a row without one ([_kitRowChrome]).
+  final List<SidebarMenuEntry> Function()? menuEntries;
 
   /// The locator warning's target: 24 px square, WCAG 2.5.8's smallest,
   /// and no taller than a compact row.
@@ -296,6 +479,17 @@ class FleetServerRow extends StatelessWidget {
       2 * 6.0 + 12 + 32 + 12 + 6 + 14 + 4,
     (_, SidebarKitDensity.compact, false) => 2 * 6.0 + 8 + 18 + 6 + 6 + 12 + 4,
     (_, SidebarKitDensity.compact, true) => 2 * 6.0 + 8 + 24 + 12 + 6 + 12 + 4,
+  };
+
+  /// The kit's indent for one nesting level in [layout] at [density],
+  /// mirrored like [_kitRowChrome].
+  static double _kitDepthIndent(
+    SidebarKitLayout layout,
+    SidebarKitDensity density,
+  ) => switch ((layout, density)) {
+    (SidebarKitLayout.list, _) => 16,
+    (_, SidebarKitDensity.comfortable) => 16,
+    (_, SidebarKitDensity.compact) => 8,
   };
 
   /// What a row with no age to count listens to instead of the clock: it
@@ -432,6 +626,9 @@ class FleetServerRow extends StatelessWidget {
           : null,
       trailingIcon: fleetStatusIcon(indicator.glyph),
       selected: selected,
+      depth: depth,
+      menuEntries: menuEntries,
+      showMenuButton: false,
       onActivate: (_) => onActivate(),
       tooltip: tooltip.isEmpty ? null : tooltip,
       semanticLabel: [
@@ -621,7 +818,9 @@ class FleetServerRow extends StatelessWidget {
       TargetPlatform.windows => false,
       _ => true,
     };
-    return _kitRowChrome(layout, density, touch: touch) + label.ceilToDouble();
+    return _kitRowChrome(layout, density, touch: touch) +
+        depth * _kitDepthIndent(layout, density) +
+        label.ceilToDouble();
   }
 
   /// The locator warning K14's import flags (03 §4.6), naming the other

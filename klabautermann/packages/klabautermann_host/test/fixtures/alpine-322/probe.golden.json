@@ -25,6 +25,7 @@
     "doasPresent": true,
     "doasNonInteractive": false,
     "run0Present": false,
+    "run0NonInteractive": null,
     "printfBuiltin": true,
     "tools": {
       "journalctl": null,

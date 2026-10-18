@@ -64,7 +64,9 @@ final class IsolateEngineClient implements EngineClient {
   /// directory where the engine keeps its files (03 §4.10), and completes
   /// the [Hello]/[EngineReady] handshake, so a returned client is ready
   /// for feature requests. [linksEnabled] turns on the engine's SSH links
-  /// ([EngineStart.linksEnabled]); they stay off unless a caller asks.
+  /// ([EngineStart.linksEnabled]); they stay off unless a caller asks, as
+  /// do the reachability probes [probesEnabled] turns on
+  /// ([EngineStart.probesEnabled]).
   /// [supportDirectoryAccess] lets it write its caches and sync
   /// ([EngineStart.supportDirectoryAccess]), and [deviceId] is the
   /// install's sync authorship id ([EngineStart.deviceId]).
@@ -74,6 +76,7 @@ final class IsolateEngineClient implements EngineClient {
   static Future<IsolateEngineClient> spawn({
     required String supportDirectory,
     bool linksEnabled = false,
+    bool probesEnabled = false,
     SupportDirectoryAccess supportDirectoryAccess =
         SupportDirectoryAccess.unguarded,
     String? deviceId,
@@ -87,6 +90,7 @@ final class IsolateEngineClient implements EngineClient {
         uiPort: fromEngine.sendPort,
         supportDirectory: supportDirectory,
         linksEnabled: linksEnabled,
+        probesEnabled: probesEnabled,
         supportDirectoryAccess: supportDirectoryAccess,
         deviceId: deviceId,
       ),

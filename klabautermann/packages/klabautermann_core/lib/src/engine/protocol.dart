@@ -15,7 +15,9 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         ProcsSelection,
         SystemdUnit,
         TimersSnapshot,
-        UnitsSnapshot;
+        UnitsSnapshot,
+        EngineMode,
+        EngineRuntime;
 // A masked process argument (03 §8.9): its display and toString carry the
 // mask, so the app shows a secret only through the reveal action. The
 // Docker models are plain data too: no field holds a function, and the
@@ -23,6 +25,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
 import 'package:klabautermann_docker/klabautermann_docker.dart'
     show
         ApiVersion,
+        ComposeGrouping,
         ContainerHostConfig,
         ContainerMount,
         ContainerNetworkSettings,
@@ -33,8 +36,6 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
         HealthStatus,
         ImageSummary,
         MaskedValue;
-import 'package:klabautermann_host/klabautermann_host.dart'
-    show EngineMode, EngineRuntime;
 import 'package:meta/meta.dart';
 
 import '../docker/docker_ladder.dart'
@@ -117,12 +118,24 @@ import '../docker/docker_ladder.dart'
 /// asks the app for the OS keystore with [KeystoreRequest], which
 /// [AnswerKeystore] answers.
 ///
+/// Endpoint confirmation then joined v3 the same way (03 §4.7, K41):
+/// [FleetEntry] gains `endpoint`, whether a synced server's endpoint is
+/// confirmed on this device, [ConfirmEndpoints] confirms them,
+/// [EndpointChanged] reports a confirmed one a sync changed, and
+/// [ConnectRejectedReason] gains `endpointNotConfirmed`.
+///
 /// Docker reads then joined v3 the same way (03 §5.8, §5.9, §10.1):
 /// [DockerQuery] gained a `queryId` and reads a sealed [DockerQuerySpec]
 /// instead of an endpoint kind and API arguments, [DockerResult] echoes
 /// the id and carries a sealed [DockerPayload] of typed, masked values
 /// instead of decoded JSON, and [DockerEndpointState] reports the route,
 /// the runtime as the Docker API names it and the negotiated version.
+///
+/// Docker watches then joined v3 the same way (03 §7.12 DKE-02, CST-01):
+/// [DockerWatch] and [DockerUnwatch] name the lists a view shows and the
+/// containers it wants stats for, and [DockerListChanged] carries each
+/// list as a typed [DockerPayload] in place of the opaque `DockerEvent`
+/// record, which is gone.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -208,14 +221,30 @@ final class ImportSshConfig extends EngineRequest {
   final String text;
 }
 
-/// Confirms probed endpoints into the fleet (03 §5.1, §10.1).
+/// Confirms the endpoints of the synced servers [serverIds] on this
+/// device as they stand (03 §4.3 step 3, §4.7, SAF-09): their host, port,
+/// user and jump route, and those of each jump host on a route that has
+/// none confirmed yet (D64). Only a confirmed synced server is dialed.
+/// An id that is no synced server is skipped; imports count as confirmed
+/// on the device that imported them. Device-local: the pins never sync
+/// (03 §4.9). Answered by [CatalogReplaced] with the new
+/// [FleetEntry.endpoint] values, after a [RequestRejected] when a pin
+/// could not be saved.
 final class ConfirmEndpoints extends EngineRequest {
   const ConfirmEndpoints(this.serverIds);
 
   final List<String> serverIds;
 }
 
-/// Sets which servers the monitor set samples continuously (03 §10.3).
+/// Sets FL-21's monitor set (03 §4.3 step 4, §6.4): the servers whose
+/// `overview` the engine samples while the app is in the foreground,
+/// whether or not a view shows them, over links it dials unattended, so
+/// nothing prompts. It replaces the last set. Only a fleet server that
+/// `monitorEligibilityOf` allows joins; others are skipped and named in a
+/// [RequestRejected], and a set of more than `kMonitorSetLimit` (10)
+/// servers is rejected whole, leaving the last one. A server that leaves the fleet
+/// or stops being eligible leaves the set. No other event answers it.
+/// Device-local: the app keeps the set in `settings.json` (03 §4.9).
 final class SetMonitorSet extends EngineRequest {
   const SetMonitorSet(this.serverIds);
 
@@ -272,7 +301,9 @@ final class Subscribe extends EngineRequest {
 
   final String serverId;
 
-  /// The surface's own id, unique among the server's subscriptions.
+  /// The surface's own id, unique among the server's subscriptions. The
+  /// engine's monitor set holds one of its own (`engine:monitorSet`),
+  /// which the app never uses.
   final String subscriptionId;
 
   /// What the surface shows. Pass an unmodifiable set.
@@ -370,6 +401,45 @@ final class DockerQuery extends EngineRequest {
   final String queryId;
 
   final DockerQuerySpec query;
+}
+
+/// Watches [lists] on [serverId]'s engine (03 §7.12 DKE-02, CST-01), as
+/// [DockerListChanged] events, until [DockerUnwatch] or the session
+/// ends. While any watch holds, the engine follows the engine's
+/// `/events` and reads a list again when an event changes it; with
+/// [DockerWatchList.stats] it reads one-shot stats for [statsFor]'s
+/// containers at the list cadence. A watch with a [watchId] the server
+/// already holds replaces it, which is how a view reports the rows it
+/// shows now. Like a [DockerQuery], it opens the server's endpoint, and
+/// it starts once the endpoint is ready. A watch the engine cannot hold
+/// is answered with a [DockerQueryFailed] list for each of its [lists].
+final class DockerWatch extends EngineRequest {
+  const DockerWatch({
+    required this.serverId,
+    required this.watchId,
+    required this.lists,
+    this.statsFor = const {},
+  });
+
+  final String serverId;
+
+  /// The app's own id for the watch, unique per server.
+  final String watchId;
+  final Set<DockerWatchList> lists;
+
+  /// The containers, by id, whose stats [DockerWatchList.stats] reads:
+  /// the rows on screen (CST-01). At most [kDockerStatsForMax].
+  final Set<String> statsFor;
+}
+
+/// Ends the [DockerWatch] [watchId] on [serverId]. The last one ends the
+/// server's `/events` stream and stats reads; ending a watch the server
+/// does not hold does nothing.
+final class DockerUnwatch extends EngineRequest {
+  const DockerUnwatch({required this.serverId, required this.watchId});
+
+  final String serverId;
+  final String watchId;
 }
 
 /// Previews an operation: the engine answers [ActionPlanned] and nothing runs
@@ -550,7 +620,12 @@ final class SyncStatus extends EngineEvent {
   final String? detail;
 }
 
-/// One endpoint's catalog record changed (03 §10.1).
+/// A sync changed the endpoint of the synced server [serverId], which was
+/// confirmed on this device (03 §4.7, SYN-08): its host, port or user,
+/// its jump route, or a jump host's endpoint. The engine closed its link,
+/// dials it no more and purged its cached profile; the [CatalogReplaced]
+/// that follows lists it with [EndpointConfirmation.changed] until the
+/// user confirms it again.
 final class EndpointChanged extends EngineEvent {
   const EndpointChanged(this.serverId);
 
@@ -568,7 +643,8 @@ final class LinkState extends EngineEvent {
 }
 
 /// A [Connect] to the fleet server [serverId] could not start, because the
-/// engine has no config to dial it with (03 §10.1, D61). Nothing about
+/// engine has no config to dial it with (03 §10.1, D61) or its endpoint
+/// is not confirmed on this device (03 §4.7). Nothing about
 /// the server's link changes; a later [CatalogReplaced] may give it one.
 /// A [Connect] for an id outside the fleet still gets [RequestRejected].
 final class ConnectRejected extends EngineEvent {
@@ -590,6 +666,11 @@ enum ConnectRejectedReason {
   /// server signs in and which jump hosts it needs are unknown until the
   /// next import.
   addressOnlyImport,
+
+  /// A synced server whose endpoint is not confirmed on this device, or
+  /// changed since it was ([FleetEntry.endpoint], 03 §4.7, SAF-09).
+  /// [ConfirmEndpoints] lets the engine dial it.
+  endpointNotConfirmed,
 }
 
 /// The last reachability probe of [serverId] (FL-04, 03 §5.12). A probe
@@ -810,13 +891,29 @@ final class DockerEndpointState extends EngineEvent {
   DockerRouteLabel get label => route?.rank.label ?? DockerRouteLabel.none;
 }
 
-/// One Docker Engine `/events` record (03 §10.1); kept opaque until the
-/// Docker events model lands in its milestone.
-final class DockerEvent extends EngineEvent {
-  const DockerEvent(this.serverId, this.payload);
+/// [list] on [serverId], as a [DockerWatch] asked for it (03 §7.12
+/// DKE-02, CST-01): the whole list each time, read at [at] by the
+/// engine's clock. The payload is [DockerContainersPayload],
+/// [DockerImagesPayload], [DockerStacksPayload] or [DockerStatsPayload]
+/// by [list], or [DockerQueryFailed] when the read failed.
+final class DockerListChanged extends EngineEvent {
+  const DockerListChanged({
+    required this.serverId,
+    required this.list,
+    required this.payload,
+    required this.at,
+    this.fullRelist = false,
+  });
 
   final String serverId;
-  final Map<String, Object?> payload;
+  final DockerWatchList list;
+  final DockerPayload payload;
+  final DateTime at;
+
+  /// Whether the list was read from nothing rather than after events: a
+  /// watch's first read, or one after the events stream was lost for
+  /// over 60 s or could not resume, so changes in between went unseen.
+  final bool fullRelist;
 }
 
 /// The plan [PlanAction] computed: what would run, in the user's words, and
@@ -972,6 +1069,7 @@ final class FleetEntry {
     this.authKind,
     this.searchText,
     this.locatorConflict,
+    this.endpoint,
   });
 
   /// The id every per-server request carries: a synced record's bare
@@ -1021,6 +1119,11 @@ final class FleetEntry {
   /// [jumpRoute]). Pass an unmodifiable list.
   final List<String>? locatorConflict;
 
+  /// Whether this device confirmed a synced server's endpoint (03 §4.7);
+  /// null for an import, which counts as confirmed on the device that
+  /// imported it.
+  final EndpointConfirmation? endpoint;
+
   // By value: every CatalogReplaced copies its entries across the isolate
   // boundary, so identity would make an unchanged entry look changed.
   @override
@@ -1036,7 +1139,8 @@ final class FleetEntry {
       _sameItems(jumpRoute, other.jumpRoute) &&
       authKind == other.authKind &&
       searchText == other.searchText &&
-      _sameItems(locatorConflict, other.locatorConflict);
+      _sameItems(locatorConflict, other.locatorConflict) &&
+      endpoint == other.endpoint;
 
   @override
   int get hashCode => Object.hash(
@@ -1051,7 +1155,23 @@ final class FleetEntry {
     authKind,
     searchText,
     locatorConflict == null ? null : Object.hashAll(locatorConflict!),
+    endpoint,
   );
+}
+
+/// Where a synced server's endpoint stands on this device (03 §4.7,
+/// SAF-09). Only a [confirmed] one is dialed.
+enum EndpointConfirmation {
+  /// Its host, port, user and jump route match what this device
+  /// confirmed, and so does each jump host's.
+  confirmed,
+
+  /// Never confirmed on this device.
+  unconfirmed,
+
+  /// Confirmed once, but a sync has changed it or a jump host on its
+  /// route since: it waits to be confirmed again.
+  changed,
 }
 
 /// How the engine signs in to a [FleetEntry]'s server (03 §4.5).
@@ -1475,7 +1595,31 @@ final class DockerImagesQuery extends DockerQuerySpec {
   const DockerImagesQuery();
 }
 
-/// What a [DockerResult] carries.
+/// A list a [DockerWatch] follows (03 §7.12 to §7.14).
+enum DockerWatchList {
+  /// Every container (CTR-01), as [DockerContainersPayload].
+  containers,
+
+  /// The image list (IMG-01), as [DockerImagesPayload].
+  images,
+
+  /// The containers grouped by compose project (STK-01), as
+  /// [DockerStacksPayload].
+  stacks,
+
+  /// One-shot stats for the watch's `statsFor` (CST-01), as
+  /// [DockerStatsPayload].
+  stats,
+}
+
+/// The most watches one server holds [E]: a Docker view holds one or two.
+const kDockerWatchesMax = 16;
+
+/// The most containers one watch reads stats for [E]: more rows than a
+/// screen shows.
+const kDockerStatsForMax = 64;
+
+/// What a [DockerResult] or [DockerListChanged] carries.
 @immutable
 sealed class DockerPayload {
   const DockerPayload();
@@ -1512,6 +1656,48 @@ final class DockerImagesPayload extends DockerPayload {
   final List<ImageSummary> images;
 }
 
+/// The containers grouped by compose project (STK-01), from the same
+/// list [DockerContainersPayload] carries.
+final class DockerStacksPayload extends DockerPayload {
+  const DockerStacksPayload(this.grouping);
+
+  final ComposeGrouping grouping;
+}
+
+/// One stats round over a watch's `statsFor` (CST-01): a row for each
+/// running container that answered, in no set order.
+final class DockerStatsPayload extends DockerPayload {
+  const DockerStatsPayload(this.stats);
+
+  final List<ContainerListStats> stats;
+}
+
+/// One container's list stats (03 §7.12 CST-01), read at [at] by the
+/// engine's clock.
+@immutable
+final class ContainerListStats {
+  const ContainerListStats({
+    required this.containerId,
+    required this.at,
+    this.cpuPercent,
+    this.memoryUsed,
+    this.memoryLimit,
+  });
+
+  final String containerId;
+  final DateTime at;
+
+  /// CPU % by the spec formula over the time since the previous read,
+  /// so null on a container's first one, on the first after a read of it
+  /// failed, and on the first after a [DockerListChanged.fullRelist]
+  /// (one-shot `precpu_stats` is not meaningful, 03 §5.6).
+  final double? cpuPercent;
+
+  /// Bytes in use less `inactive_file` (cgroup v2) or the cache (v1).
+  final int? memoryUsed;
+  final int? memoryLimit;
+}
+
 /// The query read nothing, for [failure]; [detail] is the daemon's own
 /// message or the transport error, for diagnostics.
 final class DockerQueryFailed extends DockerPayload {
@@ -1521,7 +1707,7 @@ final class DockerQueryFailed extends DockerPayload {
   final String? detail;
 }
 
-/// Why a [DockerQuery] read nothing.
+/// Why a [DockerQuery] or a watched list read nothing.
 enum DockerQueryFailure {
   /// The server is not in the fleet.
   notInFleet,
@@ -1537,10 +1723,12 @@ enum DockerQueryFailure {
   /// query looks for it again.
   endpointUnavailable,
 
-  /// The server already holds the most queries waiting for its endpoint.
+  /// The server already holds the most queries waiting for its endpoint,
+  /// or the most watches.
   tooManyQueries,
 
-  /// The query names no container.
+  /// The query names no container, or the watch names more stats
+  /// containers than [kDockerStatsForMax].
   invalidQuery,
 
   /// The object is gone (404); a list query shows what remains.

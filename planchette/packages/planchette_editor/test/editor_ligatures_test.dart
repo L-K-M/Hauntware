@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_fonts/ghost_fonts.dart';
 import 'package:ghost_fonts/testing.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
@@ -14,8 +15,10 @@ void main() {
   Future<Uint8List> render(
     WidgetTester tester,
     String text,
-    EditorLigatures ligatures,
-  ) async {
+    EditorLigatures ligatures, {
+    String? family,
+  }) async {
+    await tester.runAsync(loadBundledMonoFonts);
     final c = EditorController(displayPath: 'a.txt', initialText: text);
     addTearDown(c.dispose);
     await tester.pumpWidget(
@@ -28,12 +31,22 @@ void main() {
               isActive: false,
               showStatus: false,
               ligatures: ligatures,
+              textStyle: TextStyle(fontFamily: family),
             ),
           ),
         ),
       ),
     );
     await tester.pump();
+    final style = tester
+        .widget<TextField>(find.byKey(const ValueKey('planchette.document')))
+        .style!;
+    final metrics = TextPainter(
+      text: TextSpan(text: 'm', style: style),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    expect(metrics.width, lessThan(style.fontSize!));
+    metrics.dispose();
 
     final bytes = await tester.runAsync(() async {
       final image =
@@ -46,10 +59,6 @@ void main() {
     });
     return bytes!;
   }
-
-  setUp(() async {
-    await TestWidgetsFlutterBinding.instance.runAsync(loadBundledMonoFonts);
-  });
 
   testWidgets('JetBrains Mono joins -> and != with ligatures on', (
     tester,
@@ -71,6 +80,35 @@ void main() {
       await render(tester, text, EditorLigatures.off),
     );
   });
+
+  for (final font in [
+    BundledMonoFont.monaspaceNeon,
+    BundledMonoFont.geistMono,
+    BundledMonoFont.intelOneMono,
+    BundledMonoFont.commitMono,
+  ]) {
+    testWidgets('${font.displayName} coding sets reach the editor', (
+      tester,
+    ) async {
+      const text = 'a -> b != c';
+      expect(
+        await render(
+          tester,
+          text,
+          EditorLigatures.on,
+          family: font.displayName,
+        ),
+        isNot(
+          await render(
+            tester,
+            text,
+            EditorLigatures.off,
+            family: font.displayName,
+          ),
+        ),
+      );
+    });
+  }
 
   test('a stored name reads back, and anything else is on', () {
     expect(EditorLigatures.named('off'), EditorLigatures.off);

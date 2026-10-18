@@ -354,6 +354,7 @@ jobs:
           (cd planchette/packages/ghost_theme && flutter pub get)
           (cd planchette/packages/ghost_servers && flutter pub get)
           (cd planchette/packages/ghost_keystore && flutter pub get)
+          (cd planchette/packages/ghost_apk_update && flutter pub get)
           (cd planchette/app/planchette_app && flutter pub get)
       - name: Planchette — analyze and test shared packages and app
         run: |
@@ -365,6 +366,7 @@ jobs:
           (cd planchette/packages/ghost_theme && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/packages/ghost_servers && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/packages/ghost_keystore && flutter analyze --no-pub && flutter test --no-pub)
+          (cd planchette/packages/ghost_apk_update && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/app/planchette_app && flutter analyze --no-pub && flutter test --no-pub)
       - name: Séance — analyze and test app and vendored xterm fork
         run: |
@@ -478,6 +480,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - os: ubuntu-latest
+            target: android
+            build: apk --release
+            files: planchette-android.apk
           # The .deb, AppImage and Flatpak ride along with the plain bundle
           # (four assets); the .deb keeps its versioned Debian filename, hence the
           # glob. x64 only: Flutter publishes no linux-arm64 host artifacts
@@ -526,6 +532,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
         with:
           ref: ${{ steps.checkout-ref.outputs.ref }}
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6 (SHA-pinned)
+        if: matrix.target == 'android'
+        with:
+          distribution: temurin
+          java-version: '17'
       # GTK toolchain for the Flutter Linux embedder, plus libsecret/jsoncpp
       # for flutter_secure_storage's keyring backend; imagemagick/file feed
       # scripts/package-linux.sh (icon resize, appimagetool).
@@ -571,6 +582,14 @@ jobs:
             echo "::error::pubspec.lock drift after build: $drift_flat" >&2
             exit 1
           fi
+      - name: Android document-provider regressions
+        if: matrix.target == 'android'
+        working-directory: planchette/app/planchette_app/android
+        run: ./gradlew :app:testDebugUnitTest
+      - name: Verify Android version code
+        if: matrix.target == 'android'
+        working-directory: planchette/app/planchette_app
+        run: bash "$GITHUB_WORKSPACE/scripts/verify-android-version.sh"
       - name: Native keyboard modifiers
         if: matrix.target == 'macos'
         working-directory: planchette
@@ -609,6 +628,10 @@ jobs:
         run: |
           shopt -s nullglob
           case "${{ matrix.target }}" in
+            android)
+              cp planchette/app/planchette_app/build/app/outputs/flutter-apk/app-release.apk \
+                 planchette-android.apk
+              ;;
             linux)
               bundles=(planchette/app/planchette_app/build/linux/*/release/bundle)
               [[ ${#bundles[@]} -eq 1 ]] || { echo "expected one linux bundle, found ${#bundles[@]}" >&2; exit 1; }

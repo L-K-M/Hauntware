@@ -4,6 +4,8 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_docker/klabautermann_docker.dart'
+    show groupComposeProjects;
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
         CoreCpuTimes,
@@ -104,6 +106,12 @@ void main() {
           queryId: 'q-1',
           query: DockerContainersQuery(),
         ),
+        const DockerWatch(
+          serverId: 'srv-1',
+          watchId: 'w-1',
+          lists: {DockerWatchList.containers},
+        ),
+        const DockerUnwatch(serverId: 'srv-1', watchId: 'w-1'),
         const PlanAction(
           ActionIntent(serverId: 'srv-1', action: 'container.restart'),
         ),
@@ -190,7 +198,12 @@ void main() {
           serverId: 'srv-1',
           phase: DockerEndpointPhase.waiting,
         ),
-        const DockerEvent('srv-1', {'status': 'start'}),
+        DockerListChanged(
+          serverId: 'srv-1',
+          list: DockerWatchList.images,
+          payload: const DockerImagesPayload([]),
+          at: DateTime.utc(2026, 10, 17),
+        ),
         const ActionPlanned('plan-1', ActionPreview(title: 'restart')),
         const ActionProgress(planId: 'plan-1', stepIndex: 1, stepCount: 3),
         const ActionFinished(
@@ -231,6 +244,7 @@ void main() {
                 ),
               )
               as DockerQuery;
+      expect(query.serverId, 'srv-1');
       expect(query.queryId, 'q-7');
       expect((query.query as DockerContainerQuery).containerId, 'db');
 
@@ -303,6 +317,77 @@ void main() {
         (failed.payload as DockerQueryFailed).failure,
         DockerQueryFailure.notFound,
       );
+    });
+
+    test('Docker watches and their lists survive with their payloads '
+        '(M7)', () async {
+      final watch =
+          await roundTrip(
+                const DockerWatch(
+                  serverId: 'srv-1',
+                  watchId: 'w-1',
+                  lists: {DockerWatchList.stacks, DockerWatchList.stats},
+                  statsFor: {'abc'},
+                ),
+              )
+              as DockerWatch;
+      expect(watch.lists, {DockerWatchList.stacks, DockerWatchList.stats});
+      expect(watch.statsFor, {'abc'});
+
+      final at = DateTime.utc(2026, 10, 17, 12);
+      final stacks =
+          await roundTrip(
+                DockerListChanged(
+                  serverId: 'srv-1',
+                  list: DockerWatchList.stacks,
+                  payload: DockerStacksPayload(
+                    groupComposeProjects([
+                      ContainerSummary(
+                        id: 'abc',
+                        labels: {
+                          'com.docker.compose.project': MaskedValue.plain(
+                            'demo',
+                          ),
+                          'com.docker.compose.service': MaskedValue.plain(
+                            'web',
+                          ),
+                        },
+                      ),
+                    ]),
+                  ),
+                  at: at,
+                  fullRelist: true,
+                ),
+              )
+              as DockerListChanged;
+      final grouping = (stacks.payload as DockerStacksPayload).grouping;
+      expect(grouping.projects.single.name, 'demo');
+      expect(grouping.projects.single.services.single.name, 'web');
+      expect(stacks.fullRelist, isTrue);
+      expect(stacks.at, at);
+
+      final stats =
+          await roundTrip(
+                DockerListChanged(
+                  serverId: 'srv-1',
+                  list: DockerWatchList.stats,
+                  payload: DockerStatsPayload([
+                    ContainerListStats(
+                      containerId: 'abc',
+                      at: at,
+                      cpuPercent: 12.5,
+                      memoryUsed: 1024,
+                      memoryLimit: 4096,
+                    ),
+                  ]),
+                  at: at,
+                ),
+              )
+              as DockerListChanged;
+      final row = (stats.payload as DockerStatsPayload).stats.single;
+      expect(row.cpuPercent, 12.5);
+      expect(row.memoryUsed, 1024);
+      expect(row.memoryLimit, 4096);
     });
 
     test('sampling requests survive with their ids, streams and '
@@ -1028,6 +1113,7 @@ void main() {
         FleetAuthKind? authKind = FleetAuthKind.agent,
         String? searchText = 'web-1 deploy@web-1.example:2222',
         List<String>? locatorConflict = const ['ssh-config:db-1'],
+        EndpointConfirmation? endpoint = EndpointConfirmation.confirmed,
       }) => FleetEntry(
         serverId: serverId,
         label: label,
@@ -1041,6 +1127,7 @@ void main() {
         authKind: authKind,
         searchText: searchText,
         locatorConflict: locatorConflict?.toList(),
+        endpoint: endpoint,
       );
 
       final web = entry();
@@ -1066,6 +1153,8 @@ void main() {
         entry(searchText: 'web-1'),
         entry(locatorConflict: null),
         entry(locatorConflict: const ['ssh-config:db-2']),
+        entry(endpoint: null),
+        entry(endpoint: EndpointConfirmation.changed),
       ]) {
         expect(web, isNot(other));
       }
@@ -1101,6 +1190,30 @@ void main() {
         expect(web.locatorConflict, isNull);
       },
     );
+
+    test('endpoint confirmation survives: every state on an entry, and '
+        'the ids it confirms', () async {
+      for (final endpoint in [null, ...EndpointConfirmation.values]) {
+        final entry = FleetEntry(
+          serverId: '0b9a6f3e-2d1c-4e5f-8a7b-6c5d4e3f2a1b',
+          label: 'db-1',
+          host: '10.0.0.4',
+          port: kSshDefaultPort,
+          origin: FleetEntryOrigin.synced,
+          endpoint: endpoint,
+        );
+        final event = await roundTrip(CatalogReplaced([entry]));
+        expect((event as CatalogReplaced).entries.single.endpoint, endpoint);
+      }
+
+      final request =
+          await roundTrip(const ConfirmEndpoints(['a', 'b']))
+              as ConfirmEndpoints;
+      expect(request.serverIds, ['a', 'b']);
+      final changed =
+          await roundTrip(const EndpointChanged('srv-1')) as EndpointChanged;
+      expect(changed.serverId, 'srv-1');
+    });
 
     test('every link status survives with its values (D46)', () async {
       final statuses = <LinkStatus>[

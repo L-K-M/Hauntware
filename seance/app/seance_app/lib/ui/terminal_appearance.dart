@@ -2,7 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:ghost_fonts/ghost_fonts.dart';
-import 'package:xterm/xterm.dart' show TerminalStyle, TerminalTheme;
+import 'package:xterm/xterm.dart'
+    show TerminalLigatures, TerminalStyle, TerminalTheme;
 
 import '../services/app_settings.dart';
 import '../theme.dart';
@@ -194,23 +195,46 @@ class TerminalAppearance {
   factory TerminalAppearance.resolve(
     AppSettings settings,
     Brightness brightness,
-  ) {
-    final family = settings.terminalFontFamily.trim();
+  ) => TerminalAppearance.of(
+    fontSize: settings.terminalFontSize,
+    fontFamily: settings.terminalFontFamily,
+    ligatures: settings.terminalLigatures,
+    palette: settings.terminalPalette,
+    themeColors: settings.themePalette.terminal,
+    brightness: brightness,
+  );
+
+  /// [TerminalAppearance.resolve] from the settings' parts, for a preview
+  /// of values not saved yet: [themeColors] is the theme palette's own
+  /// terminal block, if it has one.
+  factory TerminalAppearance.of({
+    required double fontSize,
+    required String fontFamily,
+    required TerminalLigatures ligatures,
+    required TerminalPalette palette,
+    required ThemeTerminalColors? themeColors,
+    required Brightness brightness,
+  }) {
+    final family = fontFamily.trim();
     final fallback = <String>[
       family.isEmpty ? kDefaultTerminalFont.family : resolveMonoFamily(family),
       ...SeanceTheme.monoFallback,
     ];
+    final features =
+        (ligatures == TerminalLigatures.on ? MonoLigatures.on : MonoLigatures.off)
+            .featuresFor(fallback.first);
     return TerminalAppearance(
       style: TerminalStyle(
-        fontSize: clampTerminalFontSize(settings.terminalFontSize),
+        fontSize: clampTerminalFontSize(fontSize),
         fontFamily: fallback.first,
         fontFamilyFallback: fallback,
-        ligatures: settings.terminalLigatures,
+        ligatures: ligatures,
+        fontFeatures: features.isEmpty ? null : features,
       ),
-      theme: switch (settings.terminalPalette) {
+      theme: switch (palette) {
         TerminalPalette.alwaysDark => SeanceTerminalThemes.dark,
         TerminalPalette.alwaysLight => SeanceTerminalThemes.light,
-        TerminalPalette.followApp => switch (settings.themePalette.terminal) {
+        TerminalPalette.followApp => switch (themeColors) {
           final colors? => SeanceTerminalThemes.fromColors(colors),
           null => SeanceTerminalThemes.builtIn(brightness),
         },

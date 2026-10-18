@@ -296,18 +296,21 @@ class _CommandPaletteState extends State<CommandPalette> {
                 ),
               )
             else
-              ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxHeight: _rowHeight * _visibleRows,
-                ),
-                child: ListView.builder(
-                  controller: _scroll,
-                  shrinkWrap: true,
-                  padding: EdgeInsets.zero,
-                  itemExtent: _rowHeight,
-                  itemCount: _rows.length,
-                  itemBuilder: (context, index) =>
-                      _row(context, index, _rows[index]),
+              // The phone keyboard reduces the dialog's remaining height.
+              Flexible(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxHeight: _rowHeight * _visibleRows,
+                  ),
+                  child: ListView.builder(
+                    controller: _scroll,
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    itemExtent: _rowHeight,
+                    itemCount: _rows.length,
+                    itemBuilder: (context, index) =>
+                        _row(context, index, _rows[index]),
+                  ),
                 ),
               ),
           ],

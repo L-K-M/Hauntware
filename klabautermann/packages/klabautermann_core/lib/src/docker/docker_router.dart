@@ -4,7 +4,8 @@
 /// over it and runs the queries.
 ///
 /// ```text
-///   first query ─▶ waiting (no link, or no probe answer on it)
+///   first query ─▶ waiting (no link, or no probe answer on it): the
+///                    │ query is answered at once with that failure
 ///                    │ link ready and probed
 ///                    ▼
 ///                  resolving: ladder ─▶ _ping, /version over the route
@@ -15,6 +16,9 @@
 ///   a query while failed ─▶ resolving again
 ///   Disconnect, fleet removal, endpoint change (SYN-08) ─▶ session ends
 /// ```
+///
+/// A [DockerWatch] opens the session as a query does, and its
+/// [DockerWatcher] reads over the endpoint while it is ready.
 library;
 
 import 'dart:async';
@@ -27,6 +31,7 @@ import 'package:seance_core/seance_core.dart' show SshLink, SshLinkClosed;
 import '../engine/protocol.dart';
 import '../links/channel_quota.dart';
 import 'docker_ladder.dart';
+import 'docker_watch.dart';
 import 'inspect_masking.dart';
 
 /// The most queries one server holds while its endpoint resolves [E]: a
@@ -42,30 +47,35 @@ const _answerTimeout = Duration(seconds: 10);
 const _relayIdle = Duration(seconds: 30);
 
 /// Owned by the engine isolate, which hands it the Docker queries and
-/// tells it what changed: [update] after a server's [LinkState],
+/// watches and tells it what changed: [update] after a server's [LinkState],
 /// [probed] for each probe answer, [disconnect], [forget] for servers
 /// that left the fleet or changed endpoint, [retain] for the fleet and
 /// [close].
 final class DockerRouter {
   /// [linkFor] gives a server's ready link, null while it has none.
-  /// [startTimer] arms the relays' idle close; tests pass a fake clock.
+  /// [startTimer] arms the relays' idle close and the watches' timers,
+  /// and [now] dates the lists; tests pass a fake clock.
   DockerRouter({
     required this._linkFor,
     required this._emit,
     this._startTimer = Timer.new,
+    this._now = DateTime.now,
   });
 
   final SshLink? Function(String serverId) _linkFor;
   final void Function(EngineEvent event) _emit;
   final Timer Function(Duration duration, void Function() callback) _startTimer;
+  final DateTime Function() _now;
 
   final Map<String, _Session> _sessions = {};
   final Map<String, HostProfile> _profiles = {};
   final Set<Future<void>> _closing = {};
   Set<String> _fleet = const {};
 
-  /// Accepts [request]: it runs once its server's endpoint is ready, and
-  /// every query gets exactly one [DockerResult].
+  /// Accepts [request]: while its server has no ready link or no probe
+  /// answer it is answered at once with that failure; otherwise it waits
+  /// for the endpoint to resolve and runs once it is ready. Every query
+  /// gets exactly one [DockerResult].
   void query(DockerQuery request) {
     if (!_fleet.contains(request.serverId)) {
       return _answer(request, DockerQueryFailure.notInFleet);
@@ -83,6 +93,67 @@ final class DockerRouter {
     }
     session.waiting.add(request);
     _pump(session);
+  }
+
+  /// Takes [request], replacing the server's watch with its id. A new
+  /// watch looks for a failed endpoint again, as a query does.
+  void watch(DockerWatch request) {
+    final serverId = request.serverId;
+    final refusal = switch (request) {
+      _ when !_fleet.contains(serverId) => DockerQueryFailure.notInFleet,
+      DockerWatch(:final statsFor) when statsFor.length > kDockerStatsForMax =>
+        DockerQueryFailure.invalidQuery,
+      _ => null,
+    };
+    final session = _sessions[serverId];
+    final before = session?.watches[request.watchId];
+    if (refusal != null ||
+        (before == null &&
+            (session?.watches.length ?? 0) >= kDockerWatchesMax)) {
+      for (final list in request.lists) {
+        _emit(
+          DockerListChanged(
+            serverId: serverId,
+            list: list,
+            payload: DockerQueryFailed(
+              refusal ?? DockerQueryFailure.tooManyQueries,
+            ),
+            at: _now(),
+          ),
+        );
+      }
+      return;
+    }
+
+    final opened = _sessions.putIfAbsent(serverId, () => _Session(serverId));
+    opened.watches[request.watchId] = request;
+    final watcher = opened.watcher ??= DockerWatcher(
+      serverId: serverId,
+      emit: _emit,
+      dropped: () => _routeDropped(opened),
+      now: _now,
+      startTimer: _startTimer,
+    );
+    watcher.watch(
+      opened.watches.values,
+      asked: request.lists.difference(before?.lists ?? const {}),
+    );
+    if (before == null) opened.failed = false;
+    _pump(opened);
+  }
+
+  /// Ends the watch [request] names; the last one stops the server's
+  /// events stream and stats.
+  void unwatch(DockerUnwatch request) {
+    final session = _sessions[request.serverId];
+    if (session?.watches.remove(request.watchId) == null) return;
+    final watcher = session!.watcher!;
+    if (session.watches.isNotEmpty) {
+      return watcher.watch(session.watches.values);
+    }
+    session.watcher = null;
+    session.target = null;
+    _track(watcher.close());
   }
 
   /// Follows [serverId]'s link: a new link resolves the endpoint again,
@@ -167,6 +238,11 @@ final class DockerRouter {
     }
 
     if (session.endpoint case final endpoint?) {
+      if (session.watcher case final watcher?) {
+        watcher.attach(
+          session.target ??= _WatchTarget(this, session, endpoint),
+        );
+      }
       final queries = session.waiting.toList();
       session.waiting.clear();
       for (final query in queries) {
@@ -217,7 +293,8 @@ final class DockerRouter {
         _pump(session);
       case _Failed(:final failure, :final route, :final noRouteReason):
         session.failed = true;
-        _answerWaiting(session, DockerQueryFailure.endpointUnavailable);
+        // The state that explains the failure goes out first, so an app
+        // reading it on a failed answer never sees `resolving`.
         _state(
           session,
           DockerEndpointPhase.failed,
@@ -225,6 +302,7 @@ final class DockerRouter {
           failure: failure,
           noRouteReason: noRouteReason,
         );
+        _answerWaiting(session, DockerQueryFailure.endpointUnavailable);
     }
   }
 
@@ -286,6 +364,7 @@ final class DockerRouter {
         return _Ready(
           _Endpoint(
             () => _pool(link, route),
+            () => openDockerDuplex(link, route),
             http,
             route: endpointRoute,
             version: version,
@@ -364,15 +443,6 @@ final class DockerRouter {
     final client = endpoint.client;
     _Read read(DockerPayload payload, List<String> warnings) =>
         (payload: payload, warnings: warnings, routeDropped: false);
-    _Read failed(
-      DockerQueryFailure failure,
-      String? detail, {
-      bool routeDropped = false,
-    }) => (
-      payload: DockerQueryFailed(failure, detail: detail),
-      warnings: const <String>[],
-      routeDropped: routeDropped,
-    );
 
     try {
       switch (spec) {
@@ -398,21 +468,11 @@ final class DockerRouter {
           final images = await client.listImages();
           return read(DockerImagesPayload(images.value), images.warnings);
       }
-    } on DockerNotFoundException catch (e) {
-      return failed(DockerQueryFailure.notFound, e.daemonMessage);
-    } on DockerApiException catch (e) {
-      return failed(
-        DockerQueryFailure.daemonError,
-        e.daemonMessage ?? 'HTTP ${e.statusCode}',
-      );
     } on DockerException catch (e) {
-      // A channel or relay that went answers no more: a relay's exit
-      // reads as a response that never came.
-      final dropped =
-          e is DockerTransportException || e is DockerProtocolException;
-      return failed(
-        DockerQueryFailure.connectionFailed,
-        '${e.cause ?? e.message}',
+      final (:failure, :dropped) = dockerReadFailure(e);
+      return (
+        payload: failure,
+        warnings: const <String>[],
         routeDropped: dropped,
       );
     }
@@ -432,13 +492,24 @@ final class DockerRouter {
     });
   }
 
+  /// A watch's pooled read lost its connection: the endpoint is found
+  /// again, as for a query's.
+  void _routeDropped(_Session session) {
+    if (!identical(_sessions[session.serverId], session)) return;
+    _drop(session);
+    _pump(session);
+  }
+
   /// Lets [session]'s endpoint go, and any resolution under way. A
   /// failure belongs to the link and probe answer it was found with.
+  /// The watches stay, to resume over the next endpoint.
   void _drop(_Session session) {
     session
       ..epoch += 1
       ..resolving = false
-      ..failed = false;
+      ..failed = false
+      ..target = null;
+    if (session.watcher case final watcher?) _track(watcher.detach());
     session.idle?.cancel();
     session.idle = null;
     if (session.endpoint case final endpoint?) {
@@ -449,6 +520,9 @@ final class DockerRouter {
 
   void _end(_Session session) {
     _drop(session);
+    session.watches.clear();
+    if (session.watcher case final watcher?) _track(watcher.close());
+    session.watcher = null;
     _answerWaiting(session, DockerQueryFailure.cancelled);
     _state(session, DockerEndpointPhase.waiting);
   }
@@ -539,12 +613,20 @@ final class _Session {
   /// The phase last sent; null before any.
   DockerEndpointPhase? phase;
   Timer? idle;
+
+  /// The watches by id, and what reads for them.
+  final Map<String, DockerWatch> watches = {};
+  DockerWatcher? watcher;
+
+  /// [endpoint] as [watcher] reads over it.
+  DockerWatchTarget? target;
 }
 
 /// A negotiated route, with the HTTP pool over it.
 final class _Endpoint {
   _Endpoint(
     this._openPool,
+    this._openDuplex,
     this._pool, {
     required this.route,
     required this.version,
@@ -552,6 +634,7 @@ final class _Endpoint {
   });
 
   final DockerHttpClient Function() _openPool;
+  final DuplexOpener _openDuplex;
   DockerHttpClient? _pool;
   final DockerEndpointRoute route;
 
@@ -572,6 +655,44 @@ final class _Endpoint {
     _pool = null;
     await pool?.close();
   }
+}
+
+/// [_Endpoint] as a watcher reads over it: its pooled reads count as
+/// queries for the relays' idle close.
+final class _WatchTarget implements DockerWatchTarget {
+  _WatchTarget(this._router, this._session, this._endpoint);
+
+  final DockerRouter _router;
+  final _Session _session;
+  final _Endpoint _endpoint;
+
+  @override
+  DockerRank get rank => _endpoint.route.rank;
+
+  @override
+  String get socketPath => _endpoint.route.socketPath;
+
+  @override
+  Future<T> use<T>(Future<T> Function(DockerClient client) read) async {
+    _session.idle?.cancel();
+    _session.idle = null;
+    _endpoint.inFlight++;
+    try {
+      return await read(_endpoint.client);
+    } finally {
+      _endpoint.inFlight--;
+      if (identical(_session.endpoint, _endpoint)) {
+        _router._idleCheck(_session, _endpoint);
+      }
+    }
+  }
+
+  /// Bounded by the head timeout only, as every stream is (03 §5.5).
+  @override
+  DockerClient openStream() => DockerClient(
+    DockerHttpClient(_endpoint._openDuplex, maxConnections: 1),
+    apiVersion: _endpoint.api,
+  );
 }
 
 /// What a query read, and whether its connection dropped, so the

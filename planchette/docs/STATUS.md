@@ -1,5 +1,46 @@
 # Status
 
+## Optional folder and server workspaces (2026-10-17)
+
+- Open Folder and Open Containing Folder add a resizable file browser beside
+  the existing editor tabs. Direct-file launches stay editor-only. Native
+  folder pickers belong to their requesting window.
+- Open Server reads the shared encrypted catalog and asks for a remote root.
+  Enrollment is optional, pull-only and isolated to Planchette's storage and
+  keystore entries. Credential import requires consent; conflicting host-key
+  pins retain local trust.
+- Remote editing uses Poltergeist's managed checkouts and content-checked
+  uploads. Buffer edits, saved-local/upload-pending changes and successful
+  remote saves have distinct states. Save All retries pending uploads.
+  Save a Local Copy exports without retargeting the remote tab.
+- Recover Remote Edits reopens pending copies offline after restart. Quit
+  retains durable copies; explicit tab discard removes them. Managed loads
+  reject symlinks, and managed saves use the shared checkout-recovery prefix.
+  Startup restores interrupted save pairs before cleaning generated files.
+- Connection dialogs lock the window displaying them and cancel when its
+  workspace is disposed. The initiating window retains its own operation lock.
+
+Local proof: app analysis is clean; 579 app tests pass with two existing
+case-insensitive-volume skips. Core analysis and 97 checkout/sorting tests
+pass. Linux release and Android APK compilation pass. Native modal
+picker behavior, OS keystore prompts and live SSH/account flows still need
+desktop smoke checks; fake-backed tests cover their application contracts.
+Android's provider store accepts the shared document interface and its command
+palette offers provider-supported actions; desktop workspaces stay host-owned.
+
+## Font catalog and preview picker (2026-10-17)
+
+`ghost_fonts` bundles 20 OFL families. The shared picker searches offline,
+previews real glyphs and emphasis, and confirms family and ligatures together.
+Planchette, Séance and Poltergeist use it. Defaults and stored family names
+are preserved; a saved ligatures-off choice stays off.
+
+Rendering tests check every family's fixed-width metrics and each supported
+font's ligature switch. The additional release files and licenses are pinned
+by SHA-256; the fonts are unmodified. Desktop and narrow layouts were inspected
+as rendered captures. Native macOS, Windows and mobile device checks remain
+manual.
+
 ## Problem checks (2026-10-06)
 
 The shared editor checks the formats it can read quickly and marks what
@@ -331,10 +372,11 @@ a native smoke test. No release tag has been created.
 
 ## Current limits
 
-The standalone app is desktop-only, uses one tabbed window per process, and
-does not restore documents after application exit. It accepts UTF-8 files up
+The standalone app targets Android and the three desktops, and does not
+restore documents after application exit. It accepts UTF-8 files up
 to 4 MiB; highlighting stops above 200,000 characters. File conflict guards
 are best-effort checks, not cross-process locks. Mixed line endings follow
 the selected host normalization policy. Android hard-link publication limits
-are documented in the core package; mobile runtime file I/O has not been
-verified locally.
+are documented in the core package. Android provider writes retain original
+recovery copies but cannot guarantee atomic replacement. Real-device document
+provider and keyboard flows require a manual smoke test.
