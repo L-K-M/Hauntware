@@ -4676,7 +4676,7 @@ shows there.
 | `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `RefreshSubscription(serverId, subscriptionId)` (a phone's pull to refresh, PLT-02), `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
-| `DockerQuery(serverId, queryId, query)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason)`, `DockerEvent` (opaque until the event lists) |
+| `DockerQuery(serverId, queryId, query)`, `DockerWatch(serverId, watchId, lists, statsFor)`, `DockerUnwatch(serverId, watchId)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason)`, `DockerListChanged(serverId, list, payload, at, fullRelist)` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(preview)`, `ActionProgress`, `ActionFinished` |
 | `AnswerPrompt(promptId, answer)` (trust, responses or cancel, secret) | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
 | `SetAppActivity(activity)` (foreground or background; D34, D45) | no event: it changes what runs |
@@ -5238,9 +5238,46 @@ the engine in `engine_isolate.dart` beside it):
   probe answer with other sockets, tools or sudo, or a connection that
   drops resolves again; a failure stands until the next query. On
   relay ranks the pool holds at most the short-action share's 2
-  connections and closes them after 30 s without a query [E]. Watches,
-  the endpoint override and typed list events are not in the protocol
-  yet.
+  connections and closes them after 30 s without a query [E]. The
+  endpoint override is not in the protocol yet.
+- **Version 3 (M3 Docker watches).** Watches joined version 3 the same
+  way (D06), and the opaque `DockerEvent` row is gone. `DockerWatch`
+  names the lists a view shows (containers, images, stacks, stats) and,
+  for stats, the container ids on screen (at most 64 [E]); a watch with
+  an id the server holds replaces it, and a server holds at most 16
+  [E]. A watch opens the endpoint as a query does, and one the engine
+  cannot hold (not in the fleet, too many ids, too many watches) is
+  answered with a failed list. `DockerListChanged` carries the whole
+  list each time as a typed payload: the containers without command
+  lines, the images, `groupComposeProjects`' grouping of the same
+  containers, or a stats round (per container CPU %, memory less
+  `inactive_file` or the cache, the limit, and the engine's time), or a
+  typed failure. `fullRelist` marks a list read from nothing: a
+  watch's first read, or one after the stream was lost for over 60 s
+  or could not resume. As built, the engine opens one `/events` stream
+  per server while any watch holds, on a connection of its own (on a
+  relay a follower-type channel that D09 accounts for), filtered to
+  container, image, volume and network events, and lists only once its
+  head has arrived. Container actions that change no list (`exec_*`,
+  `attach`, `resize`, `top`, archive and export) are skipped. Each
+  other event goes through `planEventRefresh`: events within 250 ms
+  [E] of the first are refreshed together, the containers they name
+  (up to 16 [E]) read with an `id` filter and merged in, more of them,
+  or an event without an id, re-listing them all, and image events
+  re-listing the images. A stream that ends opens again over the same
+  endpoint after 1 s, doubling to 30 s [E]; one whose endpoint drops
+  resumes over the next. Either resumes with `since` at the last
+  event's second when the stream was lost 60 s ago or less on the same
+  socket, and re-lists in full otherwise. A resumed stream re-lists
+  too, though not as a fresh list: the daemon replays from memory,
+  which a daemon restarted meanwhile has lost along with the
+  containers it stopped. Stats are one-shot reads of the ids on screen
+  that the list does not know as stopped, every 5 s [E] after the last
+  round, at most 4 at once on streamlocal and one at a time on a
+  relay, the CPU % taken against the previous read, so a container's
+  first read has none, nor the first after a failed read or a gap
+  over 60 s. The last unwatch, Disconnect,
+  fleet removal and an endpoint change end it all.
 - **Monitor set (M2, K30).** `SetMonitorSet(ids)` replaces FL-21's set
   without a shape change. The engine keeps only the fleet servers that
   `monitorEligibilityOf` allows (4.3 step 4) and it can dial, subscribes

@@ -96,7 +96,9 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         kCalendarIterationsSystemd,
         kCronHorizonDays,
         kOwnCrontabSource;
+
 export 'src/sampling/sample_results.dart' show kCronLinesEvaluated;
+
 // The Logs panel's LOG-04 notice: the access check's journal row (K04)
 // over the probe's HostProfile.
 export 'package:klabautermann_host/klabautermann_host.dart'
@@ -133,18 +135,23 @@ export 'package:seance_core/seance_core.dart'
 // their display and reveals one on request.
 export 'package:klabautermann_docker/klabautermann_docker.dart'
     show MaskedValue;
+
 // The Docker tab (03 §7.12 to §7.14, §10.1): the route a
 // DockerEndpointState names and the plain-data Docker models a
-// DockerResult carries (D52).
+// DockerResult or DockerListChanged carries (D52).
 export 'src/docker/docker_ladder.dart'
     show
         DockerNoRouteReason,
         DockerRank,
         DockerRootEquivalence,
         DockerRouteLabel;
+
 export 'package:klabautermann_docker/klabautermann_docker.dart'
     show
         ApiVersion,
+        ComposeGrouping,
+        ComposeProject,
+        ComposeService,
         ContainerHostConfig,
         ContainerMount,
         ContainerNetwork,
@@ -156,14 +163,19 @@ export 'package:klabautermann_docker/klabautermann_docker.dart'
         EngineComponent,
         EngineInfo,
         EnvVar,
+        ExternalManager,
         HealthStatus,
         ImageSummary,
-        LogConfig;
+        LogConfig,
+        Ownership,
+        OwnershipMarker;
 // The coverage card's external-monitor finding (03 §9.5 item 3): K04's
 // rule over a `units` reading, and what it reports.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show ExternalMonitorReport, ExternalMonitorUnit;
+
 export 'src/sampling/sample_results.dart' show externalMonitorsIn;
+
 // The Overview's threshold-band announcements (A11Y-15, D60): the rule
 // model's hysteresis evaluator, whose `for` durations debounce a band.
 export 'package:klabautermann_host/klabautermann_host.dart'
