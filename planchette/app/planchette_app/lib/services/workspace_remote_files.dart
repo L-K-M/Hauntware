@@ -62,7 +62,10 @@ final class WorkspaceRemoteFiles {
   final void Function(Object, StackTrace)? onError;
   final Map<String, ServerConfig> _servers = {};
   final Map<String, _RemotePublication> _publications = {};
+  // The raw pool only binds server configs and disconnects. Channel requests
+  // go through [_guarded], so they fail instead of parking while reconnecting.
   ConnectionManager? _connections;
+  ConnectionManager? _guarded;
   TransferQueue? _queue;
   ManagedRemoteFileStore? _store;
   CheckoutManager? _checkouts;
@@ -124,10 +127,11 @@ final class WorkspaceRemoteFiles {
       indexFile: File(paths.join(_directory.path, 'managed_remote_files.json')),
       checkoutRoot: Directory(paths.join(_directory.path, 'checkouts')),
     );
-    final queue = TransferQueue(connections: connections);
+    final guarded = _FailWhileReconnecting(connections);
+    final queue = TransferQueue(connections: guarded);
     final checkouts = CheckoutManager(
       store: store,
-      connections: connections,
+      connections: guarded,
       queue: queue,
       onError: onError,
     );
@@ -141,6 +145,7 @@ final class WorkspaceRemoteFiles {
       rethrow;
     }
     _connections = connections;
+    _guarded = guarded;
     _queue = queue;
     _store = store;
     _checkouts = checkouts;
@@ -191,7 +196,7 @@ final class WorkspaceRemoteFiles {
   }) async {
     await _start();
     final id = _bind(server);
-    final connections = _connections!;
+    final connections = _guarded!;
     final channel = await connections.openBrowseChannel(
       id,
       paneTabId: windowId,
@@ -303,6 +308,81 @@ final class WorkspaceRemoteFiles {
       await connections.disconnectServer(id);
     }
   }
+}
+
+/// The pool parks lease and browse requests until a dropped server reconnects,
+/// which may be never. A parked save keeps its tab busy and a parked Open
+/// Server keeps the window locked, both refusing quit, so remote work fails
+/// instead; the saved local copy stays pending for the next save.
+final class _FailWhileReconnecting implements ConnectionManager {
+  _FailWhileReconnecting(this._pool);
+  final ConnectionManager _pool;
+
+  static const _reconnecting = RemoteFileException(
+    kind: RemoteFileErrorKind.disconnected,
+    operation: 'connect',
+    message: 'The server is reconnecting. Try again once it is connected.',
+  );
+
+  @override
+  Future<TransferChannelLease> leaseTransferChannel(String serverId) =>
+      _failIfDropped(
+        serverId,
+        () => _pool.leaseTransferChannel(serverId),
+        // A parked request is granted after reconnecting; return its channel.
+        onLate: (granted) => granted.release(),
+      );
+
+  @override
+  Future<PaneChannel> openBrowseChannel(
+    String serverId, {
+    required String paneTabId,
+  }) => _failIfDropped(
+    serverId,
+    () => _pool.openBrowseChannel(serverId, paneTabId: paneTabId),
+    // Opens are idempotent per pane-tab, so a late grant may be the binding
+    // the window still browses; closing it would unbind that. It stays bound
+    // for the window's next open; [WorkspaceRemoteFiles.close] disconnects it.
+    onLate: (_) {},
+  );
+
+  /// Races [request] against the server entering `reconnecting`. The pool's
+  /// status stream replays the current state, so an already-dropped server
+  /// fails at once.
+  Future<T> _failIfDropped<T>(
+    String serverId,
+    Future<T> Function() request, {
+    required void Function(T granted) onLate,
+  }) async {
+    final dropped = Completer<Never>();
+    final watch = _pool.watchServer(serverId).listen((status) {
+      if (status.state != ServerConnectionState.reconnecting) return;
+      if (!dropped.isCompleted) dropped.completeError(_reconnecting);
+    });
+    final pending = request();
+    try {
+      return await Future.any([pending, dropped.future]);
+    } on Object {
+      pending.then(onLate, onError: (Object _) {}).ignore();
+      rethrow;
+    } finally {
+      await watch.cancel();
+    }
+  }
+
+  @override
+  Stream<ServerStatus> watchServer(String serverId) =>
+      _pool.watchServer(serverId);
+  @override
+  Stream<ConnectLogLine> get connectLog => _pool.connectLog;
+  @override
+  Future<Set<String>> connectedServerIds() => _pool.connectedServerIds();
+  @override
+  Future<void> disconnectServer(String serverId) =>
+      _pool.disconnectServer(serverId);
+  @override
+  Future<void> removeBookmark(String serverId) =>
+      _pool.removeBookmark(serverId);
 }
 
 final class _CatalogCredentials implements CredentialSource {

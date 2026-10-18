@@ -1,5 +1,21 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:klabautermann_docker/klabautermann_docker.dart';
 import 'package:test/test.dart';
+
+StdcopyFrame _frame(StdcopyKind stream, String text) =>
+    StdcopyFrame(stream, Uint8List.fromList(utf8.encode(text)));
+
+Future<List<TimestampedLogLine>> _join(
+  List<StdcopyFrame> frames, {
+  LogFraming framing = LogFraming.multiplexed,
+  int maxLineBytes = defaultMaxLogLineChars,
+}) => joinTimestampedLogLines(
+  Stream.fromIterable(frames),
+  framing: framing,
+  maxLineBytes: maxLineBytes,
+).toList();
 
 void main() {
   group('LogTimestamp (03 §5.6)', () {
@@ -93,6 +109,71 @@ void main() {
     test('lastDeliveredTimestamp finds the newest timestamp', () {
       expect(lastDeliveredTimestamp([at(1), at(5), at(3)])!.seconds, 5);
       expect(lastDeliveredTimestamp(const []), isNull);
+    });
+  });
+
+  group('joined timestamped lines (03 §5.6)', () {
+    const ts1 = '2026-10-17T10:00:00.000000001Z';
+    const ts2 = '2026-10-17T10:00:00.000000002Z';
+    const ts3 = '2026-10-17T10:00:00.000000003Z';
+
+    test('Podman\'s line split over two frames, each with a timestamp, '
+        'arrives whole at the first one (D01)', () async {
+      final lines = await _join([
+        _frame(StdcopyKind.stdout, '$ts1 stdout lin'),
+        _frame(StdcopyKind.stderr, '$ts2 an error\n'),
+        _frame(StdcopyKind.stdout, '$ts3 e 520\n'),
+      ]);
+
+      expect(
+        [for (final l in lines) (l.stream, l.message)],
+        [
+          (StdcopyKind.stderr, 'an error'),
+          (StdcopyKind.stdout, 'stdout line 520'),
+        ],
+      );
+      expect(lines.last.timestamp!.nanos, 1);
+    });
+
+    test('a frame of several lines yields each, and a continuation '
+        'without a timestamp is joined as it is', () async {
+      final lines = await _join([
+        _frame(StdcopyKind.stdout, '$ts1 one\n$ts2 two\n$ts3 thr'),
+        _frame(StdcopyKind.stdout, 'ee\r\n'),
+      ]);
+
+      expect([for (final l in lines) l.message], ['one', 'two', 'three']);
+      expect([for (final l in lines) l.timestamp!.nanos], [1, 2, 3]);
+    });
+
+    test('a raw stream splits on newlines only, wherever its chunks '
+        'end, and drops no timestamp inside a line', () async {
+      final lines = await _join([
+        _frame(StdcopyKind.stdout, '$ts1 prompt> '),
+        _frame(StdcopyKind.stdout, '$ts2 typed\r\n${ts3.substring(0, 9)}'),
+        _frame(StdcopyKind.stdout, '${ts3.substring(9)} last'),
+      ], framing: LogFraming.raw);
+
+      expect(
+        [for (final l in lines) l.message],
+        ['prompt> $ts2 typed', 'last'],
+      );
+      expect(lines.last.timestamp!.nanos, 3);
+    });
+
+    test('an overlong line keeps its first bytes, and a multibyte '
+        'character split across frames survives', () async {
+      final lines = await _join([
+        _frame(StdcopyKind.stdout, '$ts1 abcdefghij'),
+        _frame(StdcopyKind.stdout, '$ts2 klmnop\n'),
+        StdcopyFrame(
+          StdcopyKind.stdout,
+          Uint8List.fromList([...utf8.encode('$ts3 \u00e4'), 0xc3]),
+        ),
+        StdcopyFrame(StdcopyKind.stdout, Uint8List.fromList([0xb6, 0x0a])),
+      ], maxLineBytes: ts1.length + 6);
+
+      expect([for (final l in lines) l.message], ['abcde', '\u00e4\u00f6']);
     });
   });
 }

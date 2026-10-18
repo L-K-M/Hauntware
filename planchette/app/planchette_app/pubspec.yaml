@@ -23,7 +23,7 @@ dependencies:
   ghost_ui:
     path: ../../packages/ghost_ui
   path: 1.9.1
-  path_provider: 2.1.5
+  path_provider: 2.1.6
   planchette_core:
     path: ../../packages/planchette_core
   planchette_editor:
