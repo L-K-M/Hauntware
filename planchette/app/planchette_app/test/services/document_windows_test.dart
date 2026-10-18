@@ -74,6 +74,9 @@ final class FakeWindowHost implements WindowHost {
   Future<List<String>> pickOpenFiles(int viewId) async => openAnswer;
 
   @override
+  Future<String?> pickDirectory(int viewId) async => null;
+
+  @override
   Future<String?> pickSavePath(
     int viewId, {
     required String suggestedName,

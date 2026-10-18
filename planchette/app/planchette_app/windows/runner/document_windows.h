@@ -62,6 +62,9 @@ class DocumentWindowsHost {
       HWND owner,
       const flutter::EncodableMap* arguments,
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  void PickDirectory(
+      HWND owner,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
   void SendEvent(const char* event, int64_t view_id);
   HWND WindowFor(int64_t view_id) const;
   DocumentFlutterWindow* ExtraWindow(int64_t view_id) const;

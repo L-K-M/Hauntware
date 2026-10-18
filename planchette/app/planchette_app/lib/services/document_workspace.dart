@@ -5,6 +5,8 @@ import 'package:path/path.dart' as paths;
 import 'package:planchette_editor/planchette_editor.dart';
 
 import 'document_store.dart';
+import 'document_publication.dart';
+import 'folder_workspace.dart';
 
 enum CloseChoice { save, discard, cancel }
 
@@ -13,6 +15,8 @@ enum ReadOnlyChoice { saveAs, saveAnyway, cancel }
 
 /// The answer to the one-question close of several dirty documents at once.
 enum BulkCloseChoice { saveAll, discardAll, cancel }
+
+enum _CloseScope { tab, application }
 
 /// Who is walking the dirty tabs, which decides what the walk may assume.
 enum _SaveRun {
@@ -107,6 +111,13 @@ final class DocumentTab {
   TextDocument? baseline;
   String? path;
   bool busy = false;
+  DocumentPublication? _publication;
+
+  DocumentPublication? get publication => _publication;
+  bool get hasUnsavedChanges =>
+      editor.isDirty || (_publication?.pending ?? false);
+  String get displayPath => _publication?.displayPath ?? path ?? name;
+  String? get sourcePath => _publication?.sourcePath ?? path;
 
   /// Set while a confirmed revert reads the file. The buffer is about to be
   /// replaced, so it takes no edits and no save may write it.
@@ -177,8 +188,12 @@ final class DocumentWorkspace extends ChangeNotifier {
     required this.dialogs,
     paths.Context? pathContext,
     TextToolHistory? toolHistory,
+    FolderWorkspace? folders,
   }) : _paths = pathContext ?? paths.context,
-       toolHistory = toolHistory ?? TextToolHistory();
+       toolHistory = toolHistory ?? TextToolHistory(),
+       folders = folders ?? FolderWorkspace() {
+    this.folders.addListener(_notify);
+  }
 
   /// Scope of a refused quit's notice. The notice describes a state, not a
   /// failure, so [_notify] retires it the moment nothing blocks a quit any
@@ -188,6 +203,7 @@ final class DocumentWorkspace extends ChangeNotifier {
   final paths.Context _paths;
   final DocumentStore store;
   final DocumentDialogs dialogs;
+  final FolderWorkspace folders;
   final List<DocumentTab> _documents = [];
   final Map<String, Future<_OpenFailure?>> _opening = {};
   final Set<DocumentTab> _closingTabs = {};
@@ -237,6 +253,8 @@ final class DocumentWorkspace extends ChangeNotifier {
   bool _closingAll = false;
   bool _quitAccepted = false;
   bool _disposed = false;
+  final _lifetimeEnd = Completer<void>();
+  Future<void> get whenDisposed => _lifetimeEnd.future;
   Future<bool>? _quitDecision;
   Completer<void>? _unlocked;
   DocumentTab? _active;
@@ -255,8 +273,12 @@ final class DocumentWorkspace extends ChangeNotifier {
       _dialogCount > 0 || _closingAll || _quitAccepted;
   String get windowTitle {
     final tab = active;
-    if (tab == null) return 'Planchette';
-    return '${tab.editor.isDirty ? '● ' : ''}${tab.name} — Planchette';
+    final root = folders.isOpen ? '${folders.label} | ' : '';
+    if (tab == null) return '${root}Planchette';
+    if (!folders.isOpen) {
+      return '${tab.hasUnsavedChanges ? '● ' : ''}${tab.name} — Planchette';
+    }
+    return '${tab.hasUnsavedChanges ? '● ' : ''}${tab.name} | ${root}Planchette';
   }
 
   DocumentTab? newDocument() {
@@ -282,6 +304,7 @@ final class DocumentWorkspace extends ChangeNotifier {
     String? path,
     String? initialText,
     String? untitledName,
+    DocumentPublication? publication,
   }) {
     final id = _nextId++;
     // A file tab shows its path; an untitled one shows the free name it was
@@ -290,6 +313,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       id,
       path != null ? '' : untitledName ?? _freeUntitledName(),
     )..path = path;
+    tab._publication = publication;
     tab.editor = EditorController(
       displayPath: path ?? tab.untitledName,
       initialText: initialText,
@@ -299,7 +323,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       loadDocument: path == null
           ? null
           : () async {
-              final document = await store.load(tab.path!);
+              final document = await _loadTab(tab);
               tab.baseline = document;
               tab.path = document.file.path;
               return document;
@@ -315,17 +339,25 @@ final class DocumentWorkspace extends ChangeNotifier {
           source: tab.baseline,
           expectedSha256: target.digest,
           metadata: tab.editor.metadata,
+          target: tab._publication == null
+              ? DocumentWriteTarget.local
+              : DocumentWriteTarget.managedRemote,
         );
         tab.baseline = document;
         tab.path = document.file.path;
         tab.editor.adoptDocument(document);
-        tab.editor.displayPath = document.file.path;
+        tab.editor.displayPath = tab.displayPath;
+        tab._publication?.localSaved(document.sha256);
         _settle(tab);
         return document.sha256;
       },
     );
     tab.editor.indentationPreference = _indentationPreference;
     tab.editor.saveOptions = _saveOptions;
+    if (publication != null) {
+      tab.editor.onPublish = publication.publish;
+      publication.addListener(_notify);
+    }
     // Extract Matches can send its result to a fresh tab.
     tab.editor.onNewDocument = _extractedDocument;
     tab._editorListener = () => _editorChanged(tab);
@@ -402,6 +434,26 @@ final class DocumentWorkspace extends ChangeNotifier {
 
   Future<void> open(String path) => openAll([path]);
 
+  /// Open the host's durable working copy through the ordinary local guards.
+  /// The publication owns its remote target independently of the browser root.
+  Future<void> openManaged(String path, DocumentPublication publication) async {
+    final failure = await _openDeduped(path, publication: publication);
+    if (failure != null) {
+      _reportError(_openFailureMessage([failure]), scope: _pathKey(path));
+      return;
+    }
+    final tab = _findPath(path);
+    if (tab == null || _disposed || identical(tab._publication, publication)) {
+      return;
+    }
+    tab._publication?.removeListener(_notify);
+    tab._publication = publication;
+    publication.addListener(_notify);
+    tab.editor.displayPath = publication.displayPath;
+    tab.editor.onPublish = publication.publish;
+    _notify();
+  }
+
   /// Opens every path in one batch, so the failures it collects are reported
   /// together: a drop or an argv list that half-fails names each file it
   /// could not open instead of showing only the last.
@@ -474,17 +526,20 @@ final class DocumentWorkspace extends ChangeNotifier {
         '$listed${extra > 0 ? ', and $extra more' : ''}';
   }
 
-  Future<_OpenFailure?> _openDeduped(String path) {
+  Future<_OpenFailure?> _openDeduped(
+    String path, {
+    DocumentPublication? publication,
+  }) {
     if (_quitAccepted || _disposed) return Future.value();
     if (interactionLocked) {
       return (_unlocked ??= Completer<void>()).future.then(
-        (_) => _openDeduped(path),
+        (_) => _openDeduped(path, publication: publication),
       );
     }
     final key = _pathKey(path);
     return _opening.putIfAbsent(
       key,
-      () => _open(path).whenComplete(() {
+      () => _open(path, publication: publication).whenComplete(() {
         _opening.remove(key);
         // The open's own notification ran while it was still listed, so a
         // quit notice waiting on it needs one more.
@@ -519,7 +574,9 @@ final class DocumentWorkspace extends ChangeNotifier {
 
   void _rememberClosed(DocumentTab tab) {
     final path = tab.path;
-    if (path == null) return;
+    // Remote files reopen through their server browser, never a bare checkout
+    // path that would bypass publication and present a local-only Save.
+    if (path == null || tab._publication != null) return;
     final key = _pathKey(path);
     final (line, column) = tab.editor.caretLineColumn;
     _closedPaths
@@ -528,7 +585,10 @@ final class DocumentWorkspace extends ChangeNotifier {
     if (_closedPaths.length > _closedPathLimit) _closedPaths.removeAt(0);
   }
 
-  Future<_OpenFailure?> _open(String path) async {
+  Future<_OpenFailure?> _open(
+    String path, {
+    DocumentPublication? publication,
+  }) async {
     final existing = _findPath(path);
     if (existing != null) {
       // No new tab will appear, so point at the one that already holds the
@@ -549,7 +609,10 @@ final class DocumentWorkspace extends ChangeNotifier {
       return null;
     }
     final previous = _active;
-    final tab = _makeTab(path: _paths.normalize(_paths.absolute(path)));
+    final tab = _makeTab(
+      path: _paths.normalize(_paths.absolute(path)),
+      publication: publication,
+    );
     _documents.add(tab);
     _active = tab;
     _notify();
@@ -577,7 +640,7 @@ final class DocumentWorkspace extends ChangeNotifier {
         _remove(tab);
         peers!.focusTab(held.workspace, held.tab);
       } else {
-        tab.editor.displayPath = tab.path!;
+        tab.editor.displayPath = tab.displayPath;
       }
       // The path opened: any earlier failure about it (and any
       // still-opening refusal raised against this tab) has been resolved.
@@ -665,9 +728,26 @@ final class DocumentWorkspace extends ChangeNotifier {
     try {
       target = await _saveTarget(tab, saveAs: saveAs);
       if (target == null) return false;
+      if (saveAs && tab._publication != null) {
+        if (_pathKey(target.path) == _pathKey(tab.path!)) {
+          throw StateError('Choose another location for the local copy.');
+        }
+        await store.write(
+          path: target.path,
+          text: tab.editor.text.text,
+          source: tab.baseline,
+          expectedSha256: target.digest,
+          metadata: tab.editor.metadata,
+        );
+        _clearScope(tab);
+        return true;
+      }
       _saveTargets[tab] = (path: target.path, digest: target.digest);
       final result = await tab.editor.save(access: access);
       if (result == null) return false;
+      if (result.publishRequested && !result.published) {
+        throw StateError('The local copy was saved, but it was not uploaded.');
+      }
       // Consent to replace a protected file covers the write it was given
       // for, so it is remembered only once that write lands.
       if (target.acceptedReadOnly) tab._acceptedReadOnlyPath = target.path;
@@ -706,7 +786,9 @@ final class DocumentWorkspace extends ChangeNotifier {
       final String target;
       if (chooseTarget) {
         final selected = await _dialog(
-          () => dialogs.pickSavePath(tab.path ?? tab.name),
+          () => dialogs.pickSavePath(
+            tab._publication == null ? tab.path ?? tab.name : tab.name,
+          ),
         );
         if (selected == null) {
           _declinedSaves.add(tab);
@@ -795,7 +877,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       // A tab being reverted is dirty only with edits the user discarded.
       final dirty = [
         for (final tab in _documents)
-          if (tab.editor.isDirty && !tab._reverting) tab,
+          if (tab.hasUnsavedChanges && !tab._reverting) tab,
       ];
       return await _saveEach(dirty, _SaveRun.saveAll);
     } finally {
@@ -1004,7 +1086,7 @@ final class DocumentWorkspace extends ChangeNotifier {
     }
 
     try {
-      final document = await store.load(path);
+      final document = await _loadTab(tab);
       if (staleReason() case final reason?) {
         if (reason.isNotEmpty) _reportError(reason, scope: scope);
         return false;
@@ -1136,12 +1218,15 @@ final class DocumentWorkspace extends ChangeNotifier {
     return true;
   }
 
-  Future<bool> _confirmTab(DocumentTab tab) async {
+  Future<bool> _confirmTab(
+    DocumentTab tab, {
+    _CloseScope scope = _CloseScope.tab,
+  }) async {
     if (tab.busy || tab.editor.isSaving) {
       _reportBusy(tab);
       return false;
     }
-    if (!tab.editor.isDirty) return true;
+    if (!tab.hasUnsavedChanges) return true;
     final reviewedText = tab.editor.text.text;
     _active = tab;
     _notify();
@@ -1154,7 +1239,20 @@ final class DocumentWorkspace extends ChangeNotifier {
       case CloseChoice.cancel:
         return false;
       case CloseChoice.discard:
-        if (tab.editor.text.text == reviewedText) return true;
+        if (tab.editor.text.text == reviewedText) {
+          try {
+            // App-wide consent is provisional until every window agrees.
+            // Durable copies survive Quit; explicit tab discard forgets them.
+            final publication = tab._publication;
+            if (scope == _CloseScope.tab && publication != null) {
+              await _dialog(publication.discard);
+            }
+            return true;
+          } on Object catch (error) {
+            _reportError('Could not discard ${tab.name}: $error', scope: tab);
+            return false;
+          }
+        }
         // The buffer moved on while the prompt was open, so the reviewed text
         // is no longer what would be dropped. Say so instead of closing
         // nothing in silence.
@@ -1166,7 +1264,7 @@ final class DocumentWorkspace extends ChangeNotifier {
         return false;
       case CloseChoice.save:
         return await _save(tab, access: EditorSaveAccess.confirmedClose) &&
-            !tab.editor.isDirty;
+            !tab.hasUnsavedChanges;
     }
   }
 
@@ -1244,7 +1342,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       // stays on screen while the file is read, and a failed read never
       // reaches the editor, so the buffer survives it untouched. The read
       // follows the tab's current path, which Save As may have changed.
-      final document = await store.load(tab.path!);
+      final document = await _loadTab(tab);
       if (_disposed || !_documents.contains(tab)) return false;
       if (why == _Reread.background &&
           (tab.editor.isDirty || !identical(tab.baseline, baseline))) {
@@ -1256,7 +1354,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       // text cannot be undone back into a buffer whose baseline has moved.
       // The caret and scroll position stay where they still fit.
       tab.editor.adoptDocument(document, replaceText: true);
-      tab.editor.displayPath = document.file.path;
+      tab.editor.displayPath = tab.displayPath;
       _settle(tab);
       if (why == _Reread.chosen) _clearScope(tab);
       return true;
@@ -1499,7 +1597,7 @@ final class DocumentWorkspace extends ChangeNotifier {
     try {
       final unsaved = [
         for (final tab in _documents)
-          if (tab.editor.isDirty) tab,
+          if (tab.hasUnsavedChanges) tab,
       ];
 
       // One question for a pile of dirty tabs beats a queue of per-document
@@ -1522,7 +1620,7 @@ final class DocumentWorkspace extends ChangeNotifier {
             // was open: saving them is what the answer asked for.
             final dirty = [
               for (final tab in _documents)
-                if (tab.editor.isDirty) tab,
+                if (tab.hasUnsavedChanges) tab,
             ];
             if (!await _saveEach(dirty, _SaveRun.quit)) return false;
           case BulkCloseChoice.discardAll:
@@ -1540,7 +1638,9 @@ final class DocumentWorkspace extends ChangeNotifier {
         }
       } else {
         for (final tab in List.of(_documents)) {
-          if (!await _confirmTab(tab)) return false;
+          if (!await _confirmTab(tab, scope: _CloseScope.application)) {
+            return false;
+          }
         }
       }
       _quitAccepted = true;
@@ -1560,6 +1660,20 @@ final class DocumentWorkspace extends ChangeNotifier {
       _dialogCount--;
       _notify();
     }
+  }
+
+  Future<TextDocument> _loadTab(DocumentTab tab) => store.load(
+    tab.path!,
+    symlinkPolicy: tab._publication == null
+        ? SymlinkPolicy.resolveOnce
+        : SymlinkPolicy.reject,
+  );
+
+  /// Workspace pickers and connection prompts obey the same editing and quit
+  /// lock as document dialogs. Opening the chosen file happens after it ends.
+  Future<T?> chooseWorkspace<T>(Future<T?> Function() show) async {
+    if (interactionLocked || _disposed) return null;
+    return _dialog(show);
   }
 
   DocumentTab? _findPath(String path, {DocumentTab? except}) {
@@ -1610,6 +1724,7 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// The tab's name, with its folder while another open tab has the same
   /// name, so two index.js tabs can be told apart. Ported from #43.
   String labelFor(DocumentTab tab) {
+    if (tab._publication != null) return tab.displayPath;
     final path = tab.path;
     if (path == null) return tab.name;
     final others = [
@@ -1727,6 +1842,7 @@ final class DocumentWorkspace extends ChangeNotifier {
           : _documents[index.clamp(0, _documents.length - 1)];
     }
     tab.editor.removeListener(tab._editorListener);
+    tab._publication?.removeListener(_notify);
     tab.editor.dispose();
   }
 
@@ -1755,10 +1871,14 @@ final class DocumentWorkspace extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _lifetimeEnd.complete();
     _unlocked?.complete();
     _unlocked = null;
+    folders.removeListener(_notify);
+    folders.dispose();
     for (final tab in _documents) {
       tab.editor.removeListener(tab._editorListener);
+      tab._publication?.removeListener(_notify);
       tab.editor.dispose();
     }
     super.dispose();

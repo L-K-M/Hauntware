@@ -49,6 +49,7 @@ constexpr char kSetFullScreenMethod[] = "setFullScreen";
 constexpr char kSetTitleMethod[] = "setTitle";
 constexpr char kPickOpenFilesMethod[] = "pickOpenFiles";
 constexpr char kPickSavePathMethod[] = "pickSavePath";
+constexpr char kPickDirectoryMethod[] = "pickDirectory";
 constexpr char kActivatedEvent[] = "activated";
 constexpr char kCloseRequestedEvent[] = "closeRequested";
 constexpr char kViewIdKey[] = "viewId";
@@ -348,7 +349,8 @@ void DocumentWindowsHost::HandleMethodCall(
   if (method != kDestroyMethod && method != kActivateMethod &&
       method != kHideMethod && method != kIsFullScreenMethod &&
       method != kSetFullScreenMethod && method != kSetTitleMethod &&
-      method != kPickOpenFilesMethod && method != kPickSavePathMethod) {
+      method != kPickOpenFilesMethod && method != kPickSavePathMethod &&
+      method != kPickDirectoryMethod) {
     result->NotImplemented();
     return;
   }
@@ -390,6 +392,9 @@ void DocumentWindowsHost::HandleMethodCall(
     return;
   } else if (method == kPickSavePathMethod) {
     PickSavePath(window, arguments, std::move(result));
+    return;
+  } else if (method == kPickDirectoryMethod) {
+    PickDirectory(window, std::move(result));
     return;
   } else {
     // Full screen is the extra windows' only: window_manager owns the main
@@ -532,6 +537,56 @@ void DocumentWindowsHost::PickOpenFiles(
   }
   dialog->Release();
   result->Success(flutter::EncodableValue(paths));
+}
+
+void DocumentWindowsHost::PickDirectory(
+    HWND owner,
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+  IFileOpenDialog* dialog = nullptr;
+  HRESULT hr = ::CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_ALL,
+                                  IID_PPV_ARGS(&dialog));
+  if (FAILED(hr) || dialog == nullptr) {
+    if (dialog != nullptr) {
+      dialog->Release();
+    }
+    result->Error(kPickerFailedError, "the folder dialog did not start");
+    return;
+  }
+  FILEOPENDIALOGOPTIONS options = 0;
+  hr = dialog->GetOptions(&options);
+  if (SUCCEEDED(hr)) {
+    hr = dialog->SetOptions((options | FOS_FORCEFILESYSTEM | FOS_PICKFOLDERS) &
+                           ~FOS_ALLOWMULTISELECT);
+  }
+  if (FAILED(hr)) {
+    dialog->Release();
+    result->Error(kPickerFailedError, "the folder dialog could not be configured");
+    return;
+  }
+  hr = dialog->Show(owner);
+  if (hr == HRESULT_FROM_WIN32(ERROR_CANCELLED)) {
+    dialog->Release();
+    result->Success();
+    return;
+  }
+  if (FAILED(hr)) {
+    dialog->Release();
+    result->Error(kPickerFailedError, "the folder dialog failed");
+    return;
+  }
+  IShellItem* item = nullptr;
+  hr = dialog->GetResult(&item);
+  dialog->Release();
+  const std::optional<std::string> path =
+      SUCCEEDED(hr) && item != nullptr ? ItemPath(item) : std::nullopt;
+  if (item != nullptr) {
+    item->Release();
+  }
+  if (!path || path->empty()) {
+    result->Error(kPickerFailedError, "the folder dialog returned no path");
+    return;
+  }
+  result->Success(flutter::EncodableValue(*path));
 }
 
 void DocumentWindowsHost::PickSavePath(

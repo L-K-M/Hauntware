@@ -2,6 +2,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:klabautermann_app/app_identity.dart';
+import 'package:klabautermann_app/l10n/app_localizations_en.dart';
 
 // Paths are relative to the app directory, where `flutter test` runs.
 const _packager = '../../scripts/package-linux.sh';
@@ -92,11 +94,14 @@ void main() {
         ),
       );
       expect(_read(_buildScript), contains('ASSET_STEM="$_assetStem"'));
-      // The package name stays klabautermann; its description says preview.
+      // The package name stays klabautermann; its description says
+      // preview with the app's own label, as the app title does (M16), so
+      // M7 drops both together.
       expect(
         _read(_packager),
-        contains('DEB_DESCRIPTION="Klabautermann (preview): '),
+        contains('DEB_DESCRIPTION="Klabautermann $kPreviewLabel: '),
       );
+      expect(AppLocalizationsEn().appTitle, 'Klabautermann $kPreviewLabel');
     });
 
     test('the master icon covers the largest hicolor size', () {

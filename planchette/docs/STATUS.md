@@ -1,5 +1,33 @@
 # Status
 
+## Optional folder and server workspaces (2026-10-17)
+
+- Open Folder and Open Containing Folder add a resizable file browser beside
+  the existing editor tabs. Direct-file launches stay editor-only. Native
+  folder pickers belong to their requesting window.
+- Open Server reads the shared encrypted catalog and asks for a remote root.
+  Enrollment is optional, pull-only and isolated to Planchette's storage and
+  keystore entries. Credential import requires consent; conflicting host-key
+  pins retain local trust.
+- Remote editing uses Poltergeist's managed checkouts and content-checked
+  uploads. Buffer edits, saved-local/upload-pending changes and successful
+  remote saves have distinct states. Save All retries pending uploads.
+  Save a Local Copy exports without retargeting the remote tab.
+- Recover Remote Edits reopens pending copies offline after restart. Quit
+  retains durable copies; explicit tab discard removes them. Managed loads
+  reject symlinks, and managed saves use the shared checkout-recovery prefix.
+  Startup restores interrupted save pairs before cleaning generated files.
+- Connection dialogs lock the window displaying them and cancel when its
+  workspace is disposed. The initiating window retains its own operation lock.
+
+Local proof: app analysis is clean; 579 app tests pass with two existing
+case-insensitive-volume skips. Core analysis and 97 checkout/sorting tests
+pass. Linux release and Android APK compilation pass. Native modal
+picker behavior, OS keystore prompts and live SSH/account flows still need
+desktop smoke checks; fake-backed tests cover their application contracts.
+Android's provider store accepts the shared document interface and its command
+palette offers provider-supported actions; desktop workspaces stay host-owned.
+
 ## Font catalog and preview picker (2026-10-17)
 
 `ghost_fonts` bundles 20 OFL families. The shared picker searches offline,

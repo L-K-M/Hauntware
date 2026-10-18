@@ -623,6 +623,9 @@ final class WindowPickers {
 
   Future<List<String>> pickOpenFiles() => _window.owner.pickOpenFiles(_window);
 
+  Future<String?> pickDirectory() =>
+      _window.owner._host.pickDirectory(_window.viewId);
+
   Future<String?> pickSavePath({
     required String suggestedName,
     String? initialDirectory,
