@@ -221,13 +221,40 @@ DockerParseResult<ComposeConfig> parseComposeConfig(Object? decoded) {
   );
 }
 
-/// The plain hash from `docker compose config --hash '*'` (03 §7.16
-/// STK-01). Returns null when the output is not a single hash token.
-String? parseComposeConfigHash(String text) {
-  final t = text.trim();
-  if (t.isEmpty || t.contains('\n')) return null;
-  return RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(t) ? t : null;
+/// Each service's config hash from `docker compose config --hash '*'`
+/// (03 §7.16 STK-01): one `<service> <hash>` line per service, as
+/// `runHash` in Compose's `cmd/compose/config.go` prints them (read on
+/// its v5 main branch; a released binary is checked in D21). Null when
+/// the output is empty or any line is not that shape, as a CLI that
+/// reads `--hash` otherwise would print.
+Map<String, String>? parseComposeServiceHashes(String text) {
+  final hashes = <String, String>{};
+  for (final line in const LineSplitter().convert(text)) {
+    if (line.trim().isEmpty) continue;
+    final match = _serviceHashLine.firstMatch(line.trim());
+    if (match == null) return null;
+    hashes[match[1]!] = match[2]!;
+  }
+  return hashes.isEmpty ? null : hashes;
 }
+
+final _serviceHashLine = RegExp(r'^([a-zA-Z0-9][a-zA-Z0-9._-]*) ([a-f0-9]+)$');
+
+/// The service names `docker compose config --services` prints, one per
+/// line (03 §7.16 STK-06). Null when a line is not a service name, as an
+/// error or another CLI's output would be.
+Set<String>? parseComposeServiceNames(String text) {
+  final names = <String>{};
+  for (final line in const LineSplitter().convert(text)) {
+    final name = line.trim();
+    if (name.isEmpty) continue;
+    if (!_serviceName.hasMatch(name)) return null;
+    names.add(name);
+  }
+  return names;
+}
+
+final _serviceName = RegExp(r'^[a-zA-Z0-9][a-zA-Z0-9._-]*$');
 
 /// `docker compose version --format json` (03 §7.16 STK-05).
 @immutable

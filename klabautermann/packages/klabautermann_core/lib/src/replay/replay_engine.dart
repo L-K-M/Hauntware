@@ -363,7 +363,8 @@ final class _ReplayEngine {
   /// window or file at once.
   void _run(_Stream stream) {
     final _Stream(id: streamId, :spec, :host) = stream;
-    if (spec.source is FileLogSource) {
+    // A replay holds no files and no Docker engine.
+    if (spec.source is FileLogSource || spec.source is ContainerLogSource) {
       _end(stream, LogStreamEndReason.missing);
       return;
     }

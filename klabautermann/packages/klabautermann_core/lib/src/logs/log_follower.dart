@@ -220,6 +220,10 @@ final class LogFollower {
       OperationLogSource() => throw const HostCommandError(
         'the engine reads an operation log as its file',
       ),
+      // The Docker router reads them over the API.
+      ContainerLogSource() => throw const HostCommandError(
+        'container logs come from the Docker endpoint',
+      ),
     };
   }
 

@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:klabautermann_host/klabautermann_host.dart' show HostProfile;
+import 'package:klabautermann_host/klabautermann_host.dart'
+    show HostProfile, OpDirectoryKind;
 import 'package:meta/meta.dart';
 import 'package:seance_core/catalog.dart'
     show EndpointPin, EndpointPinStore, endpointPinsFileName;
@@ -31,7 +32,9 @@ import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
 import '../logs/log_stream_router.dart';
 import '../operations/confirmation.dart';
-import '../operations/operation_plan.dart' show PlanAttempt;
+import '../operations/detached_runner.dart';
+import '../operations/operation_plan.dart'
+    show DockerTargetUnchanged, PlanAttempt, StackConfigUnchanged;
 import '../operations/operation_runner.dart';
 import '../operations/operation_tracker.dart';
 import '../operations/operations_shown.dart';
@@ -39,6 +42,7 @@ import '../operations/plan_registry.dart';
 import '../operations/plan_types.dart' show RequiredLevel;
 import '../operations/plans/docker_plans.dart';
 import '../operations/plans/host_plans.dart';
+import '../operations/plans/redeploy_plan.dart';
 import '../operations/protected_targets.dart';
 import '../sampling/sampling_scheduler.dart';
 import '../sampling/subscriptions.dart';
@@ -69,9 +73,10 @@ final class EngineStart {
 
   /// Whether the engine opens SSH links (03 §5.1, §10.1). Without them it
   /// has no link supervisor, sampling scheduler, log streams or Docker
-  /// sessions: [Connect], [OpenLogStream] and [DockerQuery] get
-  /// [RequestRejected] and nothing dials, samples or reads,
-  /// [CloseStream], [Disconnect], [RefreshSubscription] and
+  /// sessions: [Connect], [OpenLogStream], [DockerQuery] and
+  /// [DockerWatch] get [RequestRejected] and nothing dials, samples or
+  /// reads, [CloseStream], [DockerUnwatch], [Disconnect],
+  /// [RefreshSubscription] and
   /// [SetAppActivity] change nothing, subscriptions are only recorded,
   /// and no [Prompt] is ever open. The app's composition root leaves
   /// them off; tests turn them on.
@@ -117,10 +122,13 @@ final class EngineStart {
 /// prompt broker (03 §5.1), a [Connect] to a fleet server without a
 /// config gets [ConnectRejected] (D61), [OpenLogStream] and
 /// [CloseStream] go to the log streams, which read each window over its
-/// server's link (03 §5.2, §7.6), a [DockerQuery] goes to its server's
+/// server's link (03 §5.2, §7.6), or for a [ContainerLogSource] over its
+/// server's Docker session (03 §7.12), a [DockerQuery] goes to its server's
 /// Docker session, which finds and negotiates the endpoint over the link
 /// once the probe has answered and reports it as [DockerEndpointState]
-/// (03 §5.8, §5.9), [EnrollSync] and [RunSyncRound] run pull-only sync
+/// (03 §5.8, §5.9), [DockerWatch] and [DockerUnwatch] go to that session,
+/// which follows the engine's events into [DockerListChanged] lists
+/// (03 §7.12), [EnrollSync] and [RunSyncRound] run pull-only sync
 /// one at a time beside the request queue (03 §4.3, D63), answered by
 /// [SyncStatus] and, when they succeed, the fleet, after an
 /// [EndpointChanged] for each confirmed endpoint a round changed (03
@@ -357,17 +365,74 @@ void engineMain(
         final router = docker;
         if (router == null) return RevalidationFailure.unreadable;
         try {
-          return await router.useEndpoint(
+          return await router.useStacks(
             serverId,
-            (client, _) => revalidateDockerTarget(client, check),
+            (client, _, stacks) => switch (check) {
+              final StackConfigUnchanged stack => revalidateStackConfig(
+                stacks,
+                stack,
+              ),
+              final DockerTargetUnchanged target => revalidateDockerTarget(
+                client,
+                target,
+              ),
+              _ => Future.value(RevalidationFailure.unreadable),
+            },
           );
         } on Object {
           return RevalidationFailure.unreadable;
         }
       },
-      // A record that cannot be written is lost; the run itself stands.
-      finished: (result) =>
-          unawaited(audit.recordRun(result).catchError((Object _) {})),
+      launch: (serverId, plan, session) async {
+        final link = links.link(serverId);
+        final uid = profiles[serverId]?.uid;
+        final runner = plan.detachedRunner!;
+        final id = newOpId();
+        if (link == null || uid == null) {
+          return (
+            id: id,
+            dir: null,
+            pid: null,
+            failure: LaunchFailure.transport,
+            exitCode: null,
+          );
+        }
+        final launched = await launchDetached(
+          link: link,
+          runner: runner,
+          uid: uid,
+          argv: detachedArgv(plan),
+          id: id,
+          session: session,
+        );
+        if (launched.failure == null) {
+          await operations?.launched(
+            serverId,
+            id,
+            directory: runner.runsAsRoot
+                ? OpDirectoryKind.root
+                : OpDirectoryKind.user,
+            launch: OperationLaunch(
+              action: '${plan.intent.runtimeType}',
+              targetName: plan.targetName,
+              steps: [for (final step in plan.steps) step.display],
+              tier: plan.tier,
+              startedAt: DateTime.now().toUtc(),
+            ),
+          );
+        }
+        return launched;
+      },
+      // A record that cannot be written is lost; the run itself stands. A
+      // started detached operation is audited with its result, once the
+      // app has shown it (03 §7.17).
+      finished: (result) {
+        if (result.plan.detached &&
+            result.finished.outcome == ActionOutcome.succeeded) {
+          return;
+        }
+        unawaited(audit.recordRun(result).catchError((Object _) {}));
+      },
     );
     scheduler = SamplingScheduler(
       subscriptions: sampling,
@@ -711,6 +776,16 @@ void engineMain(
       case SetCadenceProfile(:final profile):
         sampling.profile = profile;
         scheduler?.profileChanged();
+      case OpenLogStream(spec: LogStreamSpec(source: ContainerLogSource())):
+        // The log router keeps every stream id; the Docker session reads.
+        final reason = switch ((logs, docker)) {
+          (final logs?, final docker?) =>
+            logs.claim(message.streamId)
+                ? docker.openLogs(message)
+                : 'stream id ${message.streamId} was used before',
+          _ => 'links are off in this engine',
+        };
+        if (reason != null) reject(message, reason);
       case OpenLogStream(:final streamId, :final spec):
         final router = logs;
         if (router == null) {
@@ -737,6 +812,7 @@ void engineMain(
         if (router.open(open) case final reason?) reject(message, reason);
       case CloseStream(:final streamId):
         logs?.closeStream(streamId);
+        docker?.closeLogs(streamId);
       case DockerQuery():
         switch (docker) {
           case null:
@@ -744,6 +820,15 @@ void engineMain(
           case final docker:
             docker.query(message);
         }
+      case DockerWatch():
+        switch (docker) {
+          case null:
+            reject(message, 'links are off in this engine');
+          case final docker:
+            docker.watch(message);
+        }
+      case DockerUnwatch():
+        docker?.unwatch(message);
       case ImportSshConfig(:final text):
         final ({
           List<ImportedHost> hosts,
@@ -871,8 +956,30 @@ void engineMain(
                   ),
                 );
           case RedeployStack():
-            refuse(ActionRefusalReason.notImplemented);
-            return;
+            final router = docker;
+            if (router == null) {
+              refuse(ActionRefusalReason.engineUnavailable);
+              return;
+            }
+            attempt = router
+                .useStacks(
+                  serverId,
+                  (client, route, stacks) => planRedeploy(intent, (
+                    client: client,
+                    route: route,
+                    stacks: stacks,
+                    profile: profile,
+                    adminMode: admin?.session(serverId) != null,
+                    protection: protection,
+                    loginUser: profile.user ?? 'login user',
+                  )),
+                )
+                .catchError(
+                  (Object _) => (
+                    plan: null,
+                    refusal: ActionRefusalReason.engineUnavailable,
+                  ),
+                );
         }
         // Not awaited: planning reads over the link, and the queue keeps
         // serving the app meanwhile.

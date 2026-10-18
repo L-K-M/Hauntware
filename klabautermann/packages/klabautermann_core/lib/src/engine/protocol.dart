@@ -29,6 +29,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
 import 'package:klabautermann_docker/klabautermann_docker.dart'
     show
         ApiVersion,
+        ComposeGrouping,
         ContainerHostConfig,
         ContainerMount,
         ContainerNetworkSettings,
@@ -36,6 +37,7 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
         DockerServerVersion,
         EngineInfo,
         EnvVar,
+        ExternalManager,
         HealthStatus,
         ImageSummary,
         MaskedValue;
@@ -136,6 +138,25 @@ import '../operations/plan_types.dart';
 /// the id and carries a sealed [DockerPayload] of typed, masked values
 /// instead of decoded JSON, and [DockerEndpointState] reports the route,
 /// the runtime as the Docker API names it and the negotiated version.
+///
+/// Docker watches then joined v3 the same way (03 §7.12 DKE-02, CST-01):
+/// [DockerWatch] and [DockerUnwatch] name the lists a view shows and the
+/// containers it wants stats for, and [DockerListChanged] carries each
+/// list as a typed [DockerPayload] in place of the opaque `DockerEvent`
+/// record, which is gone.
+///
+/// Container logs then joined v3 the same way (03 §7.12 CTX-01):
+/// [ContainerLogSource] reads one container's logs over its server's
+/// Docker endpoint as [ContainerRecord]s through the same
+/// [OpenLogStream], [LogBatch] and [LogStreamState], and
+/// [LogStreamEndReason] gained `logDriverUnreadable`, whose detail names
+/// the driver.
+///
+/// Stack sources then joined v3 the same way (03 §7.16 STK-01, STK-04,
+/// STK-05): [DockerStacksPayload] gained each project's [StackVerdict]
+/// and the [DockerComposeCli] found, and [DockerStackFileQuery] reads a
+/// verified stack's file, answered by [DockerStackFilePayload] or
+/// [DockerStackFileFailed].
 ///
 /// Operation plans then joined v3 the same way (03 §8.5, §10.1, M4 E09):
 /// [ActionIntent] became sealed, one variant per MVP action, [ActionPreview]
@@ -409,6 +430,45 @@ final class DockerQuery extends EngineRequest {
   final String queryId;
 
   final DockerQuerySpec query;
+}
+
+/// Watches [lists] on [serverId]'s engine (03 §7.12 DKE-02, CST-01), as
+/// [DockerListChanged] events, until [DockerUnwatch] or the session
+/// ends. While any watch holds, the engine follows the engine's
+/// `/events` and reads a list again when an event changes it; with
+/// [DockerWatchList.stats] it reads one-shot stats for [statsFor]'s
+/// containers at the list cadence. A watch with a [watchId] the server
+/// already holds replaces it, which is how a view reports the rows it
+/// shows now. Like a [DockerQuery], it opens the server's endpoint, and
+/// it starts once the endpoint is ready. A watch the engine cannot hold
+/// is answered with a [DockerQueryFailed] list for each of its [lists].
+final class DockerWatch extends EngineRequest {
+  const DockerWatch({
+    required this.serverId,
+    required this.watchId,
+    required this.lists,
+    this.statsFor = const {},
+  });
+
+  final String serverId;
+
+  /// The app's own id for the watch, unique per server.
+  final String watchId;
+  final Set<DockerWatchList> lists;
+
+  /// The containers, by id, whose stats [DockerWatchList.stats] reads:
+  /// the rows on screen (CST-01). At most [kDockerStatsForMax].
+  final Set<String> statsFor;
+}
+
+/// Ends the [DockerWatch] [watchId] on [serverId]. The last one ends the
+/// server's `/events` stream and stats reads; ending a watch the server
+/// does not hold does nothing.
+final class DockerUnwatch extends EngineRequest {
+  const DockerUnwatch({required this.serverId, required this.watchId});
+
+  final String serverId;
+  final String watchId;
 }
 
 /// Previews an operation: the engine answers [ActionPlanned], or
@@ -920,13 +980,29 @@ final class DockerEndpointState extends EngineEvent {
   DockerRouteLabel get label => route?.rank.label ?? DockerRouteLabel.none;
 }
 
-/// One Docker Engine `/events` record (03 §10.1); kept opaque until the
-/// Docker events model lands in its milestone.
-final class DockerEvent extends EngineEvent {
-  const DockerEvent(this.serverId, this.payload);
+/// [list] on [serverId], as a [DockerWatch] asked for it (03 §7.12
+/// DKE-02, CST-01): the whole list each time, read at [at] by the
+/// engine's clock. The payload is [DockerContainersPayload],
+/// [DockerImagesPayload], [DockerStacksPayload] or [DockerStatsPayload]
+/// by [list], or [DockerQueryFailed] when the read failed.
+final class DockerListChanged extends EngineEvent {
+  const DockerListChanged({
+    required this.serverId,
+    required this.list,
+    required this.payload,
+    required this.at,
+    this.fullRelist = false,
+  });
 
   final String serverId;
-  final Map<String, Object?> payload;
+  final DockerWatchList list;
+  final DockerPayload payload;
+  final DateTime at;
+
+  /// Whether the list was read from nothing rather than after events: a
+  /// watch's first read, or one after the events stream was lost for
+  /// over 60 s or could not resume, so changes in between went unseen.
+  final bool fullRelist;
 }
 
 /// The plan [PlanAction] computed: what would run, in the user's words, and
@@ -965,9 +1041,13 @@ final class ActionFinished extends EngineEvent {
     this.exitCode,
     this.httpStatus,
     this.revalidation,
+    this.operationId,
   });
 
   final String planId;
+
+  /// For a detached plan, [ActionOutcome.succeeded] means its operation
+  /// started; it then runs on the host as [operationId] (03 §7.17).
   final ActionOutcome outcome;
   final ActionFailure? failure;
 
@@ -983,6 +1063,10 @@ final class ActionFinished extends EngineEvent {
 
   /// What re-validation found, with [ActionFailure.revalidation].
   final RevalidationFailure? revalidation;
+
+  /// The detached operation a started plan runs as, which
+  /// [OperationsChanged] lists.
+  final String? operationId;
 }
 
 /// Why a plan failed.
@@ -1013,6 +1097,10 @@ enum ActionFailure {
   /// A detached operation ended before it recorded a result (03 §7.17):
   /// its wrapper was killed, at logout or by a reboot.
   interrupted,
+
+  /// A detached operation did not start: its directory could not be
+  /// resolved, or `systemd-run` or `setsid` failed, with [exitCode].
+  launchFailed,
 }
 
 /// What re-validation found changed (03 §8.5).
@@ -1051,7 +1139,7 @@ final class ActionRefused extends EngineEvent {
 
 /// Why an [ActionRefused] refused; the app words each (D35).
 enum ActionRefusalReason {
-  /// The action's planner has not landed yet (STK-06 lands with E18).
+  /// The action has no planner in this engine.
   notImplemented,
 
   /// No previewed plan has the id, or it already ran.
@@ -1098,6 +1186,23 @@ enum ActionRefusalReason {
   /// The stack's services depend on each other in a cycle, so there is no
   /// order to act in (STK-03).
   dependencyCycle,
+
+  /// A manager's labels mark the stack, and a redeploy offers no act
+  /// anyway (STK-06, 03 §8.7).
+  stackManaged,
+
+  /// The stack's files are not verified as its source (STK-01), so its
+  /// commands cannot be rebuilt from them (STK-06).
+  stackUnverified,
+
+  /// Only the legacy `docker-compose` is installed, which stays read-only
+  /// (STK-05).
+  legacyComposeOnly,
+
+  /// The detached operation needs root and the account's passwordless
+  /// sudo reaches only `docker`, which cannot start a root runner (03
+  /// §7.17).
+  sudoRightMissing,
 }
 
 /// Why [UserCrontabs] read no crontab.
@@ -1714,8 +1819,9 @@ final class LogStreamSpec {
     this.afterCursor,
   }) : assert(window >= 0, 'window counts records'),
        assert(
-         afterCursor == null || source is! FileLogSource,
-         'a file tail has no cursor',
+         afterCursor == null ||
+             (source is! FileLogSource && source is! ContainerLogSource),
+         'a file tail and a container log have no cursor',
        ),
        assert(
          !follow || source is! JournalLogSource || source.until == null,
@@ -1736,7 +1842,9 @@ final class LogStreamSpec {
 
   /// A [JournalRecord.cursor] the read continues after, in the stream's
   /// order: a window reads older records, a follow the ones written after
-  /// it. File tails and `dmesg` have no cursor. Null starts at the newest
+  /// it. File tails, `dmesg` and container logs have no cursor: a
+  /// container follow resumes after its newest line itself, as long as
+  /// the stream stays open. Null starts at the newest
   /// record. journalctl refuses `--since` together with a cursor, so with
   /// one the engine applies [JournalLogSource.since] itself: a window ends
   /// with [LogStreamEndReason.oldestReached] at the first record older
@@ -1744,8 +1852,9 @@ final class LogStreamSpec {
   final String? afterCursor;
 }
 
-/// Where an [OpenLogStream] reads (03 §7.6). Container logs (CTX-01) are
-/// not a source yet: they come from the Docker Engine API with M3.
+/// Where an [OpenLogStream] reads (03 §7.6, §7.12): the host's journal,
+/// kernel log or a file over its link, or a container's logs over its
+/// Docker endpoint.
 @immutable
 sealed class LogSource {
   const LogSource();
@@ -1815,6 +1924,21 @@ final class OperationLogSource extends LogSource {
   const OperationLogSource(this.operationId);
 
   final String operationId;
+}
+
+/// One container's logs through the Docker Engine API (CTX-01, 03 §5.6),
+/// read as [ContainerRecord]s: `GET /containers/{id}/logs` with
+/// `timestamps=1`, its last [LogStreamSpec.window] lines, then the new
+/// ones for a follow. A follow outlasts the container's stops: it reads
+/// on, after the newest line it delivered, once the container runs
+/// again. The read waits for the server's Docker endpoint
+/// ([DockerEndpointState]) as [LogStreamWaitReason.link].
+final class ContainerLogSource extends LogSource {
+  const ContainerLogSource(this.containerId);
+
+  /// The container's id, or its name; the engine validates it before it
+  /// puts it in a path.
+  final String containerId;
 }
 
 /// A syslog severity as journald and the kernel record it, most urgent
@@ -1906,6 +2030,24 @@ final class FileRecord extends LogRecord {
   final String text;
 }
 
+/// One line of a container's log (CTX-01), as the engine assembled it
+/// from the API's frames (03 §5.6): a line the engine split across
+/// frames arrives whole, without its line break.
+final class ContainerRecord extends LogRecord {
+  const ContainerRecord({required this.stream, required this.text, this.at});
+
+  final ContainerLogStream stream;
+
+  /// When the engine received the line, by the daemon's clock, to the
+  /// microsecond; null when the line carried no timestamp.
+  final DateTime? at;
+  final String text;
+}
+
+/// The container stream a [ContainerRecord] came from. A TTY container
+/// has one stream, read as [stdout].
+enum ContainerLogStream { stdout, stderr }
+
 /// A log stream's state behind [LogStreamState]. Compares by value, as
 /// [LinkStatus] does, because a status that crosses the boundary may
 /// arrive as a copy.
@@ -1980,7 +2122,8 @@ enum LogReader {
 
 /// The stream ended for [reason], and nothing more arrives for it.
 /// [detail] is the host's error output when the host ended it, control
-/// characters stripped, or null.
+/// characters stripped, the daemon's message for a container's logs, the
+/// driver's name for [LogStreamEndReason.logDriverUnreadable], or null.
 final class LogStreamEnded extends LogStreamStatus {
   const LogStreamEnded(this.reason, {this.detail});
 
@@ -1993,7 +2136,9 @@ final class LogStreamEnded extends LogStreamStatus {
 
 /// What a [LogStreamWaiting] stream waits for.
 enum LogStreamWaitReason {
-  /// The server's link; [LinkState] says why it is not ready.
+  /// The server's link; [LinkState] says why it is not ready. Container
+  /// logs also wait here for the Docker endpoint over it, which
+  /// [DockerEndpointState] reports.
   link,
 
   /// A free session channel: reads of its kind already hold their share
@@ -2024,7 +2169,8 @@ enum LogStreamEndReason {
   /// unit name or path its validation rejects (03 §8.8).
   invalid,
 
-  /// The tool or file the source reads is absent on the host.
+  /// The tool, file or container the source reads is absent on the
+  /// host.
   missing,
 
   /// The host refused the read, such as a file only `adm` or root may
@@ -2033,6 +2179,12 @@ enum LogStreamEndReason {
 
   /// The read failed otherwise.
   failed,
+
+  /// The container's logging driver keeps no logs the API can read (03
+  /// §7.12 CTX-01): `none`, or a remote driver with Docker's dual-logging
+  /// cache disabled, or on Podman, which has no such cache, any but
+  /// `k8s-file`, `json-file` and `journald`. [LogStreamEnded.detail] names the driver.
+  logDriverUnreadable,
 }
 
 /// What a [DockerQuery] reads (03 §7.12 to §7.14).
@@ -2067,7 +2219,46 @@ final class DockerImagesQuery extends DockerQuerySpec {
   const DockerImagesQuery();
 }
 
-/// What a [DockerResult] carries.
+/// One file of the compose project [project] (03 §7.16 STK-04, M11):
+/// a config file or an environment file its containers recorded, or the
+/// `.env` in its working directory, read over SFTP once the project's
+/// source is verified. Answered by [DockerStackFilePayload] or
+/// [DockerStackFileFailed].
+final class DockerStackFileQuery extends DockerQuerySpec {
+  const DockerStackFileQuery({required this.project, required this.path});
+
+  /// The compose project name.
+  final String project;
+
+  /// The file's absolute path, as the project's labels name it.
+  final String path;
+}
+
+/// A list a [DockerWatch] follows (03 §7.12 to §7.14).
+enum DockerWatchList {
+  /// Every container (CTR-01), as [DockerContainersPayload].
+  containers,
+
+  /// The image list (IMG-01), as [DockerImagesPayload].
+  images,
+
+  /// The containers grouped by compose project (STK-01), as
+  /// [DockerStacksPayload].
+  stacks,
+
+  /// One-shot stats for the watch's `statsFor` (CST-01), as
+  /// [DockerStatsPayload].
+  stats,
+}
+
+/// The most watches one server holds [E]: a Docker view holds one or two.
+const kDockerWatchesMax = 16;
+
+/// The most containers one watch reads stats for [E]: more rows than a
+/// screen shows.
+const kDockerStatsForMax = 64;
+
+/// What a [DockerResult] or [DockerListChanged] carries.
 @immutable
 sealed class DockerPayload {
   const DockerPayload();
@@ -2104,6 +2295,209 @@ final class DockerImagesPayload extends DockerPayload {
   final List<ImageSummary> images;
 }
 
+/// The containers grouped by compose project (STK-01), from the same
+/// list [DockerContainersPayload] carries, with each project's source
+/// verdict and the compose CLI the host has (STK-05). A project's
+/// managed-by badge (STK-10) is its [ComposeProject.ownership].
+final class DockerStacksPayload extends DockerPayload {
+  const DockerStacksPayload(
+    this.grouping, {
+    this.verdicts = const {},
+    this.composeCli,
+  });
+
+  final ComposeGrouping grouping;
+
+  /// The verdict for each project in [grouping], by name; a project the
+  /// engine has not checked yet reads [StackVerifying], and the list is
+  /// sent again once it has.
+  final Map<String, StackVerdict> verdicts;
+
+  /// The compose CLI found, once the engine has looked.
+  final DockerComposeCli? composeCli;
+}
+
+/// Whether a compose project's files are its source (03 §7.16 STK-01).
+@immutable
+sealed class StackVerdict {
+  const StackVerdict();
+}
+
+/// The engine is checking the project's files.
+final class StackVerifying extends StackVerdict {
+  const StackVerifying();
+}
+
+/// Every config file exists and `compose config --hash '*'` over them
+/// matches the `config-hash` label of every service's containers: the
+/// files are the project's source.
+final class StackVerified extends StackVerdict {
+  const StackVerified();
+}
+
+/// "Unverified source", for [reason].
+final class StackUnverified extends StackVerdict {
+  const StackUnverified(this.reason);
+
+  final StackUnverifiedReason reason;
+}
+
+/// "Source not on host": a config file the containers name is missing.
+/// A manager that runs compose in its own container records paths
+/// inside it (Dockge's rule), so [deployedBy] names the manager the
+/// project's labels mark, when they mark one.
+final class StackSourceNotOnHost extends StackVerdict {
+  const StackSourceNotOnHost({this.deployedBy});
+
+  final ExternalManager? deployedBy;
+}
+
+/// Why a project's files are not its verified source.
+enum StackUnverifiedReason {
+  /// The containers record no config files.
+  noSourceLabels,
+
+  /// A recorded project name or path fails 03 §8.8's validation, so no
+  /// command names it.
+  unsafeLabels,
+
+  /// A service's container carries no `config-hash` label.
+  noHashLabels,
+
+  /// The host has no compose CLI.
+  noComposeCli,
+
+  /// The host has only the standalone `docker-compose`, which is
+  /// read-only (STK-05) and does not verify.
+  standaloneComposeOnly,
+
+  /// The compose CLI did not print service hashes for `config --hash
+  /// '*'`, as one without that flag form would not.
+  cliCouldNotHash,
+
+  /// `compose config` failed over the files: a file it cannot read or
+  /// parse, or a variable it cannot interpolate.
+  configFailed,
+
+  /// A service's hash differs from its containers' label, or the files
+  /// define no such service: the files changed since the deploy, or
+  /// are not the ones it used.
+  hashMismatch,
+
+  /// The check could not run: the link failed or timed out.
+  checkFailed,
+}
+
+/// The compose CLIs on the host (03 §7.16 STK-05), each version as it
+/// printed it without a leading `v`.
+@immutable
+final class DockerComposeCli {
+  const DockerComposeCli({this.pluginVersion, this.standaloneVersion});
+
+  /// `docker compose version`; null without the plugin.
+  final String? pluginVersion;
+
+  /// `docker-compose version`; null without the standalone binary.
+  final String? standaloneVersion;
+
+  /// Whether the standalone binary is the Python Compose v1, unmaintained
+  /// since 2023 and read-only here (STK-05).
+  bool get standaloneLegacy => standaloneVersion?.startsWith('1.') ?? false;
+}
+
+/// One stack file (03 §7.16 STK-04, M11) as spans whose
+/// [MaskedValue.display]s joined are the file with its secrets masked
+/// (03 §8.9); the app reveals one span at a time. Read fresh for each
+/// query, and never cached or logged by the engine.
+final class DockerStackFilePayload extends DockerPayload {
+  const DockerStackFilePayload({
+    required this.project,
+    required this.path,
+    required this.text,
+    required this.size,
+    this.truncated = false,
+  });
+
+  final String project;
+  final String path;
+  final List<MaskedValue> text;
+
+  /// The file's size in bytes, as SFTP reported it.
+  final int size;
+
+  /// Whether the file is over [kStackFileMaxBytes], so [text] holds only
+  /// its complete lines within that many bytes.
+  final bool truncated;
+}
+
+/// The most bytes of a stack file the engine reads (M11 [E]).
+const kStackFileMaxBytes = 1024 * 1024;
+
+/// A [DockerStackFileQuery] the engine did not answer with the file.
+final class DockerStackFileFailed extends DockerPayload {
+  const DockerStackFileFailed(this.failure);
+
+  final StackFileFailure failure;
+}
+
+/// Why a [DockerStackFileQuery] read no file.
+enum StackFileFailure {
+  /// No container belongs to the project.
+  unknownStack,
+
+  /// The project's source is not verified ([StackVerdict]).
+  notVerified,
+
+  /// The path is none of the project's files.
+  notStackFile,
+
+  /// SFTP found no file at the path.
+  notFound,
+
+  /// The login user cannot read the file; admin mode's elevated read
+  /// arrives with M4.
+  permissionDenied,
+
+  /// The path is a symbolic link, directory or other non-regular file.
+  notRegularFile,
+
+  /// SFTP failed, or the file changed while it was read.
+  readFailed,
+}
+
+/// One stats round over a watch's `statsFor` (CST-01): a row for each
+/// running container that answered, in no set order.
+final class DockerStatsPayload extends DockerPayload {
+  const DockerStatsPayload(this.stats);
+
+  final List<ContainerListStats> stats;
+}
+
+/// One container's list stats (03 §7.12 CST-01), read at [at] by the
+/// engine's clock.
+@immutable
+final class ContainerListStats {
+  const ContainerListStats({
+    required this.containerId,
+    required this.at,
+    this.cpuPercent,
+    this.memoryUsed,
+    this.memoryLimit,
+  });
+
+  final String containerId;
+  final DateTime at;
+
+  /// CPU % by the spec formula over the time since the previous read,
+  /// so null on a container's first one (one-shot `precpu_stats` is not
+  /// meaningful, 03 §5.6).
+  final double? cpuPercent;
+
+  /// Bytes in use less `inactive_file` (cgroup v2) or the cache (v1).
+  final int? memoryUsed;
+  final int? memoryLimit;
+}
+
 /// The query read nothing, for [failure]; [detail] is the daemon's own
 /// message or the transport error, for diagnostics.
 final class DockerQueryFailed extends DockerPayload {
@@ -2113,7 +2507,7 @@ final class DockerQueryFailed extends DockerPayload {
   final String? detail;
 }
 
-/// Why a [DockerQuery] read nothing.
+/// Why a [DockerQuery] or a watched list read nothing.
 enum DockerQueryFailure {
   /// The server is not in the fleet.
   notInFleet,
@@ -2129,10 +2523,12 @@ enum DockerQueryFailure {
   /// query looks for it again.
   endpointUnavailable,
 
-  /// The server already holds the most queries waiting for its endpoint.
+  /// The server already holds the most queries waiting for its endpoint,
+  /// or the most watches.
   tooManyQueries,
 
-  /// The query names no container.
+  /// The query names no container, or the watch names more stats
+  /// containers than [kDockerStatsForMax].
   invalidQuery,
 
   /// The object is gone (404); a list query shows what remains.
@@ -2564,6 +2960,8 @@ final class ActionPreview {
     this.ownership,
     this.protected,
     this.followUnit,
+    this.orphans = const [],
+    this.warnings = const {},
   });
 
   final ActionIntent intent;
@@ -2592,6 +2990,12 @@ final class ActionPreview {
   /// The unit whose journal shows the run's effect, from the run's start:
   /// JOB-08's timer service (03 §7.7).
   final String? followUnit;
+
+  /// The stack's containers whose service its files no longer name,
+  /// which `--remove-orphans` would remove (STK-06).
+  final List<String> orphans;
+
+  final Set<PlanWarning> warnings;
 }
 
 /// A running plan's end state (03 §10.1).

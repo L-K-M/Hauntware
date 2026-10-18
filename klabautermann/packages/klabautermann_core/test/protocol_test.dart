@@ -4,6 +4,8 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_docker/klabautermann_docker.dart'
+    show groupComposeProjects;
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
         CoreCpuTimes,
@@ -98,6 +100,15 @@ void main() {
             follow: false,
           ),
         ),
+        OpenLogStream(
+          streamId: 'stream-2',
+          spec: LogStreamSpec(
+            serverId: 'srv-1',
+            source: const ContainerLogSource('db'),
+            window: 100,
+            follow: true,
+          ),
+        ),
         const CloseStream('stream-1'),
         const DockerQuery(
           serverId: 'srv-1',
@@ -105,6 +116,12 @@ void main() {
           query: DockerContainersQuery(),
         ),
         const PlanAction(KillProcess('srv-1', pid: 42, startTicks: 9001)),
+        const DockerWatch(
+          serverId: 'srv-1',
+          watchId: 'w-1',
+          lists: {DockerWatchList.containers},
+        ),
+        const DockerUnwatch(serverId: 'srv-1', watchId: 'w-1'),
         const PlanAction(
           UnitAction(
             'srv-1',
@@ -230,7 +247,12 @@ void main() {
           serverId: 'srv-1',
           phase: DockerEndpointPhase.waiting,
         ),
-        const DockerEvent('srv-1', {'status': 'start'}),
+        DockerListChanged(
+          serverId: 'srv-1',
+          list: DockerWatchList.images,
+          payload: const DockerImagesPayload([]),
+          at: DateTime.utc(2026, 10, 17),
+        ),
         ActionPlanned(
           'plan-1',
           ActionPreview(
@@ -484,6 +506,166 @@ void main() {
       expect(
         (failed.payload as DockerQueryFailed).failure,
         DockerQueryFailure.notFound,
+      );
+    });
+
+    test('Docker watches and their lists survive with their payloads '
+        '(M7)', () async {
+      final watch =
+          await roundTrip(
+                const DockerWatch(
+                  serverId: 'srv-1',
+                  watchId: 'w-1',
+                  lists: {DockerWatchList.stacks, DockerWatchList.stats},
+                  statsFor: {'abc'},
+                ),
+              )
+              as DockerWatch;
+      expect(watch.lists, {DockerWatchList.stacks, DockerWatchList.stats});
+      expect(watch.statsFor, {'abc'});
+
+      final at = DateTime.utc(2026, 10, 17, 12);
+      final stacks =
+          await roundTrip(
+                DockerListChanged(
+                  serverId: 'srv-1',
+                  list: DockerWatchList.stacks,
+                  payload: DockerStacksPayload(
+                    groupComposeProjects([
+                      ContainerSummary(
+                        id: 'abc',
+                        labels: {
+                          'com.docker.compose.project': MaskedValue.plain(
+                            'demo',
+                          ),
+                          'com.docker.compose.service': MaskedValue.plain(
+                            'web',
+                          ),
+                        },
+                      ),
+                    ]),
+                  ),
+                  at: at,
+                  fullRelist: true,
+                ),
+              )
+              as DockerListChanged;
+      final grouping = (stacks.payload as DockerStacksPayload).grouping;
+      expect(grouping.projects.single.name, 'demo');
+      expect(grouping.projects.single.services.single.name, 'web');
+      expect(stacks.fullRelist, isTrue);
+      expect(stacks.at, at);
+
+      final stats =
+          await roundTrip(
+                DockerListChanged(
+                  serverId: 'srv-1',
+                  list: DockerWatchList.stats,
+                  payload: DockerStatsPayload([
+                    ContainerListStats(
+                      containerId: 'abc',
+                      at: at,
+                      cpuPercent: 12.5,
+                      memoryUsed: 1024,
+                      memoryLimit: 4096,
+                    ),
+                  ]),
+                  at: at,
+                ),
+              )
+              as DockerListChanged;
+      final row = (stats.payload as DockerStatsPayload).stats.single;
+      expect(row.cpuPercent, 12.5);
+      expect(row.memoryUsed, 1024);
+      expect(row.memoryLimit, 4096);
+    });
+
+    test('stack verdicts and stack files survive with their masked '
+        'spans (03 §7.16)', () async {
+      final stacks =
+          await roundTrip(
+                DockerListChanged(
+                  serverId: 'srv-1',
+                  list: DockerWatchList.stacks,
+                  payload: DockerStacksPayload(
+                    groupComposeProjects(const []),
+                    verdicts: const {
+                      'a': StackVerified(),
+                      'b': StackUnverified(StackUnverifiedReason.hashMismatch),
+                      'c': StackSourceNotOnHost(
+                        deployedBy: ExternalManager.dockge,
+                      ),
+                      'd': StackVerifying(),
+                    },
+                    composeCli: const DockerComposeCli(
+                      pluginVersion: '2.29.7',
+                      standaloneVersion: '1.29.2',
+                    ),
+                  ),
+                  at: DateTime.utc(2026, 10, 17),
+                ),
+              )
+              as DockerListChanged;
+      final payload = stacks.payload as DockerStacksPayload;
+      expect(payload.verdicts['a'], isA<StackVerified>());
+      expect(
+        (payload.verdicts['b']! as StackUnverified).reason,
+        StackUnverifiedReason.hashMismatch,
+      );
+      expect(
+        (payload.verdicts['c']! as StackSourceNotOnHost).deployedBy,
+        ExternalManager.dockge,
+      );
+      expect(payload.composeCli!.standaloneLegacy, isTrue);
+
+      final query =
+          await roundTrip(
+                const DockerQuery(
+                  serverId: 'srv-1',
+                  queryId: 'q-1',
+                  query: DockerStackFileQuery(
+                    project: 'demo',
+                    path: '/srv/demo/.env',
+                  ),
+                ),
+              )
+              as DockerQuery;
+      expect((query.query as DockerStackFileQuery).path, '/srv/demo/.env');
+
+      final file =
+          await roundTrip(
+                DockerResult(
+                  serverId: 'srv-1',
+                  queryId: 'q-1',
+                  payload: DockerStackFilePayload(
+                    project: 'demo',
+                    path: '/srv/demo/.env',
+                    text: [
+                      MaskedValue.plain('DB_PASSWORD='),
+                      MaskedValue.secret('hunter2'),
+                      MaskedValue.plain('\n'),
+                    ],
+                    size: 20,
+                  ),
+                ),
+              )
+              as DockerResult;
+      final spans = (file.payload as DockerStackFilePayload).text;
+      expect(spans.map((s) => s.display).join(), 'DB_PASSWORD=********\n');
+      expect(spans[1].reveal(), 'hunter2');
+
+      final failed =
+          await roundTrip(
+                const DockerResult(
+                  serverId: 'srv-1',
+                  queryId: 'q-2',
+                  payload: DockerStackFileFailed(StackFileFailure.notVerified),
+                ),
+              )
+              as DockerResult;
+      expect(
+        (failed.payload as DockerStackFileFailed).failure,
+        StackFileFailure.notVerified,
       );
     });
 
@@ -1010,6 +1192,11 @@ void main() {
         throwsA(isA<AssertionError>()),
         reason: 'a file tail has no cursor',
       );
+      expect(
+        () => spec(source: const ContainerLogSource('db'), afterCursor: 's=1'),
+        throwsA(isA<AssertionError>()),
+        reason: 'a container log has no cursor',
+      );
       final bounded = JournalLogSource(until: DateTime.utc(2026, 10, 15));
       expect(
         () => spec(source: bounded, follow: true),
@@ -1057,6 +1244,11 @@ void main() {
                     ),
                     const KernelRecord(message: 'no level'),
                     const FileRecord('GET / HTTP/1.1 200'),
+                    ContainerRecord(
+                      stream: ContainerLogStream.stderr,
+                      at: DateTime.utc(2026, 10, 17, 10, 0, 0, 0, 3),
+                      text: 'warn: slow',
+                    ),
                   ],
                   dropped: 41,
                 ),
@@ -1069,6 +1261,7 @@ void main() {
         KernelRecord,
         KernelRecord,
         FileRecord,
+        ContainerRecord,
       ]);
       expect(() => batch.records.clear(), throwsUnsupportedError);
 
@@ -1097,6 +1290,10 @@ void main() {
       expect(unleveled.priority, isNull);
 
       expect((batch.records[3] as FileRecord).text, 'GET / HTTP/1.1 200');
+      final container = batch.records[4] as ContainerRecord;
+      expect(container.stream, ContainerLogStream.stderr);
+      expect(container.at, DateTime.utc(2026, 10, 17, 10, 0, 0, 0, 3));
+      expect(container.text, 'warn: slow');
 
       final empty = await roundTrip(const JournalRecord()) as JournalRecord;
       expect(empty.fields, isEmpty);

@@ -188,8 +188,39 @@ M2, the host read MVP, is the current milestone. What is on main:
   `Libpod-API-Version` and reports `DockerEndpointState`. Results are
   typed; inspect `Path`/`Args`, `Entrypoint`/`Cmd` and health output
   cross masked, and the list drops its command line. Tested over fakes
-  only; no app surface yet (D12), no `/system/df` (D03), no watch or
-  events (D06), no low-session mode (D09).
+  only; no app surface yet (D12), no `/system/df` (D03), no
+  low-session mode (D09).
+- Docker watches (M3, D06, 03 §7.12, §10.1): `DockerWatch` keeps the
+  container, image and stack lists current from one `/events` stream
+  per server (250 ms batches, targeted re-reads by container id,
+  resume with `since`, a full re-list after a gap over 60 s) and reads
+  one-shot list stats for the ids on screen every 5 s (4 at once on
+  streamlocal, one at a time on a relay), all as `DockerListChanged`.
+  Tested over fakes only; the app does not watch yet (D13), and
+  relay channels are not counted in `ChannelQuota` until D09.
+- Container logs (M3, D07, 03 §5.6, §10.1): `ContainerLogSource`
+  streams a container's logs through `OpenLogStream` as
+  `ContainerRecord`s over the server's Docker endpoint: framing by
+  `Config.Tty` when no `Content-Type` comes (Docker 20.10, Podman),
+  Podman's lines split over two frames joined, the journal follow's
+  ring and pace, a resume after the newest line with `since` and the
+  boundary line dropped, a stopped container read again with backoff,
+  and `logDriverUnreadable` naming a driver whose logs the API cannot
+  read. On relays the streams take follower slots of their own until
+  D09. Tested over fakes only; the app opens none yet (D15), and the
+  background does not pause them.
+- Stack sources (M3, D08, 03 §7.16, §10.1): the stacks list carries a
+  verdict per compose project (verified, unverified with a reason, or
+  source not on host naming the marked manager) and the compose CLIs
+  found, the standalone v1 read-only. Verification runs `test -f` on
+  the config files, then `compose config --hash '*'` with `--host`
+  against each service's `config-hash`, both in short-action slots,
+  and falls back to "CLI could not hash" when the flag form fails.
+  `DockerStackFileQuery` reads a verified stack's compose or `.env`
+  file over SFTP, at most 1 MiB, masked in the engine. Tested over
+  fakes only, plus the `test -f` quoting in a real `sh`; the `--hash`
+  output shape comes from Compose's source and awaits D21's run, and
+  the app shows no stacks yet (D17, D18).
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and
@@ -1337,6 +1368,11 @@ M2, the host read MVP, is the current milestone. What is on main:
   image in use, and a managed or protected target need the typed
   confirmation. A stack acts in its services' dependency order and a
   cycle refuses. The app's Docker actions arrive with E22.
+- M4 pull and redeploy (E18): `PlanAction` plans STK-06 for a verified,
+  unmanaged stack as one detached operation of `config -q`, `pull` and
+  `up -d` through the endpoint's `--host`, listing orphans and warning
+  about profile-gated services. The runner checks the config hashes
+  again before it launches. The app's redeploy arrives with E23b.
 - M4 operation output (E17c): the engine follows a detached
   operation's output file like any log file, each line redacted.
 - M4 detached runner, second half (E17b): the engine reads each

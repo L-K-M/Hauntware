@@ -203,6 +203,10 @@ final class LogService {
       OperationLogSource() => throw const HostCommandError(
         'the engine reads an operation log as its file',
       ),
+      // The Docker router reads them over the API.
+      ContainerLogSource() => throw const HostCommandError(
+        'container logs come from the Docker endpoint',
+      ),
     };
   }
 
@@ -220,8 +224,10 @@ final class LogService {
         _deliver(read, out, _journalWindow(out, spec.window, since: after));
       case FileLogSource(:final redacted):
         _deliver(read, out, _fileWindow(out, spec.window, redacted: redacted));
+      // Refused on opening: its command throws.
       case OperationLogSource():
-        // Refused on opening: its command throws.
+      // Refused by accepts: the Docker router reads them.
+      case ContainerLogSource():
         break;
       case KernelLogSource():
         final journal = _journalWindow(out, spec.window);

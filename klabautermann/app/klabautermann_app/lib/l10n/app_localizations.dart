@@ -4141,7 +4141,7 @@ abstract class AppLocalizations {
   /// Toast when an action failed; failure is the engine's ActionFailure name.
   ///
   /// In en, this message translates to:
-  /// **'{target} did not finish: {failure, select, noLink{there is no connection to the server.} revalidation{the target changed since the preview.} elevationRefused{admin mode refused the step.} stepFailed{a step failed.} transport{the connection failed during the run.} unsupportedStep{this version cannot run one of its steps.} adminRequired{it needs admin mode.} other{it failed.}}'**
+  /// **'{target} did not finish: {failure, select, noLink{there is no connection to the server.} revalidation{the target changed since the preview.} elevationRefused{admin mode refused the step.} stepFailed{a step failed.} transport{the connection failed during the run.} unsupportedStep{this version cannot run one of its steps.} adminRequired{it needs admin mode.} launchFailed{its operation could not be started on the server.} other{it failed.}}'**
   String actionFailed(String target, String failure);
 
   /// Toast when an action failed without a typed reason.
@@ -4159,7 +4159,7 @@ abstract class AppLocalizations {
   /// Toast when the engine refused to plan or run an action; reason is the engine's ActionRefusalReason name.
   ///
   /// In en, this message translates to:
-  /// **'{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server\'s container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} dependencyCycle{The stack\'s services depend on each other in a loop, so there is no order to act in.} other{The action was refused.}}'**
+  /// **'{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server\'s container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} dependencyCycle{The stack\'s services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack\'s files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}'**
   String actionRefused(String reason);
 
   /// Process action (PRC-02): sends SIGTERM, asking the process to end.
@@ -4363,7 +4363,7 @@ abstract class AppLocalizations {
   /// Why a run failed, in the activity record's details; failure is the engine's ActionFailure name.
   ///
   /// In en, this message translates to:
-  /// **'{failure, select, noLink{No connection to the server.} revalidation{The target changed since the preview.} elevationRefused{Admin mode refused the step.} stepFailed{A step failed.} transport{The connection failed during the run.} unsupportedStep{This version could not run a step.} adminRequired{It needed admin mode.} other{It failed.}}'**
+  /// **'{failure, select, noLink{No connection to the server.} revalidation{The target changed since the preview.} elevationRefused{Admin mode refused the step.} stepFailed{A step failed.} transport{The connection failed during the run.} unsupportedStep{This version could not run a step.} adminRequired{It needed admin mode.} launchFailed{Its operation could not be started on the server.} other{It failed.}}'**
   String activityFailure(String failure);
 
   /// A failed step's exit status in an activity record's details.
