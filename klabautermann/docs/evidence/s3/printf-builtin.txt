@@ -1,0 +1,6 @@
+# command -V printf, as each shell runs a -c string; mirror.gcr.io/library/debian:13@sha256:913f6706df59a68922d1dd08f78c2476560a8d367897200a6005b00e5f67c2d5
+dash: exit 0 printf is a shell builtin
+bash: exit 0 printf is a shell builtin
+busybox ash: exit 0 printf is a shell builtin
+mksh: exit 0 printf is a tracked alias for /usr/bin/printf
+zsh: exit 0 printf is a shell builtin

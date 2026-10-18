@@ -1,7 +1,8 @@
 // A fake Docker or Podman engine behind a socket for the engine's Docker
 // session: `_ping` and `/version` answer as the engine configured,
-// versioned paths from the test's routes, `/events` as a stream the test
-// writes to, and answers the test holds back until it releases them.
+// versioned paths from the test's routes, `/events` and container logs
+// as streams the test writes to, and answers the test holds back until it
+// releases them.
 import 'dart:async';
 import 'dart:convert';
 
@@ -37,6 +38,12 @@ final class EngineDaemon extends FakeDaemon {
   /// The open `/events` streams' connections.
   final eventStreams = <FakeDuplexPair>[];
 
+  /// The open container logs streams' connections, and the
+  /// `Content-Type` their heads carry: Docker 20.10 and Podman send none
+  /// (D01).
+  final logStreams = <FakeDuplexPair>[];
+  String? logsContentType = 'application/vnd.docker.multiplexed-stream';
+
   @override
   void handle(String requestLine, FakeDuplexPair connection) {
     final path = requestLine.split(' ')[1].split('?').first;
@@ -50,6 +57,19 @@ final class EngineDaemon extends FakeDaemon {
       connection.server.sink.add(
         utf8.encode(
           'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n'
+          'Transfer-Encoding: chunked\r\n\r\n',
+        ),
+      );
+    } else if (path.endsWith('/logs') && !failures.containsKey(path)) {
+      logStreams.add(connection);
+      unawaited(
+        connection.server.done.then((_) => logStreams.remove(connection)),
+      );
+      final type = logsContentType;
+      connection.server.sink.add(
+        utf8.encode(
+          'HTTP/1.1 200 OK\r\n'
+          '${type == null ? '' : 'Content-Type: $type\r\n'}'
           'Transfer-Encoding: chunked\r\n\r\n',
         ),
       );
@@ -71,12 +91,31 @@ final class EngineDaemon extends FakeDaemon {
   void emit(Map<String, Object?> event) {
     final line = utf8.encode('${jsonEncode(event)}\n');
     for (final connection in eventStreams) {
-      connection.server.sink
-        ..add(utf8.encode('${line.length.toRadixString(16)}\r\n'))
-        ..add(line)
-        ..add(utf8.encode('\r\n'));
+      _chunk(connection, line);
     }
   }
+
+  /// Writes [bytes] as one chunk to every open logs stream.
+  void writeLogs(List<int> bytes) {
+    for (final connection in logStreams) {
+      _chunk(connection, bytes);
+    }
+  }
+
+  /// Ends every logs stream with its last chunk, as the daemon does when
+  /// the container stops; the connections stay open.
+  void endLogs() {
+    for (final connection in logStreams.toList()) {
+      connection.server.sink.add(utf8.encode('0\r\n\r\n'));
+      logStreams.remove(connection);
+    }
+  }
+
+  static void _chunk(FakeDuplexPair connection, List<int> bytes) =>
+      connection.server.sink
+        ..add(utf8.encode('${bytes.length.toRadixString(16)}\r\n'))
+        ..add(bytes)
+        ..add(utf8.encode('\r\n'));
 
   /// Ends every `/events` stream, as a daemon restart or a lost channel
   /// does.

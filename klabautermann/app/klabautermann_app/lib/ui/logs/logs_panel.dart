@@ -100,7 +100,9 @@ _StatusWord? _statusWord(LogsPanelController panel) {
       LogStreamEndReason.invalid => _StatusWord.invalid,
       LogStreamEndReason.missing => _StatusWord.missing,
       LogStreamEndReason.denied => _StatusWord.denied,
-      LogStreamEndReason.failed => _StatusWord.failed,
+      // Container logs, which this panel does not open yet (D15).
+      LogStreamEndReason.failed ||
+      LogStreamEndReason.logDriverUnreadable => _StatusWord.failed,
       LogStreamEndReason.windowFilled ||
       LogStreamEndReason.oldestReached ||
       LogStreamEndReason.closed => null,

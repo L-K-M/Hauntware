@@ -1130,6 +1130,44 @@ Proposals awaiting the owner close the section; they are not decisions.
   device-local storage only. *Rejected:* a `secret:` record (Séance would adopt
   an unreferenced secret into its vault as an orphan, c1 §2.4); device-only
   storage (the earlier recommendation).
+- **D65. Spike S3 confirms the ladder; admin validation ignores cached
+  credentials (M4 E01).** The spike drove seance_core's
+  `ElevatedExecutor` as a non-root account with no tty against three
+  tools: sudo 1.9.16p2 (Debian 13), sudo-rs 0.2.13 (Ubuntu 26.04) and
+  OpenDoas 6.8.2 (Alpine 3.22), in containers (`capture.sh
+  --elevation-only`; evidence and table in
+  `klabautermann/docs/evidence/s3/`).
+
+  Rungs 2 to 4 hold as 8.3 states them:
+  - blanket doas `permit nopass` runs the command in one call;
+  - the prelude shares sudo's record under `timestamp_type` `tty` and
+    `ppid`;
+  - under `timestamp_timeout=0` the rung-4 retry runs the command, with
+    sudo and with sudo-rs, and the stdin after the password line reaches
+    it.
+
+  Rung 5 is needed: `requiretty` ("sorry, you must have a tty to run
+  sudo") and password doas ("doas: a tty is required" on a pipe) both
+  refuse, and both classify as `ttyRequired`. sudo-rs's texts are
+  recorded and match the classifier. mksh's `printf` is not a builtin, so
+  the prelude stays unavailable under mksh.
+
+  The amendment: under `timestamp_type=global`, a record left by any
+  session of the account satisfies `sudo -v` without reading the
+  password, so a wrong password runs the command while the record lasts.
+  This grants nothing, since `sudo -n` works then anyway. But it means a
+  validation by the prelude cannot reject a wrong password. Admin mode's
+  validation (8.2, E11) therefore runs `sudo -k -S -p '' -v`, which
+  ignores cached records [L: sudo 1.9.16p2 refuses the wrong password
+  and records the right one]. Commands keep the prelude unchanged.
+  sudo-rs checks the password under `-k` too, but records nothing, so its
+  first command after validation takes rung 4.
+
+  *Rejected:*
+  - `sudo -k` in the prelude itself: every sudo-rs command would cost a
+    second round trip, to guard a case that grants no privilege;
+  - `sudo -K` before validation: it removes the account's records in
+    every session, the user's own terminal included.
 
 ### Persistence, alerts and tiers
 
@@ -3957,10 +3995,11 @@ exit $?
   client writes the password line, then HTTP bytes), a privileged `tee`.
 - Both sudo invocations are children of the same shell. With no terminal,
   sudo's default `timestamp_type` (tty) falls back to per-parent-PID records
-  [R: sudoers(5), per review], so `exec sudo -n` (whose parent becomes the
-  shell's parent) and a validation in another exec channel both miss the
-  cached credential. The trailing `exit $?` is load-bearing: bash execs the
-  last command of a `-c` string implicitly, which has the same effect.
+  [R: sudoers(5), per review; spike S3], so `exec sudo -n` (whose parent
+  becomes the shell's parent) and a validation in another exec channel both
+  miss the cached credential. The trailing `exit $?` is load-bearing:
+  bash execs the last command of a `-c` string implicitly, which has the
+  same effect.
 - **Verified locally [L]** (04, Appendix A, E6 and E8), sudo 1.9.15p5
   without a tty: the prelude works under dash and bash and passes the
   remaining stdin to the command; the `exec` variant fails with "sudo: a
@@ -3971,10 +4010,12 @@ exit $?
   stderr.
 - sudo's stderr is kept (never `2>/dev/null`) and classified: wrong
   password, not in sudoers, "a password is required" after a successful
-  validation, "you must have a tty" [R], sudo-rs texts [U: spike S3].
+  validation, "you must have a tty" [R], sudo-rs texts (recorded by spike
+  S3, D65).
 - `printf` must be a shell builtin so the password never appears in a
-  process argument list (dash, bash and BusyBox ash provide one [R]); the
-  probe's `command -V printf` checks it. Here-documents are not used (older
+  process argument list (dash, bash, BusyBox ash and zsh provide one; mksh's
+  is a tracked alias for `/usr/bin/printf`, spike S3); the probe's
+  `command -V printf` checks it. Here-documents are not used (older
   bash versions write them to temporary files).
 
 Fallback ladder:
@@ -3994,10 +4035,11 @@ Fallback ladder:
    (for example `timestamp_timeout=0`, verified [L]): retry once with
    `sudo -S -p '' -- <cmd>` and the password as the first stdin line; sudo
    1.9.15p5 reads exactly one line and passes the rest to the command [L];
-   sudo-rs behaviour [U: spike S3].
+   so do sudo 1.9.16p2 and sudo-rs 0.2.13 (spike S3, D65).
 5. "you must have a tty" (`requiretty`) or doas with a password: a PTY
-   channel with prompt detection, after spike S3 shows it is safe; until
-   then the access check explains the limitation.
+   channel with prompt detection, once it is shown to be safe; until then
+   the access check explains the limitation. Spike S3 recorded both
+   refusals (D65).
 6. run0: only when the probe shows it works without a password (it cannot
    read a password from a pipe [U]).
 7. polkit-granted `systemctl` verbs: no elevation, `--no-ask-password`.
@@ -5115,8 +5157,8 @@ the engine in `engine_isolate.dart` beside it):
   `dmesg --json` only as a fallback), and one file by absolute path
   (LOG-22). There is no text filter: LOG-05 searches the records the
   view holds, and `journalctl -g` waits for LOG-06 (v1). Container logs
-  (CTX-01) are no source until M3, so the M1 scaffold's `docker` source
-  and untyped `target` are gone. A window reads the newest `window` records and
+  (CTX-01) joined with M3 as their own typed source (below), so the M1
+  scaffold's `docker` source and untyped `target` are gone. A window reads the newest `window` records and
   ends; they arrive newest first, so `afterCursor`, a journal record's
   cursor, reads on to older records, as `journalctl --reverse
   --after-cursor` does. journalctl refuses `--since` with a cursor, so
@@ -5334,6 +5376,47 @@ the engine in `engine_isolate.dart` beside it):
   first read has none, nor the first after a failed read or a gap
   over 60 s. The last unwatch, Disconnect,
   fleet removal and an endpoint change end it all.
+- **Version 3 (M3 container logs).** Container logs joined version 3
+  the same way (D07), as a log source rather than Docker rows (M7):
+  `ContainerLogSource(containerId)` opens through `OpenLogStream`, its
+  lines arrive in `LogBatch` as `ContainerRecord(stream, at, text)`
+  (stdout or stderr; a TTY container's one stream as stdout; `at` the
+  daemon's timestamp to the microsecond), and `LogStreamState` reports
+  it with the journal's statuses. It takes no cursor. A follow waits
+  for the Docker endpoint as waiting for the link, and a failed
+  endpoint ends it as failed. `LogStreamEndReason` gained
+  `logDriverUnreadable`, whose detail names the driver: `none`, a
+  remote driver whose dual-logging cache the container turns off
+  (`cache-disabled`), or on Podman, which keeps no such cache, any
+  driver but `k8s-file`, `json-file` and `journald`; a cache turned
+  off daemon-wide, which inspect does not show, reads so from the
+  logs request's 501. A gone container ends as missing. As built, the
+  engine inspects the container for `Config.Tty` and the log driver,
+  then asks for the last `window` lines with `follow` and
+  `timestamps=1`, on a connection of its own. The framing follows
+  `resolveLogFraming`, so `Config.Tty` decides when no `Content-Type`
+  came, as from Docker 20.10 and Podman. A multiplexed frame without a
+  trailing newline leaves its line open, and the next frame of that
+  stream continues it without its own timestamp, which joins the
+  lines Podman splits over two frames; a raw stream splits on
+  newlines only. Lines are cut at 256 KiB, and the journal follow's
+  ring (5,000 lines, 4 MiB) and pace (a batch per 50 ms at most) apply,
+  with lines the ring drops counted in `dropped`. When the endpoint
+  drops, a follow pauses with its ring kept and resumes over the next
+  one with `since` at the newest line received and no tail, dropping
+  re-sent lines up to that timestamp (`dropInclusiveSince`), so it
+  reports `complete`; lines at that very nanosecond that never arrived
+  are dropped too. A response that ends, as when the container
+  stops, reads again over the same endpoint after 1 s, doubling to
+  30 s [E], since the newest line, so a follow outlasts a restart; a
+  window ends once its response does. On relay ranks a running follow
+  holds a follower slot and a window a short-action slot (2 each, with
+  the learned-limit rule), from shares the Docker session keeps apart
+  from the host log reads' until D09 joins them, and others wait for a
+  channel; streamlocal costs none. Container log streams count apart from the
+  host's, up to 16 per server, and ids stay unique across both. The
+  background does not pause them yet. CloseStream, Disconnect, fleet
+  removal and an endpoint change end them.
 - **Monitor set (M2, K30).** `SetMonitorSet(ids)` replaces FL-21's set
   without a shape change. The engine keeps only the fleet servers that
   `monitorEligibilityOf` allows (4.3 step 4) and it can dial, subscribes

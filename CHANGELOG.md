@@ -49,8 +49,10 @@
   and Docker over SSH, still in development. CI builds its Android, iOS,
   Linux, macOS and Windows clients on every pull request and launches
   the desktop ones, and `scripts/build.sh` builds it with the other
-  products. Suite releases do not ship it until its preview milestone;
-  its [changelog](klabautermann/CHANGELOG.md) tracks the work so far.
+  products. Suite releases ship its five clients as previews: until v1
+  their asset names start with `klabautermann-preview-`, except the
+  .deb, which keeps Debian's versioned name. Its
+  [changelog](klabautermann/CHANGELOG.md) tracks the work so far.
 
 ## 1.9.0 (2026-10-04)
 

@@ -272,6 +272,11 @@ either (plugins come through Swift Package Manager). The one exception is the
 vendored `flutter_pty`, which ships only a podspec: Flutter generates a
 Podfile for it at build time, so building the macOS app needs CocoaPods
 (`brew install cocoapods`; GitHub's macOS runners preinstall it).
+The local build script restores the Apple CocoaPods configuration files to
+their pre-build contents on exit, including failed or interrupted builds.
+It preserves existing local edits and Podfiles, removes newly generated
+Podfiles and locks, and retains build caches and staged artifacts. Direct
+Flutter commands still leave their generated configuration in the checkout.
 `scripts/build.sh` checks for `pod` before starting Flutter. What it has to keep up with is
 the SDK's own macOS minimum, which reached 12.0; raising it is what an
 `unsupported deployment target` build failure after a Flutter upgrade is
