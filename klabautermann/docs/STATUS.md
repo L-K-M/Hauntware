@@ -1326,6 +1326,14 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 host action planners (E14): `PlanAction` plans PRC-02's kill,
+  SVC-03's start, stop, restart and reload, and JOB-08's run timer now
+  over the server's link, using its probe and E10's protected targets.
+  A kill elevates only for another user's process and is refused when
+  the PID's start time changed. Unit actions elevate in admin mode and
+  otherwise try polkit, whose refusal reads as needing admin mode. The
+  Docker planners arrive with E15, and the app surfaces with E20 and
+  E21.
 - M4 protected targets, ownership and danger (E10): the plan facts
   for 03 §8.6 and §8.7, with no planner using them yet.
   - Protected targets: built-in units, PID 1, the core daemons, the

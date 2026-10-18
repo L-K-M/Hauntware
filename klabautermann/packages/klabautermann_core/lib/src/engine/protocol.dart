@@ -981,6 +981,10 @@ enum ActionFailure {
 
   /// The engine has no runner for an API step yet (M4 E15).
   unsupportedStep,
+
+  /// polkit refused a step run without elevation: admin mode would run
+  /// it (03 §7.5).
+  adminRequired,
 }
 
 /// What re-validation found changed (03 §8.5).
@@ -1043,6 +1047,18 @@ enum ActionRefusalReason {
 
   /// The plan needs admin mode, which is off for the server (03 §8.2).
   adminRequired,
+
+  /// The intent names no valid target: a unit name outside systemd's
+  /// grammar, a verb the MVP does not offer, a timer that activates
+  /// nothing.
+  invalidTarget,
+
+  /// The target changed since the app saw it: the process exited, or its
+  /// PID now names another process.
+  targetChanged,
+
+  /// The server has no ready link to plan over.
+  noLink,
 }
 
 /// The answer to an [AuditQuery]: [records] newest first, and whether
@@ -2323,6 +2339,7 @@ final class ActionPreview {
     this.impact,
     this.ownership,
     this.protected,
+    this.followUnit,
   });
 
   final ActionIntent intent;
@@ -2347,6 +2364,10 @@ final class ActionPreview {
 
   /// Why the target is protected, or null when it is not.
   final ProtectedReason? protected;
+
+  /// The unit whose journal shows the run's effect, from the run's start:
+  /// JOB-08's timer service (03 §7.7).
+  final String? followUnit;
 }
 
 /// A running plan's end state (03 §10.1).

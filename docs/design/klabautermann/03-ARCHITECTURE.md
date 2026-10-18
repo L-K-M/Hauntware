@@ -3000,6 +3000,16 @@ after its last `) ` (a comm holding a newline), 6 when `kill` fails
 and 7 when it refuses a parameter (`GuardedKillOutcome`). The codes
 avoid 1 and 2, which sudo and the shell use, and 126 and 127.
 
+As built in M4 (E14,
+`klabautermann_core/lib/src/operations/plans/host_plans.dart`),
+planning a kill reads the process over the link first: its start ticks, which must still match the intent's, then
+`HostCommands.processFacts`, its real uid and `comm`. The plan elevates
+only when the uid differs from the probe's login uid, names the target
+by its `comm` for a typed confirmation, and drops the session when the
+PID is on its path. The runner reads the guarded kill's exits 3 and 4
+as re-validation failures (process gone, PID reused), not as a failed
+step.
+
 ### 7.3 Disks and storage (DSK)
 
 - **MVP.** Usage per mount from `df -PT -B1` with pseudo filesystems filtered
@@ -3089,6 +3099,14 @@ no longer holds that value.
   rejects every one, the page says unit logs are not available in this
   version; a read the engine can no longer answer, because it stopped,
   says so and asks for a restart of the app.
+
+As built in M4 (E14), SVC-03 offers start, stop, restart and reload; the
+other verbs are refused as invalid targets. In admin mode the step runs
+through the elevation executor. Outside it the step runs unelevated, and
+a polkit refusal (`Interactive authentication required` or
+`Access denied` on stderr) ends the run as needing admin mode rather
+than as a failed step. Every unit action re-validates that the unit
+still loads, and only start reports no impact.
 
 ### 7.6 Logs (LOG)
 
@@ -3344,6 +3362,12 @@ non-symlink file name in it. It exits 0, 3 when neither exists, and 4
 when the directory cannot be listed, so an unreadable spool never reads
 as empty. `parseCrontabSpool` keeps only names that pass the user-name
 check for `crontab -l -u`.
+
+As built in M4 (E14), run timer now reads the timer's `Unit=` with
+`HostCommands.timerActivates`, refuses a timer with none or one that
+activates a timer, and plans `timerStart` on that unit with SVC-03's
+elevation rule and re-validation. The preview names the unit as
+`followUnit`, whose journal the app follows from the run's start.
 
 ### 7.8 Packages and updates (PKG)
 

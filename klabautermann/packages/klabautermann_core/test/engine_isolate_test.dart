@@ -95,7 +95,7 @@ void main() {
       );
     });
 
-    test('plans are refused until their planners land, and no plan runs '
+    test('without a link a host plan is refused, and no plan runs '
         '(03 §8.5)', () async {
       final client = await spawnEngine();
       final (:events, fleet: _) = await started(client);
@@ -120,7 +120,7 @@ void main() {
         );
 
       final planned = (await next(events)) as ActionRefused;
-      expect(planned.reason, ActionRefusalReason.notImplemented);
+      expect(planned.reason, ActionRefusalReason.noLink, reason: 'links off');
       expect(planned.intent, isA<UnitAction>());
       expect((planned.intent! as UnitAction).unit, 'nginx.service');
       final ran = (await next(events)) as ActionRefused;
@@ -182,7 +182,7 @@ void main() {
           ),
         );
       expect(await refusal(), ActionRefusalReason.readOnly);
-      expect(await refusal(), ActionRefusalReason.notImplemented);
+      expect(await refusal(), ActionRefusalReason.noLink);
       final noLinks = (await next(events)) as AdminModeState;
       expect(noLinks.failure, AdminFailure.noLink, reason: 'links are off');
       expect(

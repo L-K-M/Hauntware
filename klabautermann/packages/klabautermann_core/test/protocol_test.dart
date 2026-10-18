@@ -265,6 +265,7 @@ void main() {
             impact: const PlanImpact(ImpactKind.stopsContainers, count: 3),
             ownership: const PlanOwnership('coolify'),
             protected: ProtectedReason.userMarked,
+            followUnit: 'backup.service',
           ),
         ),
         const ActionRefused(
@@ -272,6 +273,10 @@ void main() {
           intent: StartTimer('srv-1', timer: 'backup.timer'),
         ),
         const ActionRefused(ActionRefusalReason.stalePlan, planId: 'plan-1'),
+        const ActionRefused(
+          ActionRefusalReason.targetChanged,
+          intent: KillProcess('srv-1', pid: 4300, startTicks: 9001),
+        ),
         AdminModeState(
           'srv-1',
           AdminModePhase.on,
@@ -320,6 +325,13 @@ void main() {
           failure: ActionFailure.stepFailed,
           failedStep: 1,
           httpStatus: 409,
+        ),
+        const ActionFinished(
+          planId: 'plan-4',
+          outcome: ActionOutcome.failed,
+          failure: ActionFailure.adminRequired,
+          failedStep: 0,
+          exitCode: 1,
         ),
         const Prompt(
           promptId: 'p-1',

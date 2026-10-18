@@ -31,6 +31,7 @@ final class OperationPlan {
     this.impact,
     this.ownership,
     this.protected,
+    this.followUnit,
     Iterable<Revalidation> revalidate = const [],
   }) : steps = List.unmodifiable(steps),
        hostWrites = List.unmodifiable(hostWrites),
@@ -60,6 +61,9 @@ final class OperationPlan {
   final PlanImpact? impact;
   final PlanOwnership? ownership;
   final ProtectedReason? protected;
+
+  /// The unit whose journal the app follows after the run (JOB-08).
+  final String? followUnit;
   final List<Revalidation> revalidate;
 
   /// What the linter found in the steps ([lintSteps]).
@@ -83,6 +87,7 @@ final class OperationPlan {
     ownership: ownership,
     protected: protected,
     requiredTier: tier,
+    followUnit: followUnit,
   );
 }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:klabautermann_host/klabautermann_host.dart' show HostProfile;
 import 'package:meta/meta.dart';
 import 'package:seance_core/catalog.dart'
     show EndpointPin, EndpointPinStore, endpointPinsFileName;
@@ -32,6 +33,8 @@ import '../operations/confirmation.dart';
 import '../operations/operation_runner.dart';
 import '../operations/plan_registry.dart';
 import '../operations/plan_types.dart' show RequiredLevel;
+import '../operations/plans/host_plans.dart';
+import '../operations/protected_targets.dart';
 import '../sampling/sampling_scheduler.dart';
 import '../sampling/subscriptions.dart';
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
@@ -192,6 +195,9 @@ void engineMain(
   );
   final linkGenerations = <String, int>{};
   final readyLinks = <String>{};
+  // Each server's latest probe answer, which the planners read for the
+  // login uid, the session's path and its SSH port.
+  final profiles = <String, HostProfile>{};
   OperationRunner? runner;
 
   // FL-02's imported hosts, in D13's device-local store (03 §4.10),
@@ -333,6 +339,7 @@ void engineMain(
       deadPeerHint: links.deadPeerHint,
       clearDeadPeerHint: links.clearDeadPeerHint,
       probed: (serverId, profile) {
+        profiles[serverId] = profile;
         admin?.probed(serverId, profile);
         unawaited(capabilities?.probed(serverId, profile));
         docker?.probed(serverId, profile);
@@ -434,6 +441,7 @@ void engineMain(
       ..retain(fleetIds);
     admin?.forget(forgotten);
     plans.forget(forgotten);
+    profiles.removeWhere((id, _) => forgotten.contains(id));
     // Before the caller sends the fleet or an EndpointChanged, so no
     // probe of a server starts, and no answer for it goes out, once the
     // app hears it left or lost its pin.
@@ -748,14 +756,50 @@ void engineMain(
       case RunSyncRound():
         runSync(SyncOperation.round, sync.runRound);
       case PlanAction(:final intent):
-        // The policy first (M4 plan M4); the planners land with E14 (host)
-        // and E15 (Docker).
-        uiPort.send(
-          ActionRefused(
-            safetyRefusal(safetyPolicy, intent.serverId) ??
-                ActionRefusalReason.notImplemented,
-            intent: intent,
-          ),
+        void refuse(ActionRefusalReason reason) =>
+            uiPort.send(ActionRefused(reason, intent: intent));
+        // The policy first (M4 plan M4). The Docker planners land with E15.
+        if (safetyRefusal(safetyPolicy, intent.serverId) case final reason?) {
+          refuse(reason);
+          return;
+        }
+        if (intent is! KillProcess &&
+            intent is! UnitAction &&
+            intent is! StartTimer) {
+          refuse(ActionRefusalReason.notImplemented);
+          return;
+        }
+        final serverId = intent.serverId;
+        final link = links?.link(serverId);
+        final profile = profiles[serverId];
+        if (link == null || profile == null) {
+          refuse(ActionRefusalReason.noLink);
+          return;
+        }
+        // The plan holds the generation it was made on, so a reconnect
+        // while it waits for the user makes it stale.
+        final generation = linkGenerations[serverId] ?? 0;
+        // Not awaited: planning reads over the link, and the queue keeps
+        // serving the app meanwhile.
+        unawaited(
+          planHostAction(intent, (
+            link: link,
+            profile: profile,
+            protection: protectionContextOf(
+              samplerPids: scheduler?.samplerPids(serverId) ?? const {},
+              profile: profile,
+              safety: safetyPolicy.servers[serverId],
+            ),
+            adminMode: admin?.session(serverId) != null,
+          )).then((attempt) {
+            final plan = attempt.plan;
+            if (plan == null) {
+              refuse(attempt.refusal!);
+              return;
+            }
+            final planId = plans.hold(plan, linkGeneration: generation);
+            uiPort.send(ActionPlanned(planId, plan.preview));
+          }),
         );
       case AuditQuery(:final serverId, :final before, :final limit):
         final (:records, :more) = await audit.query(
