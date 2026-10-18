@@ -189,6 +189,12 @@ void main() {
         ((await next(events)) as RequestRejected).requestName,
         'SetSafetyPolicy',
       );
+
+      // JOB-03's read needs the link, then admin mode.
+      client.send(const ReadUserCrontabs('ssh-config:web', requestId: 'r-1'));
+      final crontabs = (await next(events)) as UserCrontabs;
+      expect(crontabs.requestId, 'r-1');
+      expect(crontabs.failure, UserCrontabsFailure.noLink);
     });
 
     test('links stay off unless spawn turns them on', () async {

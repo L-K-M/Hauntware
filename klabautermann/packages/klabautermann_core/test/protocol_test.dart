@@ -152,6 +152,7 @@ void main() {
         ),
         const SetAdminMode('srv-1', enabled: true),
         AuditQuery('srv-1', before: DateTime.utc(2026, 10, 18), limit: 20),
+        const ReadUserCrontabs('srv-1', requestId: 'r-1'),
         const AnswerPrompt('prompt-1', PromptTrustAnswer(true)),
         const AnswerPrompt('prompt-2', PromptCancelAnswer()),
         const HandleAlert('alert-1', AlertAction.acknowledge),
@@ -308,6 +309,19 @@ void main() {
             exitCode: 5,
           ),
         ], more: true),
+        UserCrontabs(
+          serverId: 'srv-1',
+          requestId: 'r-1',
+          directory: '/var/spool/cron/crontabs',
+          unreadable: const ['carol'],
+          skipped: 1,
+          zoneName: 'Etc/UTC',
+        ),
+        UserCrontabs(
+          serverId: 'srv-1',
+          requestId: 'r-2',
+          failure: UserCrontabsFailure.adminRequired,
+        ),
         const ActionProgress(planId: 'plan-1', stepIndex: 1, stepCount: 3),
         const ActionFinished(
           planId: 'plan-1',

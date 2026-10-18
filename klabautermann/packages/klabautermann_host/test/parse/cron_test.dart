@@ -240,4 +240,23 @@ void main() {
     expect(r.value.jobs.single.expression, isNull);
     expect(r.warnings, contains(contains('unparseable')));
   });
+
+  test('another user\'s crontab is a user table that names its user', () {
+    final r = parseUserCrontab(
+      '# m h dom mon dow command\n'
+      'MAILTO=""\n'
+      'CRON_TZ=Europe/Berlin\n'
+      '*/5 * * * * /usr/local/bin/sync --quiet\n'
+      '@reboot\n',
+      user: 'alice',
+    );
+    final job = r.value.single;
+    expect(job.source, 'crontab -u alice');
+    expect(job.source, userCrontabSource('alice'));
+    expect(job.user, 'alice');
+    expect(job.schedule, '*/5 * * * *');
+    expect(job.command, '/usr/local/bin/sync --quiet');
+    expect(job.cronTz, 'Europe/Berlin');
+    expect(r.warnings, [contains('short line')]);
+  });
 }

@@ -17,6 +17,10 @@ import 'parse_result.dart';
 /// (`crontab -l`); system crontab lines carry their file path.
 const String kOwnCrontabSource = 'crontab';
 
+/// The [CronJob.source] of a line in [user]'s crontab, which JOB-03 reads
+/// with `crontab -l -u` (03 §7.7, M14).
+String userCrontabSource(String user) => 'crontab -u $user';
+
 /// Which `cron.{hourly,daily,weekly,monthly}` directory a script came
 /// from (03 §7.7 JOB-04).
 enum CronPeriod { hourly, daily, weekly, monthly }
@@ -45,7 +49,8 @@ final class CronJob {
   /// expression with `isReboot`.
   final CronExpression? expression;
 
-  /// The system-crontab user field; null for `crontab -l` jobs.
+  /// The system-crontab user field, or the user whose crontab JOB-03
+  /// read; null for the invoking user's `crontab -l` jobs.
   final String? user;
 
   /// The command text, verbatim (a `%` keeps its stdin meaning).
@@ -164,6 +169,36 @@ ParseResult<CronSnapshot> parseCron(String raw, ParseContext ctx) {
     ),
     warnings,
   );
+}
+
+/// Parses [user]'s crontab, `crontab -l -u <user>`'s output when it
+/// exited 0 (JOB-03, 03 §7.7): a user table, each job carrying [user] and
+/// [userCrontabSource]. Never throws.
+ParseResult<List<CronJob>> parseUserCrontab(
+  String stdout, {
+  required String user,
+}) {
+  final warnings = <String>[];
+  final parsed = <CronJob>[];
+  _parseCrontab(
+    stdout.split('\n'),
+    source: userCrontabSource(user),
+    table: _CronTable.user,
+    jobs: parsed,
+    warnings: warnings,
+  );
+  return ParseResult([
+    for (final job in parsed)
+      CronJob(
+        source: job.source,
+        schedule: job.schedule,
+        command: job.command,
+        raw: job.raw,
+        expression: job.expression,
+        user: user,
+        cronTz: job.cronTz,
+      ),
+  ], warnings);
 }
 
 /// The `crontab_meta` block: `tool=missing` or `rc=<n>`. rc 0 means a

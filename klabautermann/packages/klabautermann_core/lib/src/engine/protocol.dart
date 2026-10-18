@@ -458,6 +458,16 @@ final class AuditQuery extends EngineRequest {
   final int limit;
 }
 
+/// Reads every user's crontab on [serverId] (JOB-03, 03 §7.7, M14): in
+/// admin mode only, tier 0 and never cached. One [UserCrontabs] with
+/// [requestId] answers it.
+final class ReadUserCrontabs extends EngineRequest {
+  const ReadUserCrontabs(this.serverId, {required this.requestId});
+
+  final String serverId;
+  final String requestId;
+}
+
 /// Answers an outstanding [Prompt] event (03 §10.1).
 final class AnswerPrompt extends EngineRequest {
   const AnswerPrompt(this.promptId, this.answer);
@@ -1059,6 +1069,74 @@ enum ActionRefusalReason {
 
   /// The server has no ready link to plan over.
   noLink,
+}
+
+/// Why [UserCrontabs] read no crontab.
+enum UserCrontabsFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// Admin mode is off for the server.
+  adminRequired,
+
+  /// Elevation refused, so nothing ran.
+  elevationRefused,
+
+  /// Neither spool directory exists (`kCrontabSpools`).
+  noSpool,
+
+  /// The spool exists but cannot be listed.
+  spoolDenied,
+
+  /// The listing did not read as a spool.
+  unreadable,
+
+  /// The link failed while reading.
+  transport,
+}
+
+/// The answer to [ReadUserCrontabs]: the listed users' crontab lines as
+/// jobs rows, commands masked (8.9), with their next runs as the `cron`
+/// stream's rows have them. A user whose crontab could not be read is in
+/// [unreadable]; one that was removed since the listing is left out.
+final class UserCrontabs extends EngineEvent {
+  UserCrontabs({
+    required this.serverId,
+    required this.requestId,
+    this.directory,
+    Iterable<JobEntry> jobs = const [],
+    Iterable<String> unreadable = const [],
+    this.skipped = 0,
+    this.notRead = 0,
+    this.zoneName,
+    this.zoneFallback,
+    this.failure,
+  }) : jobs = List.unmodifiable(jobs),
+       unreadable = List.unmodifiable(unreadable);
+
+  final String serverId;
+  final String requestId;
+
+  /// The spool directory the listing found.
+  final String? directory;
+
+  final List<JobEntry> jobs;
+  final List<String> unreadable;
+
+  /// Spool file names that are not user names, which are never read.
+  final int skipped;
+
+  /// Users past `kUserCrontabsRead`, whose crontabs were not read.
+  final int notRead;
+
+  /// As [CronResult.zoneName].
+  final String? zoneName;
+
+  /// As [CronResult.zoneFallback].
+  final CronZoneFallback? zoneFallback;
+
+  /// Why nothing was read, or null.
+  final UserCrontabsFailure? failure;
 }
 
 /// The answer to an [AuditQuery]: [records] newest first, and whether

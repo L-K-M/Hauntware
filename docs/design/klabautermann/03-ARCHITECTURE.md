@@ -3369,6 +3369,16 @@ activates a timer, and plans `timerStart` on that unit with SVC-03's
 elevation rule and re-validation. The preview names the unit as
 `followUnit`, whose journal the app follows from the run's start.
 
+As built in M4 (E14b,
+`klabautermann_core/lib/src/admin/user_crontabs.dart`),
+`ReadUserCrontabs` runs JOB-03 in admin mode only: the spool listing, then `crontab -l -u` for at most 64 [E] of its
+valid names, each through the elevation executor. `parseUserCrontab`
+reads each as a user table whose jobs name their user, with the source
+`crontab -u <user>`. A crontab removed since the listing ("no crontab
+for") is left out, any other failure names the user as unreadable, and
+the jobs rows carry next runs as the `cron` stream's do. Nothing is
+cached.
+
 ### 7.8 Packages and updates (PKG)
 
 - **v1 (read-only).** `apt-get -s upgrade` (`Inst` lines; not `apt`, whose
@@ -4250,7 +4260,11 @@ CI.
   M3 (D05) the engine masks an inspected container's `Path` and `Args`,
   and its `Entrypoint` and `Cmd`, by the same rules, each pair read as
   one command line, and each health check's output as one argument;
-  the container list drops its command line.
+  the container list drops its command line. From M4 (E14b) every cron
+  line's command and raw text cross masked by the same rules, each read
+  as one command line, both the `cron` stream's and JOB-03's; the jobs
+  merge reads `run-parts` lines from the real commands first. Cron lines
+  have no reveal yet.
 - Reveal (M2, the Processes tab): a tap on a masked argument in a
   process's details shows it there for 30 s, and it is masked again
   sooner when the details close or the app turns inactive, as it loses

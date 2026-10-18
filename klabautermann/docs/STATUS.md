@@ -1326,6 +1326,11 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 other users' crontabs (E14b): in admin mode `ReadUserCrontabs`
+  lists the cron spool and reads each valid user's crontab through
+  elevation, as jobs rows with next runs. Every cron command now crosses
+  masked, the `cron` stream's included. The app's user switch arrives
+  with E21.
 - M4 host action planners (E14): `PlanAction` plans PRC-02's kill,
   SVC-03's start, stop, restart and reload, and JOB-08's run timer now
   over the server's link, using its probe and E10's protected targets.

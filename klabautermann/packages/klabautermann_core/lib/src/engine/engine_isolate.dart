@@ -12,6 +12,7 @@ import 'package:seance_core/seance_core.dart'
 import '../admin/admin_mode.dart';
 import '../audit/audit_log.dart';
 import '../admin/safety_policy.dart';
+import '../admin/user_crontabs.dart';
 import '../capabilities/capability_cache.dart';
 import '../catalog/engine_sync.dart';
 import '../catalog/keystore_channel.dart';
@@ -808,6 +809,35 @@ void engineMain(
           limit: limit,
         );
         uiPort.send(AuditRecords(serverId, records, more: more));
+      case ReadUserCrontabs(:final serverId, :final requestId):
+        void fail(UserCrontabsFailure failure) => uiPort.send(
+          UserCrontabs(
+            serverId: serverId,
+            requestId: requestId,
+            failure: failure,
+          ),
+        );
+        if (links?.link(serverId) == null) {
+          fail(UserCrontabsFailure.noLink);
+          return;
+        }
+        final session = admin?.session(serverId);
+        if (session == null) {
+          fail(UserCrontabsFailure.adminRequired);
+          return;
+        }
+        admin?.touch(serverId);
+        // Not awaited: one elevated command per user, and the queue keeps
+        // serving the app meanwhile.
+        unawaited(
+          readUserCrontabs(
+            serverId,
+            requestId: requestId,
+            session: session,
+            profile: profiles[serverId],
+            now: DateTime.now().toUtc(),
+          ).then(uiPort.send),
+        );
       case SetSafetyPolicy(:final policy):
         if (validateSafetyPolicy(policy) case final problem?) {
           reject(message, problem);
