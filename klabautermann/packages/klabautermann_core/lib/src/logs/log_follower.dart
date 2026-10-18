@@ -217,6 +217,10 @@ final class LogFollower {
         after == null
             ? HostCommands.tail(path, lines: lines, follow: true)
             : throw const HostCommandError('a file has no cursor'),
+      // The Docker router reads them over the API.
+      ContainerLogSource() => throw const HostCommandError(
+        'container logs come from the Docker endpoint',
+      ),
     };
   }
 

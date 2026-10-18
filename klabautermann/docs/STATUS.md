@@ -198,6 +198,17 @@ M2, the host read MVP, is the current milestone. What is on main:
   streamlocal, one at a time on a relay), all as `DockerListChanged`.
   Tested over fakes only; the app does not watch yet (D13), and
   relay channels are not counted in `ChannelQuota` until D09.
+- Container logs (M3, D07, 03 §5.6, §10.1): `ContainerLogSource`
+  streams a container's logs through `OpenLogStream` as
+  `ContainerRecord`s over the server's Docker endpoint: framing by
+  `Config.Tty` when no `Content-Type` comes (Docker 20.10, Podman),
+  Podman's lines split over two frames joined, the journal follow's
+  ring and pace, a resume after the newest line with `since` and the
+  boundary line dropped, a stopped container read again with backoff,
+  and `logDriverUnreadable` naming a driver whose logs the API cannot
+  read. On relays the streams take follower slots of their own until
+  D09. Tested over fakes only; the app opens none yet (D15), and the
+  background does not pause them.
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and
