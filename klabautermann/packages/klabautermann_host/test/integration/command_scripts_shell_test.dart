@@ -26,6 +26,22 @@ final _shells = {
 
 final _uid = int.parse((Process.runSync('id', ['-u']).stdout as String).trim());
 
+/// Root, or a user who owns PID 1 (a container's entrypoint run with
+/// `--user`), may signal it: kill(2) lets a sender whose uid matches the
+/// target's real or saved uid.
+final bool _mayKillPid1 = () {
+  if (_uid == 0) return true;
+  try {
+    final line = File(
+      '/proc/1/status',
+    ).readAsLinesSync().firstWhere((l) => l.startsWith('Uid:'));
+    final ids = line.substring(4).trim().split(RegExp(r'\s+'));
+    return ids[0] == '$_uid' || ids[2] == '$_uid';
+  } on Object {
+    return false;
+  }
+}();
+
 const _id = '0123456789abcdef';
 const _placeholderDir = '/home/klab/.local/state/klabautermann/ops';
 
@@ -215,7 +231,7 @@ void main() {
         );
         final result = await _run(shell, argv);
         expect(result.exitCode, kGuardedKillFailed);
-      }, skip: _uid == 0 ? 'root may signal PID 1' : null);
+      }, skip: _mayKillPid1 ? 'this user may signal PID 1' : null);
     });
 
     group('$name: crontab spool', () {

@@ -423,6 +423,9 @@ void main() {
       expect(spool.users, ['root', 'alice']);
       expect(spool.skipped, 2);
       expect(parseCrontabSpool('/var/spool/cron\n')!.users, isEmpty);
+      final blank = parseCrontabSpool('/var/spool/cron/crontabs\nroot\n\n\n')!;
+      expect(blank.users, ['root']);
+      expect(blank.skipped, 0);
       expect(parseCrontabSpool(''), isNull);
       expect(parseCrontabSpool('root\nalice\n'), isNull);
     });

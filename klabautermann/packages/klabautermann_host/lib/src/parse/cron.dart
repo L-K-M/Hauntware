@@ -397,7 +397,9 @@ final class CrontabSpool {
 /// name per line. Null when the first line is not an absolute path.
 CrontabSpool? parseCrontabSpool(String stdout) {
   final lines = stdout.split('\n');
-  if (lines.isNotEmpty && lines.last.isEmpty) lines.removeLast();
+  while (lines.isNotEmpty && lines.last.isEmpty) {
+    lines.removeLast();
+  }
   if (lines.isEmpty || ArgValidators.absolutePath(lines.first) != null) {
     return null;
   }
