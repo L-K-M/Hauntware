@@ -193,8 +193,9 @@ void main() {
     );
     if (workspace == null) throw StateError('Workspace package is unresolved.');
     root = Directory.fromUri(workspace.resolve('../'));
-    script = File('${root.path}test/integration/runner_vm.sh')
-        .readAsStringSync();
+    script = File(
+      '${root.path}test/integration/runner_vm.sh',
+    ).readAsStringSync();
     run = File('${root.path}test/integration/run.sh').readAsStringSync();
   });
 
@@ -376,13 +377,15 @@ void main() {
       });
 
       for (final MapEntry(key: name, value: body) in _stubs.entries) {
-        File('${bin.path}/$name')
-            .writeAsStringSync('#!/usr/bin/env bash\n$body');
+        File(
+          '${bin.path}/$name',
+        ).writeAsStringSync('#!/usr/bin/env bash\n$body');
       }
       File('${sandbox.path}/dash').writeAsStringSync('');
       Link('${sandbox.path}/sh').createSync('${sandbox.path}/dash');
-      File('${sandbox.path}/os-release')
-          .writeAsStringSync('ID=ubuntu\nVERSION_ID="24.04"\n');
+      File(
+        '${sandbox.path}/os-release',
+      ).writeAsStringSync('ID=ubuntu\nVERSION_ID="24.04"\n');
       final integration = Directory(
         '${sandbox.path}/klabautermann/test/integration',
       )..createSync(recursive: true);
