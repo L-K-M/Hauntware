@@ -338,4 +338,96 @@ void main() {
       );
     });
   });
+
+  group('guarded kill, timers and the crontab spool', () {
+    test('guardedKill passes pid, ticks and signal as parameters', () {
+      final argv = HostCommands.guardedKill(4242, 987654, KillSignal.sigterm);
+      expect(argv.take(2), ['sh', '-c']);
+      expect(argv.skip(3), ['klabautermann-kill', '4242', '987654', 'TERM']);
+      // The script is constant: nothing interpolates into it.
+      expect(HostCommands.guardedKill(1, 0, KillSignal.sigkill)[2], argv[2]);
+      expect(argv[2], contains(r'kill -s "$3" "$1"'));
+    });
+
+    test('guardedKill refuses a non-positive pid and negative ticks', () {
+      for (final build in <void Function()>[
+        () => HostCommands.guardedKill(0, 1, KillSignal.sigterm),
+        () => HostCommands.guardedKill(-1, 1, KillSignal.sigterm),
+        () => HostCommands.guardedKill(10, -1, KillSignal.sigterm),
+      ]) {
+        expect(build, throwsA(isA<HostCommandError>()));
+      }
+    });
+
+    test('every kill signal passes the signal-name validator', () {
+      for (final s in KillSignal.values) {
+        expect(ArgValidators.signalName(s.wireName), isNull, reason: s.name);
+        expect(s.wireName, matches(RegExp(r'^[A-Z0-9]+$')));
+      }
+    });
+
+    test('guarded kill outcomes map exit codes both ways', () {
+      expect(
+        GuardedKillOutcome.values.map((o) => o.exitCode).toSet(),
+        hasLength(GuardedKillOutcome.values.length),
+      );
+      for (final o in GuardedKillOutcome.values) {
+        expect(GuardedKillOutcome.fromExitCode(o.exitCode), o);
+      }
+      expect(GuardedKillOutcome.reused.exitCode, kGuardedKillReused);
+      for (final code in [1, 2, 126, 127, 255]) {
+        expect(GuardedKillOutcome.fromExitCode(code), isNull);
+      }
+    });
+
+    test('timerStart starts the activated unit with the guards', () {
+      expect(HostCommands.timerStart('logrotate.service'), [
+        'systemctl',
+        '--no-ask-password',
+        'start',
+        '--',
+        'logrotate.service',
+      ]);
+      for (final unit in ['logrotate.timer', 'a; reboot', '']) {
+        expect(
+          () => HostCommands.timerStart(unit),
+          throwsA(isA<HostCommandError>()),
+          reason: unit,
+        );
+      }
+    });
+
+    test('crontabSpoolList tries the Debian spool before the RHEL one', () {
+      final argv = HostCommands.crontabSpoolList();
+      expect(argv.take(2), ['sh', '-c']);
+      expect(argv.skip(3), [
+        'klabautermann-spool',
+        '/var/spool/cron/crontabs',
+        '/var/spool/cron',
+      ]);
+      expect(
+        () => HostCommands.crontabSpoolList(spools: const []),
+        throwsA(isA<HostCommandError>()),
+      );
+      expect(
+        () => HostCommands.crontabSpoolList(spools: const ['spool']),
+        throwsA(isA<HostCommandError>()),
+      );
+    });
+
+    test('parseCrontabSpool keeps valid user names and counts the rest', () {
+      final spool = parseCrontabSpool(
+        '/var/spool/cron/crontabs\nroot\nalice\ntmp.XyZ123\nBob\n',
+      )!;
+      expect(spool.directory, '/var/spool/cron/crontabs');
+      expect(spool.users, ['root', 'alice']);
+      expect(spool.skipped, 2);
+      expect(parseCrontabSpool('/var/spool/cron\n')!.users, isEmpty);
+      final blank = parseCrontabSpool('/var/spool/cron/crontabs\nroot\n\n\n')!;
+      expect(blank.users, ['root']);
+      expect(blank.skipped, 0);
+      expect(parseCrontabSpool(''), isNull);
+      expect(parseCrontabSpool('root\nalice\n'), isNull);
+    });
+  });
 }

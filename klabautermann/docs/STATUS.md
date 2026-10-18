@@ -1326,6 +1326,16 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 command builders (E08): `klabautermann_host` builds the guarded
+  kill (PRC-02), which signals only when the PID's start ticks still
+  match and exits 4 for a reused PID. It also builds `timerStart`
+  (JOB-08), the crontab spool listing (JOB-03) and the detached
+  operation commands (SAF-23): the inline wrapper, which writes
+  `<id>.json` records atomically with `mv`, the launch argv of the five
+  runner rows, cleanup and the 7-day prune. Real-shell tests run under
+  dash and bash. Nothing runs these builders yet: E14 and E17 will.
+  The root-run wrapper's `chown` was checked by hand only, and whether
+  the backgrounded `setsid` launch survives logout waits for spike S4.
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.
