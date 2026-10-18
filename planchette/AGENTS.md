@@ -31,8 +31,10 @@ packages/
                           outside the workspace
   ghost_theme/            the editable theme palette, its stored/pasted JSON
                           form, the shipped presets, the theme builders and
-                          chrome extension, and the per-app style and codec
-                          seams; outside the workspace
+                          chrome extension, the per-app style and codec
+                          seams, and the Appearance editor
+                          (GhostAppearanceSection) with its strings bag and
+                          model seam; outside the workspace
   ghost_servers/          server surfaces shared by Séance and Poltergeist
                           (today the server list's sectioning, the
                           status-dot vocabulary and the host-key,
