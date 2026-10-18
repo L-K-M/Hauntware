@@ -3933,6 +3933,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Read-only: actions on this server are hidden.'**
   String get serverReadOnlyNotice;
+
+  /// Title of the admin mode password dialog (SAF-02); host is the server's address.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin password for {host}'**
+  String elevationTitle(String host);
+
+  /// Explanation in the admin mode password dialog; user is the login account sudo runs for.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann asks sudo for root as {user} with this password. It is kept in memory only while admin mode is on, and never saved.'**
+  String elevationDetail(String user);
+
+  /// Shown in the admin mode password dialog when sudo refused the previous password.
+  ///
+  /// In en, this message translates to:
+  /// **'That password did not work. Try again.'**
+  String get elevationRetry;
+
+  /// Label of the password field in the admin mode password dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get elevationPassword;
+
+  /// Button that closes the admin mode password dialog without turning admin mode on.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get elevationCancel;
+
+  /// Button that sends the password and turns admin mode on.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on'**
+  String get elevationTurnOn;
+
+  /// Label of the server header's admin mode chip while admin mode is off (SAF-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Admin mode'**
+  String get adminChipOff;
+
+  /// Label of the admin mode chip while the engine detects how to elevate, waits for the password or checks it.
+  ///
+  /// In en, this message translates to:
+  /// **'Turning on admin mode'**
+  String get adminChipStarting;
+
+  /// Label of the admin mode chip while it is on; time is when inactivity ends it.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin mode until {time}'**
+  String adminChipOn(String time);
+
+  /// Tooltip of the disabled admin mode chip while the server or every server is read-only (SAF-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Admin mode is not available while the server is read-only.'**
+  String get adminChipReadOnly;
+
+  /// Notice in the server header while admin mode is on.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin mode is on: actions you confirm here run as root.'**
+  String get adminOnNotice;
+
+  /// Notice in the server header when admin mode could not start; reason is the engine's AdminFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, observeOnly{Admin mode needs Allow actions turned on for this server.} readOnly{Admin mode is not available while this server is read-only.} noLink{Admin mode needs a connection to this server.} notProbed{Klabautermann has not checked this server yet. Try admin mode again in a moment.} unavailable{This server offers no way to become root that Klabautermann can use.} ttyRequired{This server lets you become root only from a terminal, so admin mode is not available.} notInSudoers{Your account on this server may not use sudo.} wrongPassword{The password was refused three times, so admin mode stayed off.} cancelled{Admin mode stayed off because no password was given.} other{Admin mode could not be turned on.}}'**
+  String adminFailure(String reason);
+
+  /// Notice in the server header after admin mode ended; reason is the engine's AdminEnd name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, inactivity{Admin mode ended after a while without an action.} background{Admin mode ended when Klabautermann went to the background.} linkLost{Admin mode ended when the connection dropped.} serverRemoved{Admin mode ended because the server changed.} other{Admin mode ended.}}'**
+  String adminEnded(String reason);
 }
 
 class _AppLocalizationsDelegate

@@ -10,6 +10,7 @@ import 'package:klabautermann_core/klabautermann_core.dart'
         InstanceLockUnavailable,
         SyncStoreIssue;
 
+import 'controllers/admin_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/safety_controller.dart';
 import 'controllers/appearance_controller.dart';
@@ -22,6 +23,7 @@ import 'l10n/app_localizations.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'theme/app_theme.dart';
 import 'ui/adaptive_shell.dart';
+import 'ui/admin_mode_chip.dart' show AdminScope;
 import 'ui/macos_toolbar_band.dart';
 import 'ui/menus/app_commands.dart';
 import 'ui/menus/app_menu_host.dart';
@@ -49,6 +51,7 @@ class KlabautermannApp extends StatelessWidget {
     required this.coverage,
     required this.announcements,
     this.safety,
+    this.admin,
     this.sync,
     this.settingsIssue,
     this.importStoreIssue,
@@ -78,6 +81,10 @@ class KlabautermannApp extends StatelessWidget {
   /// safety out: Settings then shows its placeholder and the server header
   /// neither the Safety menu nor its notices.
   final SafetyController? safety;
+
+  /// Admin mode per server (03 §8.2), one engine run's like [fleet]. Null
+  /// in tests that leave it out, where the header shows no admin chip.
+  final AdminController? admin;
 
   /// The sync account (03 §4.3), one engine run's like [fleet]; null in
   /// tests that leave sync out, which shows the sync control idle.
@@ -172,9 +179,13 @@ class KlabautermannApp extends StatelessWidget {
               openSettings: (context) => unawaited(_openSettings(context)),
               child: withMacosToolbarBand(toolbarBand, child: child!),
             );
-            return switch (safety) {
-              final safety? => SafetyScope(safety: safety, child: scoped),
+            final withAdmin = switch (admin) {
+              final admin? => AdminScope(admin: admin, child: scoped),
               null => scoped,
+            };
+            return switch (safety) {
+              final safety? => SafetyScope(safety: safety, child: withAdmin),
+              null => withAdmin,
             };
           },
           // The shell's settings callback and the menus' commands need a

@@ -3577,5 +3577,82 @@
   "serverReadOnlyNotice": "Read-only: actions on this server are hidden.",
   "@serverReadOnlyNotice": {
     "description": "Notice in the server header while the server, or every server, is read-only (SAF-06)."
+  },
+  "elevationTitle": "Admin password for {host}",
+  "@elevationTitle": {
+    "description": "Title of the admin mode password dialog (SAF-02); host is the server's address.",
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "elevationDetail": "Klabautermann asks sudo for root as {user} with this password. It is kept in memory only while admin mode is on, and never saved.",
+  "@elevationDetail": {
+    "description": "Explanation in the admin mode password dialog; user is the login account sudo runs for.",
+    "placeholders": {
+      "user": {
+        "type": "String"
+      }
+    }
+  },
+  "elevationRetry": "That password did not work. Try again.",
+  "@elevationRetry": {
+    "description": "Shown in the admin mode password dialog when sudo refused the previous password."
+  },
+  "elevationPassword": "Password",
+  "@elevationPassword": {
+    "description": "Label of the password field in the admin mode password dialog."
+  },
+  "elevationCancel": "Cancel",
+  "@elevationCancel": {
+    "description": "Button that closes the admin mode password dialog without turning admin mode on."
+  },
+  "elevationTurnOn": "Turn on",
+  "@elevationTurnOn": {
+    "description": "Button that sends the password and turns admin mode on."
+  },
+  "adminChipOff": "Admin mode",
+  "@adminChipOff": {
+    "description": "Label of the server header's admin mode chip while admin mode is off (SAF-02)."
+  },
+  "adminChipStarting": "Turning on admin mode",
+  "@adminChipStarting": {
+    "description": "Label of the admin mode chip while the engine detects how to elevate, waits for the password or checks it."
+  },
+  "adminChipOn": "Admin mode until {time}",
+  "@adminChipOn": {
+    "description": "Label of the admin mode chip while it is on; time is when inactivity ends it.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "adminChipReadOnly": "Admin mode is not available while the server is read-only.",
+  "@adminChipReadOnly": {
+    "description": "Tooltip of the disabled admin mode chip while the server or every server is read-only (SAF-06)."
+  },
+  "adminOnNotice": "Admin mode is on: actions you confirm here run as root.",
+  "@adminOnNotice": {
+    "description": "Notice in the server header while admin mode is on."
+  },
+  "adminFailure": "{reason, select, observeOnly{Admin mode needs Allow actions turned on for this server.} readOnly{Admin mode is not available while this server is read-only.} noLink{Admin mode needs a connection to this server.} notProbed{Klabautermann has not checked this server yet. Try admin mode again in a moment.} unavailable{This server offers no way to become root that Klabautermann can use.} ttyRequired{This server lets you become root only from a terminal, so admin mode is not available.} notInSudoers{Your account on this server may not use sudo.} wrongPassword{The password was refused three times, so admin mode stayed off.} cancelled{Admin mode stayed off because no password was given.} other{Admin mode could not be turned on.}}",
+  "@adminFailure": {
+    "description": "Notice in the server header when admin mode could not start; reason is the engine's AdminFailure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "adminEnded": "{reason, select, inactivity{Admin mode ended after a while without an action.} background{Admin mode ended when Klabautermann went to the background.} linkLost{Admin mode ended when the connection dropped.} serverRemoved{Admin mode ended because the server changed.} other{Admin mode ended.}}",
+  "@adminEnded": {
+    "description": "Notice in the server header after admin mode ended; reason is the engine's AdminEnd name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
   }
 }

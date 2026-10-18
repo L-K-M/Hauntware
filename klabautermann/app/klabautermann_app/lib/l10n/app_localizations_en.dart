@@ -2909,4 +2909,80 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get serverReadOnlyNotice =>
       'Read-only: actions on this server are hidden.';
+
+  @override
+  String elevationTitle(String host) {
+    return 'Admin password for $host';
+  }
+
+  @override
+  String elevationDetail(String user) {
+    return 'Klabautermann asks sudo for root as $user with this password. It is kept in memory only while admin mode is on, and never saved.';
+  }
+
+  @override
+  String get elevationRetry => 'That password did not work. Try again.';
+
+  @override
+  String get elevationPassword => 'Password';
+
+  @override
+  String get elevationCancel => 'Cancel';
+
+  @override
+  String get elevationTurnOn => 'Turn on';
+
+  @override
+  String get adminChipOff => 'Admin mode';
+
+  @override
+  String get adminChipStarting => 'Turning on admin mode';
+
+  @override
+  String adminChipOn(String time) {
+    return 'Admin mode until $time';
+  }
+
+  @override
+  String get adminChipReadOnly =>
+      'Admin mode is not available while the server is read-only.';
+
+  @override
+  String get adminOnNotice =>
+      'Admin mode is on: actions you confirm here run as root.';
+
+  @override
+  String adminFailure(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'observeOnly':
+          'Admin mode needs Allow actions turned on for this server.',
+      'readOnly': 'Admin mode is not available while this server is read-only.',
+      'noLink': 'Admin mode needs a connection to this server.',
+      'notProbed':
+          'Klabautermann has not checked this server yet. Try admin mode again in a moment.',
+      'unavailable':
+          'This server offers no way to become root that Klabautermann can use.',
+      'ttyRequired':
+          'This server lets you become root only from a terminal, so admin mode is not available.',
+      'notInSudoers': 'Your account on this server may not use sudo.',
+      'wrongPassword':
+          'The password was refused three times, so admin mode stayed off.',
+      'cancelled': 'Admin mode stayed off because no password was given.',
+      'other': 'Admin mode could not be turned on.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String adminEnded(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'inactivity': 'Admin mode ended after a while without an action.',
+      'background':
+          'Admin mode ended when Klabautermann went to the background.',
+      'linkLost': 'Admin mode ended when the connection dropped.',
+      'serverRemoved': 'Admin mode ended because the server changed.',
+      'other': 'Admin mode ended.',
+    });
+    return '$_temp0';
+  }
 }

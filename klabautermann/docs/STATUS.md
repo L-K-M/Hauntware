@@ -1326,6 +1326,11 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 admin mode in the app (E19b): the server header's admin chip
+  turns admin mode on and off and follows the engine's states, tinted
+  while on with its end time, and the header says why it failed or
+  ended. The elevation prompt is a password dialog without a remember
+  option. Light and dark goldens cover the chip.
 - M4 safety settings (E19a): the app keeps the safety preferences in
   `settings.json` and applies them to the engine at spawn and on every
   change. Settings > Safety (also in the desktop settings window) holds

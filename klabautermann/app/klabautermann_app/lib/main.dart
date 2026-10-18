@@ -9,6 +9,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'app.dart';
+import 'controllers/admin_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/fleet_controller.dart';
@@ -167,6 +168,9 @@ Future<void> main(List<String> args) async {
   // The host-key and keyboard-interactive prompts the engine raises while
   // it connects, shown one at a time over every route.
   final prompts = PromptController(engine);
+  // Admin mode per server (03 §8.2): the engine runs it and holds the
+  // password; the header's chip asks and shows its state.
+  final admin = AdminController(engine);
   // Pull-only sync (03 §4.3, D14): the sign-in and rounds the user asks
   // for, and the OS keystore the engine's sync reaches through this
   // isolate, which alone can call the keystore plugin (D62).
@@ -222,6 +226,7 @@ Future<void> main(List<String> args) async {
       coverage: coverage,
       announcements: announcements,
       safety: safety,
+      admin: admin,
       sync: sync,
       settingsIssue: settings.issue,
       importStoreIssue: importStoreIssue,

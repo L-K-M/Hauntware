@@ -1841,6 +1841,20 @@ that removes it. The app applies the policy to the engine at spawn and
 before it saves each change, so the engine never enforces less than
 the screen shows.
 
+As built in M4 (E19b), a server whose actions are allowed shows an
+admin mode chip beside the Safety menu (8.2). Tapping it sends
+`SetAdminMode`; the chip then follows the engine's `AdminModeState`:
+"Turning on admin mode" while the engine detects, waits for the
+password or checks it, and "Admin mode until <time>" while it is on,
+tinted with the error container color, with a header notice that
+confirmed actions run as root. Tapping again turns it off, which also
+cancels a start. The header words why it failed or ended (D35), the
+app going to the background on a phone included. Read-only disables
+the chip. The engine's elevation prompt is a password dialog with the
+retry line and no "remember" (v1.x). The chip shows when admin mode
+ends rather than a ticking countdown, since the expiry moves with
+every elevated action.
+
 As built in M2 (K41, D64), step 3 is a notice atop the fleet rows of the
 rail and the phone's list, scrolling with them, that counts the synced
 servers waiting for confirmation (never confirmed on this device, or

@@ -13,6 +13,7 @@ import 'coverage.dart' show ServerCoverageChip;
 import 'fleet_rail.dart' show linkFailureText, linkStatusWord;
 import 'fleet_row_state.dart';
 import 'fleet_rows.dart' show fleetStatusIcon, fleetStatusStrings;
+import 'admin_mode_chip.dart';
 import 'server_safety.dart';
 
 /// The server header of 03 §10.2 and §10.5: the server's name, unless the
@@ -76,6 +77,7 @@ class ServerHeader extends StatelessWidget {
               ),
             ServerLinkState(server: server, fleet: fleet),
             ServerSafetyMenu(serverId: server.id),
+            AdminModeChip(serverId: server.id),
           ],
         ),
         Wrap(
@@ -100,6 +102,7 @@ class ServerHeader extends StatelessWidget {
         for (final message in [
           ?failure,
           ...serverSafetyNotices(context, server.id),
+          ...adminNotices(context, server.id),
           ...limitations,
         ])
           MergeSemantics(
