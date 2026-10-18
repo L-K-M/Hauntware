@@ -10,10 +10,12 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         FsSnapshot,
         HostProfile,
         JobEntry,
+        KillSignal,
         LoadAvg,
         NetRate,
         ProcsSelection,
         SystemdUnit,
+        SystemctlVerb,
         TimersSnapshot,
         UnitsSnapshot,
         EngineMode,
@@ -36,6 +38,8 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
         ImageSummary,
         MaskedValue;
 import 'package:meta/meta.dart';
+// DangerLinter's findings are plain data: a severity and three values.
+import 'package:seance_core/seance_core.dart' show DangerFinding;
 
 import '../docker/docker_ladder.dart'
     show
@@ -43,6 +47,7 @@ import '../docker/docker_ladder.dart'
         DockerRank,
         DockerRootEquivalence,
         DockerRouteLabel;
+import '../operations/plan_types.dart';
 
 /// The isolate protocol version; [Hello] and [EngineReady] compare it so an
 /// app and engine built apart fail loudly instead of silently desynchronizing
@@ -129,6 +134,12 @@ import '../docker/docker_ladder.dart'
 /// the id and carries a sealed [DockerPayload] of typed, masked values
 /// instead of decoded JSON, and [DockerEndpointState] reports the route,
 /// the runtime as the Docker API names it and the negotiated version.
+///
+/// Operation plans then joined v3 the same way (03 §8.5, §10.1, M4 E09):
+/// [ActionIntent] became sealed, one variant per MVP action, [ActionPreview]
+/// carries the plan's typed steps, host writes, runner and risk facts
+/// instead of display strings, and [ActionRefused] answers a [PlanAction]
+/// or [RunAction] the engine will not carry out.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -396,8 +407,9 @@ final class DockerQuery extends EngineRequest {
   final DockerQuerySpec query;
 }
 
-/// Previews an operation: the engine answers [ActionPlanned] and nothing runs
-/// until [RunAction] carries the matching plan id (03 §8.5, §10.1).
+/// Previews an operation: the engine answers [ActionPlanned], or
+/// [ActionRefused], and nothing runs until [RunAction] carries the
+/// matching plan id (03 §8.5, §10.1).
 final class PlanAction extends EngineRequest {
   const PlanAction(this.intent);
 
@@ -889,6 +901,41 @@ final class ActionFinished extends EngineEvent {
   final String planId;
   final ActionOutcome outcome;
   final String? error;
+}
+
+/// The engine will not plan [intent] or run plan [planId] (03 §8.5): the
+/// one carries the request it answers, so the app matches it to what it
+/// asked. Nothing ran.
+final class ActionRefused extends EngineEvent {
+  const ActionRefused(this.reason, {this.intent, this.planId})
+    : assert((intent == null) != (planId == null), 'one of intent, planId');
+
+  final ActionRefusalReason reason;
+
+  /// The refused [PlanAction]'s intent.
+  final ActionIntent? intent;
+
+  /// The refused [RunAction]'s plan.
+  final String? planId;
+}
+
+/// Why an [ActionRefused] refused; the app words each (D35).
+enum ActionRefusalReason {
+  /// The action's planner has not landed yet (M4 E14, E15).
+  notImplemented,
+
+  /// No previewed plan has the id, or it already ran.
+  unknownPlan,
+
+  /// The plan outlived its five minutes; plan again.
+  expiredPlan,
+
+  /// The server's link was re-established since the preview; plan again.
+  stalePlan,
+
+  /// The confirmation does not meet the plan's tier, or does not name
+  /// the target.
+  confirmationMismatch,
 }
 
 /// The engine needs the user to decide something: trust a host key,
@@ -1822,20 +1869,117 @@ final class ContainerDetailsConfig {
   final Map<String, MaskedValue> labels;
 }
 
-/// What the user wants done (03 §10.1 `intent`). The action vocabulary lands
-/// with the actions milestone, so [action] is the intent's name until the
-/// typed catalog of 03 §7 exists; [parameters] carries its arguments.
+/// What the user wants done (03 §10.1 `intent`, M4 plan M3): one variant
+/// per MVP action. The engine validates every value again before it builds
+/// a plan from it.
 @immutable
-final class ActionIntent {
-  const ActionIntent({
-    required this.serverId,
-    required this.action,
-    this.parameters = const {},
-  });
+sealed class ActionIntent {
+  const ActionIntent(this.serverId);
 
   final String serverId;
-  final String action;
-  final Map<String, Object?> parameters;
+}
+
+/// Signals process [pid] (PRC-02), only while its start time still reads
+/// [startTicks], so a reused PID is never hit (03 §8.5).
+final class KillProcess extends ActionIntent {
+  const KillProcess(
+    super.serverId, {
+    required this.pid,
+    required this.startTicks,
+    this.signal = KillSignal.sigterm,
+  });
+
+  final int pid;
+  final int startTicks;
+  final KillSignal signal;
+}
+
+/// Starts, stops, restarts or reloads a system unit (SVC-03).
+final class UnitAction extends ActionIntent {
+  const UnitAction(super.serverId, {required this.unit, required this.verb});
+
+  final String unit;
+  final SystemctlVerb verb;
+}
+
+/// Runs a system timer's service now (JOB-08).
+final class StartTimer extends ActionIntent {
+  const StartTimer(super.serverId, {required this.timer});
+
+  final String timer;
+}
+
+/// What [ContainerAction] does to a container (CTR-02).
+enum ContainerVerb { start, stop, restart, pause, unpause, kill }
+
+/// Changes a container's state (CTR-02); [signal] only with
+/// [ContainerVerb.kill], whose default is the engine's (`SIGKILL`).
+final class ContainerAction extends ActionIntent {
+  const ContainerAction(
+    super.serverId, {
+    required this.containerId,
+    required this.verb,
+    this.signal,
+  });
+
+  final String containerId;
+  final ContainerVerb verb;
+  final KillSignal? signal;
+}
+
+/// Removes a container (CTR-05), its anonymous volumes with [volumes],
+/// a running one with [force].
+final class RemoveContainer extends ActionIntent {
+  const RemoveContainer(
+    super.serverId, {
+    required this.containerId,
+    this.volumes = false,
+    this.force = false,
+  });
+
+  final String containerId;
+  final bool volumes;
+  final bool force;
+}
+
+/// Removes an image by reference or id (IMG-02); one in use only with
+/// [force].
+final class RemoveImage extends ActionIntent {
+  const RemoveImage(super.serverId, {required this.image, this.force = false});
+
+  final String image;
+  final bool force;
+}
+
+/// What [StackAction] does to a Compose project (STK-03).
+enum StackVerb { start, stop, restart }
+
+/// Starts, stops or restarts a Compose project's containers (STK-03).
+/// [actAnyway] confirms acting on a stack another manager owns (03 §8.7).
+final class StackAction extends ActionIntent {
+  const StackAction(
+    super.serverId, {
+    required this.project,
+    required this.verb,
+    this.actAnyway = false,
+  });
+
+  final String project;
+  final StackVerb verb;
+  final bool actAnyway;
+}
+
+/// Pulls a verified, unmanaged stack's images and recreates it (STK-06),
+/// removing orphan containers with [removeOrphans].
+final class RedeployStack extends ActionIntent {
+  const RedeployStack(
+    super.serverId, {
+    required this.project,
+    this.removeOrphans = false,
+  });
+
+  final String project;
+  final bool removeOrphans;
 }
 
 /// How far 03 §8.6's tiers make the user go before a plan runs.
@@ -1861,23 +2005,50 @@ final class ActionConfirmation {
   final String? phrase;
 }
 
-/// What [PlanAction] previews before anything runs (03 §8.5): human-readable
-/// steps, warnings, and the tier [RunAction] must satisfy.
+/// What [PlanAction] previews before anything runs (03 §8.5, SAF-04):
+/// the exact steps the plan will run, the host writes they cause, who runs
+/// them, the typed risk facts the app words (D35), and the tier
+/// [RunAction] must satisfy. The engine's plan and this preview share the
+/// step list, so what the user confirms is what runs.
 @immutable
 final class ActionPreview {
   const ActionPreview({
-    required this.title,
-    this.steps = const [],
-    this.warnings = const [],
-    this.requiredTier = ConfirmationTier.acknowledge,
-    this.protectedTarget = false,
+    required this.intent,
+    required this.targetName,
+    required this.steps,
+    required this.requiredLevel,
+    required this.runner,
+    required this.requiredTier,
+    this.hostWrites = const [],
+    this.detached = false,
+    this.danger = const [],
+    this.impact,
+    this.ownership,
+    this.protected,
   });
 
-  final String title;
-  final List<String> steps;
-  final List<String> warnings;
+  final ActionIntent intent;
+
+  /// What a typed confirmation repeats.
+  final String targetName;
+
+  final List<PlanStep> steps;
+  final RequiredLevel requiredLevel;
+  final RunnerFacts runner;
   final ConfirmationTier requiredTier;
-  final bool protectedTarget;
+  final List<HostWriteRow> hostWrites;
+
+  /// The steps run as a detached operation (03 §7.17).
+  final bool detached;
+
+  /// What DangerLinter found in the shell steps.
+  final List<DangerFinding> danger;
+
+  final PlanImpact? impact;
+  final PlanOwnership? ownership;
+
+  /// Why the target is protected, or null when it is not.
+  final ProtectedReason? protected;
 }
 
 /// A running plan's end state (03 §10.1).

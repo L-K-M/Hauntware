@@ -104,8 +104,37 @@ void main() {
           queryId: 'q-1',
           query: DockerContainersQuery(),
         ),
+        const PlanAction(KillProcess('srv-1', pid: 42, startTicks: 9001)),
         const PlanAction(
-          ActionIntent(serverId: 'srv-1', action: 'container.restart'),
+          UnitAction(
+            'srv-1',
+            unit: 'nginx.service',
+            verb: SystemctlVerb.restart,
+          ),
+        ),
+        const PlanAction(StartTimer('srv-1', timer: 'backup.timer')),
+        const PlanAction(
+          ContainerAction(
+            'srv-1',
+            containerId: 'abc123',
+            verb: ContainerVerb.kill,
+            signal: KillSignal.sighup,
+          ),
+        ),
+        const PlanAction(
+          RemoveContainer('srv-1', containerId: 'abc123', volumes: true),
+        ),
+        const PlanAction(RemoveImage('srv-1', image: 'busybox:1', force: true)),
+        const PlanAction(
+          StackAction(
+            'srv-1',
+            project: 'web',
+            verb: StackVerb.restart,
+            actAnyway: true,
+          ),
+        ),
+        const PlanAction(
+          RedeployStack('srv-1', project: 'web', removeOrphans: true),
         ),
         const RunAction(
           'plan-1',
@@ -191,7 +220,49 @@ void main() {
           phase: DockerEndpointPhase.waiting,
         ),
         const DockerEvent('srv-1', {'status': 'start'}),
-        const ActionPlanned('plan-1', ActionPreview(title: 'restart')),
+        ActionPlanned(
+          'plan-1',
+          ActionPreview(
+            intent: const ContainerAction(
+              'srv-1',
+              containerId: 'abc123',
+              verb: ContainerVerb.restart,
+            ),
+            targetName: 'web-1',
+            steps: [
+              ShellStep(['systemctl', 'restart', 'nginx.service']),
+              ApiStep(
+                method: 'POST',
+                path: '/v1.44/containers/abc123/restart',
+                query: {'t': '10'},
+              ),
+            ],
+            requiredLevel: RequiredLevel.admin,
+            runner: const RunnerFacts(
+              identity: 'root',
+              engine: 'docker',
+              credentials: RunnerCredentials.adminPassword,
+            ),
+            requiredTier: ConfirmationTier.typedPhrase,
+            hostWrites: const [HostWriteRow.engineState],
+            danger: const [
+              DangerFinding(
+                severity: DangerSeverity.warning,
+                pattern: 'systemctl restart',
+                explanation: 'restarts a service',
+                line: 1,
+              ),
+            ],
+            impact: const PlanImpact(ImpactKind.stopsContainers, count: 3),
+            ownership: const PlanOwnership('coolify'),
+            protected: ProtectedReason.userMarked,
+          ),
+        ),
+        const ActionRefused(
+          ActionRefusalReason.notImplemented,
+          intent: StartTimer('srv-1', timer: 'backup.timer'),
+        ),
+        const ActionRefused(ActionRefusalReason.stalePlan, planId: 'plan-1'),
         const ActionProgress(planId: 'plan-1', stepIndex: 1, stepCount: 3),
         const ActionFinished(
           planId: 'plan-1',

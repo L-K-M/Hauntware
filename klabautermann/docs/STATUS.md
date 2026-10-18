@@ -1326,6 +1326,13 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 operation model (E09): `klabautermann_core` builds immutable
+  operation plans, whose preview shares the steps the runner will take
+  (03 §8.5). It also computes 8.6's confirmation tiers and holds
+  previewed plans for 5 minutes, refusing stale ones. `ActionIntent` is
+  sealed, one variant per MVP action, and `ActionPreview` carries typed
+  steps and risk facts. Until the planners land (E14, E15), the engine
+  refuses every plan with `ActionRefused`.
 - M4 command builders (E08): `klabautermann_host` builds the guarded
   kill (PRC-02), which signals only when the PID's start ticks still
   match and exits 4 for a reused PID. It also builds `timerStart`

@@ -4001,6 +4001,40 @@ OperationPlan {
 
 - The preview (SAF-04) renders `steps` and `hostWrites`; execution runs the
   same `steps`. No second code path builds commands.
+- **As built (M4 E09).** `KC/lib/src/operations/` holds the model.
+  - `OperationPlan` is immutable, and its `preview` hands `ActionPlanned`
+    the same step, host-write and finding lists, never copies.
+  - Steps are `ShellStep` (an argv quoted under the C locale into its
+    exact command line, `elevated` through 8.3) and `ApiStep` (method,
+    versioned path and query). `HostWriteRow` names 8.11's MVP rows.
+  - `DangerLinter` reads each shell step's argv words: the exact line
+    quotes every word behind its locale wrapper, which the linter's
+    patterns cannot see through.
+  - `confirmationTier` is 8.6's table as a pure function, raised to typed
+    for a protected target, an owned one (8.7's act-anyway) or a
+    fleet-wide action.
+  - `PlanRegistry` holds a previewed plan for 5 minutes [E] with the
+    server's link generation. A plan runs once; an expired or stale one
+    is refused.
+  - `ActionIntent` is sealed, one variant per MVP action:
+    - `KillProcess` (pid, start ticks, signal);
+    - `UnitAction`;
+    - `StartTimer`;
+    - `ContainerAction`;
+    - `RemoveContainer`;
+    - `RemoveImage`;
+    - `StackAction` (act anyway);
+    - `RedeployStack` (remove orphans).
+  - `ActionPreview` carries the typed facts the app words (D35): steps,
+    host writes, required level, runner (identity, Docker route,
+    credentials), danger findings, impact, ownership, protection reason
+    and tier.
+  - Until the planners land (E14 host, E15 Docker), the engine answers
+    `PlanAction` with `ActionRefused(notImplemented)` and `RunAction`
+    with `unknownPlan`.
+  - The admin-mode, audit, crontab and detached-operation messages of
+    M4 join v3 with the PRs that implement them (E11, E12, E14, E17),
+    rather than all at once here.
 - Re-validation immediately before execution: the unit still exists, the
   container ID is unchanged, the PID start time matches, the file hash
   matches (compare-and-swap for edits), the stack's config hash still
@@ -4704,7 +4738,7 @@ shows there.
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
 | `DockerQuery(serverId, queryId, query)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason)`, `DockerEvent` (opaque until the event lists) |
-| `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(preview)`, `ActionProgress`, `ActionFinished` |
+| `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(planId, preview)`, `ActionProgress`, `ActionFinished`, `ActionRefused(reason, intent or planId)` |
 | `AnswerPrompt(promptId, answer)` (trust, responses or cancel, secret) | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
 | `SetAppActivity(activity)` (foreground or background; D34, D45) | no event: it changes what runs |
 | none: the engine's probe sweeps (5.12) | `Reachability(serverId, status)` (FL-04) |

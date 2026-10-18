@@ -87,15 +87,40 @@ void main() {
       final client = await spawnEngine();
       final (:events, fleet: _) = await started(client);
 
-      client
-        ..send(const PlanAction(ActionIntent(serverId: 'srv-1', action: 'x')))
-        ..send(const OpenTerminal(serverId: 'srv-1'));
+      client.send(const OpenTerminal(serverId: 'srv-1'));
 
-      final names = [
-        for (var i = 0; i < 2; i++)
-          ((await next(events)) as RequestRejected).requestName,
-      ];
-      expect(names, ['PlanAction', 'OpenTerminal']);
+      expect(
+        ((await next(events)) as RequestRejected).requestName,
+        'OpenTerminal',
+      );
+    });
+
+    test('plans are refused until their planners land, and no plan runs '
+        '(03 §8.5)', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+      const intent = UnitAction(
+        'srv-1',
+        unit: 'nginx.service',
+        verb: SystemctlVerb.restart,
+      );
+
+      client
+        ..send(const PlanAction(intent))
+        ..send(
+          const RunAction(
+            'plan-1',
+            ActionConfirmation(tier: ConfirmationTier.acknowledge),
+          ),
+        );
+
+      final planned = (await next(events)) as ActionRefused;
+      expect(planned.reason, ActionRefusalReason.notImplemented);
+      expect(planned.intent, isA<UnitAction>());
+      expect((planned.intent! as UnitAction).unit, 'nginx.service');
+      final ran = (await next(events)) as ActionRefused;
+      expect(ran.reason, ActionRefusalReason.unknownPlan);
+      expect(ran.planId, 'plan-1');
     });
 
     test('links stay off unless spawn turns them on', () async {

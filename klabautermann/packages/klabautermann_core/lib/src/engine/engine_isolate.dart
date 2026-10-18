@@ -114,8 +114,10 @@ final class EngineStart {
 /// [ConnectRejected], [SetMonitorSet] samples its eligible servers'
 /// `overview` over links dialed unattended (FL-21, 03 §4.3 step 4),
 /// [AnswerKeystore] completes the keystore call it names ahead of the
-/// queue, [Shutdown] ends every log stream and exits, and every other
-/// 03 §10.1 row gets [RequestRejected] until its milestone lands.
+/// queue, a [PlanAction] gets [ActionRefused] until its planner lands and
+/// a [RunAction] because no plan is held yet (03 §8.5), [Shutdown] ends
+/// every log stream and exits, and every other 03 §10.1 row gets
+/// [RequestRejected] until its milestone lands.
 ///
 /// With probes on, the fleet's confirmed endpoints are probed once the
 /// app has the fleet ([Hello]'s answer), and each answer goes out as a
@@ -678,6 +680,16 @@ void engineMain(
         runSync(SyncOperation.enroll, () => sync.enroll(message));
       case RunSyncRound():
         runSync(SyncOperation.round, sync.runRound);
+      case PlanAction(:final intent):
+        // The planners land with E14 (host) and E15 (Docker).
+        uiPort.send(
+          ActionRefused(ActionRefusalReason.notImplemented, intent: intent),
+        );
+      case RunAction(:final planId):
+        // Nothing is planned yet, so no plan is held under any id.
+        uiPort.send(
+          ActionRefused(ActionRefusalReason.unknownPlan, planId: planId),
+        );
       case Shutdown():
         // Each stream's end goes out before the isolate does, and its
         // process goes with the isolate.
