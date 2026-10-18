@@ -76,7 +76,10 @@ class ServerHeader extends StatelessWidget {
                 ),
               ),
             ServerLinkState(server: server, fleet: fleet),
-            ServerSafetyMenu(serverId: server.id),
+            ServerSafetyMenu(
+              serverId: server.id,
+              serverName: server.displayName,
+            ),
             AdminModeChip(serverId: server.id),
           ],
         ),

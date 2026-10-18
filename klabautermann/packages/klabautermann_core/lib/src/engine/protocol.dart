@@ -1191,6 +1191,24 @@ final class AuditRecord {
   final int? failedStep;
   final int? exitCode;
   final int? httpStatus;
+
+  /// The record as the Activity page's export carries it (SAF-11): every
+  /// field, its steps redacted as stored, times in UTC.
+  Map<String, Object?> toJson() => {
+    'serverId': serverId,
+    'action': action,
+    'target': targetName,
+    'steps': steps,
+    'tier': tier.name,
+    'outcome': outcome.name,
+    'startedAt': startedAt.toUtc().toIso8601String(),
+    'endedAt': endedAt.toUtc().toIso8601String(),
+    'deviceId': ?deviceId,
+    'failure': ?failure?.name,
+    'failedStep': ?failedStep,
+    'exitCode': ?exitCode,
+    'httpStatus': ?httpStatus,
+  };
 }
 
 /// Where admin mode stands on [serverId] (03 §8.2, M4 plan M5). The app

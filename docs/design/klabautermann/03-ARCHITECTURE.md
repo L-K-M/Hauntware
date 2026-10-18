@@ -4379,6 +4379,16 @@ CI.
   - The log stores redacted steps only, so E24's export has nothing
     secret to include.
 
+As built in M4 (E24), the server header's Safety menu opens Activity: a
+sortable table of each record's time, target, action, confirmation and
+result, newest first, whose rows open the run's redacted steps and how
+it ended; Show older reads the next page. The table has no device
+column, since the log is this device's own (D28). Copy puts the records
+on the clipboard as JSON lines, as stored; the include-secrets toggle
+of SAF-07 is not offered, because the log holds no secret to include,
+and saving to a file waits for a file plugin. When the engine keeps the
+log in memory, the page says it lasts only for this run.
+
 ### 8.11 Host write inventory (D27)
 
 Anything not in this table is a defect. The M4 integration test diffs the

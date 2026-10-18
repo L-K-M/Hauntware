@@ -1326,6 +1326,10 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 activity log (E24): the server header's Safety menu opens
+  Activity, the device audit log as a sortable table with each run's
+  redacted steps in its details and older pages on request. Copy puts
+  the records on the clipboard as JSON lines; they never hold a secret.
 - M4 other users' crontabs in the app (E21c): in admin mode the Jobs
   tab's source switch reads every other user's crontab and lists the
   lines read-only, masked, saying which users could not be read.

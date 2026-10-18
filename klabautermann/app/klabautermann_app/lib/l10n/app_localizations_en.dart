@@ -3248,4 +3248,126 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get jobsOtherUsersMasked =>
       'Commands are masked where they look like they hold secrets.';
+
+  @override
+  String get activityMenu => 'Activity';
+
+  @override
+  String activityTitle(String server) {
+    return 'Activity on $server';
+  }
+
+  @override
+  String get activityDetail =>
+      'Every action this device ran on the server, newest first. Records are kept for 90 days and never synced. Commands are stored with secrets removed.';
+
+  @override
+  String get activityInMemory =>
+      'Another Klabautermann window has the settings folder, so this log lasts only until this window closes.';
+
+  @override
+  String get activityColumnTime => 'Time';
+
+  @override
+  String get activityColumnTarget => 'Target';
+
+  @override
+  String get activityColumnAction => 'Action';
+
+  @override
+  String get activityColumnTier => 'Confirmation';
+
+  @override
+  String get activityColumnResult => 'Result';
+
+  @override
+  String activityAction(String action) {
+    String _temp0 = intl.Intl.selectLogic(action, {
+      'KillProcess': 'Signal',
+      'UnitAction': 'Unit action',
+      'StartTimer': 'Run timer now',
+      'ContainerAction': 'Container action',
+      'RemoveContainer': 'Remove container',
+      'RemoveImage': 'Remove image',
+      'StackAction': 'Stack action',
+      'RedeployStack': 'Redeploy stack',
+      'other': 'Action',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String activityTier(String tier) {
+    String _temp0 = intl.Intl.selectLogic(tier, {
+      'none': 'None',
+      'acknowledge': 'Confirmed',
+      'typedPhrase': 'Name typed',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String activityResult(String outcome) {
+    String _temp0 = intl.Intl.selectLogic(outcome, {
+      'succeeded': 'Done',
+      'failed': 'Failed',
+      'cancelled': 'Cancelled',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String activityFailure(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'No connection to the server.',
+      'revalidation': 'The target changed since the preview.',
+      'elevationRefused': 'Admin mode refused the step.',
+      'stepFailed': 'A step failed.',
+      'transport': 'The connection failed during the run.',
+      'unsupportedStep': 'This version could not run a step.',
+      'adminRequired': 'It needed admin mode.',
+      'other': 'It failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String activityExitCode(int code) {
+    return 'Exit status $code';
+  }
+
+  @override
+  String activityHttpStatus(int status) {
+    return 'Engine answered HTTP $status';
+  }
+
+  @override
+  String get activitySteps => 'What ran';
+
+  @override
+  String get activityReading => 'Reading the log.';
+
+  @override
+  String get activityEmpty =>
+      'Nothing has run on this server from this device.';
+
+  @override
+  String get activityOlder => 'Show older';
+
+  @override
+  String get activityCopy => 'Copy the log';
+
+  @override
+  String get activityCopied =>
+      'The log is on the clipboard, with secrets removed.';
+
+  @override
+  String get activityNotCopied => 'Not copied. Try again.';
+
+  @override
+  String activityTime(String date, String time) {
+    return '$date $time';
+  }
 }

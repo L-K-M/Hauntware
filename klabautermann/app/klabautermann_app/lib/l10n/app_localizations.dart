@@ -4287,6 +4287,144 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Commands are masked where they look like they hold secrets.'**
   String get jobsOtherUsersMasked;
+
+  /// Item in the server header's Safety menu that opens the server's activity log (SAF-11).
+  ///
+  /// In en, this message translates to:
+  /// **'Activity'**
+  String get activityMenu;
+
+  /// Title of the activity log page; server is the server's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity on {server}'**
+  String activityTitle(String server);
+
+  /// Explanation at the top of the activity log page (03 §8.10).
+  ///
+  /// In en, this message translates to:
+  /// **'Every action this device ran on the server, newest first. Records are kept for 90 days and never synced. Commands are stored with secrets removed.'**
+  String get activityDetail;
+
+  /// Notice on the activity log page when the audit log is kept in memory only.
+  ///
+  /// In en, this message translates to:
+  /// **'Another Klabautermann window has the settings folder, so this log lasts only until this window closes.'**
+  String get activityInMemory;
+
+  /// Column of the activity log: when the run ended.
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get activityColumnTime;
+
+  /// Column of the activity log: the unit, process, container or other target.
+  ///
+  /// In en, this message translates to:
+  /// **'Target'**
+  String get activityColumnTarget;
+
+  /// Column of the activity log: what was done.
+  ///
+  /// In en, this message translates to:
+  /// **'Action'**
+  String get activityColumnAction;
+
+  /// Column of the activity log: how the run was confirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmation'**
+  String get activityColumnTier;
+
+  /// Column of the activity log: how the run ended.
+  ///
+  /// In en, this message translates to:
+  /// **'Result'**
+  String get activityColumnResult;
+
+  /// An activity log row's action; action is the engine's intent type name.
+  ///
+  /// In en, this message translates to:
+  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} StackAction{Stack action} RedeployStack{Redeploy stack} other{Action}}'**
+  String activityAction(String action);
+
+  /// An activity log row's confirmation; tier is the engine's ConfirmationTier name.
+  ///
+  /// In en, this message translates to:
+  /// **'{tier, select, none{None} acknowledge{Confirmed} typedPhrase{Name typed} other{}}'**
+  String activityTier(String tier);
+
+  /// An activity log row's result; outcome is the engine's ActionOutcome name.
+  ///
+  /// In en, this message translates to:
+  /// **'{outcome, select, succeeded{Done} failed{Failed} cancelled{Cancelled} other{}}'**
+  String activityResult(String outcome);
+
+  /// Why a run failed, in the activity record's details; failure is the engine's ActionFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{No connection to the server.} revalidation{The target changed since the preview.} elevationRefused{Admin mode refused the step.} stepFailed{A step failed.} transport{The connection failed during the run.} unsupportedStep{This version could not run a step.} adminRequired{It needed admin mode.} other{It failed.}}'**
+  String activityFailure(String failure);
+
+  /// A failed step's exit status in an activity record's details.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit status {code}'**
+  String activityExitCode(int code);
+
+  /// A failed Docker step's HTTP status in an activity record's details.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine answered HTTP {status}'**
+  String activityHttpStatus(int status);
+
+  /// Heading above an activity record's steps, secrets removed.
+  ///
+  /// In en, this message translates to:
+  /// **'What ran'**
+  String get activitySteps;
+
+  /// Shown in the activity table while the log is read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the log.'**
+  String get activityReading;
+
+  /// Shown when the activity log is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing has run on this server from this device.'**
+  String get activityEmpty;
+
+  /// Button that reads the next page of older activity records.
+  ///
+  /// In en, this message translates to:
+  /// **'Show older'**
+  String get activityOlder;
+
+  /// Tooltip and screen reader label of the button that copies the activity log as JSON, secrets already removed.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy the log'**
+  String get activityCopy;
+
+  /// Toast after the activity log was copied.
+  ///
+  /// In en, this message translates to:
+  /// **'The log is on the clipboard, with secrets removed.'**
+  String get activityCopied;
+
+  /// Toast when the clipboard refused the activity log.
+  ///
+  /// In en, this message translates to:
+  /// **'Not copied. Try again.'**
+  String get activityNotCopied;
+
+  /// An activity log row's time: its local date, then its time of day, both formatted by the locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{date} {time}'**
+  String activityTime(String date, String time);
 }
 
 class _AppLocalizationsDelegate

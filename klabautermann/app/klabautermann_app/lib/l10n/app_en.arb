@@ -3965,5 +3965,140 @@
   "jobsOtherUsersMasked": "Commands are masked where they look like they hold secrets.",
   "@jobsOtherUsersMasked": {
     "description": "Notice under the other users' crontabs (03 §8.9)."
+  },
+  "activityMenu": "Activity",
+  "@activityMenu": {
+    "description": "Item in the server header's Safety menu that opens the server's activity log (SAF-11)."
+  },
+  "activityTitle": "Activity on {server}",
+  "@activityTitle": {
+    "description": "Title of the activity log page; server is the server's name.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "activityDetail": "Every action this device ran on the server, newest first. Records are kept for 90 days and never synced. Commands are stored with secrets removed.",
+  "@activityDetail": {
+    "description": "Explanation at the top of the activity log page (03 §8.10)."
+  },
+  "activityInMemory": "Another Klabautermann window has the settings folder, so this log lasts only until this window closes.",
+  "@activityInMemory": {
+    "description": "Notice on the activity log page when the audit log is kept in memory only."
+  },
+  "activityColumnTime": "Time",
+  "@activityColumnTime": {
+    "description": "Column of the activity log: when the run ended."
+  },
+  "activityColumnTarget": "Target",
+  "@activityColumnTarget": {
+    "description": "Column of the activity log: the unit, process, container or other target."
+  },
+  "activityColumnAction": "Action",
+  "@activityColumnAction": {
+    "description": "Column of the activity log: what was done."
+  },
+  "activityColumnTier": "Confirmation",
+  "@activityColumnTier": {
+    "description": "Column of the activity log: how the run was confirmed."
+  },
+  "activityColumnResult": "Result",
+  "@activityColumnResult": {
+    "description": "Column of the activity log: how the run ended."
+  },
+  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} StackAction{Stack action} RedeployStack{Redeploy stack} other{Action}}",
+  "@activityAction": {
+    "description": "An activity log row's action; action is the engine's intent type name.",
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "activityTier": "{tier, select, none{None} acknowledge{Confirmed} typedPhrase{Name typed} other{}}",
+  "@activityTier": {
+    "description": "An activity log row's confirmation; tier is the engine's ConfirmationTier name.",
+    "placeholders": {
+      "tier": {
+        "type": "String"
+      }
+    }
+  },
+  "activityResult": "{outcome, select, succeeded{Done} failed{Failed} cancelled{Cancelled} other{}}",
+  "@activityResult": {
+    "description": "An activity log row's result; outcome is the engine's ActionOutcome name.",
+    "placeholders": {
+      "outcome": {
+        "type": "String"
+      }
+    }
+  },
+  "activityFailure": "{failure, select, noLink{No connection to the server.} revalidation{The target changed since the preview.} elevationRefused{Admin mode refused the step.} stepFailed{A step failed.} transport{The connection failed during the run.} unsupportedStep{This version could not run a step.} adminRequired{It needed admin mode.} other{It failed.}}",
+  "@activityFailure": {
+    "description": "Why a run failed, in the activity record's details; failure is the engine's ActionFailure name.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "activityExitCode": "Exit status {code}",
+  "@activityExitCode": {
+    "description": "A failed step's exit status in an activity record's details.",
+    "placeholders": {
+      "code": {
+        "type": "int"
+      }
+    }
+  },
+  "activityHttpStatus": "Engine answered HTTP {status}",
+  "@activityHttpStatus": {
+    "description": "A failed Docker step's HTTP status in an activity record's details.",
+    "placeholders": {
+      "status": {
+        "type": "int"
+      }
+    }
+  },
+  "activitySteps": "What ran",
+  "@activitySteps": {
+    "description": "Heading above an activity record's steps, secrets removed."
+  },
+  "activityReading": "Reading the log.",
+  "@activityReading": {
+    "description": "Shown in the activity table while the log is read."
+  },
+  "activityEmpty": "Nothing has run on this server from this device.",
+  "@activityEmpty": {
+    "description": "Shown when the activity log is empty."
+  },
+  "activityOlder": "Show older",
+  "@activityOlder": {
+    "description": "Button that reads the next page of older activity records."
+  },
+  "activityCopy": "Copy the log",
+  "@activityCopy": {
+    "description": "Tooltip and screen reader label of the button that copies the activity log as JSON, secrets already removed."
+  },
+  "activityCopied": "The log is on the clipboard, with secrets removed.",
+  "@activityCopied": {
+    "description": "Toast after the activity log was copied."
+  },
+  "activityNotCopied": "Not copied. Try again.",
+  "@activityNotCopied": {
+    "description": "Toast when the clipboard refused the activity log."
+  },
+  "activityTime": "{date} {time}",
+  "@activityTime": {
+    "description": "An activity log row's time: its local date, then its time of day, both formatted by the locale.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
   }
 }

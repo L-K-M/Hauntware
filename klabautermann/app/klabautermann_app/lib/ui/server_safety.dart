@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../controllers/safety_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'actions/action_entry.dart' show OperationsScope;
+import 'actions/activity_page.dart';
 import 'settings_page.dart' show changeSafetyWithFeedback;
 
 /// The safety preferences for every route (M4 plan M4): the server
@@ -48,9 +50,12 @@ List<String> serverSafetyNotices(BuildContext context, String serverId) {
 /// (management, SAF-01) and Read-only switch (SAF-06). Nothing without a
 /// [SafetyScope].
 class ServerSafetyMenu extends StatelessWidget {
-  const ServerSafetyMenu({super.key, required this.serverId});
+  const ServerSafetyMenu({super.key, required this.serverId, this.serverName});
 
   final String serverId;
+
+  /// The name the Activity page's title shows; the id without it.
+  final String? serverName;
 
   @override
   Widget build(BuildContext context) {
@@ -85,6 +90,22 @@ class ServerSafetyMenu extends StatelessWidget {
           onChanged: (on) => set(readOnly: on ?? false),
           child: Text(l10n.serverReadOnly),
         ),
+        if (OperationsScope.maybeOf(context) case final operations?)
+          MenuItemButton(
+            leadingIcon: const Icon(Icons.history),
+            onPressed: () => unawaited(
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => ActivityPage(
+                    operations: operations,
+                    serverId: serverId,
+                    serverName: serverName ?? serverId,
+                  ),
+                ),
+              ),
+            ),
+            child: Text(l10n.activityMenu),
+          ),
       ],
       builder: (context, controller, _) => IconButton(
         icon: const Icon(Icons.shield_outlined),

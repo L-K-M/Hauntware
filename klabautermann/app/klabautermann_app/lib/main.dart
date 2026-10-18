@@ -174,7 +174,10 @@ Future<void> main(List<String> args) async {
   final admin = AdminController(engine);
   // Action previews and runs (03 §8.5): the engine plans and runs them;
   // the app shows the preview and the results.
-  final operations = OperationsController(engine);
+  final operations = OperationsController(
+    engine,
+    auditInMemory: engine.ready.auditInMemory,
+  );
   // Pull-only sync (03 §4.3, D14): the sign-in and rounds the user asks
   // for, and the OS keystore the engine's sync reaches through this
   // isolate, which alone can call the keystore plugin (D62).

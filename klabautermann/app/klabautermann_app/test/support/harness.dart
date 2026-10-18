@@ -8,6 +8,7 @@ import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/controllers/operations_controller.dart';
 import 'package:klabautermann_app/controllers/prompt_controller.dart';
 import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/controllers/sync_controller.dart';
@@ -36,6 +37,7 @@ final class AppHarness {
     required this.announcements,
     required this.sync,
     this.admin,
+    this.operations,
   });
 
   final FakeEngineClient engine;
@@ -47,6 +49,7 @@ final class AppHarness {
   final AnnouncementController announcements;
   final SyncController sync;
   final AdminController? admin;
+  final OperationsController? operations;
 
   void dispose() {
     fleet.dispose();
@@ -57,6 +60,7 @@ final class AppHarness {
     announcements.dispose();
     sync.dispose();
     admin?.dispose();
+    operations?.dispose();
   }
 }
 
@@ -79,7 +83,7 @@ final class AppHarness {
 /// [announcements] replaces an in-memory A11Y-15 switch that is on.
 /// [safety], which the caller disposes, adds the safety preferences; none
 /// leaves the Safety menu and notices out. [admin] adds the admin mode
-/// controller over the fake engine.
+/// controller over the fake engine, and [operations] the operations one.
 /// [linkGrace] defaults to zero, which disconnects a server as its last
 /// view closes: the tree unmounts at the end of every test, and the test
 /// binding fails a test that leaves a grace timer pending.
@@ -93,6 +97,7 @@ Future<AppHarness> pumpApp(
   AnnouncementController? announcements,
   SafetyController? safety,
   bool admin = false,
+  bool operations = false,
   DeviceSettingsIssue? settingsIssue,
   ImportStoreIssue? importStoreIssue,
   InstanceLockUnavailable? instanceLockIssue,
@@ -117,6 +122,7 @@ Future<AppHarness> pumpApp(
     announcements: announcements ?? AnnouncementController(),
     sync: SyncController(engine, account: syncAccount),
     admin: admin ? AdminController(engine) : null,
+    operations: operations ? OperationsController(engine) : null,
   );
   addTearDown(() async {
     harness.dispose();
@@ -133,6 +139,7 @@ Future<AppHarness> pumpApp(
       announcements: harness.announcements,
       safety: safety,
       admin: harness.admin,
+      operations: harness.operations,
       sync: harness.sync,
       settingsIssue: settingsIssue,
       importStoreIssue: importStoreIssue,

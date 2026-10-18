@@ -60,11 +60,21 @@ final class RunRefused extends RunState {
 /// [plan] while one is pending throws [StateError]. Runs are matched by
 /// plan id. Like the other per-run controllers it lasts one engine run.
 final class OperationsController extends ChangeNotifier {
-  OperationsController(this._engine) {
+  /// [auditInMemory] is what the engine's handshake said of its audit
+  /// log: kept in memory for this run, without the support directory to
+  /// itself (03 §8.10).
+  OperationsController(this._engine, {this.auditInMemory = false}) {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
   }
 
   final EngineClient _engine;
+
+  /// Whether the audit log lives in memory for this run only.
+  final bool auditInMemory;
+
+  /// Audit reads waiting on the engine, oldest first, by server: it
+  /// answers each [AuditQuery] in order and names only the server.
+  final Map<String, List<Completer<AuditRecords>>> _auditReads = {};
   late final StreamSubscription<EngineEvent> _events;
   Completer<PlanAnswer>? _pending;
   final Map<String, RunState> _runs = {};
@@ -100,6 +110,16 @@ final class OperationsController extends ChangeNotifier {
     _runs[planId] = const RunInProgress(0, 0);
     notifyListeners();
     _send(RunAction(planId, confirmation));
+  }
+
+  /// [serverId]'s audit records that ended before [before], newest first
+  /// (SAF-11). A stopped engine answers none.
+  Future<AuditRecords> readAudit(String serverId, {DateTime? before}) {
+    if (_engineStopped) return Future.value(AuditRecords(serverId, const []));
+    final read = Completer<AuditRecords>();
+    (_auditReads[serverId] ??= []).add(read);
+    _send(AuditQuery(serverId, before: before));
+    return read.future;
   }
 
   /// What a request the engine cannot take gets: no engine means no link.
@@ -140,6 +160,10 @@ final class OperationsController extends ChangeNotifier {
         notifyListeners();
       case ActionFinished(:final planId):
         _end(planId, RunFinished(event));
+      case AuditRecords(:final serverId):
+        final waiting = _auditReads[serverId];
+        if (waiting == null || waiting.isEmpty) return;
+        waiting.removeAt(0).complete(event);
       default:
     }
   }
@@ -148,6 +172,12 @@ final class OperationsController extends ChangeNotifier {
     if (_engineStopped) return;
     _engineStopped = true;
     _answer(_noEngine);
+    for (final MapEntry(key: serverId, value: waiting) in _auditReads.entries) {
+      for (final read in waiting) {
+        read.complete(AuditRecords(serverId, const []));
+      }
+    }
+    _auditReads.clear();
     notifyListeners();
   }
 
