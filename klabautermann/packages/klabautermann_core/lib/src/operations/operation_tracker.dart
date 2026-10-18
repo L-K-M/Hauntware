@@ -191,6 +191,17 @@ final class OperationTracker {
     _report(serverId);
   }
 
+  /// The output file of [serverId]'s operation [id] in the directory the
+  /// latest `ops` read listed it in, or null when that read did not list
+  /// it.
+  String? logPath(String serverId, String id) {
+    final server = _servers[serverId];
+    final operation = server?.operations[id];
+    if (operation == null) return null;
+    final dir = server!.listing?.directories[operation.directory]?.path;
+    return dir == null ? null : '$dir/$id.log';
+  }
+
   /// Follows the end of [serverId]'s link: no re-read is due until the
   /// next one is ready.
   void linkLost(String serverId) {

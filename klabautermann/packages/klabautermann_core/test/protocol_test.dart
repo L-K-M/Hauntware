@@ -968,6 +968,20 @@ void main() {
         ),
       );
       expect((file.source as FileLogSource).path, '/var/log/nginx/access.log');
+      expect((file.source as FileLogSource).redacted, isFalse);
+
+      final operation = await spec(
+        LogStreamSpec(
+          serverId: 'srv-1',
+          source: const OperationLogSource('0123456789abcdef'),
+          window: 500,
+          follow: true,
+        ),
+      );
+      expect(
+        (operation.source as OperationLogSource).operationId,
+        '0123456789abcdef',
+      );
 
       final close = await roundTrip(const CloseStream('logs-1')) as CloseStream;
       expect(close.streamId, 'logs-1');

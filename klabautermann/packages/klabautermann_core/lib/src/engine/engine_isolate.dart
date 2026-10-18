@@ -687,12 +687,30 @@ void engineMain(
       case SetCadenceProfile(:final profile):
         sampling.profile = profile;
         scheduler?.profileChanged();
-      case OpenLogStream():
-        final reason = switch (logs) {
-          null => 'links are off in this engine',
-          final logs => logs.open(message),
+      case OpenLogStream(:final streamId, :final spec):
+        final router = logs;
+        if (router == null) {
+          reject(message, 'links are off in this engine');
+          return;
+        }
+        // An operation's output is its log file, read redacted (03
+        // §7.17); one the engine does not list reads no file.
+        final open = switch (spec.source) {
+          OperationLogSource(:final operationId) => OpenLogStream(
+            streamId: streamId,
+            spec: LogStreamSpec(
+              serverId: spec.serverId,
+              source: FileLogSource(
+                operations?.logPath(spec.serverId, operationId) ?? '',
+                redacted: true,
+              ),
+              window: spec.window,
+              follow: spec.follow,
+            ),
+          ),
+          _ => message,
         };
-        if (reason != null) reject(message, reason);
+        if (router.open(open) case final reason?) reject(message, reason);
       case CloseStream(:final streamId):
         logs?.closeStream(streamId);
       case DockerQuery():

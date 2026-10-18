@@ -77,6 +77,8 @@ Future<void> _until(bool Function() condition) async {
   }
 }
 
+/// A token the secret redactor knows by its shape.
+const _token = 'ghp_A1b2C3d4E5f6G7h8I9j0K1';
 void main() {
   late ScriptedLink link;
   late List<EngineEvent> events;
@@ -447,6 +449,23 @@ void main() {
       expect(link.commands.single, _command('tail -n 3 -- /var/log/syslog'));
       expect(texts('f'), ['three', 'two', 'one']);
     });
+
+    test(
+      "a redacted file's lines pass the secret redactor (03 §7.17)",
+      () async {
+        const spec = FileLogSource(
+          '/home/u/x/klabautermann/ops/a.log',
+          redacted: true,
+        );
+        expect(
+          await read('f', _spec(spec), stdout: 'pull\nlogin $_token ok\n'),
+          _oldest,
+        );
+        expect(texts('f').first, isNot(contains(_token)));
+        expect(texts('f').first, startsWith('login '));
+        expect(texts('f').last, 'pull');
+      },
+    );
 
     test('a short file reaches its oldest line, an open one too', () async {
       expect(await read('f', _spec(syslog), stdout: 'one\ntwo'), _oldest);

@@ -3847,6 +3847,16 @@ each server's operations. Decisions:
 - [U] A record older than 7 days is pruned even while its operation
   runs; the operation then drops from the list.
 
+As built in M4 (E17c), the app follows an operation's output with an
+`OpenLogStream` whose source is `OperationLogSource(<id>)`. The engine
+reads it as a `FileLogSource` of `<id>.log` in the directory the latest
+`ops` read listed the operation in, marked `redacted`, so each line passes
+the secret redactor before it crosses. Root's files are owned by the
+login user, so no elevation is needed. The follow is the file follow of
+7.6 (`tail -n <window> -F` on a follower slot) rather than `tail -n +1`:
+the window bounds what the first batch holds, as for any file. An
+operation the engine does not list ends the stream as `invalid`.
+
 ### 7.18 Backups (BAK)
 
 - **v1.x.** One-shot database dumps from a container using its own

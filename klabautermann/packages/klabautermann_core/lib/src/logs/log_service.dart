@@ -27,7 +27,7 @@ import 'dart:typed_data';
 
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:seance_core/seance_core.dart'
-    show RemoteExit, RemoteProcess, SshLink;
+    show RemoteExit, RemoteProcess, SecretRedactor, SshLink;
 
 import '../engine/protocol.dart';
 import 'journal_record.dart';
@@ -200,6 +200,9 @@ final class LogService {
         cursor == null
             ? HostCommands.tail(path, lines: spec.window)
             : throw const HostCommandError('a file has no cursor'),
+      OperationLogSource() => throw const HostCommandError(
+        'the engine reads an operation log as its file',
+      ),
     };
   }
 
@@ -215,8 +218,11 @@ final class LogService {
       case JournalLogSource(:final since):
         final after = spec.afterCursor == null ? null : since;
         _deliver(read, out, _journalWindow(out, spec.window, since: after));
-      case FileLogSource():
-        _deliver(read, out, _fileWindow(out, spec.window));
+      case FileLogSource(:final redacted):
+        _deliver(read, out, _fileWindow(out, spec.window, redacted: redacted));
+      case OperationLogSource():
+        // Refused on opening: its command throws.
+        break;
       case KernelLogSource():
         final journal = _journalWindow(out, spec.window);
         // Without an exit code journalctl did not run to its end: a cut,
@@ -409,6 +415,13 @@ typedef _Window = ({
 
 /// journalctl's line for an empty result, which some versions print in
 /// JSON mode too; never a record.
+/// A file's [line] as a [FileRecord], through the secret redactor when
+/// [redacted]. Shared with `LogFollower`.
+FileRecord fileRecord(String line, {required bool redacted}) =>
+    FileRecord(redacted ? _redactor.redact(line) : line);
+
+final _redactor = SecretRedactor();
+
 const _noEntries = '-- No entries --';
 
 const _newline = 0x0a;
@@ -500,7 +513,7 @@ _Window _dmesgWindow(_Output out, int window) {
 /// line break. A cut kept the newest bytes, so its first line, which
 /// starts before them, goes; when that leaves no line, the newest line
 /// was longer than the cap and counts as dropped.
-_Window _fileWindow(_Output out, int window) {
+_Window _fileWindow(_Output out, int window, {required bool redacted}) {
   final bytes = out.stdout;
   var start = 0;
   if (out.cut) {
@@ -519,8 +532,9 @@ _Window _fileWindow(_Output out, int window) {
   return (
     records: [
       for (final line in newest.reversed)
-        FileRecord(
+        fileRecord(
           line.endsWith('\r') ? line.substring(0, line.length - 1) : line,
+          redacted: redacted,
         ),
     ],
     dropped: out.cut && newest.isEmpty ? 1 : 0,

@@ -205,6 +205,37 @@ void main() {
       expect(refused.reason, 'links are off');
     });
 
+    test('an operation log the engine does not list reads no file '
+        '(03 §7.17)', () async {
+      final client = await IsolateEngineClient.spawn(
+        supportDirectory: support.path,
+        linksEnabled: true,
+      );
+      addTearDown(client.shutdown);
+      final (:events, fleet: _) = await started(client);
+      client.send(const ImportSshConfig('Host web\n  HostName 192.0.2.10\n'));
+      expect(await next(events), isA<CatalogReplaced>());
+      expect(await next(events), isA<SshConfigImported>());
+
+      client.send(
+        OpenLogStream(
+          streamId: 'op-1',
+          spec: LogStreamSpec(
+            serverId: 'ssh-config:web',
+            source: const OperationLogSource('0123456789abcdef'),
+            window: 50,
+            follow: true,
+          ),
+        ),
+      );
+      final state = (await next(events)) as LogStreamState;
+      expect(state.streamId, 'op-1');
+      expect(
+        (state.status as LogStreamEnded).reason,
+        LogStreamEndReason.invalid,
+      );
+    });
+
     test('links stay off unless spawn turns them on', () async {
       Future<String> connectAnswer({bool? linksEnabled}) async {
         final client = linksEnabled == null

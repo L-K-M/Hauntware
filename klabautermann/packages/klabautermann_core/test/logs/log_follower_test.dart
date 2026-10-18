@@ -38,6 +38,8 @@ String _cmd(List<String> argv) =>
 
 const _journal = ['journalctl', '-o', 'json', '--no-pager'];
 
+/// A token the secret redactor knows by its shape.
+const _token = 'ghp_A1b2C3d4E5f6G7h8I9j0K1';
 void main() {
   late ScriptedLink link;
   late FakeClock clock;
@@ -172,6 +174,23 @@ void main() {
       await clock.elapse(const Duration(milliseconds: 1));
       expect(batches(), hasLength(2));
       expect(messages(), [for (var n = 1; n <= 7; n++) 'entry $n']);
+    });
+
+    test("a redacted file's lines pass the secret redactor", () async {
+      follower(
+        _spec(
+          const FileLogSource(
+            '/home/u/x/klabautermann/ops/a.log',
+            redacted: true,
+          ),
+        ),
+      ).run(link);
+      final p = await link.process(0);
+      p.emitText('login $_token ok\n');
+      await clock.elapse(const Duration(milliseconds: 100));
+      final text = (batches().single.records.single as FileRecord).text;
+      expect(text, isNot(contains(_token)));
+      expect(text, startsWith('login '));
     });
 
     test('1,000 lines/s with a 10 s stall: at most 20 batches in any '

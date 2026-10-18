@@ -1784,11 +1784,26 @@ final class KernelLogSource extends LogSource {
 /// and `tail -F`, which follows the file by name across rotation, for a
 /// follow. No archives.
 final class FileLogSource extends LogSource {
-  const FileLogSource(this.path);
+  const FileLogSource(this.path, {this.redacted = false});
 
   /// The absolute path, typed or picked from the common paths; the engine
   /// validates it (03 §8.8) before it quotes it into the command.
   final String path;
+
+  /// Each line passes the secret redactor before it crosses, as a
+  /// detached operation's output does.
+  final bool redacted;
+}
+
+/// A detached operation's output (03 §7.17): the engine reads its
+/// `<id>.log` in the directory the latest `ops` read listed it in, as a
+/// [FileLogSource] whose lines are redacted, so a follow keeps showing
+/// output across the operation's end. An operation the engine does not
+/// list ends the stream as [LogStreamEndReason.invalid].
+final class OperationLogSource extends LogSource {
+  const OperationLogSource(this.operationId);
+
+  final String operationId;
 }
 
 /// A syslog severity as journald and the kernel record it, most urgent

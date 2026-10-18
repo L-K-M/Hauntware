@@ -347,6 +347,20 @@ void main() {
     expect(store.notesOf(_s1), isEmpty);
   });
 
+  test("an operation's log is its file in the listed directory", () async {
+    await tracker.listed(
+      _s1,
+      _section(
+        user: {_done: _record(_done)},
+        root: {_rootDone: _record(_rootDone)},
+      ),
+    );
+    expect(tracker.logPath(_s1, _done), '$_userDir/$_done.log');
+    expect(tracker.logPath(_s1, _rootDone), '$kRootOpsDir/$_rootDone.log');
+    expect(tracker.logPath(_s1, _running), isNull);
+    expect(tracker.logPath('srv-2', _done), isNull);
+  });
+
   test('a collector that failed reports why, with no list', () async {
     await tracker.listed(
       _s1,
