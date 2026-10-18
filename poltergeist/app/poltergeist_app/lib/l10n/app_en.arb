@@ -2399,6 +2399,24 @@
   "@editorTextSizeHint": {
     "description": "Note under the built-in editor's text size slider: the editor's View menu zoom commands set the same size."
   },
+  "editorFontPickerTitle": "Choose a font",
+  "@editorFontPickerTitle": {"description": "Shared monospace font picker title"},
+  "editorFontPickerSearch": "Search fonts",
+  "@editorFontPickerSearch": {"description": "Font search field hint"},
+  "editorFontPickerIncluded": "Included fonts",
+  "@editorFontPickerIncluded": {"description": "Bundled font section heading"},
+  "editorFontPickerInstalled": "Installed fonts",
+  "@editorFontPickerInstalled": {"description": "Installed font section heading"},
+  "editorFontPickerEmpty": "No fonts match your search.",
+  "@editorFontPickerEmpty": {"description": "Empty font search result"},
+  "editorFontPickerUse": "Use font",
+  "@editorFontPickerUse": {"description": "Confirm the previewed font and ligatures"},
+  "editorFontPickerDefault": "default",
+  "@editorFontPickerDefault": {"description": "Default font choice suffix"},
+  "editorFontPickerMonospace": "Monospace only",
+  "@editorFontPickerMonospace": {"description": "Installed font filter label"},
+  "editorFontPickerNoLigatures": "This font has no programming ligatures.",
+  "@editorFontPickerNoLigatures": {"description": "Notice for a font without coding ligatures"},
   "editorFontLabel": "Font",
   "@editorFontLabel": {
     "description": "Label beside the built-in editor's font menu in Settings → Appearance."

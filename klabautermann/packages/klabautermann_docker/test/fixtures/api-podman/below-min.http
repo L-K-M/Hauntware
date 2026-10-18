@@ -1,0 +1,16 @@
+HTTP/1.1 200 OK
+Api-Version: 1.44
+Content-Type: application/json
+Libpod-Api-Version: 5.8.7
+Server: Libpod/5.8.7 (linux)
+X-Reference-Id: 0x16fa71182770
+Date: Sat, 17 Oct 2026 16:14:49 GMT
+Transfer-Encoding: chunked
+
+800
+{"ID":"0bac7348-e313-4359-a118-39ad4a7a7ad8","Containers":8,"ContainersRunning":6,"ContainersPaused":1,"ContainersStopped":1,"Images":2,"Driver":"overlay","DriverStatus":[["Backing Filesystem","extfs"],["Supports d_type","true"],["Native Overlay Diff","false"],["Using metacopy","false"],["Supports shifting","true"],["Supports volatile","true"]],"Plugins":{"Volume":["local"],"Network":["bridge","macvlan","ipvlan"],"Authorization":null,"Log":["k8s-file","none","passthrough","journald"]},"MemoryLimit":true,"SwapLimit":true,"CpuCfsPeriod":true,"CpuCfsQuota":true,"CPUShares":true,"CPUSet":true,"PidsLimit":true,"IPv4Forwarding":true,"Debug":false,"NFd":13,"OomKillDisable":true,"NGoroutines":13,"SystemTime":"2026-10-17T16:14:49.749884975Z","LoggingDriver":"","CgroupDriver":"cgroupfs","NEventsListener":0,"KernelVersion":"6.18.44-fc-v139","OperatingSystem":"fedora","OSVersion":"44","OSType":"linux","Architecture":"amd64","IndexServerAddress":"","RegistryConfig":{"IndexConfigs":{},"InsecureRegistryCIDRs":[],"Mirrors":[]},"NCPU":4,"MemTotal":16874930176,"GenericResources":null,"DockerRootDir":"/var/lib/containers/storage","HttpProxy":"","HttpsProxy":"","NoProxy":"","Name":"capture-daemon","Labels":null,"ExperimentalBuild":true,"ServerVersion":"5.8.7","Runtimes":{"crun":{"path":"/usr/bin/crun"},"crun-vm":{"path":"/usr/bin/crun-vm"},"crun-wasm":{"path":"/usr/bin/crun-wasm"},"kata":{"path":"/usr/bin/kata-runtime"},"krun":{"path":"/usr/bin/krun"},"ocijail":{"path":"/usr/local/bin/ocijail"},"runc":{"path":"/usr/bin/runc"},"runj":{"path":"/usr/local/bin/runj"},"runsc":{"path":"/usr/bin/runsc"},"youki":{"path":"/usr/local/bin/youki"}},"DefaultRuntime":"crun","Swarm":{"NodeID":"","NodeAddr":"","LocalNodeState":"inactive","ControlAvailable":false,"Error":"","RemoteManagers":null},"LiveRestoreEnabled":false,"Isolation":"","InitBinary":"","ContainerdCommit":{"ID":""},"RuncCommit":{"ID":""},"InitCommit":{"ID":""},"SecurityOptions":["name=seccomp,profile=default"],"ProductLicense":"Apache-2.0","DefaultAddressPools":[{"Base":"10.89.0.0/1
+17a
+6","Size":24},{"Base":"10.90.0.0/15","Size":24},{"Base":"10.92.0.0/14","Size":24},{"Base":"10.96.0.0/11","Size":24},{"Base":"10.128.0.0/9","Size":24}],"CDISpecDirs":null,"Warnings":[],"BuildahVersion":"1.43.4","CPURealtimePeriod":true,"CPURealtimeRuntime":true,"CgroupVersion":"1","Rootless":false,"SwapFree":0,"SwapTotal":0,"Uptime":"10h 57m 45.00s (Approximately 0.42 days)"}
+
+0
+

@@ -41,6 +41,7 @@ class TerminalStyle {
     this.fontFamily = _kDefaultFontFamily,
     this.fontFamilyFallback = _kDefaultFontFamilyFallback,
     this.ligatures = TerminalLigatures.off,
+    this.fontFeatures,
   });
 
   factory TerminalStyle.fromTextStyle(TextStyle textStyle) {
@@ -52,6 +53,7 @@ class TerminalStyle {
           _kDefaultFontFamily,
       fontFamilyFallback:
           textStyle.fontFamilyFallback ?? _kDefaultFontFamilyFallback,
+      fontFeatures: textStyle.fontFeatures,
     );
   }
 
@@ -67,6 +69,9 @@ class TerminalStyle {
   /// drawing for every caller that does not ask.
   final TerminalLigatures ligatures;
 
+  /// [seance fork] Host-selected OpenType features, also used by the preview.
+  final List<FontFeature>? fontFeatures;
+
   TextStyle toTextStyle({
     Color? color,
     Color? backgroundColor,
@@ -79,6 +84,7 @@ class TerminalStyle {
       height: height,
       fontFamily: fontFamily,
       fontFamilyFallback: fontFamilyFallback,
+      fontFeatures: fontFeatures,
       color: color,
       backgroundColor: backgroundColor,
       fontWeight: bold ? FontWeight.bold : FontWeight.normal,
@@ -93,6 +99,7 @@ class TerminalStyle {
     String? fontFamily,
     List<String>? fontFamilyFallback,
     TerminalLigatures? ligatures,
+    List<FontFeature>? fontFeatures,
   }) {
     return TerminalStyle(
       fontSize: fontSize ?? this.fontSize,
@@ -100,6 +107,7 @@ class TerminalStyle {
       fontFamily: fontFamily ?? this.fontFamily,
       fontFamilyFallback: fontFamilyFallback ?? this.fontFamilyFallback,
       ligatures: ligatures ?? this.ligatures,
+      fontFeatures: fontFeatures ?? this.fontFeatures,
     );
   }
 }

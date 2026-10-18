@@ -5,9 +5,6 @@ const String _package = 'ghost_fonts';
 /// A monospace family every Ghost app ships, so code and terminal text look
 /// the same on every platform instead of depending on what is installed.
 ///
-/// All four draw ligatures (`->`, `!=`, `===`) through contextual
-/// alternates: each character keeps its own one-cell glyph, so carets,
-/// selections and terminal cells stay on the grid.
 enum BundledMonoFont {
   /// Narrow and tall, so a window holds more columns. Séance's terminal
   /// default. A subset of the Term variant, whose arrows and symbols stay
@@ -21,7 +18,23 @@ enum BundledMonoFont {
   firaCode('Fira Code'),
 
   /// Rounded, with cursive italics.
-  mapleMono('Maple Mono');
+  mapleMono('Maple Mono'),
+  cascadiaCode('Cascadia Code'),
+  victorMono('Victor Mono'),
+  lilex('Lilex'),
+  zeroXProto('0xProto'),
+  monaspaceNeon('Monaspace Neon'),
+  monaspaceArgon('Monaspace Argon'),
+  monaspaceXenon('Monaspace Xenon'),
+  monaspaceRadon('Monaspace Radon'),
+  monaspaceKrypton('Monaspace Krypton'),
+  martianMono('Martian Mono'),
+  geistMono('Geist Mono'),
+  intelOneMono('Intel One Mono'),
+  fragmentMono('Fragment Mono'),
+  googleSansCode('Google Sans Code'),
+  commitMono('Commit Mono'),
+  departureMono('Departure Mono');
 
   const BundledMonoFont(this.displayName);
 
@@ -30,6 +43,12 @@ enum BundledMonoFont {
 
   /// The family to hand a `TextStyle`.
   String get family => 'packages/$_package/$displayName';
+
+  /// Whether the shipped face has programming ligatures to preview.
+  bool get hasProgrammingLigatures => switch (this) {
+    googleSansCode || departureMono => false,
+    _ => true,
+  };
 
   /// The bundled font [name] refers to, ignoring case and surrounding
   /// spaces, or null when it names some other family.

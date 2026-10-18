@@ -2433,8 +2433,8 @@ limit of 2 and reports `SshLinkDegraded(sessionLimitLearned)`.
 
 | Stream | Endpoint | Framing | Cancel | Resume |
 |---|---|---|---|---|
-| Container logs | `GET /containers/{id}/logs?follow=1&tail=N&timestamps=1&stdout=1&stderr=1` | stdcopy 8-byte frames unless `Config.Tty` (from inspect; Docker sets `Content-Type: application/vnd.docker.multiplexed-stream` or `application/vnd.docker.raw-stream` from API 1.42; from 1.42 the header is used when present and cross-checked with `Config.Tty`; below 1.42 a current daemon labels every logs response raw-stream, and older daemons and possibly Podman's compat layer omit it [R: moby `container_routes.go` `getContainersLogs`, reported by review]); split on `\n` after demultiplexing | Close the duplex | `since=<unix seconds>.<9-digit nanoseconds>` converted from the last delivered line's RFC3339Nano timestamp (the API rejects RFC3339 with 400); `since` is inclusive, so drop re-sent lines up to and including the last delivered one [R: moby `getContainersLogs`, `loggerutils/logfile.go`, reported by review] |
-| Stats, list | `GET /containers/{id}/stats?stream=false&one-shot=true` | One JSON object | n/a | Deltas between polls client-side (one-shot `precpu_stats` not meaningful [U]) |
+| Container logs | `GET /containers/{id}/logs?follow=1&tail=N&timestamps=1&stdout=1&stderr=1` | stdcopy 8-byte frames unless `Config.Tty` (from inspect; Docker sets `Content-Type: application/vnd.docker.multiplexed-stream` or `application/vnd.docker.raw-stream` from API 1.42; from 1.42 the header is used when present and cross-checked with `Config.Tty`; below 1.42 a current daemon labels every logs response raw-stream, and older daemons and Podman's compat layer omit it [R: moby `container_routes.go` `getContainersLogs`, reported by review; recorded from Docker 20.10 and Podman 5.8 in D01]); split on `\n` after demultiplexing | Close the duplex | `since=<unix seconds>.<9-digit nanoseconds>` converted from the last delivered line's RFC3339Nano timestamp (the API rejects RFC3339 with 400); `since` is inclusive, so drop re-sent lines up to and including the last delivered one [R: moby `getContainersLogs`, `loggerutils/logfile.go`, reported by review] |
+| Stats, list | `GET /containers/{id}/stats?stream=false&one-shot=true` | One JSON object | n/a | Deltas between polls client-side (one-shot `precpu_stats` is zeroed, with a zero `preread`, on every daemon of the recorded corpus) |
 | Stats, detail | `GET /containers/{id}/stats?stream=1` | JSON lines | Close | n/a |
 | Events | `GET /events?since=&filters=` | JSON lines; `Type`, `Action`, `Actor` only (1.52 removed the legacy fields), legacy shape accepted below 1.52 | Close | `since=` last event time; full re-list after a gap over 60 s |
 | Pull progress | `POST /images/create?fromImage=&tag=` | JSON values keyed by layer `id`; `progressDetail`, `errorDetail` | Close, which cancels the pull on the daemon unless another client is pulling the same image [R: moby `image_routes.go` request context, `xfer/transfer.go` `release`, reported by review]; a pull that must outlive its view runs detached (7.14) | n/a |
@@ -2529,6 +2529,21 @@ unresolved; a dial past that point cannot be stopped, so it keeps the
 slot until `SshLink.connect` returns. Reachability probes reuse
 `ProbeService` (`SC/src/probe/probe_service.dart:64`, 45 s jittered
 sweeps, at most 6 concurrent [V]) and run only for confirmed endpoints.
+
+As built in M2 (K20, `klabautermann_core` `fleet/reachability_service.dart`):
+the engine probes the fleet entries that have a connect config and a
+confirmed endpoint, imports included under O6's default (4.3), and so
+never an unconfirmed or changed synced server (4.7). A server routed
+through a jump host is not probed and is reported `unknown`, and one
+holding a link is answered online without a probe, as `ProbeService`
+does. Probing starts once `Hello` has had its fleet; a new or moved
+target sweeps at once, a removed one is dropped before the fleet or
+`EndpointChanged` that removes it goes out, and every sweep reports
+every target, always on a later event-loop turn than the fleet that
+lists it. `SetAppActivity` pauses the sweeps in the background, dropping
+answers in flight, and the foreground sweeps at once.
+`EngineStart.probesEnabled` gates probing apart from links; it is off
+unless given, and `main.dart` turns it on (the contract test holds it).
 
 ---
 
@@ -5860,6 +5875,27 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
 | Helper and alert delivery (v1.x, D42) | Rust unit tests of `klabautermann-inbox` and `klabautermann-notify` (format v1 validation, credential-file mode refusal, exit statuses per HTTP answer); cross-language vectors: blobs sealed in Rust open with the Dart sealing under the alert domain and vice versa, and never under `seance/v1/inbox/`; app-side fetch, validation, replay filter, an item fetched again behind a stopped cursor left on the server, two devices merging one status record, wrong-server rejection, acknowledgement and deletion against a fake inbox; end to end on the fixture host: install with hash check, a real deposit to a sync server, fetch, acknowledge, delete, revoke (exit status 2), spool fallback, uninstall leaving nothing | `klabautermann/rust` tests, `klabautermann_host/test`, `klabautermann_core/test`, integration, CI Rust job |
 | Companion parity (M9) | The shared fixture corpus through the Dart parsers and rule evaluator and through the Rust companion; identical parsed results and rule verdicts required (9.4) | `klabautermann_host/test/fixtures`, `klabautermann/rust` companion tests, CI Rust job |
 | Manual checklist | iOS background disclosure and return banner; Android battery and data use; macOS keychain prompts; RHEL 8, Ubuntu 26.04 (sudo-rs) and a Synology host | `klabautermann/docs/` |
+
+As built in M3 (D01), `klabautermann_docker/tool/capture_api.dart`,
+run by `test/integration/capture.sh` through `capture_docker_api.sh`,
+records the Docker API corpus from rootful daemons in privileged,
+digest-pinned containers: Docker 20.10.24 (API 1.41), 25.0.5 (1.44),
+29.0.4 (1.52) and 29.7.2 (1.55, the newest release at that maximum;
+29.8 serves 1.56), and Podman 5.8.7's compat service (1.44). It seeds
+each daemon through the API, then keeps every response's raw bytes,
+chunked framing included, with a manifest and provenance, in
+`api-1.41/`, `api-1.44/`, `api-1.52/`, `api-1.55/` and `api-podman/`.
+CI's capture step records them again and fails on a structural
+difference (exchanges, statuses, content types, header names, JSON key
+paths). The recordings settle three notes: Docker 20.10 and Podman send
+logs without a `Content-Type` (5.6), a one-shot `precpu_stats` is zeroed
+(5.6), and Podman answers versioned paths outside its range instead of
+refusing them, so the client-side refusal of 5.8 is the only one there.
+Capturing also showed that Podman 5.8's log follow sometimes sends one
+line as two stdcopy frames, each with its own `timestamps=1` prefix,
+and that it returned no lines for a `since` equal to the last lines'
+timestamp, where Docker's `since` is inclusive (5.6). Rootless daemons
+and real hosts are not recorded.
 
 ### 11.2 Cross-app regression tests added by this plan
 

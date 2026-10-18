@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_fonts/ghost_fonts.dart';
 import 'package:ghost_fonts/testing.dart';
@@ -45,15 +48,45 @@ const _advanceEm = {
   BundledMonoFont.jetBrainsMono: 600 / 1000,
   BundledMonoFont.firaCode: 1200 / 1950,
   BundledMonoFont.mapleMono: 600 / 1000,
+  BundledMonoFont.cascadiaCode: 1200 / 2048,
+  BundledMonoFont.victorMono: 600 / 1100,
+  BundledMonoFont.lilex: 600 / 1000,
+  BundledMonoFont.zeroXProto: 620 / 1000,
+  BundledMonoFont.monaspaceNeon: 1240 / 2000,
+  BundledMonoFont.monaspaceArgon: 1240 / 2000,
+  BundledMonoFont.monaspaceXenon: 1240 / 2000,
+  BundledMonoFont.monaspaceRadon: 1240 / 2000,
+  BundledMonoFont.monaspaceKrypton: 1240 / 2000,
+  BundledMonoFont.martianMono: 700 / 1000,
+  BundledMonoFont.geistMono: 600 / 1000,
+  BundledMonoFont.intelOneMono: 614 / 1000,
+  BundledMonoFont.fragmentMono: 618 / 1000,
+  BundledMonoFont.googleSansCode: 1200 / 2000,
+  BundledMonoFont.commitMono: 600 / 1000,
+  BundledMonoFont.departureMono: 350 / 550,
 };
-
-/// Contextual alternates off: what a "no ligatures" setting turns off.
-const _noLigatures = [ui.FontFeature.disable('calt')];
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(loadBundledMonoFonts);
+
+  test('Commit Mono enables both coding ligature sets by default', () async {
+    final font = BundledMonoFont.commitMono;
+    expect(
+      await _render(
+        font.family,
+        '!= ->',
+        features: MonoLigatures.on.featuresFor(font.family),
+      ),
+      await _render(
+        font.family,
+        '!= ->',
+        features: const [ui.FontFeature('ss01'), ui.FontFeature('ss02')],
+      ),
+    );
+    expect(font.hasProgrammingLigatures, isTrue);
+  });
 
   group('each bundled family', () {
     for (final font in BundledMonoFont.values) {
@@ -62,30 +95,80 @@ void main() {
         // font's own advance proves the family was registered.
         for (final text in ['mmmmmmmmmm', 'iiiiiiiiii', '->=!<>|:;.']) {
           expect(
-            _layout(font.family, text).maxIntrinsicWidth / text.length,
+            _layout(
+                  font.family,
+                  text,
+                  features: MonoLigatures.on.featuresFor(font.family),
+                ).maxIntrinsicWidth /
+                text.length,
             moreOrLessEquals(_advanceEm[font]! * _size, epsilon: 0.01),
             reason: text,
           );
         }
       });
 
-      test('${font.displayName} draws ligatures', () async {
-        // calt is how all four ligate; the Iosevka subset must keep it.
-        for (final text in ['->', '!=', '===']) {
+      if (!font.hasProgrammingLigatures) continue;
+
+      test(
+        '${font.displayName} draws switchable programming ligatures',
+        () async {
+          final enabled = MonoLigatures.on.featuresFor(font.family);
+          final disabled = MonoLigatures.off.featuresFor(font.family);
+          final different = <String>[];
+          for (final text in ['->', '!=', '===', '<=', '=>']) {
+            if (!listEquals(
+              await _render(font.family, text, features: enabled),
+              await _render(font.family, text, features: disabled),
+            )) {
+              different.add(text);
+            }
+          }
           expect(
-            await _render(font.family, text),
-            isNot(await _render(font.family, text, features: _noLigatures)),
-            reason: text,
+            different,
+            isNotEmpty,
+            reason: 'A real glyph change, not just a feature flag',
           );
-        }
-        // The control: letters that never ligate draw the same either way.
-        expect(
-          await _render(font.family, 'ab'),
-          await _render(font.family, 'ab', features: _noLigatures),
-        );
-      });
+          // Commit Mono's calt also applies smart kerning to plain letters.
+          if (font == BundledMonoFont.commitMono) return;
+
+          // The control: letters that never ligate draw the same either way.
+          expect(
+            await _render(font.family, 'ab', features: enabled),
+            await _render(font.family, 'ab', features: disabled),
+          );
+        },
+      );
     }
   });
+
+  test(
+    'release provenance covers the declared additional files unchanged',
+    () async {
+      final sources =
+          jsonDecode(File('tool/font_releases.json').readAsStringSync())
+              as List;
+      final manifest =
+          jsonDecode(await rootBundle.loadString('FontManifest.json')) as List;
+      final declared = {
+        for (final family in manifest)
+          for (final face in family['fonts'] as List) face['asset'] as String,
+      };
+      for (final source in sources) {
+        for (final family in source['families'] as List) {
+          expect(BundledMonoFont.named(family['name'] as String), isNotNull);
+          for (final face in family['files'] as List) {
+            final path = face['path'] as String;
+            expect(declared, contains(path));
+            expect(
+              sha256.convert(File(path).readAsBytesSync()).toString(),
+              face['sha256'],
+              reason: path,
+            );
+          }
+        }
+      }
+    },
+  );
 
   test('named matches display names loosely and nothing else', () {
     expect(BundledMonoFont.named('Iosevka Term'), BundledMonoFont.iosevkaTerm);
