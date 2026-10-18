@@ -119,12 +119,14 @@ enum GuardedKillOutcome {
 /// The guarded kill script (03 §7.2): checks its parameters, re-reads the
 /// start ticks, and signals only on a match. The window between the read
 /// and `kill` is the shell's own; PID reuse inside it needs the PID space
-/// to wrap within that instant.
+/// to wrap within that instant. The signal check spells its letters out:
+/// a range such as `[A-Z]` follows the locale's collation.
 const String _kGuardedKillScript =
     '''
-${kStartTicksFunction}case \$1 in '' | 0* | *[!0-9]*) exit $kGuardedKillInvalid ;; esac
+$kStartTicksFunction
+case \$1 in '' | 0* | *[!0-9]*) exit $kGuardedKillInvalid ;; esac
 case \$2 in '' | *[!0-9]*) exit $kGuardedKillInvalid ;; esac
-case \$3 in '' | *[!A-Z0-9]*) exit $kGuardedKillInvalid ;; esac
+case \$3 in '' | *[!ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789]*) exit $kGuardedKillInvalid ;; esac
 klab_ticks "\$1" || exit \$?
 [ "\$KT" = "\$2" ] || exit $kGuardedKillReused
 kill -s "\$3" "\$1" || exit $kGuardedKillFailed''';

@@ -33,7 +33,7 @@ const String kRootOpsDir = '/var/lib/klabautermann/ops';
 /// How every operation directory ends. The user one is
 /// `${XDG_STATE_HOME:-$HOME/.local/state}/klabautermann/ops`, which the
 /// engine resolves in the login shell's environment, since a transient
-/// unit's has no `XDG_STATE_HOME`.
+/// unit has no `XDG_STATE_HOME`.
 const String kOpsDirSuffix = '/klabautermann/ops';
 
 /// The transient unit name before the operation id; the unit is
@@ -237,7 +237,7 @@ case \$n in
 esac
 case \$d in /*$kOpsDirSuffix) ;; *) exit $kOpWrapperSetupFailed ;; esac
 m=\$(id -u) || exit $kOpWrapperSetupFailed
-if [ "\$d" = $kRootOpsDir ]; then
+if [ "\$d" = '$kRootOpsDir' ]; then
   [ "\$m" = 0 ] || exit $kOpWrapperSetupFailed
   (umask 022 && mkdir -p "\$d") || exit $kOpWrapperSetupFailed
   k=755
@@ -291,10 +291,12 @@ printf '%s\n' "$!"''';
 /// Builders for detached operations (03 §7.17, §8.11).
 abstract final class OperationCommands {
   /// The launch argv of operation [id] for [runner] (03 §7.17): the
-  /// wrapper runs [argv] as uid [uid] (the login user's, also on the
-  /// root rows, whose files it `chown`s to that uid) and records it in
-  /// [dir], [kRootOpsDir] for the root rows and the resolved user
-  /// directory otherwise. The systemd rows name the transient unit
+  /// wrapper runs [argv] as root on the root rows and as the login user
+  /// otherwise, and records it for uid [uid], the login user's: in
+  /// [kRootOpsDir] on the root rows, whose files it `chown`s to that
+  /// uid, and in the resolved user directory [dir] otherwise. Uid 0 is
+  /// refused on [DetachedRunner.loginSystemdUid], where `--uid=0` would
+  /// run a root unit that records in the user directory. The systemd rows name the transient unit
   /// [opUnitName] and pass `--collect --quiet`; the setsid rows print the
   /// wrapper's PID. When [DetachedRunner.elevated] holds, the caller runs
   /// the argv through the elevation prelude.
@@ -308,6 +310,12 @@ abstract final class OperationCommands {
     _checkOpId(id);
     _checkRunnerDir(runner, dir);
     if (uid < 0) throw HostCommandError('negative uid', argument: '$uid');
+    if (uid == 0 && runner == DetachedRunner.loginSystemdUid) {
+      throw HostCommandError(
+        'a root unit records in $kRootOpsDir',
+        argument: '0',
+      );
+    }
     _checkArgv(argv);
 
     final unit = opUnitName(id);

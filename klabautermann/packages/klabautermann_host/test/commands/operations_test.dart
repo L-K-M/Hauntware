@@ -148,6 +148,9 @@ void main() {
         () => _launch(DetachedRunner.loginSetsid, id: '0123456789abcdef0'),
         () => _launch(DetachedRunner.loginSetsid, id: '../../etc/passwd'),
         () => _launch(DetachedRunner.loginSetsid, uid: -1),
+        // systemd-run --uid=0 would run a root unit that records in the
+        // user directory.
+        () => _launch(DetachedRunner.loginSystemdUid, uid: 0),
         () => _launch(DetachedRunner.loginSetsid, argv: const []),
         () => _launch(DetachedRunner.loginSetsid, argv: const ['']),
         () => _launch(DetachedRunner.loginSetsid, argv: const ['-p', 'x']),
