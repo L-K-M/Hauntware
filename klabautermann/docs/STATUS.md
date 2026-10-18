@@ -1326,6 +1326,13 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 admin mode and safety policy (E11): the engine runs admin mode
+  per server (03 §8.2). It detects how to elevate, asks for the password
+  only when the prelude needs it, and validates it through the elevation
+  executor. Admin mode ends after inactivity, in the background, on link
+  loss or when the server leaves. The engine enforces the app's safety
+  policy: observe-only by default, read-only above it. No app surface
+  sends these messages yet: E19 adds the Safety settings and the chip.
 - M4 operation model (E09): `klabautermann_core` builds immutable
   operation plans, whose preview shares the steps the runner will take
   (03 §8.5). It also computes 8.6's confirmation tiers and holds

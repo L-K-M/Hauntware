@@ -139,7 +139,9 @@ import '../operations/plan_types.dart';
 /// [ActionIntent] became sealed, one variant per MVP action, [ActionPreview]
 /// carries the plan's typed steps, host writes, runner and risk facts
 /// instead of display strings, and [ActionRefused] answers a [PlanAction]
-/// or [RunAction] the engine will not carry out.
+/// or [RunAction] the engine will not carry out. Admin mode and the safety
+/// policy joined next (03 §8.2, M4 E11): [SetSafetyPolicy], [SetAdminMode]
+/// and [AdminModeState].
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -423,6 +425,25 @@ final class RunAction extends EngineRequest {
 
   final String planId;
   final ActionConfirmation confirmation;
+}
+
+/// The safety preferences the app keeps in `settings.json` (03 §4.10, M4
+/// plan M4), sent at spawn and on every change. The engine enforces them:
+/// until the first one arrives, every server is observe-only.
+final class SetSafetyPolicy extends EngineRequest {
+  const SetSafetyPolicy(this.policy);
+
+  final SafetyPolicy policy;
+}
+
+/// Turns admin mode on or off for [serverId] (03 §8.2, SAF-02). Turning
+/// it on detects how to elevate and asks for the password only when that
+/// needs one; [AdminModeState] reports each step.
+final class SetAdminMode extends EngineRequest {
+  const SetAdminMode(this.serverId, {required this.enabled});
+
+  final String serverId;
+  final bool enabled;
 }
 
 /// Answers an outstanding [Prompt] event (03 §10.1).
@@ -936,6 +957,98 @@ enum ActionRefusalReason {
   /// The confirmation does not meet the plan's tier, or does not name
   /// the target.
   confirmationMismatch,
+
+  /// The server is observe-only: management is off for it (SAF-01).
+  observeOnly,
+
+  /// Read-only mode is on, for the server or for every server (SAF-06).
+  readOnly,
+}
+
+/// Where admin mode stands on [serverId] (03 §8.2, M4 plan M5). The app
+/// shows the chip and its countdown from [expiresAt] while [phase] is
+/// [AdminModePhase.on]. No field ever holds the password.
+final class AdminModeState extends EngineEvent {
+  const AdminModeState(
+    this.serverId,
+    this.phase, {
+    this.expiresAt,
+    this.retry = false,
+    this.failure,
+    this.ended,
+  });
+
+  final String serverId;
+  final AdminModePhase phase;
+
+  /// When inactivity ends admin mode, while it is on.
+  final DateTime? expiresAt;
+
+  /// While awaiting the password: the previous one was wrong.
+  final bool retry;
+
+  /// Why turning it on failed, with [AdminModePhase.failed].
+  final AdminFailure? failure;
+
+  /// Why it ended, with [AdminModePhase.expired].
+  final AdminEnd? ended;
+}
+
+/// The admin-mode state machine's phases (M4 plan M5).
+enum AdminModePhase {
+  off,
+  detecting,
+  awaitingPassword,
+  validating,
+  on,
+  expired,
+  failed,
+}
+
+/// Why admin mode could not start; the app words each (D35).
+enum AdminFailure {
+  /// The server is observe-only (SAF-01).
+  observeOnly,
+
+  /// Read-only mode is on (SAF-06): admin mode is hidden.
+  readOnly,
+
+  /// The server has no link to elevate over.
+  noLink,
+
+  /// The host has not been probed yet, so how to elevate is unknown.
+  notProbed,
+
+  /// No elevation rung applies (03 §8.3).
+  unavailable,
+
+  /// Only a terminal could elevate: `requiretty`, or doas with a password
+  /// (rung 5, which spike S3 left for later).
+  ttyRequired,
+
+  /// The account may not elevate.
+  notInSudoers,
+
+  /// The password was refused three times.
+  wrongPassword,
+
+  /// The password prompt was cancelled or withdrawn.
+  cancelled,
+}
+
+/// Why admin mode ended (03 §8.2).
+enum AdminEnd {
+  /// No elevated action or read for the expiry period.
+  inactivity,
+
+  /// The app went to the background.
+  background,
+
+  /// The server's link dropped.
+  linkLost,
+
+  /// The server left the fleet or changed endpoint.
+  serverRemoved,
 }
 
 /// The engine needs the user to decide something: trust a host key,
@@ -1981,6 +2094,48 @@ final class RedeployStack extends ActionIntent {
   final String project;
   final bool removeOrphans;
 }
+
+/// The app's safety preferences (M4 plan M4, SAF-01, SAF-06): per server,
+/// whether management is on and whether it is read-only, plus the global
+/// read-only switch and admin mode's inactivity expiry.
+@immutable
+final class SafetyPolicy {
+  const SafetyPolicy({
+    this.globalReadOnly = false,
+    this.servers = const {},
+    this.adminExpiry = kDefaultAdminExpiry,
+  });
+
+  final bool globalReadOnly;
+
+  /// By server id; a server without an entry has the default: management
+  /// off.
+  final Map<String, ServerSafety> servers;
+
+  /// One of [kAdminExpiryChoices].
+  final Duration adminExpiry;
+}
+
+/// One server's safety preferences. Management is off by default
+/// (SAF-01): the server is observed, never changed.
+@immutable
+final class ServerSafety {
+  const ServerSafety({this.management = false, this.readOnly = false});
+
+  final bool management;
+  final bool readOnly;
+}
+
+/// Admin mode's default inactivity expiry [E] (03 §8.2).
+const kDefaultAdminExpiry = Duration(minutes: 15);
+
+/// The expiries the Safety tab offers (M4 plan M5).
+const kAdminExpiryChoices = [
+  Duration(minutes: 5),
+  kDefaultAdminExpiry,
+  Duration(minutes: 30),
+  Duration(minutes: 60),
+];
 
 /// How far 03 §8.6's tiers make the user go before a plan runs.
 enum ConfirmationTier {

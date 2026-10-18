@@ -106,6 +106,11 @@ void main() {
       );
 
       client
+        ..send(
+          const SetSafetyPolicy(
+            SafetyPolicy(servers: {'srv-1': ServerSafety(management: true)}),
+          ),
+        )
         ..send(const PlanAction(intent))
         ..send(
           const RunAction(
@@ -121,6 +126,58 @@ void main() {
       final ran = (await next(events)) as ActionRefused;
       expect(ran.reason, ActionRefusalReason.unknownPlan);
       expect(ran.planId, 'plan-1');
+    });
+
+    test('the safety policy refuses plans and admin mode in the engine '
+        '(SAF-01, SAF-06)', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+      const plan = PlanAction(StartTimer('ssh-config:web', timer: 'a.timer'));
+      Future<ActionRefusalReason> refusal() async =>
+          ((await next(events)) as ActionRefused).reason;
+
+      client
+        ..send(const ImportSshConfig('Host web\n  HostName 192.0.2.10\n'))
+        ..send(plan);
+      expect(await next(events), isA<CatalogReplaced>());
+      expect(await next(events), isA<SshConfigImported>());
+      expect(await refusal(), ActionRefusalReason.observeOnly);
+
+      client
+        ..send(const SetAdminMode('ssh-config:web', enabled: true))
+        ..send(const SetAdminMode('nowhere', enabled: true));
+      final observed = (await next(events)) as AdminModeState;
+      expect(observed.phase, AdminModePhase.failed);
+      expect(observed.failure, AdminFailure.observeOnly);
+      expect(
+        ((await next(events)) as RequestRejected).requestName,
+        'SetAdminMode',
+      );
+
+      const managed = {'ssh-config:web': ServerSafety(management: true)};
+      client
+        ..send(
+          const SetSafetyPolicy(
+            SafetyPolicy(globalReadOnly: true, servers: managed),
+          ),
+        )
+        ..send(plan)
+        ..send(const SetSafetyPolicy(SafetyPolicy(servers: managed)))
+        ..send(plan)
+        ..send(const SetAdminMode('ssh-config:web', enabled: true))
+        ..send(
+          const SetSafetyPolicy(
+            SafetyPolicy(adminExpiry: Duration(minutes: 7)),
+          ),
+        );
+      expect(await refusal(), ActionRefusalReason.readOnly);
+      expect(await refusal(), ActionRefusalReason.notImplemented);
+      final noLinks = (await next(events)) as AdminModeState;
+      expect(noLinks.failure, AdminFailure.noLink, reason: 'links are off');
+      expect(
+        ((await next(events)) as RequestRejected).requestName,
+        'SetSafetyPolicy',
+      );
     });
 
     test('links stay off unless spawn turns them on', () async {

@@ -8,6 +8,8 @@ import 'package:seance_core/catalog.dart'
 import 'package:seance_core/seance_core.dart'
     show ImportedHost, Prober, ServerConfig, SshLink, TcpBannerProber;
 
+import '../admin/admin_mode.dart';
+import '../admin/safety_policy.dart';
 import '../capabilities/capability_cache.dart';
 import '../catalog/engine_sync.dart';
 import '../catalog/keystore_channel.dart';
@@ -163,6 +165,11 @@ void engineMain(
   // none while links are off. It follows every LinkState and probe
   // answer.
   DockerRouter? docker;
+  // Admin mode per server (03 §8.2), over the links; none while links are
+  // off. The safety policy the app last sent; until then every server is
+  // observe-only (SAF-01).
+  AdminModeController? admin;
+  var safetyPolicy = const SafetyPolicy();
 
   // FL-02's imported hosts, in D13's device-local store (03 §4.10),
   // opened before the first request is handled. Each import replaces the
@@ -246,6 +253,9 @@ void engineMain(
               scheduler?.update(event.serverId);
               logs?.update(event.serverId);
               docker?.update(event.serverId);
+              if (event.status is! LinkReady && event.status is! LinkDegraded) {
+                admin?.linkLost(event.serverId);
+              }
             }
           },
           policy: Platform.isAndroid || Platform.isIOS
@@ -264,6 +274,19 @@ void engineMain(
   final viewed = <String>{};
 
   if (links != null) {
+    admin = AdminModeController(
+      linkFor: links.link,
+      endpointOf: (id) => switch (configOf(id)) {
+        final config? => (
+          host: config.host,
+          port: config.port,
+          user: config.username,
+        ),
+        null => null,
+      },
+      prompts: prompts,
+      emit: uiPort.send,
+    );
     scheduler = SamplingScheduler(
       subscriptions: sampling,
       linkFor: links.link,
@@ -271,6 +294,7 @@ void engineMain(
       deadPeerHint: links.deadPeerHint,
       clearDeadPeerHint: links.clearDeadPeerHint,
       probed: (serverId, profile) {
+        admin?.probed(serverId, profile);
         unawaited(capabilities?.probed(serverId, profile));
         docker?.probed(serverId, profile);
       },
@@ -369,6 +393,7 @@ void engineMain(
     docker
       ?..forget(forgotten)
       ..retain(fleetIds);
+    admin?.forget(forgotten);
     // Before the caller sends the fleet or an EndpointChanged, so no
     // probe of a server starts, and no answer for it goes out, once the
     // app hears it left or lost its pin.
@@ -570,6 +595,7 @@ void engineMain(
         }
       case SetAppActivity(:final activity):
         links?.setActivity(activity);
+        admin?.setActivity(activity);
         scheduler?.activity = activity;
         logs?.activity = activity;
         reachability?.activity = activity;
@@ -681,10 +707,47 @@ void engineMain(
       case RunSyncRound():
         runSync(SyncOperation.round, sync.runRound);
       case PlanAction(:final intent):
-        // The planners land with E14 (host) and E15 (Docker).
+        // The policy first (M4 plan M4); the planners land with E14 (host)
+        // and E15 (Docker).
         uiPort.send(
-          ActionRefused(ActionRefusalReason.notImplemented, intent: intent),
+          ActionRefused(
+            safetyRefusal(safetyPolicy, intent.serverId) ??
+                ActionRefusalReason.notImplemented,
+            intent: intent,
+          ),
         );
+      case SetSafetyPolicy(:final policy):
+        if (validateSafetyPolicy(policy) case final problem?) {
+          reject(message, problem);
+          return;
+        }
+        safetyPolicy = policy;
+        admin?.expiry = policy.adminExpiry;
+        // A server the new policy forbids changing leaves admin mode.
+        for (final serverId in [...?admin?.servers]) {
+          if (adminRefusal(policy, serverId) != null) admin?.disable(serverId);
+        }
+      case SetAdminMode(:final serverId, :final enabled):
+        if (!fleetIds.contains(serverId)) {
+          reject(message, 'no fleet server $serverId');
+          return;
+        }
+        if (!enabled) {
+          admin?.disable(serverId);
+          return;
+        }
+        final failure =
+            adminRefusal(safetyPolicy, serverId) ??
+            (admin == null ? AdminFailure.noLink : null);
+        if (failure != null) {
+          uiPort.send(
+            AdminModeState(serverId, AdminModePhase.failed, failure: failure),
+          );
+          return;
+        }
+        // Not awaited: the password prompt's answer comes through this
+        // queue.
+        unawaited(admin!.enable(serverId));
       case RunAction(:final planId):
         // Nothing is planned yet, so no plan is held under any id.
         uiPort.send(

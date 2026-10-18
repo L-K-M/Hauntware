@@ -3910,6 +3910,32 @@ SAF-17 generates narrow, validated rules (v1.x): a blanket rule equals root
   the prompt: admin mode still starts explicitly, shows its chip and
   expires as above. A remembered password that sudo rejects is not
   retried; the prompt returns and offers to replace it.
+- **As built (M4 E11).** `KC/lib/src/admin/` holds admin mode and the
+  safety policy.
+  - `AdminModeController` runs the M5 state machine per server: off,
+    detecting, awaiting password, validating, on (with `expiresAt`), then
+    expired or failed.
+  - It reads the elevation facts from the probe's `HostProfile` and asks
+    for the password through the prompt broker only for the prelude rung.
+    A wrong password is retried up to three times.
+  - Validation runs `true` through `ElevatedExecutor`, so rung 4 and the
+    refusal classifier apply. Password doas fails `ttyRequired` without a
+    prompt. E04's validation, which ignores cached records (D65), replaces
+    this check.
+  - Admin mode ends:
+    - after the expiry (5, 15, 30 or 60 minutes) without elevated work,
+      which resets the clock;
+    - when the app goes to the background;
+    - when the link leaves ready or degraded;
+    - when the server leaves the fleet or changes endpoint;
+    - on `SetAdminMode(enabled: false)`.
+  - The password is held only in the controller's session and never in
+    an event, argv or `toString`.
+  - The engine keeps the app's `SetSafetyPolicy` and, until the first
+    one, treats every server as observe-only. It refuses `PlanAction`
+    and `SetAdminMode` with `observeOnly` or `readOnly` for a server it
+    may not change. A new policy that forbids a server ends that server's
+    admin mode.
 
 ### 8.3 The elevation prelude (D24)
 
@@ -4739,6 +4765,7 @@ shows there.
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
 | `DockerQuery(serverId, queryId, query)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason)`, `DockerEvent` (opaque until the event lists) |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(planId, preview)`, `ActionProgress`, `ActionFinished`, `ActionRefused(reason, intent or planId)` |
+| `SetSafetyPolicy(policy)`, `SetAdminMode(serverId, enabled)` (8.2, M4) | `AdminModeState(serverId, phase, expiresAt, retry, failure, ended)`; a refused plan's `ActionRefused` names `observeOnly` or `readOnly` |
 | `AnswerPrompt(promptId, answer)` (trust, responses or cancel, secret) | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
 | `SetAppActivity(activity)` (foreground or background; D34, D45) | no event: it changes what runs |
 | none: the engine's probe sweeps (5.12) | `Reachability(serverId, status)` (FL-04) |

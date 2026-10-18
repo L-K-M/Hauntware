@@ -143,6 +143,14 @@ void main() {
             phrase: 'web-1',
           ),
         ),
+        const SetSafetyPolicy(
+          SafetyPolicy(
+            globalReadOnly: true,
+            servers: {'srv-1': ServerSafety(management: true, readOnly: true)},
+            adminExpiry: Duration(minutes: 30),
+          ),
+        ),
+        const SetAdminMode('srv-1', enabled: true),
         const AnswerPrompt('prompt-1', PromptTrustAnswer(true)),
         const AnswerPrompt('prompt-2', PromptCancelAnswer()),
         const HandleAlert('alert-1', AlertAction.acknowledge),
@@ -263,6 +271,21 @@ void main() {
           intent: StartTimer('srv-1', timer: 'backup.timer'),
         ),
         const ActionRefused(ActionRefusalReason.stalePlan, planId: 'plan-1'),
+        AdminModeState(
+          'srv-1',
+          AdminModePhase.on,
+          expiresAt: DateTime.utc(2026, 10, 18, 12, 15),
+        ),
+        const AdminModeState(
+          'srv-1',
+          AdminModePhase.failed,
+          failure: AdminFailure.ttyRequired,
+        ),
+        const AdminModeState(
+          'srv-1',
+          AdminModePhase.expired,
+          ended: AdminEnd.linkLost,
+        ),
         const ActionProgress(planId: 'plan-1', stepIndex: 1, stepCount: 3),
         const ActionFinished(
           planId: 'plan-1',
