@@ -3787,6 +3787,34 @@ never reads as an operation, a record cut at 4 KiB, one of another
 version, a malformed one, and a forged one: its `id` differs from its
 file name or its `unit` names another unit. Re-attach itself is E17's.
 
+As built in M4 (E17a, `klabautermann_core/lib/src/operations/
+detached_runner.dart`), the engine picks and launches a runner; nothing
+calls it before E17b. Decisions:
+
+- `selectDetachedRunner` applies the table to the host profile, the
+  plan's `requiredLevel` and admin mode. Unknown probe facts enable no
+  row: an unknown systemd directory reads as none and an unknown linger
+  as off. The `--user` row also needs `XDG_RUNTIME_DIR`, without which
+  the user manager cannot be reached. A root login never gets
+  `systemd-run --uid=0` and takes the `setsid` row. Under a sudo rule
+  that does not cover the runners, work that needs root is refused with
+  the missing right named, and other work is placed as with admin mode
+  off. `mayDieAtLogout` is the preview's warning for the `setsid` row
+  under `KillUserProcesses=yes`.
+- Operation ids are 16 lowercase hex digits from a secure random
+  source.
+- On the login rows, the launch first resolves the user directory in the
+  login shell with `OperationCommands.userOpsDir`, the same rule as the
+  `ops` collector, since a transient unit has no `XDG_STATE_HOME`. A
+  relative or missing answer refuses the launch. The root rows record in
+  `/var/lib/klabautermann/ops` and run through the admin session's
+  elevation executor; without a session nothing runs.
+- A launch reports started once the launcher returns 0, with the
+  wrapper's PID from the `setsid` rows. The wrapper runs in the
+  background or in the unit, so its exit 125 never reaches the launcher.
+  A refused wrapper therefore shows as a launched id with no record,
+  which re-attach reports (E17b).
+
 ### 7.18 Backups (BAK)
 
 - **v1.x.** One-shot database dumps from a container using its own

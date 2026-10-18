@@ -1326,6 +1326,10 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 detached runner, first half (E17a): the engine picks each
+  operation's runner from the host profile, the work's level and admin
+  mode, and launches it with a fresh id. Re-attach, results and cleanup
+  follow in E17b.
 - M4 activity log (E24): the server header's Safety menu opens
   Activity, the device audit log as a sortable table with each run's
   redacted steps in its details and older pages on request. Copy puts

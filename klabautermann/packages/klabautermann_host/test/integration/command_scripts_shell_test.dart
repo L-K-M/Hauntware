@@ -234,6 +234,35 @@ void main() {
       }, skip: _mayKillPid1 ? 'this user may signal PID 1' : null);
     });
 
+    group('$name: user operation directory', () {
+      test('follows XDG_STATE_HOME, ignoring a relative one, as the ops '
+          'collector does', () async {
+        Future<String> dir(Map<String, String> env) async {
+          final result = await _run(
+            shell,
+            OperationCommands.userOpsDir(),
+            environment: {'HOME': '/home/deploy', ...env},
+          );
+          expect(result.exitCode, 0, reason: '${result.stderr}');
+          return '${result.stdout}';
+        }
+
+        // Empty reads as unset, whatever the runner's own environment holds.
+        expect(
+          await dir({'XDG_STATE_HOME': ''}),
+          '/home/deploy/.local/state/klabautermann/ops\n',
+        );
+        expect(
+          await dir({'XDG_STATE_HOME': '/srv/state'}),
+          '/srv/state/klabautermann/ops\n',
+        );
+        expect(
+          await dir({'XDG_STATE_HOME': 'state'}),
+          '/home/deploy/.local/state/klabautermann/ops\n',
+        );
+      });
+    });
+
     group('$name: re-validation reads', () {
       test("start ticks print a live process's field 22", () async {
         final sleeper = await _sleeper();
