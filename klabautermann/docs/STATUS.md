@@ -1326,6 +1326,12 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 operation runner (E12a): a confirmed plan is re-validated (unit
+  loaded, process start time, Docker target unchanged), then its own
+  steps run in order. Shell steps go over the link or through admin
+  mode's executor; API steps go through the Docker runner E15 adds. A
+  failure stops the run and is reported with typed facts. Plans run
+  once, and only on the link generation they were previewed on.
 - M4 admin mode and safety policy (E11): the engine runs admin mode
   per server (03 §8.2). It detects how to elevate, asks for the password
   only when the prelude needs it, and validates it through the elevation

@@ -46,7 +46,7 @@ OperationPlan _plan({
   hostWrites: const [HostWriteRow.loginRecords],
   protected: protected,
   ownership: ownership,
-  expectedState: const {'unit': 'nginx.service'},
+  revalidate: const [UnitLoaded('nginx.service')],
 );
 
 void main() {
@@ -99,7 +99,7 @@ void main() {
         () => plan.hostWrites.add(HostWriteRow.engineState),
         throwsUnsupportedError,
       );
-      expect(() => plan.expectedState['unit'] = 'x', throwsUnsupportedError);
+      expect(() => plan.revalidate.clear(), throwsUnsupportedError);
       expect(() => plan.danger.clear(), throwsUnsupportedError);
     });
 
@@ -251,10 +251,13 @@ void main() {
       final id = registry.hold(plan, linkGeneration: 3);
 
       expect(id, matches(RegExp(r'^[0-9a-f]{16}$')));
-      final first = registry.take(id, linkGeneration: 3);
+      final first = registry.take(id, linkGeneration: (_) => 3);
       expect(first.plan, same(plan));
       expect(first.missing, isNull);
-      expect(registry.take(id, linkGeneration: 3).missing, PlanMissing.unknown);
+      expect(
+        registry.take(id, linkGeneration: (_) => 3).missing,
+        PlanMissing.unknown,
+      );
     });
 
     test('refuses a plan past its lifetime or from an older link', () {
@@ -262,12 +265,12 @@ void main() {
       final stale = registry.hold(_plan(), linkGeneration: 1);
       now = now.add(kPlanLifetime - const Duration(seconds: 1));
       expect(
-        registry.take(stale, linkGeneration: 2).missing,
+        registry.take(stale, linkGeneration: (_) => 2).missing,
         PlanMissing.stale,
       );
       now = now.add(const Duration(seconds: 1));
       expect(
-        registry.take(expired, linkGeneration: 1).missing,
+        registry.take(expired, linkGeneration: (_) => 1).missing,
         PlanMissing.expired,
       );
       expect(registry.length, 0, reason: 'refused plans never run later');
@@ -282,7 +285,7 @@ void main() {
 
       registry.forget({'srv-1'});
       expect(registry.length, 1);
-      expect(registry.take(kept, linkGeneration: 1).plan, isNotNull);
+      expect(registry.take(kept, linkGeneration: (_) => 1).plan, isNotNull);
     });
   });
 }

@@ -4061,6 +4061,24 @@ OperationPlan {
   - The admin-mode, audit, crontab and detached-operation messages of
     M4 join v3 with the PRs that implement them (E11, E12, E14, E17),
     rather than all at once here.
+- **As built (M4 E12a).** `operation_runner.dart` runs a confirmed plan.
+  - `RunAction` takes the plan from the registry once. The engine then
+    checks the safety policy, the confirmation (a typed phrase must equal
+    the target name) and, for an admin plan, admin mode, each a typed
+    `ActionRefused`. A refused run needs a new preview.
+  - The runner re-validates each `Revalidation` the planner listed:
+    `UnitLoaded` reads `systemctl show --property=LoadState`;
+    `ProcessStarted` reads field 22 of `/proc/<pid>/stat`;
+    `DockerTargetUnchanged` goes to the Docker planners' checker (E15).
+  - It runs the plan's own steps in order: shell steps over the link, or
+    through the admin session's executor when `elevated`, and API steps
+    through the Docker runner (E15). It stops at the first failure.
+  - It reports `ActionProgress` per step, then one `ActionFinished` with
+    typed facts: the failure, the step, its exit or HTTP status, and what
+    re-validation found.
+  - Each server's link generation counts the times its link became
+    ready, so a plan previewed before a reconnect is stale. An admin run
+    resets the inactivity clock before and after.
 - Re-validation immediately before execution: the unit still exists, the
   container ID is unchanged, the PID start time matches, the file hash
   matches (compare-and-swap for edits), the stack's config hash still

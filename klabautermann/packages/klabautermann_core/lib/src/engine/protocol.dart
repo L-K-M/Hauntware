@@ -911,17 +911,76 @@ final class ActionProgress extends EngineEvent {
   final String? message;
 }
 
-/// A plan finished, one way or another (03 §10.1).
+/// A plan finished, one way or another (03 §10.1). A failed plan says
+/// why in typed facts the app words (D35): which step, its exit status or
+/// HTTP status, and what re-validation found.
 final class ActionFinished extends EngineEvent {
   const ActionFinished({
     required this.planId,
     required this.outcome,
-    this.error,
+    this.failure,
+    this.failedStep,
+    this.exitCode,
+    this.httpStatus,
+    this.revalidation,
   });
 
   final String planId;
   final ActionOutcome outcome;
-  final String? error;
+  final ActionFailure? failure;
+
+  /// The index of the step that failed, in the preview's steps.
+  final int? failedStep;
+
+  /// A failed shell step's exit status; null when the channel ended
+  /// without one.
+  final int? exitCode;
+
+  /// A failed API step's HTTP status.
+  final int? httpStatus;
+
+  /// What re-validation found, with [ActionFailure.revalidation].
+  final RevalidationFailure? revalidation;
+}
+
+/// Why a plan failed.
+enum ActionFailure {
+  /// The server's link is gone.
+  noLink,
+
+  /// The target changed since the preview (03 §8.5); nothing ran.
+  revalidation,
+
+  /// Elevation refused a step: admin mode ended or the password changed.
+  elevationRefused,
+
+  /// A step exited non-zero or answered an HTTP error; later steps did
+  /// not run.
+  stepFailed,
+
+  /// The link failed or timed out during a step.
+  transport,
+
+  /// The engine has no runner for an API step yet (M4 E15).
+  unsupportedStep,
+}
+
+/// What re-validation found changed (03 §8.5).
+enum RevalidationFailure {
+  /// The unit no longer loads.
+  unitMissing,
+
+  /// The process exited.
+  processGone,
+
+  /// The PID now names another process: its start time differs.
+  processReused,
+
+  /// The container id or the stack's configuration changed.
+  targetChanged,
+
+  /// The check could not read what it compares.
+  unreadable,
 }
 
 /// The engine will not plan [intent] or run plan [planId] (03 §8.5): the
@@ -963,6 +1022,9 @@ enum ActionRefusalReason {
 
   /// Read-only mode is on, for the server or for every server (SAF-06).
   readOnly,
+
+  /// The plan needs admin mode, which is off for the server (03 §8.2).
+  adminRequired,
 }
 
 /// Where admin mode stands on [serverId] (03 §8.2, M4 plan M5). The app

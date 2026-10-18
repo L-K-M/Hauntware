@@ -291,6 +291,19 @@ void main() {
           planId: 'plan-1',
           outcome: ActionOutcome.succeeded,
         ),
+        const ActionFinished(
+          planId: 'plan-2',
+          outcome: ActionOutcome.failed,
+          failure: ActionFailure.revalidation,
+          revalidation: RevalidationFailure.processReused,
+        ),
+        const ActionFinished(
+          planId: 'plan-3',
+          outcome: ActionOutcome.failed,
+          failure: ActionFailure.stepFailed,
+          failedStep: 1,
+          httpStatus: 409,
+        ),
         const Prompt(
           promptId: 'p-1',
           serverId: 'srv-1',

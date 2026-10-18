@@ -430,4 +430,21 @@ void main() {
       expect(parseCrontabSpool('root\nalice\n'), isNull);
     });
   });
+
+  test('re-validation reads validate their target (03 §8.5)', () {
+    expect(HostCommands.startTicks(42).last, '42');
+    expect(() => HostCommands.startTicks(0), throwsA(isA<HostCommandError>()));
+    expect(HostCommands.unitLoadState('nginx.service'), [
+      'systemctl',
+      'show',
+      '--property=LoadState',
+      '--value',
+      '--',
+      'nginx.service',
+    ]);
+    expect(
+      () => HostCommands.unitLoadState('-x'),
+      throwsA(isA<HostCommandError>()),
+    );
+  });
 }

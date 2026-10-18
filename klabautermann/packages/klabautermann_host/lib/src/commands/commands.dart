@@ -272,6 +272,32 @@ abstract final class HostCommands {
     ];
   }
 
+  /// Prints process [pid]'s start time in clock ticks, field 22 of
+  /// `/proc/<pid>/stat`, for an operation's re-validation (03 §8.5). It
+  /// exits 3 when the process is gone and 5 when its stat is unreadable,
+  /// as the guarded kill's reader does.
+  static List<String> startTicks(int pid) {
+    if (pid <= 0) {
+      throw HostCommandError('pid must be positive', argument: '$pid');
+    }
+    return [
+      'sh',
+      '-c',
+      '${kStartTicksFunction}klab_ticks "\$1" || exit \$?\n'
+          "printf '%s\\n' \"\$KT\"",
+      'klabautermann-ticks',
+      '$pid',
+    ];
+  }
+
+  /// Prints systemd's load state of [unit] (`loaded`, `not-found`, ...),
+  /// for an operation's re-validation (03 §8.5): a unit that no longer
+  /// loads is not acted on.
+  static List<String> unitLoadState(String unit) {
+    _check(ArgValidators.unitName, unit);
+    return ['systemctl', 'show', '--property=LoadState', '--value', '--', unit];
+  }
+
   /// The crontab spool listing for JOB-03 (03 §7.7, M14), run elevated:
   /// the first of [kCrontabSpools] that exists, then its file names, read
   /// by `parseCrontabSpool`. The exit is [kCrontabSpoolListed],

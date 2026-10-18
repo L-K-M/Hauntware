@@ -48,16 +48,19 @@ final class PlanRegistry {
     return id;
   }
 
-  /// Removes and returns plan [planId] if it is still runnable on the
-  /// server's current link generation [linkGeneration]. An expired or
-  /// stale plan is removed too: it can never run.
-  PlanLookup take(String planId, {required int linkGeneration}) {
+  /// Removes and returns plan [planId] if it is still runnable on its
+  /// server's current link generation, which [linkGeneration] gives for a
+  /// server id. An expired or stale plan is removed too: it can never run.
+  PlanLookup take(
+    String planId, {
+    required int Function(String serverId) linkGeneration,
+  }) {
     final held = _plans.remove(planId);
     if (held == null) return (plan: null, missing: PlanMissing.unknown);
     if (!_now().isBefore(held.expiresAt)) {
       return (plan: null, missing: PlanMissing.expired);
     }
-    if (held.linkGeneration != linkGeneration) {
+    if (held.linkGeneration != linkGeneration(held.plan.intent.serverId)) {
       return (plan: null, missing: PlanMissing.stale);
     }
     return (plan: held.plan, missing: null);

@@ -11,6 +11,7 @@
 import 'dart:async';
 
 import 'package:klabautermann_host/klabautermann_host.dart' show HostProfile;
+import 'package:meta/meta.dart';
 import 'package:seance_core/seance_core.dart'
     show
         ElevatedExecutor,
@@ -40,6 +41,10 @@ typedef AdminValidator =
 /// password, which never leave the engine.
 final class AdminSession {
   AdminSession._(this.executor, this._password);
+
+  /// A session over [executor], for the runner's tests.
+  @visibleForTesting
+  AdminSession.test(this.executor, this._password);
 
   final ElevatedExecutor executor;
   final String? _password;

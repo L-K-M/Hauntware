@@ -27,6 +27,10 @@ import '../links/link_connector.dart';
 import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
 import '../logs/log_stream_router.dart';
+import '../operations/confirmation.dart';
+import '../operations/operation_runner.dart';
+import '../operations/plan_registry.dart';
+import '../operations/plan_types.dart' show RequiredLevel;
 import '../sampling/sampling_scheduler.dart';
 import '../sampling/subscriptions.dart';
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
@@ -170,6 +174,13 @@ void engineMain(
   // observe-only (SAF-01).
   AdminModeController? admin;
   var safetyPolicy = const SafetyPolicy();
+  // Previewed plans and the runner of confirmed ones (03 §8.5). A plan
+  // runs only on the link generation it was planned on: each server's
+  // generation counts the times its link became ready.
+  final plans = PlanRegistry();
+  final linkGenerations = <String, int>{};
+  final readyLinks = <String>{};
+  OperationRunner? runner;
 
   // FL-02's imported hosts, in D13's device-local store (03 §4.10),
   // opened before the first request is handled. Each import replaces the
@@ -253,7 +264,16 @@ void engineMain(
               scheduler?.update(event.serverId);
               logs?.update(event.serverId);
               docker?.update(event.serverId);
-              if (event.status is! LinkReady && event.status is! LinkDegraded) {
+              if (event.status is LinkReady || event.status is LinkDegraded) {
+                if (readyLinks.add(event.serverId)) {
+                  linkGenerations.update(
+                    event.serverId,
+                    (n) => n + 1,
+                    ifAbsent: () => 1,
+                  );
+                }
+              } else {
+                readyLinks.remove(event.serverId);
                 admin?.linkLost(event.serverId);
               }
             }
@@ -287,6 +307,7 @@ void engineMain(
       prompts: prompts,
       emit: uiPort.send,
     );
+    runner = OperationRunner(linkFor: links.link, emit: uiPort.send);
     scheduler = SamplingScheduler(
       subscriptions: sampling,
       linkFor: links.link,
@@ -394,6 +415,7 @@ void engineMain(
       ?..forget(forgotten)
       ..retain(fleetIds);
     admin?.forget(forgotten);
+    plans.forget(forgotten);
     // Before the caller sends the fleet or an EndpointChanged, so no
     // probe of a server starts, and no answer for it goes out, once the
     // app hears it left or lost its pin.
@@ -748,10 +770,48 @@ void engineMain(
         // Not awaited: the password prompt's answer comes through this
         // queue.
         unawaited(admin!.enable(serverId));
-      case RunAction(:final planId):
-        // Nothing is planned yet, so no plan is held under any id.
-        uiPort.send(
-          ActionRefused(ActionRefusalReason.unknownPlan, planId: planId),
+      case RunAction(:final planId, :final confirmation):
+        // A plan is taken once: a refused run needs a new preview.
+        final (:plan, :missing) = plans.take(
+          planId,
+          linkGeneration: (id) => linkGenerations[id] ?? 0,
+        );
+        void refuse(ActionRefusalReason reason) =>
+            uiPort.send(ActionRefused(reason, planId: planId));
+        if (plan == null) {
+          refuse(switch (missing!) {
+            PlanMissing.unknown => ActionRefusalReason.unknownPlan,
+            PlanMissing.expired => ActionRefusalReason.expiredPlan,
+            PlanMissing.stale => ActionRefusalReason.stalePlan,
+          });
+          return;
+        }
+        final serverId = plan.intent.serverId;
+        if (safetyRefusal(safetyPolicy, serverId) case final reason?) {
+          refuse(reason);
+          return;
+        }
+        if (!confirmationSatisfies(
+          required: plan.tier,
+          given: confirmation.tier,
+          targetName: plan.targetName,
+          phrase: confirmation.phrase,
+        )) {
+          refuse(ActionRefusalReason.confirmationMismatch);
+          return;
+        }
+        final session = admin?.session(serverId);
+        if (plan.requiredLevel == RequiredLevel.admin && session == null) {
+          refuse(ActionRefusalReason.adminRequired);
+          return;
+        }
+        if (session != null) admin?.touch(serverId);
+        // Not awaited, like the reads: a plan's steps take as long as
+        // they take, and the queue keeps serving the app meanwhile.
+        unawaited(
+          runner?.run(planId, plan, session: session).then((finished) {
+            if (session != null) admin?.touch(serverId);
+          }),
         );
       case Shutdown():
         // Each stream's end goes out before the isolate does, and its

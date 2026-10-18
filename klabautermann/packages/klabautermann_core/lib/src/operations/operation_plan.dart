@@ -16,9 +16,8 @@ import 'plan_types.dart';
 @immutable
 final class OperationPlan {
   /// [targetName] is what a typed confirmation must repeat: the unit,
-  /// container or stack name as the user sees it. [expectedState] holds
-  /// what re-validation compares right before the run (03 §8.5): a
-  /// container id, a PID's start ticks, a stack's config hash.
+  /// container or stack name as the user sees it. [revalidate] lists what
+  /// the runner checks again right before the first step (03 §8.5).
   OperationPlan({
     required this.intent,
     required this.kind,
@@ -31,10 +30,10 @@ final class OperationPlan {
     this.impact,
     this.ownership,
     this.protected,
-    Map<String, String> expectedState = const {},
+    Iterable<Revalidation> revalidate = const [],
   }) : steps = List.unmodifiable(steps),
        hostWrites = List.unmodifiable(hostWrites),
-       expectedState = Map.unmodifiable(expectedState),
+       revalidate = List.unmodifiable(revalidate),
        danger = List.unmodifiable(_lint(steps)),
        tier = confirmationTier(
          kind,
@@ -60,7 +59,7 @@ final class OperationPlan {
   final PlanImpact? impact;
   final PlanOwnership? ownership;
   final ProtectedReason? protected;
-  final Map<String, String> expectedState;
+  final List<Revalidation> revalidate;
 
   /// What `DangerLinter.scan` found in the shell steps' words.
   final List<DangerFinding> danger;
@@ -92,4 +91,38 @@ final class OperationPlan {
     for (final step in steps)
       if (step is ShellStep) ...DangerLinter.scan(step.argv.join(' ')),
   ];
+}
+
+/// What the runner checks again right before a plan's first step (03
+/// §8.5). Each holds what the preview saw.
+sealed class Revalidation {
+  const Revalidation();
+}
+
+/// The unit still loads.
+final class UnitLoaded extends Revalidation {
+  const UnitLoaded(this.unit);
+
+  final String unit;
+}
+
+/// Process [pid] is still the one that started at [startTicks].
+final class ProcessStarted extends Revalidation {
+  const ProcessStarted(this.pid, this.startTicks);
+
+  final int pid;
+  final int startTicks;
+}
+
+/// A Docker target is unchanged: the container still has [id], or the
+/// stack's configuration still hashes to it. The Docker planners check
+/// these through the engine's API (M4 E15).
+final class DockerTargetUnchanged extends Revalidation {
+  const DockerTargetUnchanged(this.target, this.id);
+
+  /// The container name or the stack's project.
+  final String target;
+
+  /// The container id or the configuration hash the preview saw.
+  final String id;
 }
