@@ -469,6 +469,7 @@ final class DockerRouter {
                 ),
               ),
           openFileSystem: link.openFileSystem,
+          admin: () => _adminFor?.call(session.serverId),
         );
         session.endpoint = endpoint;
         _state(

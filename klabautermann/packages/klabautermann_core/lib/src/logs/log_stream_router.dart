@@ -24,6 +24,8 @@ import 'dart:async';
 import 'package:seance_core/seance_core.dart'
     show SshLink, SshLinkClosed, quoteShellWord;
 
+import '../admin/admin_mode.dart' show AdminSession;
+import '../admin/elevated_link.dart';
 import '../engine/protocol.dart';
 import '../links/channel_quota.dart';
 import 'log_follower.dart';
@@ -36,10 +38,22 @@ const kLogStreamsPerServerMax = 16;
 
 /// Builds the [LogService] of one link; tests pass a fake clock.
 typedef LogServiceOpener =
-    LogService Function(SshLink link, void Function(EngineEvent) emit);
+    LogService Function(
+      SshLink link,
+      void Function(EngineEvent) emit, {
+      SshLink? Function()? elevatedLink,
+    });
 
-LogService _defaultService(SshLink link, void Function(EngineEvent) emit) =>
-    LogService(link: link, quote: quoteShellWord, emit: emit);
+LogService _defaultService(
+  SshLink link,
+  void Function(EngineEvent) emit, {
+  SshLink? Function()? elevatedLink,
+}) => LogService(
+  link: link,
+  quote: quoteShellWord,
+  emit: emit,
+  elevatedLink: elevatedLink,
+);
 
 Duration Function() _monotonicClock() {
   final watch = Stopwatch()..start();
@@ -56,6 +70,7 @@ final class LogStreamRouter {
   LogStreamRouter({
     required this._linkFor,
     required this._emit,
+    this._adminFor,
     this._openService = _defaultService,
     this._startTimer = Timer.new,
     Duration Function()? elapsed,
@@ -63,6 +78,10 @@ final class LogStreamRouter {
 
   final SshLink? Function(String serverId) _linkFor;
   final void Function(EngineEvent event) _emit;
+
+  /// Each server's admin session, which an elevated file read runs
+  /// through (LOG-22); absent in an engine without admin mode.
+  final AdminSession? Function(String serverId)? _adminFor;
   final LogServiceOpener _openService;
   final Timer Function(Duration duration, void Function() callback) _startTimer;
   final Duration Function() _elapsed;
@@ -116,6 +135,27 @@ final class LogStreamRouter {
   /// logs, and returns false when an earlier open used it, so ids stay
   /// unique across every log stream (03 §10.1).
   bool claim(String streamId) => _usedIds.add(streamId);
+
+  /// Admin mode turned on or off for [serverId]. When it ends, the
+  /// server's elevated follows end denied, and its elevated reads still
+  /// waiting too; a window under way finishes, bounded as it is.
+  void adminChanged(String serverId) {
+    if (_adminFor?.call(serverId) != null) return;
+    final server = _servers[serverId];
+    if (server == null) return;
+    for (final stream in [...server.waiting, ...server.running.values]) {
+      if (!_elevated(stream.spec)) continue;
+      if (stream.follower case final follower?) {
+        follower.end(kAdminModeOff);
+        continue;
+      }
+      if (server.waiting.remove(stream)) {
+        _streams.remove(stream.id);
+        _emit(LogStreamState(stream.id, kAdminModeOff));
+      }
+    }
+    _pump(server);
+  }
 
   /// [CloseStream]: ends [streamId] as closed, stopping its read. Does
   /// nothing when the stream is not open.
@@ -230,7 +270,17 @@ final class LogStreamRouter {
       server.waiting.remove(stream);
       server.running[stream.id] = stream;
       if (stream.follower case final follower?) {
-        _status(stream, LogStreamRunning(continuity: follower.run(link)));
+        final session = _elevated(stream.spec)
+            ? _adminFor?.call(server.id)
+            : null;
+        if (_elevated(stream.spec) && session == null) {
+          follower.end(kAdminModeOff);
+          continue;
+        }
+        final reader = session == null
+            ? link
+            : ElevatedStartLink(link, session);
+        _status(stream, LogStreamRunning(continuity: follower.run(reader)));
         continue;
       }
       // The service sends the window's states from here.
@@ -250,9 +300,16 @@ final class LogStreamRouter {
     service = _openService(
       link,
       (event) => _onServiceEvent(server, service, event),
+      elevatedLink: () => switch (_adminFor?.call(server.id)) {
+        final session? => ElevatedStartLink(link, session),
+        null => null,
+      },
     );
     return service;
   }
+
+  static bool _elevated(LogStreamSpec spec) =>
+      spec.source is FileLogSource && (spec.source as FileLogSource).elevated;
 
   /// Passes [event] on; an end frees its read's slot for the next read.
   void _onServiceEvent(_Server server, LogService service, EngineEvent event) {

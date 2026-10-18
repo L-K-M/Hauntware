@@ -1904,7 +1904,11 @@ final class KernelLogSource extends LogSource {
 /// and `tail -F`, which follows the file by name across rotation, for a
 /// follow. No archives.
 final class FileLogSource extends LogSource {
-  const FileLogSource(this.path, {this.redacted = false});
+  const FileLogSource(
+    this.path, {
+    this.redacted = false,
+    this.elevated = false,
+  });
 
   /// The absolute path, typed or picked from the common paths; the engine
   /// validates it (03 §8.8) before it quotes it into the command.
@@ -1913,6 +1917,12 @@ final class FileLogSource extends LogSource {
   /// Each line passes the secret redactor before it crosses, as a
   /// detached operation's output does.
   final bool redacted;
+
+  /// The read runs through admin mode's elevation (LOG-22, M4 E16b), for
+  /// a file only root may read; the app asks for it after a read ended
+  /// [LogStreamEndReason.denied]. Without admin mode it ends denied, and
+  /// a follow ends so when admin mode does.
+  final bool elevated;
 }
 
 /// A detached operation's output (03 §7.17): the engine reads its
@@ -2174,7 +2184,7 @@ enum LogStreamEndReason {
   missing,
 
   /// The host refused the read, such as a file only `adm` or root may
-  /// read; admin mode (03 §8.2), which reads such files, arrives with M4.
+  /// read; with admin mode on, an elevated [FileLogSource] reads it.
   denied,
 
   /// The read failed otherwise.

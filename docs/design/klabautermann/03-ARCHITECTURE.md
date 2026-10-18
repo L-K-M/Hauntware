@@ -3179,7 +3179,14 @@ table keeps no action slot otherwise, so its layout does not change.
   `id -nG` drives a notice with the least-privileged fix. Text search
   (LOG-05) over the loaded window with `planchette_core`'s search functions.
   File tail (LOG-22): `tail -n N -F -- '<path>'` with a validated, quoted
-  path; admin mode for files that need `adm` or root.
+  path; admin mode for files that need `adm` or root. As built in M4
+  (E16b), the app asks for that with `FileLogSource(elevated: true)`
+  after a read ended denied: the same command line runs through the
+  admin session's `ElevatedExecutor.start` under `sh -c`, a window on the
+  service's link and a follow on its follower slot. Without admin mode
+  it ends denied with the detail "admin mode is off"; when admin mode
+  ends, an elevated follow and an elevated read still waiting end so
+  too, while a window under way finishes.
 - **v1.** Regex search with server-side `journalctl -g`; highlighting (SGR
   colours only); `/var/log` browser with rotated archives through `zcat`;
   boot picker; export redacted by default.
@@ -3644,7 +3651,14 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   health, ports, images; compose and `.env` read over SFTP when the login
   user can read them, elevated `cat` in admin mode otherwise, shown in
   `planchette_editor` with editing locked (an existing shared package,
-  `EditorController.setEditingLocked` [R]); `.env` values masked.
+  `EditorController.setEditingLocked` [R]); `.env` values masked. As
+  built in M4 (E16b), a read SFTP refuses for permissions runs as root
+  through the admin session while admin mode is on: one elevated exec
+  checks the path is a regular file and not a link (exit 3, as the SFTP
+  stat without following refuses it; exit 4 when missing), prints its
+  size, then at most the cap plus one byte with `head -c`; the same 1 MiB
+  cap, complete-line cut and masking apply, and the process is let go
+  past the cap.
 - **Start, stop, restart (STK-03, MVP).** Per-container API calls on
   existing containers in `depends_on` order (reverse for stop), one-off
   containers skipped.
