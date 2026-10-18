@@ -89,38 +89,47 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       expect(tester.takeException(), isNull);
     },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
   );
 
-  testWidgets('Open Folder shortcut and close retain document editing state', (
-    tester,
-  ) async {
-    await workspace.open(paths.join(root, 'first.txt'));
-    final editor = workspace.active!.editor;
-    await mount(tester, pickFolder: () async => root);
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
-    await tester.sendKeyEvent(LogicalKeyboardKey.keyO);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-    await tester.pumpAndSettle();
-    expect(workspace.folders.root, root);
-    expect(find.byKey(const ValueKey('folder-browser')), findsOneWidget);
+  testWidgets(
+    'Open Folder shortcut and close retain document editing state',
+    (tester) async {
+      await workspace.open(paths.join(root, 'first.txt'));
+      final editor = workspace.active!.editor;
+      await mount(tester, pickFolder: () async => root);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyO);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      expect(workspace.folders.root, root);
+      expect(find.byKey(const ValueKey('folder-browser')), findsOneWidget);
 
-    final before = tester.getSize(find.byType(PlanchetteEditor)).width;
-    await tester.drag(
-      find.byKey(const ValueKey('workspace-divider')),
-      const Offset(60, 0),
-    );
-    await tester.pumpAndSettle();
-    expect(
-      tester.getSize(find.byType(PlanchetteEditor)).width,
-      lessThan(before),
-    );
-    await tester.tap(find.byTooltip('Close folder workspace'));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('folder-browser')), findsNothing);
-    expect(workspace.active!.editor, same(editor));
-    await tester.pumpWidget(const SizedBox.shrink());
-    expect(tester.takeException(), isNull);
-  });
+      final before = tester.getSize(find.byType(PlanchetteEditor)).width;
+      await tester.drag(
+        find.byKey(const ValueKey('workspace-divider')),
+        const Offset(60, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.getSize(find.byType(PlanchetteEditor)).width,
+        lessThan(before),
+      );
+      await tester.tap(find.byTooltip('Close folder workspace'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('folder-browser')), findsNothing);
+      expect(workspace.active!.editor, same(editor));
+      await tester.pumpWidget(const SizedBox.shrink());
+      expect(tester.takeException(), isNull);
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
 }

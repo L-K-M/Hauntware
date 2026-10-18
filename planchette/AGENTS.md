@@ -4,7 +4,7 @@ Read this first. It captures what isn't obvious from the code: how to get a
 toolchain in a fresh environment, how to build/test each piece, and the
 conventions this repo family shares.
 
-Planchette is a desktop text editor (macOS, Windows, Linux) and the shared
+Planchette is a text editor (Android, macOS, Windows, Linux) and the shared
 editor foundation for [Séance](https://github.com/L-K-M/Seance) and
 [Poltergeist](https://github.com/L-K-M/Poltergeist). The shared Flutter editor
 also supports the hosts' mobile flows. Architecture and file-safety contracts
@@ -86,11 +86,13 @@ dart test    packages/planchette_core
 # Desktop app for this host, staged into dist/
 scripts/build.sh
 scripts/build.sh --install  # build + install the app for this host
+scripts/build.sh android    # stage dist/planchette-android.apk; --install uses adb
 ```
 
 CI (`../.github/workflows/ci.yml`) runs Dart analyze+test on every push/PR
 on three OSes, shared-editor/app analysis and tests on Linux, and release
-builds on all three desktop platforms. macOS also runs native keyboard and
+builds on Android and all three desktop platforms. Android also runs native
+document-provider I/O tests. macOS runs native keyboard and
 accessibility fixtures; Linux validates its installable packages.
 
 ## Releasing
@@ -100,8 +102,9 @@ accessibility fixtures; Linux validates its installable packages.
 `version:` in every pubspec in lockstep, keeps committed lockfiles and the
 README version line in step, commits, and tags `v<version>` — pushing that
 tag triggers `../.github/workflows/release.yml`, which tests, then builds
-and publishes the desktop app as the GitHub Release: Linux `.deb`, AppImage
-and bundle for x64, plus macOS and Windows desktop bundles.
+and publishes the app as the GitHub Release: `planchette-android.apk`, Linux
+packages for x64, plus macOS and Windows desktop bundles. Android uses its
+committed public sideload key, matching the suite's existing trust model.
 
 ```bash
 scripts/release.sh 0.2.0          # bump + commit, tag v0.2.0

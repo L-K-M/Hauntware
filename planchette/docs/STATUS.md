@@ -20,11 +20,13 @@
 - Connection dialogs lock the window displaying them and cancel when its
   workspace is disposed. The initiating window retains its own operation lock.
 
-Local proof: app analysis is clean; 570 app tests pass with two existing
+Local proof: app analysis is clean; 579 app tests pass with two existing
 case-insensitive-volume skips. Core analysis and 97 checkout/sorting tests
-pass. Linux release compilation passes. Native modal
+pass. Linux release and Android APK compilation pass. Native modal
 picker behavior, OS keystore prompts and live SSH/account flows still need
 desktop smoke checks; fake-backed tests cover their application contracts.
+Android's provider store accepts the shared document interface and its command
+palette offers provider-supported actions; desktop workspaces stay host-owned.
 
 ## Problem checks (2026-10-06)
 
@@ -357,10 +359,11 @@ a native smoke test. No release tag has been created.
 
 ## Current limits
 
-The standalone app is desktop-only, uses one tabbed window per process, and
-does not restore documents after application exit. It accepts UTF-8 files up
+The standalone app targets Android and the three desktops, and does not
+restore documents after application exit. It accepts UTF-8 files up
 to 4 MiB; highlighting stops above 200,000 characters. File conflict guards
 are best-effort checks, not cross-process locks. Mixed line endings follow
 the selected host normalization policy. Android hard-link publication limits
-are documented in the core package; mobile runtime file I/O has not been
-verified locally.
+are documented in the core package. Android provider writes retain original
+recovery copies but cannot guarantee atomic replacement. Real-device document
+provider and keyboard flows require a manual smoke test.

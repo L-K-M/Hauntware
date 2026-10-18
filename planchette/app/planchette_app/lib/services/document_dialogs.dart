@@ -2,13 +2,15 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as paths;
 
+import 'android_documents.dart';
 import 'document_windows.dart';
 import 'document_workspace.dart';
 import 'document_store.dart';
 
 final class AppDocumentDialogs implements DocumentDialogs {
-  AppDocumentDialogs(this.navigatorKey, {this.pickers});
+  AppDocumentDialogs(this.navigatorKey, {this.pickers, this.android});
   final GlobalKey<NavigatorState> navigatorKey;
+  final AndroidDocuments? android;
 
   /// The window's own native file dialogs. file_selector parents every
   /// dialog to the plugin registry's view — the main window — which may be
@@ -21,6 +23,8 @@ final class AppDocumentDialogs implements DocumentDialogs {
   // Open and Save As work on desktops that run no portal service.
   @override
   Future<List<String>> pickOpenFiles() async {
+    final documents = android;
+    if (documents != null) return documents.pickOpenFiles();
     final window = pickers;
     if (window != null && window.available) {
       return window.pickOpenFiles();
@@ -47,6 +51,10 @@ final class AppDocumentDialogs implements DocumentDialogs {
 
   @override
   Future<String?> pickSavePath(String suggestedName) async {
+    final documents = android;
+    if (documents != null) {
+      return documents.pickSavePath(paths.basename(suggestedName));
+    }
     final window = pickers;
     if (window != null && window.available) {
       return window.pickSavePath(

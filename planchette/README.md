@@ -12,12 +12,12 @@ A focused text editor, and the shared editor foundation for
 **Current version:** v<!-- version -->1.9.1<!-- /version --> · [Releases](https://github.com/L-K-M/Hauntware/releases) (`planchette-*` assets)
 
 Planchette edits UTF-8 text, configuration files, and scripts. Its
-standalone desktop app provides document tabs, Open/New/Save/Save As,
+standalone app provides document tabs, Open/New/Save/Save As,
 find and replace, syntax highlighting, line numbers, and protection against
 accidental loss of unsaved changes. The same editing surface is embedded in
 the two host apps, which retain their own remote-file workflows.
 
-**File > Open Folder** adds a resizable file browser beside the editor tabs.
+On desktop, **File > Open Folder** adds a resizable browser beside the editor tabs.
 **Open Containing Folder** adds it to an existing file window. Opening a file
 directly starts with the editor alone.
 
@@ -43,8 +43,27 @@ From the repository root, `scripts/build.sh` builds and stages the current
 desktop platform under `dist/`. Add `--install` to install on macOS or Linux;
 the Windows build is portable.
 
-The standalone app targets macOS, Linux, and Windows. Server workspaces use
-an optional existing sync account. It has no telemetry or updater.
+The standalone app targets Android, macOS, Linux, and Windows. Desktop server
+workspaces use an optional existing sync account. It has no telemetry or updater.
+
+### Android
+
+Install `planchette-android.apk` from a suite release. Open and Save As use
+Android's system document picker, including its local and cloud providers.
+The Commands button opens the same command palette as the desktop app.
+Back checks unsaved documents; removing the task or OS process termination
+does not restore unsaved buffers.
+
+Provider saves check the original digest and verify the written bytes.
+Providers cannot guarantee atomic replacement. If a write fails or the app
+stops during it, restart Planchette to open the retained original, then use
+Save As. Recovery copies stay in private app storage and are excluded from
+Android backup.
+
+Build locally with `scripts/build.sh android`; add `--install` to install
+through `adb`. The release APK uses a committed public sideload key, like
+Séance and Poltergeist. It permits in-place upgrades but does not authenticate
+the publisher. Download APKs from this repository's releases.
 
 ## Shared packages
 

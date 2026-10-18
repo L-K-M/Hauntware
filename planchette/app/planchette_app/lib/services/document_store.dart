@@ -14,6 +14,17 @@ enum DocumentWriteTarget { local, managedRemote }
 /// still catches it.
 typedef FileStamp = ({DateTime modified, int size});
 
+/// A write may have altered the destination. Its recovery instructions must
+/// remain visible even when the subsequent disk check also detects a change.
+final class DocumentRecoveryException implements Exception {
+  const DocumentRecoveryException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// The shell's filesystem boundary. Tests substitute an in-memory store.
 abstract interface class DocumentStore {
   Future<TextDocument> load(
