@@ -36,6 +36,27 @@ String fixtureString(String name) =>
 /// The fixtures directory, `test/fixtures`.
 Directory get fixturesDirectory => Directory('$_packageRoot/test/fixtures');
 
+/// The recorded API corpora (03 §11.1, D21): the `api-*` directory
+/// names under `test/fixtures`, sorted.
+List<String> get recordedCorpusNames {
+  final names = [
+    for (final e in fixturesDirectory.listSync())
+      if (e is Directory &&
+          e.uri.pathSegments.reversed.skip(1).first.startsWith('api-'))
+        e.uri.pathSegments.reversed.skip(1).first,
+  ]..sort();
+  return names;
+}
+
+/// Loads one recorded corpus, `test/fixtures/<name>`.
+RecordedCorpus recordedCorpus(String name) {
+  final dir = '$_packageRoot/test/fixtures/$name';
+  return RecordedCorpus.parse(
+    File('$dir/MANIFEST.json').readAsStringSync(),
+    (file) => File('$dir/$file').readAsBytesSync(),
+  );
+}
+
 /// The scripted server side of a [FakeDuplexPair]. `pair.client` goes to
 /// the code under test; this object plays the daemon: it records the
 /// request bytes, feeds response bytes, and half-closes.
