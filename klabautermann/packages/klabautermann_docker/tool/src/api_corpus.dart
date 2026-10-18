@@ -208,7 +208,8 @@ Iterable<_Chunk> _chunks(Uint8List rest) sync* {
 /// newline-terminated lines of its body and nothing after them: the end
 /// of the chunk that completes line [lines] for a chunked body, the byte
 /// after that newline for a close-delimited one. Null when the bytes hold
-/// fewer lines, or the body has another framing.
+/// fewer lines, when that chunk ends inside a later line (the cut would
+/// keep a partial line), or when the body has another framing.
 int? truncationPoint(List<int> raw, int lines) {
   assert(lines > 0, 'lines must be positive');
   final bytes = raw is Uint8List ? raw : Uint8List.fromList(raw);
@@ -223,7 +224,8 @@ int? truncationPoint(List<int> raw, int lines) {
       for (final chunk in _chunks(rest)) {
         if (chunk.last) return null;
         for (var i = chunk.dataStart; i < chunk.dataEnd; i++) {
-          if (rest[i] == 10 && ++seen == lines) return bodyStart + chunk.end;
+          if (rest[i] != 10 || ++seen != lines) continue;
+          return rest[chunk.dataEnd - 1] == 10 ? bodyStart + chunk.end : null;
         }
       }
       return null;
@@ -325,11 +327,12 @@ const Set<String> opaqueKeys = {
   'pids_stats',
 };
 
-/// Keys a daemon sends or omits by the host it runs on rather than by
-/// the API: Docker 25's `/info` reports `KernelMemory` and
+/// Top-level keys a daemon sends or omits by the host it runs on rather
+/// than by the API: Docker 25's `/info` reports `KernelMemory` and
 /// `KernelMemoryTCP` on a cgroup v1 host and leaves them out on cgroup
 /// v2 (the CI runners). The check leaves them and their children out on
-/// both sides.
+/// both sides. Deeper down, as in 1.41's inspect `HostConfig`, the same
+/// names are API shape and stay.
 const Set<String> hostDependentKeys = {'KernelMemory', 'KernelMemoryTCP'};
 
 /// A key that is an object id, such as the container ids keying a
@@ -339,13 +342,13 @@ final RegExp _idKey = RegExp(r'^[0-9a-f]{64}$');
 /// Every key path in [value]: `a.b` for nested objects, `a[]` for the
 /// elements of a list (all elements merged), `<id>` for a 64-digit hex
 /// id key, stopping below [opaqueKeys] and leaving out
-/// [hostDependentKeys]. Values themselves never appear.
+/// top-level [hostDependentKeys]. Values themselves never appear.
 Set<String> jsonKeyPaths(Object? value) {
   final paths = <String>{};
   void walk(Object? node, String prefix) {
     if (node is Map) {
       for (final MapEntry(:key, value: child) in node.entries) {
-        if (hostDependentKeys.contains(key)) continue;
+        if (prefix.isEmpty && hostDependentKeys.contains(key)) continue;
         final name = _idKey.hasMatch('$key') ? '<id>' : '$key';
         final path = prefix.isEmpty ? name : '$prefix.$name';
         paths.add(path);

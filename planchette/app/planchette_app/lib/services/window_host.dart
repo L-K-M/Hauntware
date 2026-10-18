@@ -21,6 +21,7 @@ enum WindowHostMethod {
   setTitle,
   pickOpenFiles,
   pickSavePath,
+  pickDirectory,
 }
 
 enum WindowHostEvent { activated, closeRequested }
@@ -95,6 +96,10 @@ abstract interface class WindowHost {
   /// other windows are open, so the runner shows the pickers for the window
   /// that asked. Returns the chosen paths (empty on cancel).
   Future<List<String>> pickOpenFiles(int viewId);
+
+  /// The window's own folder dialog. Returns the chosen path, or null on
+  /// cancel. Host failures throw [WindowHostException].
+  Future<String?> pickDirectory(int viewId);
 
   /// The window's own save dialog. Returns the chosen path, or null on
   /// cancel. [suggestedName] fills the name field; [initialDirectory] the
@@ -236,6 +241,25 @@ final class MethodChannelWindowHost implements WindowHost {
       'the runner answered a non-string path entry',
     );
     return paths;
+  }
+
+  @override
+  Future<String?> pickDirectory(int viewId) async {
+    final Object? answer;
+    try {
+      answer = await documentWindowsChannel.invokeMethod<Object?>(
+        WindowHostMethod.pickDirectory.name,
+        {WindowHostKey.viewId.name: viewId},
+      );
+    } on MissingPluginException {
+      throw const WindowHostException('no window host on this platform');
+    } on PlatformException catch (error) {
+      throw WindowHostException(error.message ?? error.code);
+    }
+    if (answer != null && answer is! String) {
+      throw const WindowHostException('the runner answered no directory path');
+    }
+    return answer as String?;
   }
 
   @override
