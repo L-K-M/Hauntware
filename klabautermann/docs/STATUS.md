@@ -1570,6 +1570,19 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 Docker actions suite (E28): on the Docker fixture, as the fixture
+  user in the `docker` group, the engine runs every container action,
+  removes an unused image and an in-use one only by force with its typed
+  name, and stops, starts and restarts a stack, each followed by the
+  watched list. A managed stack and the container publishing port 22
+  need the typed name, and the unverified and managed stacks are not
+  redeployed. The user's own process is stopped, continued and killed,
+  and a plan whose process exited fails its check. The redeploy pulls a
+  new digest from the fixture registry and recreates the stack as a
+  detached operation under BusyBox `setsid`, which outlives the
+  session's sshd processes, is found again over the new link, has its
+  output followed, and is acknowledged, deleted and audited with
+  `--host` in every step. Locally the suite takes about 90 s.
 - M4 runner-VM actions suite (E29): on the GitHub-hosted runner, as
   throwaway accounts, the engine turns admin mode on after a wrong
   password is asked again, and under `timestamp_timeout=0` (rung 4);

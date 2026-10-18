@@ -6933,6 +6933,30 @@ targets: the stacks `redeploy`, `orphans` (whose `old` service leaves
 its file after it starts) and `managed` (`coolify.managed=true`), and a
 container `ssh-port` publishing port 22 inside dind, a protected target.
 
+As built in M4 (E28), `klabautermann_core/test/integration/
+docker_actions_test.dart` (tags `integration` and `docker`) drives the
+real engine on those targets as the fixture user. Each `ContainerAction`
+verb, `RemoveContainer`, `RemoveImage` (an unused image, then a tag of
+the image in use, refused as `imageInUse` without `force` and needing
+the typed name with it) and each `StackAction` verb runs on the id the
+plan read, and the watched list shows the new state. The managed stack
+and `ssh-port` (`publishesSessionPort`) need the typed name, and
+`RedeployStack` refuses `gone` as `stackUnverified` and `managed` as
+`stackManaged`. A `KillProcess` with another start time is refused as
+`targetChanged`, `SIGSTOP` and `SIGCONT` move the user's own `sleep`
+between `T` and `S`, and a plan whose process ended before it ran fails
+as `revalidation` with `processGone`. The redeploy, after a new digest of
+`klab/app:1` is pushed and dind's tag put back on the old one, runs as a
+`loginSetsid` operation in the user's directory; killing the session's
+sshd processes (`sshd:` or, from OpenSSH 9.8, `sshd-session:`) leaves it
+running, the engine lists it done with exit 0 over the next link, the
+container is recreated from the new digest, its output follows as a
+redacted file once the `ops` read lists it, and acknowledging it deletes
+its files and writes an audit record whose three steps carry `--host
+unix:///var/run/docker.sock`. A refused `RunAction` takes its plan, so a
+second run of it reads `unknownPlan`. Locally the suite takes about 90 s,
+40 s of it the stack stop waiting out each container's grace period.
+
 ### 11.4 Performance budgets (gated from M2)
 
 - Fast tick at most 2.5 KB, plus 30 B for each CPU beyond 32 (D48), and
