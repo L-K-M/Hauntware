@@ -3283,6 +3283,30 @@ void main() {
       expect(await verdicts.negativePins(), {'elsewhere.example.com:22'});
     });
 
+    test('accepting again after the verdict save failed finishes the job',
+        () async {
+      final account = await accountCarryingK2();
+      final pins = InMemoryHostKeyStore();
+      await pins.put(k1);
+      final verdicts = _FailingRemoval();
+      final resolver = PulledPinResolver(hostKeys: pins, verdicts: verdicts);
+
+      final a = deviceA(account.codec, account.configs, pins,
+          verdicts: verdicts);
+      await a.run(account.server);
+      final conflict = a.pinConflicts.single;
+      // Untrusted since the round, so accepting has a verdict to lift.
+      await verdicts.addNegativePin('alpha.example.com:22');
+      verdicts.failNext = true;
+      await expectLater(resolver.acceptPulled(conflict), throwsStateError);
+      expect((await pins.get('alpha.example.com', 22))?.fingerprintSha256,
+          'SHA256:k2');
+
+      expect(await resolver.acceptPulled(conflict),
+          PulledPinResolution.resolved);
+      expect(await verdicts.negativePins(), isEmpty);
+    });
+
     test('a choice made after the local pin changed does nothing', () async {
       final account = await accountCarryingK2();
       final pins = InMemoryHostKeyStore();
@@ -3305,6 +3329,36 @@ void main() {
           isNull);
     });
   });
+}
+
+/// Pin verdicts whose next negative-pin removal fails once, as a full
+/// disk would, when [failNext] is set.
+final class _FailingRemoval implements PinVerdictStore {
+  final _inner = InMemoryPinVerdictStore();
+  bool failNext = false;
+
+  @override
+  Future<Set<String>> negativePins() => _inner.negativePins();
+
+  @override
+  Future<void> addNegativePin(String locator) => _inner.addNegativePin(locator);
+
+  @override
+  Future<void> removeNegativePin(String locator) async {
+    if (failNext) {
+      failNext = false;
+      throw StateError('disk full');
+    }
+    await _inner.removeNegativePin(locator);
+  }
+
+  @override
+  Future<String?> rejectedFingerprintFor(String locator) =>
+      _inner.rejectedFingerprintFor(locator);
+
+  @override
+  Future<void> recordKeptVerdict(String locator, String rejectedFingerprint) =>
+      _inner.recordKeptVerdict(locator, rejectedFingerprint);
 }
 
 /// Awaits a round that must end in [SyncRecordsRefused], and returns it.

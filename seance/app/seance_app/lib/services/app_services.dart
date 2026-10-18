@@ -979,6 +979,14 @@ class AppServices {
       // Thrown after everything else was applied.
       _pinConflicts = coordinator.pinConflicts;
       rethrow;
+    } on Object {
+      // A push can fail after the pull applied and held keys back; those
+      // conflicts still need the user. A round that failed before it held
+      // anything back keeps the previous list.
+      if (coordinator.pinConflicts.isNotEmpty) {
+        _pinConflicts = coordinator.pinConflicts;
+      }
+      rethrow;
     } finally {
       // In a `finally`, because a round can apply the assistant record and
       // *then* fail — the pull happens first, and a push after it can still

@@ -51,15 +51,23 @@ final class PulledPinResolver {
 
   /// Trusts the pulled key in place of this device's pin. Accepting is
   /// explicit re-trust, so it also lifts a negative pin on the address.
+  /// A retry after the verdict save failed finds the pulled key already
+  /// installed and finishes the job rather than reporting it stale.
   Future<PulledPinResolution> acceptPulled(HostKeyConflict conflict) =>
       _gate.run(() async {
         _checkLocators(conflict);
-        final accepted = await _hostKeys.replaceIfCurrent(
-          conflict.local,
-          conflict.pulled,
+        final current = await _hostKeys.get(
+          conflict.pulled.host,
+          conflict.pulled.port,
         );
-        if (accepted == HostKeyInstallResult.conflict) {
-          return PulledPinResolution.stale;
+        if (current?.fingerprintSha256 != conflict.pulled.fingerprintSha256) {
+          final accepted = await _hostKeys.replaceIfCurrent(
+            conflict.local,
+            conflict.pulled,
+          );
+          if (accepted == HostKeyInstallResult.conflict) {
+            return PulledPinResolution.stale;
+          }
         }
 
         await _verdicts.removeNegativePin(conflict.locator);

@@ -626,7 +626,9 @@ class FileHostKeyStore implements ConflictAwareHostKeyStore {
   Future<HostKeyInstallResult> replaceIfCurrent(
     HostKey expected,
     HostKey replacement,
-  ) {
+  ) async {
+    // Async, so a mismatch fails the returned future like every other
+    // error of this store.
     if (expected.locator != replacement.locator) {
       throw ArgumentError.value(
         replacement.locator,
