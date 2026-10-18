@@ -17,6 +17,11 @@ abstract interface class AppearanceSettings
   /// takes but cannot save throws [AppearanceNotSavedException] instead,
   /// in the app and, over the link, in the window.
   Future<void> setMode(ThemeModePreference mode);
+
+  /// The Appearance tab's editor (M4 E25): replaces the palette and the
+  /// mode at once; a no-op when both are already in force. Throws as
+  /// [setMode] does.
+  Future<void> setAppearance(ThemePalette palette, ThemeModePreference mode);
 }
 
 /// An appearance change that was applied but not saved: the app is drawn
@@ -64,9 +69,19 @@ final class AppearanceController extends ChangeNotifier
   /// only which of its light and dark themes is drawn; a no-op when [mode]
   /// is already in force. Completes once the change is saved.
   @override
-  Future<void> setMode(ThemeModePreference mode) async {
-    if (mode == _value.mode) return;
-    _value = AppAppearance(palette: _value.palette, mode: mode);
+  Future<void> setMode(ThemeModePreference mode) =>
+      setAppearance(_value.palette, mode);
+
+  /// Applies the editor's palette and mode, then saves them; a no-op when
+  /// both are already in force. Completes once the change is saved.
+  @override
+  Future<void> setAppearance(
+    ThemePalette palette,
+    ThemeModePreference mode,
+  ) async {
+    final next = AppAppearance(palette: palette, mode: mode);
+    if (next == _value) return;
+    _value = next;
     notifyListeners();
     try {
       await _save?.call(_value);

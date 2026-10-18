@@ -47,6 +47,12 @@ final class _RefusingAppearance extends ChangeNotifier
   @override
   Future<void> setMode(ThemeModePreference mode) async =>
       throw StateError('read-only appearance');
+
+  @override
+  Future<void> setAppearance(
+    ThemePalette palette,
+    ThemeModePreference mode,
+  ) async => throw StateError('read-only appearance');
 }
 
 /// The desktop settings window (03 §10.2, D32) over fake channels: the main
@@ -421,6 +427,31 @@ void main() {
       expect(remote.appearance.value, appearance.value);
       expect(windowApp(tester).themeMode, ThemeMode.dark);
       expect(windowSwitch(tester), ThemeModePreference.dark);
+    });
+
+    testWidgets('a preset picked in the window re-themes the main window '
+        'through the link (M4 E25)', (tester) async {
+      final remote = await pumpBothWindows(tester, appearance);
+      final target = klabautermannThemePresets.all
+          .firstWhere(
+            (p) => p.name != appearance.value.palette.name && p.surface != null,
+          )
+          .name;
+
+      await tester.tap(find.text(target));
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+
+      expect(appearance.value.palette.name, target);
+      expect(remote.appearance.value, appearance.value);
+      expect(
+        mainApp(tester).theme?.colorScheme.surface,
+        appearance.value.palette.surface,
+      );
+      expect(
+        windowApp(tester).theme?.colorScheme.surface,
+        appearance.value.palette.surface,
+      );
     });
 
     testWidgets('a change in the window the app applies but cannot save '

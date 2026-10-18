@@ -12,7 +12,10 @@
 - Remote editing uses Poltergeist's managed checkouts and content-checked
   uploads. Buffer edits, saved-local/upload-pending changes and successful
   remote saves have distinct states. Save All retries pending uploads.
-  Save a Local Copy exports without retargeting the remote tab.
+  Save a Local Copy exports without retargeting the remote tab. Saves, file
+  opens and Open Server fail promptly while a dropped server reconnects
+  instead of keeping a tab busy or the window locked and blocking quit; the
+  local copy stays pending.
 - Recover Remote Edits reopens pending copies offline after restart. Quit
   retains durable copies; explicit tab discard removes them. Managed loads
   reject symlinks, and managed saves use the shared checkout-recovery prefix.
@@ -22,9 +25,11 @@
 
 Local proof: app analysis is clean; 579 app tests pass with two existing
 case-insensitive-volume skips. Core analysis and 97 checkout/sorting tests
-pass. Linux release and Android APK compilation pass. Native modal
-picker behavior, OS keystore prompts and live SSH/account flows still need
-desktop smoke checks; fake-backed tests cover their application contracts.
+pass. Linux release and Android APK compilation pass. A live OpenSSH run
+(2026-10-18, service layer, no UI) confirmed first-use host-key pinning,
+SFTP saves, same-metadata conflict blocking, changed-key refusal and save
+after reconnecting. Native modal picker behavior, OS keystore prompts,
+account sync and the desktop UI over live SSH still need smoke checks.
 Android's provider store accepts the shared document interface and its command
 palette offers provider-supported actions; desktop workspaces stay host-owned.
 

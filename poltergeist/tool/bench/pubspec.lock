@@ -143,7 +143,7 @@ packages:
       path: "../../packages/poltergeist_bench"
       relative: true
     source: path
-    version: "1.9.1"
+    version: "1.9.2"
   posix:
     dependency: transitive
     description:
@@ -158,14 +158,14 @@ packages:
       path: "../../../seance/packages/seance_core"
       relative: true
     source: path
-    version: "1.9.1"
+    version: "1.9.2"
   seance_protocol:
     dependency: transitive
     description:
       path: "../../../seance/packages/seance_protocol"
       relative: true
     source: path
-    version: "1.9.1"
+    version: "1.9.2"
   source_span:
     dependency: transitive
     description:

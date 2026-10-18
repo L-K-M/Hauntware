@@ -385,7 +385,6 @@
   "settingsTabDocker": "Docker",
   "settingsTabSafety": "Safety",
   "settingsTabAlerts": "Alerts",
-  "themeLabel": "Theme",
   "themeSystem": "System",
   "themeLight": "Light",
   "themeDark": "Dark",
@@ -3524,5 +3523,281 @@
         "example": "sync_enrollment.json"
       }
     }
+  },
+  "appearanceThemeTitle": "Theme",
+  "@appearanceThemeTitle": {
+    "description": "Appearance tab: heading of the preset grid."
+  },
+  "appearanceThemeHelpTitle": "Themes",
+  "@appearanceThemeHelpTitle": {
+    "description": "Appearance tab: title of the theme help dialog."
+  },
+  "appearanceThemeHelp": "A theme is kept on this device only and never syncs. To use one elsewhere, copy it here and paste it into Klabautermann on the other device.",
+  "@appearanceThemeHelp": {
+    "description": "Appearance tab: body of the theme help dialog."
+  },
+  "appearanceThemeFootnote": "Picking a theme copies its colours here. It is a starting point, not a mode, so everything below stays yours to change.",
+  "@appearanceThemeFootnote": {
+    "description": "Appearance tab: small print under the preset grid."
+  },
+  "appearancePresetTooltip": "Use the {name} theme",
+  "@appearancePresetTooltip": {
+    "description": "Appearance tab: tooltip of a preset tile.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Paper"
+      }
+    }
+  },
+  "appearanceModeTitle": "Mode",
+  "@appearanceModeTitle": {
+    "description": "Appearance tab: heading of the light/dark mode section."
+  },
+  "appearanceModeLead": "Automatic colours follow",
+  "@appearanceModeLead": {
+    "description": "Appearance tab: line above the mode switch."
+  },
+  "appearanceOwnSurfaceDark": "This theme has its own surface, so it is always dark. Set Surface to Automatic to choose a mode.",
+  "@appearanceOwnSurfaceDark": {
+    "description": "Appearance tab: note when a dark palette sets its own surface."
+  },
+  "appearanceOwnSurfaceLight": "This theme has its own surface, so it is always light. Set Surface to Automatic to choose a mode.",
+  "@appearanceOwnSurfaceLight": {
+    "description": "Appearance tab: note when a light palette sets its own surface."
+  },
+  "appearanceColoursTitle": "Colours",
+  "@appearanceColoursTitle": {
+    "description": "Appearance tab: heading of the colour slots."
+  },
+  "appearanceColoursHelpTitle": "Automatic colours",
+  "@appearanceColoursHelpTitle": {
+    "description": "Appearance tab: title of the colours help dialog."
+  },
+  "appearanceColoursHelp": "Automatic colours are the light or dark neutrals Klabautermann ships with, as the mode picks them. Once you give the theme a surface of its own, they are mixed from that surface and the text instead. Lines and the selection may be translucent.",
+  "@appearanceColoursHelp": {
+    "description": "Appearance tab: body of the colours help dialog."
+  },
+  "appearanceAccent": "Accent",
+  "@appearanceAccent": {
+    "description": "Appearance tab: the accent colour row."
+  },
+  "appearanceSlotSurface": "Surface",
+  "@appearanceSlotSurface": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotSidebar": "Sidebar",
+  "@appearanceSlotSidebar": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotRaised": "Headers and bars",
+  "@appearanceSlotRaised": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotText": "Text",
+  "@appearanceSlotText": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotSecondaryText": "Secondary text",
+  "@appearanceSlotSecondaryText": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotHairline": "Lines",
+  "@appearanceSlotHairline": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotSelection": "Selection",
+  "@appearanceSlotSelection": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotOnline": "Online",
+  "@appearanceSlotOnline": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotOffline": "Offline",
+  "@appearanceSlotOffline": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotConnecting": "Connecting",
+  "@appearanceSlotConnecting": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotUnknown": "Unknown",
+  "@appearanceSlotUnknown": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceStatusTitle": "Status colours",
+  "@appearanceStatusTitle": {
+    "description": "Appearance tab: heading of the status colour slots."
+  },
+  "appearanceStatusFootnote": "Each status also keeps its own shape and its name, so these colours never have to say it alone.",
+  "@appearanceStatusFootnote": {
+    "description": "Appearance tab: small print under the status colours."
+  },
+  "appearanceAutomatic": "Automatic",
+  "@appearanceAutomatic": {
+    "description": "Appearance tab: checkbox beside a colour that follows the mode."
+  },
+  "appearanceAutomaticSemantics": "{label}: Automatic",
+  "@appearanceAutomaticSemantics": {
+    "description": "Appearance tab: screen reader label of a colour's Automatic checkbox.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Surface"
+      }
+    }
+  },
+  "appearanceChooseColour": "Choose the {label} colour",
+  "@appearanceChooseColour": {
+    "description": "Appearance tab: tooltip of a colour swatch.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Surface"
+      }
+    }
+  },
+  "appearanceChooseAutomaticColour": "Choose a {label} colour (now Automatic)",
+  "@appearanceChooseAutomaticColour": {
+    "description": "Appearance tab: tooltip of an Automatic colour's swatch.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Surface"
+      }
+    }
+  },
+  "appearanceShapeTitle": "Shape and type",
+  "@appearanceShapeTitle": {
+    "description": "Appearance tab: heading of the font and corner controls."
+  },
+  "appearanceInterfaceFont": "Interface font",
+  "@appearanceInterfaceFont": {
+    "description": "Appearance tab: label of the interface font field."
+  },
+  "appearanceInterfaceFontHint": "System default",
+  "@appearanceInterfaceFontHint": {
+    "description": "Appearance tab: hint of the empty interface font field."
+  },
+  "appearanceInterfaceFontHelper": "Logs and commands keep their monospace font.",
+  "@appearanceInterfaceFontHelper": {
+    "description": "Appearance tab: helper text under the interface font field."
+  },
+  "appearanceCorners": "Corners",
+  "@appearanceCorners": {
+    "description": "Appearance tab: label of the corner slider."
+  },
+  "appearanceCornersSquare": "Square",
+  "@appearanceCornersSquare": {
+    "description": "Appearance tab: corner slider value at no rounding."
+  },
+  "appearanceCornersPercent": "{percent}%",
+  "@appearanceCornersPercent": {
+    "description": "Appearance tab: corner slider value as a percentage.",
+    "placeholders": {
+      "percent": {
+        "type": "int",
+        "example": "65"
+      }
+    }
+  },
+  "appearanceCornersSemantics": "Corners {label}",
+  "@appearanceCornersSemantics": {
+    "description": "Appearance tab: screen reader value of the corner slider.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "65%"
+      }
+    }
+  },
+  "appearanceShareTitle": "Share",
+  "@appearanceShareTitle": {
+    "description": "Appearance tab: heading of copy and paste."
+  },
+  "appearanceCopyTheme": "Copy theme",
+  "@appearanceCopyTheme": {
+    "description": "Appearance tab: button that copies the theme as text."
+  },
+  "appearancePasteTheme": "Paste theme",
+  "@appearancePasteTheme": {
+    "description": "Appearance tab: button that pastes a theme."
+  },
+  "appearanceShareFootnote": "Copies the theme as text you can keep or send. Pasting reads what it can and leaves everything else at the default.",
+  "@appearanceShareFootnote": {
+    "description": "Appearance tab: small print under copy and paste."
+  },
+  "appearanceThemeCopied": "Theme copied.",
+  "@appearanceThemeCopied": {
+    "description": "Appearance tab: toast after Copy theme."
+  },
+  "appearancePasteNotATheme": "The clipboard does not hold a theme. Copy one with Copy theme first.",
+  "@appearancePasteNotATheme": {
+    "description": "Appearance tab: toast when the clipboard holds no theme."
+  },
+  "appearanceStartOverTitle": "Start over",
+  "@appearanceStartOverTitle": {
+    "description": "Appearance tab: heading of the reset control."
+  },
+  "appearanceResetButton": "Reset to {name}",
+  "@appearanceResetButton": {
+    "description": "Appearance tab: button that resets the theme to the initial preset.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Klabautermann"
+      }
+    }
+  },
+  "appearanceUsingOwnColours": "Using your own colours.",
+  "@appearanceUsingOwnColours": {
+    "description": "Appearance tab: status beside the reset button when no preset matches."
+  },
+  "appearanceUsingPreset": "Using {name}.",
+  "@appearanceUsingPreset": {
+    "description": "Appearance tab: status beside the reset button when a preset matches.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Paper"
+      }
+    }
+  },
+  "appearanceResetTitle": "Reset the theme?",
+  "@appearanceResetTitle": {
+    "description": "Appearance tab: title of the reset confirmation."
+  },
+  "appearanceResetBody": "Every colour, the font and the corners go back to the {name} theme. The mode stays as it is.",
+  "@appearanceResetBody": {
+    "description": "Appearance tab: body of the reset confirmation.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Klabautermann"
+      }
+    }
+  },
+  "appearanceCancel": "Cancel",
+  "@appearanceCancel": {
+    "description": "Appearance tab: cancels the reset."
+  },
+  "appearanceReset": "Reset",
+  "@appearanceReset": {
+    "description": "Appearance tab: confirms the reset."
+  },
+  "appearanceAbout": "About {title}",
+  "@appearanceAbout": {
+    "description": "Appearance tab: tooltip of a section's help button.",
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "Colours"
+      }
+    }
+  },
+  "appearanceClose": "Close",
+  "@appearanceClose": {
+    "description": "Appearance tab: closes a section's help dialog."
   }
 }

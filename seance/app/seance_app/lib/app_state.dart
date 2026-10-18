@@ -9,6 +9,7 @@ import 'package:flutter/widgets.dart';
 import 'package:ghost_apk_update/ghost_apk_update.dart';
 import 'package:planchette_editor/planchette_editor.dart'
     show EditorLigatures, EditorTextSize, EditorZoom;
+import 'package:seance_core/catalog.dart' show HostKeyConflict;
 import 'package:seance_core/seance_core.dart';
 import 'package:xterm/xterm.dart' show TerminalController;
 
@@ -1778,6 +1779,19 @@ class AppState extends ChangeNotifier {
     });
     notifyListeners();
     _scheduleAutoSync();
+  }
+
+  /// Settles a pulled-pin conflict ([AppServices.resolvePinConflict]) and
+  /// tells Settings the list changed.
+  Future<PulledPinResolution> resolvePinConflict(
+    HostKeyConflict conflict, {
+    required bool keepLocal,
+  }) async {
+    try {
+      return await services.resolvePinConflict(conflict, keepLocal: keepLocal);
+    } finally {
+      notifyListeners();
+    }
   }
 
   /// Run one sync round manually (the "Sync now" button). Surfaces errors to

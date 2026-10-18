@@ -136,9 +136,63 @@ void main() {
       expect(effectiveMemoryUsage(missing), 100);
     });
 
-    test('CPU percent is null without positive deltas', () {
+    test('CPU percent is null without a system delta', () {
       expect(
         cpuPercentDelta(const CpuStats(), const CpuStats(totalUsage: 5)),
+        isNull,
+      );
+    });
+
+    test('CPU percent is null when the container counter went back', () {
+      expect(
+        cpuPercentDelta(
+          const CpuStats(totalUsage: 50, systemCpuUsage: 100),
+          const CpuStats(totalUsage: 10, systemCpuUsage: 200),
+        ),
+        isNull,
+      );
+    });
+
+    test('an idle container is 0 %, not unknown', () {
+      expect(
+        cpuPercentDelta(
+          const CpuStats(totalUsage: 50, systemCpuUsage: 100, onlineCpus: 4),
+          const CpuStats(totalUsage: 50, systemCpuUsage: 200, onlineCpus: 4),
+        ),
+        0,
+      );
+    });
+
+    test('a missing system counter is unknown too', () {
+      expect(
+        cpuPercentDelta(
+          const CpuStats(totalUsage: 50, onlineCpus: 4),
+          const CpuStats(totalUsage: 60, systemCpuUsage: 200, onlineCpus: 4),
+        ),
+        isNull,
+      );
+      expect(
+        cpuPercentDelta(
+          const CpuStats(totalUsage: 50, systemCpuUsage: 100, onlineCpus: 4),
+          const CpuStats(totalUsage: 60, onlineCpus: 4),
+        ),
+        isNull,
+      );
+    });
+
+    test('a missing container counter is unknown, not idle', () {
+      expect(
+        cpuPercentDelta(
+          const CpuStats(systemCpuUsage: 100, onlineCpus: 4),
+          const CpuStats(systemCpuUsage: 200, onlineCpus: 4),
+        ),
+        isNull,
+      );
+      expect(
+        cpuPercentDelta(
+          const CpuStats(totalUsage: 50, systemCpuUsage: 100),
+          const CpuStats(systemCpuUsage: 200),
+        ),
         isNull,
       );
     });

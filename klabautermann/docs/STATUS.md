@@ -188,8 +188,16 @@ M2, the host read MVP, is the current milestone. What is on main:
   `Libpod-API-Version` and reports `DockerEndpointState`. Results are
   typed; inspect `Path`/`Args`, `Entrypoint`/`Cmd` and health output
   cross masked, and the list drops its command line. Tested over fakes
-  only; no app surface yet (D12), no `/system/df` (D03), no watch or
-  events (D06), no low-session mode (D09).
+  only; no app surface yet (D12), no `/system/df` (D03), no
+  low-session mode (D09).
+- Docker watches (M3, D06, 03 §7.12, §10.1): `DockerWatch` keeps the
+  container, image and stack lists current from one `/events` stream
+  per server (250 ms batches, targeted re-reads by container id,
+  resume with `since`, a full re-list after a gap over 60 s) and reads
+  one-shot list stats for the ids on screen every 5 s (4 at once on
+  streamlocal, one at a time on a relay), all as `DockerListChanged`.
+  Tested over fakes only; the app does not watch yet (D13), and
+  relay channels are not counted in `ChannelQuota` until D09.
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and
@@ -1167,8 +1175,7 @@ M2, the host read MVP, is the current milestone. What is on main:
   `klabautermann_docker/test/fixtures/api-*/`. Check mode compares a
   fresh capture by structure, never by value; `--docker-api-only`
   [`--update`] runs only these. The committed corpus comes from a local
-  cgroup v1 run; replay tests follow in D02, and rootless daemons stay
-  unrecorded.
+  cgroup v1 run; rootless daemons stay unrecorded.
 - Negative sshd variants and refusal evidence (M3, 03 §5.3, §11.3,
   D11): six Docker hosts on 127.0.0.1:2245 to 2250 refuse with
   `AllowStreamLocalForwarding no`, `DisableForwarding yes`,
@@ -1182,6 +1189,19 @@ M2, the host read MVP, is the current milestone. What is on main:
   CLI. Each result, with sshd's log lines, goes to
   `$KLABAUTERMANN_EVIDENCE_DIR/fixture/refusals/`. Locally it adds
   about 8 s to `run.sh` with the images cached.
+- Recorded API replay (M3, 03 §11.1, D02): `RecordedDaemon` in
+  `klabautermann_docker/testing.dart` serves a corpus to the real HTTP
+  client, matching method, path (a lower negotiated version gets the
+  native recording) and normalized query, whole or one byte at a time.
+  `recorded_api_test.dart` replays every `api-*` directory: negotiation
+  from `_ping` and `/version`, the client's floor and server-minimum
+  refusals and the daemons' own 400s (Podman accepts every version),
+  every typed endpoint with no parser warning, the event, image-count,
+  logs `Content-Type` and `/system/df` gates against the lists, the
+  2,000-line follow demultiplexed, a `since` resume with no lost or
+  repeated line, and one-shot stats then a stream delta. An idle
+  container's CPU now reads 0 % rather than unknown, and Go's zero time
+  (a created container's `StartedAt`) reads as absent.
 - Desktop settings window (03 §10.2, D32): on macOS, Linux and Windows,
   Settings opens in a native window of its own through `ghost_desktop`'s
   `GhostSettingsWindowHost`; phones, and a desktop runner that cannot
@@ -1343,6 +1363,14 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 theme editing (E25): Settings > Appearance edits the theme with
+  ghost_theme's shared editor (presets, mode, colours, font, corners,
+  copy, paste and reset), in the app and in the desktop settings window,
+  in Klabautermann's words.
+- M4 Docker fixture for mutations (E27): the Docker fixture gains a
+  registry on its Compose network, which dind alone trusts, and seeds a
+  stack to redeploy, one with an orphan, a managed one and a container
+  on port 22.
 - Probe and sampler additions (M4, E07, 03 §6.2, §7.17): collector-set
   version 8 prints a `SELF <pid> <ppid>` marker before READY, which
   `HwsSessionReady` carries for 8.6's protected targets, and the

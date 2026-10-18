@@ -4676,7 +4676,7 @@ shows there.
 | `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `RefreshSubscription(serverId, subscriptionId)` (a phone's pull to refresh, PLT-02), `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
-| `DockerQuery(serverId, queryId, query)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason)`, `DockerEvent` (opaque until the event lists) |
+| `DockerQuery(serverId, queryId, query)`, `DockerWatch(serverId, watchId, lists, statsFor)`, `DockerUnwatch(serverId, watchId)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason)`, `DockerListChanged(serverId, list, payload, at, fullRelist)` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(preview)`, `ActionProgress`, `ActionFinished` |
 | `AnswerPrompt(promptId, answer)` (trust, responses or cancel, secret) | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
 | `SetAppActivity(activity)` (foreground or background; D34, D45) | no event: it changes what runs |
@@ -5238,9 +5238,46 @@ the engine in `engine_isolate.dart` beside it):
   probe answer with other sockets, tools or sudo, or a connection that
   drops resolves again; a failure stands until the next query. On
   relay ranks the pool holds at most the short-action share's 2
-  connections and closes them after 30 s without a query [E]. Watches,
-  the endpoint override and typed list events are not in the protocol
-  yet.
+  connections and closes them after 30 s without a query [E]. The
+  endpoint override is not in the protocol yet.
+- **Version 3 (M3 Docker watches).** Watches joined version 3 the same
+  way (D06), and the opaque `DockerEvent` row is gone. `DockerWatch`
+  names the lists a view shows (containers, images, stacks, stats) and,
+  for stats, the container ids on screen (at most 64 [E]); a watch with
+  an id the server holds replaces it, and a server holds at most 16
+  [E]. A watch opens the endpoint as a query does, and one the engine
+  cannot hold (not in the fleet, too many ids, too many watches) is
+  answered with a failed list. `DockerListChanged` carries the whole
+  list each time as a typed payload: the containers without command
+  lines, the images, `groupComposeProjects`' grouping of the same
+  containers, or a stats round (per container CPU %, memory less
+  `inactive_file` or the cache, the limit, and the engine's time), or a
+  typed failure. `fullRelist` marks a list read from nothing: a
+  watch's first read, or one after the stream was lost for over 60 s
+  or could not resume. As built, the engine opens one `/events` stream
+  per server while any watch holds, on a connection of its own (on a
+  relay a follower-type channel that D09 accounts for), filtered to
+  container, image, volume and network events, and lists only once its
+  head has arrived. Container actions that change no list (`exec_*`,
+  `attach`, `resize`, `top`, archive and export) are skipped. Each
+  other event goes through `planEventRefresh`: events within 250 ms
+  [E] of the first are refreshed together, the containers they name
+  (up to 16 [E]) read with an `id` filter and merged in, more of them,
+  or an event without an id, re-listing them all, and image events
+  re-listing the images. A stream that ends opens again over the same
+  endpoint after 1 s, doubling to 30 s [E]; one whose endpoint drops
+  resumes over the next. Either resumes with `since` at the last
+  event's second when the stream was lost 60 s ago or less on the same
+  socket, and re-lists in full otherwise. A resumed stream re-lists
+  too, though not as a fresh list: the daemon replays from memory,
+  which a daemon restarted meanwhile has lost along with the
+  containers it stopped. Stats are one-shot reads of the ids on screen
+  that the list does not know as stopped, every 5 s [E] after the last
+  round, at most 4 at once on streamlocal and one at a time on a
+  relay, the CPU % taken against the previous read, so a container's
+  first read has none, nor the first after a failed read or a gap
+  over 60 s. The last unwatch, Disconnect,
+  fleet removal and an endpoint change end it all.
 - **Monitor set (M2, K30).** `SetMonitorSet(ids)` replaces FL-21's set
   without a shape change. The engine keeps only the fleet servers that
   `monitorEligibilityOf` allows (4.3 step 4) and it can dial, subscribes
@@ -5868,6 +5905,22 @@ the shared theme extensions and provides theme editing (the editable
 palette) and presets in the preview. v1: paste from Séance and Poltergeist
 (same JSON keys).
 
+As built in M4 (E25), the Appearance tab hosts `ghost_theme`'s
+`GhostAppearanceSection` (F4b PR 3, E05) with Klabautermann's style and
+an ARB adapter (`KlabautermannAppearanceStrings`): presets, the mode,
+every colour slot, the interface font, the corners, copy and paste of the
+theme JSON, and reset. It shows no terminal section and no installed-font
+picker. Each edit goes through `AppearanceSettings.setAppearance`: the
+app's controller applies it, repaints and saves the palette and mode
+under `klabautermann.appearance` (the M1 shape, which already held the
+whole palette, so nothing new needs reading). The desktop settings window
+sends the same edit as the `setAppearance` link method, and the snapshot
+that comes back re-themes the window. A change the app does not take
+puts the editor back on the app's appearance; one it takes but cannot
+save stays and says so. The theme mode switch remains `setMode` for any
+caller outside the editor. Pasting a sibling's theme keeps the shared
+codec's lenient reading; v1 adds nothing beyond it.
+
 ### 10.10 Localization and accessibility
 
 - ARB and `gen-l10n` from the first commit with the shared contract scanner
@@ -5937,6 +5990,17 @@ line as two stdcopy frames, each with its own `timestamps=1` prefix,
 and that it returned no lines for a `since` equal to the last lines'
 timestamp, where Docker's `since` is inclusive (5.6). Rootless daemons
 and real hosts are not recorded.
+
+As built in M3 (D02), `RecordedDaemon` in `klabautermann_docker`'s
+`testing.dart` replays a corpus to the real HTTP client, whole or one
+byte at a time, and `recorded_api_test.dart` runs every directory
+through negotiation, refusals, the typed endpoints and the 5.8 gates.
+Replay showed three more daemon facts. Podman's 1.44 compat layer
+sends the pre-1.52 legacy event fields as Docker 1.44 does. Podman's
+`/system/df` lists an image once per name (tag and digest reference),
+so its image count can exceed `/images/json`'s; the summary counts
+images from the list. And an idle container's CPU counter can stand
+still between two samples, which now reads as 0 % instead of unknown.
 
 ### 11.2 Cross-app regression tests added by this plan
 
@@ -6069,6 +6133,17 @@ five put their setting ahead of the common config's `Include`;
 run's keys behind `restrict` (`authorized_keys.restrict`, which `run.sh`
 writes). The claim above that the common config's `AllowTcpForwarding
 no` refuses streamlocal holds on OpenSSH 10.6 (5.3).
+
+As built in M4 (E27), a `registry` service (Distribution 3.0.0, pinned by
+digest) serves the Compose network only: it publishes and exposes
+nothing, and dind trusts it, and only it, over plain HTTP
+(`--insecure-registry=registry:5000`). `check_docker_exposure.dart`
+rejects a registry that publishes a port or leaves the Compose network,
+and any other insecure registry. `seed_docker.sh` pushes the busybox
+image as `registry:5000/klab/app:1` and seeds the mutation suites'
+targets: the stacks `redeploy`, `orphans` (whose `old` service leaves
+its file after it starts) and `managed` (`coolify.managed=true`), and a
+container `ssh-port` publishing port 22 inside dind, a protected target.
 
 ### 11.4 Performance budgets (gated from M2)
 

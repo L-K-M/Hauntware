@@ -1,7 +1,7 @@
-Captured on 2026-10-17 by `klabautermann_core/tool/capture_fixtures.dart`
+Captured on 2026-10-18 by `klabautermann_core/tool/capture_fixtures.dart`
 (local mode, `/usr/sbin/bash -s`) from
 Fedora Linux 44 (Container Image), Linux 6.18.44-fc-v139 x86_64;
-collector-set version 7. Goldens come from
+collector-set version 8. Goldens come from
 `klabautermann_host/tool/regen_goldens.dart`.
 
 Section statuses (each `.txt` file holds the payload only):
@@ -32,5 +32,5 @@ parses as the capture did.
 
 Container capture: `klabautermann/test/integration/capture.sh` ran
 the tool as root in a fresh container of
-`quay.io/fedora/fedora:44@sha256:e9a013b99bbbe0b21c42e029ec7811ef5c8ea5fbdaf78575f7cd482cf4d21b90`,
+`quay.io/fedora/fedora:44@sha256:4a78eff1423dcce55cf68b8fd66e7cdca61c85978283db3ecc3089a8419fbbc0`,
 whose PID 1 is `sleep infinity`.

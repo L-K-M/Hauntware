@@ -4,6 +4,8 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_docker/klabautermann_docker.dart'
+    show groupComposeProjects;
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
         CoreCpuTimes,
@@ -104,6 +106,12 @@ void main() {
           queryId: 'q-1',
           query: DockerContainersQuery(),
         ),
+        const DockerWatch(
+          serverId: 'srv-1',
+          watchId: 'w-1',
+          lists: {DockerWatchList.containers},
+        ),
+        const DockerUnwatch(serverId: 'srv-1', watchId: 'w-1'),
         const PlanAction(
           ActionIntent(serverId: 'srv-1', action: 'container.restart'),
         ),
@@ -190,7 +198,12 @@ void main() {
           serverId: 'srv-1',
           phase: DockerEndpointPhase.waiting,
         ),
-        const DockerEvent('srv-1', {'status': 'start'}),
+        DockerListChanged(
+          serverId: 'srv-1',
+          list: DockerWatchList.images,
+          payload: const DockerImagesPayload([]),
+          at: DateTime.utc(2026, 10, 17),
+        ),
         const ActionPlanned('plan-1', ActionPreview(title: 'restart')),
         const ActionProgress(planId: 'plan-1', stepIndex: 1, stepCount: 3),
         const ActionFinished(
@@ -304,6 +317,77 @@ void main() {
         (failed.payload as DockerQueryFailed).failure,
         DockerQueryFailure.notFound,
       );
+    });
+
+    test('Docker watches and their lists survive with their payloads '
+        '(M7)', () async {
+      final watch =
+          await roundTrip(
+                const DockerWatch(
+                  serverId: 'srv-1',
+                  watchId: 'w-1',
+                  lists: {DockerWatchList.stacks, DockerWatchList.stats},
+                  statsFor: {'abc'},
+                ),
+              )
+              as DockerWatch;
+      expect(watch.lists, {DockerWatchList.stacks, DockerWatchList.stats});
+      expect(watch.statsFor, {'abc'});
+
+      final at = DateTime.utc(2026, 10, 17, 12);
+      final stacks =
+          await roundTrip(
+                DockerListChanged(
+                  serverId: 'srv-1',
+                  list: DockerWatchList.stacks,
+                  payload: DockerStacksPayload(
+                    groupComposeProjects([
+                      ContainerSummary(
+                        id: 'abc',
+                        labels: {
+                          'com.docker.compose.project': MaskedValue.plain(
+                            'demo',
+                          ),
+                          'com.docker.compose.service': MaskedValue.plain(
+                            'web',
+                          ),
+                        },
+                      ),
+                    ]),
+                  ),
+                  at: at,
+                  fullRelist: true,
+                ),
+              )
+              as DockerListChanged;
+      final grouping = (stacks.payload as DockerStacksPayload).grouping;
+      expect(grouping.projects.single.name, 'demo');
+      expect(grouping.projects.single.services.single.name, 'web');
+      expect(stacks.fullRelist, isTrue);
+      expect(stacks.at, at);
+
+      final stats =
+          await roundTrip(
+                DockerListChanged(
+                  serverId: 'srv-1',
+                  list: DockerWatchList.stats,
+                  payload: DockerStatsPayload([
+                    ContainerListStats(
+                      containerId: 'abc',
+                      at: at,
+                      cpuPercent: 12.5,
+                      memoryUsed: 1024,
+                      memoryLimit: 4096,
+                    ),
+                  ]),
+                  at: at,
+                ),
+              )
+              as DockerListChanged;
+      final row = (stats.payload as DockerStatsPayload).stats.single;
+      expect(row.cpuPercent, 12.5);
+      expect(row.memoryUsed, 1024);
+      expect(row.memoryLimit, 4096);
     });
 
     test('sampling requests survive with their ids, streams and '
