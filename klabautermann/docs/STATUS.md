@@ -188,8 +188,7 @@ M2, the host read MVP, is the current milestone. What is on main:
   `Libpod-API-Version` and reports `DockerEndpointState`. Results are
   typed; inspect `Path`/`Args`, `Entrypoint`/`Cmd` and health output
   cross masked, and the list drops its command line. Tested over fakes
-  only; no app surface yet (D12), no `/system/df` (D03), no
-  low-session mode (D09).
+  only; no `/system/df` (D03), no low-session mode (D09).
 - Docker watches (M3, D06, 03 §7.12, §10.1): `DockerWatch` keeps the
   container, image and stack lists current from one `/events` stream
   per server (250 ms batches, targeted re-reads by container id,
@@ -209,6 +208,16 @@ M2, the host read MVP, is the current milestone. What is on main:
   read. On relays the streams take follower slots of their own until
   D09. Tested over fakes only; the app opens none yet (D15), and the
   background does not pause them.
+- Docker in the app (M3, D12, 03 §5.9, §8.4, §10.2): a Docker controller
+  per engine run asks for each server's endpoint as its link comes up
+  and keeps its `DockerEndpointState`; the server header names the
+  transport in every mode (E4) with SAF-08's engine badge, the
+  low-session indicator (always off until D09) and the runtime the API
+  names (M13). The Docker tab waits, looks or says why no route works
+  (with the Access link and a retry), then shows SAF-08's notice until
+  it is dismissed on the device (`settings.json`), the engine strip
+  (DKE-01) and the Containers, Images and Stacks sub-tabs, still empty
+  (D13, D16, D17). Tested against the fake engine only.
 - Stack sources (M3, D08, 03 §7.16, §10.1): the stacks list carries a
   verdict per compose project (verified, unverified with a reason, or
   source not on host naming the marked manager) and the compose CLIs
@@ -863,8 +872,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   the detected runtime read-only (CN-09). A tab whose host panels all lack
   a capability the probe answered does not build its panel: a notice in
   its place names what is missing and links to Access, which the desktop
-  selects with focus moved in and a phone pushes. The Docker tab reads
-  "Arrives with Docker support" until M3 (D54). Since K44b turned links
+  selects with focus moved in and a phone pushes. The Docker tab follows
+  its Docker endpoint since M3 (D12, above). Since K44b turned links
   on, the app's engine sends `HostProfileChanged` for a connected server,
   so the rows and the panel gating follow its probe.
 - Localization contract (D35, A11Y-05):
@@ -1390,6 +1399,16 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 spike S3 (E01): `capture.sh --elevation-only` drives the real
+  elevation executor in containers. It covers sudo 1.9.16p2 under four
+  timestamp and tty rules, sudo-rs 0.2.13 and Alpine's doas, as a
+  non-root account with no tty. The evidence is in `docs/evidence/s3/`,
+  with D65 in 03. Rungs 2 to 4 hold; `requiretty` and password doas
+  need rung 5. Under `timestamp_type=global` a cached record accepts a
+  wrong password, so admin-mode validation (E11) will use
+  `sudo -k -S -p '' -v`. The matrix ran locally; CI runs only its
+  contract tests, since the Alpine package pin can disappear. run0 stays
+  manual.
 - M4 theme editing (E25): Settings > Appearance edits the theme with
   ghost_theme's shared editor (presets, mode, colours, font, corners,
   copy, paste and reset), in the app and in the desktop settings window,

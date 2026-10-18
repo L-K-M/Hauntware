@@ -1722,18 +1722,6 @@
   "@accessRuntimeAlias": {
     "description": "Access tab and Docker tab: note under a socket at Docker's path, which a podman-docker install may serve."
   },
-  "accessDockerPendingTitle": "Arrives with Docker support",
-  "@accessDockerPendingTitle": {
-    "description": "Docker tab: title shown instead of the Docker panels until the release with Docker support."
-  },
-  "accessDockerPendingBody": "Containers, images and stacks arrive with Docker support. Until then, this tab shows the runtime Klabautermann detected, read-only.",
-  "@accessDockerPendingBody": {
-    "description": "Docker tab: body under accessDockerPendingTitle."
-  },
-  "accessDetectedRuntime": "Detected runtime",
-  "@accessDetectedRuntime": {
-    "description": "Docker tab: heading over the container engines the probe found."
-  },
   "accessPanelHiddenTitle": "{panel} is not available on this server",
   "@accessPanelHiddenTitle": {
     "description": "Shown instead of a server panel that cannot work with this server or account; panel is the panel's tab name.",
@@ -3523,6 +3511,244 @@
         "example": "sync_enrollment.json"
       }
     }
+  },
+  "dockerTransportWaiting": "Engine API: waiting for the connection",
+  "@dockerTransportWaiting": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) before the server is connected and its capability check has answered."
+  },
+  "dockerTransportResolving": "Engine API: looking for a route",
+  "@dockerTransportResolving": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) while Klabautermann tries the routes to the engine socket and agrees on an API version."
+  },
+  "dockerTransportSocketForward": "Engine API via SSH socket forward",
+  "@dockerTransportSocketForward": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) for rank 1: SSH forwards the engine socket. Keep the wording of 03 §5.9."
+  },
+  "dockerTransportCliRelay": "Engine API via docker CLI relay (limited streams)",
+  "@dockerTransportCliRelay": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) for rank 2: the engine CLI relays each connection over its own SSH session. \"docker\" is the command name; keep the wording of 03 §5.9."
+  },
+  "dockerTransportSocatRelay": "Engine API via socat relay",
+  "@dockerTransportSocatRelay": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) for rank 4: socat or nc relays each connection. \"socat\" is the command name; keep the wording of 03 §5.9."
+  },
+  "dockerTransportNoRelay": "No Engine API route: forwarding is off and there is no relay",
+  "@dockerTransportNoRelay": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when socket forwarding is refused and the server has no docker, podman, socat or nc to relay through."
+  },
+  "dockerTransportNeedsAdminMode": "No Engine API route: the socket needs admin mode",
+  "@dockerTransportNeedsAdminMode": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the account cannot use the engine socket but sudo exists; admin mode arrives later."
+  },
+  "dockerTransportSocketDenied": "No Engine API route: your account cannot use the socket",
+  "@dockerTransportSocketDenied": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the account cannot use the engine socket and the server has no sudo."
+  },
+  "dockerTransportProbeFailed": "No Engine API route: the socket check failed",
+  "@dockerTransportProbeFailed": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the command that checks the engine socket failed or answered something unreadable."
+  },
+  "dockerTransportNoSocket": "No Engine API route: no engine socket found",
+  "@dockerTransportNoSocket": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the server has no Docker or Podman socket."
+  },
+  "dockerTransportSocketsUnknown": "No Engine API route: the sockets were not checked",
+  "@dockerTransportSocketsUnknown": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the capability check has not reported the server's engine sockets."
+  },
+  "dockerTransportUnreachable": "Engine API: the engine did not answer",
+  "@dockerTransportUnreachable": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when routes to the engine socket opened but the engine answered over none of them."
+  },
+  "dockerTransportUnsupported": "Engine API: the engine's API version is not supported",
+  "@dockerTransportUnsupported": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the engine offers no API version this app can use."
+  },
+  "dockerTransportLinkError": "Engine API: the connection failed while looking for a route",
+  "@dockerTransportLinkError": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the SSH connection failed while the routes were tried."
+  },
+  "dockerLowSession": "Low-session mode",
+  "@dockerLowSession": {
+    "description": "Server header: the server allows few SSH sessions, so Docker shares them sparingly (03 §5.2)."
+  },
+  "dockerBadgeRootfulSocket": "Rootful socket: root-equivalent",
+  "@dockerBadgeRootfulSocket": {
+    "description": "Server header badge (SAF-08, 03 §8.4): the engine socket in use belongs to a rootful engine, so using it equals root on the server."
+  },
+  "dockerBadgeRootlessEngine": "Rootless engine: equals user {user}",
+  "@dockerBadgeRootlessEngine": {
+    "description": "Server header badge (SAF-08, 03 §8.4): the engine in use runs rootless, so using it equals the account that runs it.",
+    "placeholders": {
+      "user": {
+        "type": "String",
+        "example": "alice"
+      }
+    }
+  },
+  "dockerBadgeRootlessEngineLogin": "Rootless engine: equals your login user",
+  "@dockerBadgeRootlessEngineLogin": {
+    "description": "dockerBadgeRootlessEngine when the capability check did not name the login user."
+  },
+  "dockerBadgeCustomSocket": "Custom socket: root-equivalent",
+  "@dockerBadgeCustomSocket": {
+    "description": "Server header badge (SAF-08): a socket path Klabautermann cannot classify, treated as root-equivalent."
+  },
+  "dockerRuntimeDocker": "Docker",
+  "@dockerRuntimeDocker": {
+    "description": "The engine in use when its mode is unknown, as on a custom socket path."
+  },
+  "dockerRuntimePodman": "Podman",
+  "@dockerRuntimePodman": {
+    "description": "The engine in use when its mode is unknown, as on a custom socket path."
+  },
+  "dockerGateWaitingTitle": "Waiting for the connection",
+  "@dockerGateWaitingTitle": {
+    "description": "Docker tab, shown instead of its panels until the server is connected and its capability check has answered."
+  },
+  "dockerGateWaitingBody": "Klabautermann looks for the Docker engine once it is connected to this server and knows what the server offers.",
+  "@dockerGateWaitingBody": {
+    "description": "Body under dockerGateWaitingTitle."
+  },
+  "dockerGateResolvingTitle": "Looking for the Docker engine",
+  "@dockerGateResolvingTitle": {
+    "description": "Docker tab, shown instead of its panels while Klabautermann finds a route to the engine socket."
+  },
+  "dockerGateResolvingBody": "Klabautermann is finding a way to reach the engine socket and agreeing on an API version with the engine.",
+  "@dockerGateResolvingBody": {
+    "description": "Body under dockerGateResolvingTitle."
+  },
+  "dockerGateNoRelay": "Socket forwarding is off on this server, and it has nothing to relay through: no docker or podman command, no socat and no nc.",
+  "@dockerGateNoRelay": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: forwarding refused and no relay. Command names stay as they are."
+  },
+  "dockerGateNeedsAdminMode": "Your account cannot use the engine socket. Reaching it through sudo needs admin mode, which arrives in a later milestone.",
+  "@dockerGateNeedsAdminMode": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the account cannot use the socket, but sudo exists."
+  },
+  "dockerGateSocketDenied": "Your account cannot use the engine socket, and this server has no sudo. The Access tab shows how access is granted.",
+  "@dockerGateSocketDenied": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the account cannot use the socket and there is no sudo."
+  },
+  "dockerGateProbeFailed": "Checking the engine socket failed, so Klabautermann cannot tell how to reach it.",
+  "@dockerGateProbeFailed": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the socket check failed."
+  },
+  "dockerGateNoSocket": "No Docker or Podman socket was found on this server.",
+  "@dockerGateNoSocket": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: no engine socket."
+  },
+  "dockerGateSocketsUnknown": "The server's capability check has not reported its engine sockets.",
+  "@dockerGateSocketsUnknown": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the sockets were not checked."
+  },
+  "dockerGateUnreachable": "A route to the engine socket opened, but the engine did not answer over it.",
+  "@dockerGateUnreachable": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the engine did not answer."
+  },
+  "dockerGateBelowClientFloor": "The engine's newest API version is older than 1.41, the oldest Klabautermann supports.",
+  "@dockerGateBelowClientFloor": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the engine is too old. 1.41 is the Docker API version."
+  },
+  "dockerGateBelowServerMinimum": "The engine only accepts API versions newer than Klabautermann supports.",
+  "@dockerGateBelowServerMinimum": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the engine is too new for this app."
+  },
+  "dockerGateApiVersionUnknown": "The engine did not report an API version Klabautermann can read.",
+  "@dockerGateApiVersionUnknown": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: no readable API version."
+  },
+  "dockerGateLinkError": "The connection to this server failed while Klabautermann looked for the engine.",
+  "@dockerGateLinkError": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the SSH connection failed meanwhile."
+  },
+  "dockerRetry": "Try again",
+  "@dockerRetry": {
+    "description": "Docker tab: asks again for the Docker endpoint or the engine details after a failure."
+  },
+  "dockerTabContainers": "Containers",
+  "@dockerTabContainers": {
+    "description": "Docker tab: the sub-tab listing containers."
+  },
+  "dockerTabImages": "Images",
+  "@dockerTabImages": {
+    "description": "Docker tab: the sub-tab listing images."
+  },
+  "dockerTabStacks": "Stacks",
+  "@dockerTabStacks": {
+    "description": "Docker tab: the sub-tab listing compose stacks."
+  },
+  "dockerEngineHeading": "Engine",
+  "@dockerEngineHeading": {
+    "description": "Docker tab: heading of the strip with the engine's runtime, API version, version and operating system (DKE-01)."
+  },
+  "dockerEngineApi": "API {version}",
+  "@dockerEngineApi": {
+    "description": "Docker tab engine strip: the Docker API version the app negotiated with the engine.",
+    "placeholders": {
+      "version": {
+        "type": "String",
+        "example": "1.47"
+      }
+    }
+  },
+  "dockerEngineVersion": "{name} {version}",
+  "@dockerEngineVersion": {
+    "description": "Docker tab engine strip: the engine's product name and version.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Docker Engine - Community"
+      },
+      "version": {
+        "type": "String",
+        "example": "27.3.1"
+      }
+    }
+  },
+  "dockerEngineVersionUnknown": "{name}, version unknown",
+  "@dockerEngineVersionUnknown": {
+    "description": "Docker tab engine strip: the engine did not report its version.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Docker"
+      }
+    }
+  },
+  "dockerEngineOs": "{os} on {architecture}",
+  "@dockerEngineOs": {
+    "description": "Docker tab engine strip: the engine host's operating system and architecture.",
+    "placeholders": {
+      "os": {
+        "type": "String",
+        "example": "Ubuntu 24.04.1 LTS"
+      },
+      "architecture": {
+        "type": "String",
+        "example": "x86_64"
+      }
+    }
+  },
+  "dockerEngineOsUnknown": "Operating system unknown",
+  "@dockerEngineOsUnknown": {
+    "description": "Docker tab engine strip: the engine did not report its host's operating system."
+  },
+  "dockerEngineReading": "Reading the engine details…",
+  "@dockerEngineReading": {
+    "description": "Docker tab engine strip: while the engine's details are read."
+  },
+  "dockerEngineReadFailed": "The engine details could not be read.",
+  "@dockerEngineReadFailed": {
+    "description": "Docker tab engine strip: reading the engine's details failed."
+  },
+  "dockerNoticeDismiss": "Got it",
+  "@dockerNoticeDismiss": {
+    "description": "Docker tab: dismisses the root-equivalence notice on this device."
+  },
+  "dockerNoticeNotSaved": "Klabautermann could not save that you dismissed the root-equivalence note, so it shows again after a restart.",
+  "@dockerNoticeNotSaved": {
+    "description": "Toast: dismissing the Docker tab's root-equivalence notice could not be saved."
   },
   "appearanceThemeTitle": "Theme",
   "@appearanceThemeTitle": {

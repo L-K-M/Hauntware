@@ -7,6 +7,7 @@ import '../l10n/app_localizations.dart';
 import 'access/access_panel.dart' show AccessPage;
 import 'access/panel_gate.dart';
 import 'coverage.dart' show pausesInBackground;
+import 'docker/docker_panel.dart';
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 import 'jobs_panel.dart';
 import 'logs/logs_panel.dart';
@@ -28,7 +29,7 @@ enum ServerScreenExit {
 
 /// The pushed server screen of 03 §10.5: the server's title, the server
 /// header, and the bottom bar (Overview, Docker, Logs, More). More lists
-/// the other panels, which open full-screen; Docker's body lands with M3.
+/// the other panels, which open full-screen.
 ///
 /// The server stays open while the screen is pushed, and only the
 /// selected destination's panel samples its streams (03 §6.4); a panel
@@ -221,6 +222,11 @@ class _ServerDetailPageState extends State<ServerDetailPage>
                           serverId: widget.server.id,
                           visible: _destinations.index == index,
                         ),
+                      ),
+                      ServerPanel.docker => DockerPanel(
+                        monitoring: widget.monitoring,
+                        serverId: widget.server.id,
+                        visible: _destinations.index == index,
                       ),
                       ServerPanel.logs => LogsPanel(
                         monitoring: widget.monitoring,

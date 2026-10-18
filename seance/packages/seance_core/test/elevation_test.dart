@@ -8,6 +8,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:seance_core/seance_core.dart';
 import 'package:seance_core/src/ssh/elevation.dart';
@@ -358,6 +359,58 @@ void main() {
         classifyElevationStderr(_e8WrongPassword, ElevationTool.sudoRs),
         ElevationFailureKind.wrongPassword,
       );
+    });
+
+    test('classifies every refusal spike S3 recorded', () async {
+      // test/fixtures/elevation/README.md names each file's source.
+      const recorded = {
+        'sudo-1.9.16p2.password-required': (
+          ElevationTool.sudo,
+          ElevationFailureKind.passwordRequired,
+        ),
+        'sudo-1.9.16p2.wrong-password': (
+          ElevationTool.sudo,
+          ElevationFailureKind.wrongPassword,
+        ),
+        'sudo-1.9.16p2.requiretty': (
+          ElevationTool.sudo,
+          ElevationFailureKind.ttyRequired,
+        ),
+        'sudo-rs-0.2.13.password-required': (
+          ElevationTool.sudoRs,
+          ElevationFailureKind.passwordRequired,
+        ),
+        'sudo-rs-0.2.13.prelude-password-required': (
+          ElevationTool.sudoRs,
+          ElevationFailureKind.passwordRequired,
+        ),
+        'sudo-rs-0.2.13.wrong-password': (
+          ElevationTool.sudoRs,
+          ElevationFailureKind.wrongPassword,
+        ),
+        'opendoas-6.8.2.authentication-required': (
+          ElevationTool.doas,
+          ElevationFailureKind.passwordRequired,
+        ),
+        'opendoas-6.8.2.tty-required': (
+          ElevationTool.doas,
+          ElevationFailureKind.ttyRequired,
+        ),
+      };
+      final fixtures = await _recordedRefusals();
+      final files = fixtures
+          .listSync()
+          .map((entry) => entry.uri.pathSegments.last)
+          .where((name) => name.endsWith('.stderr'))
+          .map((name) => name.substring(0, name.length - '.stderr'.length));
+      expect(files, unorderedEquals(recorded.keys));
+      recorded.forEach((name, expected) {
+        final (tool, kind) = expected;
+        final stderr = File.fromUri(
+          fixtures.uri.resolve('$name.stderr'),
+        ).readAsStringSync();
+        expect(classifyElevationStderr(stderr, tool), kind, reason: name);
+      });
     });
 
     test('anchors doas and polkit texts to whole lines', () {
@@ -1947,3 +2000,12 @@ String? _which(String program) {
 
 Object _firstSkip(List<Object> reasons) =>
     reasons.firstWhere((reason) => reason != false, orElse: () => false);
+
+/// test/fixtures/elevation/, found from the package rather than the
+/// working directory: CI runs the suite from the workspace root.
+Future<Directory> _recordedRefusals() async {
+  final library = await Isolate.resolvePackageUri(
+    Uri.parse('package:seance_core/seance_core.dart'),
+  );
+  return Directory.fromUri(library!.resolve('../test/fixtures/elevation/'));
+}

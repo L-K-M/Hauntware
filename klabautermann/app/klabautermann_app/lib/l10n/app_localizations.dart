@@ -2134,24 +2134,6 @@ abstract class AppLocalizations {
   /// **'Podman can also answer on Docker\'s socket path. Docker support will tell them apart.'**
   String get accessRuntimeAlias;
 
-  /// Docker tab: title shown instead of the Docker panels until the release with Docker support.
-  ///
-  /// In en, this message translates to:
-  /// **'Arrives with Docker support'**
-  String get accessDockerPendingTitle;
-
-  /// Docker tab: body under accessDockerPendingTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Containers, images and stacks arrive with Docker support. Until then, this tab shows the runtime Klabautermann detected, read-only.'**
-  String get accessDockerPendingBody;
-
-  /// Docker tab: heading over the container engines the probe found.
-  ///
-  /// In en, this message translates to:
-  /// **'Detected runtime'**
-  String get accessDetectedRuntime;
-
   /// Shown instead of a server panel that cannot work with this server or account; panel is the panel's tab name.
   ///
   /// In en, this message translates to:
@@ -3861,6 +3843,306 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The sync file {fileName} was saved by a newer version of Klabautermann. Sync changes will not be kept after a restart.'**
   String syncFileNewer(String fileName);
+
+  /// The server header's Docker transport label (03 §5.9, E4) before the server is connected and its capability check has answered.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API: waiting for the connection'**
+  String get dockerTransportWaiting;
+
+  /// The server header's Docker transport label (03 §5.9, E4) while Klabautermann tries the routes to the engine socket and agrees on an API version.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API: looking for a route'**
+  String get dockerTransportResolving;
+
+  /// The server header's Docker transport label (03 §5.9, E4) for rank 1: SSH forwards the engine socket. Keep the wording of 03 §5.9.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API via SSH socket forward'**
+  String get dockerTransportSocketForward;
+
+  /// The server header's Docker transport label (03 §5.9, E4) for rank 2: the engine CLI relays each connection over its own SSH session. "docker" is the command name; keep the wording of 03 §5.9.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API via docker CLI relay (limited streams)'**
+  String get dockerTransportCliRelay;
+
+  /// The server header's Docker transport label (03 §5.9, E4) for rank 4: socat or nc relays each connection. "socat" is the command name; keep the wording of 03 §5.9.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API via socat relay'**
+  String get dockerTransportSocatRelay;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when socket forwarding is refused and the server has no docker, podman, socat or nc to relay through.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: forwarding is off and there is no relay'**
+  String get dockerTransportNoRelay;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when the account cannot use the engine socket but sudo exists; admin mode arrives later.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: the socket needs admin mode'**
+  String get dockerTransportNeedsAdminMode;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when the account cannot use the engine socket and the server has no sudo.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: your account cannot use the socket'**
+  String get dockerTransportSocketDenied;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when the command that checks the engine socket failed or answered something unreadable.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: the socket check failed'**
+  String get dockerTransportProbeFailed;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when the server has no Docker or Podman socket.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: no engine socket found'**
+  String get dockerTransportNoSocket;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when the capability check has not reported the server's engine sockets.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: the sockets were not checked'**
+  String get dockerTransportSocketsUnknown;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when routes to the engine socket opened but the engine answered over none of them.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API: the engine did not answer'**
+  String get dockerTransportUnreachable;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when the engine offers no API version this app can use.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API: the engine\'s API version is not supported'**
+  String get dockerTransportUnsupported;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when the SSH connection failed while the routes were tried.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API: the connection failed while looking for a route'**
+  String get dockerTransportLinkError;
+
+  /// Server header: the server allows few SSH sessions, so Docker shares them sparingly (03 §5.2).
+  ///
+  /// In en, this message translates to:
+  /// **'Low-session mode'**
+  String get dockerLowSession;
+
+  /// Server header badge (SAF-08, 03 §8.4): the engine socket in use belongs to a rootful engine, so using it equals root on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Rootful socket: root-equivalent'**
+  String get dockerBadgeRootfulSocket;
+
+  /// Server header badge (SAF-08, 03 §8.4): the engine in use runs rootless, so using it equals the account that runs it.
+  ///
+  /// In en, this message translates to:
+  /// **'Rootless engine: equals user {user}'**
+  String dockerBadgeRootlessEngine(String user);
+
+  /// dockerBadgeRootlessEngine when the capability check did not name the login user.
+  ///
+  /// In en, this message translates to:
+  /// **'Rootless engine: equals your login user'**
+  String get dockerBadgeRootlessEngineLogin;
+
+  /// Server header badge (SAF-08): a socket path Klabautermann cannot classify, treated as root-equivalent.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom socket: root-equivalent'**
+  String get dockerBadgeCustomSocket;
+
+  /// The engine in use when its mode is unknown, as on a custom socket path.
+  ///
+  /// In en, this message translates to:
+  /// **'Docker'**
+  String get dockerRuntimeDocker;
+
+  /// The engine in use when its mode is unknown, as on a custom socket path.
+  ///
+  /// In en, this message translates to:
+  /// **'Podman'**
+  String get dockerRuntimePodman;
+
+  /// Docker tab, shown instead of its panels until the server is connected and its capability check has answered.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the connection'**
+  String get dockerGateWaitingTitle;
+
+  /// Body under dockerGateWaitingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann looks for the Docker engine once it is connected to this server and knows what the server offers.'**
+  String get dockerGateWaitingBody;
+
+  /// Docker tab, shown instead of its panels while Klabautermann finds a route to the engine socket.
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for the Docker engine'**
+  String get dockerGateResolvingTitle;
+
+  /// Body under dockerGateResolvingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann is finding a way to reach the engine socket and agreeing on an API version with the engine.'**
+  String get dockerGateResolvingBody;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: forwarding refused and no relay. Command names stay as they are.
+  ///
+  /// In en, this message translates to:
+  /// **'Socket forwarding is off on this server, and it has nothing to relay through: no docker or podman command, no socat and no nc.'**
+  String get dockerGateNoRelay;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the account cannot use the socket, but sudo exists.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account cannot use the engine socket. Reaching it through sudo needs admin mode, which arrives in a later milestone.'**
+  String get dockerGateNeedsAdminMode;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the account cannot use the socket and there is no sudo.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account cannot use the engine socket, and this server has no sudo. The Access tab shows how access is granted.'**
+  String get dockerGateSocketDenied;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the socket check failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the engine socket failed, so Klabautermann cannot tell how to reach it.'**
+  String get dockerGateProbeFailed;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: no engine socket.
+  ///
+  /// In en, this message translates to:
+  /// **'No Docker or Podman socket was found on this server.'**
+  String get dockerGateNoSocket;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the sockets were not checked.
+  ///
+  /// In en, this message translates to:
+  /// **'The server\'s capability check has not reported its engine sockets.'**
+  String get dockerGateSocketsUnknown;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the engine did not answer.
+  ///
+  /// In en, this message translates to:
+  /// **'A route to the engine socket opened, but the engine did not answer over it.'**
+  String get dockerGateUnreachable;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the engine is too old. 1.41 is the Docker API version.
+  ///
+  /// In en, this message translates to:
+  /// **'The engine\'s newest API version is older than 1.41, the oldest Klabautermann supports.'**
+  String get dockerGateBelowClientFloor;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the engine is too new for this app.
+  ///
+  /// In en, this message translates to:
+  /// **'The engine only accepts API versions newer than Klabautermann supports.'**
+  String get dockerGateBelowServerMinimum;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: no readable API version.
+  ///
+  /// In en, this message translates to:
+  /// **'The engine did not report an API version Klabautermann can read.'**
+  String get dockerGateApiVersionUnknown;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the SSH connection failed meanwhile.
+  ///
+  /// In en, this message translates to:
+  /// **'The connection to this server failed while Klabautermann looked for the engine.'**
+  String get dockerGateLinkError;
+
+  /// Docker tab: asks again for the Docker endpoint or the engine details after a failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get dockerRetry;
+
+  /// Docker tab: the sub-tab listing containers.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers'**
+  String get dockerTabContainers;
+
+  /// Docker tab: the sub-tab listing images.
+  ///
+  /// In en, this message translates to:
+  /// **'Images'**
+  String get dockerTabImages;
+
+  /// Docker tab: the sub-tab listing compose stacks.
+  ///
+  /// In en, this message translates to:
+  /// **'Stacks'**
+  String get dockerTabStacks;
+
+  /// Docker tab: heading of the strip with the engine's runtime, API version, version and operating system (DKE-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Engine'**
+  String get dockerEngineHeading;
+
+  /// Docker tab engine strip: the Docker API version the app negotiated with the engine.
+  ///
+  /// In en, this message translates to:
+  /// **'API {version}'**
+  String dockerEngineApi(String version);
+
+  /// Docker tab engine strip: the engine's product name and version.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} {version}'**
+  String dockerEngineVersion(String name, String version);
+
+  /// Docker tab engine strip: the engine did not report its version.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}, version unknown'**
+  String dockerEngineVersionUnknown(String name);
+
+  /// Docker tab engine strip: the engine host's operating system and architecture.
+  ///
+  /// In en, this message translates to:
+  /// **'{os} on {architecture}'**
+  String dockerEngineOs(String os, String architecture);
+
+  /// Docker tab engine strip: the engine did not report its host's operating system.
+  ///
+  /// In en, this message translates to:
+  /// **'Operating system unknown'**
+  String get dockerEngineOsUnknown;
+
+  /// Docker tab engine strip: while the engine's details are read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the engine details…'**
+  String get dockerEngineReading;
+
+  /// Docker tab engine strip: reading the engine's details failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The engine details could not be read.'**
+  String get dockerEngineReadFailed;
+
+  /// Docker tab: dismisses the root-equivalence notice on this device.
+  ///
+  /// In en, this message translates to:
+  /// **'Got it'**
+  String get dockerNoticeDismiss;
+
+  /// Toast: dismissing the Docker tab's root-equivalence notice could not be saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save that you dismissed the root-equivalence note, so it shows again after a restart.'**
+  String get dockerNoticeNotSaved;
 
   /// Appearance tab: heading of the preset grid.
   ///

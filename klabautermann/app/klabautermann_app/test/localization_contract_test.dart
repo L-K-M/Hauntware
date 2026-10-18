@@ -111,6 +111,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The diagnostic of a sync answer the stopped engine never gave;
   // surfaces show ARB text for its failure kind (syncFailed).
   'lib/controllers/sync_controller.dart': {"'the engine stopped'"},
+  // A Docker query id the engine echoes in its answer (03 §10.1).
+  'lib/controllers/docker_controller.dart': {r"'docker-${_count++}'"},
   'lib/controllers/log_streams.dart': {
     // A log stream id the engine keys a stream's events by (03 §10.1), and
     // the rejected request's class name, which RequestRejected carries.
@@ -224,6 +226,12 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // debugPrint of a dismissal that was not saved; the toast is ARB text.
   'lib/ui/coverage.dart': {r"'$error'"},
+  'lib/ui/docker/docker_panel.dart': {
+    // An assert message; programmer diagnostic, never rendered.
+    "'new controllers come with a new tree (KlabautermannApp, D44)'",
+    // debugPrint of a dismissal that was not saved; the toast is ARB text.
+    r"'$error'",
+  },
   'lib/ui/fleet_row_state.dart': {
     // The root mount point whose use the pressure bar shows.
     "'/'",
