@@ -123,9 +123,12 @@ Future<void> main(List<String> args) async {
   // directory alone; otherwise it keeps this run's pins in memory (D59,
   // D61, D63). It gets the device id read above, after the lock, so
   // enrollment never reads an id another process may have minted.
+  // Probes are on too (FL-04): the engine probes confirmed endpoints and
+  // the fleet rows show the answers.
   final engine = await IsolateEngineClient.spawn(
     supportDirectory: supportDirectory.path,
     linksEnabled: true,
+    probesEnabled: true,
     supportDirectoryAccess: supportDirectoryAccessFor(instanceLock),
     deviceId: settings.deviceId,
   );

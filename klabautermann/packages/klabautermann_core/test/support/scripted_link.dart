@@ -118,9 +118,9 @@ final class ScriptedProcess implements RemoteProcess {
 
   void emitStderr(List<int> bytes) => _stderr.add(bytes);
 
-  /// The program's READY line with [version].
+  /// The program's SELF line, then its READY line with [version].
   void ready([String version = kCollectorSetVersion]) =>
-      emitText('\x1e$nonce READY HWS/1 $version\n');
+      emitText('\x1e$nonce SELF 4242 4241\n\x1e$nonce READY HWS/1 $version\n');
 
   /// A complete reply to [seq] with one section per entry of [sections].
   String reply(int seq, Map<String, String> sections) {

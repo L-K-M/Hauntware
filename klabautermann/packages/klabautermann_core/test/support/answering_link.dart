@@ -88,7 +88,10 @@ final class AnsweringProcess implements RemoteProcess {
       ).firstMatch(_buffer)!.group(1);
       kind = _buffer.contains('c_core()') ? SamplerKind.fast : SamplerKind.slow;
       _buffer = '';
-      _emit('\x1e$_nonce READY HWS/1 $kCollectorSetVersion\n');
+      _emit(
+        '\x1e$_nonce SELF 4242 4241\n'
+        '\x1e$_nonce READY HWS/1 $kCollectorSetVersion\n',
+      );
       return;
     }
     for (var at = _buffer.indexOf('\n'); at >= 0; at = _buffer.indexOf('\n')) {

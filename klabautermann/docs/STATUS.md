@@ -202,8 +202,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   `locatorConflict`. The fleet controller keeps link statuses and probe
   answers only for listed servers, and the rail words every status.
   Only an engine with links on sends link states and prompts, as the
-  app's does since K44b (below). The engine sends no probe answers and
-  fills the new fleet fields only for imports (below).
+  app's does since K44b (below). The engine sends probe answers since
+  K20 (below) and fills the new fleet fields only for imports (below).
 - Protocol v3 sampling (M2, 03 §10.1, K16a, #193): `Subscribe` and
   `Unsubscribe` name one surface's subscription and its `SampleStream`s
   (D45; the health card's failed units are a `failedUnits` stream of their
@@ -438,6 +438,22 @@ M2, the host read MVP, is the current milestone. What is on main:
   records. Engine unit tests use a fake dialer; K24's fixture tests
   (below) dial a containerized sshd, and no manual run against a real
   server has happened yet.
+- Reachability probes (M2, 03 §4.7, §5.12, FL-04, K20): the engine's
+  `ReachabilityService` runs `seance_core`'s `ProbeService` (a TCP
+  connect to the SSH port, 45 s jittered sweeps, at most 6 at once) over
+  the fleet entries with a connect config and a confirmed endpoint:
+  imports (O6's default) and confirmed synced servers, never an
+  unconfirmed or changed one. Each sweep sends a `Reachability` per
+  target; a server behind a jump host is reported unknown without a
+  probe, and one holding a link is answered online. Probing starts after
+  `Hello`'s fleet, sweeps at once for a new or moved target, stops for
+  a server before the fleet or `EndpointChanged` that removes it goes
+  out, and pauses with `SetAppActivity` in the background (phones only
+  send it). `EngineStart.probesEnabled`, off unless given, gates it
+  apart from links, and `main.dart` turns it on (the contract test holds
+  it). The fleet controller drops the answer of a server whose endpoint
+  waits for confirmation. Tested with a fake prober, under a fake clock
+  for the service; no real host has been probed from the app.
 - Shared host-key file store (M2, `seance_core`, 03 D3, F3b-1, #242):
   Poltergeist's `FileHostKeyStore` and its corrupt-file quarantine moved
   into `seance_core` (`package:seance_core/catalog.dart`, re-exported by
@@ -606,10 +622,10 @@ M2, the host read MVP, is the current milestone. What is on main:
   changes are announced, through a live region where the platform takes no
   announcements; samples and probe answers are not. Rows subscribe
   nothing; the engine samples `overview` for the monitor set (K30, below),
-  and the app's engine sends no probe answers (K20). It sends link states
-  and samples since K44b turned links on, so in a real run a row shows
-  its link state once its server is opened or monitored, and its readings
-  while a view or the monitor set holds them.
+  and the app's engine sends probe answers since K20 (below). It sends
+  link states and samples since K44b turned links on, so in a real run a
+  row shows its link state once its server is opened or monitored, and
+  its readings while a view or the monitor set holds them.
 - Monitor set (M2, FL-21, 03 §4.3 step 4, §10.1, K30): every fleet row's
   menu offers Monitor or Stop monitoring, and Settings > Servers (the
   route, and the desktop window through the `setMonitored` link method)
@@ -1310,6 +1326,21 @@ M2, the host read MVP, is the current milestone. What is on main:
   wrong password, so admin-mode validation (E11) will use
   `sudo -k -v`. The matrix ran locally; CI runs only its contract
   tests, since the Alpine package pin can disappear. run0 stays manual.
+- Probe and sampler additions (M4, E07, 03 §6.2, §7.17): collector-set
+  version 8 prints a `SELF <pid> <ppid>` marker before READY, which
+  `HwsSessionReady` carries for 8.6's protected targets, and the
+  assembler ends a session whose READY of this version comes without it.
+  The probe runs `run0 --no-ask-password true` when run0 exists
+  (`HostProfile.run0NonInteractive`; the probe's deadline grows to 175 s
+  for its 17 guarded commands). The slow `ops` collector lists both
+  operation directories, at most 50 records each cut at 4 KiB, framed by
+  byte counts; `parseOps` reads E08's record schema into `OpRecord` and
+  rejects truncated, malformed, other-version and forged records (an id
+  that differs from the file name, or a unit not its own). Tested with
+  record fixtures and through dash and bash (BusyBox sh where
+  installed). Nothing in the engine uses the SELF PIDs or `ops` yet:
+  E10 takes the PIDs into the protected targets, E17 runs `ops` on
+  connect, and `ops` has no platform fixture.
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.

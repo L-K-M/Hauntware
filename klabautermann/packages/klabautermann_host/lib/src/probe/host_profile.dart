@@ -136,6 +136,7 @@ final class HostProfile {
     this.doasPresent,
     this.doasNonInteractive,
     this.run0Present,
+    this.run0NonInteractive,
     this.printfBuiltin,
     Map<String, String?>? tools,
     this.psi,
@@ -205,6 +206,11 @@ final class HostProfile {
   /// `doas -n true` exit status; null without doas.
   final bool? doasNonInteractive;
   final bool? run0Present;
+
+  /// `run0 --no-ask-password true` exit status (03 §8.3 rung 6): true when
+  /// polkit lets run0 elevate without asking; null without run0 or from a
+  /// probe before collector-set version 8.
+  final bool? run0NonInteractive;
 
   /// `command -V printf` outcome (03 §8.3 needs to know whether the
   /// password read uses a builtin).
@@ -360,6 +366,7 @@ final class HostProfile {
       doasPresent: r.boolean('doasPresent'),
       doasNonInteractive: r.boolean('doasNonInteractive'),
       run0Present: r.boolean('run0Present'),
+      run0NonInteractive: r.boolean('run0NonInteractive'),
       printfBuiltin: r.boolean('printfBuiltin'),
       tools: r
           .map('tools')
@@ -419,6 +426,7 @@ final class HostProfile {
     'doasPresent': doasPresent,
     'doasNonInteractive': doasNonInteractive,
     'run0Present': run0Present,
+    'run0NonInteractive': run0NonInteractive,
     'printfBuiltin': printfBuiltin,
     'tools': tools,
     'psi': psi,
