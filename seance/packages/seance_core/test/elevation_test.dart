@@ -8,6 +8,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:seance_core/seance_core.dart';
 import 'package:seance_core/src/ssh/elevation.dart';
@@ -360,7 +361,7 @@ void main() {
       );
     });
 
-    test('classifies every refusal spike S3 recorded', () {
+    test('classifies every refusal spike S3 recorded', () async {
       // test/fixtures/elevation/README.md names each file's source.
       const recorded = {
         'sudo-1.9.16p2.password-required': (
@@ -396,7 +397,8 @@ void main() {
           ElevationFailureKind.ttyRequired,
         ),
       };
-      final files = Directory('test/fixtures/elevation')
+      final fixtures = await _recordedRefusals();
+      final files = fixtures
           .listSync()
           .map((entry) => entry.uri.pathSegments.last)
           .where((name) => name.endsWith('.stderr'))
@@ -404,8 +406,8 @@ void main() {
       expect(files, unorderedEquals(recorded.keys));
       recorded.forEach((name, expected) {
         final (tool, kind) = expected;
-        final stderr = File(
-          'test/fixtures/elevation/$name.stderr',
+        final stderr = File.fromUri(
+          fixtures.uri.resolve('$name.stderr'),
         ).readAsStringSync();
         expect(classifyElevationStderr(stderr, tool), kind, reason: name);
       });
@@ -1998,3 +2000,12 @@ String? _which(String program) {
 
 Object _firstSkip(List<Object> reasons) =>
     reasons.firstWhere((reason) => reason != false, orElse: () => false);
+
+/// test/fixtures/elevation/, found from the package rather than the
+/// working directory: CI runs the suite from the workspace root.
+Future<Directory> _recordedRefusals() async {
+  final library = await Isolate.resolvePackageUri(
+    Uri.parse('package:seance_core/seance_core.dart'),
+  );
+  return Directory.fromUri(library!.resolve('../test/fixtures/elevation/'));
+}
