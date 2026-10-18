@@ -422,8 +422,10 @@ void main() {
       expect(workspace.interactionLocked, isFalse);
 
       // A late grant may be the window's live binding, so it stays open.
+      final opensBeforeGrant = connections.opened.length;
       connections.reconnect!.complete();
       await pumpEventQueue();
+      expect(connections.opened.length, greaterThan(opensBeforeGrant));
       expect(connections.browseClosed, 0);
     },
   );

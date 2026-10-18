@@ -62,6 +62,8 @@ final class WorkspaceRemoteFiles {
   final void Function(Object, StackTrace)? onError;
   final Map<String, ServerConfig> _servers = {};
   final Map<String, _RemotePublication> _publications = {};
+  // The raw pool only binds server configs and disconnects. Channel requests
+  // go through [_guarded], so they fail instead of parking while reconnecting.
   ConnectionManager? _connections;
   ConnectionManager? _guarded;
   TransferQueue? _queue;
