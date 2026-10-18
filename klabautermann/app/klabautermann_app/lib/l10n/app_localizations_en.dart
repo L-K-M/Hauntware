@@ -3156,4 +3156,30 @@ class AppLocalizationsEn extends AppLocalizations {
     });
     return '$_temp0';
   }
+
+  @override
+  String get processTerminate => 'Terminate';
+
+  @override
+  String get processKill => 'Kill';
+
+  @override
+  String get processSendSignal => 'Send signal';
+
+  @override
+  String processSignalName(String name) {
+    return 'SIG$name';
+  }
+
+  @override
+  String get unitStart => 'Start';
+
+  @override
+  String get unitStop => 'Stop';
+
+  @override
+  String get unitRestart => 'Restart';
+
+  @override
+  String get unitReload => 'Reload';
 }

@@ -4161,6 +4161,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} other{The action was refused.}}'**
   String actionRefused(String reason);
+
+  /// Process action (PRC-02): sends SIGTERM, asking the process to end.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminate'**
+  String get processTerminate;
+
+  /// Process action (PRC-02): sends SIGKILL, ending the process at once.
+  ///
+  /// In en, this message translates to:
+  /// **'Kill'**
+  String get processKill;
+
+  /// Process action menu holding every other signal (PRC-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Send signal'**
+  String get processSendSignal;
+
+  /// A signal's name in the Send signal menu; name is its kill -s name such as HUP.
+  ///
+  /// In en, this message translates to:
+  /// **'SIG{name}'**
+  String processSignalName(String name);
+
+  /// Unit action (SVC-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get unitStart;
+
+  /// Unit action (SVC-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get unitStop;
+
+  /// Unit action (SVC-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Restart'**
+  String get unitRestart;
+
+  /// Unit action (SVC-03): reloads the unit's configuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Reload'**
+  String get unitReload;
 }
 
 class _AppLocalizationsDelegate

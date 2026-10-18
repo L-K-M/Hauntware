@@ -1326,6 +1326,12 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 process and unit actions in the app (E21a): where actions are
+  allowed, the Processes table's row menu and a process's details send
+  Terminate, Kill or any other signal, and the Services table's row menu
+  and a unit's page offer Start, Stop, Restart and Reload, each through
+  the action preview. Run timer now and other users' crontabs follow in
+  E21b.
 - M4 action framework (E20): the app plans an action through the
   engine, shows the preview (exact steps, root badges, danger findings,
   impact, protection, ownership, runner and host writes) as a dialog or

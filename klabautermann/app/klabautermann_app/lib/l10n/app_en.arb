@@ -3851,5 +3851,42 @@
         "type": "String"
       }
     }
+  },
+  "processTerminate": "Terminate",
+  "@processTerminate": {
+    "description": "Process action (PRC-02): sends SIGTERM, asking the process to end."
+  },
+  "processKill": "Kill",
+  "@processKill": {
+    "description": "Process action (PRC-02): sends SIGKILL, ending the process at once."
+  },
+  "processSendSignal": "Send signal",
+  "@processSendSignal": {
+    "description": "Process action menu holding every other signal (PRC-02)."
+  },
+  "processSignalName": "SIG{name}",
+  "@processSignalName": {
+    "description": "A signal's name in the Send signal menu; name is its kill -s name such as HUP.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "unitStart": "Start",
+  "@unitStart": {
+    "description": "Unit action (SVC-03)."
+  },
+  "unitStop": "Stop",
+  "@unitStop": {
+    "description": "Unit action (SVC-03)."
+  },
+  "unitRestart": "Restart",
+  "@unitRestart": {
+    "description": "Unit action (SVC-03)."
+  },
+  "unitReload": "Reload",
+  "@unitReload": {
+    "description": "Unit action (SVC-03): reloads the unit's configuration."
   }
 }

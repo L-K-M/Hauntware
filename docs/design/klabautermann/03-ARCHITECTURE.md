@@ -3035,6 +3035,12 @@ PID is on its path. The runner reads the guarded kill's exits 3 and 4
 as re-validation failures (process gone, PID reused), not as a failed
 step.
 
+As built in M4 (E21a), where actions are allowed the Processes table's
+row menu offers Terminate and Kill, then every other signal under Send
+signal, and a process's details offer the same as buttons, which phones
+reach by tapping a row. A row without its start time offers none, since
+the guarded kill needs it.
+
 ### 7.3 Disks and storage (DSK)
 
 - **MVP.** Usage per mount from `df -PT -B1` with pseudo filesystems filtered
@@ -3132,6 +3138,10 @@ a polkit refusal (`Interactive authentication required` or
 `Access denied` on stderr) ends the run as needing admin mode rather
 than as a failed step. Every unit action re-validates that the unit
 still loads, and only start reports no impact.
+
+As built in M4 (E21a), where actions are allowed the Services table's
+row menu and a unit's page offer Start, Stop, Restart and Reload; the
+table keeps no action slot otherwise, so its layout does not change.
 
 ### 7.6 Logs (LOG)
 

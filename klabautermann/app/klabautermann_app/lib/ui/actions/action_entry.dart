@@ -69,14 +69,26 @@ class ActionEntry extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) {
-    final safety = SafetyScope.maybeOf(context);
-    if (safety == null) return const SizedBox.shrink();
-    final policy = safety.value;
-    if (!serverSafetyIn(policy, serverId).management ||
-        serverReadOnlyIn(policy, serverId)) {
-      return const SizedBox.shrink();
-    }
-    return child;
+  Widget build(BuildContext context) =>
+      actionsAllowedAt(context, serverId, point)
+      ? child
+      : const SizedBox.shrink();
+}
+
+/// Whether [point]'s actions on [serverId] show: management on (SAF-01),
+/// neither the server nor the app read-only (SAF-06), and an operations
+/// controller to run them. [ActionEntry] and the row menus that cannot
+/// wrap a widget both ask this.
+bool actionsAllowedAt(
+  BuildContext context,
+  String serverId,
+  ActionEntryPoint point,
+) {
+  final safety = SafetyScope.maybeOf(context);
+  if (safety == null || OperationsScope.maybeOf(context) == null) {
+    return false;
   }
+  final policy = safety.value;
+  return serverSafetyIn(policy, serverId).management &&
+      !serverReadOnlyIn(policy, serverId);
 }

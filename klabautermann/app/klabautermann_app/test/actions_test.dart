@@ -348,16 +348,43 @@ void main() {
             ),
         ],
       );
+      // Every case has an operations controller, so only the policy
+      // decides.
+      final engine = FakeEngineClient();
+      final operations = OperationsController(engine);
+      addTearDown(() async {
+        operations.dispose();
+        await engine.close();
+      });
+      final scoped = OperationsScope(operations: operations, child: entries);
       if (policy == null) {
-        await tester.pumpWidget(_app(entries));
+        await tester.pumpWidget(_app(scoped));
         return;
       }
       final safety = SafetyController(initial: policy, apply: (_) {});
       addTearDown(safety.dispose);
-      await tester.pumpWidget(
-        _app(SafetyScope(safety: safety, child: entries)),
-      );
+      await tester.pumpWidget(_app(SafetyScope(safety: safety, child: scoped)));
     }
+
+    testWidgets('without an operations controller nothing shows', (
+      tester,
+    ) async {
+      final safety = SafetyController(initial: allowed, apply: (_) {});
+      addTearDown(safety.dispose);
+      await tester.pumpWidget(
+        _app(
+          SafetyScope(
+            safety: safety,
+            child: const ActionEntry(
+              serverId: 'srv-1',
+              point: ActionEntryPoint.unitVerb,
+              child: Text('entry'),
+            ),
+          ),
+        ),
+      );
+      expect(find.text('entry'), findsNothing);
+    });
 
     testWidgets('a server whose actions are allowed shows every entry', (
       tester,
