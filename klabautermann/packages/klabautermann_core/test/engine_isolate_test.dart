@@ -128,6 +128,17 @@ void main() {
       expect(ran.planId, 'plan-1');
     });
 
+    test('an audit query answers from the log, empty at first', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+
+      client.send(const AuditQuery('ssh-config:web'));
+      final answer = (await next(events)) as AuditRecords;
+      expect(answer.serverId, 'ssh-config:web');
+      expect(answer.records, isEmpty);
+      expect(answer.more, isFalse);
+    });
+
     test('the safety policy refuses plans and admin mode in the engine '
         '(SAF-01, SAF-06)', () async {
       final client = await spawnEngine();

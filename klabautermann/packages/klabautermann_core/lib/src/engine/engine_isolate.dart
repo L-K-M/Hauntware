@@ -9,6 +9,7 @@ import 'package:seance_core/seance_core.dart'
     show ImportedHost, Prober, ServerConfig, SshLink, TcpBannerProber;
 
 import '../admin/admin_mode.dart';
+import '../audit/audit_log.dart';
 import '../admin/safety_policy.dart';
 import '../capabilities/capability_cache.dart';
 import '../catalog/engine_sync.dart';
@@ -178,6 +179,17 @@ void engineMain(
   // runs only on the link generation it was planned on: each server's
   // generation counts the times its link became ready.
   final plans = PlanRegistry();
+  // The device audit log (03 §8.10): a record per finished run, in files
+  // only while this process has the support directory to itself.
+  final audit = AuditLog(
+    Directory(
+      '${start.supportDirectory}${Platform.pathSeparator}$auditDirectoryName',
+    ),
+    storage: start.supportDirectoryAccess == SupportDirectoryAccess.exclusive
+        ? AuditStorage.files
+        : AuditStorage.memory,
+    deviceId: start.deviceId,
+  );
   final linkGenerations = <String, int>{};
   final readyLinks = <String>{};
   OperationRunner? runner;
@@ -307,7 +319,13 @@ void engineMain(
       prompts: prompts,
       emit: uiPort.send,
     );
-    runner = OperationRunner(linkFor: links.link, emit: uiPort.send);
+    runner = OperationRunner(
+      linkFor: links.link,
+      emit: uiPort.send,
+      // A record that cannot be written is lost; the run itself stands.
+      finished: (result) =>
+          unawaited(audit.recordRun(result).catchError((Object _) {})),
+    );
     scheduler = SamplingScheduler(
       subscriptions: sampling,
       linkFor: links.link,
@@ -566,6 +584,7 @@ void engineMain(
             importStoreIssue: imports.issue,
             syncAccount: sync.account,
             syncStoreIssues: sync.issues,
+            auditInMemory: audit.storage == AuditStorage.memory,
           ),
         );
         // The fleet as the engine starts: the servers the last sync left
@@ -738,6 +757,13 @@ void engineMain(
             intent: intent,
           ),
         );
+      case AuditQuery(:final serverId, :final before, :final limit):
+        final (:records, :more) = await audit.query(
+          serverId,
+          before: before,
+          limit: limit,
+        );
+        uiPort.send(AuditRecords(serverId, records, more: more));
       case SetSafetyPolicy(:final policy):
         if (validateSafetyPolicy(policy) case final problem?) {
           reject(message, problem);
@@ -849,6 +875,9 @@ void engineMain(
         ),
       ).then((store) async {
         imports = store;
+        // 90 days [E] (03 §8.10); a prune that fails leaves the old
+        // records for the next start.
+        await audit.prune().catchError((Object _) {});
         sync = await EngineSync.open(
           supportDirectory: Directory(start.supportDirectory),
           access: start.supportDirectoryAccess,

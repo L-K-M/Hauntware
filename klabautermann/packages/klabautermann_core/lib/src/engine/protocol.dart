@@ -446,6 +446,18 @@ final class SetAdminMode extends EngineRequest {
   final bool enabled;
 }
 
+/// Reads [serverId]'s device audit log (03 §8.10, SAF-11): up to [limit]
+/// records ended before [before] (newest first; all when null), answered
+/// by [AuditRecords].
+final class AuditQuery extends EngineRequest {
+  const AuditQuery(this.serverId, {this.before, this.limit = 100})
+    : assert(limit > 0, 'limit must be positive');
+
+  final String serverId;
+  final DateTime? before;
+  final int limit;
+}
+
 /// Answers an outstanding [Prompt] event (03 §10.1).
 final class AnswerPrompt extends EngineRequest {
   const AnswerPrompt(this.promptId, this.answer);
@@ -501,6 +513,7 @@ final class EngineReady extends EngineEvent {
     this.importStoreIssue,
     this.syncAccount,
     this.syncStoreIssues = const [],
+    this.auditInMemory = false,
   });
 
   final int protocolVersion;
@@ -517,6 +530,11 @@ final class EngineReady extends EngineEvent {
   /// What was wrong with each sync state file the engine opened at start
   /// (03 §4.10, D62), told once like [importStoreIssue].
   final List<SyncStoreIssue> syncStoreIssues;
+
+  /// The audit log lives in memory only: another instance may write the
+  /// support directory (03 §4.10), so this one writes no audit file. The
+  /// app says so once (M4 plan M12).
+  final bool auditInMemory;
 }
 
 /// The engine refused a request it does not serve (yet). The 03 §10.1 table
@@ -1025,6 +1043,60 @@ enum ActionRefusalReason {
 
   /// The plan needs admin mode, which is off for the server (03 §8.2).
   adminRequired,
+}
+
+/// The answer to an [AuditQuery]: [records] newest first, and whether
+/// older ones remain.
+final class AuditRecords extends EngineEvent {
+  AuditRecords(
+    this.serverId,
+    Iterable<AuditRecord> records, {
+    this.more = false,
+  }) : records = List.unmodifiable(records);
+
+  final String serverId;
+  final List<AuditRecord> records;
+  final bool more;
+}
+
+/// One finished or refused run in the device audit log (03 §8.10): the
+/// plan's steps as the preview showed them with secrets redacted, the
+/// tier, and the result.
+@immutable
+final class AuditRecord {
+  AuditRecord({
+    required this.serverId,
+    required this.action,
+    required this.targetName,
+    required Iterable<String> steps,
+    required this.tier,
+    required this.outcome,
+    required this.startedAt,
+    required this.endedAt,
+    this.deviceId,
+    this.failure,
+    this.failedStep,
+    this.exitCode,
+    this.httpStatus,
+  }) : steps = List.unmodifiable(steps);
+
+  final String serverId;
+
+  /// The intent's kind, such as `UnitAction`.
+  final String action;
+  final String targetName;
+  final List<String> steps;
+  final ConfirmationTier tier;
+  final ActionOutcome outcome;
+  final DateTime startedAt, endedAt;
+
+  /// This device, when sync enrolled it (03 §4.3).
+  final String? deviceId;
+
+  final ActionFailure? failure;
+  final int? failedStep;
+  final int? exitCode;
+  final int? httpStatus;
 }
 
 /// Where admin mode stands on [serverId] (03 §8.2, M4 plan M5). The app

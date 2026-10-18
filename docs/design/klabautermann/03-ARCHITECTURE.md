@@ -4201,6 +4201,26 @@ CI.
   events and sudo logs corroborate it, and every device and admin sees the
   same trail on the host.
 - **Not synced** (D28).
+- **As built (M4 E12b).** `KC/lib/src/audit/audit_log.dart` appends one
+  JSON line per finished run to `audit/<stem>.jsonl`. The fields:
+  - the device id, the server, the intent's kind and the target;
+  - the steps as the preview showed them, through `SecretRedactor`;
+  - the tier and the outcome, with the typed failure, the step and its
+    exit or HTTP status;
+  - the start and end times.
+
+  The file name follows 4.10's rule, now shared with the capability cache
+  as `serverFileStem`. An id that names no file keeps its records in
+  memory.
+  - Records older than 90 days [E] are pruned at engine start.
+  - A line that does not decode marks the file damaged: it is copied
+    aside as `.corrupt-<time>` and rewritten with the lines that do.
+  - Without exclusive access to the support directory the log lives in
+    memory, and `EngineReady.auditInMemory` tells the app.
+  - `AuditQuery(serverId, before, limit)` answers newest first with
+    `AuditRecords(records, more)`.
+  - The log stores redacted steps only, so E24's export has nothing
+    secret to include.
 
 ### 8.11 Host write inventory (D27)
 
@@ -4783,6 +4803,7 @@ shows there.
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
 | `DockerQuery(serverId, queryId, query)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason)`, `DockerEvent` (opaque until the event lists) |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(planId, preview)`, `ActionProgress`, `ActionFinished`, `ActionRefused(reason, intent or planId)` |
+| `AuditQuery(serverId, before, limit)` (8.10, M4) | `AuditRecords(serverId, records, more)` |
 | `SetSafetyPolicy(policy)`, `SetAdminMode(serverId, enabled)` (8.2, M4) | `AdminModeState(serverId, phase, expiresAt, retry, failure, ended)`; a refused plan's `ActionRefused` names `observeOnly` or `readOnly` |
 | `AnswerPrompt(promptId, answer)` (trust, responses or cancel, secret) | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
 | `SetAppActivity(activity)` (foreground or background; D34, D45) | no event: it changes what runs |

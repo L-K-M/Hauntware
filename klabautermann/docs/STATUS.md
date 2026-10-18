@@ -1326,6 +1326,11 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 audit log (E12b): every finished run appends a redacted record to
+  the server's `audit/` file. Records are pruned after 90 days, and a
+  damaged file is quarantined. Without exclusive access the log lives in
+  memory, and the engine says so at start. `AuditQuery` reads it; the
+  viewer and export arrive with E24.
 - M4 operation runner (E12a): a confirmed plan is re-validated (unit
   loaded, process start time, Docker target unchanged), then its own
   steps run in order. Shell steps go over the link or through admin
