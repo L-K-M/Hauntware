@@ -69,8 +69,11 @@ readonly api_targets=(
 # The podman/stable image configures itself for nesting: cgroups
 # disabled and the host's namespaces, under which a container can be
 # neither paused nor measured. This drop-in restores a rootful host
-# install's defaults for the containers the tool creates.
+# install's defaults for the containers the tool creates, and keeps
+# the service's own proxy variables (which it needs for the seed pull
+# behind a proxy) out of their Env, which inspect records.
 readonly api_podman_conf='[containers]
+http_proxy = false
 cgroups = "enabled"
 netns = "bridge"
 userns = ""
@@ -110,7 +113,7 @@ api_prepare() {
 # Runs one capture into $evidence/docker-api/<corpus>/ and removes its
 # containers and volumes again.
 api_capture_one() {
-  local name="$1" status=0 ids
+  local name="$1" runtime="$3" status=0 ids
   local sock_volume="klab-api-$name-socket-$$"
   local data_volume="klab-api-$name-data-$$"
   docker volume create --label "$run_label" "$sock_volume" >/dev/null ||
@@ -118,6 +121,14 @@ api_capture_one() {
   docker volume create --label "$run_label" "$data_volume" >/dev/null ||
     return 1
   api_capture_in "$@" "$sock_volume" "$data_volume" || status=1
+  # The tool unpauses `paused` itself, but a timeout or an interrupt
+  # skips that; under cgroup v1 a frozen container ignores SIGKILL and
+  # would keep the daemon's container from stopping.
+  local unpause=(podman unpause paused)
+  [[ "$runtime" == podman ]] ||
+    unpause=(docker --host unix:///run/capture/docker.sock unpause paused)
+  docker exec "klab-api-$name-daemon-$$" "${unpause[@]}" >/dev/null 2>&1 ||
+    true
   ids="$(docker ps -aq --filter "label=$run_label" \
     --filter "name=klab-api-$name-")" || status=1
   if [[ -n "$ids" ]]; then
