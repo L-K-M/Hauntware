@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
+import 'package:seance_core/catalog.dart' show HostKeyConflict;
 import 'package:seance_core/seance_core.dart';
 
 import '../theme/app_appearance.dart';
@@ -120,6 +121,13 @@ abstract class SettingsBackend implements Listenable {
 
   Future<SyncCounts> syncNow();
 
+  /// Settles one of [SyncStatus.pinConflicts]: keeps this device's pin
+  /// ([keepLocal]) or trusts the pulled key.
+  Future<PulledPinResolution> resolvePinConflict(
+    HostKeyConflict conflict, {
+    required bool keepLocal,
+  });
+
   /// The Inbox tab's state: connected apps and the servers they may target.
   Future<InboxAppsView> inboxApps();
 
@@ -208,11 +216,20 @@ class LocalShellInfo {
 /// The sync status line's inputs.
 @immutable
 class SyncStatus {
-  const SyncStatus({this.syncing = false, this.lastSyncAt, this.lastSyncError});
+  const SyncStatus({
+    this.syncing = false,
+    this.lastSyncAt,
+    this.lastSyncError,
+    this.pinConflicts = const [],
+  });
 
   final bool syncing;
   final DateTime? lastSyncAt;
   final String? lastSyncError;
+
+  /// Pulled host keys held back because they disagree with this device's
+  /// pins (Séance #56), each waiting for the user's choice.
+  final List<HostKeyConflict> pinConflicts;
 
   factory SyncStatus.fromJson(Map<String, dynamic> json) => SyncStatus(
     syncing: json['syncing'] == true,
@@ -220,14 +237,34 @@ class SyncStatus {
         ? DateTime.fromMillisecondsSinceEpoch(json['lastSyncAt'] as int)
         : null,
     lastSyncError: json['lastSyncError'] as String?,
+    pinConflicts: [
+      for (final conflict in json['pinConflicts'] as List? ?? const [])
+        hostKeyConflictFromJson((conflict as Map).cast<String, dynamic>()),
+    ],
   );
 
   Map<String, dynamic> toJson() => {
     'syncing': syncing,
     if (lastSyncAt != null) 'lastSyncAt': lastSyncAt!.millisecondsSinceEpoch,
     if (lastSyncError != null) 'lastSyncError': lastSyncError,
+    if (pinConflicts.isNotEmpty)
+      'pinConflicts': [for (final c in pinConflicts) hostKeyConflictToJson(c)],
   };
 }
+
+/// [HostKeyConflict] across the settings window's link.
+Map<String, dynamic> hostKeyConflictToJson(HostKeyConflict conflict) => {
+  'locator': conflict.locator,
+  'local': conflict.local.toJson(),
+  'pulled': conflict.pulled.toJson(),
+};
+
+HostKeyConflict hostKeyConflictFromJson(Map<String, dynamic> json) =>
+    HostKeyConflict(
+      locator: json['locator'] as String,
+      local: HostKey.fromJson((json['local'] as Map).cast<String, dynamic>()),
+      pulled: HostKey.fromJson((json['pulled'] as Map).cast<String, dynamic>()),
+    );
 
 /// The assistant half of the settings, as the screen's fields show it.
 @immutable

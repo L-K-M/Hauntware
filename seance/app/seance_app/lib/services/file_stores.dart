@@ -4,6 +4,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:seance_core/catalog.dart'
+    show ConflictAwareHostKeyStore, HostKeyInstallResult;
 import 'package:seance_core/seance_core.dart';
 
 import 'atomic_file.dart';
@@ -548,10 +550,11 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
   });
 }
 
-/// JSON-file [HostKeyStore] for pinned TOFU keys.
+/// JSON-file [HostKeyStore] for pinned TOFU keys. Conflict-aware, so sync
+/// writes a pulled pin only when it agrees with the local one (Séance #56).
 ///
 /// Use one instance per [file]. Separate instances do not coordinate writes.
-class FileHostKeyStore implements HostKeyStore {
+class FileHostKeyStore implements ConflictAwareHostKeyStore {
   final File file;
   final Map<String, HostKey> _keys = {};
   bool _loaded = false;
@@ -605,12 +608,52 @@ class FileHostKeyStore implements HostKeyStore {
       _serialize(() async => _keys['$host:$port']);
 
   @override
-  Future<void> put(HostKey key) => _serialize(() async {
-        final next = Map<String, HostKey>.of(_keys)..[key.locator] = key;
-        await _flush(next);
+  Future<void> put(HostKey key) => _serialize(() => _write(key));
 
-        _keys
-          ..clear()
-          ..addAll(next);
+  @override
+  Future<HostKeyInstallResult> putIfNoConflict(HostKey key) =>
+      _serialize(() async {
+        final current = _keys[key.locator];
+        if (current != null && current.conflictsWith(key)) {
+          return HostKeyInstallResult.conflict;
+        }
+
+        await _write(key);
+        return HostKeyInstallResult.installed;
       });
+
+  @override
+  Future<HostKeyInstallResult> replaceIfCurrent(
+    HostKey expected,
+    HostKey replacement,
+  ) {
+    if (expected.locator != replacement.locator) {
+      throw ArgumentError.value(
+        replacement.locator,
+        'replacement',
+        'must use the expected host-key locator',
+      );
+    }
+
+    return _serialize(() async {
+      final current = _keys[expected.locator];
+      if (current == null ||
+          current.fingerprintSha256 != expected.fingerprintSha256) {
+        return HostKeyInstallResult.conflict;
+      }
+
+      await _write(replacement);
+      return HostKeyInstallResult.installed;
+    });
+  }
+
+  /// Only inside [_serialize]: the cache follows the file once it is written.
+  Future<void> _write(HostKey key) async {
+    final next = Map<String, HostKey>.of(_keys)..[key.locator] = key;
+    await _flush(next);
+
+    _keys
+      ..clear()
+      ..addAll(next);
+  }
 }

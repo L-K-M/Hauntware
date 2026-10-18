@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:seance_core/catalog.dart'
+    show ConflictAwareHostKeyStore, InMemoryPinVerdictStore, PinVerdictStore;
 import 'package:seance_core/seance_core.dart';
 import 'package:test/test.dart';
 
@@ -1082,7 +1084,7 @@ void main() {
       ConfigStore configs,
       String device, {
       LocalRecordStore? local,
-      HostKeyStore? hostKeys,
+      ConflictAwareHostKeyStore? hostKeys,
       bool syncSecrets = false,
       SecretVault? secretVault,
     }) =>
@@ -3115,6 +3117,192 @@ void main() {
             .having((e) => e.code, 'code', 'storage_busy')
             .having((e) => e, 'error', isNot(isA<SyncRecordsRefused>()))),
       );
+    });
+  });
+
+  group('a pulled pin that disagrees with the local one (Séance #56)', () {
+    HostKey pin(String fingerprint, int pinnedAt) => HostKey(
+          host: 'alpha.example.com',
+          type: 'ssh-ed25519',
+          fingerprintSha256: fingerprint,
+          pinnedAt: pinnedAt,
+        );
+
+    final k1 = pin('SHA256:k1', 10);
+    final k2 = pin('SHA256:k2', 20);
+
+    /// Device A pins K1 and pushes; device B, sharing the vault, has K2
+    /// pinned later and pushes it, so the account's record carries K2.
+    Future<
+        ({FakeServer server, RecordCodec codec, InMemoryConfigStore configs})>
+        accountCarryingK2() async {
+      final srv = FakeServer();
+      final codec = RecordCodec(secureRandomBytes(32));
+      final configs = InMemoryConfigStore();
+      await configs.putServer(server('s1', 'alpha', 10));
+      final pinsB = InMemoryHostKeyStore();
+      await pinsB.put(k2);
+      await SyncCoordinator(
+        configStore: InMemoryConfigStore(),
+        hostKeyStore: pinsB,
+        codec: codec,
+        local: InMemoryLocalRecordStore(),
+        deviceId: 'B',
+      ).run(srv);
+      return (server: srv, codec: codec, configs: configs);
+    }
+
+    SyncCoordinator deviceA(
+      RecordCodec codec,
+      ConfigStore configs,
+      ConflictAwareHostKeyStore pins, {
+      PinVerdictStore? verdicts,
+    }) =>
+        SyncCoordinator(
+          configStore: configs,
+          hostKeyStore: pins,
+          pinVerdicts: verdicts,
+          codec: codec,
+          // A fresh mirror per round, as the app builds it.
+          local: InMemoryLocalRecordStore(),
+          deviceId: 'A',
+        );
+
+    test('is held back and raised, and the local pin stays', () async {
+      final account = await accountCarryingK2();
+      final pins = InMemoryHostKeyStore();
+      await pins.put(k1);
+
+      final a = deviceA(account.codec, account.configs, pins);
+      await a.run(account.server);
+
+      expect((await pins.get('alpha.example.com', 22))?.fingerprintSha256,
+          'SHA256:k1');
+      expect(a.pinConflicts, hasLength(1));
+      final conflict = a.pinConflicts.single;
+      expect(conflict.locator, 'alpha.example.com:22');
+      expect(conflict.local.fingerprintSha256, 'SHA256:k1');
+      expect(conflict.pulled.fingerprintSha256, 'SHA256:k2');
+    });
+
+    test('the same key pulled is applied with no conflict', () async {
+      final account = await accountCarryingK2();
+      final pins = InMemoryHostKeyStore();
+      await pins.put(pin('SHA256:k2', 5));
+
+      final a = deviceA(account.codec, account.configs, pins);
+      await a.run(account.server);
+
+      expect(a.pinConflicts, isEmpty);
+      expect((await pins.get('alpha.example.com', 22))?.pinnedAt, 20);
+    });
+
+    test('a pulled pin for an address with no pin is applied', () async {
+      final account = await accountCarryingK2();
+      final pins = InMemoryHostKeyStore();
+
+      final a = deviceA(account.codec, account.configs, pins);
+      await a.run(account.server);
+
+      expect(a.pinConflicts, isEmpty);
+      expect((await pins.get('alpha.example.com', 22))?.fingerprintSha256,
+          'SHA256:k2');
+    });
+
+    test('an untrusted address takes no pulled pin', () async {
+      final account = await accountCarryingK2();
+      final pins = InMemoryHostKeyStore();
+      final verdicts = InMemoryPinVerdictStore();
+      await verdicts.addNegativePin('alpha.example.com:22');
+
+      final a = deviceA(account.codec, account.configs, pins,
+          verdicts: verdicts);
+      await a.run(account.server);
+
+      expect(await pins.get('alpha.example.com', 22), isNull);
+      expect(a.pinConflicts, isEmpty);
+    });
+
+    test('keeping the local pin silences that key only', () async {
+      final account = await accountCarryingK2();
+      final pins = InMemoryHostKeyStore();
+      await pins.put(k1);
+      final verdicts = InMemoryPinVerdictStore();
+      final resolver = PulledPinResolver(hostKeys: pins, verdicts: verdicts);
+
+      final first = deviceA(account.codec, account.configs, pins,
+          verdicts: verdicts);
+      await first.run(account.server);
+      expect(await resolver.keepLocal(first.pinConflicts.single),
+          PulledPinResolution.resolved);
+
+      final second = deviceA(account.codec, account.configs, pins,
+          verdicts: verdicts);
+      await second.run(account.server);
+      expect(second.pinConflicts, isEmpty);
+      expect((await pins.get('alpha.example.com', 22))?.fingerprintSha256,
+          'SHA256:k1');
+
+      // A different key on the account is raised again.
+      final pinsC = InMemoryHostKeyStore();
+      await pinsC.put(pin('SHA256:k3', 30));
+      await SyncCoordinator(
+        configStore: InMemoryConfigStore(),
+        hostKeyStore: pinsC,
+        codec: account.codec,
+        local: InMemoryLocalRecordStore(),
+        deviceId: 'C',
+      ).run(account.server);
+      final third = deviceA(account.codec, account.configs, pins,
+          verdicts: verdicts);
+      await third.run(account.server);
+      expect(third.pinConflicts.single.pulled.fingerprintSha256, 'SHA256:k3');
+    });
+
+    test('accepting the pulled pin installs it and ends the conflict',
+        () async {
+      final account = await accountCarryingK2();
+      final pins = InMemoryHostKeyStore();
+      await pins.put(k1);
+      final verdicts = InMemoryPinVerdictStore();
+      await verdicts.addNegativePin('elsewhere.example.com:22');
+      final resolver = PulledPinResolver(hostKeys: pins, verdicts: verdicts);
+
+      final first = deviceA(account.codec, account.configs, pins,
+          verdicts: verdicts);
+      await first.run(account.server);
+      expect(await resolver.acceptPulled(first.pinConflicts.single),
+          PulledPinResolution.resolved);
+      expect((await pins.get('alpha.example.com', 22))?.fingerprintSha256,
+          'SHA256:k2');
+
+      final second = deviceA(account.codec, account.configs, pins,
+          verdicts: verdicts);
+      await second.run(account.server);
+      expect(second.pinConflicts, isEmpty);
+      expect(await verdicts.negativePins(), {'elsewhere.example.com:22'});
+    });
+
+    test('a choice made after the local pin changed does nothing', () async {
+      final account = await accountCarryingK2();
+      final pins = InMemoryHostKeyStore();
+      await pins.put(k1);
+      final verdicts = InMemoryPinVerdictStore();
+      final resolver = PulledPinResolver(hostKeys: pins, verdicts: verdicts);
+
+      final a = deviceA(account.codec, account.configs, pins,
+          verdicts: verdicts);
+      await a.run(account.server);
+      final conflict = a.pinConflicts.single;
+      // The user trusts a new key through the connection flow meanwhile.
+      await pins.put(pin('SHA256:k4', 40));
+
+      expect(await resolver.acceptPulled(conflict), PulledPinResolution.stale);
+      expect(await resolver.keepLocal(conflict), PulledPinResolution.stale);
+      expect((await pins.get('alpha.example.com', 22))?.fingerprintSha256,
+          'SHA256:k4');
+      expect(await verdicts.rejectedFingerprintFor('alpha.example.com:22'),
+          isNull);
     });
   });
 }

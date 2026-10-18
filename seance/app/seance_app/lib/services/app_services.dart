@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:seance_core/catalog.dart'
+    show ConflictAwareHostKeyStore, HostKeyConflict;
 import 'package:seance_core/seance_core.dart';
 
 import 'atomic_file.dart';
@@ -20,6 +22,7 @@ import 'inbox_stores.dart';
 import 'local_shell_service.dart';
 import 'macos_sandbox.dart';
 import 'managed_remote_file_store.dart';
+import 'pin_verdicts.dart';
 import 'sandbox_migration.dart';
 import 'secrets_recovery.dart';
 import 'secure_master_key.dart';
@@ -117,7 +120,7 @@ class AppServices {
   /// surviving a crash is a property of the file-backed store, not something
   /// every [VaultStore] can offer.
   final VaultRekeyJournal _rekeyJournal;
-  final HostKeyStore hostKeyStore;
+  final ConflictAwareHostKeyStore hostKeyStore;
   final TofuVerifier tofu;
   final ProbeService probe;
   final MasterKeyManager masterKeys;
@@ -162,6 +165,39 @@ class AppServices {
   /// cost an adopted provider its rebuild in exactly the silent way this
   /// flag exists to prevent.
   bool get assistantSettingsChanged => _assistantSettingsChanged;
+
+  /// The pulled host keys the last sync round that applied anything held
+  /// back because they disagree with this device's pins (Séance #56). A
+  /// round that failed before applying keeps the previous list.
+  List<HostKeyConflict> get pinConflicts => _pinConflicts;
+  List<HostKeyConflict> _pinConflicts = const [];
+
+  late final _pinVerdicts = SettingsPinVerdictStore(
+    settings: () => settings,
+    save: saveSettings,
+  );
+  late final _pinResolver = PulledPinResolver(
+    hostKeys: hostKeyStore,
+    verdicts: _pinVerdicts,
+  );
+
+  /// Keeps this device's pin ([keepLocal]) or trusts the pulled key, then
+  /// drops the conflict from [pinConflicts]; a stale one is dropped too, and
+  /// the next round raises whatever is left. Queued behind a running round,
+  /// so a choice never races the apply that might be re-deriving it.
+  Future<PulledPinResolution> resolvePinConflict(
+    HostKeyConflict conflict, {
+    required bool keepLocal,
+  }) => _serializeSyncOperation(() async {
+    final resolution = keepLocal
+        ? await _pinResolver.keepLocal(conflict)
+        : await _pinResolver.acceptPulled(conflict);
+    _pinConflicts = [
+      for (final other in _pinConflicts)
+        if (other.locator != conflict.locator) other,
+    ];
+    return resolution;
+  });
   bool _assistantSettingsChanged = false;
 
   AppServices._({
@@ -920,6 +956,7 @@ class AppServices {
     final coordinator = SyncCoordinator(
       configStore: configStore,
       hostKeyStore: hostKeyStore,
+      pinVerdicts: _pinVerdicts,
       snippetStore: snippetStore,
       assistantStore: assistant,
       codec: RecordCodec(key),
@@ -932,10 +969,16 @@ class AppServices {
       inboxStatusStore: inboxStatuses,
     );
     try {
-      return await _withSyncClient(baseUrl, (client) {
+      final outcome = await _withSyncClient(baseUrl, (client) {
         client.token = token;
         return coordinator.run(client);
       });
+      _pinConflicts = coordinator.pinConflicts;
+      return outcome;
+    } on SyncRecordsRefused {
+      // Thrown after everything else was applied.
+      _pinConflicts = coordinator.pinConflicts;
+      rethrow;
     } finally {
       // In a `finally`, because a round can apply the assistant record and
       // *then* fail — the pull happens first, and a push after it can still
