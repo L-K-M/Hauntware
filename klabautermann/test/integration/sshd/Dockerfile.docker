@@ -13,7 +13,7 @@ COPY --from=mirror.gcr.io/library/docker:29.9.1-cli@sha256:6fae2214c3121a28d5aa6
   /usr/local/libexec/docker/cli-plugins/docker-compose
 COPY entrypoint.sh /usr/local/bin/fixture-entrypoint
 COPY docker-setup.sh /usr/local/bin/fixture-setup
-COPY sshd_config.docker /etc/klabautermann/
+COPY sshd_config.docker sshd_config.neg-* /etc/klabautermann/
 
 RUN chmod 0755 /usr/local/bin/fixture-entrypoint /usr/local/bin/fixture-setup
 

@@ -8,6 +8,7 @@ import 'package:ghost_theme/ghost_theme.dart';
 
 import '../../controllers/announcement_controller.dart';
 import '../../controllers/appearance_controller.dart';
+import '../../controllers/monitor_set.dart';
 import '../../theme/app_theme.dart';
 import 'settings_window_link.dart';
 
@@ -48,6 +49,14 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
         invoke(SettingsLinkMethod.setAnnounceThresholdBands.name, announce),
   );
 
+  /// The Servers tab's monitor set toggles, from the latest snapshot.
+  late final RemoteMonitorSet monitorSet = RemoteMonitorSet._(
+    (serverId, monitored) => invoke(SettingsLinkMethod.setMonitored.name, {
+      SettingsLinkKey.serverId.name: serverId,
+      SettingsLinkKey.monitored.name: monitored,
+    }),
+  );
+
   @override
   void applySnapshot(Map<String, Object?> snapshot) {
     appearance._apply(
@@ -59,12 +68,18 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     announcements._apply(
       snapshot[SettingsLinkKey.announceThresholdBands.name]! as bool,
     );
+    monitorSet._apply(
+      decodeMonitorCandidates(
+        snapshot[SettingsLinkKey.monitorSet.name]! as List<Object?>,
+      ),
+    );
   }
 
   @override
   void dispose() {
     appearance.dispose();
     announcements.dispose();
+    monitorSet.dispose();
     super.dispose();
   }
 }
@@ -92,6 +107,32 @@ final class RemoteAnnouncements extends ChangeNotifier
   @override
   Future<void> setAnnounceThresholdBands(bool announce) async {
     await _call(announce);
+  }
+}
+
+/// [MonitorSetSettings] over the link: the app's candidates as the latest
+/// snapshot carries them, and toggles that run in the app's isolate.
+final class RemoteMonitorSet extends ChangeNotifier
+    implements MonitorSetSettings {
+  RemoteMonitorSet._(this._call);
+
+  final Future<Object?> Function(String serverId, bool monitored) _call;
+
+  // None until the first snapshot, which comes with hello.
+  List<MonitorCandidate> _value = const [];
+
+  void _apply(List<MonitorCandidate> candidates) {
+    if (listEquals(candidates, _value)) return;
+    _value = List.unmodifiable(candidates);
+    notifyListeners();
+  }
+
+  @override
+  List<MonitorCandidate> get value => _value;
+
+  @override
+  Future<void> setMonitored(String serverId, {required bool monitored}) async {
+    await _call(serverId, monitored);
   }
 }
 

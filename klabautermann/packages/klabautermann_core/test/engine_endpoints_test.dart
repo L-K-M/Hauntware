@@ -73,6 +73,7 @@ final class _Engine {
     required FakeSyncServer server,
     required List<ServerConfig> dials,
     required List<AnsweringLink> links,
+    List<bool>? prompting,
     SupportDirectoryAccess access = SupportDirectoryAccess.exclusive,
     EndpointPinStore? pins,
     Prober? prober,
@@ -99,6 +100,8 @@ final class _Engine {
             resolveJumpHost,
           }) async {
             dials.add(config);
+            // Only the user's connect may ask anything (03 §4.5).
+            prompting?.add(onKeyboardInteractive != null);
             return links.last;
           },
       syncTransport: server.transport,
@@ -199,6 +202,7 @@ void main() {
   late FakeSyncServer server;
   late List<ServerConfig> dials;
   late List<AnsweringLink> links;
+  late List<bool> prompting;
 
   setUp(() async {
     support = Directory.systemTemp.createTempSync('klab-endpoints-');
@@ -206,6 +210,7 @@ void main() {
     await server.seedServer(fakeServer(_srv, 'alpha'));
     dials = [];
     links = [AnsweringLink()];
+    prompting = [];
   });
   tearDown(() => support.deleteSync(recursive: true));
 
@@ -218,6 +223,7 @@ void main() {
     server: server,
     dials: dials,
     links: links,
+    prompting: prompting,
     access: access,
     pins: pins,
     prober: prober,
@@ -537,5 +543,106 @@ void main() {
       if (sw.elapsed > const Duration(seconds: 5)) fail('file not purged');
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
+  });
+
+  group('the monitor set (FL-21, 03 §4.3 step 4)', () {
+    const web = 'ssh-config:web';
+    const webConfig = 'Host web\n  HostName 192.0.2.10\n  User me\n';
+
+    Future<void> import(_Engine engine, String config) async {
+      engine.send(ImportSshConfig(config));
+      await engine.until<SshConfigImported>();
+    }
+
+    test('samples a confirmed synced server over an unattended link, and '
+        'loses it when a sync moves the server', () async {
+      final engine = await start();
+      await engine.enroll();
+
+      engine.send(const SetMonitorSet([_srv]));
+      final refused = await engine.next() as RequestRejected;
+      expect(refused.requestName, 'SetMonitorSet');
+      expect(refused.reason, contains(_srv), reason: 'not confirmed yet');
+      await pumpEventQueue();
+      expect(dials, isEmpty);
+
+      engine.send(const ConfirmEndpoints([_srv]));
+      await engine.until<CatalogReplaced>();
+      // No view connects or subscribes: the set alone samples it.
+      engine.send(const SetMonitorSet([_srv]));
+      final sample = await engine.until<Sample>();
+      expect((sample.serverId, sample.stream), (_srv, SampleStream.overview));
+      expect(prompting, [false], reason: 'background connects never ask');
+
+      await server.seedServer(
+        fakeServer(_srv, 'alpha').copyWith(host: 'moved.example.com'),
+        updatedAt: 2,
+      );
+      engine.send(const RunSyncRound());
+      await engine.untilSyncEnds();
+      expect(links.single.closes, 1);
+      expect(links.single.running, isEmpty, reason: 'sampling stopped');
+
+      // Confirming the new endpoint does not bring it back: the app sends
+      // its set again after the fleet it hears.
+      engine.send(const ConfirmEndpoints([_srv]));
+      await engine.until<CatalogReplaced>();
+      await pumpEventQueue();
+      expect(dials, hasLength(1));
+    });
+
+    test('a set of more than ten is rejected whole, and ids outside the '
+        'fleet are skipped by name', () async {
+      final engine = await start();
+      final ids = [for (var i = 1; i <= kMonitorSetLimit + 1; i++) 's$i'];
+      await import(
+        engine,
+        [
+          for (final id in ids) 'Host $id\n  HostName 192.0.2.1\n  User me\n',
+        ].join(),
+      );
+
+      engine.send(const SetMonitorSet(['ssh-config:s1', 'ssh-config:gone']));
+      final skipped = await engine.until<RequestRejected>();
+      expect(skipped.reason, contains('ssh-config:gone'));
+      expect(skipped.reason, isNot(contains('ssh-config:s1')));
+      await engine.until<Sample>();
+
+      engine.send(SetMonitorSet([for (final id in ids) 'ssh-config:$id']));
+      final refused = await engine.until<RequestRejected>();
+      expect(refused.reason, contains('more than $kMonitorSetLimit'));
+      await pumpEventQueue();
+      expect(dials, hasLength(1), reason: 'the last set stands');
+      expect(links.single.closes, 0);
+    });
+
+    test('a view\'s Disconnect keeps a monitored server\'s link, and '
+        'leaving the set keeps the link a view holds', () async {
+      final engine = await start();
+      await import(engine, webConfig);
+      final link = links.single;
+
+      engine
+        ..send(const SetMonitorSet([web]))
+        ..send(const Connect(web))
+        ..send(const Disconnect(web));
+      await engine.until<Sample>();
+      expect(link.closes, 0, reason: 'the monitor set holds it');
+
+      engine
+        ..send(const Connect(web))
+        ..send(const SetMonitorSet([]));
+      await pumpEventQueue();
+      expect(link.closes, 0, reason: 'the open view holds it');
+      expect(link.running, isEmpty, reason: 'nothing subscribes now');
+
+      engine.send(const Disconnect(web));
+      expect(
+        (await engine.until<LinkState>()).status,
+        const LinkClosed(LinkClosedReason.closedByOwner),
+      );
+      expect(link.closes, 1);
+      expect(dials, hasLength(1));
+    });
   });
 }

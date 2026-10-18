@@ -114,7 +114,12 @@ packages to the same reviewed Git revision and commit their lockfiles. A
 package update is validated in both host apps before merging the adoption
 PRs.
 
-The first standalone app targets macOS, Windows, and Linux with one tabbed
-document window. Its files are local; it has no network service, account,
+The standalone app targets Android, macOS, Windows, and Linux. Desktops use tabbed
+document windows. It has no network service, account,
 telemetry, or updater. The shared Flutter surface stays usable in the host
-apps' existing mobile flows.
+apps' existing mobile flows. Android starts one workspace without the desktop
+window host. Its `AndroidDocuments` service maps system document-provider
+identities onto the existing `DocumentStore` boundary; private staging reuses
+the core's UTF-8, BOM, line-ending and size rules. The native provider adapter
+checks digests before writes and verifies read-back, retaining the original
+in private recovery storage until success. Provider writes are not atomic.

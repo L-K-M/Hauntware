@@ -1833,7 +1833,7 @@ class _PaneSurface extends StatelessWidget {
                   controller.error == null &&
                   controller.phase != PanePhase.restored
               ? l10n.paneLoadingFolder(
-                  paneLastSegment(controller.location?.path),
+                  controller.pathLabel(controller.location?.path, l10n),
                 )
               : '',
           liveRegion: true,
@@ -2518,14 +2518,14 @@ class _TypeAheadBadge extends StatelessWidget {
 }
 
 /// The ancestors of [path], parent first and root last — Finder's title
-/// menu order: ('/home', 'home'), ('/', '/') for `/home/tester`. Empty
+/// menu order: `/home`, `/` for `/home/tester`. Empty
 /// at a root.
-List<(String, String)> _ancestorsOf(String path) {
-  final ancestors = <(String, String)>[];
+List<String> _ancestorsOf(String path) {
+  final ancestors = <String>[];
   var walking = paneParentPath(path);
   var previous = path;
   while (walking != previous) {
-    ancestors.add((paneLastSegment(walking), walking));
+    ancestors.add(walking);
     previous = walking;
     walking = paneParentPath(walking);
   }
@@ -2696,10 +2696,10 @@ class _LocationTitle extends StatelessWidget {
     final location = controller.location;
     final path = location?.path;
     final name = path != null
-        ? paneLastSegment(path)
+        ? controller.pathLabel(path, l10n)
         : controller.remoteBookmark?.label ?? '';
     final ancestors = path == null
-        ? const <(String, String)>[]
+        ? const <String>[]
         : _ancestorsOf(path);
     final editable = controller.acceptsPathInput;
 
@@ -2783,7 +2783,7 @@ class _AncestorMenu extends StatelessWidget {
   const _AncestorMenu({required this.controller, required this.ancestors});
 
   final PaneController controller;
-  final List<(String, String)> ancestors;
+  final List<String> ancestors;
 
   @override
   Widget build(BuildContext context) {
@@ -2806,8 +2806,8 @@ class _AncestorMenu extends StatelessWidget {
                     size: 16,
                     color: palette.glyph(FamilyHue.blue),
                   ),
-            onPressed: () => controller.navigate(ancestors[i].$2),
-            child: Text(ancestors[i].$1),
+            onPressed: () => controller.navigate(ancestors[i]),
+            child: Text(controller.pathLabel(ancestors[i], l10n)),
           ),
       ],
       builder: (context, menu, _) => IconButton(

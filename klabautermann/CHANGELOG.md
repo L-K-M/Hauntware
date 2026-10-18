@@ -110,3 +110,11 @@
   sections you can fold, and your imports follow under Imported. Pin a
   synced server to the top from its menu (right-click, Shift+F10, the Menu
   key or a long-press); pins are kept on this device only.
+- Choose which servers Klabautermann reads continuously while it is
+  open: Monitor or Stop monitoring from a server's menu, or the switches
+  under Settings > Servers. Monitored servers show CPU, memory and disk
+  in their rows without being opened, up to 10 per device. A server can
+  be monitored once its address is confirmed on this device and it
+  signs in with an SSH agent or a key file; Settings says why one
+  cannot. Until you choose, desktops monitor up to 10 eligible servers
+  and phones none. Your choice is kept on this device only.

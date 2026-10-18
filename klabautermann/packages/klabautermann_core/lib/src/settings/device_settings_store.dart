@@ -10,8 +10,8 @@ const String deviceSettingsFileName = 'settings.json';
 
 /// The schema this build reads and writes. A file with a higher version
 /// came from a newer build and is never rewritten by this one
-/// ([DeviceSettingsIssueKind.newerVersion]); the monitor set and the
-/// per-server device preferences join the schema under new keys.
+/// ([DeviceSettingsIssueKind.newerVersion]); the per-server device
+/// preferences join the schema under new keys, as the monitor set did.
 const int deviceSettingsSchemaVersion = 1;
 
 // The keys sit under the `klabautermann.` prefix like every settings key
@@ -23,6 +23,7 @@ const String _firstRunCardKey = 'klabautermann.coverage.firstRunCardDismissed';
 const String _announceBandsKey =
     'klabautermann.accessibility.announceThresholdBands';
 const String _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
+const String _monitorSetKey = 'klabautermann.monitorSet';
 
 /// Replaces a file's contents. [DeviceSettingsStore] writes the settings
 /// document and the copy of a damaged file through it.
@@ -99,7 +100,7 @@ final class DeviceSettingsReadOnlyException implements Exception {
 /// This device's `settings.json` (03 §4.10): the device id, the appearance,
 /// whether the first-run coverage card was dismissed, whether screen
 /// readers hear threshold-band changes (D60), the servers pinned to the
-/// top of the fleet list (03 §10.3) and, later, the monitor set and
+/// top of the fleet list (03 §10.3), FL-21's monitor set and, later,
 /// per-server device preferences.
 ///
 /// The app's isolate owns it: the composition root opens it once and the
@@ -278,6 +279,26 @@ final class DeviceSettingsStore {
   /// is read-only; the value stays in memory either way.
   Future<void> setPinnedServerIds(Set<String> ids) async {
     _values[_pinnedServersKey] = ids.toList()..sort();
+    await _save();
+  }
+
+  /// The ids of FL-21's monitor set as the user chose it on this device
+  /// (03 §4.3 step 4), or null when the user never chose one and the
+  /// platform's default applies. Device-local: never synced (03 §4.9). A
+  /// value that is not a list reads as never chosen and items that are
+  /// not strings are skipped, rather than failing the file; the app drops
+  /// ids that are no longer eligible when it next saves.
+  Set<String>? get monitorSet => switch (_values[_monitorSetKey]) {
+    final List<Object?> ids => Set.unmodifiable(ids.whereType<String>()),
+    _ => null,
+  };
+
+  /// Stores [ids] as the user's monitor set, sorted so the document does
+  /// not churn with toggle order, and writes the document. Throws when
+  /// the write fails or this session is read-only; the value stays in
+  /// memory either way.
+  Future<void> setMonitorSet(Set<String> ids) async {
+    _values[_monitorSetKey] = ids.toList()..sort();
     await _save();
   }
 

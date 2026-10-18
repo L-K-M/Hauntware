@@ -103,14 +103,12 @@ class _SettingsDialogState extends State<SettingsDialog> {
               ),
               const SizedBox(height: 16),
               _section(theme, 'Indentation for new documents'),
-              Row(
+              OverflowBar(
+                alignment: MainAxisAlignment.spaceBetween,
+                spacing: 16,
+                overflowSpacing: 8,
                 children: [
-                  Expanded(
-                    child: Text(
-                      'Indent with',
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                  ),
+                  Text('Indent with', style: theme.textTheme.bodyMedium),
                   SegmentedButton<IndentStyle>(
                     segments: const [
                       ButtonSegment(
