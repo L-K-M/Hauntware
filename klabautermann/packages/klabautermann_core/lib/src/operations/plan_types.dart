@@ -123,8 +123,12 @@ enum ImpactKind {
   /// [PlanImpact.count] running containers stop.
   stopsContainers,
 
-  /// Data is removed with no way back: volumes, an image in use.
-  removesData,
+  /// The container's anonymous volumes are removed with it: their data
+  /// has no way back.
+  removesVolumes,
+
+  /// An image in use by [PlanImpact.count] containers is removed anyway.
+  forcesImageInUse,
 
   /// The target restarts or stops; nothing beyond it is touched.
   interruptsTarget,

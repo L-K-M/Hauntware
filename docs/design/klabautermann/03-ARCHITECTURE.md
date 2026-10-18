@@ -4141,6 +4141,30 @@ session), containers publishing the SSH port or a VPN port, and user-marked
 targets (synced in `pref`, sealed removal). The impact line names the
 consequence ("drops your session", "stops 23 running containers").
 
+As built in M4 (E10, `KC/lib/src/operations/`):
+
+- `protected_targets.dart` holds the built-in unit list (with `*` globs
+  such as `wg-quick@*.service`), PID 1 and `sshd`, `dockerd` and
+  `containerd` by `comm`. It reads the session's path from three PIDs:
+  - the sampler shells and their sshd parents, from E07's `SELF`,
+    which `SamplerSession.self` keeps and the scheduler's `samplerPids`
+    reads;
+  - the probe's `sessionParentPid`;
+  - and the SSH port from `$SSH_CONNECTION`.
+- A container is protected when it publishes that port, port 22, or a
+  VPN port (51820/udp, 1194, 41641/udp [guess list]).
+- User marks are `ServerSafety.marks` in `SetSafetyPolicy`, which stay on
+  the device until v1's `pref` records (M4 plan Q1).
+- Any protection reason raises the tier to typed. A target another
+  manager owns does the same: `ownership.dart` reads 8.7's markers
+  through `detectOwnership`.
+- `danger.dart` lints each shell step's words, and each API step as the
+  Docker CLI command that does the same, so `DELETE /volumes/x` is
+  flagged like `docker volume rm x`.
+- `impact.dart` gives the typed impact facts the app words:
+  `dropsSession`, `stopsContainers(n)`, `removesVolumes`,
+  `forcesImageInUse(n)` and `interruptsTarget`.
+
 ### 8.7 Ownership markers of other managers (DKE-10, STK-10, JOB-09)
 
 Owned when any of these hold: labels `coolify.managed`, `runtipi.managed`,

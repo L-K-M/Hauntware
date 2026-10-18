@@ -3,11 +3,12 @@
 // steps, so what the user confirmed is what runs; the danger findings come
 // from the same steps' words.
 import 'package:meta/meta.dart';
-import 'package:seance_core/seance_core.dart' show DangerFinding, DangerLinter;
+import 'package:seance_core/seance_core.dart' show DangerFinding;
 
 import '../engine/protocol.dart'
     show ActionIntent, ActionPreview, ConfirmationTier;
 import 'confirmation.dart';
+import 'danger.dart';
 import 'plan_types.dart';
 
 /// A planned operation. Every collection is unmodifiable, and [preview]
@@ -34,7 +35,7 @@ final class OperationPlan {
   }) : steps = List.unmodifiable(steps),
        hostWrites = List.unmodifiable(hostWrites),
        revalidate = List.unmodifiable(revalidate),
-       danger = List.unmodifiable(_lint(steps)),
+       danger = List.unmodifiable(lintSteps(steps)),
        tier = confirmationTier(
          kind,
          protected: protected != null,
@@ -61,7 +62,7 @@ final class OperationPlan {
   final ProtectedReason? protected;
   final List<Revalidation> revalidate;
 
-  /// What `DangerLinter.scan` found in the shell steps' words.
+  /// What the linter found in the steps ([lintSteps]).
   final List<DangerFinding> danger;
 
   /// The tier [RunAction]'s confirmation must satisfy (03 §8.6).
@@ -83,14 +84,6 @@ final class OperationPlan {
     protected: protected,
     requiredTier: tier,
   );
-
-  // The linter matches shell words, which the exact command line quotes
-  // one by one behind its locale wrapper, so it reads each step's argv
-  // joined by spaces: the same words, with any `sh -c` script as text.
-  static List<DangerFinding> _lint(Iterable<PlanStep> steps) => [
-    for (final step in steps)
-      if (step is ShellStep) ...DangerLinter.scan(step.argv.join(' ')),
-  ];
 }
 
 /// What the runner checks again right before a plan's first step (03

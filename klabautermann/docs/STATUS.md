@@ -1326,6 +1326,16 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 protected targets, ownership and danger (E10): the plan facts
+  for 03 §8.6 and §8.7, with no planner using them yet.
+  - Protected targets: built-in units, PID 1, the core daemons, the
+    session's own sshd and sampler PIDs (from E07's `SELF`), containers
+    on the SSH or a VPN port, and the user's device-local marks.
+  - Managed containers and stacks raise the tier to typed.
+  - API steps are linted as their Docker CLI equivalents.
+  - Typed impact facts.
+
+  E14 and E15 build plans from these facts.
 - M4 audit log (E12b): every finished run appends a redacted record to
   the server's `audit/` file. Records are pruned after 90 days, and a
   damaged file is quarantined. Without exclusive access the log lives in

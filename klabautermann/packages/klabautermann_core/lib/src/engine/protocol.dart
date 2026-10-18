@@ -2254,10 +2254,19 @@ final class SafetyPolicy {
 /// (SAF-01): the server is observed, never changed.
 @immutable
 final class ServerSafety {
-  const ServerSafety({this.management = false, this.readOnly = false});
+  const ServerSafety({
+    this.management = false,
+    this.readOnly = false,
+    this.marks = const {},
+  });
 
   final bool management;
   final bool readOnly;
+
+  /// Targets the user marked protected on this device (SAF-22): unit,
+  /// container and stack names. They stay device-local until v1's `pref`
+  /// records (M4 plan Q1).
+  final Set<String> marks;
 }
 
 /// Admin mode's default inactivity expiry [E] (03 §8.2).
