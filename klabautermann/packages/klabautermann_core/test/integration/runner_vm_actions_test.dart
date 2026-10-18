@@ -200,13 +200,18 @@ void main() {
       expect(planned.preview.protected, ProtectedReason.sessionPath);
       expect(planned.preview.requiredTier, ConfirmationTier.typedPhrase);
 
-      // Never confirmed: the runner's own sshd stays as it is.
+      // Never confirmed: the runner's own sshd stays as it is. A refused
+      // run takes its plan, so each confirmation gets a plan of its own.
       for (final confirmation in const [
         ActionConfirmation(tier: ConfirmationTier.acknowledge),
         ActionConfirmation(tier: ConfirmationTier.typedPhrase, phrase: 'ssh'),
       ]) {
         final refused =
-            await run(engine, planned, confirmation: confirmation)
+            await run(
+                  engine,
+                  await plan(engine, planned.preview.intent),
+                  confirmation: confirmation,
+                )
                 as ActionRefused;
         expect(refused.reason, ActionRefusalReason.confirmationMismatch);
       }
