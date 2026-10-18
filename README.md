@@ -25,8 +25,8 @@ One repository, one version and one release cadence:
 
 Séance also supplies the shared encrypted sync server. Product names,
 application IDs, storage locations and keystore namespaces stay distinct.
-Klabautermann is in development: CI builds its five clients on every pull
-request, and suite releases include them from its preview milestone.
+Klabautermann is in preview: suite releases ship its five clients under
+asset names that carry the preview label until v1.
 
 ## Develop
 
@@ -62,9 +62,9 @@ scripts/release.sh --check
 scripts/release.sh 1.2.0 --push  # Explicit future release, not part of migration
 ```
 
-One `vX.Y.Z` tag drives all 14 released client targets (Klabautermann's five
-join with its preview), sync-server binaries and its container image. One
-publish point follows every required test/build and artifact/checksum check.
+One `vX.Y.Z` tag drives all 19 released client targets, sync-server binaries
+and its container image. One publish point follows every required test/build
+and artifact/checksum check.
 Android keeps the existing committed sideload signing keys; desktop bundles
 remain unsigned/ad-hoc and iOS bundles unsigned.
 Vendored package versions and historical benchmark measurements stay intact.
