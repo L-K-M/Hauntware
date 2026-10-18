@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../services/ssh_config_source.dart';
+import 'monitor_set.dart';
 
 /// One fleet entry as the rail renders it: the engine's [FleetEntry]
 /// reduced to what a row shows (03 §10.3).
@@ -16,6 +17,7 @@ final class FleetServer {
     this.address,
     this.searchText,
     this.locatorConflict,
+    this.monitorEligibility = MonitorEligibility.eligible,
   });
 
   /// The row for [entry]; its address leaves out the default port.
@@ -28,6 +30,7 @@ final class FleetServer {
       address: _address(entry),
       searchText: entry.searchText,
       locatorConflict: entry.locatorConflict,
+      monitorEligibility: monitorEligibilityOf(entry),
     );
   }
 
@@ -54,6 +57,10 @@ final class FleetServer {
   /// The ids of the servers whose host-key pins would collide with this
   /// one's (03 §4.6); see [FleetEntry.locatorConflict].
   final List<String>? locatorConflict;
+
+  /// Whether the server may join FL-21's monitor set, by the engine's
+  /// rule ([monitorEligibilityOf]).
+  final MonitorEligibility monitorEligibility;
 
   static String _address(FleetEntry entry) {
     final login = entry.user == null ? '' : '${entry.user}@';
@@ -122,28 +129,38 @@ enum EndpointConfirmResult {
 /// The fleet concern (03 §10.1): the server list from [CatalogReplaced]
 /// snapshots, per-server link statuses from [LinkState] and probe results
 /// from [Reachability] events, the workspace's selection, the servers
-/// pinned to the top of the list (03 §10.3), the desktop ssh_config
-/// import (FL-02) and the synced servers' endpoint confirmation (03 §4.3
-/// step 3, §4.7).
+/// pinned to the top of the list (03 §10.3), FL-21's monitor set (03
+/// §4.3 step 4), the desktop ssh_config import (FL-02) and the synced
+/// servers' endpoint confirmation (03 §4.3 step 3, §4.7).
 /// Pull-only by construction (D14): the requests it sends,
-/// [ImportSshConfig] and [ConfirmEndpoints], change the engine's
-/// device-local files and never a catalog record, and pins stay on this
-/// device.
+/// [ImportSshConfig], [ConfirmEndpoints] and [SetMonitorSet], change the
+/// engine's device-local files and state and never a catalog record, and
+/// pins and the monitor set stay on this device.
 final class FleetController extends ChangeNotifier {
   /// [servers] seeds the list until the engine's first [CatalogReplaced].
   /// [sshConfig] is null on platforms without an ssh_config, which hides
   /// the import (see [sshConfigSourceFor]). [pinnedServerIds] are the pins
   /// `settings.json` restored, and `savePins` writes the set back; without
-  /// it, as in most tests, pins are held in memory only.
+  /// it, as in most tests, pins are held in memory only. [monitorSet] is
+  /// the monitor set `settings.json` restored, null while the user has
+  /// chosen none and [monitorSetDefault] applies, and `saveMonitorSet`
+  /// writes a choice back; without it, the choice is held in memory only.
   FleetController(
     this._engine, {
     List<FleetServer> servers = const [],
     this._sshConfig,
     Set<String> pinnedServerIds = const {},
     this._savePins,
+    Set<String>? monitorSet,
+    this._monitorSetDefault = MonitorSetDefault.none,
+    this._saveMonitorSet,
   }) : _servers = List.unmodifiable(servers),
        _serverIds = {for (final server in servers) server.id},
-       _pinnedServerIds = Set.unmodifiable(pinnedServerIds) {
+       _pinnedServerIds = Set.unmodifiable(pinnedServerIds),
+       _chosenMonitorSet = monitorSet == null
+           ? null
+           : Set.unmodifiable(monitorSet) {
+    _applyMonitorSet();
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
   }
 
@@ -163,6 +180,23 @@ final class FleetController extends ChangeNotifier {
   /// a sync drops and brings back returns pinned, as in Séance.
   Set<String> _pinnedServerIds;
   final Future<void> Function(Set<String> ids)? _savePins;
+
+  /// The monitor set the user chose on this device, which may still name
+  /// servers that left the fleet or stopped being eligible until the next
+  /// choice saves it; null while the default applies.
+  Set<String>? _chosenMonitorSet;
+  final MonitorSetDefault _monitorSetDefault;
+  final Future<void> Function(Set<String> ids)? _saveMonitorSet;
+
+  /// The monitor set in force, and the one the engine was last sent: the
+  /// engine starts with none, and hears a set only once it sent a fleet,
+  /// so eligibility is the engine's own.
+  Set<String> _monitored = const {};
+  Set<String> _sentMonitorSet = const {};
+  bool _heardFleet = false;
+  late final _MonitorCandidates _monitorCandidates = _MonitorCandidates(
+    setMonitored,
+  );
 
   final Map<String, LinkStatus> _linkStatuses = {};
   final Map<String, ReachabilityStatus> _reachability = {};
@@ -239,6 +273,89 @@ final class FleetController extends ChangeNotifier {
     _pinnedServerIds = Set.unmodifiable(ids);
     notifyListeners();
     await _savePins?.call(_pinnedServerIds);
+  }
+
+  /// The servers FL-21's monitor set holds (03 §4.3 step 4): sampled for
+  /// their rows while the app is in the foreground, whether or not a view
+  /// shows them. Eligible fleet servers only, at most [kMonitorSetLimit].
+  Set<String> get monitoredServerIds => _monitored;
+
+  /// The monitor set as Settings > Servers shows and changes it. It
+  /// notifies only when its list changes, not with every link status.
+  MonitorSetSettings get monitorSettings => _monitorCandidates;
+
+  /// Adds [serverId] to the monitor set or takes it out, at once, and
+  /// saves the choice, which drops the servers that left the fleet or
+  /// stopped being eligible. See [MonitorSetSettings.setMonitored] for
+  /// what it throws; a server that is not an eligible fleet server throws
+  /// [ArgumentError].
+  Future<void> setMonitored(String serverId, {required bool monitored}) async {
+    final inForce = _monitored;
+    if (inForce.contains(serverId) == monitored) return;
+
+    if (monitored) {
+      final eligible = _servers.any(
+        (server) =>
+            server.id == serverId &&
+            server.monitorEligibility == MonitorEligibility.eligible,
+      );
+      if (!eligible) {
+        throw ArgumentError.value(serverId, 'serverId', 'not eligible');
+      }
+      if (inForce.length >= kMonitorSetLimit) {
+        throw const MonitorSetFullException();
+      }
+    }
+
+    final chosen = _chosenMonitorSet = Set.unmodifiable(
+      monitored ? {...inForce, serverId} : ({...inForce}..remove(serverId)),
+    );
+    _applyMonitorSet();
+    notifyListeners();
+    try {
+      await _saveMonitorSet?.call(chosen);
+    } on Exception catch (error, stackTrace) {
+      Error.throwWithStackTrace(
+        MonitorSetNotSavedException('The monitor set was not saved: $error'),
+        stackTrace,
+      );
+    }
+  }
+
+  /// Works out the monitor set in force from the fleet and the choice,
+  /// refreshes [monitorSettings], and tells the engine when the set
+  /// changed since it last heard one.
+  void _applyMonitorSet() {
+    final inForce = _monitored = monitorSetInForce(
+      eligible: [
+        for (final server in _servers)
+          if (server.monitorEligibility == MonitorEligibility.eligible)
+            server.id,
+      ],
+      chosen: _chosenMonitorSet,
+      fallback: _monitorSetDefault,
+    );
+    final candidates = List<MonitorCandidate>.unmodifiable([
+      for (final server in _servers)
+        MonitorCandidate(
+          serverId: server.id,
+          label: server.displayName,
+          eligibility: server.monitorEligibility,
+          monitored: inForce.contains(server.id),
+        ),
+    ]);
+    if (!listEquals(candidates, _monitorCandidates.value)) {
+      _monitorCandidates.value = candidates;
+    }
+
+    if (!_heardFleet || _engineStopped || _disposed) return;
+    if (setEquals(inForce, _sentMonitorSet)) return;
+    _sentMonitorSet = inForce;
+    try {
+      _engine.send(SetMonitorSet(inForce.toList()));
+    } on StateError {
+      // The engine stopped; its done event follows.
+    }
   }
 
   void select(String? serverId) {
@@ -337,6 +454,7 @@ final class FleetController extends ChangeNotifier {
       case Reachability(:final serverId, :final status):
         _keep(_reachability, serverId, status);
       case CatalogReplaced(:final entries):
+        _heardFleet = true;
         _replaceFleet(entries);
         // Any fleet settles a confirm in flight, including one a sync
         // round or an import sent ahead of this confirm's answer: it can
@@ -366,6 +484,11 @@ final class FleetController extends ChangeNotifier {
       case RequestRejected(:final requestName)
           when requestName == '$ConfirmEndpoints':
         _completeConfirm(EndpointConfirmResult.failed);
+      // The engine saw another fleet than the one the set came from; the
+      // fleet it sends next brings the set in step.
+      case RequestRejected(:final requestName, :final reason)
+          when requestName == '$SetMonitorSet':
+        debugPrint('$requestName: $reason');
       // The fleet after an EndpointChanged lists the server as pending;
       // everything else belongs to other concerns.
       case EngineEvent():
@@ -393,6 +516,7 @@ final class FleetController extends ChangeNotifier {
     final ids = _serverIds = {for (final server in _servers) server.id};
     _linkStatuses.removeWhere((serverId, _) => !ids.contains(serverId));
     _reachability.removeWhere((serverId, _) => !ids.contains(serverId));
+    _applyMonitorSet();
     notifyListeners();
   }
 
@@ -421,6 +545,22 @@ final class FleetController extends ChangeNotifier {
     );
     _completeConfirm(EndpointConfirmResult.failed);
     unawaited(_events.cancel());
+    _monitorCandidates.dispose();
     super.dispose();
   }
+}
+
+/// [FleetController.monitorSettings]: the candidates as a listenable of
+/// their own, so the settings window hears the monitor set change and not
+/// every link status.
+final class _MonitorCandidates extends ValueNotifier<List<MonitorCandidate>>
+    implements MonitorSetSettings {
+  _MonitorCandidates(this._setMonitored) : super(const []);
+
+  final Future<void> Function(String serverId, {required bool monitored})
+  _setMonitored;
+
+  @override
+  Future<void> setMonitored(String serverId, {required bool monitored}) =>
+      _setMonitored(serverId, monitored: monitored);
 }

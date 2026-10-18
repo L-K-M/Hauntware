@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
+import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/settings_page.dart';
 
@@ -17,11 +18,13 @@ void main() {
     WidgetTester tester, {
     Size size = const Size(1280, 800),
     AnnouncementController? announcements,
+    List<FleetServer> servers = const [],
   }) async {
     final harness = await pumpApp(
       tester,
       size: size,
       announcements: announcements,
+      servers: servers,
     );
     await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
@@ -139,6 +142,27 @@ void main() {
     );
     await tester.pump(const Duration(seconds: 10));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('the Servers tab switches a server into the monitor set on a '
+      'phone, which starts with none (FL-21)', (tester) async {
+    final harness = await openSettings(
+      tester,
+      size: const Size(400, 800),
+      servers: twoServers,
+    );
+    // The tab bar scrolls at phone width.
+    await tester.ensureVisible(find.text('Servers'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Servers'));
+    await tester.pumpAndSettle();
+    expect(find.text('0 of 10 servers monitored'), findsOneWidget);
+
+    await tester.tap(find.text('db-1'));
+    await tester.pumpAndSettle();
+
+    expect(harness.fleet.monitoredServerIds, {'srv-2'});
+    expect(find.text('1 of 10 servers monitored'), findsOneWidget);
   });
 
   testWidgets('back returns to the shell', (tester) async {

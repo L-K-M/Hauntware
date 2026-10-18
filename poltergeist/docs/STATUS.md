@@ -4,6 +4,18 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Font catalog and previews (2026-10-17)
+
+Settings → Appearance uses the shared `ghost_fonts` picker for 20 offline
+families, with a code sample, ambiguous glyphs and emphasis. Use font confirms
+family and ligatures in one model write. Cancel discards both. Existing custom
+families and a saved ligatures-off preference are preserved. Both the settings
+window and compact dialog supply the editor's current text size.
+
+Widget tests cover model round trips, failure recovery and selection; shared
+font tests cover licensing, source digests, metrics and real ligature glyphs.
+Native-device visual checks remain manual.
+
 ## Android in-app update (2026-10-17)
 
 Owner request: the Android build can update itself once the user

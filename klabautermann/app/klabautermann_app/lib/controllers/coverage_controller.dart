@@ -11,9 +11,8 @@ final class FleetCoverage {
 
   /// The coverage of [servers]. A server is watched when FL-21's
   /// [monitorSet] lists it: it is then sampled continuously while the app
-  /// is open, the others only while a view has them open. The app stores
-  /// no monitor set yet, so the default watches none, which is what the
-  /// engine does today; ids the fleet does not list count for nothing.
+  /// is open, the others only while a view has them open. Ids the fleet
+  /// does not list count for nothing.
   factory FleetCoverage.of(
     List<FleetServer> servers, {
     Set<String> monitorSet = const {},
