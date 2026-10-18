@@ -409,12 +409,11 @@ class _GhostAppearanceSectionState extends State<GhostAppearanceSection> {
   }
 
   void _setOwnTerminal(bool own) {
+    // Only offered when the host has terminals.
+    final defaults = widget.defaultTerminalColors;
     if (own) {
-      _edit(
-        _palette.withTerminal(
-          _terminalSetAside ?? widget.defaultTerminalColors!(_drawnAt),
-        ),
-      );
+      if (defaults == null) return;
+      _edit(_palette.withTerminal(_terminalSetAside ?? defaults(_drawnAt)));
       return;
     }
     _terminalSetAside = _palette.terminal;
@@ -441,7 +440,10 @@ class _GhostAppearanceSectionState extends State<GhostAppearanceSection> {
   }
 
   Future<void> _pickFont() async {
-    final chosen = await widget.pickInstalledFont!(context, _font.text.trim());
+    // Only offered when the host gave a picker.
+    final pick = widget.pickInstalledFont;
+    if (pick == null) return;
+    final chosen = await pick(context, _font.text.trim());
     if (chosen == null || !mounted) return;
     _font.text = chosen;
     _commitFont();

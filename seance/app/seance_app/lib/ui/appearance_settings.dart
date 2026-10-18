@@ -59,10 +59,9 @@ final class _BackendAppearance implements GhostAppearanceModel {
 class _AppearanceSettingsState extends State<AppearanceSettings> {
   late final _model = _BackendAppearance(widget.backend);
 
-  /// The palette and brightness the editor last drew the terminal section
-  /// with, for the terminal font picker's preview.
+  /// The palette the editor last drew the terminal section with, for the
+  /// terminal font picker's preview, which opens outside that build.
   ThemePalette? _palette;
-  Brightness _drawnAt = Brightness.dark;
 
   /// The terminal's text and colour source. Not part of the theme: they are
   /// written with their own backend call and survive a preset or a reset.
@@ -180,7 +179,6 @@ class _AppearanceSettingsState extends State<AppearanceSettings> {
         SeanceTerminalThemes.toColors(SeanceTerminalThemes.builtIn(drawnAt)),
     terminalSection: (context, palette, drawnAt) {
       _palette = palette;
-      _drawnAt = drawnAt;
       return [
         SettingsSectionHeader(
           'Terminal',
@@ -197,7 +195,7 @@ class _AppearanceSettingsState extends State<AppearanceSettings> {
               'previewed in its own face; you can also type any family name '
               'the system knows.',
         ),
-        ..._terminalTextSection(),
+        ..._terminalTextSection(palette, drawnAt),
       ];
     },
     terminalColoursLead: (context) => DropdownButtonFormField<TerminalPalette>(
@@ -229,8 +227,9 @@ class _AppearanceSettingsState extends State<AppearanceSettings> {
     hexStyle: seanceHexStyle,
   );
 
-  /// The preview, drawn as the terminal will draw it, then the text controls.
-  List<Widget> _terminalTextSection() {
+  /// The preview, drawn as the terminal will draw it in [palette] at
+  /// [drawnAt], then the text controls.
+  List<Widget> _terminalTextSection(ThemePalette palette, Brightness drawnAt) {
     final sizeLabel = '${_terminalFontSize.round()} pt';
     return [
       _TerminalPreview(
@@ -239,8 +238,8 @@ class _AppearanceSettingsState extends State<AppearanceSettings> {
           fontFamily: _terminalFamily,
           ligatures: _terminalLigatures,
           palette: _terminalPalette,
-          themeColors: _palette?.terminal,
-          brightness: _drawnAt,
+          themeColors: palette.terminal,
+          brightness: drawnAt,
         ),
       ),
       const SizedBox(height: 12),

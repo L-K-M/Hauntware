@@ -59,7 +59,7 @@ services:
   # default options, which include a TCP listener on 2375 or 2376, and
   # dockerd listens on one Unix socket, owned by the Docker host's
   # `docker` group, on the volume the Docker host mounts. Nothing is
-  # published.
+  # published. It trusts the fixture's plain-HTTP registry, and only it.
   dind:
     image: mirror.gcr.io/library/docker:29.9.1-dind@sha256:3e5756e2b6dad6a5f1f5deacf0a19f9eaa2581b76ae092b2d4a118162e1d4d4e
     privileged: true
@@ -67,6 +67,7 @@ services:
       - dockerd
       - --host=unix:///run/docker-fixture/docker.sock
       - --group=990
+      - --insecure-registry=registry:5000
     volumes:
       - docker-run:/run/docker-fixture
     healthcheck:
@@ -78,6 +79,13 @@ services:
       interval: 60s
       start_period: 60s
       start_interval: 1s
+
+  # The image registry the mutation suites pull from (M4 E27): seed_docker.sh
+  # pushes the app image there, so a redeploy's `pull` has something to
+  # pull. Plain HTTP on the Compose network only, so nothing is published
+  # (check_docker_exposure.dart), and its storage goes with the container.
+  registry:
+    image: mirror.gcr.io/library/registry:3.0.0@sha256:6c5666b861f3505b116bb9aa9b25175e71210414bd010d92035ff64018f9457e
 
   # The host the Docker suites reach dind through, as the fixture user in
   # its `docker` group or as `klab-nosock` outside it (sshd/
