@@ -3404,6 +3404,12 @@ activates a timer, and plans `timerStart` on that unit with SVC-03's
 elevation rule and re-validation. The preview names the unit as
 `followUnit`, whose journal the app follows from the run's start.
 
+As built in M4 (E21b), where actions are allowed a timer's row menu and
+its details offer Run now. Once the run is confirmed, a sheet follows
+the started service's journal live through the Logs panel's reading,
+from the last 15 minutes so the run's start is in it, and closing the
+sheet closes the follow.
+
 As built in M4 (E14b,
 `klabautermann_core/lib/src/admin/user_crontabs.dart`),
 `ReadUserCrontabs` runs JOB-03 in admin mode only: the spool listing, then `crontab -l -u` for at most 64 [E] of its

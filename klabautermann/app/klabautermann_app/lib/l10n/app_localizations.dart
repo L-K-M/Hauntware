@@ -4209,6 +4209,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Reload'**
   String get unitReload;
+
+  /// Timer action (JOB-08): starts the unit the timer activates now.
+  ///
+  /// In en, this message translates to:
+  /// **'Run now'**
+  String get jobsRunNow;
+
+  /// Title of the sheet that follows a timer run's journal; unit is the service the timer started.
+  ///
+  /// In en, this message translates to:
+  /// **'Output of {unit}'**
+  String jobsRunOutputTitle(String unit);
+
+  /// Tooltip and screen reader label of the button that closes the run output sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Close output'**
+  String get jobsRunOutputClose;
 }
 
 class _AppLocalizationsDelegate

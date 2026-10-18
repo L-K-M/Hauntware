@@ -8,6 +8,9 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
+import 'actions/host_actions.dart';
+import 'actions/run_output_sheet.dart';
 import 'freshness.dart';
 import 'jobs_view.dart';
 import 'server_surfaces.dart' show ServerPanel;
@@ -84,6 +87,38 @@ class _JobsPanelState extends State<JobsPanel> {
   /// The table's order, which outlives tab switches: the workspace keeps a
   /// panel built once opened. The next job to run leads.
   TableSort? _sort = TableSort(_Column.next.name, TableSortDirection.ascending);
+
+  /// JOB-08's output sheet for [unit], the service a run started.
+  void _showOutput(String unit) {
+    if (!mounted) return;
+    unawaited(
+      showRunOutput(
+        context,
+        monitoring: widget.monitoring,
+        serverId: widget.serverId,
+        unit: unit,
+      ),
+    );
+  }
+
+  /// The details' Run now, for a timer row where actions are allowed.
+  Widget? _runNow(BuildContext context, JobEntry job) => switch (job) {
+    TimerJobEntry(:final timer)
+        when actionsAllowedAt(
+          context,
+          widget.serverId,
+          ActionEntryPoint.timerRunNow,
+        ) =>
+      TimerRunButton(
+        serverId: widget.serverId,
+        timer: timer.unit,
+        onRun: (unit) {
+          Navigator.of(context).pop();
+          _showOutput(unit);
+        },
+      ),
+    _ => null,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -270,8 +305,31 @@ class _JobsPanelState extends State<JobsPanel> {
                       onSort: (sort) => setState(() => _sort = sort),
                       // The table cuts commands and schedules short
                       // (A11Y-09); the details do not.
-                      onRowActivated: (job) =>
-                          _showDetails(context, job, profile, clock.value),
+                      onRowActivated: (job) => _showDetails(
+                        context,
+                        job,
+                        profile,
+                        clock.value,
+                        run: _runNow,
+                      ),
+                      // JOB-08 on timer rows where actions are allowed (M4
+                      // E21); the table keeps no slot otherwise.
+                      rowActions:
+                          actionsAllowedAt(
+                            context,
+                            widget.serverId,
+                            ActionEntryPoint.timerRunNow,
+                          )
+                          ? (job) => switch (job) {
+                              TimerJobEntry(:final timer) => timerActionEntries(
+                                context,
+                                serverId: widget.serverId,
+                                timer: timer.unit,
+                                onRun: _showOutput,
+                              ),
+                              _ => const [],
+                            }
+                          : null,
                       empty: empty == null
                           ? null
                           : Padding(
@@ -641,8 +699,9 @@ void _showDetails(
   BuildContext context,
   JobEntry job,
   HostProfile? profile,
-  DateTime now,
-) {
+  DateTime now, {
+  required Widget? Function(BuildContext context, JobEntry job) run,
+}) {
   unawaited(
     showModalBottomSheet<void>(
       context: context,
@@ -651,7 +710,14 @@ void _showDetails(
       builder: (context) => SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-          child: JobDetails(job: job, profile: profile, now: now),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: 16,
+            children: [
+              JobDetails(job: job, profile: profile, now: now),
+              ?run(context, job),
+            ],
+          ),
         ),
       ),
     ),

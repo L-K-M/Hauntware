@@ -3,9 +3,13 @@ import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/controllers/operations_controller.dart';
+import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
+import 'package:klabautermann_app/ui/actions/action_entry.dart';
 import 'package:klabautermann_app/ui/jobs_panel.dart';
+import 'package:klabautermann_app/ui/server_safety.dart';
 import 'package:klabautermann_app/ui/sortable_table.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_host/klabautermann_host.dart'
@@ -75,6 +79,7 @@ Future<void> _frame(
   required Size size,
   double textScale = 1,
   Brightness brightness = Brightness.light,
+  Widget Function(Widget child)? scopes,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -95,11 +100,14 @@ Future<void> _frame(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       // Above the Navigator, so a row's details sheet scales too.
-      builder: (context, navigator) => MediaQuery.withClampedTextScaling(
-        minScaleFactor: textScale,
-        maxScaleFactor: textScale,
-        child: navigator!,
-      ),
+      builder: (context, navigator) {
+        final scaled = MediaQuery.withClampedTextScaling(
+          minScaleFactor: textScale,
+          maxScaleFactor: textScale,
+          child: navigator!,
+        );
+        return scopes?.call(scaled) ?? scaled;
+      },
       home: Scaffold(
         body: RepaintBoundary(
           child: ColoredBox(color: theme.colorScheme.surface, child: child),
@@ -116,6 +124,7 @@ Future<_Panel> _pump(
   double textScale = 1,
   Brightness brightness = Brightness.light,
   bool visible = true,
+  SafetyPolicy? safety,
 }) async {
   final engine = FakeEngineClient();
   final shown = ValueNotifier(visible);
@@ -126,8 +135,20 @@ Future<_Panel> _pump(
     monitoring.dispose();
     await engine.close();
   });
+  final operations = OperationsController(engine);
+  addTearDown(operations.dispose);
+  final policy = safety == null
+      ? null
+      : SafetyController(initial: safety, apply: (_) {});
+  if (policy != null) addTearDown(policy.dispose);
   await _frame(
     tester,
+    scopes: policy == null
+        ? null
+        : (child) => SafetyScope(
+            safety: policy,
+            child: OperationsScope(operations: operations, child: child),
+          ),
     ValueListenableBuilder(
       valueListenable: shown,
       builder: (context, visible, _) => JobsPanel(
@@ -891,5 +912,87 @@ void main() {
         }, skip: !goldensCompareHere);
       }
     }
+  });
+
+  group('run timer now (JOB-08, M4 E21)', () {
+    const managed = SafetyPolicy(
+      servers: {_serverId: ServerSafety(management: true)},
+    );
+
+    ActionPreview preview() => ActionPreview(
+      intent: const StartTimer(_serverId, timer: 'certbot.timer'),
+      targetName: 'certbot.timer',
+      steps: [
+        ShellStep([
+          'systemctl',
+          '--no-ask-password',
+          'start',
+          '--',
+          'certbot.service',
+        ]),
+      ],
+      requiredLevel: RequiredLevel.login,
+      runner: const RunnerFacts(identity: 'deploy'),
+      requiredTier: ConfirmationTier.acknowledge,
+      followUnit: 'certbot.service',
+    );
+
+    testWidgets('the row menu runs the timer and follows its service\'s '
+        'journal', (tester) async {
+      final panel = await _pump(tester, safety: managed);
+      await panel.all(tester);
+
+      await tester.tap(
+        find.byKey(const ValueKey('jobs.rowActions.timer|certbot.timer')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Run now'));
+      await tester.pumpAndSettle();
+      final intent =
+          (panel.engine.sentOfType<PlanAction>().single as PlanAction).intent;
+      expect((intent as StartTimer).timer, 'certbot.timer');
+
+      await panel.emit(tester, ActionPlanned('plan-1', preview()));
+      await tester.tap(find.text('Run'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Output of certbot.service'), findsOneWidget);
+      final follow = panel.engine
+          .sentOfType<OpenLogStream>()
+          .cast<OpenLogStream>()
+          .single
+          .spec;
+      expect(follow.follow, isTrue);
+      expect((follow.source as JournalLogSource).unit, 'certbot.service');
+
+      await tester.tap(find.byTooltip('Close output'));
+      await tester.pumpAndSettle();
+      expect(panel.engine.sentOfType<CloseStream>(), hasLength(1));
+    });
+
+    testWidgets('a timer\'s details run it too; cron rows offer nothing', (
+      tester,
+    ) async {
+      final panel = await _pump(tester, safety: managed);
+      await panel.all(tester);
+      expect(
+        find.byKey(const ValueKey('jobs.rowActions.cron|crontab|0')),
+        findsNothing,
+      );
+      await tester.tap(_row('timer|certbot.timer'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Run now'));
+      await tester.pumpAndSettle();
+      expect(panel.engine.sentOfType<PlanAction>(), hasLength(1));
+    });
+
+    testWidgets('observe-only offers none', (tester) async {
+      final panel = await _pump(tester, safety: const SafetyPolicy());
+      await panel.all(tester);
+      expect(
+        find.byKey(const ValueKey('jobs.rowActions.timer|certbot.timer')),
+        findsNothing,
+      );
+    });
   });
 }

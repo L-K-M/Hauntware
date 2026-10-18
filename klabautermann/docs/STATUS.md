@@ -1326,6 +1326,10 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 run timer now in the app (E21b): where actions are allowed, a
+  timer's row menu and details offer Run now through the action
+  preview, and a sheet then follows the started service's journal live.
+  Other users' crontabs follow in E21c.
 - M4 process and unit actions in the app (E21a): where actions are
   allowed, the Processes table's row menu and a process's details send
   Terminate, Kill or any other signal, and the Services table's row menu

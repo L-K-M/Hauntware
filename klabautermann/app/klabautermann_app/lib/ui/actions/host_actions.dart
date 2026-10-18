@@ -14,11 +14,16 @@ import 'action_preview.dart';
 const _firstSignals = [KillSignal.sigterm, KillSignal.sigkill];
 
 /// Plans and previews [intent], if an operations controller is in scope
-/// and no other preview is on its way (the preview is modal).
-void _act(BuildContext context, ActionIntent intent) {
+/// and no other preview is on its way (the preview is modal). [onRun]
+/// hears of the preview once its plan runs.
+void _act(
+  BuildContext context,
+  ActionIntent intent, {
+  void Function(ActionPreview preview)? onRun,
+}) {
   final operations = OperationsScope.maybeOf(context);
   if (operations == null || operations.planning) return;
-  unawaited(previewAndRun(context, operations, intent));
+  unawaited(previewAndRun(context, operations, intent, onRun: onRun));
 }
 
 String _signalLabel(AppLocalizations l10n, KillSignal signal) =>
@@ -186,3 +191,65 @@ class UnitActionButtons extends StatelessWidget {
     );
   }
 }
+
+/// [timer]'s JOB-08 verb for the Jobs table's row menu, or none where
+/// actions are not allowed. [onRun] gets the unit the run starts, whose
+/// journal shows its output.
+List<SidebarMenuEntry> timerActionEntries(
+  BuildContext context, {
+  required String serverId,
+  required String timer,
+  required void Function(String unit) onRun,
+}) {
+  if (!actionsAllowedAt(context, serverId, ActionEntryPoint.timerRunNow)) {
+    return const [];
+  }
+  final l10n = AppLocalizations.of(context);
+  return [
+    SidebarMenuAction(
+      label: l10n.jobsRunNow,
+      onSelected: () => _runTimer(context, serverId, timer, onRun),
+    ),
+  ];
+}
+
+/// The same verb as a button in a timer's details.
+class TimerRunButton extends StatelessWidget {
+  const TimerRunButton({
+    super.key,
+    required this.serverId,
+    required this.timer,
+    required this.onRun,
+  });
+
+  final String serverId;
+  final String timer;
+  final void Function(String unit) onRun;
+
+  @override
+  Widget build(BuildContext context) => ActionEntry(
+    serverId: serverId,
+    point: ActionEntryPoint.timerRunNow,
+    child: Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: OutlinedButton.icon(
+        onPressed: () => _runTimer(context, serverId, timer, onRun),
+        icon: const Icon(Icons.play_arrow),
+        label: Text(AppLocalizations.of(context).jobsRunNow),
+      ),
+    ),
+  );
+}
+
+void _runTimer(
+  BuildContext context,
+  String serverId,
+  String timer,
+  void Function(String unit) onRun,
+) => _act(
+  context,
+  StartTimer(serverId, timer: timer),
+  onRun: (preview) {
+    if (preview.followUnit case final unit?) onRun(unit);
+  },
+);

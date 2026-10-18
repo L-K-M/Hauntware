@@ -15,12 +15,14 @@ const double _sheetBelowWidth = 600;
 /// Plans [intent] through [operations], shows the preview, and runs the
 /// plan once the user confirms (SAF-04, SAF-05). A refused plan says why
 /// in a toast; the run's progress and end come as toasts from
-/// [ActionResultToasts]. Returns once the preview is closed.
+/// [ActionResultToasts]. [onRun] hears of the preview once its plan runs,
+/// as JOB-08's output sheet does. Returns once the preview is closed.
 Future<void> previewAndRun(
   BuildContext context,
   OperationsController operations,
-  ActionIntent intent,
-) async {
+  ActionIntent intent, {
+  void Function(ActionPreview preview)? onRun,
+}) async {
   final overlay = Overlay.of(context, rootOverlay: true);
   final l10n = AppLocalizations.of(context);
   final answer = await operations.plan(intent);
@@ -35,6 +37,7 @@ Future<void> previewAndRun(
       final confirmation = await showActionPreview(context, preview);
       if (confirmation == null) return;
       operations.run(planId, confirmation);
+      onRun?.call(preview);
       if (overlay.mounted) {
         showTopToast(overlay, message: l10n.actionRunning(preview.targetName));
       }

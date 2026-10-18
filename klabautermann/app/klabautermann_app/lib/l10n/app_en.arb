@@ -3888,5 +3888,22 @@
   "unitReload": "Reload",
   "@unitReload": {
     "description": "Unit action (SVC-03): reloads the unit's configuration."
+  },
+  "jobsRunNow": "Run now",
+  "@jobsRunNow": {
+    "description": "Timer action (JOB-08): starts the unit the timer activates now."
+  },
+  "jobsRunOutputTitle": "Output of {unit}",
+  "@jobsRunOutputTitle": {
+    "description": "Title of the sheet that follows a timer run's journal; unit is the service the timer started.",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsRunOutputClose": "Close output",
+  "@jobsRunOutputClose": {
+    "description": "Tooltip and screen reader label of the button that closes the run output sheet."
   }
 }

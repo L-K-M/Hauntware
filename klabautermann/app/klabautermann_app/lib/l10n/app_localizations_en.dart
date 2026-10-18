@@ -3182,4 +3182,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get unitReload => 'Reload';
+
+  @override
+  String get jobsRunNow => 'Run now';
+
+  @override
+  String jobsRunOutputTitle(String unit) {
+    return 'Output of $unit';
+  }
+
+  @override
+  String get jobsRunOutputClose => 'Close output';
 }
