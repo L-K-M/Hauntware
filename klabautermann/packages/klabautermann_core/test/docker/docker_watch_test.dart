@@ -325,16 +325,16 @@ void main() {
       await h.settle();
     }
 
-    test('a link back within 60 s resumes the stream since the last event '
-        'and lists nothing again', () async {
+    test('a link back within 60 s resumes the stream since the last event, '
+        'and re-lists, though not as a fresh list', () async {
       final h = await watchedWithEvent();
       final listed = h.requests(_containersPath).length;
 
       await dropLink(h, const Duration(seconds: 60));
 
       expect(h.requests('/events').last, contains('since=1760702460'));
-      expect(h.requests(_containersPath), hasLength(listed));
-      expect(h.lists(), isEmpty);
+      expect(h.requests(_containersPath), hasLength(listed + 1));
+      expect(h.lists(), [_list(DockerWatchList.containers)]);
 
       // An event missed while away arrives again, and is read.
       h.daemon.emit(_event('abc', action: 'die', time: 1760702490));
@@ -358,7 +358,27 @@ void main() {
         ..router.update(_srv);
       await h.settle();
       expect(h.requests('/events').last, contains('since=1760702460'));
-      expect(h.lists(), [_list(DockerWatchList.images, fullRelist: true)]);
+      expect(h.lists(), [
+        _list(DockerWatchList.containers),
+        _list(DockerWatchList.images, fullRelist: true),
+      ]);
+    });
+
+    test('a daemon that restarted while the link was away replays no '
+        'event, and the re-list still shows the container it lost', () async {
+      final h = await watchedWithEvent();
+      h.daemon.routes[_containersPath] = jsonEncode([
+        _container('abc', state: 'exited'),
+      ]);
+
+      await dropLink(h, const Duration(seconds: 10));
+
+      final containers =
+          (h.lists().single.payload as DockerContainersPayload).containers;
+      expect(
+        [for (final c in containers) (c.id, c.state)],
+        [('abc', 'exited')],
+      );
     });
 
     test('a link back after more than 60 s re-lists in full', () async {
@@ -437,6 +457,34 @@ void main() {
       // (500 / 10000) * 2 CPUs * 100.
       expect(next.cpuPercent, 10.0);
       expect(next.memoryUsed, 450);
+    });
+
+    test('after more than 60 s away the first read has no CPU %, which '
+        'would span the outage', () async {
+      final h = _Harness();
+      h.daemon.routes['/v1.52/containers/abc/stats'] = jsonEncode(
+        _stats(cpu: 1000, system: 10000),
+      );
+      await h.start({DockerWatchList.stats}, statsFor: {'abc'});
+
+      h
+        ..link = null
+        ..router.update(_srv);
+      await h.settle();
+      await h.clock.elapse(const Duration(seconds: 61));
+      h.daemon.routes['/v1.52/containers/abc/stats'] = jsonEncode(
+        _stats(cpu: 90000, system: 900000),
+      );
+      h
+        ..link = (ForwardingLink()..daemons[_socket] = h.daemon)
+        ..router.update(_srv);
+      await h.settle();
+
+      final rows = [
+        for (final e in h.lists())
+          if (e.payload case DockerStatsPayload(:final stats)) ...stats,
+      ];
+      expect(rows.single.cpuPercent, isNull);
     });
 
     test('a new visible set is read from the next round on, and stopped '

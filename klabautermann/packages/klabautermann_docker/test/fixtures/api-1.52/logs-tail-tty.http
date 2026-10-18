@@ -1,0 +1,20 @@
+HTTP/1.1 200 OK
+Api-Version: 1.52
+Content-Type: application/vnd.docker.raw-stream
+Docker-Experimental: false
+Ostype: linux
+Server: Docker/29.0.4 (linux)
+Date: Sat, 17 Oct 2026 16:14:04 GMT
+Transfer-Encoding: chunked
+
+2b
+2026-10-17T16:13:49.984115336Z tty line 1
+
+2b
+2026-10-17T16:13:49.984910010Z tty line 2
+
+2b
+2026-10-17T16:13:49.984917276Z tty line 3
+
+0
+

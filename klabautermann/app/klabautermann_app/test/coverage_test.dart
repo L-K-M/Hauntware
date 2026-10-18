@@ -7,8 +7,7 @@ import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/coverage.dart';
 import 'package:klabautermann_app/ui/fleet_rail.dart' show FleetEmptyState;
 import 'package:klabautermann_app/ui/server_workspace.dart';
-import 'package:klabautermann_app/ui/sidebar_kit.dart'
-    show SidebarSectionHeader;
+import 'package:klabautermann_app/ui/sidebar_kit.dart' show SidebarFilterField;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/charts.dart' show chartTheme;
@@ -200,9 +199,12 @@ void main() {
       expect(dismiss.top, greaterThanOrEqualTo(details.bottom));
       expect(dismiss.top - details.bottom, 8);
       expect(card.bottom, lessThan(tester.getTopLeft(_chip).dy));
+      // At this size the list starts below the fold, with its filter.
       expect(
         tester.getBottomLeft(_chip).dy,
-        lessThanOrEqualTo(tester.getTopLeft(find.text('web-1')).dy),
+        lessThanOrEqualTo(
+          tester.getTopLeft(find.byType(SidebarFilterField)).dy,
+        ),
       );
 
       await tester.tap(find.text('Got it'));
@@ -308,8 +310,10 @@ void main() {
       expect(find.text(_chipOfTwo), findsOneWidget);
       expect(
         tester.getBottomLeft(_chip).dy,
-        tester.getTopLeft(find.byType(SidebarSectionHeader)).dy,
-        reason: 'the chip heads the rail, over the fleet\'s section',
+        tester.getTopLeft(find.byType(SidebarFilterField)).dy,
+        reason:
+            'the chip heads the rail, over the filter and the fleet\'s '
+            'sections',
       );
       await tester.tap(_chip);
       await tester.pumpAndSettle();

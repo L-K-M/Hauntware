@@ -12,9 +12,11 @@ import 'app.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/fleet_controller.dart';
+import 'controllers/monitor_set.dart';
 import 'controllers/monitoring_controller.dart';
 import 'controllers/prompt_controller.dart';
 import 'controllers/sync_controller.dart';
+import 'services/app_version.dart';
 import 'services/engine_keystore.dart';
 import 'services/instance_guard.dart';
 import 'services/macos_titlebar.dart';
@@ -122,9 +124,12 @@ Future<void> main(List<String> args) async {
   // directory alone; otherwise it keeps this run's pins in memory (D59,
   // D61, D63). It gets the device id read above, after the lock, so
   // enrollment never reads an id another process may have minted.
+  // Probes are on too (FL-04): the engine probes confirmed endpoints and
+  // the fleet rows show the answers.
   final engine = await IsolateEngineClient.spawn(
     supportDirectory: supportDirectory.path,
     linksEnabled: true,
+    probesEnabled: true,
     supportDirectoryAccess: supportDirectoryAccessFor(instanceLock),
     deviceId: settings.deviceId,
   );
@@ -144,6 +149,16 @@ Future<void> main(List<String> args) async {
   final fleet = FleetController(
     engine,
     sshConfig: sshConfigSourceFor(defaultTargetPlatform, Platform.environment),
+    // The rail's pinned shortlist (03 §10.3), device-local in
+    // settings.json as Séance keeps its pins.
+    pinnedServerIds: settings.pinnedServerIds,
+    savePins: settings.setPinnedServerIds,
+    // FL-21's monitor set (03 §4.3 step 4), device-local in settings.json:
+    // until the user chooses one, every eligible server on a desktop and
+    // none on a phone.
+    monitorSet: settings.monitorSet,
+    monitorSetDefault: monitorSetDefaultFor(defaultTargetPlatform),
+    saveMonitorSet: settings.setMonitorSet,
   );
   // Spawned once per launch: a restarted engine would be a new client
   // with new controllers over it, whose seq floors start empty (D44), and
@@ -174,12 +189,18 @@ Future<void> main(List<String> args) async {
     save: settings.setAnnounceThresholdBands,
   );
 
+  // The About dialog's version (M16), read here once: the settings
+  // window's engine has no plugins and gets it over the link.
+  final appVersion = await readAppVersion();
+
   // Desktop only: the runners there host the settings window; phones keep
   // the settings route.
   final settingsWindow = settingsWindowHostFor(
     defaultTargetPlatform,
     appearance: appearance,
     announcements: announcements,
+    appVersion: appVersion,
+    monitorSet: fleet.monitorSettings,
   );
 
   runApp(
@@ -197,6 +218,7 @@ Future<void> main(List<String> args) async {
       instanceLockIssue: instanceLockIssue,
       openSettingsWindow: settingsWindow?.open,
       toolbarBand: toolbarBand,
+      appVersion: appVersion,
     ),
   );
 }

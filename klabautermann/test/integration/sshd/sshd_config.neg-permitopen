@@ -1,0 +1,7 @@
+# A negative variant of the Docker host (03 §5.3, §11.3; M3 D11): local
+# forwarding on, but PermitOpen allows one TCP destination nothing
+# listens on. sshd keeps the first value it reads (sshd_config(5)), so
+# both lines come before the Include of the common config.
+AllowTcpForwarding local
+PermitOpen 127.0.0.1:1
+Include /etc/ssh/fixture/sshd_config.common

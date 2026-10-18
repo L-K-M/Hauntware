@@ -520,6 +520,17 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     below the last selected row, clamped to the view. Mouse selections do
     not report.
 
+### Touch selection handles (regressions: `test/src/ui/selection_handles_test.dart`, `app/seance_app/test/terminal_selection_toolbar_test.dart`)
+
+40. **Touch selections have draggable endpoints** (`terminal_view.dart`,
+    `ui/render.dart`): long-press and double/triple-tap selections now show
+    Flutter's platform selection handles. Each drag adjusts one endpoint
+    while anchoring the opposite endpoint to its text. Paint-linked handles
+    follow scrolling, output and reflow, and hide outside the viewport. They
+    are removed on selection clear, focus loss, view replacement or disposal.
+    Dragging dismisses the host toolbar and reports completion so it reopens
+    at the adjusted range. Mouse selection retains its existing behavior.
+
 ### App-layer notes (outside this package)
 
 - The app passes `shortcuts: {}` and instead routes ⌘C/⌘V/⌘A on

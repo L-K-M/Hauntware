@@ -3,8 +3,8 @@
 /// [ByteDuplex], the stdcopy demultiplexer and log line handling, API
 /// version negotiation with feature gates, the thin versioned
 /// [DockerClient], tolerant typed models, secret masking, compose
-/// discovery and command builders, and the pure event-refresh and image
-/// digest logic. No SSH types, no Flutter, no `dart:io`:
+/// discovery and command builders, and the pure event-refresh, image
+/// digest and Docker summary logic. No SSH types, no Flutter, no `dart:io`:
 /// `klabautermann_core` adapts `seance_core`'s `ByteDuplex` to the seam
 /// defined here.
 library;
@@ -63,6 +63,7 @@ export 'src/compose/parsers.dart'
         parseComposeVersion;
 export 'src/docker_client.dart' show DockerClient, negotiateDockerClient;
 export 'src/docker_parse_result.dart' show DockerParseResult;
+export 'src/docker_summary.dart' show DockerSummary, dockerSummary;
 export 'src/duplex.dart' show ByteDuplex, DuplexOpener, HijackedDuplex;
 export 'src/endpoints.dart' show DockerEndpoints, DockerSignal;
 export 'src/errors.dart'
@@ -174,6 +175,8 @@ export 'src/models/stats.dart'
         cpuPercentDelta,
         effectiveMemoryUsage,
         parseContainerStats;
+export 'src/models/system_df.dart'
+    show DiskUsageTotals, SystemDf, SystemDfType, parseSystemDf;
 export 'src/models/volume.dart' show VolumeSummary, parseVolumeSummaries;
 export 'src/stdcopy.dart'
     show

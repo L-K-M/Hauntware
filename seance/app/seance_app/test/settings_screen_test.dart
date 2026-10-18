@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_fonts/ghost_fonts.dart' show BundledMonoFont;
 import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
 import 'package:seance_app/services/app_settings.dart';
 import 'package:seance_app/services/app_lock.dart';
@@ -372,24 +373,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(backend.calls, ['setCheckForUpdates(false)']);
-  });
-
-  testWidgets('the ligature switch writes the terminal appearance', (
-    tester,
-  ) async {
-    await pumpScreen(tester);
-
-    // The terminal's switch; the editor's follows it.
-    final terminal = find.text('Ligatures').first;
-    await tester.ensureVisible(terminal);
-    await tester.pumpAndSettle();
-    await tester.tap(terminal);
-    await tester.pumpAndSettle();
-
-    expect(backend.calls, [
-      'setTerminalAppearance(${kDefaultTerminalFontSize.toDouble()}, , '
-          '${TerminalPalette.followApp}, ${TerminalLigatures.off})',
-    ]);
   });
 
   testWidgets('the editor text size writes through when the slider settles', (
@@ -848,6 +831,144 @@ void main() {
       await tester.tap(find.text("Use the theme's terminal colours"));
       await tester.pumpAndSettle();
       expect(lastPalette().terminal, isNull);
+    });
+
+    final preview = find.byWidgetPredicate(
+      (w) => w is Text && w.semanticsLabel == 'Terminal preview',
+    );
+
+    /// The preview's text style: what the terminal draws with.
+    TextStyle previewStyle(WidgetTester tester) =>
+        tester.widget<Text>(preview).textSpan!.style!;
+
+    Color previewBackground(WidgetTester tester) {
+      final box = tester.widget<Container>(
+        find.ancestor(of: preview, matching: find.byType(Container)).first,
+      );
+      return (box.decoration! as BoxDecoration).color!;
+    }
+
+    testWidgets('holds the terminal text, which General no longer does', (
+      tester,
+    ) async {
+      final hint = find.text(
+        'e.g. Fira Code — blank uses ${kDefaultTerminalFont.displayName}',
+      );
+      await pumpScreen(tester);
+      tester.view.physicalSize = const Size(1000, 4200);
+      await tester.pumpAndSettle();
+      expect(hint, findsNothing);
+
+      await tester.tap(find.text('Appearance'));
+      await tester.pumpAndSettle();
+      expect(hint, findsOneWidget);
+    });
+
+    testWidgets('the preview draws in the terminal font, not the code font', (
+      tester,
+    ) async {
+      backend.settings.terminalFontSize = 15;
+      await pumpAppearance(tester);
+      expect(previewStyle(tester).fontFamily, kDefaultTerminalFont.family);
+      expect(previewStyle(tester).fontSize, 15);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('terminal.font')),
+        ' Fira Code ',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(previewStyle(tester).fontFamily, BundledMonoFont.firaCode.family);
+      expect(backend.calls, [
+        'setTerminalAppearance(15.0, Fira Code, '
+            '${TerminalPalette.followApp}, ${TerminalLigatures.on})',
+      ]);
+    });
+
+    testWidgets('the ligature switch writes through and shows in the preview', (
+      tester,
+    ) async {
+      await pumpAppearance(tester);
+      expect(previewStyle(tester).fontFeatures, isNull);
+
+      await tester.tap(find.byKey(const ValueKey('terminal.ligatures')));
+      await tester.pumpAndSettle();
+
+      expect(
+        previewStyle(tester).fontFeatures,
+        contains(const FontFeature.disable('calt')),
+      );
+      expect(backend.calls, [
+        'setTerminalAppearance(${kDefaultTerminalFontSize.toDouble()}, , '
+            '${TerminalPalette.followApp}, ${TerminalLigatures.off})',
+      ]);
+    });
+
+    testWidgets('the picker confirms font and ligatures together', (tester) async {
+      await pumpAppearance(tester);
+      await tester.tap(find.byTooltip('Choose a font'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('font.search')), 'Geist Mono');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('font.choice.Geist Mono')));
+      await tester.pumpAndSettle();
+      expect(backend.calls, isEmpty);
+
+      final samples = tester.widgetList<Text>(preview);
+      expect(samples.last.textSpan!.style!.fontFamily, BundledMonoFont.geistMono.family);
+      expect(samples.last.textSpan!.style!.fontFeatures, contains(const FontFeature('ss11')));
+      await tester.tap(find.byKey(const ValueKey('font.ligatures')));
+      await tester.tap(find.byKey(const ValueKey('font.apply')));
+      await tester.pumpAndSettle();
+
+      expect(previewStyle(tester).fontFeatures, contains(const FontFeature.disable('ss11')));
+      expect(backend.calls, [
+        'setTerminalAppearance(${kDefaultTerminalFontSize.toDouble()}, Geist Mono, '
+            '${TerminalPalette.followApp}, ${TerminalLigatures.off})',
+      ]);
+    });
+
+    testWidgets('the terminal size slider writes through when it settles', (
+      tester,
+    ) async {
+      await pumpAppearance(tester);
+      final slider = tester.widget<Slider>(
+        find.byKey(const ValueKey('terminal.textSize')),
+      );
+
+      slider.onChanged!(20);
+      await tester.pump();
+      expect(previewStyle(tester).fontSize, 20);
+      expect(backend.calls, isEmpty);
+      slider.onChangeEnd!(20);
+      await tester.pumpAndSettle();
+
+      expect(backend.calls, [
+        'setTerminalAppearance(20.0, , '
+            '${TerminalPalette.followApp}, ${TerminalLigatures.on})',
+      ]);
+    });
+
+    testWidgets('the preview follows the terminal colour choice', (
+      tester,
+    ) async {
+      backend.settings.themePalette = ThemePresets.seance.withTerminal(
+        SeanceTerminalThemes.toColors(SeanceTerminalThemes.dark),
+      );
+      await pumpAppearance(tester);
+      expect(previewBackground(tester), SeanceTerminalThemes.dark.background);
+
+      await tester.tap(find.text('Follow the app theme'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Always light').last);
+      await tester.pumpAndSettle();
+
+      expect(previewBackground(tester), SeanceTerminalThemes.light.background);
+      expect(backend.calls, [
+        'setTerminalAppearance(${kDefaultTerminalFontSize.toDouble()}, , '
+            '${TerminalPalette.alwaysLight}, ${TerminalLigatures.on})',
+      ]);
     });
 
     testWidgets('the corners slider writes the scale', (tester) async {
