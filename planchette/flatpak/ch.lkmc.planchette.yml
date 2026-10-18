@@ -12,8 +12,12 @@ finish-args:
   - --socket=fallback-x11
   # GPU rendering for the Flutter embedder.
   - --device=dri
-  # Document open/save goes through the portal file chooser; the app is
-  # local-only, so no filesystem or network permissions.
+  # Folder workspaces and referenced keys use the same home access as the
+  # suite's file client. SSH and catalog sync are opened on demand.
+  - --filesystem=home
+  - --share=network
+  - --socket=ssh-auth
+  - --talk-name=org.freedesktop.secrets
 modules:
   - name: planchette
     buildsystem: simple

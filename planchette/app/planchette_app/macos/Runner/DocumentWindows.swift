@@ -80,7 +80,7 @@ final class DocumentWindowsHost: NSObject, NSWindowDelegate {
         title: (call.arguments as? [String: Any])?["title"] as? String,
         result: result)
     case "destroy", "activate", "hide", "isFullScreen", "setFullScreen",
-      "setTitle", "pickOpenFiles", "pickSavePath":
+      "setTitle", "pickOpenFiles", "pickSavePath", "pickDirectory":
       let arguments = call.arguments as? [String: Any]
       guard let viewId = (arguments?["viewId"] as? NSNumber)?.int64Value,
         let window = window(for: viewId)
@@ -124,6 +124,9 @@ final class DocumentWindowsHost: NSObject, NSWindowDelegate {
         return
       case "pickSavePath":
         pickSavePath(on: window, arguments: arguments, result: result)
+        return
+      case "pickDirectory":
+        pickDirectory(on: window, result: result)
         return
       default:
         guard let fullScreen = arguments?["fullScreen"] as? Bool else {
@@ -212,6 +215,27 @@ final class DocumentWindowsHost: NSObject, NSWindowDelegate {
         return
       }
       result(panel.urls.map { $0.path })
+    }
+  }
+
+  private func pickDirectory(on window: NSWindow, result: @escaping FlutterResult) {
+    let panel = NSOpenPanel()
+    panel.canChooseFiles = false
+    panel.canChooseDirectories = true
+    panel.allowsMultipleSelection = false
+    panel.resolvesAliases = true
+    panel.beginSheetModal(for: window) { response in
+      guard response == .OK else {
+        result(nil)
+        return
+      }
+      guard let path = panel.url?.path else {
+        result(FlutterError(
+          code: "PICKER_FAILED", message: "the folder dialog returned no path",
+          details: nil))
+        return
+      }
+      result(path)
     }
   }
 

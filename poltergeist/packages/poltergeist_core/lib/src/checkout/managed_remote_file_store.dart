@@ -19,6 +19,8 @@ import 'managed_remote_file.dart';
 
 const _indexVersion = 1;
 
+enum _SaveTempSweepMode { startup, live }
+
 /// Computes a SHA-256 without loading the checkout into memory.
 Future<String> streamedFileSha256(File file) async =>
     (await sha256.bind(file.openRead()).first).toString();
@@ -61,9 +63,9 @@ final class RecoveredCheckout {
 ///   [listRecovered].
 /// - `createUploadSnapshot` writes the upload's frozen content next to
 ///   the checkout as `<name>.poltergeist-<uuid>.upload`; a load sweep
-///   removes those exact generated siblings (plus `.edit`/`.backup`
-///   shapes) from indexed dirs — never a bare `.poltergeist-` prefix,
-///   so a real file named `.poltergeist-notes` is untouched.
+///   removes those exact generated siblings from indexed dirs after
+///   per-target `.edit`/`.backup` recovery — never a bare `.poltergeist-`
+///   prefix, so a real file named `.poltergeist-notes` is untouched.
 /// - The whole store sits behind a cross-process exclusive lock file so
 ///   a second instance fails fast instead of racing the index.
 class ManagedRemoteFileStore {
@@ -144,7 +146,7 @@ class ManagedRemoteFileStore {
 
   /// The in-flight-save guard window (06 §2.1 step 5): a `.edit`/
   /// `.backup` sibling touched within this span may belong to a save
-  /// still executing — the reconcile sweep leaves it alone so a
+  /// still executing — the live reconcile sweep leaves it alone so a
   /// reconcile running mid-save can neither reap a live temp nor
   /// crash-recover a live `.backup`. Matches §3.3's watch debounce.
   final Duration saveTempWindow;
@@ -755,6 +757,11 @@ class ManagedRemoteFileStore {
     }
     if (canSweepUnindexed) {
       await _sweepUnindexedCheckouts();
+      // The store lock excludes managed writers at startup, even when a
+      // crashed save's artifacts are newer than the live-save guard window.
+      for (final file in _files.values) {
+        await _sweepSaveTemps(file, mode: _SaveTempSweepMode.startup);
+      }
       await _sweepGeneratedTemps();
     }
     await _enumerateRecovered();
@@ -812,7 +819,7 @@ class ManagedRemoteFileStore {
   }
 
   /// Deletes generated temp siblings inside indexed checkout dirs —
-  /// `<name>.poltergeist-<token>.(upload|edit|backup|tmp)` exactly, and
+  /// `<name>.poltergeist-<token>.(upload|tmp)` exactly, and
   /// never the record's own basename even when it carries that shape
   /// (a remote file legitimately named `x.poltergeist-deadbeef.tmp`
   /// is still the checkout payload — 06 §3.3's exact-shape rule).
@@ -822,13 +829,12 @@ class ManagedRemoteFileStore {
     // basename shields only siblings in the same directory.
     final retained = <String, Set<String>>{};
     for (final file in _files.values) {
-      final segments = file.localPath.split('/');
-      final parent = segments.take(segments.length - 1).join('/');
-      (retained[parent] ??= {}).add(segments.last);
+      final directory = await _safeCheckoutDirectory(file.localPath);
+      if (directory == null) continue;
+      (retained[directory.path] ??= {}).add(p.basename(file.localPath));
     }
     for (final entry in retained.entries) {
-      final parts = entry.key.isEmpty ? const <String>[] : entry.key.split('/');
-      final dir = Directory(_join(checkoutRoot.absolute.path, parts));
+      final dir = Directory(entry.key);
       if (await FileSystemEntity.type(dir.path, followLinks: false) !=
           FileSystemEntityType.directory) {
         continue;
@@ -838,6 +844,8 @@ class ManagedRemoteFileStore {
         final name = p.basename(child.path);
         if (entry.value.contains(name)) continue;
         if (!generatedTempName.hasMatch(name)) continue;
+        // Save siblings belong to recovery; they may be the only content left.
+        if (name.endsWith('.edit') || name.endsWith('.backup')) continue;
         try {
           await child.delete();
         } on FileSystemException {
@@ -971,15 +979,15 @@ class ManagedRemoteFileStore {
   }
 
   /// The per-checkout `.edit`/`.backup` sweep 06 §2.1 step 5 prescribes,
-  /// run inside the serialized section as part of every reconcile:
+  /// run inside the serialized section at startup and on every reconcile:
   ///
   /// - Only the record's OWN basename's generated siblings are touched —
   ///   `<name>.poltergeist-<token>.edit|backup` exactly. A foreign stem
   ///   (or the record basename itself, decoy-shaped or not) is never
   ///   swept: inside checkout dirs the sweep deletes only what the save
   ///   dance created.
-  /// - Anything touched within [saveTempWindow] may belong to a save
-  ///   still executing — the whole pass skips that target (the
+  /// - During live reconciliation, anything touched within [saveTempWindow]
+  ///   may belong to a live save, so the pass skips that target (the
   ///   in-flight-save guard), so a reconcile landing mid-dance can
   ///   neither reap a live temp nor "recover" a live `.backup`.
   /// - Beside a live target the siblings are stale temps — deleted.
@@ -996,18 +1004,24 @@ class ManagedRemoteFileStore {
   ///
   /// All sibling failures are tolerated: the sweep is janitorial and a
   /// failed delete or restore must never mask the reconcile itself.
-  Future<void> _sweepSaveTemps(ManagedRemoteFile managed) async {
+  Future<void> _sweepSaveTemps(
+    ManagedRemoteFile managed, {
+    _SaveTempSweepMode mode = _SaveTempSweepMode.live,
+  }) async {
     try {
-      final directory = checkoutDirectory(managed.localPath);
+      final directory = await _safeCheckoutDirectory(managed.localPath);
+      if (directory == null) return;
       final targetName = p.basename(managed.localPath);
-      if (await FileSystemEntity.type(directory.path, followLinks: false) !=
-          FileSystemEntityType.directory) {
-        return;
-      }
+      // Another indexed checkout can legitimately look like this one's temp.
+      final retained = {
+        for (final file in _files.values)
+          p.normalize(checkoutFile(file.localPath).path),
+      };
       final edits = <File>[];
       final backups = <File>[];
       await for (final child in directory.list(followLinks: false)) {
         if (child is! File) continue;
+        if (retained.contains(p.normalize(child.path))) continue;
         final name = p.basename(child.path);
         // Stem-match the record's basename: `target.poltergeist-<tok>.edit`.
         final prefix = '$targetName.poltergeist-';
@@ -1037,15 +1051,17 @@ class ManagedRemoteFileStore {
       // The in-flight-save guard: any sibling inside the window freezes
       // the whole pass — a save's own `.edit`/`.backup` pair shares one
       // recency, so checking the freshest sibling covers the set.
-      final now = _now();
-      for (final sibling in [...edits, ...backups]) {
-        FileStat stat;
-        try {
-          stat = await sibling.stat();
-        } on FileSystemException {
-          continue; // vanished mid-list — nothing to guard
+      if (mode == _SaveTempSweepMode.live) {
+        final now = _now();
+        for (final sibling in [...edits, ...backups]) {
+          FileStat stat;
+          try {
+            stat = await sibling.stat();
+          } on FileSystemException {
+            continue; // vanished mid-list — nothing to guard
+          }
+          if (now.difference(stat.modified) < saveTempWindow) return;
         }
-        if (now.difference(stat.modified) < saveTempWindow) return;
       }
       final target = checkoutFile(managed.localPath);
       final targetType = await FileSystemEntity.type(
@@ -1162,7 +1178,7 @@ class ManagedRemoteFileStore {
     }
   }
 
-  Future<File?> _safeRegularFile(String localPath) async {
+  Future<Directory?> _safeCheckoutDirectory(String localPath) async {
     final segments = _validateRelativePath(localPath);
     var path = checkoutRoot.absolute.path;
     if (await FileSystemEntity.type(path, followLinks: false) !=
@@ -1176,6 +1192,11 @@ class ManagedRemoteFileStore {
         return null;
       }
     }
+    return Directory(path);
+  }
+
+  Future<File?> _safeRegularFile(String localPath) async {
+    if (await _safeCheckoutDirectory(localPath) == null) return null;
     final file = checkoutFile(localPath);
     return await FileSystemEntity.type(file.path, followLinks: false) ==
             FileSystemEntityType.file

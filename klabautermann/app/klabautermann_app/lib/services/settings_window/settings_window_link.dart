@@ -77,6 +77,10 @@ enum SettingsLinkKey {
   palette,
   mode,
   announceThresholdBands,
+
+  /// The running build's version for the about row, a string or null:
+  /// the window's engine registers no plugins to read it itself.
+  appVersion,
   monitorSet,
   serverId,
   label,

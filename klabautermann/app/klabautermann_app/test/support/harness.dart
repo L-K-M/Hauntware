@@ -84,6 +84,7 @@ final class AppHarness {
 /// [safety], which the caller disposes, adds the safety preferences; none
 /// leaves the Safety menu and notices out. [admin] adds the admin mode
 /// controller over the fake engine, and [operations] the operations one.
+/// [appVersion] stands in for what `readAppVersion` read.
 /// [linkGrace] defaults to zero, which disconnects a server as its last
 /// view closes: the tree unmounts at the end of every test, and the test
 /// binding fails a test that leaves a grace timer pending.
@@ -105,6 +106,7 @@ Future<AppHarness> pumpApp(
   List<SyncStoreIssue> syncStoreIssues = const [],
   OpenSettingsWindow? openSettingsWindow,
   ValueListenable<bool>? toolbarBand,
+  String? appVersion,
   Duration linkGrace = Duration.zero,
 }) async {
   tester.view.physicalSize = size;
@@ -147,6 +149,7 @@ Future<AppHarness> pumpApp(
       instanceLockIssue: instanceLockIssue,
       openSettingsWindow: openSettingsWindow,
       toolbarBand: toolbarBand,
+      appVersion: appVersion,
     ),
   );
   await tester.pumpAndSettle();

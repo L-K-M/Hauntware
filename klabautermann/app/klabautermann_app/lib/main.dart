@@ -18,6 +18,7 @@ import 'controllers/monitoring_controller.dart';
 import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
 import 'controllers/sync_controller.dart';
+import 'services/app_version.dart';
 import 'services/engine_keystore.dart';
 import 'services/instance_guard.dart';
 import 'services/macos_titlebar.dart';
@@ -213,6 +214,9 @@ Future<void> main(List<String> args) async {
             ?.displayName ??
         serverId,
   );
+  // The About dialog's version (M16), read here once: the settings
+  // window's engine has no plugins and gets it over the link.
+  final appVersion = await readAppVersion();
 
   // Desktop only: the runners there host the settings window; phones keep
   // the settings route.
@@ -220,6 +224,7 @@ Future<void> main(List<String> args) async {
     defaultTargetPlatform,
     appearance: appearance,
     announcements: announcements,
+    appVersion: appVersion,
     monitorSet: fleet.monitorSettings,
     safety: safety,
   );
@@ -242,6 +247,7 @@ Future<void> main(List<String> args) async {
       instanceLockIssue: instanceLockIssue,
       openSettingsWindow: settingsWindow?.open,
       toolbarBand: toolbarBand,
+      appVersion: appVersion,
     ),
   );
 }

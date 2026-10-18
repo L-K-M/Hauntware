@@ -63,6 +63,7 @@ class KlabautermannApp extends StatelessWidget {
     this.instanceLockIssue,
     this.openSettingsWindow,
     this.toolbarBand,
+    this.appVersion,
   });
 
   final FleetController fleet;
@@ -121,6 +122,11 @@ class KlabautermannApp extends StatelessWidget {
   /// integrated titlebar (`installMacosTitlebar`); null everywhere else,
   /// and then no surface reserves a band.
   final ValueListenable<bool>? toolbarBand;
+
+  /// The running build's version for the About dialog and Settings >
+  /// General (`readAppVersion`); null when the platform could not tell,
+  /// and in tests that leave it out.
+  final String? appVersion;
 
   /// The settings window where there is one, otherwise the route. A window
   /// that cannot open falls back to the route, so Settings stays reachable,
@@ -237,6 +243,7 @@ class KlabautermannApp extends StatelessWidget {
                         platform: Theme.of(context).platform,
                         fleet: fleet,
                         onOpenSettings: openSettings,
+                        appVersion: appVersion,
                       ),
                       child: AdaptiveShell(
                         fleet: fleet,
@@ -255,6 +262,7 @@ class KlabautermannApp extends StatelessWidget {
             kSettingsRoute: (_) => SettingsPage(
               appearance: appearance,
               announcements: announcements,
+              appVersion: appVersion,
               monitorSet: fleet.monitorSettings,
               safety: safety,
             ),

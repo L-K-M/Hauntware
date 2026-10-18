@@ -3,6 +3,7 @@ import 'dart:io' show FileSystemException;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
+import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
@@ -18,12 +19,14 @@ void main() {
     WidgetTester tester, {
     Size size = const Size(1280, 800),
     AnnouncementController? announcements,
+    String? appVersion,
     List<FleetServer> servers = const [],
   }) async {
     final harness = await pumpApp(
       tester,
       size: size,
       announcements: announcements,
+      appVersion: appVersion,
       servers: servers,
     );
     await tester.tap(find.byTooltip('Settings'));
@@ -127,7 +130,9 @@ void main() {
       MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(body: GeneralTab(announcements: announcements)),
+        home: Scaffold(
+          body: GeneralTab(announcements: announcements, appVersion: null),
+        ),
       ),
     );
 
@@ -142,6 +147,40 @@ void main() {
     );
     await tester.pump(const Duration(seconds: 10));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('the General tab\'s about row shows the title with its '
+      'preview label and the version, and opens About (M16)', (tester) async {
+    // A phone: no About command, so this row is the way to the dialog.
+    await openSettings(tester, size: const Size(400, 800), appVersion: '1.2.3');
+
+    expect(find.text('About'), findsOneWidget);
+    expect(find.text('Klabautermann $kPreviewLabel'), findsOneWidget);
+    await tester.tap(find.text('Version 1.2.3'));
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(AboutDialog);
+    expect(dialog, findsOneWidget);
+    for (final text in [
+      'Klabautermann $kPreviewLabel',
+      'Version 1.2.3',
+      'Klabautermann is free and unencumbered software released into the '
+          'public domain under the Unlicense.',
+    ]) {
+      expect(
+        find.descendant(of: dialog, matching: find.text(text)),
+        findsOneWidget,
+        reason: text,
+      );
+    }
+  });
+
+  testWidgets('the about row says so when the version is unknown', (
+    tester,
+  ) async {
+    await openSettings(tester);
+
+    expect(find.text('Version unknown'), findsOneWidget);
   });
 
   testWidgets('the Servers tab switches a server into the monitor set on a '

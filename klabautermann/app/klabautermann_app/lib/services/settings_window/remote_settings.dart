@@ -51,6 +51,11 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
         invoke(SettingsLinkMethod.setAnnounceThresholdBands.name, announce),
   );
 
+  /// The app's version for the about row, from the latest snapshot; null
+  /// when the app could not tell.
+  String? get appVersion => _appVersion;
+  String? _appVersion;
+
   /// The Servers tab's monitor set toggles, from the latest snapshot.
   late final RemoteMonitorSet monitorSet = RemoteMonitorSet._(
     (serverId, monitored) => invoke(SettingsLinkMethod.setMonitored.name, {
@@ -66,6 +71,7 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
 
   @override
   void applySnapshot(Map<String, Object?> snapshot) {
+    _appVersion = snapshot[SettingsLinkKey.appVersion.name] as String?;
     appearance._apply(
       decodeAppearance(
         (snapshot[SettingsLinkKey.appearance.name]! as Map)
