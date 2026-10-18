@@ -113,7 +113,7 @@ packages:
       path: "../ghost_ui"
       relative: true
     source: path
-    version: "1.9.1"
+    version: "1.9.2"
   http:
     dependency: transitive
     description:
@@ -232,7 +232,7 @@ packages:
       path: "../../../seance/packages/seance_protocol"
       relative: true
     source: path
-    version: "1.9.1"
+    version: "1.9.2"
   sky_engine:
     dependency: transitive
     description: flutter
