@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_app/services/android_documents.dart';
+import 'package:planchette_app/services/document_store.dart';
 import 'package:planchette_app/services/document_workspace.dart';
 import 'package:planchette_core/planchette_core.dart';
 
@@ -110,6 +111,28 @@ void main() {
     }
     expect(writes, isEmpty);
   });
+
+  test(
+    'managed copies cannot be published through a document provider',
+    () async {
+      final original = await documents.load(
+        path,
+        symlinkPolicy: SymlinkPolicy.reject,
+      );
+      await expectLater(
+        documents.write(
+          path: path,
+          text: 'remote content',
+          source: original,
+          expectedSha256: original.sha256,
+          target: DocumentWriteTarget.managedRemote,
+        ),
+        throwsA(isA<TextDocumentException>()),
+      );
+      expect(writes, isEmpty);
+      expect((await documents.load(path)).sha256, original.sha256);
+    },
+  );
 
   test(
     'provider failures retain the dirty buffer and saved baseline',

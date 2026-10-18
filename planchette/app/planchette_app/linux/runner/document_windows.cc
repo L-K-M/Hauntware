@@ -19,6 +19,7 @@ constexpr char kSetFullScreenMethod[] = "setFullScreen";
 constexpr char kSetTitleMethod[] = "setTitle";
 constexpr char kPickOpenFilesMethod[] = "pickOpenFiles";
 constexpr char kPickSavePathMethod[] = "pickSavePath";
+constexpr char kPickDirectoryMethod[] = "pickDirectory";
 constexpr char kActivatedEvent[] = "activated";
 constexpr char kCloseRequestedEvent[] = "closeRequested";
 constexpr char kViewIdKey[] = "viewId";
@@ -29,6 +30,7 @@ constexpr char kInitialDirectoryKey[] = "initialDirectory";
 
 constexpr char kBadArgsError[] = "BAD_ARGS";
 constexpr char kCreateFailedError[] = "CREATE_FAILED";
+constexpr char kPickerFailedError[] = "PICKER_FAILED";
 
 constexpr char kWindowTitle[] = "Planchette";
 
@@ -63,7 +65,7 @@ struct ExtraWindow {
 // dialog answers, so the pieces that bridge them live until then.
 struct PickerCall {
   FlMethodCall* call;  // Owned ref.
-  bool save;
+  GtkFileChooserAction action;
 };
 
 void send_event(DocumentWindowsHost* host, const char* event,
@@ -220,12 +222,12 @@ bool is_full_screen(GtkWindow* window) {
 }
 
 // The picker answered: file lists for Open, the one path (or none) for
-// Save. Cancel is an empty list or a null, matching the Dart contract.
+// Save or folders. Cancel is an empty list or a null, matching Dart.
 void picker_response_cb(GtkNativeDialog* native, gint response_id,
                         gpointer user_data) {
   auto* picker = static_cast<PickerCall*>(user_data);
   g_autoptr(FlValue) answer = nullptr;
-  if (picker->save) {
+  if (picker->action != GTK_FILE_CHOOSER_ACTION_OPEN) {
     if (response_id == GTK_RESPONSE_ACCEPT) {
       g_autofree gchar* filename =
           gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(native));
@@ -248,7 +250,12 @@ void picker_response_cb(GtkNativeDialog* native, gint response_id,
   }
   gtk_native_dialog_hide(native);
   g_autoptr(FlMethodResponse) response =
-      FL_METHOD_RESPONSE(fl_method_success_response_new(answer));
+      picker->action == GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER &&
+              response_id == GTK_RESPONSE_ACCEPT && answer == nullptr
+          ? FL_METHOD_RESPONSE(fl_method_error_response_new(
+                kPickerFailedError, "the folder dialog returned no path",
+                nullptr))
+          : FL_METHOD_RESPONSE(fl_method_success_response_new(answer));
   fl_method_call_respond(picker->call, response, nullptr);
   g_object_unref(picker->call);
   g_object_unref(native);
@@ -258,7 +265,8 @@ void picker_response_cb(GtkNativeDialog* native, gint response_id,
 // A file dialog owned by the window that asked — file_selector would parent
 // it to the plugin registry's view, the main window, which may be hidden.
 FlMethodResponse* open_picker(GtkWindow* parent, FlMethodCall* call,
-                              bool save) {
+                              GtkFileChooserAction action) {
+  const bool save = action == GTK_FILE_CHOOSER_ACTION_SAVE;
   const char* suggested_name =
       save ? string_argument(call, kSuggestedNameKey) : nullptr;
   if (save && suggested_name == nullptr) {
@@ -266,8 +274,7 @@ FlMethodResponse* open_picker(GtkWindow* parent, FlMethodCall* call,
         kBadArgsError, "pickSavePath needs a suggestedName", nullptr));
   }
   GtkFileChooserNative* native = gtk_file_chooser_native_new(
-      save ? "Save" : "Open", parent,
-      save ? GTK_FILE_CHOOSER_ACTION_SAVE : GTK_FILE_CHOOSER_ACTION_OPEN,
+      save ? "Save" : "Open", parent, action,
       save ? "_Save" : "_Open", "_Cancel");
   if (save) {
     gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(native),
@@ -276,12 +283,12 @@ FlMethodResponse* open_picker(GtkWindow* parent, FlMethodCall* call,
     if (directory != nullptr) {
       gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(native), directory);
     }
-  } else {
+  } else if (action == GTK_FILE_CHOOSER_ACTION_OPEN) {
     gtk_file_chooser_set_select_multiple(GTK_FILE_CHOOSER(native), TRUE);
   }
   auto* picker = g_new(PickerCall, 1);
   picker->call = FL_METHOD_CALL(g_object_ref(call));
-  picker->save = save;
+  picker->action = action;
   g_signal_connect(native, "response", G_CALLBACK(picker_response_cb),
                    picker);
   // file_selector runs the same dialog modally; the async version keeps
@@ -308,7 +315,8 @@ FlMethodResponse* handle(DocumentWindowsHost* host, FlMethodCall* call) {
                      strcmp(method, kSetFullScreenMethod) == 0 ||
                      strcmp(method, kSetTitleMethod) == 0 ||
                      strcmp(method, kPickOpenFilesMethod) == 0 ||
-                     strcmp(method, kPickSavePathMethod) == 0;
+                     strcmp(method, kPickSavePathMethod) == 0 ||
+                     strcmp(method, kPickDirectoryMethod) == 0;
   if (!known) {
     return FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
   }
@@ -337,9 +345,11 @@ FlMethodResponse* handle(DocumentWindowsHost* host, FlMethodCall* call) {
     }
     window_title_update(window, title);
   } else if (strcmp(method, kPickOpenFilesMethod) == 0) {
-    return open_picker(window, call, false);
+    return open_picker(window, call, GTK_FILE_CHOOSER_ACTION_OPEN);
   } else if (strcmp(method, kPickSavePathMethod) == 0) {
-    return open_picker(window, call, true);
+    return open_picker(window, call, GTK_FILE_CHOOSER_ACTION_SAVE);
+  } else if (strcmp(method, kPickDirectoryMethod) == 0) {
+    return open_picker(window, call, GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER);
   } else if (strcmp(method, kIsFullScreenMethod) == 0) {
     return FL_METHOD_RESPONSE(fl_method_success_response_new(
         fl_value_new_bool(is_full_screen(window))));
