@@ -1353,6 +1353,10 @@ M2, the host read MVP, is the current milestone. What is on main:
   dash and bash. Nothing runs these builders yet: E14 and E17 will.
   The root-run wrapper's `chown` was checked by hand only, and whether
   the backgrounded `setsid` launch survives logout waits for spike S4.
+- M4 Docker fixture for mutations (E27): the Docker fixture gains a
+  registry on its Compose network, which dind alone trusts, and seeds a
+  stack to redeploy, one with an orphan, a managed one and a container
+  on port 22.
 - Probe and sampler additions (M4, E07, 03 §6.2, §7.17): collector-set
   version 8 prints a `SELF <pid> <ppid>` marker before READY, which
   `HwsSessionReady` carries for 8.6's protected targets, and the
