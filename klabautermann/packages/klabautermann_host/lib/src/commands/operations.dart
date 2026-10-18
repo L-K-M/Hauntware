@@ -296,8 +296,9 @@ abstract final class OperationCommands {
   /// [kRootOpsDir] on the root rows, whose files it `chown`s to that
   /// uid, and in the resolved user directory [dir] otherwise. Uid 0 is
   /// refused on [DetachedRunner.loginSystemdUid], where `--uid=0` would
-  /// run a root unit that records in the user directory. The systemd rows name the transient unit
-  /// [opUnitName] and pass `--collect --quiet`; the setsid rows print the
+  /// run a root unit that records in the user directory. The systemd
+  /// rows name the transient unit [opUnitName] and pass `--collect
+  /// --quiet`; the setsid rows print the
   /// wrapper's PID. When [DetachedRunner.elevated] holds, the caller runs
   /// the argv through the elevation prelude.
   static List<String> detachedLaunch(
@@ -312,7 +313,7 @@ abstract final class OperationCommands {
     if (uid < 0) throw HostCommandError('negative uid', argument: '$uid');
     if (uid == 0 && runner == DetachedRunner.loginSystemdUid) {
       throw HostCommandError(
-        'a root unit records in $kRootOpsDir',
+        'a root unit would record in the user directory',
         argument: '0',
       );
     }
@@ -343,7 +344,12 @@ abstract final class OperationCommands {
       '--collect',
       '--quiet',
       '--',
-      ...wrapped,
+      // The service manager expands `${NAME}`, and `$NAME` as a whole
+      // word, in a transient service's command line (systemd-run's
+      // --expand-environment defaults to on for services, and before
+      // systemd 254 there was no way off), which would empty the
+      // wrapper's own variables; `$$` is its escape for a literal `$`.
+      for (final word in wrapped) word.replaceAll(r'$', r'$$'),
     ];
   }
 
