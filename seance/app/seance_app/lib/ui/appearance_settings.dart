@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:ghost_fonts/ghost_fonts.dart' show BundledMonoFont;
+import 'package:ghost_fonts/ghost_fonts.dart';
 
 import '../services/settings_backend.dart';
 import '../services/system_fonts.dart';
@@ -110,14 +110,6 @@ const double _presetTileRadius = 8;
 
 /// Below this the corner slider says "Square" rather than a percentage.
 const double _squareCornerScale = 0.01;
-
-/// The features ligature fonts join `->` and `!=` with. The terminal never
-/// shapes neighbouring cells together with ligatures off, so its preview
-/// turns these off instead.
-const List<FontFeature> _ligaturesOff = [
-  FontFeature.disable('calt'),
-  FontFeature.disable('liga'),
-];
 
 class _AppearanceSettingsState extends State<AppearanceSettings> {
   late ThemePalette _palette = widget.backend.settings.themePalette;
@@ -348,16 +340,46 @@ class _AppearanceSettingsState extends State<AppearanceSettings> {
   /// A dismissal leaves the field alone; the default choice clears it,
   /// which is what a blank family already means to [TerminalAppearance].
   Future<void> _pickTerminalFont() async {
-    final chosen = await showFontPicker(
+    final chosen = await showMonoFontPicker(
       context,
-      fonts: widget.systemFonts,
       current: _terminalFont.text.trim(),
-      builtInLabel: 'Use ${kDefaultTerminalFont.displayName}',
-      bundled: BundledMonoFont.values,
+      defaultFont: kDefaultTerminalFont,
+      fontSize: _terminalFontSize,
+      ligatures: _terminalLigatures == TerminalLigatures.on
+          ? MonoLigatures.on
+          : MonoLigatures.off,
+      installedFonts: widget.systemFonts.isSupported
+          ? () async => {
+              for (final font in await widget.systemFonts.families())
+                font.name: font.monospaced,
+            }
+          : null,
+      labels: const MonoFontPickerLabels(title: 'Terminal font'),
+      previewBuilder: (family, ligatures) => SizedBox(
+        width: 360,
+        child: _TerminalPreview(
+          appearance: TerminalAppearance.of(
+            fontSize: _terminalFontSize,
+            fontFamily: family,
+            ligatures: ligatures == MonoLigatures.on
+                ? TerminalLigatures.on
+                : TerminalLigatures.off,
+            palette: _terminalPalette,
+            themeColors: _palette.terminal,
+            brightness: Theme.of(context).brightness,
+          ),
+        ),
+      ),
     );
     if (chosen == null || !mounted) return;
-    _terminalFont.text = chosen;
-    _commitTerminalFont();
+    _terminalFont.text = chosen.family;
+    setState(() {
+      _terminalFamily = chosen.family;
+      _terminalLigatures = chosen.ligatures == MonoLigatures.on
+          ? TerminalLigatures.on
+          : TerminalLigatures.off;
+    });
+    unawaited(_persistTerminal());
   }
 
   Future<void> _copy() async {
@@ -1193,10 +1215,7 @@ class _TerminalPreview extends StatelessWidget {
       ),
       child: Text.rich(
         TextSpan(
-          style: switch (style.ligatures) {
-            TerminalLigatures.on => text,
-            TerminalLigatures.off => text.copyWith(fontFeatures: _ligaturesOff),
-          },
+          style: text,
           children: [
             span('deploy@web', theme.green),
             span(':', theme.foreground),
@@ -1211,6 +1230,15 @@ class _TerminalPreview extends StatelessWidget {
             span('ok', theme.cyan),
             span(' 14 passed ', theme.foreground),
             span('(0.8 s)', theme.magenta),
+            const TextSpan(text: '\nIl1 | 0Oo  {}[]  -> != ===\n'),
+            const TextSpan(
+              text: 'Aa Bb 0123  ',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const TextSpan(
+              text: 'Aa Bb 0123',
+              style: TextStyle(fontStyle: FontStyle.italic),
+            ),
           ],
         ),
         semanticsLabel: 'Terminal preview',

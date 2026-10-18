@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Terminal and editor font pickers now offer 20 bundled families with
+  search and larger previews. The terminal sample uses the session's
+  colours and text size. Ligatures default to on, including Monaspace,
+  Geist Mono and Intel One Mono's coding features, and can be disabled.
 - The terminal's text size, font, ligatures and Colors choice moved from
   Settings ▸ General to Settings ▸ Appearance, beside the terminal
   colours. The preview there now draws in the terminal's own font, size

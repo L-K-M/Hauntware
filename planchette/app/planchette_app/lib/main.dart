@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
+import 'android_app.dart';
 import 'planchette_app.dart';
 import 'services/app_settings.dart';
 import 'services/desktop_window.dart';
@@ -18,6 +19,10 @@ import 'ui/document_windows_root.dart';
 
 Future<void> main(List<String> arguments) async {
   PlanchetteBinding.ensureInitialized();
+  if (Platform.isAndroid) {
+    await runAndroidApp();
+    return;
+  }
   // Loaded before the window exists: the stored theme is the one source for
   // both the app and the window's pre-paint color.
   final settings = SettingsController(
