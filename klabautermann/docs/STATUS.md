@@ -613,11 +613,34 @@ M2, the host read MVP, is the current milestone. What is on main:
   cadence; they give way where the name and state word would not fit.
   K14's locator flag shows as a warning whose words a tap shows. Link
   changes are announced, through a live region where the platform takes no
-  announcements; samples and probe answers are not. Rows subscribe nothing
-  until the monitor set (K30), and the app's engine sends no probe
-  answers (K20). It sends link states and samples since K44b turned links
-  on, so in a real run a row shows its link state once its server is
-  opened, and its readings while a view holds them.
+  announcements; samples and probe answers are not. Rows subscribe
+  nothing; the engine samples `overview` for the monitor set (K30, below),
+  and the app's engine sends no probe answers (K20). It sends link states
+  and samples since K44b turned links on, so in a real run a row shows
+  its link state once its server is opened or monitored, and its readings
+  while a view or the monitor set holds them.
+- Monitor set (M2, FL-21, 03 §4.3 step 4, §10.1, K30): every fleet row's
+  menu offers Monitor or Stop monitoring, and Settings > Servers (the
+  route, and the desktop window through the `setMonitored` link method)
+  lists the fleet with a switch per server, why a server cannot join,
+  and the count out of 10. Eligible: a confirmed endpoint (imports count
+  as confirmed) and agent or key-file sign-in, by
+  `monitorEligibilityOf`, which the engine enforces too. Until the user
+  chooses, desktops monitor the first 10 eligible servers and phones
+  none; a choice is kept as `klabautermann.monitorSet` in
+  `settings.json`, without the ids that left the fleet or stopped being
+  eligible. The engine samples each member's `overview` under its own
+  subscription over an unattended link, keeps that link when a view
+  disconnects, and drops a member that leaves the fleet or whose
+  endpoint a sync changes; `SetMonitorSet` with more than 10 ids is
+  rejected whole, and ineligible ids are skipped by name. The coverage
+  chip and sheet count the set. Tested in the engine (unattended dial,
+  samples without a view, the limit, skipped ids, a moved server, a
+  view's disconnect), the store (round trip, damaged values, read-only),
+  the controller (defaults per platform, eligibility, limit, purge on
+  save, not-saved), the row menu and both settings surfaces. Not
+  checked: a jump host's credentials, and an encrypted key file, which
+  fails the unattended connect until K45; on a real device, unverified.
 - Server header and Overview part 1 (M2, 03 §10.2, §10.4, OV-01, OV-03,
   OV-04, MEM-01, MEM-02, K32a, #223): the desktop workspace and the
   phone's server screen open with a header showing the link state as a
@@ -1096,6 +1119,37 @@ M2, the host read MVP, is the current milestone. What is on main:
   digest `capture.sh` pinned, so `fedora-44` now pins the tag's current
   index digest, and the `fedora-44-docker-bash` fixture is recaptured
   from it with its goldens (collector-set version 7).
+- Docker fixture and rank-1 smoke (M3, 03 §5.4, §11.3, D10): the
+  fixture adds `dind` (Docker 29.9.1, privileged, unpublished, dockerd
+  on one Unix socket with gid 990, on a named volume) and `docker-sshd`
+  on 127.0.0.1:2244, the sshd base plus the static docker CLI and
+  Compose plugin copied from the digest-pinned CLI image, with
+  `AllowTcpForwarding local` ahead of the common config, the socket at
+  `/var/run/docker.sock` and `/run/user/<uid>/docker.sock`, `klab` in
+  `docker` and `klab-nosock` outside it. `run.sh` checks the rendered
+  config with `check_docker_exposure.dart` after Poltergeist's checker
+  (no published 2375 or 2376, no host `docker.sock` bind, `privileged`
+  only on dind or Podman, dind's dockerd on an explicit Unix `--host`),
+  loads busybox pulled by digest into dind over SSH and runs
+  `seed_docker.sh` as `klab` (stack `demo` with healthy, unhealthy and
+  TTY services, stack `gone` without its files, a Coolify-managed
+  container). `docker_link_test.dart` (tags `integration`, `docker`)
+  pings, negotiates and lists over `SshLink.openUnixStream`, reaches the
+  second path, and sees `klab-nosock` refused. Locally it adds about
+  16 s to `run.sh` with the images cached.
+- Negative sshd variants and refusal evidence (M3, 03 §5.3, §11.3,
+  D11): six Docker hosts on 127.0.0.1:2245 to 2250 refuse with
+  `AllowStreamLocalForwarding no`, `DisableForwarding yes`,
+  `AllowTcpForwarding no`, `PermitOpen 127.0.0.1:1`, `MaxSessions 2`
+  and a `restrict` key. `docker_refusal_test.dart` records, on the
+  base's OpenSSH 10.6, that every forwarding variant refuses
+  streamlocal (reason 2, "open failed", `forwardDisabled`), that only
+  `AllowStreamLocalForwarding no` still opens `direct-tcpip`, that
+  `MaxSessions 2` teaches the link a limit of 2, and that `klab-nosock`
+  sees the socket, fails `test -w` and gets `EACCES` from the docker
+  CLI. Each result, with sshd's log lines, goes to
+  `$KLABAUTERMANN_EVIDENCE_DIR/fixture/refusals/`. Locally it adds
+  about 8 s to `run.sh` with the images cached.
 - Desktop settings window (03 §10.2, D32): on macOS, Linux and Windows,
   Settings opens in a native window of its own through `ghost_desktop`'s
   `GhostSettingsWindowHost`; phones, and a desktop runner that cannot

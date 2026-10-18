@@ -129,6 +129,7 @@ class _DocumentShellState extends State<_DocumentShell>
   DocumentWorkspace get workspace => widget.workspace;
   DocumentWindow? get window => widget.window;
   bool get mac => defaultTargetPlatform == TargetPlatform.macOS;
+  bool get android => defaultTargetPlatform == TargetPlatform.android;
 
   /// Native file drops are wired on the desktops; the mobile runners have
   /// no drop bridge, so the target stays unregistered there.
@@ -1375,12 +1376,26 @@ class _DocumentShellState extends State<_DocumentShell>
                   )
                 : const BoxDecoration(),
             child: Scaffold(
+              appBar: android
+                  ? AppBar(
+                      title: const Text('Planchette'),
+                      actions: [
+                        IconButton(
+                          tooltip: 'Commands',
+                          onPressed: workspace.interactionLocked
+                              ? null
+                              : _openPalette,
+                          icon: const Icon(Icons.more_vert),
+                        ),
+                      ],
+                    )
+                  : null,
               body: Column(
                 // Chrome rows span the window and start at the leading edge;
                 // a centered column floated the menu bar mid-window.
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (!mac) _menuBar(menus),
+                  if (!mac && !android) _menuBar(menus),
                   TabStrip(
                     tabs: [
                       for (final tab in tabs)
@@ -1521,6 +1536,16 @@ class _DocumentShellState extends State<_DocumentShell>
       } else {
         body = _nativeMenu(menus, body);
       }
+    }
+    if (android) {
+      // System Back must use the same unsaved-document guard as Quit.
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) unawaited(widget.onQuit?.call());
+        },
+        child: SafeArea(child: body),
+      );
     }
     return body;
   }

@@ -331,10 +331,11 @@ a native smoke test. No release tag has been created.
 
 ## Current limits
 
-The standalone app is desktop-only, uses one tabbed window per process, and
-does not restore documents after application exit. It accepts UTF-8 files up
+The standalone app targets Android and the three desktops, and does not
+restore documents after application exit. It accepts UTF-8 files up
 to 4 MiB; highlighting stops above 200,000 characters. File conflict guards
 are best-effort checks, not cross-process locks. Mixed line endings follow
 the selected host normalization policy. Android hard-link publication limits
-are documented in the core package; mobile runtime file I/O has not been
-verified locally.
+are documented in the core package. Android provider writes retain original
+recovery copies but cannot guarantee atomic replacement. Real-device document
+provider and keyboard flows require a manual smoke test.

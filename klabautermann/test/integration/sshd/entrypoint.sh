@@ -34,6 +34,12 @@ install -d -m 0700 -o "$fixture_user" -g "$fixture_user" "$home/.ssh"
 install -m 0600 -o "$fixture_user" -g "$fixture_user" \
   "$authorized_keys" "$home/.ssh/authorized_keys"
 
+# The Docker host's image adds its accounts and socket paths
+# (docker-setup.sh); the other services' image has no such step.
+if [ -x /usr/local/bin/fixture-setup ]; then
+  /usr/local/bin/fixture-setup "$fixture_user" "$authorized_keys"
+fi
+
 # Where the tests raise the slow tool's flag (slow-df.sh), as root.
 install -d -m 0755 "$flag_dir"
 mkdir -p /run/sshd

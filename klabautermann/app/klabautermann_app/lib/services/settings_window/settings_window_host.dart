@@ -10,6 +10,7 @@ import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 
 import '../../controllers/announcement_controller.dart';
 import '../../controllers/appearance_controller.dart';
+import '../../controllers/monitor_set.dart';
 import 'settings_window_link.dart';
 
 /// The settings window host for [platform], or null where Settings stays a
@@ -19,9 +20,15 @@ SettingsWindowHost? settingsWindowHostFor(
   TargetPlatform platform, {
   required AppearanceSettings appearance,
   required AnnouncementSettings announcements,
+  required MonitorSetSettings monitorSet,
 }) => switch (platform) {
-  TargetPlatform.macOS || TargetPlatform.linux || TargetPlatform.windows =>
-    SettingsWindowHost(appearance: appearance, announcements: announcements),
+  TargetPlatform.macOS ||
+  TargetPlatform.linux ||
+  TargetPlatform.windows => SettingsWindowHost(
+    appearance: appearance,
+    announcements: announcements,
+    monitorSet: monitorSet,
+  ),
   TargetPlatform.android ||
   TargetPlatform.iOS ||
   TargetPlatform.fuchsia => null,
@@ -40,11 +47,13 @@ final class SettingsWindowHost {
   SettingsWindowHost({
     required AppearanceSettings appearance,
     required AnnouncementSettings announcements,
+    required MonitorSetSettings monitorSet,
     MethodChannel control = settingsWindowControlChannel,
     MethodChannel link = settingsWindowLinkChannel,
     @visibleForTesting Future<AppExitResponse> Function()? requestAppExit,
   }) : _appearance = appearance,
-       _announcements = announcements {
+       _announcements = announcements,
+       _monitorSet = monitorSet {
     _engine = GhostSettingsWindowHost(
       control: control,
       link: link,
@@ -52,7 +61,7 @@ final class SettingsWindowHost {
       sections: GhostSettingsSections(
         snapshot: _snapshot,
         handleCall: _handleCall,
-        changes: [appearance, announcements],
+        changes: [appearance, announcements, monitorSet],
       ),
       encodeError: encodeLinkError,
       requestAppExit: requestAppExit,
@@ -61,6 +70,7 @@ final class SettingsWindowHost {
 
   final AppearanceSettings _appearance;
   final AnnouncementSettings _announcements;
+  final MonitorSetSettings _monitorSet;
   late final GhostSettingsWindowHost<SettingsTab> _engine;
 
   @visibleForTesting
@@ -80,6 +90,7 @@ final class SettingsWindowHost {
   Map<String, Object?> _snapshot() => {
     SettingsLinkKey.appearance.name: encodeAppearance(_appearance.value),
     SettingsLinkKey.announceThresholdBands.name: _announcements.value,
+    SettingsLinkKey.monitorSet.name: encodeMonitorCandidates(_monitorSet.value),
   };
 
   Future<Object?> _handleCall(String name, Object? argument) async {
@@ -92,6 +103,12 @@ final class SettingsWindowHost {
         );
       case SettingsLinkMethod.setAnnounceThresholdBands:
         await _announcements.setAnnounceThresholdBands(argument! as bool);
+      case SettingsLinkMethod.setMonitored:
+        final change = (argument! as Map).cast<String, Object?>();
+        await _monitorSet.setMonitored(
+          change[SettingsLinkKey.serverId.name]! as String,
+          monitored: change[SettingsLinkKey.monitored.name]! as bool,
+        );
     }
     return null;
   }

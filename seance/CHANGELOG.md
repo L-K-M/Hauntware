@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The terminal's text size, font, ligatures and Colors choice moved from
+  Settings ▸ General to Settings ▸ Appearance, beside the terminal
+  colours. The preview there now draws in the terminal's own font, size
+  and ligatures, and shows whichever colours the terminal uses. Before,
+  it used the code font and appeared only with the theme's terminal
+  colours on.
 - On Android, the update banner offers Update instead of View release,
   with the download size. Séance downloads the release APK, shows its
   progress with Cancel, discards it unless its size and SHA-256 match

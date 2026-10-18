@@ -16,6 +16,7 @@ import '../../controllers/announcement_controller.dart'
     show AnnouncementNotSavedException;
 import '../../controllers/appearance_controller.dart'
     show AppearanceNotSavedException;
+import '../../controllers/monitor_set.dart';
 import '../../theme/app_theme.dart';
 
 /// On the app's engine only: `open` in, `closed` out.
@@ -51,10 +52,24 @@ enum SettingsLinkMethod {
 
   /// The General tab's A11Y-15 switch; the argument is a bool (D60).
   setAnnounceThresholdBands,
+
+  /// A Servers tab toggle of FL-21's monitor set; the argument is an
+  /// object of [SettingsLinkKey.serverId] and [SettingsLinkKey.monitored].
+  setMonitored,
 }
 
 /// The keys of every JSON object on the link, spelled once for both sides.
-enum SettingsLinkKey { appearance, palette, mode, announceThresholdBands }
+enum SettingsLinkKey {
+  appearance,
+  palette,
+  mode,
+  announceThresholdBands,
+  monitorSet,
+  serverId,
+  label,
+  eligibility,
+  monitored,
+}
 
 /// The palette's stored form, bound to Klabautermann's style.
 const _themeCodec = GhostThemeCodec(klabautermannThemeStyle);
@@ -76,6 +91,34 @@ AppAppearance decodeAppearance(Map<String, Object?> json) => AppAppearance(
   ),
 );
 
+/// The monitor set's candidates as the snapshot carries them, in fleet
+/// order, the eligibility by name.
+List<Map<String, Object?>> encodeMonitorCandidates(
+  List<MonitorCandidate> candidates,
+) => [
+  for (final candidate in candidates)
+    {
+      SettingsLinkKey.serverId.name: candidate.serverId,
+      SettingsLinkKey.label.name: candidate.label,
+      SettingsLinkKey.eligibility.name: candidate.eligibility.name,
+      SettingsLinkKey.monitored.name: candidate.monitored,
+    },
+];
+
+/// The inverse of [encodeMonitorCandidates]; an unknown eligibility
+/// throws, since both ends are the same build.
+List<MonitorCandidate> decodeMonitorCandidates(List<Object?> json) => [
+  for (final item in json.cast<Map<Object?, Object?>>())
+    MonitorCandidate(
+      serverId: item[SettingsLinkKey.serverId.name]! as String,
+      label: item[SettingsLinkKey.label.name]! as String,
+      eligibility: monitorEligibilityNamed(
+        item[SettingsLinkKey.eligibility.name]! as String,
+      ),
+      monitored: item[SettingsLinkKey.monitored.name]! as bool,
+    ),
+];
+
 /// Why a call failed in the app's isolate, as the code of the
 /// [PlatformException] that carries it.
 enum SettingsLinkError {
@@ -88,6 +131,15 @@ enum SettingsLinkError {
   /// [AnnouncementNotSavedException].
   announcementNotSaved,
 
+  /// The monitor set is full: the window rebuilds the
+  /// [MonitorSetFullException], so the Servers tab words it as the app's
+  /// rows do.
+  monitorSetFull,
+
+  /// As [notSaved], for the monitor set: the window rebuilds the
+  /// [MonitorSetNotSavedException].
+  monitorSetNotSaved,
+
   /// Anything else: the change did not happen.
   failed,
 }
@@ -99,6 +151,8 @@ PlatformException encodeLinkError(Object error) => PlatformException(
     AppearanceNotSavedException() => SettingsLinkError.notSaved.name,
     AnnouncementNotSavedException() =>
       SettingsLinkError.announcementNotSaved.name,
+    MonitorSetFullException() => SettingsLinkError.monitorSetFull.name,
+    MonitorSetNotSavedException() => SettingsLinkError.monitorSetNotSaved.name,
     _ => SettingsLinkError.failed.name,
   },
   message: '$error',
@@ -110,6 +164,10 @@ Exception decodeLinkError(PlatformException error) {
   return switch (SettingsLinkError.values.asNameMap()[error.code]) {
     SettingsLinkError.notSaved => AppearanceNotSavedException(message),
     SettingsLinkError.announcementNotSaved => AnnouncementNotSavedException(
+      message,
+    ),
+    SettingsLinkError.monitorSetFull => const MonitorSetFullException(),
+    SettingsLinkError.monitorSetNotSaved => MonitorSetNotSavedException(
       message,
     ),
     SettingsLinkError.failed || null => SettingsLinkException(message),

@@ -18,6 +18,53 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fleetSectionServers => 'Servers';
 
   @override
+  String get fleetSectionPinned => 'Pinned';
+
+  @override
+  String get fleetSectionImported => 'Imported';
+
+  @override
+  String get fleetRowPin => 'Pin to top';
+
+  @override
+  String get fleetRowUnpin => 'Unpin';
+
+  @override
+  String get fleetPinNotSaved =>
+      'Klabautermann could not save your pinned servers, so the change lasts only until it quits.';
+
+  @override
+  String get fleetRowMonitor => 'Monitor';
+
+  @override
+  String get fleetRowStopMonitoring => 'Stop monitoring';
+
+  @override
+  String monitorSetFull(int limit) {
+    return 'You can monitor up to $limit servers on this device. Stop monitoring one first.';
+  }
+
+  @override
+  String get monitorSetNotSaved =>
+      'Klabautermann could not save your monitored servers, so the change lasts only until it quits.';
+
+  @override
+  String get monitorSetNotChanged =>
+      'The monitored servers could not be changed.';
+
+  @override
+  String get monitorIneligibleEndpoint =>
+      'Confirm this server\'s endpoint to monitor it.';
+
+  @override
+  String get monitorIneligibleCredentials =>
+      'Signs in with a password or a stored key, which asks you first, so it is read only while you have it open.';
+
+  @override
+  String get monitorIneligibleUnknown =>
+      'Import your ssh_config again to monitor this server.';
+
+  @override
   String get fleetEmptyTitle => 'No servers yet';
 
   @override
@@ -2536,6 +2583,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsAnnounceNotChanged => 'The setting could not be changed.';
+
+  @override
+  String get settingsMonitorTitle => 'Monitoring';
+
+  @override
+  String settingsMonitorDetail(int limit) {
+    return 'Monitored servers are read continuously while Klabautermann is open, and their rows show CPU, memory and disk. A server can be monitored once its endpoint is confirmed and it signs in with an SSH agent or a key file, without asking you. Up to $limit servers.';
+  }
+
+  @override
+  String settingsMonitorCount(int monitored, int limit) {
+    return '$monitored of $limit servers monitored';
+  }
+
+  @override
+  String get settingsMonitorEmpty =>
+      'No servers yet. Servers you sync or import show here.';
 
   @override
   String overviewBandAnnouncement(String metric, String value, String band) {

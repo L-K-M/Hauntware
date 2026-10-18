@@ -202,6 +202,7 @@ class KlabautermannApp extends StatelessWidget {
             kSettingsRoute: (_) => SettingsPage(
               appearance: appearance,
               announcements: announcements,
+              monitorSet: fleet.monitorSettings,
             ),
           },
         );

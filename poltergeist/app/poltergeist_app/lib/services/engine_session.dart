@@ -361,6 +361,7 @@ final class EngineSession {
     required GlobalKey<NavigatorState> navigatorKey,
     required GlobalKey<ScaffoldMessengerState>? scaffoldMessengerKey,
     required IdentityFileReader identityReader,
+    this.fallbackHome,
     SecretVault? vault,
     this._trashServer,
   }) : _engine = engine,
@@ -388,6 +389,10 @@ final class EngineSession {
   final IncidentStore _incidentStore;
   final BookmarkRepository _bookmarks;
   final ApplicationErrorReporter _errors;
+
+  /// The app-owned local home, resolved when readable, used to label
+  /// restored tabs before their browse channels open.
+  final String? fallbackHome;
 
   /// The UI-isolate end of the D15 trash channel (03 §7.1): serves the
   /// engine's channel invocations on the SendPort the spawn config
@@ -780,13 +785,15 @@ Future<EngineSession?> startEngineSession({
       (trashServerBinder ??
       () => TrashChannelServer.bind(onError: errors.report))();
   final AppEngine engine;
+  final String? canonicalHome;
   try {
+    canonicalHome = await _canonicalFallbackHome(fallbackHome, errors);
     engine = await spawn(
       EngineConfig(
         hostKeyPins: pins,
         incidents: incidents,
         trashRequests: trashServer?.requests,
-        fallbackHome: fallbackHome,
+        fallbackHome: canonicalHome,
       ),
     );
   } on Object catch (error, stackTrace) {
@@ -801,6 +808,7 @@ Future<EngineSession?> startEngineSession({
   try {
     return EngineSession._(
       engine: engine,
+      fallbackHome: canonicalHome,
       pinStore: pinsStore,
       incidentStore: incidentsStore,
       bookmarks: bookmarks,
@@ -826,6 +834,22 @@ Future<EngineSession?> startEngineSession({
       // Best effort: the isolate dies with the process regardless.
     }
     return null;
+  }
+}
+
+/// Resolve Android's storage aliases without blocking remote connections
+/// when the local storage cannot be read.
+Future<String?> _canonicalFallbackHome(
+  String? path,
+  ApplicationErrorReporter errors,
+) async {
+  if (path == null || path.isEmpty) return path;
+
+  try {
+    return await LocalFileSystem().canonicalize(path);
+  } on RemoteFileException catch (error, stackTrace) {
+    errors.report(error, stackTrace);
+    return path;
   }
 }
 

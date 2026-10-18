@@ -13,6 +13,10 @@ tags:
   # The soak and 03 §11.4's budgets against the sshd fixture, which
   # run.sh's soak block runs alone; skipped without it.
   soak:
+  # Docker API tests against the Docker host and dind, which run.sh
+  # starts and seeds; they also carry `integration`, so they run with
+  # the engine suites, and skip without the fixture (03 §11.3).
+  docker:
 # A wedged shell test (an unread pipe or a hung child shell) would pin the
 # VM; cap every test instead.
 timeout: 60s

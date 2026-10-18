@@ -14,6 +14,7 @@ import '../catalog/keystore_channel.dart';
 import '../docker/docker_router.dart';
 import '../fleet/endpoint_pins.dart';
 import '../fleet/imported_fleet.dart';
+import '../fleet/monitor_set.dart';
 import '../fleet/ssh_config_entries.dart';
 import '../fleet/ssh_config_import_store.dart';
 import '../fleet/synced_fleet.dart';
@@ -100,7 +101,8 @@ final class EngineStart {
 /// [EndpointChanged] for each confirmed endpoint a round changed (03
 /// §4.7), [ConfirmEndpoints] pins synced endpoints and answers with the
 /// fleet, a [Connect] to an unconfirmed synced server gets
-/// [ConnectRejected],
+/// [ConnectRejected], [SetMonitorSet] samples its eligible servers'
+/// `overview` over links dialed unattended (FL-21, 03 §4.3 step 4),
 /// [AnswerKeystore] completes the keystore call it names ahead of the
 /// queue, [Shutdown] ends every log stream and exits, and every other
 /// 03 §10.1 row gets [RequestRejected] until its milestone lands.
@@ -231,6 +233,16 @@ void engineMain(
               : BackgroundLinkPolicy.keepOpen,
         )
       : null;
+  // FL-21's monitor set (03 §4.3 step 4, §6.4): the servers whose
+  // `overview` the fleet rows read while the app is in the foreground,
+  // whether or not a view shows them, over links dialed unattended so
+  // nothing prompts. It holds eligible fleet servers only. The servers
+  // a view holds a link to ([Connect] without its [Disconnect] yet) are
+  // kept beside it: a server that leaves the set keeps the link a view
+  // holds, and a view that leaves keeps a monitored server's link.
+  var monitored = const <String>{};
+  final viewed = <String>{};
+
   if (links != null) {
     scheduler = SamplingScheduler(
       subscriptions: sampling,
@@ -245,6 +257,43 @@ void engineMain(
     );
     logs = LogStreamRouter(linkFor: links.link, emit: uiPort.send);
     docker = DockerRouter(linkFor: links.link, emit: uiPort.send);
+  }
+
+  // The fleet servers the monitor set may hold now: those the shared rule
+  // allows and the engine can dial, which an import naming no user lacks
+  // on a system that names no local account.
+  Set<String> monitorEligibleIds() => {
+    for (final entry in fleetEntries())
+      if (monitorEligibilityOf(entry) == MonitorEligibility.eligible &&
+          configOf(entry.serverId) != null)
+        entry.serverId,
+  };
+
+  // Makes [next], eligible fleet servers only, the monitor set: a server
+  // that joins gets its subscription and an unattended connect, and one
+  // that leaves loses both, its link only when no view holds it.
+  void applyMonitorSet(Set<String> next) {
+    final before = monitored;
+    monitored = Set.unmodifiable(next);
+    for (final serverId in before.difference(next)) {
+      sampling.unsubscribe(
+        Unsubscribe(serverId: serverId, subscriptionId: monitorSubscriptionId),
+      );
+      scheduler?.update(serverId);
+      if (viewed.contains(serverId)) continue;
+      logs?.disconnect(serverId);
+      links?.disconnect(serverId);
+    }
+    for (final serverId in next.difference(before)) {
+      final subscription = Subscribe(
+        serverId: serverId,
+        subscriptionId: monitorSubscriptionId,
+        streams: const {SampleStream.overview},
+      );
+      sampling.subscribe(subscription);
+      scheduler?.subscribed(subscription);
+      links?.connect(serverId, purpose: ConnectPurpose.background);
+    }
   }
 
   // Rebuilds the fleet from the store. A server that left it is forgotten
@@ -266,6 +315,13 @@ void engineMain(
     scheduler?.retain(fleetIds);
     logs?.retain(fleetIds);
     links?.forget(before.difference(fleetIds));
+    viewed.retainAll(fleetIds);
+    // A monitored server that left the fleet or is no longer eligible (a
+    // sync changed its endpoint, an import its credentials) leaves the
+    // set; the app hears the fleet and sends its own set again.
+    if (monitored.isNotEmpty) {
+      applyMonitorSet(monitored.intersection(monitorEligibleIds()));
+    }
     final forgotten = {
       for (final id in before)
         if (!fleetIds.contains(id) ||
@@ -435,10 +491,12 @@ void engineMain(
         // blocked it reviews the key (D61).
         if (links == null) {
           reject(message, 'links are off in this engine');
-        } else if (!links.connect(
+        } else if (links.connect(
           serverId,
           purpose: ConnectPurpose.interactive,
         )) {
+          viewed.add(serverId);
+        } else {
           // A fleet server without a config is the user's to fix, so the
           // app is told why; any other id is not a server it lists.
           switch (fleetIds.contains(serverId)
@@ -452,11 +510,20 @@ void engineMain(
           }
         }
       case Disconnect(:final serverId):
+        viewed.remove(serverId);
+        // A monitored server keeps its link for the monitor set. One
+        // without a link yet gives up the view's attempt, and with it any
+        // prompt the view raised, and goes on dialing unattended.
+        final monitoredServer = monitored.contains(serverId);
+        if (monitoredServer && links?.link(serverId) != null) return;
         // Its streams end before its link closes, so none reports
         // waiting for that link first.
         logs?.disconnect(serverId);
         docker?.disconnect(serverId);
         links?.disconnect(serverId);
+        if (monitoredServer) {
+          links?.connect(serverId, purpose: ConnectPurpose.background);
+        }
       case SetAppActivity(:final activity):
         links?.setActivity(activity);
         scheduler?.activity = activity;
@@ -549,6 +616,21 @@ void engineMain(
         }
         await relistSynced();
         uiPort.send(CatalogReplaced(fleetEntries()));
+      case SetMonitorSet(:final serverIds):
+        // The app offers only what the engine allows (FL-21), so a
+        // rejection means the two saw different fleets; the app's next
+        // set follows the fleet that answers it.
+        final requested = serverIds.toSet();
+        if (requested.length > kMonitorSetLimit) {
+          reject(message, 'more than $kMonitorSetLimit servers');
+          return;
+        }
+        final eligible = monitorEligibleIds();
+        applyMonitorSet(requested.intersection(eligible));
+        final skipped = requested.difference(eligible);
+        if (skipped.isNotEmpty) {
+          reject(message, 'not eligible fleet servers: ${skipped.join(', ')}');
+        }
       case EnrollSync():
         runSync(SyncOperation.enroll, () => sync.enroll(message));
       case RunSyncRound():

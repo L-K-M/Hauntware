@@ -229,7 +229,15 @@ final class ConfirmEndpoints extends EngineRequest {
   final List<String> serverIds;
 }
 
-/// Sets which servers the monitor set samples continuously (03 §10.3).
+/// Sets FL-21's monitor set (03 §4.3 step 4, §6.4): the servers whose
+/// `overview` the engine samples while the app is in the foreground,
+/// whether or not a view shows them, over links it dials unattended, so
+/// nothing prompts. It replaces the last set. Only a fleet server that
+/// `monitorEligibilityOf` allows joins; others are skipped and named in a
+/// [RequestRejected], and a set of more than `kMonitorSetLimit` (10)
+/// servers is rejected whole, leaving the last one. A server that leaves the fleet
+/// or stops being eligible leaves the set. No other event answers it.
+/// Device-local: the app keeps the set in `settings.json` (03 §4.9).
 final class SetMonitorSet extends EngineRequest {
   const SetMonitorSet(this.serverIds);
 
@@ -286,7 +294,9 @@ final class Subscribe extends EngineRequest {
 
   final String serverId;
 
-  /// The surface's own id, unique among the server's subscriptions.
+  /// The surface's own id, unique among the server's subscriptions. The
+  /// engine's monitor set holds one of its own (`engine:monitorSet`),
+  /// which the app never uses.
   final String subscriptionId;
 
   /// What the surface shows. Pass an unmodifiable set.
