@@ -1493,6 +1493,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       final strip = PaneTabsController(
         paneId: paneId,
         lanes: lanes,
+        appStoragePath: widget.engineSession?.fallbackHome,
         newTabTarget: widget.newTabTarget,
         doubleClickAction: _doubleClickAction,
         directoryGrouping: _directoryGrouping,

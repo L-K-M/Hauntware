@@ -1834,6 +1834,34 @@ class AppLocalizationsEn extends AppLocalizations {
       'Zoom In, Zoom Out and Actual Size in an editor change it too.';
 
   @override
+  String get editorFontPickerTitle => 'Choose a font';
+
+  @override
+  String get editorFontPickerSearch => 'Search fonts';
+
+  @override
+  String get editorFontPickerIncluded => 'Included fonts';
+
+  @override
+  String get editorFontPickerInstalled => 'Installed fonts';
+
+  @override
+  String get editorFontPickerEmpty => 'No fonts match your search.';
+
+  @override
+  String get editorFontPickerUse => 'Use font';
+
+  @override
+  String get editorFontPickerDefault => 'default';
+
+  @override
+  String get editorFontPickerMonospace => 'Monospace only';
+
+  @override
+  String get editorFontPickerNoLigatures =>
+      'This font has no programming ligatures.';
+
+  @override
   String get editorFontLabel => 'Font';
 
   @override

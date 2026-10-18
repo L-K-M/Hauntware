@@ -24,8 +24,38 @@ final _digestPinned = RegExp(r'^FROM \S+@sha256:[0-9a-f]{64}$');
 /// An image reference pinned by digest.
 final _pinnedImage = RegExp(r'^\S+@sha256:[0-9a-f]{64}$');
 
+/// The Docker host's negative variants (M3 D11): each one's config lines
+/// ahead of the common config's Include, and its loopback port.
+const _negativeVariants = {
+  'neg-nostreamlocal': (
+    ['AllowTcpForwarding local', 'AllowStreamLocalForwarding no'],
+    2245,
+  ),
+  'neg-disableforwarding': (
+    ['AllowTcpForwarding local', 'DisableForwarding yes'],
+    2246,
+  ),
+  'neg-notcp': (['AllowTcpForwarding no'], 2247),
+  'neg-permitopen': (
+    ['AllowTcpForwarding local', 'PermitOpen 127.0.0.1:1'],
+    2248,
+  ),
+  'neg-maxsessions2': (['AllowTcpForwarding local', 'MaxSessions 2'], 2249),
+};
+
+/// The variant that refuses with a key option over the Docker host's own
+/// config, and its loopback port.
+const _restrictVariant = 'neg-restrict';
+const _restrictPort = 2250;
+
 /// The Compose services that are sshd hosts, and the Docker engine.
-const _sshdServices = ['sshd', 'jump', 'docker-sshd'];
+final _sshdServices = [
+  'sshd',
+  'jump',
+  'docker-sshd',
+  ..._negativeVariants.keys,
+  _restrictVariant,
+];
 const _dind = 'dind';
 
 /// The dind socket's directory, on the volume the Docker host shares.
@@ -133,6 +163,86 @@ void main() {
     );
   });
 
+  test('the negative variants refuse ahead of the common config, on '
+      'the Docker host with its socket', () {
+    final all = services();
+    final dockerfile = read(
+      'klabautermann/test/integration/sshd/Dockerfile.docker',
+    );
+    expect(
+      dockerfile,
+      contains('COPY sshd_config.docker sshd_config.neg-* /etc/klabautermann/'),
+    );
+    for (final MapEntry(key: name, value: (lines, port))
+        in _negativeVariants.entries) {
+      // sshd keeps the first value it reads (sshd_config(5)).
+      expect(
+        directives(
+          read('klabautermann/test/integration/sshd/sshd_config.$name'),
+        ),
+        [...lines, 'Include /etc/ssh/fixture/sshd_config.common'],
+        reason: name,
+      );
+      final service = all[name]!;
+      expect(service['command'], '/etc/klabautermann/sshd_config.$name');
+      expect(service['image'], all['docker-sshd']!['image'], reason: name);
+      expect(service['volumes'], all['docker-sshd']!['volumes'], reason: name);
+      expect(service['ports'], [
+        {
+          'target': 22,
+          'host_ip': '127.0.0.1',
+          'published': '$port',
+          'protocol': 'tcp',
+        },
+      ], reason: name);
+    }
+  });
+
+  test('neg-restrict signs in with restrict keys over the Docker host '
+      'config', () {
+    final restrict = services()[_restrictVariant]!;
+    expect(restrict['command'], '/etc/klabautermann/sshd_config.docker');
+    expect(restrict['image'], services()['docker-sshd']!['image']);
+    expect(restrict['volumes'], contains(_socketVolume));
+    expect(
+      restrict['volumes'],
+      contains(
+        endsWith('/authorized_keys.restrict:/run/fixture/authorized_keys:ro'),
+      ),
+    );
+    expect(restrict['ports'], [
+      {
+        'target': 22,
+        'host_ip': '127.0.0.1',
+        'published': '$_restrictPort',
+        'protocol': 'tcp',
+      },
+    ]);
+
+    final lines = read(
+      'klabautermann/test/integration/run.sh',
+    ).replaceAll(RegExp(r'\s*\\\n\s*'), ' ').split('\n');
+    int at(String line) {
+      final index = lines.indexOf(line);
+      expect(index, isNonNegative, reason: 'run.sh has no line "$line"');
+      return index;
+    }
+
+    final written = at(
+      'sed \'s/^/restrict /\' "\$runtime_dir/authorized_keys" '
+      '>"\$runtime_dir/authorized_keys.restrict"',
+    );
+    expect(
+      written,
+      greaterThan(
+        lines.indexWhere(
+          (line) => line.endsWith('>"\$runtime_dir/authorized_keys"'),
+        ),
+      ),
+    );
+    expect(written, lessThan(at('compose up --detach --build')));
+  });
+
   test('every sshd service mounts the common config and publishes on '
       'loopback only', () {
     final all = services();
@@ -233,7 +343,11 @@ void main() {
       return index;
     }
 
-    expect(lines, contains('readonly services=(sshd jump docker-sshd)'));
+    final waited = RegExp(
+      r'^readonly services=\(([^)]*)\)',
+      multiLine: true,
+    ).firstMatch(lines.join('\n'))![1]!.trim().split(RegExp(r'\s+'));
+    expect(waited, _sshdServices);
     final seed = at('seed_docker_host');
     expect(seed, greaterThan(at('  wait_for_sshd "\$port"')));
     expect(

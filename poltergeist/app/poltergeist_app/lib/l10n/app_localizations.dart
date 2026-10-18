@@ -2833,6 +2833,60 @@ abstract class AppLocalizations {
   /// **'Zoom In, Zoom Out and Actual Size in an editor change it too.'**
   String get editorTextSizeHint;
 
+  /// Shared monospace font picker title
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a font'**
+  String get editorFontPickerTitle;
+
+  /// Font search field hint
+  ///
+  /// In en, this message translates to:
+  /// **'Search fonts'**
+  String get editorFontPickerSearch;
+
+  /// Bundled font section heading
+  ///
+  /// In en, this message translates to:
+  /// **'Included fonts'**
+  String get editorFontPickerIncluded;
+
+  /// Installed font section heading
+  ///
+  /// In en, this message translates to:
+  /// **'Installed fonts'**
+  String get editorFontPickerInstalled;
+
+  /// Empty font search result
+  ///
+  /// In en, this message translates to:
+  /// **'No fonts match your search.'**
+  String get editorFontPickerEmpty;
+
+  /// Confirm the previewed font and ligatures
+  ///
+  /// In en, this message translates to:
+  /// **'Use font'**
+  String get editorFontPickerUse;
+
+  /// Default font choice suffix
+  ///
+  /// In en, this message translates to:
+  /// **'default'**
+  String get editorFontPickerDefault;
+
+  /// Installed font filter label
+  ///
+  /// In en, this message translates to:
+  /// **'Monospace only'**
+  String get editorFontPickerMonospace;
+
+  /// Notice for a font without coding ligatures
+  ///
+  /// In en, this message translates to:
+  /// **'This font has no programming ligatures.'**
+  String get editorFontPickerNoLigatures;
+
   /// Label beside the built-in editor's font menu in Settings → Appearance.
   ///
   /// In en, this message translates to:

@@ -604,11 +604,34 @@ M2, the host read MVP, is the current milestone. What is on main:
   cadence; they give way where the name and state word would not fit.
   K14's locator flag shows as a warning whose words a tap shows. Link
   changes are announced, through a live region where the platform takes no
-  announcements; samples and probe answers are not. Rows subscribe nothing
-  until the monitor set (K30), and the app's engine sends no probe
-  answers (K20). It sends link states and samples since K44b turned links
-  on, so in a real run a row shows its link state once its server is
-  opened, and its readings while a view holds them.
+  announcements; samples and probe answers are not. Rows subscribe
+  nothing; the engine samples `overview` for the monitor set (K30, below),
+  and the app's engine sends no probe answers (K20). It sends link states
+  and samples since K44b turned links on, so in a real run a row shows
+  its link state once its server is opened or monitored, and its readings
+  while a view or the monitor set holds them.
+- Monitor set (M2, FL-21, 03 §4.3 step 4, §10.1, K30): every fleet row's
+  menu offers Monitor or Stop monitoring, and Settings > Servers (the
+  route, and the desktop window through the `setMonitored` link method)
+  lists the fleet with a switch per server, why a server cannot join,
+  and the count out of 10. Eligible: a confirmed endpoint (imports count
+  as confirmed) and agent or key-file sign-in, by
+  `monitorEligibilityOf`, which the engine enforces too. Until the user
+  chooses, desktops monitor the first 10 eligible servers and phones
+  none; a choice is kept as `klabautermann.monitorSet` in
+  `settings.json`, without the ids that left the fleet or stopped being
+  eligible. The engine samples each member's `overview` under its own
+  subscription over an unattended link, keeps that link when a view
+  disconnects, and drops a member that leaves the fleet or whose
+  endpoint a sync changes; `SetMonitorSet` with more than 10 ids is
+  rejected whole, and ineligible ids are skipped by name. The coverage
+  chip and sheet count the set. Tested in the engine (unattended dial,
+  samples without a view, the limit, skipped ids, a moved server, a
+  view's disconnect), the store (round trip, damaged values, read-only),
+  the controller (defaults per platform, eligibility, limit, purge on
+  save, not-saved), the row menu and both settings surfaces. Not
+  checked: a jump host's credentials, and an encrypted key file, which
+  fails the unattended connect until K45; on a real device, unverified.
 - Server header and Overview part 1 (M2, 03 §10.2, §10.4, OV-01, OV-03,
   OV-04, MEM-01, MEM-02, K32a, #223): the desktop workspace and the
   phone's server screen open with a header showing the link state as a
@@ -1120,6 +1143,19 @@ M2, the host read MVP, is the current milestone. What is on main:
   fresh capture by structure, never by value; `--docker-api-only`
   [`--update`] runs only these. The committed corpus comes from a local
   cgroup v1 run; rootless daemons stay unrecorded.
+- Negative sshd variants and refusal evidence (M3, 03 §5.3, §11.3,
+  D11): six Docker hosts on 127.0.0.1:2245 to 2250 refuse with
+  `AllowStreamLocalForwarding no`, `DisableForwarding yes`,
+  `AllowTcpForwarding no`, `PermitOpen 127.0.0.1:1`, `MaxSessions 2`
+  and a `restrict` key. `docker_refusal_test.dart` records, on the
+  base's OpenSSH 10.6, that every forwarding variant refuses
+  streamlocal (reason 2, "open failed", `forwardDisabled`), that only
+  `AllowStreamLocalForwarding no` still opens `direct-tcpip`, that
+  `MaxSessions 2` teaches the link a limit of 2, and that `klab-nosock`
+  sees the socket, fails `test -w` and gets `EACCES` from the docker
+  CLI. Each result, with sshd's log lines, goes to
+  `$KLABAUTERMANN_EVIDENCE_DIR/fixture/refusals/`. Locally it adds
+  about 8 s to `run.sh` with the images cached.
 - Recorded API replay (M3, 03 §11.1, D02): `RecordedDaemon` in
   `klabautermann_docker/testing.dart` serves a corpus to the real HTTP
   client, matching method, path (a lower negotiated version gets the

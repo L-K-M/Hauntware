@@ -112,6 +112,84 @@ abstract class AppLocalizations {
   /// **'Servers'**
   String get fleetSectionServers;
 
+  /// Fleet list section header over the synced servers pinned to the top on this device (03 §10.3); drawn in caps.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned'**
+  String get fleetSectionPinned;
+
+  /// Fleet list section header over the servers imported from this device's SSH config (FL-02), listed apart from the synced servers and their groups; drawn in caps.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported'**
+  String get fleetSectionImported;
+
+  /// A synced fleet row's menu verb that lists the server under the Pinned section on this device.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin to top'**
+  String get fleetRowPin;
+
+  /// A pinned fleet row's menu verb that returns the server to its section.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin'**
+  String get fleetRowUnpin;
+
+  /// Top toast when pinning or unpinning a server could not be written to the device's settings file; the change holds for this session.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save your pinned servers, so the change lasts only until it quits.'**
+  String get fleetPinNotSaved;
+
+  /// A fleet row's menu verb that adds the server to this device's monitor set (FL-21): Klabautermann then reads it continuously while open and its row shows CPU, memory and disk. Disabled for a server that cannot be monitored.
+  ///
+  /// In en, this message translates to:
+  /// **'Monitor'**
+  String get fleetRowMonitor;
+
+  /// A monitored fleet row's menu verb that takes the server out of this device's monitor set (FL-21); it is then read only while a view has it open.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop monitoring'**
+  String get fleetRowStopMonitoring;
+
+  /// Top toast when the user asks to monitor a server while the monitor set (FL-21) is full; limit is the most servers it holds.
+  ///
+  /// In en, this message translates to:
+  /// **'You can monitor up to {limit} servers on this device. Stop monitoring one first.'**
+  String monitorSetFull(int limit);
+
+  /// Top toast when a monitor set change applied but could not be written to the device's settings file; the change holds for this session.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save your monitored servers, so the change lasts only until it quits.'**
+  String get monitorSetNotSaved;
+
+  /// Top toast when the app did not take a monitor set change, such as one from the settings window that the app refused.
+  ///
+  /// In en, this message translates to:
+  /// **'The monitored servers could not be changed.'**
+  String get monitorSetNotChanged;
+
+  /// Why a synced server cannot join the monitor set (FL-21): this device has not confirmed its endpoint, or a sync changed it since (SAF-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm this server\'s endpoint to monitor it.'**
+  String get monitorIneligibleEndpoint;
+
+  /// Why a server cannot join the monitor set (FL-21): its sign-in needs the user's answer, and continuous reading never asks.
+  ///
+  /// In en, this message translates to:
+  /// **'Signs in with a password or a stored key, which asks you first, so it is read only while you have it open.'**
+  String get monitorIneligibleCredentials;
+
+  /// Why an imported server cannot join the monitor set (FL-21): it came from an older import, whose sign-in Klabautermann does not know until the next import.
+  ///
+  /// In en, this message translates to:
+  /// **'Import your ssh_config again to monitor this server.'**
+  String get monitorIneligibleUnknown;
+
   /// No description provided for @fleetEmptyTitle.
   ///
   /// In en, this message translates to:
@@ -3411,6 +3489,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The setting could not be changed.'**
   String get settingsAnnounceNotChanged;
+
+  /// Heading of the monitor set's switches (FL-21) on the Servers settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Monitoring'**
+  String get settingsMonitorTitle;
+
+  /// Explanation above the monitor set's switches on the Servers settings tab (FL-21); limit is the most servers the set holds.
+  ///
+  /// In en, this message translates to:
+  /// **'Monitored servers are read continuously while Klabautermann is open, and their rows show CPU, memory and disk. A server can be monitored once its endpoint is confirmed and it signs in with an SSH agent or a key file, without asking you. Up to {limit} servers.'**
+  String settingsMonitorDetail(int limit);
+
+  /// How many servers the monitor set holds (FL-21) out of the most it can, above its switches on the Servers settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'{monitored} of {limit} servers monitored'**
+  String settingsMonitorCount(int monitored, int limit);
+
+  /// The Servers settings tab's monitor set section while the fleet has no servers.
+  ///
+  /// In en, this message translates to:
+  /// **'No servers yet. Servers you sync or import show here.'**
+  String get settingsMonitorEmpty;
 
   /// Screen-reader announcement (A11Y-15) when a value on a server's Overview has crossed into the warning or critical band, or back below the warning level; metric names the value (CPU, Memory, Disk /var), value is its percentage.
   ///
