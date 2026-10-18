@@ -360,6 +360,57 @@ void main() {
       );
     });
 
+    test('classifies every refusal spike S3 recorded', () {
+      // test/fixtures/elevation/README.md names each file's source.
+      const recorded = {
+        'sudo-1.9.16p2.password-required': (
+          ElevationTool.sudo,
+          ElevationFailureKind.passwordRequired,
+        ),
+        'sudo-1.9.16p2.wrong-password': (
+          ElevationTool.sudo,
+          ElevationFailureKind.wrongPassword,
+        ),
+        'sudo-1.9.16p2.requiretty': (
+          ElevationTool.sudo,
+          ElevationFailureKind.ttyRequired,
+        ),
+        'sudo-rs-0.2.13.password-required': (
+          ElevationTool.sudoRs,
+          ElevationFailureKind.passwordRequired,
+        ),
+        'sudo-rs-0.2.13.prelude-password-required': (
+          ElevationTool.sudoRs,
+          ElevationFailureKind.passwordRequired,
+        ),
+        'sudo-rs-0.2.13.wrong-password': (
+          ElevationTool.sudoRs,
+          ElevationFailureKind.wrongPassword,
+        ),
+        'opendoas-6.8.2.authentication-required': (
+          ElevationTool.doas,
+          ElevationFailureKind.passwordRequired,
+        ),
+        'opendoas-6.8.2.tty-required': (
+          ElevationTool.doas,
+          ElevationFailureKind.ttyRequired,
+        ),
+      };
+      final files = Directory('test/fixtures/elevation')
+          .listSync()
+          .map((entry) => entry.uri.pathSegments.last)
+          .where((name) => name.endsWith('.stderr'))
+          .map((name) => name.substring(0, name.length - '.stderr'.length));
+      expect(files, unorderedEquals(recorded.keys));
+      recorded.forEach((name, expected) {
+        final (tool, kind) = expected;
+        final stderr = File(
+          'test/fixtures/elevation/$name.stderr',
+        ).readAsStringSync();
+        expect(classifyElevationStderr(stderr, tool), kind, reason: name);
+      });
+    });
+
     test('anchors doas and polkit texts to whole lines', () {
       expect(
         classifyElevationStderr(
