@@ -10,7 +10,10 @@
 // - `privileged` on any service but dind (and a Podman one, 03 §11.3);
 // - a dind service whose command does not run dockerd with an explicit,
 //   Unix-only --host: with no command, or with options only, the dind
-//   image's entrypoint adds a TCP listener on 2375 or 2376.
+//   image's entrypoint adds a TCP listener on 2375 or 2376;
+// - a registry service that publishes or exposes a port: the fixture's
+//   registry speaks plain HTTP and serves the Compose network only (M4
+//   E27), and dind may trust no other registry over plain HTTP.
 import 'dart:convert';
 import 'dart:io';
 
@@ -31,6 +34,11 @@ const _rootlessSocketRoots = ['/var/run/user', '/run/user'];
 
 const _socketName = 'docker.sock';
 const _dindService = 'dind';
+const _registryService = 'registry';
+
+/// The one registry dind may reach over plain HTTP: the fixture's, by its
+/// Compose service name.
+const _fixtureRegistry = 'registry:5000';
 const _dockerd = 'dockerd';
 const _unixScheme = 'unix://';
 
@@ -57,7 +65,13 @@ List<String> findDockerExposureErrors(Map<String, Object?> config) {
       errors.add('$name runs privileged outside dind');
     }
     if (name == _dindService || '${value['image']}'.contains('dind')) {
-      errors.addAll(_dindCommandErrors(name, value['command']));
+      errors
+        ..addAll(_dindCommandErrors(name, value['command']))
+        ..addAll(_insecureRegistryErrors(name, value['command']));
+    }
+    if (name == _registryService ||
+        '${value['image']}'.contains('/registry:')) {
+      errors.addAll(_registryErrors(name, value));
     }
   }
   return errors;
@@ -153,6 +167,42 @@ Iterable<String> _dindCommandErrors(String name, Object? command) sync* {
     if (!host.startsWith(_unixScheme)) {
       yield '$name runs $_dockerd with --host $host, not a Unix socket';
     }
+  }
+}
+
+/// dockerd's `--insecure-registry` values other than the fixture's own.
+Iterable<String> _insecureRegistryErrors(String name, Object? command) sync* {
+  if (command is! List) return;
+  final arguments = [for (final argument in command) '$argument'];
+  for (var i = 1; i < arguments.length; i++) {
+    final argument = arguments[i];
+    final String registry;
+    if (argument == '--insecure-registry') {
+      registry = i + 1 < arguments.length ? arguments[++i] : '';
+    } else if (argument.startsWith('--insecure-registry=')) {
+      registry = argument.substring('--insecure-registry='.length);
+    } else {
+      continue;
+    }
+    if (registry != _fixtureRegistry) {
+      yield '$name trusts $registry over plain HTTP, not only '
+          '$_fixtureRegistry';
+    }
+  }
+}
+
+/// A registry that is reachable beyond the Compose network.
+Iterable<String> _registryErrors(
+  String name,
+  Map<Object?, Object?> service,
+) sync* {
+  if (service['ports'] case final List ports when ports.isNotEmpty) {
+    yield '$name publishes a port; the fixture registry stays on the '
+        'Compose network';
+  }
+  if (service['network_mode'] != null) {
+    yield '$name sets network_mode; the fixture registry stays on the '
+        'Compose network';
   }
 }
 

@@ -295,6 +295,22 @@ void main() {
       });
     }
 
+    test('trusts only the fixture registry over plain HTTP', () {
+      List<String> errors(List<String> flags) => findDockerExposureErrors(
+        _config(
+          dind: {
+            'command': ['dockerd', '--host=$_socket', ...flags],
+          },
+        ),
+      );
+      expect(errors(['--insecure-registry=registry:5000']), isEmpty);
+      expect(errors(['--insecure-registry', 'registry:5000']), isEmpty);
+      expect(errors(['--insecure-registry=0.0.0.0/0']), [
+        'dind trusts 0.0.0.0/0 over plain HTTP, not only registry:5000',
+      ]);
+      expect(errors(['--insecure-registry', 'docker.io']), hasLength(1));
+    });
+
     test('applies to a dind image under another service name', () {
       final config = _config(
         extra: {
@@ -305,6 +321,45 @@ void main() {
         'engine does not name dockerd as its command, so the dind '
             'entrypoint adds a TCP listener',
       ]);
+    });
+  });
+
+  group('the registry', () {
+    const registry = {'image': 'mirror.gcr.io/library/registry:3.0.0@sha256:0'};
+
+    test('passes on the Compose network alone', () {
+      expect(
+        findDockerExposureErrors(_config(extra: {'registry': registry})),
+        isEmpty,
+      );
+    });
+
+    test('rejects a published port, on loopback too', () {
+      final errors = findDockerExposureErrors(
+        _config(
+          extra: {
+            'registry': {
+              ...registry,
+              'ports': [
+                {'target': 5000, 'host_ip': '127.0.0.1', 'published': '5000'},
+              ],
+            },
+          },
+        ),
+      );
+      expect(errors, hasLength(1));
+      expect(errors.single, contains('registry publishes a port'));
+    });
+
+    test('rejects host networking under another service name', () {
+      final errors = findDockerExposureErrors(
+        _config(
+          extra: {
+            'images': {...registry, 'network_mode': 'host'},
+          },
+        ),
+      );
+      expect(errors.single, contains('images sets network_mode'));
     });
   });
 }
