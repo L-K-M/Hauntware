@@ -3917,7 +3917,14 @@ operations from `OperationsChanged`:
   missing.
 - Each list replaces the one before, so a reconnect re-attaches.
 
-The redeploy preview's parts arrive with E18's plan.
+In its second half (E23b) the preview words a detached plan: it says
+the operation continues on the server if the user leaves or the
+connection drops, and on iOS that the result shows on return. A
+redeploy lists its orphans with a switch that plans it again with
+`removeOrphans`, whose preview then asks for the typed name, and each
+`PlanWarning` is worded. A started operation toasts that it started;
+its result comes through the chip. The stacks view's redeploy entry
+arrives with E22's Docker actions.
 
 ### 7.18 Backups (BAK)
 

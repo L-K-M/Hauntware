@@ -3076,6 +3076,40 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get actionPreviewDetached =>
+      'Runs on the server and continues if you leave or the connection drops. Its result shows under Operations.';
+
+  @override
+  String get actionPreviewDetachedIos =>
+      'Runs on the server and continues if you leave the app or the connection drops. Its result shows under Operations when you come back.';
+
+  @override
+  String get actionPreviewOrphans =>
+      'Containers the stack\'s files no longer name';
+
+  @override
+  String get actionPreviewRemoveOrphans => 'Also remove these containers';
+
+  @override
+  String actionPreviewWarning(String warning) {
+    String _temp0 = intl.Intl.selectLogic(warning, {
+      'profileGatedServices':
+          'Some running services are enabled only by a compose profile, which Klabautermann cannot see. The redeploy leaves them as they are.',
+      'profilesUnknown':
+          'The compose CLI could not list every profile\'s services, so some of these containers may belong to a service a profile enables.',
+      'mayDieAtLogout':
+          'This server ends your processes when you log out, which can stop the operation before it finishes.',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String actionStartedOnServer(String target) {
+    return 'Started on the server: $target';
+  }
+
+  @override
   String get actionPreviewDanger => 'Warnings';
 
   @override

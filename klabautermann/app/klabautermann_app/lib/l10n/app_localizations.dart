@@ -4090,6 +4090,42 @@ abstract class AppLocalizations {
   /// **'Managed by {manager}. Acting on it here can conflict with {manager}.'**
   String actionPreviewOwnership(String manager);
 
+  /// Preview note for an operation that runs detached on the server (03 §7.17).
+  ///
+  /// In en, this message translates to:
+  /// **'Runs on the server and continues if you leave or the connection drops. Its result shows under Operations.'**
+  String get actionPreviewDetached;
+
+  /// Preview note for a detached operation on iOS, where the app does not run in the background (03 §7.17).
+  ///
+  /// In en, this message translates to:
+  /// **'Runs on the server and continues if you leave the app or the connection drops. Its result shows under Operations when you come back.'**
+  String get actionPreviewDetachedIos;
+
+  /// Heading above a redeploy's orphan containers (STK-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Containers the stack\'s files no longer name'**
+  String get actionPreviewOrphans;
+
+  /// Switch in a redeploy preview that plans it again with --remove-orphans, which needs the typed confirmation (STK-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Also remove these containers'**
+  String get actionPreviewRemoveOrphans;
+
+  /// A warning in the action preview; warning is the engine's PlanWarning name.
+  ///
+  /// In en, this message translates to:
+  /// **'{warning, select, profileGatedServices{Some running services are enabled only by a compose profile, which Klabautermann cannot see. The redeploy leaves them as they are.} profilesUnknown{The compose CLI could not list every profile\'s services, so some of these containers may belong to a service a profile enables.} mayDieAtLogout{This server ends your processes when you log out, which can stop the operation before it finishes.} other{}}'**
+  String actionPreviewWarning(String warning);
+
+  /// Toast when a detached operation started on the server; its result shows under Operations.
+  ///
+  /// In en, this message translates to:
+  /// **'Started on the server: {target}'**
+  String actionStartedOnServer(String target);
+
   /// Heading above the danger findings in the action preview (AI-01).
   ///
   /// In en, this message translates to:
