@@ -137,74 +137,81 @@ void main() {
   /// record, the log, the files' modes and what `--collect` left.
   Future<Map<String, Object?>> rootOperation(List<String> argv) async {
     final link = await vm.link(vm.sudoUser);
-    final run = over(link);
-    final executor = ElevatedExecutor(link, await probe(run));
-    final password = await vm.sudoPassword();
-    final id = generateOpId(Random.secure());
-    final unit = opUnitName(id);
+    // Closed however the run ends: an open link keeps the account's logind
+    // session, which a later logout test waits to see end.
+    try {
+      final run = over(link);
+      final executor = ElevatedExecutor(link, await probe(run));
+      final password = await vm.sudoPassword();
+      final id = generateOpId(Random.secure());
+      final unit = opUnitName(id);
 
-    final launch = await executor.run(
-      OperationCommands.detachedLaunch(
-        DetachedRunner.rootSystemd,
-        dir: kRootOpsDir,
-        id: id,
-        uid: await uidOf(run),
-        argv: argv,
-      ),
-      password: password,
-      timeout: _commandTimeout,
-    );
-    final done = launch.exitCode == 0
-        ? await untilDone(asRoot, kRootOpsDir, id)
-        : null;
-    final files = [
-      kRootOpsDir,
-      '$kRootOpsDir/$id.json',
-      '$kRootOpsDir/$id.log',
-    ];
-    final owned = await modes(files);
-    final log = await run('cat -- ${quoteShellWord(files[2])} || true');
-    final collected = await eventually(
-      () async => await loadState(unit) == 'not-found',
-      timeout: const Duration(seconds: 10),
-    );
+      final launch = await executor.run(
+        OperationCommands.detachedLaunch(
+          DetachedRunner.rootSystemd,
+          dir: kRootOpsDir,
+          id: id,
+          uid: await uidOf(run),
+          argv: argv,
+        ),
+        password: password,
+        timeout: _commandTimeout,
+      );
+      final done = launch.exitCode == 0
+          ? await untilDone(asRoot, kRootOpsDir, id)
+          : null;
+      final files = [
+        kRootOpsDir,
+        '$kRootOpsDir/$id.json',
+        '$kRootOpsDir/$id.log',
+      ];
+      final owned = await modes(files);
+      final log = await run('cat -- ${quoteShellWord(files[2])} || true');
+      final collected = await eventually(
+        () async => await loadState(unit) == 'not-found',
+        timeout: const Duration(seconds: 10),
+      );
 
-    // The login user owns the files but not the directory, so only the
-    // prelude can unlink them (03 §7.17 "Cleanup").
-    final cleanup = OperationCommands.opCleanup(kRootOpsDir, [id]);
-    final plain = await run(
-      HostCommands.commandLine(cleanup, quote: quoteShellWord),
-    );
-    final elevated = await executor.run(
-      cleanup,
-      password: password,
-      timeout: _commandTimeout,
-    );
-    final left = await asRoot(
-      'ls -A -- ${quoteShellWord(kRootOpsDir)} | grep -F $id || true',
-    );
+      // The login user owns the files but not the directory, so only the
+      // prelude can unlink them (03 §7.17 "Cleanup").
+      final cleanup = OperationCommands.opCleanup(kRootOpsDir, [id]);
+      final plain = await run(
+        HostCommands.commandLine(cleanup, quote: quoteShellWord),
+      );
+      final elevated = await executor.run(
+        cleanup,
+        password: password,
+        timeout: _commandTimeout,
+      );
+      final left = await asRoot(
+        'ls -A -- ${quoteShellWord(kRootOpsDir)} | '
+        'grep -F -e ${quoteShellWord(id)} || true',
+      );
 
-    return {
-      'user': vm.sudoUser,
-      'unit': unit,
-      'launch': resultJson((
-        exitCode: launch.exitCode,
-        stdout: launch.stdout,
-        stderr: launch.stderr,
-      )),
-      'doneRecord': done,
-      'modes': owned,
-      'log': log.stdout,
-      'unitCollected': collected,
-      'loadStateAfter': await loadState(unit),
-      'cleanupUnelevated': resultJson(plain),
-      'cleanupElevated': resultJson((
-        exitCode: elevated.exitCode,
-        stdout: elevated.stdout,
-        stderr: elevated.stderr,
-      )),
-      'filesLeft': left.stdout,
-    };
+      return {
+        'user': vm.sudoUser,
+        'unit': unit,
+        'launch': resultJson((
+          exitCode: launch.exitCode,
+          stdout: launch.stdout,
+          stderr: launch.stderr,
+        )),
+        'doneRecord': done,
+        'modes': owned,
+        'log': log.stdout,
+        'unitCollected': collected,
+        'loadStateAfter': await loadState(unit),
+        'cleanupUnelevated': resultJson(plain),
+        'cleanupElevated': resultJson((
+          exitCode: elevated.exitCode,
+          stdout: elevated.stdout,
+          stderr: elevated.stderr,
+        )),
+        'filesLeft': left.stdout,
+      };
+    } finally {
+      await link.close();
+    }
   }
 
   /// A login-user operation of [runner] for [user], launched over a link
@@ -421,6 +428,7 @@ void main() {
 
   test('KillUserProcesses is read unprivileged', () async {
     final link = await vm.link(vm.limitedUser);
+    addTearDown(link.close);
     final run = over(link);
     final busctl = await run(
       'busctl get-property org.freedesktop.login1 /org/freedesktop/login1 '
@@ -447,6 +455,7 @@ void main() {
   test('sudo -n -l shows a rule scoped to docker, which starts no '
       'systemd-run', () async {
     final link = await vm.link(vm.dockerUser);
+    addTearDown(link.close);
     final run = over(link);
     final list = await run('sudo -n -l 2>&1');
     final blanket = await run('sudo -n true 2>&1');
