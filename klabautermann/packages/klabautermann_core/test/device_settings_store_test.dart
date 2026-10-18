@@ -8,6 +8,7 @@ const _versionKey = 'klabautermann.settings.version';
 const _deviceIdKey = 'klabautermann.sync.deviceId';
 const _appearanceKey = 'klabautermann.appearance';
 const _firstRunCardKey = 'klabautermann.coverage.firstRunCardDismissed';
+const _rootNoticeKey = 'klabautermann.docker.rootEquivalenceNoticeDismissed';
 const _announceBandsKey = 'klabautermann.accessibility.announceThresholdBands';
 const _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
 const _monitorSetKey = 'klabautermann.monitorSet';
@@ -163,6 +164,43 @@ void main() {
         expect(store.firstRunCardDismissed, isFalse);
       });
     }
+
+    test('keeps the root-equivalence notice dismissed across reloads, '
+        'beside keys it does not know', () async {
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        'klabautermann.later': {'nested': true},
+      });
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.rootEquivalenceNoticeDismissed, isFalse);
+      await store.dismissRootEquivalenceNotice();
+      final reopened = await DeviceSettingsStore.open(file);
+
+      expect(reopened.rootEquivalenceNoticeDismissed, isTrue);
+      expect(reopened.firstRunCardDismissed, isFalse);
+      expect(document(), {
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        'klabautermann.later': {'nested': true},
+        _rootNoticeKey: true,
+      });
+    });
+
+    test('a root-equivalence notice dismissal holding a string reads as '
+        'not dismissed', () async {
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _rootNoticeKey: 'true',
+      });
+
+      final store = await DeviceSettingsStore.open(file);
+
+      expect(store.issue, isNull);
+      expect(store.rootEquivalenceNoticeDismissed, isFalse);
+    });
 
     test(
       'announces threshold bands until turned off, across reloads',

@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 import 'package:ghost_ui/ghost_ui.dart' show showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart'
     show MonitorEligibility, kMonitorSetLimit;
@@ -13,6 +12,7 @@ import '../l10n/app_localizations.dart';
 import '../services/settings_window/settings_window_link.dart';
 import 'about_dialog.dart';
 import 'inspector_pane.dart' show PlaceholderPaneBody;
+import 'appearance_tab.dart';
 import 'monitor_set_feedback.dart';
 
 /// Settings (03 §10.2): the seven planned tabs as placeholders, except
@@ -268,74 +268,6 @@ class ServersTab extends StatelessWidget {
                   null => null,
                 },
               ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-/// The working part of settings at M1a: the theme-mode choice, so
-/// light/dark switching is real from the first scaffold (03 §10.9).
-class AppearanceTab extends StatelessWidget {
-  const AppearanceTab({super.key, required this.appearance});
-
-  final AppearanceSettings appearance;
-
-  /// The selection shows [AppearanceSettings.value], so it moves only once
-  /// the app has taken the change; a change the app does not take leaves
-  /// it where it was and says so. A change the app took but could not save
-  /// stays, and says that instead, since it then lasts only until the app
-  /// restarts. Both in a top toast: the suite keeps the bottom edge clear.
-  Future<void> _setMode(BuildContext context, ThemeModePreference mode) async {
-    final overlay = Overlay.of(context, rootOverlay: true);
-    final l10n = AppLocalizations.of(context);
-    try {
-      await appearance.setMode(mode);
-    } on AppearanceNotSavedException catch (error) {
-      debugPrint('$error');
-      if (overlay.mounted) showTopToast(overlay, message: l10n.themeNotSaved);
-    } on Exception catch (error) {
-      debugPrint('$error');
-      if (overlay.mounted) {
-        showTopToast(overlay, message: l10n.themeNotChanged);
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return ListenableBuilder(
-      listenable: appearance,
-      builder: (context, _) {
-        return ListView(
-          padding: const EdgeInsets.all(24),
-          children: [
-            Text(
-              l10n.themeLabel,
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: 12),
-            SegmentedButton<ThemeModePreference>(
-              segments: [
-                ButtonSegment(
-                  value: ThemeModePreference.system,
-                  label: Text(l10n.themeSystem),
-                ),
-                ButtonSegment(
-                  value: ThemeModePreference.light,
-                  label: Text(l10n.themeLight),
-                ),
-                ButtonSegment(
-                  value: ThemeModePreference.dark,
-                  label: Text(l10n.themeDark),
-                ),
-              ],
-              selected: {appearance.value.mode},
-              onSelectionChanged: (modes) =>
-                  unawaited(_setMode(context, modes.first)),
-            ),
           ],
         );
       },

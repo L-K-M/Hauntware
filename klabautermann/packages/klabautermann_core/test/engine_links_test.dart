@@ -723,7 +723,7 @@ void main() {
     });
   });
 
-  group('Docker queries (03 §5.9, §10.1)', () {
+  group('Docker queries and watches (03 §5.9, §7.12, §10.1)', () {
     DockerQuery query(String queryId, {String serverId = _web}) => DockerQuery(
       serverId: serverId,
       queryId: queryId,
@@ -743,11 +743,114 @@ void main() {
               ),
             );
 
-    test('with links off, a query is rejected', () async {
+    test('with links off, a query and a watch are rejected, and an '
+        'unwatch changes nothing', () async {
       final engine = await startEngine(linksEnabled: false);
       await engine.import(_webConfig);
       engine.send(query('q-0'));
       expect(await engine.rejected(), 'DockerQuery');
+      engine
+        ..send(const DockerUnwatch(serverId: _web, watchId: 'w-0'))
+        ..send(
+          const DockerWatch(
+            serverId: _web,
+            watchId: 'w-0',
+            lists: {DockerWatchList.containers},
+          ),
+        );
+      expect(await engine.rejected(), 'DockerWatch');
+    });
+
+    test('a watch opens its server\'s session, which waits for the '
+        'link', () async {
+      final engine = await _Engine.start(
+        support.path,
+        linksEnabled: true,
+        dial:
+            ({
+              required config,
+              required credentials,
+              required tofu,
+              required onHostKey,
+              onKeyboardInteractive,
+              resolveJumpHost,
+            }) async => ForwardingLink(),
+      );
+      await engine.import(_webConfig);
+
+      engine.send(
+        const DockerWatch(
+          serverId: _web,
+          watchId: 'w-0',
+          lists: {DockerWatchList.containers},
+        ),
+      );
+      expect(
+        await engine.next(),
+        isA<DockerEndpointState>()
+            .having((s) => s.serverId, 'serverId', _web)
+            .having((s) => s.phase, 'phase', DockerEndpointPhase.waiting),
+      );
+      engine.send(const DockerUnwatch(serverId: _web, watchId: 'w-0'));
+    });
+
+    test('a container log stream goes to the Docker session, which waits '
+        'for the link; ids stay unique across journal and container '
+        'streams', () async {
+      OpenLogStream open(String streamId, LogSource source) => OpenLogStream(
+        streamId: streamId,
+        spec: LogStreamSpec(
+          serverId: _web,
+          source: source,
+          window: 50,
+          follow: true,
+        ),
+      );
+      final off = await startEngine(linksEnabled: false);
+      await off.import(_webConfig);
+      off.send(open('logs-0', const ContainerLogSource('abc')));
+      expect(await off.rejected(), 'OpenLogStream');
+
+      final engine = await _Engine.start(
+        support.path,
+        linksEnabled: true,
+        dial:
+            ({
+              required config,
+              required credentials,
+              required tofu,
+              required onHostKey,
+              onKeyboardInteractive,
+              resolveJumpHost,
+            }) async => ForwardingLink(),
+      );
+      await engine.import(_webConfig);
+
+      engine.send(open('logs-0', const JournalLogSource()));
+      expect(
+        await engine.next(),
+        isA<LogStreamState>().having((s) => s.streamId, 'streamId', 'logs-0'),
+      );
+      engine.send(open('logs-0', const ContainerLogSource('abc')));
+      expect(await engine.rejected(), 'OpenLogStream');
+
+      engine.send(open('logs-1', const ContainerLogSource('abc')));
+      expect(
+        await engine.next(),
+        isA<DockerEndpointState>().having(
+          (s) => s.phase,
+          'phase',
+          DockerEndpointPhase.waiting,
+        ),
+      );
+      final waiting = await engine.next() as LogStreamState;
+      expect(waiting.streamId, 'logs-1');
+      expect(waiting.status, const LogStreamWaiting(LogStreamWaitReason.link));
+
+      engine.send(const CloseStream('logs-1'));
+      final closed = await engine.next() as LogStreamState;
+      expect(closed.streamId, 'logs-1');
+      expect(closed.status, const LogStreamEnded(LogStreamEndReason.closed));
     });
 
     test('a query waits for its server\'s link, then for its probe, and '

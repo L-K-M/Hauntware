@@ -676,12 +676,6 @@ abstract class AppLocalizations {
   /// **'Alerts'**
   String get settingsTabAlerts;
 
-  /// No description provided for @themeLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Theme'**
-  String get themeLabel;
-
   /// No description provided for @themeSystem.
   ///
   /// In en, this message translates to:
@@ -2139,24 +2133,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Podman can also answer on Docker\'s socket path. Docker support will tell them apart.'**
   String get accessRuntimeAlias;
-
-  /// Docker tab: title shown instead of the Docker panels until the release with Docker support.
-  ///
-  /// In en, this message translates to:
-  /// **'Arrives with Docker support'**
-  String get accessDockerPendingTitle;
-
-  /// Docker tab: body under accessDockerPendingTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Containers, images and stacks arrive with Docker support. Until then, this tab shows the runtime Klabautermann detected, read-only.'**
-  String get accessDockerPendingBody;
-
-  /// Docker tab: heading over the container engines the probe found.
-  ///
-  /// In en, this message translates to:
-  /// **'Detected runtime'**
-  String get accessDetectedRuntime;
 
   /// Shown instead of a server panel that cannot work with this server or account; panel is the panel's tab name.
   ///
@@ -3867,6 +3843,630 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The sync file {fileName} was saved by a newer version of Klabautermann. Sync changes will not be kept after a restart.'**
   String syncFileNewer(String fileName);
+
+  /// The server header's Docker transport label (03 §5.9, E4) before the server is connected and its capability check has answered.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API: waiting for the connection'**
+  String get dockerTransportWaiting;
+
+  /// The server header's Docker transport label (03 §5.9, E4) while Klabautermann tries the routes to the engine socket and agrees on an API version.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API: looking for a route'**
+  String get dockerTransportResolving;
+
+  /// The server header's Docker transport label (03 §5.9, E4) for rank 1: SSH forwards the engine socket. Keep the wording of 03 §5.9.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API via SSH socket forward'**
+  String get dockerTransportSocketForward;
+
+  /// The server header's Docker transport label (03 §5.9, E4) for rank 2: the engine CLI relays each connection over its own SSH session. "docker" is the command name; keep the wording of 03 §5.9.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API via docker CLI relay (limited streams)'**
+  String get dockerTransportCliRelay;
+
+  /// The server header's Docker transport label (03 §5.9, E4) for rank 4: socat or nc relays each connection. "socat" is the command name; keep the wording of 03 §5.9.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API via socat relay'**
+  String get dockerTransportSocatRelay;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when socket forwarding is refused and the server has no docker, podman, socat or nc to relay through.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: forwarding is off and there is no relay'**
+  String get dockerTransportNoRelay;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when the account cannot use the engine socket but sudo exists; admin mode arrives later.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: the socket needs admin mode'**
+  String get dockerTransportNeedsAdminMode;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when the account cannot use the engine socket and the server has no sudo.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: your account cannot use the socket'**
+  String get dockerTransportSocketDenied;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when the command that checks the engine socket failed or answered something unreadable.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: the socket check failed'**
+  String get dockerTransportProbeFailed;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when the server has no Docker or Podman socket.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: no engine socket found'**
+  String get dockerTransportNoSocket;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when the capability check has not reported the server's engine sockets.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: the sockets were not checked'**
+  String get dockerTransportSocketsUnknown;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when routes to the engine socket opened but the engine answered over none of them.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API: the engine did not answer'**
+  String get dockerTransportUnreachable;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when the engine offers no API version this app can use.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API: the engine\'s API version is not supported'**
+  String get dockerTransportUnsupported;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when the SSH connection failed while the routes were tried.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API: the connection failed while looking for a route'**
+  String get dockerTransportLinkError;
+
+  /// Server header: the server allows few SSH sessions, so Docker shares them sparingly (03 §5.2).
+  ///
+  /// In en, this message translates to:
+  /// **'Low-session mode'**
+  String get dockerLowSession;
+
+  /// Server header badge (SAF-08, 03 §8.4): the engine socket in use belongs to a rootful engine, so using it equals root on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Rootful socket: root-equivalent'**
+  String get dockerBadgeRootfulSocket;
+
+  /// Server header badge (SAF-08, 03 §8.4): the engine in use runs rootless, so using it equals the account that runs it.
+  ///
+  /// In en, this message translates to:
+  /// **'Rootless engine: equals user {user}'**
+  String dockerBadgeRootlessEngine(String user);
+
+  /// dockerBadgeRootlessEngine when the capability check did not name the login user.
+  ///
+  /// In en, this message translates to:
+  /// **'Rootless engine: equals your login user'**
+  String get dockerBadgeRootlessEngineLogin;
+
+  /// Server header badge (SAF-08): a socket path Klabautermann cannot classify, treated as root-equivalent.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom socket: root-equivalent'**
+  String get dockerBadgeCustomSocket;
+
+  /// The engine in use when its mode is unknown, as on a custom socket path.
+  ///
+  /// In en, this message translates to:
+  /// **'Docker'**
+  String get dockerRuntimeDocker;
+
+  /// The engine in use when its mode is unknown, as on a custom socket path.
+  ///
+  /// In en, this message translates to:
+  /// **'Podman'**
+  String get dockerRuntimePodman;
+
+  /// Docker tab, shown instead of its panels until the server is connected and its capability check has answered.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the connection'**
+  String get dockerGateWaitingTitle;
+
+  /// Body under dockerGateWaitingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann looks for the Docker engine once it is connected to this server and knows what the server offers.'**
+  String get dockerGateWaitingBody;
+
+  /// Docker tab, shown instead of its panels while Klabautermann finds a route to the engine socket.
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for the Docker engine'**
+  String get dockerGateResolvingTitle;
+
+  /// Body under dockerGateResolvingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann is finding a way to reach the engine socket and agreeing on an API version with the engine.'**
+  String get dockerGateResolvingBody;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: forwarding refused and no relay. Command names stay as they are.
+  ///
+  /// In en, this message translates to:
+  /// **'Socket forwarding is off on this server, and it has nothing to relay through: no docker or podman command, no socat and no nc.'**
+  String get dockerGateNoRelay;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the account cannot use the socket, but sudo exists.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account cannot use the engine socket. Reaching it through sudo needs admin mode, which arrives in a later milestone.'**
+  String get dockerGateNeedsAdminMode;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the account cannot use the socket and there is no sudo.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account cannot use the engine socket, and this server has no sudo. The Access tab shows how access is granted.'**
+  String get dockerGateSocketDenied;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the socket check failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the engine socket failed, so Klabautermann cannot tell how to reach it.'**
+  String get dockerGateProbeFailed;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: no engine socket.
+  ///
+  /// In en, this message translates to:
+  /// **'No Docker or Podman socket was found on this server.'**
+  String get dockerGateNoSocket;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the sockets were not checked.
+  ///
+  /// In en, this message translates to:
+  /// **'The server\'s capability check has not reported its engine sockets.'**
+  String get dockerGateSocketsUnknown;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the engine did not answer.
+  ///
+  /// In en, this message translates to:
+  /// **'A route to the engine socket opened, but the engine did not answer over it.'**
+  String get dockerGateUnreachable;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the engine is too old. 1.41 is the Docker API version.
+  ///
+  /// In en, this message translates to:
+  /// **'The engine\'s newest API version is older than 1.41, the oldest Klabautermann supports.'**
+  String get dockerGateBelowClientFloor;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the engine is too new for this app.
+  ///
+  /// In en, this message translates to:
+  /// **'The engine only accepts API versions newer than Klabautermann supports.'**
+  String get dockerGateBelowServerMinimum;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: no readable API version.
+  ///
+  /// In en, this message translates to:
+  /// **'The engine did not report an API version Klabautermann can read.'**
+  String get dockerGateApiVersionUnknown;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the SSH connection failed meanwhile.
+  ///
+  /// In en, this message translates to:
+  /// **'The connection to this server failed while Klabautermann looked for the engine.'**
+  String get dockerGateLinkError;
+
+  /// Docker tab: asks again for the Docker endpoint or the engine details after a failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get dockerRetry;
+
+  /// Docker tab: the sub-tab listing containers.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers'**
+  String get dockerTabContainers;
+
+  /// Docker tab: the sub-tab listing images.
+  ///
+  /// In en, this message translates to:
+  /// **'Images'**
+  String get dockerTabImages;
+
+  /// Docker tab: the sub-tab listing compose stacks.
+  ///
+  /// In en, this message translates to:
+  /// **'Stacks'**
+  String get dockerTabStacks;
+
+  /// Docker tab: heading of the strip with the engine's runtime, API version, version and operating system (DKE-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Engine'**
+  String get dockerEngineHeading;
+
+  /// Docker tab engine strip: the Docker API version the app negotiated with the engine.
+  ///
+  /// In en, this message translates to:
+  /// **'API {version}'**
+  String dockerEngineApi(String version);
+
+  /// Docker tab engine strip: the engine's product name and version.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} {version}'**
+  String dockerEngineVersion(String name, String version);
+
+  /// Docker tab engine strip: the engine did not report its version.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}, version unknown'**
+  String dockerEngineVersionUnknown(String name);
+
+  /// Docker tab engine strip: the engine host's operating system and architecture.
+  ///
+  /// In en, this message translates to:
+  /// **'{os} on {architecture}'**
+  String dockerEngineOs(String os, String architecture);
+
+  /// Docker tab engine strip: the engine did not report its host's operating system.
+  ///
+  /// In en, this message translates to:
+  /// **'Operating system unknown'**
+  String get dockerEngineOsUnknown;
+
+  /// Docker tab engine strip: while the engine's details are read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the engine details…'**
+  String get dockerEngineReading;
+
+  /// Docker tab engine strip: reading the engine's details failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The engine details could not be read.'**
+  String get dockerEngineReadFailed;
+
+  /// Docker tab: dismisses the root-equivalence notice on this device.
+  ///
+  /// In en, this message translates to:
+  /// **'Got it'**
+  String get dockerNoticeDismiss;
+
+  /// Toast: dismissing the Docker tab's root-equivalence notice could not be saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save that you dismissed the root-equivalence note, so it shows again after a restart.'**
+  String get dockerNoticeNotSaved;
+
+  /// Appearance tab: heading of the preset grid.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get appearanceThemeTitle;
+
+  /// Appearance tab: title of the theme help dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Themes'**
+  String get appearanceThemeHelpTitle;
+
+  /// Appearance tab: body of the theme help dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'A theme is kept on this device only and never syncs. To use one elsewhere, copy it here and paste it into Klabautermann on the other device.'**
+  String get appearanceThemeHelp;
+
+  /// Appearance tab: small print under the preset grid.
+  ///
+  /// In en, this message translates to:
+  /// **'Picking a theme copies its colours here. It is a starting point, not a mode, so everything below stays yours to change.'**
+  String get appearanceThemeFootnote;
+
+  /// Appearance tab: tooltip of a preset tile.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the {name} theme'**
+  String appearancePresetTooltip(String name);
+
+  /// Appearance tab: heading of the light/dark mode section.
+  ///
+  /// In en, this message translates to:
+  /// **'Mode'**
+  String get appearanceModeTitle;
+
+  /// Appearance tab: line above the mode switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic colours follow'**
+  String get appearanceModeLead;
+
+  /// Appearance tab: note when a dark palette sets its own surface.
+  ///
+  /// In en, this message translates to:
+  /// **'This theme has its own surface, so it is always dark. Set Surface to Automatic to choose a mode.'**
+  String get appearanceOwnSurfaceDark;
+
+  /// Appearance tab: note when a light palette sets its own surface.
+  ///
+  /// In en, this message translates to:
+  /// **'This theme has its own surface, so it is always light. Set Surface to Automatic to choose a mode.'**
+  String get appearanceOwnSurfaceLight;
+
+  /// Appearance tab: heading of the colour slots.
+  ///
+  /// In en, this message translates to:
+  /// **'Colours'**
+  String get appearanceColoursTitle;
+
+  /// Appearance tab: title of the colours help dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic colours'**
+  String get appearanceColoursHelpTitle;
+
+  /// Appearance tab: body of the colours help dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic colours are the light or dark neutrals Klabautermann ships with, as the mode picks them. Once you give the theme a surface of its own, they are mixed from that surface and the text instead. Lines and the selection may be translucent.'**
+  String get appearanceColoursHelp;
+
+  /// Appearance tab: the accent colour row.
+  ///
+  /// In en, this message translates to:
+  /// **'Accent'**
+  String get appearanceAccent;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Surface'**
+  String get appearanceSlotSurface;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Sidebar'**
+  String get appearanceSlotSidebar;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Headers and bars'**
+  String get appearanceSlotRaised;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Text'**
+  String get appearanceSlotText;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Secondary text'**
+  String get appearanceSlotSecondaryText;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Lines'**
+  String get appearanceSlotHairline;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Selection'**
+  String get appearanceSlotSelection;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Online'**
+  String get appearanceSlotOnline;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline'**
+  String get appearanceSlotOffline;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting'**
+  String get appearanceSlotConnecting;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get appearanceSlotUnknown;
+
+  /// Appearance tab: heading of the status colour slots.
+  ///
+  /// In en, this message translates to:
+  /// **'Status colours'**
+  String get appearanceStatusTitle;
+
+  /// Appearance tab: small print under the status colours.
+  ///
+  /// In en, this message translates to:
+  /// **'Each status also keeps its own shape and its name, so these colours never have to say it alone.'**
+  String get appearanceStatusFootnote;
+
+  /// Appearance tab: checkbox beside a colour that follows the mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic'**
+  String get appearanceAutomatic;
+
+  /// Appearance tab: screen reader label of a colour's Automatic checkbox.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: Automatic'**
+  String appearanceAutomaticSemantics(String label);
+
+  /// Appearance tab: tooltip of a colour swatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the {label} colour'**
+  String appearanceChooseColour(String label);
+
+  /// Appearance tab: tooltip of an Automatic colour's swatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a {label} colour (now Automatic)'**
+  String appearanceChooseAutomaticColour(String label);
+
+  /// Appearance tab: heading of the font and corner controls.
+  ///
+  /// In en, this message translates to:
+  /// **'Shape and type'**
+  String get appearanceShapeTitle;
+
+  /// Appearance tab: label of the interface font field.
+  ///
+  /// In en, this message translates to:
+  /// **'Interface font'**
+  String get appearanceInterfaceFont;
+
+  /// Appearance tab: hint of the empty interface font field.
+  ///
+  /// In en, this message translates to:
+  /// **'System default'**
+  String get appearanceInterfaceFontHint;
+
+  /// Appearance tab: helper text under the interface font field.
+  ///
+  /// In en, this message translates to:
+  /// **'Logs and commands keep their monospace font.'**
+  String get appearanceInterfaceFontHelper;
+
+  /// Appearance tab: label of the corner slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Corners'**
+  String get appearanceCorners;
+
+  /// Appearance tab: corner slider value at no rounding.
+  ///
+  /// In en, this message translates to:
+  /// **'Square'**
+  String get appearanceCornersSquare;
+
+  /// Appearance tab: corner slider value as a percentage.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}%'**
+  String appearanceCornersPercent(int percent);
+
+  /// Appearance tab: screen reader value of the corner slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Corners {label}'**
+  String appearanceCornersSemantics(String label);
+
+  /// Appearance tab: heading of copy and paste.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get appearanceShareTitle;
+
+  /// Appearance tab: button that copies the theme as text.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy theme'**
+  String get appearanceCopyTheme;
+
+  /// Appearance tab: button that pastes a theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste theme'**
+  String get appearancePasteTheme;
+
+  /// Appearance tab: small print under copy and paste.
+  ///
+  /// In en, this message translates to:
+  /// **'Copies the theme as text you can keep or send. Pasting reads what it can and leaves everything else at the default.'**
+  String get appearanceShareFootnote;
+
+  /// Appearance tab: toast after Copy theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme copied.'**
+  String get appearanceThemeCopied;
+
+  /// Appearance tab: toast when the clipboard holds no theme.
+  ///
+  /// In en, this message translates to:
+  /// **'The clipboard does not hold a theme. Copy one with Copy theme first.'**
+  String get appearancePasteNotATheme;
+
+  /// Appearance tab: heading of the reset control.
+  ///
+  /// In en, this message translates to:
+  /// **'Start over'**
+  String get appearanceStartOverTitle;
+
+  /// Appearance tab: button that resets the theme to the initial preset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to {name}'**
+  String appearanceResetButton(String name);
+
+  /// Appearance tab: status beside the reset button when no preset matches.
+  ///
+  /// In en, this message translates to:
+  /// **'Using your own colours.'**
+  String get appearanceUsingOwnColours;
+
+  /// Appearance tab: status beside the reset button when a preset matches.
+  ///
+  /// In en, this message translates to:
+  /// **'Using {name}.'**
+  String appearanceUsingPreset(String name);
+
+  /// Appearance tab: title of the reset confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset the theme?'**
+  String get appearanceResetTitle;
+
+  /// Appearance tab: body of the reset confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Every colour, the font and the corners go back to the {name} theme. The mode stays as it is.'**
+  String appearanceResetBody(String name);
+
+  /// Appearance tab: cancels the reset.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get appearanceCancel;
+
+  /// Appearance tab: confirms the reset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get appearanceReset;
+
+  /// Appearance tab: tooltip of a section's help button.
+  ///
+  /// In en, this message translates to:
+  /// **'About {title}'**
+  String appearanceAbout(String title);
+
+  /// Appearance tab: closes a section's help dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get appearanceClose;
 }
 
 class _AppLocalizationsDelegate
