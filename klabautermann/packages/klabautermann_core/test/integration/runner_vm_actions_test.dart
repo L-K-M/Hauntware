@@ -19,15 +19,13 @@ import 'package:klabautermann_host/klabautermann_host.dart'
     show CronJobEntry, HostCommands;
 import 'package:test/test.dart';
 
+import 'support/actions.dart';
 import 'support/fixture.dart';
 import 'support/runner_vm.dart';
 
 /// Covers sudo's delay after each wrong password (pam_faildelay) and the
 /// validation runs that follow.
 const _adminWait = Duration(seconds: 60);
-
-/// Covers a plan's steps over the link, a systemctl job included.
-const _runWait = Duration(seconds: 60);
 
 /// Covers journald writing a unit's output before a read finds it.
 const _journalWait = Duration(seconds: 20);
@@ -49,18 +47,7 @@ void main() {
   /// to [servers] and holding their probes.
   Future<FixtureEngine> managed(String name, List<String> servers) async {
     final engine = await vm.engine(name);
-    engine.send(
-      const SetSafetyPolicy(
-        SafetyPolicy(
-          servers: {
-            limitedServer: ServerSafety(management: true),
-            journalServer: ServerSafety(management: true),
-            sudoServer: ServerSafety(management: true),
-            nocacheServer: ServerSafety(management: true),
-          },
-        ),
-      ),
-    );
+    manage(engine, [limitedServer, journalServer, sudoServer, nocacheServer]);
     for (final server in servers) {
       await engine.connect(server, vm.hostKeys);
       await _profile(engine, server);
@@ -124,7 +111,7 @@ void main() {
       expect(state.phase, AdminModePhase.on);
 
       final before = await _show(vm.testService, 'MainPID');
-      final planned = await _plan(
+      final planned = await plan(
         engine,
         UnitAction(
           nocacheServer,
@@ -134,7 +121,7 @@ void main() {
       );
       expect(planned.preview.requiredLevel, RequiredLevel.admin);
       expect(planned.preview.runner.identity, 'root');
-      _expectFinished(await _run(engine, planned));
+      expectSucceeded(await run(engine, planned));
       expect(await _show(vm.testService, 'ActiveState'), 'active');
       expect(await _show(vm.testService, 'MainPID'), isNot(before));
     });
@@ -147,7 +134,7 @@ void main() {
       await _admin(engine, sudoServer, [await vm.sudoPassword()]);
 
       Future<void> act(SystemctlVerb verb) async {
-        final planned = await _plan(
+        final planned = await plan(
           engine,
           UnitAction(sudoServer, unit: vm.testService, verb: verb),
         );
@@ -161,7 +148,7 @@ void main() {
         ]);
         expect(step.elevated, isTrue);
         expect(planned.preview.protected, isNull);
-        _expectFinished(await _run(engine, planned));
+        expectSucceeded(await run(engine, planned));
       }
 
       await act(SystemctlVerb.stop);
@@ -181,7 +168,7 @@ void main() {
     test('without admin mode polkit refuses, and the failure says admin '
         'mode would run it', () async {
       final engine = await managed('units-polkit', [limitedServer]);
-      final planned = await _plan(
+      final planned = await plan(
         engine,
         UnitAction(
           limitedServer,
@@ -192,7 +179,7 @@ void main() {
       expect(planned.preview.requiredLevel, RequiredLevel.login);
       expect((planned.preview.steps.single as ShellStep).elevated, isFalse);
 
-      final finished = await _run(engine, planned) as ActionFinished;
+      final finished = await run(engine, planned) as ActionFinished;
       expect(finished.outcome, ActionOutcome.failed);
       expect(finished.failure, ActionFailure.adminRequired);
       expect(await _show(vm.testService, 'ActiveState'), 'active');
@@ -202,7 +189,7 @@ void main() {
       final engine = await managed('units-protected', [sudoServer]);
       await _admin(engine, sudoServer, [await vm.sudoPassword()]);
 
-      final planned = await _plan(
+      final planned = await plan(
         engine,
         const UnitAction(
           sudoServer,
@@ -219,7 +206,7 @@ void main() {
         ActionConfirmation(tier: ConfirmationTier.typedPhrase, phrase: 'ssh'),
       ]) {
         final refused =
-            await _run(engine, planned, confirmation: confirmation)
+            await run(engine, planned, confirmation: confirmation)
                 as ActionRefused;
         expect(refused.reason, ActionRefusalReason.confirmationMismatch);
       }
@@ -231,7 +218,7 @@ void main() {
     final engine = await managed('timer-now', [sudoServer, journalServer]);
     await _admin(engine, sudoServer, [await vm.sudoPassword()]);
 
-    final planned = await _plan(
+    final planned = await plan(
       engine,
       StartTimer(sudoServer, timer: vm.jobTimer),
     );
@@ -258,7 +245,7 @@ void main() {
       (e) => e.streamId == streamId && e.status == const LogStreamRunning(),
     );
 
-    _expectFinished(await _run(engine, planned));
+    expectSucceeded(await run(engine, planned));
     await engine.until<LogBatch>(
       (b) =>
           b.streamId == streamId &&
@@ -277,7 +264,7 @@ void main() {
       engine.send(ReadUserCrontabs(sudoServer, requestId: requestId));
       return engine.until<UserCrontabs>(
         (e) => e.requestId == requestId,
-        _runWait,
+        actionWait,
       );
     }
 
@@ -317,18 +304,18 @@ void main() {
     );
     final intent = KillProcess(sudoServer, pid: pid, startTicks: ticks);
 
-    final unelevated = await _plan(engine, intent);
+    final unelevated = await plan(engine, intent);
     expect(unelevated.preview.requiredLevel, RequiredLevel.admin);
     expect(unelevated.preview.targetName, 'sleep');
-    final refused = await _run(engine, unelevated) as ActionRefused;
+    final refused = await run(engine, unelevated) as ActionRefused;
     expect(refused.reason, ActionRefusalReason.adminRequired);
     expect(await _alive(pid), isTrue);
 
     await _admin(engine, sudoServer, [await vm.sudoPassword()]);
-    final planned = await _plan(engine, intent);
+    final planned = await plan(engine, intent);
     expect(planned.preview.runner.identity, 'root');
     expect((planned.preview.steps.single as ShellStep).elevated, isTrue);
-    _expectFinished(await _run(engine, planned));
+    expectSucceeded(await run(engine, planned));
 
     final deadline = DateTime.now().add(const Duration(seconds: 10));
     while (await _alive(pid)) {
@@ -378,58 +365,6 @@ Future<(AdminModeState, List<ElevationPromptRequest>)> _admin(
         break;
     }
   }
-}
-
-/// Plans [intent]; a refusal fails the test.
-Future<ActionPlanned> _plan(FixtureEngine engine, ActionIntent intent) async {
-  engine.send(PlanAction(intent));
-  final answer = await engine.until<EngineEvent>(
-    (e) => e is ActionPlanned || (e is ActionRefused && e.intent != null),
-    _runWait,
-  );
-  if (answer case ActionRefused(:final reason)) fail('refused: $reason');
-  return answer as ActionPlanned;
-}
-
-/// Runs [planned] with [confirmation], by default the one its tier asks
-/// for, and returns how it finished or why it was refused.
-Future<EngineEvent> _run(
-  FixtureEngine engine,
-  ActionPlanned planned, {
-  ActionConfirmation? confirmation,
-}) {
-  final preview = planned.preview;
-  engine.send(
-    RunAction(
-      planned.planId,
-      confirmation ??
-          ActionConfirmation(
-            tier: preview.requiredTier,
-            phrase: preview.requiredTier == ConfirmationTier.typedPhrase
-                ? preview.targetName
-                : null,
-          ),
-    ),
-  );
-  return engine.until<EngineEvent>(
-    (e) => switch (e) {
-      ActionFinished(:final planId) ||
-      ActionRefused(:final planId?) => planId == planned.planId,
-      _ => false,
-    },
-    _runWait,
-  );
-}
-
-void _expectFinished(EngineEvent event) {
-  expect(
-    event,
-    isA<ActionFinished>().having(
-      (f) => (f.outcome, f.failure, f.exitCode),
-      'outcome',
-      (ActionOutcome.succeeded, null, null),
-    ),
-  );
 }
 
 /// [unit]'s [property] as `systemctl show` prints it, read by the runner
