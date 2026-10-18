@@ -3,6 +3,19 @@
 Living snapshot of where Séance is, what's proven, and what to pick up next.
 Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 
+## Font catalog and previews (2026-10-17)
+
+Terminal and editor settings use `ghost_fonts`' shared, searchable 20-family
+picker. The terminal preview uses `TerminalAppearance`'s palette, size and
+OpenType features. Confirming writes font and ligatures together; cancelling
+leaves settings alone. Existing disabled ligatures stay disabled.
+
+All 18 families with programming ligatures have terminal-painter pixel tests
+for on/off. `TerminalStyle` forwards host-selected font features, including
+Monaspace's `ss01`–`ss10`, Geist Mono's `ss11`, Intel One Mono's `ss01`, and
+Commit Mono's `ss01` mathematical ligatures and `ss02` arrows.
+No native-device smoke test has been performed for this change.
+
 ## dartssh2 4.1.0 (2026-10-10)
 
 `seance_core` and the app's dev dependency pin dartssh2 4.1.0 (was 3.0.2),
