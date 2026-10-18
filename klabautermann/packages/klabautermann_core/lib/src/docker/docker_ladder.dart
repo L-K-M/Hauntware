@@ -17,7 +17,8 @@
 /// Rank 3, the sudo relay, arrives with admin mode in M4. The ladder only
 /// opens a rank 1 channel to see that it works and closes it again; it
 /// starts no relay, so a relay whose CLI cannot reach the daemon shows
-/// first when the client pings through it.
+/// first when the client pings through it; the engine's Docker session
+/// then runs the ladder again without that route.
 library;
 
 import 'package:klabautermann_docker/klabautermann_docker.dart'
@@ -156,10 +157,30 @@ final class DockerRoute extends DockerRouteResult {
     null => DockerRootEquivalence.unclassified,
   };
 
+  /// Routes are equal when they reach the same path the same way, so the
+  /// engine can exclude one that failed and run the ladder again.
+  @override
+  bool operator ==(Object other) =>
+      other is DockerRoute &&
+      other.rank == rank &&
+      other.socketPath == socketPath &&
+      _sameWords(other.relayArgv, relayArgv);
+
+  @override
+  int get hashCode => Object.hash(rank, socketPath, Object.hashAll(relayArgv));
+
   @override
   String toString() =>
       'DockerRoute(${rank.name}, $socketPath, ${runtime?.name}, '
       '${mode?.name}, $relayArgv)';
+}
+
+bool _sameWords(List<String> a, List<String> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
 }
 
 /// No rung reaches an engine.
@@ -197,12 +218,18 @@ abstract final class DockerLadder {
   /// other than a forwarding refusal propagates, since it tells nothing
   /// about the path.
   ///
+  /// A route in [excluding], one the engine reached but could not talk
+  /// to, is passed over: an excluded streamlocal route skips its path,
+  /// since a relay would reach the same socket, and an excluded relay
+  /// gives way to the next relay of its path.
+  ///
   /// Throws an [ArgumentError] when [override] is not an absolute path
   /// free of NUL and line breaks.
   static Future<DockerRouteResult> resolve(
     SshLink link,
     HostProfile profile, {
     String? override,
+    Set<DockerRoute> excluding = const {},
   }) async {
     if (override != null) validateAbsolutePath(override);
 
@@ -218,7 +245,7 @@ abstract final class DockerLadder {
 
     var reason = DockerNoRouteReason.noSocket;
     for (final candidate in candidates) {
-      final outcome = await _try(link, profile, candidate);
+      final outcome = await _try(link, profile, candidate, excluding);
       switch (outcome) {
         case DockerRoute():
           return outcome;
@@ -235,8 +262,12 @@ abstract final class DockerLadder {
     SshLink link,
     HostProfile profile,
     _Candidate candidate,
+    Set<DockerRoute> excluding,
   ) async {
     final path = candidate.path;
+    if (excluding.contains(candidate.route(DockerRank.streamlocal))) {
+      return const DockerRouteNone._(DockerNoRouteReason.noSocket);
+    }
     try {
       final duplex = await link.openUnixStream(path);
       await duplex.close();
@@ -258,39 +289,45 @@ abstract final class DockerLadder {
               : DockerNoRouteReason.socketDenied,
         );
       case (access: _SocketAccess.reachable, netcat: final netcat):
-        return _relay(profile, candidate, netcat: netcat);
+        return _relay(profile, candidate, excluding, netcat: netcat);
     }
   }
 
   /// Rank 2 when the probe saw a CLI that reaches this engine, else rank
   /// 4: socat when the probe saw it and the path is safe in a socat
-  /// address, else `nc -U` when the exec probe found `nc`.
+  /// address, else `nc -U` when the exec probe found `nc`. The first of
+  /// these not in [excluding] wins.
   static DockerRouteResult _relay(
     HostProfile profile,
-    _Candidate candidate, {
+    _Candidate candidate,
+    Set<DockerRoute> excluding, {
     required bool netcat,
   }) {
     final path = candidate.path;
     final host = validateSocketPath(path);
-    for (final cli in _relayClis(candidate.runtime)) {
-      if (profile.toolPresent(cli.binary) != true) continue;
-      return candidate.route(
-        DockerRank.cliRelay,
-        relayArgv: [cli.binary, cli.hostOption, host, 'system', 'dial-stdio'],
-      );
-    }
-
-    if (profile.toolPresent('socat') == true && _socatSafePath.hasMatch(path)) {
-      return candidate.route(
-        DockerRank.socketRelay,
-        relayArgv: ['socat', 'STDIO', 'UNIX-CONNECT:$path'],
-      );
-    }
-    if (netcat) {
-      return candidate.route(
-        DockerRank.socketRelay,
-        relayArgv: ['nc', '-U', path],
-      );
+    final relays = [
+      for (final cli in _relayClis(candidate.runtime))
+        if (profile.toolPresent(cli.binary) == true)
+          candidate.route(
+            DockerRank.cliRelay,
+            relayArgv: [
+              cli.binary,
+              cli.hostOption,
+              host,
+              'system',
+              'dial-stdio',
+            ],
+          ),
+      if (profile.toolPresent('socat') == true && _socatSafePath.hasMatch(path))
+        candidate.route(
+          DockerRank.socketRelay,
+          relayArgv: ['socat', 'STDIO', 'UNIX-CONNECT:$path'],
+        ),
+      if (netcat)
+        candidate.route(DockerRank.socketRelay, relayArgv: ['nc', '-U', path]),
+    ];
+    for (final route in relays) {
+      if (!excluding.contains(route)) return route;
     }
     return const DockerRouteNone._(DockerNoRouteReason.noRelay);
   }

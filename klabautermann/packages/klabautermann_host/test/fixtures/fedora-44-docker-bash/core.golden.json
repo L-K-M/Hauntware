@@ -3,14 +3,14 @@
     "cpu": {
       "name": "cpu",
       "jiffies": [
-        244458,
+        2771519,
         0,
-        56895,
-        2170243,
-        32035,
+        581951,
+        15239241,
+        130399,
         0,
-        10665,
-        14655,
+        123660,
+        178706,
         0,
         0
       ]
@@ -18,45 +18,45 @@
     "perCpu": {
       "cpu0": {
         "name": "cpu0",
-        "busy": 82722,
-        "idle": 550612
+        "busy": 917916,
+        "idle": 3855908
       },
       "cpu1": {
         "name": "cpu1",
-        "busy": 81641,
-        "idle": 551026
+        "busy": 919536,
+        "idle": 3841053
       },
       "cpu2": {
         "name": "cpu2",
-        "busy": 81944,
-        "idle": 549783
+        "busy": 912251,
+        "idle": 3836669
       },
       "cpu3": {
         "name": "cpu3",
-        "busy": 80360,
-        "idle": 550855
+        "busy": 906128,
+        "idle": 3836007
       }
     },
-    "btime": 1792214224,
+    "btime": 1792260092,
     "meminfo": {
       "fields": {
         "MemTotal": 16479424,
-        "MemFree": 13480356,
-        "MemAvailable": 15580396,
-        "Buffers": 110072,
-        "Cached": 1493496,
+        "MemFree": 6064544,
+        "MemAvailable": 14584896,
+        "Buffers": 610492,
+        "Cached": 6526988,
         "SwapTotal": 0,
         "SwapFree": 0,
         "Shmem": 14680,
-        "SReclaimable": 823840
+        "SReclaimable": 1735032
       }
     },
     "loadavg": {
-      "load1": 4.07,
-      "load5": 1.95,
-      "load15": 1.19,
+      "load1": 1.08,
+      "load5": 1.55,
+      "load15": 1.24,
       "running": 1,
-      "total": 161,
+      "total": 174,
       "lastPid": 17
     },
     "netdev": [
@@ -69,52 +69,52 @@
     "diskstats": [
       {
         "name": "vda",
-        "readsCompleted": 130723,
-        "sectorsRead": 7666322,
-        "writesCompleted": 72105,
-        "sectorsWritten": 134192368
+        "readsCompleted": 537722,
+        "sectorsRead": 26009890,
+        "writesCompleted": 1650317,
+        "sectorsWritten": 720103576
       },
       {
         "name": "vdb",
-        "readsCompleted": 7,
-        "sectorsRead": 16,
+        "readsCompleted": 9,
+        "sectorsRead": 20,
         "writesCompleted": 0,
         "sectorsWritten": 0
       },
       {
         "name": "vdc",
-        "readsCompleted": 1975,
-        "sectorsRead": 299474,
+        "readsCompleted": 2077,
+        "sectorsRead": 312954,
         "writesCompleted": 0,
         "sectorsWritten": 0
       },
       {
         "name": "vdd",
-        "readsCompleted": 472,
-        "sectorsRead": 58138,
+        "readsCompleted": 637,
+        "sectorsRead": 63978,
         "writesCompleted": 0,
         "sectorsWritten": 0
       },
       {
         "name": "vde",
-        "readsCompleted": 9,
-        "sectorsRead": 28,
+        "readsCompleted": 11,
+        "sectorsRead": 36,
         "writesCompleted": 0,
         "sectorsWritten": 0
       },
       {
         "name": "vdf",
-        "readsCompleted": 9,
-        "sectorsRead": 26,
+        "readsCompleted": 13,
+        "sectorsRead": 44,
         "writesCompleted": 0,
         "sectorsWritten": 0
       }
     ],
     "cpuPressure": {
       "some": {
-        "avg10": 13.33,
-        "avg60": 12.57,
-        "avg300": 4.91
+        "avg10": 5.22,
+        "avg60": 4.42,
+        "avg300": 7.27
       },
       "full": {
         "avg10": 0.0,
@@ -124,14 +124,14 @@
     },
     "ioPressure": {
       "some": {
-        "avg10": 25.34,
-        "avg60": 13.07,
-        "avg300": 4.47
+        "avg10": 5.94,
+        "avg60": 4.42,
+        "avg300": 1.36
       },
       "full": {
-        "avg10": 20.29,
-        "avg60": 8.58,
-        "avg300": 2.92
+        "avg10": 5.66,
+        "avg60": 4.13,
+        "avg300": 1.24
       }
     },
     "memoryPressure": {
@@ -146,8 +146,8 @@
         "avg300": 0.0
       }
     },
-    "uptimeSeconds": 6309.76,
-    "idleSeconds": 21702.43,
+    "uptimeSeconds": 47410.37,
+    "idleSeconds": 152392.42,
     "zfsArc": null
   },
   "warnings": []

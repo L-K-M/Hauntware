@@ -14,15 +14,19 @@ import 'package:seance_core/seance_core.dart';
 
 import 'scripted_link.dart';
 
-/// A daemon that answers every request head with `200 OK` and an empty
-/// body on each connection, keeping it alive, as `/_ping` does.
-final class PingDaemon {
+/// A daemon behind a socket that answers each request head (bodies are
+/// not read) with [respond]'s raw response, keeping the connection
+/// alive.
+abstract base class FakeDaemon {
   /// The request lines received, across connections.
   final requests = <String>[];
 
   /// How many connections were opened; [closed] of them have ended.
   int connections = 0;
   int closed = 0;
+
+  /// The raw HTTP response to [requestLine].
+  String respond(String requestLine);
 
   /// The client end of a fresh connection. The daemon closes its end
   /// once the client's EOF arrives.
@@ -38,9 +42,10 @@ final class PingDaemon {
           at >= 0;
           at = pending.indexOf('\r\n\r\n')
         ) {
-          requests.add(pending.substring(0, pending.indexOf('\r\n')));
+          final line = pending.substring(0, pending.indexOf('\r\n'));
+          requests.add(line);
           pending = pending.substring(at + 4);
-          pair.server.sink.add(latin1.encode(_ok));
+          pair.server.sink.add(utf8.encode(respond(line)));
         }
       },
       onDone: () {
@@ -50,6 +55,13 @@ final class PingDaemon {
     );
     return pair;
   }
+}
+
+/// A daemon that answers every request with `200 OK` and an empty body,
+/// as `/_ping` does.
+final class PingDaemon extends FakeDaemon {
+  @override
+  String respond(String requestLine) => _ok;
 
   static const _ok =
       'HTTP/1.1 200 OK\r\nApi-Version: 1.52\r\nContent-Length: 0\r\n\r\n';
@@ -75,16 +87,21 @@ final class ForwardingLink extends TestLinkBase {
   /// Socket paths a daemon answers on. Every other path is refused with
   /// `forwardDisabled`, as OpenSSH answers every failed streamlocal open
   /// alike (03 §5.3).
-  final daemons = <String, PingDaemon>{};
+  final daemons = <String, FakeDaemon>{};
 
   /// The daemon every relay start reaches.
-  final relayDaemon = PingDaemon();
+  FakeDaemon relayDaemon = PingDaemon();
 
   /// The exec probe's stdout per socket path ([ProbeShell.scripted]).
   final probeAnswers = <String, String>{};
 
   /// The exit status the scripted probe reports.
   int probeExitCode = 0;
+
+  /// Programs whose relay exits with an error once a request arrives, as
+  /// a CLI that cannot reach the daemon does; matched as a quoted word of
+  /// the command line.
+  final failingRelays = <String>{};
 
   /// Errors the next runs throw, in order.
   final runFailures = <Object>[];
@@ -146,8 +163,19 @@ final class ForwardingLink extends TestLinkBase {
   @override
   Future<RemoteProcess> start(String command, {PtyRequest? pty}) async {
     started.add(command);
-    final relay = RelayProcess(relayDaemon.connect().client);
+    final failing = failingRelays.any(
+      (program) => command.contains(" '$program' "),
+    );
+    final pair = failing ? FakeDuplexPair() : relayDaemon.connect();
+    final relay = RelayProcess(pair.client);
     relays.add(relay);
+    // It fails once the request arrives, so the client sees the exit
+    // rather than a refused write.
+    if (failing) {
+      pair.server.stream.listen(
+        (_) => unawaited(relay.fail(utf8.encode('Cannot connect\n'))),
+      );
+    }
     return relay;
   }
 }
