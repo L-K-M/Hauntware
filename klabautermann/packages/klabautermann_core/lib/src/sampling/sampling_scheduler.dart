@@ -56,8 +56,8 @@ const _owedReadRetry = Duration(seconds: 15);
 
 /// The longest wait before the next probe [E]. Each probe that brings no
 /// reply doubles the wait from [_owedReadRetry]: one that hangs holds the
-/// slow sampler for its whole deadline, 165 s, and its streams lose their
-/// readings meanwhile, which the cap bounds to about 15 % of the time.
+/// slow sampler for its whole deadline, 175 s, and its streams lose their
+/// readings meanwhile, which the cap bounds to about 16 % of the time.
 const _maxProbeRetry = Duration(minutes: 15);
 
 /// The stream whose collector also serves [stream]'s, or null: a `core`

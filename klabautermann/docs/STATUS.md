@@ -1361,6 +1361,21 @@ M2, the host read MVP, is the current milestone. What is on main:
   dash and bash. Nothing runs these builders yet: E14 and E17 will.
   The root-run wrapper's `chown` was checked by hand only, and whether
   the backgrounded `setsid` launch survives logout waits for spike S4.
+- Probe and sampler additions (M4, E07, 03 §6.2, §7.17): collector-set
+  version 8 prints a `SELF <pid> <ppid>` marker before READY, which
+  `HwsSessionReady` carries for 8.6's protected targets, and the
+  assembler ends a session whose READY of this version comes without it.
+  The probe runs `run0 --no-ask-password true` when run0 exists
+  (`HostProfile.run0NonInteractive`; the probe's deadline grows to 175 s
+  for its 17 guarded commands). The slow `ops` collector lists both
+  operation directories, at most 50 records each cut at 4 KiB, framed by
+  byte counts; `parseOps` reads E08's record schema into `OpRecord` and
+  rejects truncated, malformed, other-version and forged records (an id
+  that differs from the file name, or a unit not its own). Tested with
+  record fixtures and through dash and bash (BusyBox sh where
+  installed). Nothing in the engine uses the SELF PIDs or `ops` yet:
+  E10 takes the PIDs into the protected targets, E17 runs `ops` on
+  connect, and `ops` has no platform fixture.
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.
