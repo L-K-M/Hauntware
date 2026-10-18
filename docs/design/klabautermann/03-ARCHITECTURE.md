@@ -2530,6 +2530,21 @@ slot until `SshLink.connect` returns. Reachability probes reuse
 `ProbeService` (`SC/src/probe/probe_service.dart:64`, 45 s jittered
 sweeps, at most 6 concurrent [V]) and run only for confirmed endpoints.
 
+As built in M2 (K20, `klabautermann_core` `fleet/reachability_service.dart`):
+the engine probes the fleet entries that have a connect config and a
+confirmed endpoint, imports included under O6's default (4.3), and so
+never an unconfirmed or changed synced server (4.7). A server routed
+through a jump host is not probed and is reported `unknown`, and one
+holding a link is answered online without a probe, as `ProbeService`
+does. Probing starts once `Hello` has had its fleet; a new or moved
+target sweeps at once, a removed one is dropped before the fleet or
+`EndpointChanged` that removes it goes out, and every sweep reports
+every target, always on a later event-loop turn than the fleet that
+lists it. `SetAppActivity` pauses the sweeps in the background, dropping
+answers in flight, and the foreground sweeps at once.
+`EngineStart.probesEnabled` gates probing apart from links; it is off
+unless given, and `main.dart` turns it on (the contract test holds it).
+
 ---
 
 ## 6. Host data collection
