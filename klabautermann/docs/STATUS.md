@@ -1583,6 +1583,12 @@ M2, the host read MVP, is the current milestone. What is on main:
   session's sshd processes, is found again over the new link, has its
   output followed, and is acknowledged, deleted and audited with
   `--host` in every step. Locally the suite takes about 90 s.
+- M4 host write inventory (E31, X6): run.sh snapshots the Docker host
+  as root before and after a scripted MVP session (every read, every
+  Docker action, a process signal and a detached redeploy with a
+  re-attach) and fails on any change outside 03 §8.11's MVP rows,
+  encoded once in `test/integration/inventory_allowlist.txt`. The
+  runner VM's snapshot follows separately.
 - M4 runner-VM actions suite (E29): on the GitHub-hosted runner, as
   throwaway accounts, the engine turns admin mode on after a wrong
   password is asked again, and under `timestamp_timeout=0` (rung 4);

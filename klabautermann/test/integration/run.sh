@@ -10,9 +10,13 @@
 # config, readiness, the Docker engine's seed, the tests one at a time,
 # and teardown on every exit. With
 # KLABAUTERMANN_EVIDENCE_DIR set, logs and test results go there. After
-# the fixture suites it runs the runner-VM leg (runner_vm.sh), which
-# skips itself anywhere but a GitHub-hosted runner, and then the soak
-# with 03 §11.4's budgets, whose numbers go to
+# the fixture suites it runs the host write inventory (03 §8.11, M4
+# E31): the Docker host snapshotted as root before and after a scripted
+# MVP session, and the diff checked against inventory_allowlist.txt,
+# with the snapshots and the report in $KLABAUTERMANN_EVIDENCE_DIR/inventory
+# (default build/integration-evidence/inventory). Then the runner-VM leg
+# (runner_vm.sh), which skips itself anywhere but a GitHub-hosted runner,
+# and then the soak with 03 §11.4's budgets, whose numbers go to
 # $KLABAUTERMANN_EVIDENCE_DIR/soak (default build/integration-evidence/soak):
 #
 #   KLABAUTERMANN_SOAK_SECONDS  the soak's measured window (600 with
@@ -31,6 +35,9 @@ readonly safety_checker="$klabautermann_dir/../poltergeist/test/integration/chec
 # rendered config.
 readonly docker_exposure_checker="$integration_dir/check_docker_exposure.dart"
 readonly seed_script="$integration_dir/seed_docker.sh"
+readonly inventory_script="$integration_dir/inventory.sh"
+readonly inventory_checker="$integration_dir/inventory.dart"
+readonly inventory_allowlist="$integration_dir/inventory_allowlist.txt"
 # The seeded containers' image, pulled by digest through Google's Docker
 # Hub mirror on the runner's own daemon and loaded into dind over SSH,
 # so dind needs no route to a registry. The tag only documents the pin.
@@ -61,6 +68,11 @@ if [[ "$soak_dir" != /* ]]; then
   soak_dir="$PWD/$soak_dir"
 fi
 readonly soak_dir
+inventory_dir="${KLABAUTERMANN_EVIDENCE_DIR:-$klabautermann_dir/build/integration-evidence}/inventory"
+if [[ "$inventory_dir" != /* ]]; then
+  inventory_dir="$PWD/$inventory_dir"
+fi
+readonly inventory_dir
 
 compose() {
   docker compose --project-name "$compose_project" --file "$compose_file" "$@"
@@ -146,6 +158,12 @@ seed_docker_host() {
   docker_host_ssh sh -s -- "$image_id" <"$seed_script"
 }
 
+# The Docker host's paths as inventory.sh lists them, run there as root,
+# into $1.
+docker_host_snapshot() {
+  compose exec -T --user root docker-sshd sh -s -- / <"$inventory_script" >"$1"
+}
+
 # Stops a backgrounded `dart test` run. package:test lets the running
 # test finish after a first signal, which can take up to its timeout, and
 # exits at once on a second; a supervisor may send SIGKILL before then,
@@ -161,6 +179,7 @@ stop_tests() {
 runtime_dir=''
 agent_started=0
 suites_pid=''
+inventory_pid=''
 runner_vm_pid=''
 soak_pid=''
 
@@ -176,6 +195,9 @@ on_exit() {
   # it, and they hold the lock.
   if [[ -n "$suites_pid" ]]; then
     stop_tests "$suites_pid"
+  fi
+  if [[ -n "$inventory_pid" ]]; then
+    stop_tests "$inventory_pid"
   fi
   if [[ -n "$soak_pid" ]]; then
     stop_tests "$soak_pid"
@@ -298,6 +320,27 @@ suites_status=0
 wait "$suites_pid" || suites_status="$?"
 suites_pid=''
 
+# ---- Host write inventory (03 §8.11, M4 E31) -----------------------------
+# The Docker host snapshotted before and after the scripted session alone,
+# in the background for on_exit as the suites are; a change outside the
+# allowlist fails the run. It runs whatever the suites gave.
+mkdir -p "$inventory_dir"
+inventory_status=0
+docker_host_snapshot "$inventory_dir/docker-host.before"
+"$dart_binary" test --concurrency=1 --tags inventory --reporter expanded \
+  packages/klabautermann_core/test/integration/inventory_session_test.dart &
+inventory_pid="$!"
+wait "$inventory_pid" || inventory_status="$?"
+inventory_pid=''
+docker_host_snapshot "$inventory_dir/docker-host.after"
+if ((inventory_status == 0)); then
+  "$dart_binary" run "$inventory_checker" "$inventory_allowlist" \
+    "$inventory_dir/docker-host.before" "$inventory_dir/docker-host.after" \
+    >"$inventory_dir/docker-host.report" || inventory_status="$?"
+  cat "$inventory_dir/docker-host.report"
+fi
+# ---- End of the host write inventory ------------------------------------
+
 # ---- Runner-VM leg (03 §11.3, K28a) -------------------------------------
 # systemd on the runner itself, over a loopback sshd of its own; it runs
 # whatever the suites gave, and in the background for on_exit, as they do.
@@ -332,6 +375,9 @@ fi
 
 if ((suites_status != 0)); then
   exit "$suites_status"
+fi
+if ((inventory_status != 0)); then
+  exit "$inventory_status"
 fi
 if ((runner_vm_status != 0)); then
   exit "$runner_vm_status"

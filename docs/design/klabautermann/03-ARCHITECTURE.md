@@ -4716,6 +4716,22 @@ only through the confirmed "Enable sysstat" row above), SSH keys or
 containers are not host file writes: they are confirmed engine changes,
 removed afterwards (row above, 7.15; owner decision 2026-10-10).
 
+As built in M4 (E31, plan M18), the check runs in CI on the Docker
+host. run.sh snapshots it as root with `test/integration/inventory.sh`
+before and after `inventory_session_test.dart` alone. The snapshot
+covers every path and its type, permissions, owner, group and size,
+and the SHA-256 of each regular file up to 1 MiB. It leaves out
+/proc, /sys, /dev, /run, journals, login records and engine state.
+The session samples every stream, watches the Docker lists and reads
+a container's log. It runs every MVP container, image and stack
+action, signals the user's own process, and runs a detached redeploy
+that outlives a dropped link, re-attaches and is acknowledged.
+`inventory.dart` diffs the snapshots and checks each change against
+`inventory_allowlist.txt`, which encodes this table's MVP rows once.
+A change no row covers fails the run, and the report goes to the
+evidence. The runner VM's snapshot, which needs runner_vm.sh's own
+files left out, follows as a separate change.
+
 ### 8.12 Threat model
 
 | Adversary or failure | Could | Mitigation |
