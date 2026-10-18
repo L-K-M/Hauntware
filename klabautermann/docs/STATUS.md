@@ -188,8 +188,16 @@ M2, the host read MVP, is the current milestone. What is on main:
   `Libpod-API-Version` and reports `DockerEndpointState`. Results are
   typed; inspect `Path`/`Args`, `Entrypoint`/`Cmd` and health output
   cross masked, and the list drops its command line. Tested over fakes
-  only; no app surface yet (D12), no `/system/df` (D03), no watch or
-  events (D06), no low-session mode (D09).
+  only; no app surface yet (D12), no `/system/df` (D03), no
+  low-session mode (D09).
+- Docker watches (M3, D06, 03 §7.12, §10.1): `DockerWatch` keeps the
+  container, image and stack lists current from one `/events` stream
+  per server (250 ms batches, targeted re-reads by container id,
+  resume with `since`, a full re-list after a gap over 60 s) and reads
+  one-shot list stats for the ids on screen every 5 s (4 at once on
+  streamlocal, one at a time on a relay), all as `DockerListChanged`.
+  Tested over fakes only; the app does not watch yet (D13), and
+  relay channels are not counted in `ChannelQuota` until D09.
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and
@@ -1036,8 +1044,12 @@ M2, the host read MVP, is the current milestone. What is on main:
   Android, Linux, macOS, iOS and Windows on every PR, launches the three
   desktop release builds, checks the APK's version code and the macOS
   bundle's signature, packages the .deb, AppImage and Flatpak, and runs
-  the macOS fixtures. No release job ships these builds before M4
-  (decision 16).
+  the macOS fixtures. The root `release.yml`'s `client_klabautermann`
+  job (M4 E32) builds the same five targets on a release tag and
+  attaches eight preview assets, all but the .deb with the preview
+  label in their names, which
+  `scripts/release-manifest.txt` and `scripts/check-workflows.sh` hold
+  to the release floor (decision 16).
 - Integration CI legs (M2, K47, #195): `detect_klabautermann_integration`
   in the root `ci.yml` runs on every main push and dispatch, and on PRs
   that touch `klabautermann/**`, `seance_core`, `seance_protocol`, the
@@ -1167,8 +1179,7 @@ M2, the host read MVP, is the current milestone. What is on main:
   `klabautermann_docker/test/fixtures/api-*/`. Check mode compares a
   fresh capture by structure, never by value; `--docker-api-only`
   [`--update`] runs only these. The committed corpus comes from a local
-  cgroup v1 run; replay tests follow in D02, and rootless daemons stay
-  unrecorded.
+  cgroup v1 run; rootless daemons stay unrecorded.
 - Negative sshd variants and refusal evidence (M3, 03 §5.3, §11.3,
   D11): six Docker hosts on 127.0.0.1:2245 to 2250 refuse with
   `AllowStreamLocalForwarding no`, `DisableForwarding yes`,
@@ -1182,6 +1193,19 @@ M2, the host read MVP, is the current milestone. What is on main:
   CLI. Each result, with sshd's log lines, goes to
   `$KLABAUTERMANN_EVIDENCE_DIR/fixture/refusals/`. Locally it adds
   about 8 s to `run.sh` with the images cached.
+- Recorded API replay (M3, 03 §11.1, D02): `RecordedDaemon` in
+  `klabautermann_docker/testing.dart` serves a corpus to the real HTTP
+  client, matching method, path (a lower negotiated version gets the
+  native recording) and normalized query, whole or one byte at a time.
+  `recorded_api_test.dart` replays every `api-*` directory: negotiation
+  from `_ping` and `/version`, the client's floor and server-minimum
+  refusals and the daemons' own 400s (Podman accepts every version),
+  every typed endpoint with no parser warning, the event, image-count,
+  logs `Content-Type` and `/system/df` gates against the lists, the
+  2,000-line follow demultiplexed, a `since` resume with no lost or
+  repeated line, and one-shot stats then a stream delta. An idle
+  container's CPU now reads 0 % rather than unknown, and Go's zero time
+  (a created container's `StartedAt`) reads as absent.
 - Desktop settings window (03 §10.2, D32): on macOS, Linux and Windows,
   Settings opens in a native window of its own through `ghost_desktop`'s
   `GhostSettingsWindowHost`; phones, and a desktop runner that cannot
@@ -1256,8 +1280,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   `package_info_plus`, read once in `main`; the settings window's
   engine has no plugins, so the snapshot of the settings link carries
   it. The release asset names keep their label from the packaging
-  scripts; the release job and notes are E32's. M7 drops the label in
-  one change.
+  scripts, and the release job and notes carry it (E32). M7 drops the
+  label in one change.
 - Single desktop instance (03 §4.10): on macOS, Linux and Windows the
   composition root takes an exclusive, non-blocking advisory lock on
   `instance.lock` in the support directory (`klabautermann_core`'s
@@ -1353,6 +1377,10 @@ M2, the host read MVP, is the current milestone. What is on main:
   dash and bash. Nothing runs these builders yet: E14 and E17 will.
   The root-run wrapper's `chown` was checked by hand only, and whether
   the backgrounded `setsid` launch survives logout waits for spike S4.
+- M4 theme editing (E25): Settings > Appearance edits the theme with
+  ghost_theme's shared editor (presets, mode, colours, font, corners,
+  copy, paste and reset), in the app and in the desktop settings window,
+  in Klabautermann's words.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container
