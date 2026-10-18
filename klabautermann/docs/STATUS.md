@@ -1324,8 +1324,9 @@ M2, the host read MVP, is the current milestone. What is on main:
   with D65 in 03. Rungs 2 to 4 hold; `requiretty` and password doas
   need rung 5. Under `timestamp_type=global` a cached record accepts a
   wrong password, so admin-mode validation (E11) will use
-  `sudo -k -v`. The matrix ran locally; CI runs only its contract
-  tests, since the Alpine package pin can disappear. run0 stays manual.
+  `sudo -k -S -p '' -v`. The matrix ran locally; CI runs only its
+  contract tests, since the Alpine package pin can disappear. run0 stays
+  manual.
 - Probe and sampler additions (M4, E07, 03 §6.2, §7.17): collector-set
   version 8 prints a `SELF <pid> <ppid>` marker before READY, which
   `HwsSessionReady` carries for 8.6's protected targets, and the

@@ -3941,8 +3941,9 @@ exit $?
   sudo's default `timestamp_type` (tty) falls back to per-parent-PID records
   [R: sudoers(5), per review; spike S3], so `exec sudo -n` (whose parent
   becomes the shell's parent) and a validation in another exec channel both
-  miss the cached credential. The trailing `exit $?` is load-bearing: bash execs the
-  last command of a `-c` string implicitly, which has the same effect.
+  miss the cached credential. The trailing `exit $?` is load-bearing:
+  bash execs the last command of a `-c` string implicitly, which has the
+  same effect.
 - **Verified locally [L]** (04, Appendix A, E6 and E8), sudo 1.9.15p5
   without a tty: the prelude works under dash and bash and passes the
   remaining stdin to the command; the `exec` variant fails with "sudo: a

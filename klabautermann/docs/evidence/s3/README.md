@@ -88,7 +88,9 @@ any command, as the prelude rung needs one.
     minutes before.
   - Locally, against the same Debian 13 sudo, `sudo -k -S -p '' -v`
     ignored the cached record: it refused the wrong password and recorded
-    the right one, so a following `sudo -n` ran.
+    the right one, so a following `sudo -n` ran. sudo(8) says `-k` with
+    a command leaves the cached credentials alone; with `-v` this sudo
+    updated them, so E11 must not depend on either.
   - sudo-rs 0.2.13 also checks the password under `-k`, but records
     nothing, so its next `sudo -n` asks again (rung 4).
   - 03 D65 takes this into admin mode's validation (E11).
