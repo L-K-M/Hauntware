@@ -162,5 +162,22 @@ void main() {
         0,
       );
     });
+
+    test('a missing container counter is unknown, not idle', () {
+      expect(
+        cpuPercentDelta(
+          const CpuStats(systemCpuUsage: 100, onlineCpus: 4),
+          const CpuStats(systemCpuUsage: 200, onlineCpus: 4),
+        ),
+        isNull,
+      );
+      expect(
+        cpuPercentDelta(
+          const CpuStats(totalUsage: 50, systemCpuUsage: 100),
+          const CpuStats(systemCpuUsage: 200),
+        ),
+        isNull,
+      );
+    });
   });
 }

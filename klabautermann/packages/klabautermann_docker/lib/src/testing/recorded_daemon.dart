@@ -65,7 +65,12 @@ final class RecordedExchange {
     if (h['connection']?.toLowerCase() == 'close') return true;
     // A body with neither length nor chunked framing ends at EOF; HEAD,
     // 1xx, 204 and 304 responses have no body at all.
-    if (method == 'HEAD' || status == 204 || status == 304) return false;
+    if (method == 'HEAD' ||
+        (status >= 100 && status < 200) ||
+        status == 204 ||
+        status == 304) {
+      return false;
+    }
     return !h.containsKey('content-length') &&
         h['transfer-encoding']?.toLowerCase() != 'chunked';
   }
@@ -241,6 +246,7 @@ final class _Connection {
   bool _stopped = false;
 
   void _onData(List<int> chunk) {
+    if (_stopped) return;
     _buffer.addAll(chunk);
     while (!_stopped) {
       final end = _headEnd(_buffer);
@@ -355,6 +361,10 @@ Map<String, String> _normalizeQuery(Map<String, String> query) {
   return out;
 }
 
+// Engine API defaults of the endpoints the corpus records: `stream` is
+// true for stats, which is why it may be left out. `attach`, whose
+// `stream` defaults to false, is not recorded; recording it needs these
+// keyed by endpoint.
 const Map<String, String> _queryDefaults = {
   'all': 'false',
   'size': 'false',

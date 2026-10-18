@@ -275,10 +275,13 @@ int? effectiveMemoryUsage(MemoryStats m) {
 /// * onlineCpus * 100`, null when no previous sample exists (one-shot
 /// stats carry a meaningless `precpu_stats`; 03 §5.6), when the system
 /// counter did not advance, or when the container's counter went back
-/// (a restart). An idle container whose counter stood still is 0 %:
-/// the recorded Podman stream shows exactly that.
+/// (a restart), or when either sample lacks the container's counter.
+/// An idle container whose counter stood still is 0 %: the recorded
+/// Podman stream shows exactly that.
 double? cpuPercentDelta(CpuStats previous, CpuStats current) {
-  final cpuDelta = (current.totalUsage ?? 0) - (previous.totalUsage ?? 0);
+  final (before, now) = (previous.totalUsage, current.totalUsage);
+  if (before == null || now == null) return null;
+  final cpuDelta = now - before;
   final systemDelta =
       (current.systemCpuUsage ?? 0) - (previous.systemCpuUsage ?? 0);
   if (cpuDelta < 0 || systemDelta <= 0) return null;

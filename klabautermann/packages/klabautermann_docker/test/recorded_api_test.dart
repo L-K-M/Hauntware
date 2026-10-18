@@ -53,9 +53,9 @@ void main() {
         for (final chunking in RecordedChunking.values) {
           final daemon = RecordedDaemon(corpus, chunking: chunking);
           final http = DockerHttpClient(daemon.opener);
+          addTearDown(http.close);
           final (client, negotiation) = await negotiateDockerClient(http);
           final ping = await client.ping();
-          await http.close();
 
           expect(negotiation.negotiated, corpus.apiVersion);
           expect(negotiation.serverMax, corpus.apiVersion);
@@ -340,8 +340,8 @@ void main() {
           final expected = [
             for (final l in follow)
               if (_timestamp(l) > since) _key(l),
-          ];
-          expect(resumed..sort(), expected..sort());
+          ]..sort();
+          expect(resumed..sort(), expected);
           expect(resumed, isNotEmpty);
 
           // An inclusive resend from the last delivered timestamp repeats
