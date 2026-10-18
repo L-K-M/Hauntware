@@ -2453,6 +2453,22 @@ stacks instead of failing the check that found the limit. Whether
 low-session mode should pause the slow sampler for an exec, or tell a
 check waiting for a channel from a failed one, is open for M4.
 
+As built in M4 (E13, plan M6), it does both. Before a user-initiated
+step that needs a session (an action plan's reads, a run with a shell
+step or a detached run, the crontab read), the engine counts the
+sampler sessions plus the slots its `ChannelQuota` holds. When that
+reaches the learned limit, it closes the slow sampler for the step and
+reopens it after, with a fresh READY handshake
+(`SamplingScheduler.yieldSlowSampler`). Steps that overlap share one
+pause. The fast sampler is never paused, so the overview stays live
+while the slow streams go stale for the step. Stack checks are
+background work and pause nothing: when the samplers alone fill the
+learned limit they run no exec and read `StackVerifying(waiting: StackWait.channel)`, "Waiting for a
+channel". The engine keeps no verdict for them and checks them again
+with the next stacks list, not in the same pass, so a check waiting at
+`MaxSessions 2` does not spin. At a learned limit of 3, the check runs
+beside the samplers.
+
 ### 5.3 Failure classification
 
 | Symptom | Classification | UI |

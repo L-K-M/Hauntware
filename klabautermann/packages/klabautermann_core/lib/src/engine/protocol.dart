@@ -2411,9 +2411,19 @@ sealed class StackVerdict {
   const StackVerdict();
 }
 
-/// The engine is checking the project's files.
+/// The engine is checking the project's files, or waits to: [waiting]
+/// says why a check could not start yet.
 final class StackVerifying extends StackVerdict {
-  const StackVerifying();
+  const StackVerifying({this.waiting});
+
+  final StackWait? waiting;
+}
+
+/// Why a stack check has not started (M4 plan M6).
+enum StackWait {
+  /// The link has no session channel left at its learned limit: the
+  /// samplers hold them, and a background check does not borrow one.
+  channel,
 }
 
 /// Every config file exists and `compose config --hash '*'` over them

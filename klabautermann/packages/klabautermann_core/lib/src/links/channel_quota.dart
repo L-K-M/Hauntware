@@ -48,6 +48,13 @@ const kLowSessionFollowersMax = 1;
 /// the shares.
 const kSamplerChannels = 2;
 
+/// Whether a link whose learned session limit is [learnedSessionLimit]
+/// has no session left for another exec while [inUse] are held (M4 plan
+/// M6): only a link that learned a limit can be full, since one that
+/// learned none opens up to 03 §5.2's cap of 8 and queues there.
+bool leavesNoSession({required int? learnedSessionLimit, required int inUse}) =>
+    learnedSessionLimit != null && inUse >= learnedSessionLimit;
+
 /// One server's [ChannelShare] slots in use, owned by the engine isolate.
 final class ChannelQuota {
   /// A quota on its own; [ChannelQuotas.of] gives the shared one.
@@ -63,6 +70,9 @@ final class ChannelQuota {
 
   /// How many slots of [share] are taken.
   int held(ChannelShare share) => _held[share]!;
+
+  /// The session channels the shares hold now.
+  int get sessionsHeld => _held.values.fold(0, (sum, held) => sum + held);
 
   /// Takes a slot of [share] and returns true, or returns false when its
   /// slots are all taken or the session limit the link learned

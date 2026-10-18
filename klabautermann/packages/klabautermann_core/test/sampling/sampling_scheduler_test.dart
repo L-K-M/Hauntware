@@ -718,4 +718,84 @@ void main() {
       expect(link.linesOf(_slow), isNot(contains('hw_o ops')));
     });
   });
+
+  group('lending the slow sampler (M4 E13, plan M6)', () {
+    test('a server not sampled has nothing to lend', () async {
+      expect(scheduler.samplerSessions(_s1), 0);
+      expect(await scheduler.yieldSlowSampler(_s1), isNull);
+    });
+
+    test('the slow sampler stops for the step and starts again with its '
+        'handshake, while the fast one samples on', () async {
+      subscribe({SampleStream.core, SampleStream.units});
+      await clock.elapse(const Duration(seconds: 4));
+      expect(scheduler.samplerSessions(_s1), 2);
+      final opened = sessions.length;
+
+      final giveBack = await scheduler.yieldSlowSampler(_s1);
+      expect(giveBack, isNotNull);
+      expect(scheduler.samplerSessions(_s1), 1);
+      expect(link.running.map((p) => p.kind), [_fast]);
+      final fastLines = link.linesOf(_fast).length;
+      final slowLines = link.linesOf(_slow).length;
+      await clock.elapse(const Duration(seconds: 30));
+      expect(link.linesOf(_fast).length, greaterThan(fastLines));
+      expect(link.linesOf(_slow), hasLength(slowLines), reason: 'lent');
+
+      giveBack!();
+      await _until(() => sessions.length > opened);
+      final restarted = sessions.last;
+      expect(restarted.kind, _slow);
+      await _until(() => restarted.state is SamplerReady);
+      expect(scheduler.samplerSessions(_s1), 2);
+      expect(link.running.map((p) => p.kind), unorderedEquals([_fast, _slow]));
+      // Its streams came due while it was lent: the next tick reads them,
+      // and the link probed already, so no probe goes out again.
+      await clock.elapse(const Duration(seconds: 15));
+      expect(link.linesOf(_slow).length, greaterThan(slowLines));
+      expect(
+        link.linesOf(_slow).where((l) => l.contains('probe')),
+        hasLength(1),
+      );
+
+      // Giving it back twice starts nothing more.
+      giveBack();
+      await settle();
+      expect(sessions.last, same(restarted));
+    });
+
+    test('steps that overlap share one lending, and the sampler starts '
+        'after the last', () async {
+      subscribe({SampleStream.core});
+      await clock.elapse(const Duration(seconds: 4));
+      final opened = sessions.length;
+
+      final first = await scheduler.yieldSlowSampler(_s1);
+      final second = await scheduler.yieldSlowSampler(_s1);
+      expect(scheduler.samplerSessions(_s1), 1);
+      first!();
+      await settle();
+      expect(sessions, hasLength(opened), reason: 'still lent');
+      expect(link.running.map((p) => p.kind), [_fast]);
+
+      second!();
+      await _until(() => sessions.length == opened + 1);
+      expect(sessions.last.kind, _slow);
+    });
+
+    test('a lending that ends after the link went starts no sampler on '
+        'it', () async {
+      subscribe({SampleStream.core});
+      await clock.elapse(const Duration(seconds: 4));
+      final giveBack = await scheduler.yieldSlowSampler(_s1);
+      setLink(null);
+      await settle();
+      final opened = sessions.length;
+
+      giveBack!();
+      await settle();
+      expect(sessions, hasLength(opened));
+      expect(scheduler.samplerSessions(_s1), 0);
+    });
+  });
 }

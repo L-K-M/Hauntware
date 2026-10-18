@@ -4801,6 +4801,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String dockerStackVerdict(String verdict) {
     String _temp0 = intl.Intl.selectLogic(verdict, {
       'verifying': 'Checking source…',
+      'waiting': 'Waiting for a channel',
       'verified': 'Verified source',
       'notOnHost': 'Source not on host',
       'other': 'Unverified source',

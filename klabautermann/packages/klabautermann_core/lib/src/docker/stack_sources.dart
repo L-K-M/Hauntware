@@ -52,6 +52,14 @@ typedef StackCommandRunner =
       required int maxOutputBytes,
     });
 
+/// Thrown by a [StackCommandRunner] instead of waiting for a session
+/// channel the link has none left for (M4 plan M6): the check reads
+/// waiting for a channel rather than failed, and runs again with the
+/// next stacks list.
+final class StackCheckWaiting implements Exception {
+  const StackCheckWaiting();
+}
+
 /// How long a check's command may take [E]: `config` reads and
 /// interpolates every file, and a Python Compose v1 starts slowly.
 const _commandTimeout = Duration(seconds: 30);
@@ -115,6 +123,9 @@ final class StackSources {
   final Map<String, ({String key, StackVerdict verdict})> _verdicts = {};
   final Map<String, Future<StackVerdict>> _checking = {};
 
+  /// The keys of projects whose last check waited for a channel.
+  final Set<String> _waiting = {};
+
   /// Bumped by [forget], so a check under way then keeps no verdict.
   int _generation = 0;
 
@@ -126,7 +137,11 @@ final class StackSources {
   /// decide, otherwise [StackVerifying].
   Map<String, StackVerdict> known(ComposeGrouping grouping) => {
     for (final project in grouping.projects)
-      project.name: _known(project) ?? const StackVerifying(),
+      project.name:
+          _known(project) ??
+          (_waiting.contains(_keyOf(project))
+              ? const StackVerifying(waiting: StackWait.channel)
+              : const StackVerifying()),
   };
 
   /// Forgets every verdict: a view opened the stacks again, and the
@@ -135,6 +150,7 @@ final class StackSources {
     _generation++;
     _verdicts.clear();
     _checking.clear();
+    _waiting.clear();
   }
 
   /// Checks each project of [grouping] whose verdict is not known.
@@ -148,10 +164,17 @@ final class StackSources {
     if (_known(project) case final known?) return Future.value(known);
     final key = _keyOf(project);
     final generation = _generation;
-    return _checking[key] ??= _check(project).then((verdict) {
+    return _checking[key] ??= _checkOrWait(project).then((verdict) {
       if (generation == _generation) {
         _checking.remove(key);
-        _verdicts[project.name] = (key: key, verdict: verdict);
+        // A check that waited for a channel decided nothing: the next
+        // stacks list checks again.
+        if (verdict is StackVerifying) {
+          _waiting.add(key);
+        } else {
+          _waiting.remove(key);
+          _verdicts[project.name] = (key: key, verdict: verdict);
+        }
       }
       return verdict;
     });
@@ -230,11 +253,19 @@ final class StackSources {
 
   // -- verification ---------------------------------------------------
 
+  Future<StackVerdict> _checkOrWait(ComposeProject project) async {
+    try {
+      return await _check(project);
+    } on StackCheckWaiting {
+      return const StackVerifying(waiting: StackWait.channel);
+    }
+  }
+
   Future<StackVerdict> _check(ComposeProject project) async {
     final (:verdict, :invocation, :expected) = _fromLabels(project);
     if (verdict != null) return verdict;
 
-    final present = await _filesPresent(project.configFiles);
+    final present = await _filesPresent(project.configFiles, mayWait: true);
     if (present == null) {
       return const StackUnverified(StackUnverifiedReason.checkFailed);
     }
@@ -244,7 +275,7 @@ final class StackSources {
       );
     }
 
-    final cli = await detectCli();
+    final cli = await _detectCli(mayWait: true);
     if (cli == null) {
       return const StackUnverified(StackUnverifiedReason.checkFailed);
     }
@@ -304,8 +335,17 @@ final class StackSources {
 
   /// Whether each of [files] is a regular file, from one exec; null when
   /// the exec failed or answered something else.
-  Future<List<bool>?> _filesPresent(List<String> files) async {
-    final result = await _command(['sh', '-c', _testScript, 'sh', ...files]);
+  Future<List<bool>?> _filesPresent(
+    List<String> files, {
+    bool mayWait = false,
+  }) async {
+    final result = await _command([
+      'sh',
+      '-c',
+      _testScript,
+      'sh',
+      ...files,
+    ], mayWait: mayWait);
     if (result == null || !result.succeeded) return null;
     final codes = const LineSplitter().convert(result.stdout.trim());
     if (codes.length != files.length) return null;
@@ -315,21 +355,33 @@ final class StackSources {
   /// The CLIs, looked for once in one exec, for verification and the
   /// Access tab's [DockerComposeQuery]; null, and looked for again next
   /// time, when the exec failed.
-  Future<DockerComposeCli?> detectCli() {
-    if (_cli case final cli?) return Future.value(cli);
-    return _detecting ??= () async {
-      final plugin = composeVersion(socketPath: _socketPath, json: false);
-      final result = await _command([
-        'sh',
-        '-c',
-        _cliScript,
-        'sh',
-        ...plugin.argv,
-      ]);
-      _detecting = null;
-      if (result == null || !result.succeeded) return null;
-      return _cli = _parseCli(result.stdout);
-    }();
+  Future<DockerComposeCli?> detectCli() => _detectCli();
+
+  /// [detectCli]; with [mayWait], a run that would wait for a channel
+  /// throws [StackCheckWaiting] rather than reading as failed.
+  Future<DockerComposeCli?> _detectCli({bool mayWait = false}) async {
+    if (_cli case final cli?) return cli;
+    try {
+      return await (_detecting ??= () async {
+        try {
+          final plugin = composeVersion(socketPath: _socketPath, json: false);
+          final result = await _command([
+            'sh',
+            '-c',
+            _cliScript,
+            'sh',
+            ...plugin.argv,
+          ], mayWait: true);
+          if (result == null || !result.succeeded) return null;
+          return _cli = _parseCli(result.stdout);
+        } finally {
+          _detecting = null;
+        }
+      }());
+    } on StackCheckWaiting {
+      if (mayWait) rethrow;
+      return null;
+    }
   }
 
   static DockerComposeCli? _parseCli(String stdout) {
@@ -357,7 +409,7 @@ final class StackSources {
     ComposeInvocation invocation,
     Map<String, Set<String>> expected,
   ) async {
-    final result = await _command(invocation.argv);
+    final result = await _command(invocation.argv, mayWait: true);
     if (result == null || result.exitCode == null) {
       return const StackUnverified(StackUnverifiedReason.checkFailed);
     }
@@ -392,8 +444,13 @@ final class StackSources {
         : const StackUnverified(StackUnverifiedReason.hashMismatch);
   }
 
-  /// Runs [argv] through 03 §8.8's quoting; null when the link failed.
-  Future<RemoteCommandResult?> _command(List<String> argv) async {
+  /// Runs [argv] through 03 §8.8's quoting; null when the link failed,
+  /// or when it would wait for a channel unless [mayWait] lets
+  /// [StackCheckWaiting] through.
+  Future<RemoteCommandResult?> _command(
+    List<String> argv, {
+    bool mayWait = false,
+  }) async {
     try {
       return await _run(
         HostCommands.commandLine(argv, quote: quoteShellWord),
@@ -403,6 +460,9 @@ final class StackSources {
     } on RemoteCommandException {
       return null;
     } on ChannelOpenException {
+      return null;
+    } on StackCheckWaiting {
+      if (mayWait) rethrow;
       return null;
     }
   }

@@ -123,6 +123,7 @@ final class DockerRouter {
     required this._linkFor,
     required this._emit,
     this._adminFor,
+    this._samplerSessions,
     ChannelQuotas? quotas,
     this._startTimer = Timer.new,
     this._now = DateTime.now,
@@ -141,6 +142,10 @@ final class DockerRouter {
   /// Each server's admin session, whose elevation the sudo relay (rank 3)
   /// runs through; absent in an engine without admin mode.
   final AdminSession? Function(String serverId)? _adminFor;
+
+  /// The session channels each server's samplers hold, which a stack
+  /// check counts before it takes one more (M4 plan M6); none without it.
+  final int Function(String serverId)? _samplerSessions;
   final ChannelQuotas _quotas;
   final Timer Function(Duration duration, void Function() callback) _startTimer;
   final DateTime Function() _now;
@@ -564,16 +569,27 @@ final class DockerRouter {
       case _Ready(:final endpoint):
         endpoint.stacks = StackSources(
           socketPath: endpoint.route.socketPath,
-          run: (command, {required timeout, required maxOutputBytes}) =>
-              _shortAction(
-                session,
-                link,
-                () => link.run(
-                  command,
-                  timeout: timeout,
-                  maxOutputBytes: maxOutputBytes,
-                ),
+          run: (command, {required timeout, required maxOutputBytes}) {
+            // A background check does not wait for a session the samplers
+            // hold at the link's learned limit, nor borrow one (M6). Other
+            // checks and the pooled connection give theirs back, so a check
+            // behind them queues for its slot instead.
+            if (leavesNoSession(
+              learnedSessionLimit: link.seen.learnedSessionLimit,
+              inUse: _samplerSessions?.call(session.serverId) ?? 0,
+            )) {
+              throw const StackCheckWaiting();
+            }
+            return _shortAction(
+              session,
+              link,
+              () => link.run(
+                command,
+                timeout: timeout,
+                maxOutputBytes: maxOutputBytes,
               ),
+            );
+          },
           openFileSystem: link.openFileSystem,
           admin: () => _adminFor?.call(session.serverId),
         );
