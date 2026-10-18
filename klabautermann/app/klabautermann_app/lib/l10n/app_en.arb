@@ -3654,5 +3654,202 @@
         "type": "String"
       }
     }
+  },
+  "actionPreviewTitle": "Review before it runs",
+  "@actionPreviewTitle": {
+    "description": "Title of the action preview (SAF-04), which shows exactly what will run before the user confirms."
+  },
+  "actionPreviewTarget": "Target: {target}",
+  "@actionPreviewTarget": {
+    "description": "Line naming the target in the action preview; target is the unit, process, container, image or stack name.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "actionPreviewSteps": "What will run",
+  "@actionPreviewSteps": {
+    "description": "Heading above the exact commands and API requests in the action preview."
+  },
+  "actionPreviewRoot": "root",
+  "@actionPreviewRoot": {
+    "description": "Badge on a step that runs as root through admin mode (SAF-03). Lowercase on purpose: the account name."
+  },
+  "actionPreviewRootDetail": "This step runs as root through admin mode.",
+  "@actionPreviewRootDetail": {
+    "description": "Tooltip and screen reader label of the root badge on a step in the action preview."
+  },
+  "actionPreviewRunner": "Runs as {identity}",
+  "@actionPreviewRunner": {
+    "description": "Line naming who runs the steps; identity is an account name such as root or deploy.",
+    "placeholders": {
+      "identity": {
+        "type": "String"
+      }
+    }
+  },
+  "actionPreviewRunnerEngine": "Runs as {identity} through {engine}",
+  "@actionPreviewRunnerEngine": {
+    "description": "Line naming who runs the steps and through which container engine.",
+    "placeholders": {
+      "identity": {
+        "type": "String"
+      },
+      "engine": {
+        "type": "String"
+      }
+    }
+  },
+  "actionPreviewCredentials": "{credentials, select, session{Signs in with this connection's own sign-in.} adminPassword{Uses the admin mode password.} passwordless{Needs no password.} other{}}",
+  "@actionPreviewCredentials": {
+    "description": "Line saying which credentials the run uses; credentials is the engine's RunnerCredentials name.",
+    "placeholders": {
+      "credentials": {
+        "type": "String"
+      }
+    }
+  },
+  "actionPreviewHostWrites": "What it leaves on the server",
+  "@actionPreviewHostWrites": {
+    "description": "Heading above the host writes the action causes (03 §8.11)."
+  },
+  "actionPreviewHostWrite": "{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine's own state} loginRecords{Login records, as every SSH command leaves} other{A change on the server}}",
+  "@actionPreviewHostWrite": {
+    "description": "One host write in the action preview; row is the engine's HostWriteRow name.",
+    "placeholders": {
+      "row": {
+        "type": "String"
+      }
+    }
+  },
+  "actionPreviewImpact": "{kind, select, dropsSession{This can drop your connection to the server.} stopsContainers{This stops {count} running containers.} removesVolumes{This deletes the container's volumes and the data in them.} forcesImageInUse{{count} containers still use this image.} interruptsTarget{This interrupts what the target is doing.} other{}}",
+  "@actionPreviewImpact": {
+    "description": "The action's impact in the preview; kind is the engine's ImpactKind name and count a number of containers.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "actionPreviewProtected": "{reason, select, builtIn{Protected: Klabautermann always protects this target.} sessionPath{Protected: your connection to the server runs through it.} publishesSessionPort{Protected: it publishes the SSH port or a VPN port.} userMarked{Protected: you marked it protected.} other{Protected.}}",
+  "@actionPreviewProtected": {
+    "description": "Why the target is protected (SAF-22); reason is the engine's ProtectedReason name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "actionPreviewOwnership": "Managed by {manager}. Acting on it here can conflict with {manager}.",
+  "@actionPreviewOwnership": {
+    "description": "Notice in the action preview when another tool manages the container or stack (03 §8.7).",
+    "placeholders": {
+      "manager": {
+        "type": "String"
+      }
+    }
+  },
+  "actionPreviewDanger": "Warnings",
+  "@actionPreviewDanger": {
+    "description": "Heading above the danger findings in the action preview (AI-01)."
+  },
+  "actionPreviewFinding": "{severity, select, critical{Critical} other{Warning}}: {explanation}",
+  "@actionPreviewFinding": {
+    "description": "One danger finding in the action preview (AI-01): its severity, then the linter's explanation.",
+    "placeholders": {
+      "severity": {
+        "type": "String"
+      },
+      "explanation": {
+        "type": "String"
+      }
+    }
+  },
+  "actionConfirmNames": "This acts on {target}.",
+  "@actionConfirmNames": {
+    "description": "Confirmation line for an action that needs an acknowledgement (SAF-05 tier 1).",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "actionConfirmType": "Type {target} to confirm",
+  "@actionConfirmType": {
+    "description": "Label of the field where the user types the target's name to confirm a protected or irreversible action (SAF-05 tier 2).",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "actionConfirmRun": "Run",
+  "@actionConfirmRun": {
+    "description": "Button that runs the previewed action."
+  },
+  "actionConfirmCancel": "Cancel",
+  "@actionConfirmCancel": {
+    "description": "Button that closes the action preview without running anything."
+  },
+  "actionRunning": "Running on {target}",
+  "@actionRunning": {
+    "description": "Toast when a confirmed action starts.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "actionSucceeded": "Done: {target}",
+  "@actionSucceeded": {
+    "description": "Toast when an action finished successfully.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "actionFailed": "{target} did not finish: {failure, select, noLink{there is no connection to the server.} revalidation{the target changed since the preview.} elevationRefused{admin mode refused the step.} stepFailed{a step failed.} transport{the connection failed during the run.} unsupportedStep{this version cannot run one of its steps.} adminRequired{it needs admin mode.} other{it failed.}}",
+  "@actionFailed": {
+    "description": "Toast when an action failed; failure is the engine's ActionFailure name.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      },
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "actionFailedPlain": "{target} did not finish.",
+  "@actionFailedPlain": {
+    "description": "Toast when an action failed without a typed reason.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "actionCancelled": "{target} was cancelled.",
+  "@actionCancelled": {
+    "description": "Toast when an action was cancelled.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "actionRefused": "{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} other{The action was refused.}}",
+  "@actionRefused": {
+    "description": "Toast when the engine refused to plan or run an action; reason is the engine's ActionRefusalReason name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
   }
 }

@@ -1,0 +1,82 @@
+import 'package:flutter/widgets.dart';
+
+import '../../controllers/operations_controller.dart';
+import '../server_safety.dart';
+
+/// Every place the app offers an action (SAF-06): one registry, so a
+/// single test proves read-only hides each. E21 and E22 build the
+/// entries; each wraps its control in an [ActionEntry] with its point.
+enum ActionEntryPoint {
+  /// The Processes tab's signal menu (PRC-02).
+  processSignal,
+
+  /// A unit's verbs on its page and in its row menu (SVC-03).
+  unitVerb,
+
+  /// "Run now" on a timer (JOB-08).
+  timerRunNow,
+
+  /// A container's state verbs (CTR-02).
+  containerVerb,
+
+  /// Removing a container (CTR-06).
+  containerRemove,
+
+  /// Removing an image (IMG-02).
+  imageRemove,
+
+  /// A stack's start, stop and restart (STK-03).
+  stackVerb,
+
+  /// A stack's pull and redeploy (STK-06).
+  stackRedeploy,
+}
+
+/// The operations controller for every route, which action entries plan
+/// and run through. Absent in tests that leave it out.
+class OperationsScope extends InheritedWidget {
+  const OperationsScope({
+    super.key,
+    required this.operations,
+    required super.child,
+  });
+
+  final OperationsController operations;
+
+  static OperationsController? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<OperationsScope>()?.operations;
+
+  @override
+  bool updateShouldNotify(OperationsScope oldWidget) =>
+      operations != oldWidget.operations;
+}
+
+/// Shows [child], an action's control at [point], only where actions on
+/// [serverId] are allowed and not hidden: management on (SAF-01), the
+/// server and the app not read-only (SAF-06). Without safety preferences
+/// nothing is allowed. The engine refuses such plans too; hiding them
+/// keeps screen sharing safe.
+class ActionEntry extends StatelessWidget {
+  const ActionEntry({
+    super.key,
+    required this.serverId,
+    required this.point,
+    required this.child,
+  });
+
+  final String serverId;
+  final ActionEntryPoint point;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final safety = SafetyScope.maybeOf(context);
+    if (safety == null) return const SizedBox.shrink();
+    final policy = safety.value;
+    if (!serverSafetyIn(policy, serverId).management ||
+        serverReadOnlyIn(policy, serverId)) {
+      return const SizedBox.shrink();
+    }
+    return child;
+  }
+}

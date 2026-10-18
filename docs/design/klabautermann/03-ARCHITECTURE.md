@@ -4184,6 +4184,23 @@ OperationPlan {
   `chown --reference`, `chmod --reference`, `restorecon` when SELinux
   enforces [U: ACL and label details, spike S6]).
 
+As built in M4 (E20, `app/klabautermann_app/lib/ui/actions/`), the app
+asks for one preview at a time through `OperationsController`: the
+engine's answer to `PlanAction` carries no request id, and planning
+reads the host, so answers can come out of order; the preview is modal,
+so the app never needs two. The preview is a dialog on wide windows and
+a bottom sheet below 600 dp. It shows the target, each step's exact
+command line or API request in the monospace stack with a root badge on
+elevated steps (SAF-03), the danger findings, protection, impact and
+ownership, who runs it with which credentials, and what it leaves on
+the server, all worded from the engine's typed facts (D35). Tier 1
+names the target; tier 2 enables Run and Enter only once the target's
+name is typed exactly; Escape and Cancel close it. A toast says when a
+run starts and how it ended. `ActionEntry` wraps every action control
+by its `ActionEntryPoint`, hiding it unless the server's actions are
+allowed and nothing is read-only, which one test checks for every
+point.
+
 ### 8.6 Confirmation tiers and protected targets (SAF-05, SAF-22)
 
 | Tier | Examples | Confirmation |

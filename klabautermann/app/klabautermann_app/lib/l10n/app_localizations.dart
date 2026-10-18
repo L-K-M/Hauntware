@@ -4011,6 +4011,156 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{reason, select, inactivity{Admin mode ended after a while without an action.} background{Admin mode ended when Klabautermann went to the background.} linkLost{Admin mode ended when the connection dropped.} serverRemoved{Admin mode ended because the server changed.} other{Admin mode ended.}}'**
   String adminEnded(String reason);
+
+  /// Title of the action preview (SAF-04), which shows exactly what will run before the user confirms.
+  ///
+  /// In en, this message translates to:
+  /// **'Review before it runs'**
+  String get actionPreviewTitle;
+
+  /// Line naming the target in the action preview; target is the unit, process, container, image or stack name.
+  ///
+  /// In en, this message translates to:
+  /// **'Target: {target}'**
+  String actionPreviewTarget(String target);
+
+  /// Heading above the exact commands and API requests in the action preview.
+  ///
+  /// In en, this message translates to:
+  /// **'What will run'**
+  String get actionPreviewSteps;
+
+  /// Badge on a step that runs as root through admin mode (SAF-03). Lowercase on purpose: the account name.
+  ///
+  /// In en, this message translates to:
+  /// **'root'**
+  String get actionPreviewRoot;
+
+  /// Tooltip and screen reader label of the root badge on a step in the action preview.
+  ///
+  /// In en, this message translates to:
+  /// **'This step runs as root through admin mode.'**
+  String get actionPreviewRootDetail;
+
+  /// Line naming who runs the steps; identity is an account name such as root or deploy.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs as {identity}'**
+  String actionPreviewRunner(String identity);
+
+  /// Line naming who runs the steps and through which container engine.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs as {identity} through {engine}'**
+  String actionPreviewRunnerEngine(String identity, String engine);
+
+  /// Line saying which credentials the run uses; credentials is the engine's RunnerCredentials name.
+  ///
+  /// In en, this message translates to:
+  /// **'{credentials, select, session{Signs in with this connection\'s own sign-in.} adminPassword{Uses the admin mode password.} passwordless{Needs no password.} other{}}'**
+  String actionPreviewCredentials(String credentials);
+
+  /// Heading above the host writes the action causes (03 §8.11).
+  ///
+  /// In en, this message translates to:
+  /// **'What it leaves on the server'**
+  String get actionPreviewHostWrites;
+
+  /// One host write in the action preview; row is the engine's HostWriteRow name.
+  ///
+  /// In en, this message translates to:
+  /// **'{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine\'s own state} loginRecords{Login records, as every SSH command leaves} other{A change on the server}}'**
+  String actionPreviewHostWrite(String row);
+
+  /// The action's impact in the preview; kind is the engine's ImpactKind name and count a number of containers.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, dropsSession{This can drop your connection to the server.} stopsContainers{This stops {count} running containers.} removesVolumes{This deletes the container\'s volumes and the data in them.} forcesImageInUse{{count} containers still use this image.} interruptsTarget{This interrupts what the target is doing.} other{}}'**
+  String actionPreviewImpact(String kind, int count);
+
+  /// Why the target is protected (SAF-22); reason is the engine's ProtectedReason name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, builtIn{Protected: Klabautermann always protects this target.} sessionPath{Protected: your connection to the server runs through it.} publishesSessionPort{Protected: it publishes the SSH port or a VPN port.} userMarked{Protected: you marked it protected.} other{Protected.}}'**
+  String actionPreviewProtected(String reason);
+
+  /// Notice in the action preview when another tool manages the container or stack (03 §8.7).
+  ///
+  /// In en, this message translates to:
+  /// **'Managed by {manager}. Acting on it here can conflict with {manager}.'**
+  String actionPreviewOwnership(String manager);
+
+  /// Heading above the danger findings in the action preview (AI-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Warnings'**
+  String get actionPreviewDanger;
+
+  /// One danger finding in the action preview (AI-01): its severity, then the linter's explanation.
+  ///
+  /// In en, this message translates to:
+  /// **'{severity, select, critical{Critical} other{Warning}}: {explanation}'**
+  String actionPreviewFinding(String severity, String explanation);
+
+  /// Confirmation line for an action that needs an acknowledgement (SAF-05 tier 1).
+  ///
+  /// In en, this message translates to:
+  /// **'This acts on {target}.'**
+  String actionConfirmNames(String target);
+
+  /// Label of the field where the user types the target's name to confirm a protected or irreversible action (SAF-05 tier 2).
+  ///
+  /// In en, this message translates to:
+  /// **'Type {target} to confirm'**
+  String actionConfirmType(String target);
+
+  /// Button that runs the previewed action.
+  ///
+  /// In en, this message translates to:
+  /// **'Run'**
+  String get actionConfirmRun;
+
+  /// Button that closes the action preview without running anything.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get actionConfirmCancel;
+
+  /// Toast when a confirmed action starts.
+  ///
+  /// In en, this message translates to:
+  /// **'Running on {target}'**
+  String actionRunning(String target);
+
+  /// Toast when an action finished successfully.
+  ///
+  /// In en, this message translates to:
+  /// **'Done: {target}'**
+  String actionSucceeded(String target);
+
+  /// Toast when an action failed; failure is the engine's ActionFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{target} did not finish: {failure, select, noLink{there is no connection to the server.} revalidation{the target changed since the preview.} elevationRefused{admin mode refused the step.} stepFailed{a step failed.} transport{the connection failed during the run.} unsupportedStep{this version cannot run one of its steps.} adminRequired{it needs admin mode.} other{it failed.}}'**
+  String actionFailed(String target, String failure);
+
+  /// Toast when an action failed without a typed reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{target} did not finish.'**
+  String actionFailedPlain(String target);
+
+  /// Toast when an action was cancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'{target} was cancelled.'**
+  String actionCancelled(String target);
+
+  /// Toast when the engine refused to plan or run an action; reason is the engine's ActionRefusalReason name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} other{The action was refused.}}'**
+  String actionRefused(String reason);
 }
 
 class _AppLocalizationsDelegate

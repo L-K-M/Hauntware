@@ -70,6 +70,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/safety_controller.dart': {
     r"'The safety settings were not saved: $error'",
   },
+  // A caller error's diagnostic: the preview is modal, so no screen ever
+  // shows it.
+  'lib/controllers/operations_controller.dart': {
+    "'a preview is already pending'",
+  },
   'lib/controllers/fleet_controller.dart': {
     // The row subtitle's address: host or user@host, with :port when the
     // port is not 22 and an IPv6 host then bracketed before it. Machine

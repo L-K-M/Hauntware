@@ -1326,6 +1326,13 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 action framework (E20): the app plans an action through the
+  engine, shows the preview (exact steps, root badges, danger findings,
+  impact, protection, ownership, runner and host writes) as a dialog or
+  a phone sheet, confirms by tier with typing for tier 2, runs the plan
+  and toasts its end. An entry registry hides every action entry point
+  unless actions are allowed and nothing is read-only. E21 and E22 add
+  the entry points.
 - M4 admin mode in the app (E19b): the server header's admin chip
   turns admin mode on and off and follows the engine's states, tinted
   while on with its end time, and the header says why it failed or

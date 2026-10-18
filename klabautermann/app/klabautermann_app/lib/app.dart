@@ -17,11 +17,14 @@ import 'controllers/appearance_controller.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitoring_controller.dart';
+import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
 import 'controllers/sync_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'theme/app_theme.dart';
+import 'ui/actions/action_entry.dart' show OperationsScope;
+import 'ui/actions/action_preview.dart' show ActionResultToasts;
 import 'ui/adaptive_shell.dart';
 import 'ui/admin_mode_chip.dart' show AdminScope;
 import 'ui/macos_toolbar_band.dart';
@@ -52,6 +55,7 @@ class KlabautermannApp extends StatelessWidget {
     required this.announcements,
     this.safety,
     this.admin,
+    this.operations,
     this.sync,
     this.settingsIssue,
     this.importStoreIssue,
@@ -85,6 +89,10 @@ class KlabautermannApp extends StatelessWidget {
   /// Admin mode per server (03 §8.2), one engine run's like [fleet]. Null
   /// in tests that leave it out, where the header shows no admin chip.
   final AdminController? admin;
+
+  /// Previews and runs of actions (03 §8.5), one engine run's like
+  /// [fleet]. Null in tests that leave it out, where no action can run.
+  final OperationsController? operations;
 
   /// The sync account (03 §4.3), one engine run's like [fleet]; null in
   /// tests that leave sync out, which shows the sync control idle.
@@ -136,6 +144,16 @@ class KlabautermannApp extends StatelessWidget {
     unawaited(Navigator.of(context).pushNamed(kSettingsRoute));
   }
 
+  /// [child] under the run results' toasts, which need the navigator's
+  /// overlay above them; as it is without operations.
+  Widget _withResultToasts(Widget child) => switch (operations) {
+    final operations? => ActionResultToasts(
+      operations: operations,
+      child: child,
+    ),
+    null => child,
+  };
+
   @override
   Widget build(BuildContext context) {
     // Controllers last one engine run (D44), and routes and surfaces keep
@@ -179,9 +197,16 @@ class KlabautermannApp extends StatelessWidget {
               openSettings: (context) => unawaited(_openSettings(context)),
               child: withMacosToolbarBand(toolbarBand, child: child!),
             );
-            final withAdmin = switch (admin) {
-              final admin? => AdminScope(admin: admin, child: scoped),
+            final withOperations = switch (operations) {
+              final operations? => OperationsScope(
+                operations: operations,
+                child: scoped,
+              ),
               null => scoped,
+            };
+            final withAdmin = switch (admin) {
+              final admin? => AdminScope(admin: admin, child: withOperations),
+              null => withOperations,
             };
             return switch (safety) {
               final safety? => SafetyScope(safety: safety, child: withAdmin),
@@ -200,27 +225,29 @@ class KlabautermannApp extends StatelessWidget {
             // its dialogs come up over Settings too.
             child: PromptHost(
               prompts: prompts,
-              child: Builder(
-                builder: (context) {
-                  void openSettings() => unawaited(_openSettings(context));
-                  // The desktop menus and their shortcuts (03 §10.2),
-                  // from the one command registry.
-                  return AppMenuHost(
-                    listenable: fleet,
-                    commands: buildAppCommands(
-                      platform: Theme.of(context).platform,
-                      fleet: fleet,
-                      onOpenSettings: openSettings,
-                    ),
-                    child: AdaptiveShell(
-                      fleet: fleet,
-                      monitoring: monitoring,
-                      coverage: coverage,
-                      onOpenSettings: openSettings,
-                      sync: sync,
-                    ),
-                  );
-                },
+              child: _withResultToasts(
+                Builder(
+                  builder: (context) {
+                    void openSettings() => unawaited(_openSettings(context));
+                    // The desktop menus and their shortcuts (03 §10.2),
+                    // from the one command registry.
+                    return AppMenuHost(
+                      listenable: fleet,
+                      commands: buildAppCommands(
+                        platform: Theme.of(context).platform,
+                        fleet: fleet,
+                        onOpenSettings: openSettings,
+                      ),
+                      child: AdaptiveShell(
+                        fleet: fleet,
+                        monitoring: monitoring,
+                        coverage: coverage,
+                        onOpenSettings: openSettings,
+                        sync: sync,
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ),

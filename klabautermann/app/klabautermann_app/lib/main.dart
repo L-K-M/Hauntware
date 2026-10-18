@@ -15,6 +15,7 @@ import 'controllers/coverage_controller.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitor_set.dart';
 import 'controllers/monitoring_controller.dart';
+import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
 import 'controllers/sync_controller.dart';
 import 'services/engine_keystore.dart';
@@ -171,6 +172,9 @@ Future<void> main(List<String> args) async {
   // Admin mode per server (03 §8.2): the engine runs it and holds the
   // password; the header's chip asks and shows its state.
   final admin = AdminController(engine);
+  // Action previews and runs (03 §8.5): the engine plans and runs them;
+  // the app shows the preview and the results.
+  final operations = OperationsController(engine);
   // Pull-only sync (03 §4.3, D14): the sign-in and rounds the user asks
   // for, and the OS keystore the engine's sync reaches through this
   // isolate, which alone can call the keystore plugin (D62).
@@ -227,6 +231,7 @@ Future<void> main(List<String> args) async {
       announcements: announcements,
       safety: safety,
       admin: admin,
+      operations: operations,
       sync: sync,
       settingsIssue: settings.issue,
       importStoreIssue: importStoreIssue,

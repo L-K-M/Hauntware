@@ -2985,4 +2985,175 @@ class AppLocalizationsEn extends AppLocalizations {
     });
     return '$_temp0';
   }
+
+  @override
+  String get actionPreviewTitle => 'Review before it runs';
+
+  @override
+  String actionPreviewTarget(String target) {
+    return 'Target: $target';
+  }
+
+  @override
+  String get actionPreviewSteps => 'What will run';
+
+  @override
+  String get actionPreviewRoot => 'root';
+
+  @override
+  String get actionPreviewRootDetail =>
+      'This step runs as root through admin mode.';
+
+  @override
+  String actionPreviewRunner(String identity) {
+    return 'Runs as $identity';
+  }
+
+  @override
+  String actionPreviewRunnerEngine(String identity, String engine) {
+    return 'Runs as $identity through $engine';
+  }
+
+  @override
+  String actionPreviewCredentials(String credentials) {
+    String _temp0 = intl.Intl.selectLogic(credentials, {
+      'session': 'Signs in with this connection\'s own sign-in.',
+      'adminPassword': 'Uses the admin mode password.',
+      'passwordless': 'Needs no password.',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get actionPreviewHostWrites => 'What it leaves on the server';
+
+  @override
+  String actionPreviewHostWrite(String row) {
+    String _temp0 = intl.Intl.selectLogic(row, {
+      'userOperationRecords': 'An operation record in your home directory',
+      'rootOperationRecords':
+          'An operation record under /var/lib/klabautermann',
+      'transientUnit': 'A transient systemd unit, gone when it ends',
+      'engineState': 'The container engine\'s own state',
+      'loginRecords': 'Login records, as every SSH command leaves',
+      'other': 'A change on the server',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String actionPreviewImpact(String kind, int count) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'dropsSession': 'This can drop your connection to the server.',
+      'stopsContainers': 'This stops $count running containers.',
+      'removesVolumes':
+          'This deletes the container\'s volumes and the data in them.',
+      'forcesImageInUse': '$count containers still use this image.',
+      'interruptsTarget': 'This interrupts what the target is doing.',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String actionPreviewProtected(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'builtIn': 'Protected: Klabautermann always protects this target.',
+      'sessionPath':
+          'Protected: your connection to the server runs through it.',
+      'publishesSessionPort':
+          'Protected: it publishes the SSH port or a VPN port.',
+      'userMarked': 'Protected: you marked it protected.',
+      'other': 'Protected.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String actionPreviewOwnership(String manager) {
+    return 'Managed by $manager. Acting on it here can conflict with $manager.';
+  }
+
+  @override
+  String get actionPreviewDanger => 'Warnings';
+
+  @override
+  String actionPreviewFinding(String severity, String explanation) {
+    String _temp0 = intl.Intl.selectLogic(severity, {
+      'critical': 'Critical',
+      'other': 'Warning',
+    });
+    return '$_temp0: $explanation';
+  }
+
+  @override
+  String actionConfirmNames(String target) {
+    return 'This acts on $target.';
+  }
+
+  @override
+  String actionConfirmType(String target) {
+    return 'Type $target to confirm';
+  }
+
+  @override
+  String get actionConfirmRun => 'Run';
+
+  @override
+  String get actionConfirmCancel => 'Cancel';
+
+  @override
+  String actionRunning(String target) {
+    return 'Running on $target';
+  }
+
+  @override
+  String actionSucceeded(String target) {
+    return 'Done: $target';
+  }
+
+  @override
+  String actionFailed(String target, String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'there is no connection to the server.',
+      'revalidation': 'the target changed since the preview.',
+      'elevationRefused': 'admin mode refused the step.',
+      'stepFailed': 'a step failed.',
+      'transport': 'the connection failed during the run.',
+      'unsupportedStep': 'this version cannot run one of its steps.',
+      'adminRequired': 'it needs admin mode.',
+      'other': 'it failed.',
+    });
+    return '$target did not finish: $_temp0';
+  }
+
+  @override
+  String actionFailedPlain(String target) {
+    return '$target did not finish.';
+  }
+
+  @override
+  String actionCancelled(String target) {
+    return '$target was cancelled.';
+  }
+
+  @override
+  String actionRefused(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'notImplemented': 'This action is not available yet.',
+      'unknownPlan': 'The preview is out of date. Open it again.',
+      'expiredPlan': 'The preview is out of date. Open it again.',
+      'stalePlan': 'The connection changed since the preview. Open it again.',
+      'confirmationMismatch': 'The confirmation did not match.',
+      'observeOnly': 'Turn on Allow actions for this server first.',
+      'readOnly': 'The server is read-only.',
+      'adminRequired': 'Turn on admin mode first.',
+      'invalidTarget': 'This target cannot be acted on.',
+      'targetChanged': 'The target changed. Look again before acting.',
+      'noLink': 'Connect to the server first.',
+      'other': 'The action was refused.',
+    });
+    return '$_temp0';
+  }
 }
