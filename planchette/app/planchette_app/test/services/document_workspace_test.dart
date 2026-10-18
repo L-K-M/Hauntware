@@ -44,7 +44,10 @@ class MemoryDocuments implements DocumentStore {
   int _activeWrites = 0;
 
   @override
-  Future<TextDocument> load(String path) async {
+  Future<TextDocument> load(
+    String path, {
+    SymlinkPolicy symlinkPolicy = SymlinkPolicy.resolveOnce,
+  }) async {
     await loadGate?.future;
     if (loadFailures[path] case final error?) throw error;
     final value = files[aliases[path] ?? path];
@@ -105,6 +108,7 @@ class MemoryDocuments implements DocumentStore {
     required TextDocument? source,
     required String? expectedSha256,
     TextDocumentMetadata? metadata,
+    DocumentWriteTarget target = DocumentWriteTarget.local,
   }) async {
     writes.add((path: path, text: text, digest: expectedSha256));
     _activeWrites++;

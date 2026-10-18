@@ -494,7 +494,19 @@ void main() {
       expect(teardown, contains('docker rm -fv'));
       final one = _function(api, 'api_capture_one');
       expect(one, contains(r'docker rm -fv $ids'));
+      // A timeout or interrupt skips the tool's own unpause, and a frozen
+      // container ignores SIGKILL under cgroup v1.
+      expect(
+        one.indexOf('unpause paused'),
+        allOf(isNonNegative, lessThan(one.indexOf(r'docker rm -fv $ids'))),
+      );
       expect(one, contains(r'docker volume rm "$sock_volume" "$data_volume"'));
+    });
+
+    test('keeps proxy settings out of the seeded containers', () {
+      // Podman copies its own proxy variables into every container it
+      // creates by default, and inspect records each container's Env.
+      expect(api, contains('http_proxy = false'));
     });
 
     test('writes only to the evidence and work directories', () {

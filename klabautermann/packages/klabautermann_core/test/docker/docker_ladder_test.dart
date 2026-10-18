@@ -434,6 +434,51 @@ void main() {
     });
   });
 
+  group('excluded routes', () {
+    test('an excluded streamlocal route passes its path over', () async {
+      final link = ForwardingLink()
+        ..daemons[_rootful] = PingDaemon()
+        ..daemons[_podman] = PingDaemon();
+      final profile = _profile([_rootful, _podman]);
+      final first = await _route(link, profile);
+
+      final next =
+          await DockerLadder.resolve(link, profile, excluding: {first})
+              as DockerRoute;
+      expect(next.socketPath, _podman);
+      expect(next.rank, DockerRank.streamlocal);
+      // The excluded path was neither opened again nor probed.
+      expect(link.opens, [_rootful, _podman]);
+      expect(link.commands, isEmpty);
+    });
+
+    test('an excluded relay gives way to the next relay of its path, and '
+        'none left reads as no relay', () async {
+      final link = ForwardingLink()..probeAnswers[_rootful] = _disabled;
+      final profile = _profile(
+        [_rootful],
+        tools: const {
+          'docker': '/usr/bin/docker',
+          'podman': null,
+          'socat': '/usr/bin/socat',
+        },
+      );
+      final cli = await _route(link, profile);
+      expect(cli.rank, DockerRank.cliRelay);
+
+      final socat =
+          await DockerLadder.resolve(link, profile, excluding: {cli})
+              as DockerRoute;
+      expect(socat.relayArgv.first, 'socat');
+      expect(
+        (await DockerLadder.resolve(link, profile, excluding: {cli, socat})
+                as DockerRouteNone)
+            .reason,
+        DockerNoRouteReason.noRelay,
+      );
+    });
+  });
+
   group('labels', () {
     test('cover every rank plus none, once each', () async {
       final none = await DockerLadder.resolve(

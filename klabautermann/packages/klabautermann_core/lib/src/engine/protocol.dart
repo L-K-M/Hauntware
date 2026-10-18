@@ -15,12 +15,34 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         ProcsSelection,
         SystemdUnit,
         TimersSnapshot,
-        UnitsSnapshot;
+        UnitsSnapshot,
+        EngineMode,
+        EngineRuntime;
 // A masked process argument (03 §8.9): its display and toString carry the
-// mask, so the app shows a secret only through the reveal action.
+// mask, so the app shows a secret only through the reveal action. The
+// Docker models are plain data too: no field holds a function, and the
+// engine masks the ones that could hold a secret before they cross.
 import 'package:klabautermann_docker/klabautermann_docker.dart'
-    show MaskedValue;
+    show
+        ApiVersion,
+        ContainerHostConfig,
+        ContainerMount,
+        ContainerNetworkSettings,
+        ContainerSummary,
+        DockerServerVersion,
+        EngineInfo,
+        EnvVar,
+        HealthStatus,
+        ImageSummary,
+        MaskedValue;
 import 'package:meta/meta.dart';
+
+import '../docker/docker_ladder.dart'
+    show
+        DockerNoRouteReason,
+        DockerRank,
+        DockerRootEquivalence,
+        DockerRouteLabel;
 
 /// The isolate protocol version; [Hello] and [EngineReady] compare it so an
 /// app and engine built apart fail loudly instead of silently desynchronizing
@@ -100,6 +122,13 @@ import 'package:meta/meta.dart';
 /// confirmed on this device, [ConfirmEndpoints] confirms them,
 /// [EndpointChanged] reports a confirmed one a sync changed, and
 /// [ConnectRejectedReason] gains `endpointNotConfirmed`.
+///
+/// Docker reads then joined v3 the same way (03 §5.8, §5.9, §10.1):
+/// [DockerQuery] gained a `queryId` and reads a sealed [DockerQuerySpec]
+/// instead of an endpoint kind and API arguments, [DockerResult] echoes
+/// the id and carries a sealed [DockerPayload] of typed, masked values
+/// instead of decoded JSON, and [DockerEndpointState] reports the route,
+/// the runtime as the Docker API names it and the negotiated version.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -345,12 +374,25 @@ final class CloseStream extends EngineRequest {
   final String streamId;
 }
 
-/// Runs one read-only Docker Engine query (03 §10.1). Mutations go through
-/// [PlanAction]/[RunAction] so every write is previewed and confirmed.
+/// Runs one read-only Docker Engine query on [serverId]'s engine (03
+/// §7.12 to §7.14, §10.1), answered by one [DockerResult] with [queryId].
+/// The first query for a server has the engine find its route and
+/// negotiate the API (03 §5.8, §5.9), which [DockerEndpointState] then
+/// reports. Mutations go through [PlanAction]/[RunAction] so every write
+/// is previewed and confirmed.
 final class DockerQuery extends EngineRequest {
-  const DockerQuery(this.serverId, this.query);
+  const DockerQuery({
+    required this.serverId,
+    required this.queryId,
+    required this.query,
+  });
 
   final String serverId;
+
+  /// The app's own id for the query, which its [DockerResult] carries.
+  /// The engine echoes it and does not check it for reuse.
+  final String queryId;
+
   final DockerQuerySpec query;
 }
 
@@ -746,18 +788,61 @@ final class LogStreamState extends EngineEvent {
   final LogStreamStatus status;
 }
 
-/// The answer to one [DockerQuery] (03 §10.1): the endpoint's decoded JSON
-/// payload plus any parser warnings (03 §3.4's ParseResult convention).
+/// The answer to the [DockerQuery] [queryId] on [serverId] (03 §10.1):
+/// what it read, or [DockerQueryFailed] with why, plus the parser's
+/// warnings (03 §3.4's ParseResult convention).
 final class DockerResult extends EngineEvent {
   const DockerResult({
     required this.serverId,
+    required this.queryId,
     required this.payload,
     this.warnings = const [],
   });
 
   final String serverId;
-  final Map<String, Object?> payload;
+  final String queryId;
+  final DockerPayload payload;
   final List<String> warnings;
+}
+
+/// What the engine knows of [serverId]'s Docker endpoint (03 §5.8, §5.9),
+/// so the server header names the transport in every mode (E4). Sent
+/// once a [DockerQuery] has named the server, and whenever the phase,
+/// route or negotiated version changes.
+final class DockerEndpointState extends EngineEvent {
+  const DockerEndpointState({
+    required this.serverId,
+    required this.phase,
+    this.route,
+    this.negotiatedApi,
+    this.lowSession = false,
+    this.failure,
+    this.noRouteReason,
+  });
+
+  final String serverId;
+  final DockerEndpointPhase phase;
+
+  /// The route found: always while [DockerEndpointPhase.ready], and
+  /// while failed when the engine answered over it but its API version
+  /// was refused.
+  final DockerEndpointRoute? route;
+
+  /// The API version every path uses (03 §5.8); set while ready.
+  final ApiVersion? negotiatedApi;
+
+  /// Whether 03 §5.2's low-session mode holds. Always false until the
+  /// mode arrives (M3's D09).
+  final bool lowSession;
+
+  /// Why the endpoint failed; set exactly while failed.
+  final DockerEndpointFailure? failure;
+
+  /// Why no rung reached an engine; set with [DockerEndpointFailure.noRoute].
+  final DockerNoRouteReason? noRouteReason;
+
+  /// The header label (03 §5.9): the route's, or none.
+  DockerRouteLabel get label => route?.rank.label ?? DockerRouteLabel.none;
 }
 
 /// One Docker Engine `/events` record (03 §10.1); kept opaque until the
@@ -1416,35 +1501,325 @@ enum LogStreamEndReason {
   failed,
 }
 
-/// Which read-only endpoint a [DockerQuery] runs (03 §7.12 to §7.15).
-enum DockerQueryKind {
-  containers,
-  images,
-  networks,
-  volumes,
-  info,
-  inspect,
-  logs,
-  stats,
-  events,
+/// What a [DockerQuery] reads (03 §7.12 to §7.14).
+@immutable
+sealed class DockerQuerySpec {
+  const DockerQuerySpec();
 }
 
-/// One read-only Docker Engine query (03 §10.1).
+/// The engine panel (DKE-01): `/info`, with the `/version` the endpoint
+/// negotiated over. Answered by [DockerEnginePayload].
+final class DockerEngineQuery extends DockerQuerySpec {
+  const DockerEngineQuery();
+}
+
+/// Every container, stopped ones too (CTR-01). Answered by
+/// [DockerContainersPayload].
+final class DockerContainersQuery extends DockerQuerySpec {
+  const DockerContainersQuery();
+}
+
+/// One container's inspect (CTR-03, CTR-04). Answered by
+/// [DockerContainerPayload].
+final class DockerContainerQuery extends DockerQuerySpec {
+  const DockerContainerQuery(this.containerId);
+
+  /// The container's id or name.
+  final String containerId;
+}
+
+/// The image list (IMG-01). Answered by [DockerImagesPayload].
+final class DockerImagesQuery extends DockerQuerySpec {
+  const DockerImagesQuery();
+}
+
+/// What a [DockerResult] carries.
 @immutable
-final class DockerQuerySpec {
-  const DockerQuerySpec({
-    required this.kind,
-    this.targetId,
-    this.parameters = const {},
+sealed class DockerPayload {
+  const DockerPayload();
+}
+
+/// The engine's `/info` and `/version` (DKE-01).
+final class DockerEnginePayload extends DockerPayload {
+  const DockerEnginePayload(this.info, this.version);
+
+  final EngineInfo info;
+  final DockerServerVersion version;
+}
+
+/// The container list (CTR-01), labels masked by key. Each
+/// [ContainerSummary.command] is null: the list's command line can hold
+/// a secret, and [ContainerDetails] carries it masked (03 §8.9).
+final class DockerContainersPayload extends DockerPayload {
+  const DockerContainersPayload(this.containers);
+
+  final List<ContainerSummary> containers;
+}
+
+/// One inspected container, masked (03 §8.9).
+final class DockerContainerPayload extends DockerPayload {
+  const DockerContainerPayload(this.container);
+
+  final ContainerDetails container;
+}
+
+/// The image list (IMG-01), labels masked by key.
+final class DockerImagesPayload extends DockerPayload {
+  const DockerImagesPayload(this.images);
+
+  final List<ImageSummary> images;
+}
+
+/// The query read nothing, for [failure]; [detail] is the daemon's own
+/// message or the transport error, for diagnostics.
+final class DockerQueryFailed extends DockerPayload {
+  const DockerQueryFailed(this.failure, {this.detail});
+
+  final DockerQueryFailure failure;
+  final String? detail;
+}
+
+/// Why a [DockerQuery] read nothing.
+enum DockerQueryFailure {
+  /// The server is not in the fleet.
+  notInFleet,
+
+  /// The server has no ready link.
+  linkUnavailable,
+
+  /// The server's capability probe has not answered on this link, so
+  /// the engine cannot look for its sockets yet (03 §5.4).
+  profileUnknown,
+
+  /// The endpoint failed; its [DockerEndpointState] says why. A later
+  /// query looks for it again.
+  endpointUnavailable,
+
+  /// The server already holds the most queries waiting for its endpoint.
+  tooManyQueries,
+
+  /// The query names no container.
+  invalidQuery,
+
+  /// The object is gone (404); a list query shows what remains.
+  notFound,
+
+  /// The daemon refused or failed the call.
+  daemonError,
+
+  /// The connection to the daemon failed, timed out or carried malformed
+  /// HTTP.
+  connectionFailed,
+
+  /// The endpoint closed before the query ran: its link went, the app
+  /// disconnected, or the server left the fleet or changed endpoint.
+  cancelled,
+}
+
+/// Where a [DockerEndpointState] is.
+enum DockerEndpointPhase {
+  /// The server has no ready link, or its capability probe has not
+  /// answered on it.
+  waiting,
+
+  /// The engine runs the ladder and negotiates over the route found.
+  resolving,
+
+  /// Queries run over the route.
+  ready,
+
+  /// No route reached an engine that answers with an API version this
+  /// client takes.
+  failed,
+}
+
+/// Why a [DockerEndpointState] failed.
+enum DockerEndpointFailure {
+  /// No rung reached an engine socket (03 §5.9).
+  noRoute,
+
+  /// Routes opened, but the engine answered `_ping` and `/version` over
+  /// none of them.
+  unreachable,
+
+  /// The engine's newest API version is below the client floor 1.41
+  /// (03 §5.8).
+  belowClientFloor,
+
+  /// The engine's `MinAPIVersion` is above every version this client was
+  /// tested against.
+  belowServerMinimum,
+
+  /// The engine reported no API version this client can read.
+  apiVersionUnknown,
+
+  /// The link failed while the ladder ran.
+  linkError,
+}
+
+/// The route a [DockerEndpointState] names (03 §5.4, §5.9; SAF-08).
+@immutable
+final class DockerEndpointRoute {
+  const DockerEndpointRoute({
+    required this.rank,
+    required this.socketPath,
+    required this.runtime,
+    required this.rootEquivalence,
+    this.mode,
   });
 
-  final DockerQueryKind kind;
+  final DockerRank rank;
+  final String socketPath;
 
-  /// Container/image/etc. id for `inspect`, `logs`, `stats`.
-  final String? targetId;
+  /// The engine as its API names it: Podman when `_ping` carries
+  /// `Libpod-API-Version` or `/version` names a Podman component, even
+  /// behind a Docker path (M13), otherwise Docker.
+  final EngineRuntime runtime;
 
-  /// Endpoint arguments (filters, `all`, `since`); keys are the API's.
-  final Map<String, String> parameters;
+  /// Rootful or rootless by the path; null for a custom path.
+  final EngineMode? mode;
+
+  final DockerRootEquivalence rootEquivalence;
+}
+
+/// One inspected container as it crosses (03 §7.12 CTR-03, CTR-04): the
+/// inspect fields the panels use, with the command line and the health
+/// checks' output masked by the engine (03 §8.9), so a secret reaches the
+/// app only behind [MaskedValue]. Env and label values are masked by key.
+@immutable
+final class ContainerDetails {
+  const ContainerDetails({
+    required this.id,
+    this.name,
+    this.created,
+    this.image,
+    this.platform,
+    this.restartCount,
+    this.path,
+    this.args = const [],
+    this.state,
+    this.config,
+    this.hostConfig,
+    this.mounts = const [],
+    this.networkSettings,
+  });
+
+  final String id;
+  final String? name;
+  final DateTime? created;
+
+  /// The image id; [ContainerDetailsConfig.image] names what it was
+  /// created from.
+  final String? image;
+  final String? platform;
+  final int? restartCount;
+
+  /// The program the container runs (`Path`), as it is: 03 §8.9 never
+  /// reads a program as an option.
+  final String? path;
+
+  /// `Args`, masked as the command line after [path].
+  final List<MaskedValue> args;
+
+  final ContainerDetailsState? state;
+  final ContainerDetailsConfig? config;
+  final ContainerHostConfig? hostConfig;
+  final List<ContainerMount> mounts;
+  final ContainerNetworkSettings? networkSettings;
+}
+
+/// An inspected container's `State` (CTR-03, CTR-04).
+@immutable
+final class ContainerDetailsState {
+  const ContainerDetailsState({
+    this.status,
+    this.running = false,
+    this.paused = false,
+    this.restarting = false,
+    this.oomKilled = false,
+    this.dead = false,
+    this.pid,
+    this.exitCode,
+    this.error,
+    this.startedAt,
+    this.finishedAt,
+    this.health,
+  });
+
+  final String? status;
+  final bool running;
+  final bool paused;
+  final bool restarting;
+  final bool oomKilled;
+  final bool dead;
+  final int? pid;
+  final int? exitCode;
+  final String? error;
+  final DateTime? startedAt;
+  final DateTime? finishedAt;
+  final ContainerDetailsHealth? health;
+}
+
+/// `State.Health` (CTR-04).
+@immutable
+final class ContainerDetailsHealth {
+  const ContainerDetailsHealth({
+    this.status = HealthStatus.none,
+    this.failingStreak,
+    this.log = const [],
+  });
+
+  final HealthStatus status;
+  final int? failingStreak;
+  final List<ContainerHealthCheck> log;
+}
+
+/// One health check's result (`State.Health.Log[]`), its output masked
+/// (03 §8.9): a check command can print what it was given.
+@immutable
+final class ContainerHealthCheck {
+  const ContainerHealthCheck({
+    this.start,
+    this.end,
+    this.exitCode,
+    this.output,
+  });
+
+  final DateTime? start;
+  final DateTime? end;
+  final int? exitCode;
+  final MaskedValue? output;
+}
+
+/// The inspect `Config` fields the panels use, with `Entrypoint` and
+/// `Cmd` masked as one command line (03 §8.9).
+@immutable
+final class ContainerDetailsConfig {
+  const ContainerDetailsConfig({
+    this.hostname,
+    this.image,
+    this.user,
+    this.workingDir,
+    this.stopSignal,
+    this.tty = false,
+    this.env = const [],
+    this.entrypoint = const [],
+    this.cmd = const [],
+    this.labels = const {},
+  });
+
+  final String? hostname;
+  final String? image;
+  final String? user;
+  final String? workingDir;
+  final String? stopSignal;
+
+  /// `Tty`, which decides the log framing (03 §5.6).
+  final bool tty;
+  final List<EnvVar> env;
+  final List<MaskedValue> entrypoint;
+  final List<MaskedValue> cmd;
+  final Map<String, MaskedValue> labels;
 }
 
 /// What the user wants done (03 §10.1 `intent`). The action vocabulary lands

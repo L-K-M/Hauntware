@@ -92,7 +92,7 @@ declare -rA images=(
   [ubuntu-2604]='mirror.gcr.io/library/ubuntu:26.04@sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7'
   [ubi-9]='registry.access.redhat.com/ubi9/ubi:9.8@sha256:16e9e43d99e181463513cc84a514859b1abb9460f1c4d9e208da4b4e51cd5cc3'
   [ubi-10]='registry.access.redhat.com/ubi10/ubi:10.2@sha256:a75ad754aa048d808dd3260243452f8c9a665831d0493b4c9d92f0c88fe2f8c3'
-  [fedora-44]='quay.io/fedora/fedora:44@sha256:e9a013b99bbbe0b21c42e029ec7811ef5c8ea5fbdaf78575f7cd482cf4d21b90'
+  [fedora-44]='quay.io/fedora/fedora:44@sha256:4a78eff1423dcce55cf68b8fd66e7cdca61c85978283db3ecc3089a8419fbbc0'
   [arch]='mirror.gcr.io/library/archlinux:base-20261011.0.609700@sha256:3c64b538588416593f69a1aebd2f2ec0f2541b29159f32556fa7def2167147a0'
 )
 

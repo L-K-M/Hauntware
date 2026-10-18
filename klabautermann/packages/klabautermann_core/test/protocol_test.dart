@@ -100,8 +100,9 @@ void main() {
         ),
         const CloseStream('stream-1'),
         const DockerQuery(
-          'srv-1',
-          DockerQuerySpec(kind: DockerQueryKind.containers),
+          serverId: 'srv-1',
+          queryId: 'q-1',
+          query: DockerContainersQuery(),
         ),
         const PlanAction(
           ActionIntent(serverId: 'srv-1', action: 'container.restart'),
@@ -180,7 +181,15 @@ void main() {
           dropped: 2,
         ),
         const LogStreamState('stream-1', LogStreamRunning()),
-        const DockerResult(serverId: 'srv-1', payload: {'Id': 'x'}),
+        const DockerResult(
+          serverId: 'srv-1',
+          queryId: 'q-1',
+          payload: DockerImagesPayload([]),
+        ),
+        const DockerEndpointState(
+          serverId: 'srv-1',
+          phase: DockerEndpointPhase.waiting,
+        ),
         const DockerEvent('srv-1', {'status': 'start'}),
         const ActionPlanned('plan-1', ActionPreview(title: 'restart')),
         const ActionProgress(planId: 'plan-1', stepIndex: 1, stepCount: 3),
@@ -209,6 +218,92 @@ void main() {
         expect(received, isA<EngineEvent>(), reason: '$event lost its type');
         expect(received.runtimeType, event.runtimeType);
       }
+    });
+
+    test('Docker queries, results and endpoint states survive with their '
+        'payloads (M7)', () async {
+      final query =
+          await roundTrip(
+                const DockerQuery(
+                  serverId: 'srv-1',
+                  queryId: 'q-7',
+                  query: DockerContainerQuery('db'),
+                ),
+              )
+              as DockerQuery;
+      expect(query.serverId, 'srv-1');
+      expect(query.queryId, 'q-7');
+      expect((query.query as DockerContainerQuery).containerId, 'db');
+
+      final result =
+          await roundTrip(
+                DockerResult(
+                  serverId: 'srv-1',
+                  queryId: 'q-7',
+                  payload: DockerContainerPayload(
+                    ContainerDetails(
+                      id: 'abc',
+                      args: [MaskedValue.secret('hunter2')],
+                      state: ContainerDetailsState(
+                        running: true,
+                        health: ContainerDetailsHealth(
+                          status: HealthStatus.healthy,
+                          log: [
+                            ContainerHealthCheck(
+                              exitCode: 0,
+                              output: MaskedValue.plain('ok'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  warnings: const ['Labels is not an object'],
+                ),
+              )
+              as DockerResult;
+      final details = (result.payload as DockerContainerPayload).container;
+      expect(details.args.single.display, MaskedValue.maskToken);
+      expect(details.args.single.reveal(), 'hunter2');
+      expect(details.state!.health!.log.single.output!.display, 'ok');
+      expect(result.warnings, ['Labels is not an object']);
+
+      final state =
+          await roundTrip(
+                const DockerEndpointState(
+                  serverId: 'srv-1',
+                  phase: DockerEndpointPhase.ready,
+                  route: DockerEndpointRoute(
+                    rank: DockerRank.cliRelay,
+                    socketPath: '/var/run/docker.sock',
+                    rootEquivalence: DockerRootEquivalence.rootfulSocket,
+                    runtime: EngineRuntime.podman,
+                    mode: EngineMode.rootful,
+                  ),
+                  negotiatedApi: ApiVersion(1, 44),
+                ),
+              )
+              as DockerEndpointState;
+      expect(state.label, DockerRouteLabel.cliRelay);
+      expect(state.route!.runtime, EngineRuntime.podman);
+      expect(state.negotiatedApi, const ApiVersion(1, 44));
+
+      final failed =
+          await roundTrip(
+                const DockerResult(
+                  serverId: 'srv-1',
+                  queryId: 'q-8',
+                  payload: DockerQueryFailed(
+                    DockerQueryFailure.notFound,
+                    detail: 'No such container: db',
+                  ),
+                ),
+              )
+              as DockerResult;
+      expect(
+        (failed.payload as DockerQueryFailed).failure,
+        DockerQueryFailure.notFound,
+      );
     });
 
     test('sampling requests survive with their ids, streams and '
