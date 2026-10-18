@@ -31,11 +31,13 @@ import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
 import '../logs/log_stream_router.dart';
 import '../operations/confirmation.dart';
+import '../operations/operation_plan.dart' show PlanAttempt;
 import '../operations/operation_runner.dart';
 import '../operations/operation_tracker.dart';
 import '../operations/operations_shown.dart';
 import '../operations/plan_registry.dart';
 import '../operations/plan_types.dart' show RequiredLevel;
+import '../operations/plans/docker_plans.dart';
 import '../operations/plans/host_plans.dart';
 import '../operations/protected_targets.dart';
 import '../sampling/sampling_scheduler.dart';
@@ -341,6 +343,28 @@ void engineMain(
     runner = OperationRunner(
       linkFor: links.link,
       emit: uiPort.send,
+      api: (serverId, step) async {
+        final router = docker;
+        if (router == null) {
+          throw const DockerEndpointUnavailable(DockerQueryFailure.cancelled);
+        }
+        return router.useEndpoint(
+          serverId,
+          (client, _) => runApiStep(client, step),
+        );
+      },
+      docker: (serverId, check) async {
+        final router = docker;
+        if (router == null) return RevalidationFailure.unreadable;
+        try {
+          return await router.useEndpoint(
+            serverId,
+            (client, _) => revalidateDockerTarget(client, check),
+          );
+        } on Object {
+          return RevalidationFailure.unreadable;
+        }
+      },
       // A record that cannot be written is lost; the run itself stands.
       finished: (result) =>
           unawaited(audit.recordRun(result).catchError((Object _) {})),
@@ -792,15 +816,9 @@ void engineMain(
       case PlanAction(:final intent):
         void refuse(ActionRefusalReason reason) =>
             uiPort.send(ActionRefused(reason, intent: intent));
-        // The policy first (M4 plan M4). The Docker planners land with E15.
+        // The policy first (M4 plan M4).
         if (safetyRefusal(safetyPolicy, intent.serverId) case final reason?) {
           refuse(reason);
-          return;
-        }
-        if (intent is! KillProcess &&
-            intent is! UnitAction &&
-            intent is! StartTimer) {
-          refuse(ActionRefusalReason.notImplemented);
           return;
         }
         final serverId = intent.serverId;
@@ -813,19 +831,53 @@ void engineMain(
         // The plan holds the generation it was made on, so a reconnect
         // while it waits for the user makes it stale.
         final generation = linkGenerations[serverId] ?? 0;
+        final protection = protectionContextOf(
+          samplerPids: scheduler?.samplerPids(serverId) ?? const {},
+          profile: profile,
+          safety: safetyPolicy.servers[serverId],
+        );
+        final Future<PlanAttempt> attempt;
+        switch (intent) {
+          case KillProcess() || UnitAction() || StartTimer():
+            attempt = planHostAction(intent, (
+              link: link,
+              profile: profile,
+              protection: protection,
+              adminMode: admin?.session(serverId) != null,
+            ));
+          case ContainerAction() ||
+              RemoveContainer() ||
+              RemoveImage() ||
+              StackAction():
+            final router = docker;
+            if (router == null) {
+              refuse(ActionRefusalReason.engineUnavailable);
+              return;
+            }
+            attempt = router
+                .useEndpoint(
+                  serverId,
+                  (client, route) => planDockerAction(intent, (
+                    client: client,
+                    route: route,
+                    protection: protection,
+                    loginUser: profile.user ?? 'login user',
+                  )),
+                )
+                .catchError(
+                  (Object _) => (
+                    plan: null,
+                    refusal: ActionRefusalReason.engineUnavailable,
+                  ),
+                );
+          case RedeployStack():
+            refuse(ActionRefusalReason.notImplemented);
+            return;
+        }
         // Not awaited: planning reads over the link, and the queue keeps
         // serving the app meanwhile.
         unawaited(
-          planHostAction(intent, (
-            link: link,
-            profile: profile,
-            protection: protectionContextOf(
-              samplerPids: scheduler?.samplerPids(serverId) ?? const {},
-              profile: profile,
-              safety: safetyPolicy.servers[serverId],
-            ),
-            adminMode: admin?.session(serverId) != null,
-          )).then((attempt) {
+          attempt.then((attempt) {
             final plan = attempt.plan;
             if (plan == null) {
               refuse(attempt.refusal!);

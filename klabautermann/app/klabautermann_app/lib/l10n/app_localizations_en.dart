@@ -3152,6 +3152,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'invalidTarget': 'This target cannot be acted on.',
       'targetChanged': 'The target changed. Look again before acting.',
       'noLink': 'Connect to the server first.',
+      'engineUnavailable': 'The server\'s container engine cannot be reached.',
+      'imageInUse':
+          'Containers use this image. Remove them first, or force the removal.',
+      'dependencyCycle':
+          'The stack\'s services depend on each other in a loop, so there is no order to act in.',
       'other': 'The action was refused.',
     });
     return '$_temp0';

@@ -1326,6 +1326,13 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 Docker action planners (E15): `PlanAction` plans container state
+  changes and removal, image removal and stack start, stop and restart
+  over the server's Docker endpoint. Steps address the full id and are
+  re-validated by inspect before they run. Removing volumes, forcing an
+  image in use, and a managed or protected target need the typed
+  confirmation. A stack acts in its services' dependency order and a
+  cycle refuses. The app's Docker actions arrive with E22.
 - M4 operation output (E17c): the engine follows a detached
   operation's output file like any log file, each line redacted.
 - M4 detached runner, second half (E17b): the engine reads each

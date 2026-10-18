@@ -2,6 +2,8 @@
 // target against what the preview saw, then runs the plan's own steps in
 // order, the ones the preview showed, and reports each step and the end.
 // A step that fails stops the plan; nothing after it runs.
+import 'package:klabautermann_docker/klabautermann_docker.dart'
+    show DockerException;
 import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
 import 'package:seance_core/seance_core.dart'
     show
@@ -12,12 +14,14 @@ import 'package:seance_core/seance_core.dart'
         quoteShellWord;
 
 import '../admin/admin_mode.dart' show AdminSession;
+import '../docker/docker_router.dart' show DockerEndpointUnavailable;
 import '../engine/protocol.dart';
 import 'operation_plan.dart';
 import 'plan_types.dart';
 
 /// Runs one Docker API step on [serverId]'s engine and returns its HTTP
-/// status. The Docker planners supply it (M4 E15).
+/// status (M4 E15). A [DockerException] or [DockerEndpointUnavailable]
+/// it throws ends the run as a transport failure.
 typedef ApiStepRunner = Future<int> Function(String serverId, ApiStep step);
 
 /// Checks a [DockerTargetUnchanged] on [serverId]: null when unchanged.
@@ -164,6 +168,10 @@ final class OperationRunner {
     } on ElevationException {
       return failed(ActionFailure.elevationRefused);
     } on RemoteCommandException {
+      return failed(ActionFailure.transport);
+    } on DockerException {
+      return failed(ActionFailure.transport);
+    } on DockerEndpointUnavailable {
       return failed(ActionFailure.transport);
     }
     return ActionFinished(planId: planId, outcome: ActionOutcome.succeeded);

@@ -6,7 +6,7 @@ import 'package:meta/meta.dart';
 import 'package:seance_core/seance_core.dart' show DangerFinding;
 
 import '../engine/protocol.dart'
-    show ActionIntent, ActionPreview, ConfirmationTier;
+    show ActionIntent, ActionPreview, ActionRefusalReason, ConfirmationTier;
 import 'confirmation.dart';
 import 'danger.dart';
 import 'plan_types.dart';
@@ -91,6 +91,9 @@ final class OperationPlan {
   );
 }
 
+/// A plan, or why there is none.
+typedef PlanAttempt = ({OperationPlan? plan, ActionRefusalReason? refusal});
+
 /// What the runner checks again right before a plan's first step (03
 /// §8.5). Each holds what the preview saw.
 sealed class Revalidation {
@@ -112,15 +115,21 @@ final class ProcessStarted extends Revalidation {
   final int startTicks;
 }
 
-/// A Docker target is unchanged: the container still has [id], or the
-/// stack's configuration still hashes to it. The Docker planners check
-/// these through the engine's API (M4 E15).
-final class DockerTargetUnchanged extends Revalidation {
-  const DockerTargetUnchanged(this.target, this.id);
+/// What a [DockerTargetUnchanged] names.
+enum DockerTargetKind { container, image, stack }
 
-  /// The container name or the stack's project.
+/// A Docker target is unchanged: the container or image still has [id],
+/// or the stack still has the containers [id] fingerprints. The runner
+/// checks these through the engine's API (M4 E15).
+final class DockerTargetUnchanged extends Revalidation {
+  const DockerTargetUnchanged(this.kind, this.target, this.id);
+
+  final DockerTargetKind kind;
+
+  /// The container name, the image reference or the stack's project.
   final String target;
 
-  /// The container id or the configuration hash the preview saw.
+  /// The container or image id, or the stack's fingerprint
+  /// ([stackFingerprint]), as the preview saw it.
   final String id;
 }

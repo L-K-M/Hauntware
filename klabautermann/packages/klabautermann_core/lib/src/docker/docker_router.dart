@@ -42,6 +42,16 @@ const _answerTimeout = Duration(seconds: 10);
 /// (M9 [E]): each holds a session channel.
 const _relayIdle = Duration(seconds: 30);
 
+/// Why [DockerRouter.useEndpoint] had no endpoint to run on.
+final class DockerEndpointUnavailable implements Exception {
+  const DockerEndpointUnavailable(this.failure);
+
+  final DockerQueryFailure failure;
+
+  @override
+  String toString() => 'DockerEndpointUnavailable(${failure.name})';
+}
+
 /// Owned by the engine isolate, which hands it the Docker queries and
 /// tells it what changed: [update] after a server's [LinkState],
 /// [probed] for each probe answer, [disconnect], [forget] for servers
@@ -86,6 +96,42 @@ final class DockerRouter {
     }
     session.waiting.add(request);
     _pump(session);
+  }
+
+  /// Runs [body] with [serverId]'s client and route once its endpoint is
+  /// ready, as a query would run (M4 E15: the Docker planners and the
+  /// runner's API steps). Throws [DockerEndpointUnavailable] when the
+  /// endpoint cannot be reached; a connection that drops under [body]
+  /// drops the endpoint, as a query's does, and the error propagates.
+  Future<T> useEndpoint<T>(
+    String serverId,
+    Future<T> Function(DockerClient client, DockerEndpointRoute route) body,
+  ) async {
+    if (!_fleet.contains(serverId)) {
+      throw const DockerEndpointUnavailable(DockerQueryFailure.notInFleet);
+    }
+    final session = _sessions.putIfAbsent(serverId, () => _Session(serverId));
+    final ready = Completer<_Endpoint>();
+    session.users.add(ready);
+    _pump(session);
+    final endpoint = await ready.future;
+
+    session.idle?.cancel();
+    session.idle = null;
+    endpoint.inFlight++;
+    try {
+      return await body(endpoint.client, endpoint.route);
+    } on DockerException catch (e) {
+      if ((e is DockerTransportException || e is DockerProtocolException) &&
+          identical(session.endpoint, endpoint)) {
+        _drop(session);
+        _pump(session);
+      }
+      rethrow;
+    } finally {
+      endpoint.inFlight--;
+      if (identical(session.endpoint, endpoint)) _idleCheck(session, endpoint);
+    }
   }
 
   /// Follows [serverId]'s link: a new link resolves the endpoint again,
@@ -175,12 +221,18 @@ final class DockerRouter {
       for (final query in queries) {
         unawaited(_run(session, endpoint, query));
       }
+      final users = session.users.toList();
+      session.users.clear();
+      for (final user in users) {
+        user.complete(endpoint);
+      }
       return;
     }
 
     // A failure stands for its link and probe answer until a query asks
     // again.
-    if (session.resolving || (session.failed && session.waiting.isEmpty)) {
+    if (session.resolving ||
+        (session.failed && session.waiting.isEmpty && session.users.isEmpty)) {
       return;
     }
     unawaited(_resolve(session, link, profile));
@@ -479,6 +531,11 @@ final class DockerRouter {
     for (final query in queries) {
       _answer(query, failure);
     }
+    final users = session.users.toList();
+    session.users.clear();
+    for (final user in users) {
+      user.completeError(DockerEndpointUnavailable(failure));
+    }
   }
 
   /// Sends [session]'s state; waiting goes out once, since nothing in it
@@ -528,6 +585,9 @@ final class _Session {
 
   /// Queries waiting for the endpoint, oldest first.
   final List<DockerQuery> waiting = [];
+
+  /// [DockerRouter.useEndpoint] calls waiting for the endpoint.
+  final List<Completer<_Endpoint>> users = [];
 
   /// The link [endpoint] and any resolution under way belong to.
   SshLink? link;

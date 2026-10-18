@@ -1051,7 +1051,7 @@ final class ActionRefused extends EngineEvent {
 
 /// Why an [ActionRefused] refused; the app words each (D35).
 enum ActionRefusalReason {
-  /// The action's planner has not landed yet (M4 E14, E15).
+  /// The action's planner has not landed yet (STK-06 lands with E18).
   notImplemented,
 
   /// No previewed plan has the id, or it already ran.
@@ -1087,6 +1087,17 @@ enum ActionRefusalReason {
 
   /// The server has no ready link to plan over.
   noLink,
+
+  /// The server's Docker endpoint could not be reached (M4 E15).
+  engineUnavailable,
+
+  /// Containers use the image, and the removal did not ask to force it
+  /// (IMG-02).
+  imageInUse,
+
+  /// The stack's services depend on each other in a cycle, so there is no
+  /// order to act in (STK-03).
+  dependencyCycle,
 }
 
 /// Why [UserCrontabs] read no crontab.

@@ -128,6 +128,29 @@ void main() {
       expect(ran.planId, 'plan-1');
     });
 
+    test('a Docker intent reaches its planner, which needs a link '
+        '(M4 E15)', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+      const intent = ContainerAction(
+        'srv-1',
+        containerId: 'web-1',
+        verb: ContainerVerb.restart,
+      );
+
+      client
+        ..send(
+          const SetSafetyPolicy(
+            SafetyPolicy(servers: {'srv-1': ServerSafety(management: true)}),
+          ),
+        )
+        ..send(const PlanAction(intent));
+
+      final planned = (await next(events)) as ActionRefused;
+      expect(planned.reason, ActionRefusalReason.noLink, reason: 'links off');
+      expect(planned.intent, isA<ContainerAction>());
+    });
+
     test('an audit query answers from the log, empty at first', () async {
       final client = await spawnEngine();
       final (:events, fleet: _) = await started(client);

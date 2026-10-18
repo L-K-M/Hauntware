@@ -3505,6 +3505,28 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   stats (CST-01): one-shot stats for visible rows, at most 4 in flight, CPU
   % from the spec formula, memory as usage minus `inactive_file` on cgroup v2
   (minus `cache` on v1) [R: r5 §1.7]. Managed-by badges (DKE-10): 8.7.
+- **As built (M4 E15).** `operations/plans/docker_plans.dart` plans
+  CTR-02's verbs, CTR-06's removal, IMG-02 and STK-03 (7.14, 7.16) over
+  the server's Docker endpoint (`DockerRouter.useEndpoint`).
+  - Every step is an API request addressed by the full id the planner
+    read, and the runner re-validates the target by inspect first: a
+    container or image by its name or reference, a stack by the ids of
+    its containers.
+  - A managed target raises the tier to the typed act-anyway step naming
+    its owner (8.7), and a container publishing the session's SSH or a
+    VPN port is protected.
+  - Removing with `v=1` needs the typed confirmation.
+  - An image in use is refused unless forced, and forcing it needs the
+    typed confirmation. The count is the image list's from API 1.51, and
+    the container list's before.
+  - A stack acts on its containers service by service in
+    `com.docker.compose.depends_on` order (dependencies first; stop
+    reverses it), leaves one-off containers alone, and a cycle refuses
+    the plan.
+  - Docker's 304 for an already started or stopped container counts as
+    done.
+  - The event watch (5.7) refreshes the lists afterwards. Rank 3 relays
+    and their elevation arrive with E16.
 - **v1.** Events timeline with gap markers; disk usage on demand; prune
   with preview (list what the same filters match, with sizes and exemption
   labels, then call `/prune`; typed confirmation for volumes and `-a`);
@@ -4237,9 +4259,9 @@ OperationPlan {
     host writes, required level, runner (identity, Docker route,
     credentials), danger findings, impact, ownership, protection reason
     and tier.
-  - Until the planners land (E14 host, E15 Docker), the engine answers
-    `PlanAction` with `ActionRefused(notImplemented)` and `RunAction`
-    with `unknownPlan`.
+  - Until a planner lands (E14 host, E15 Docker, E18 redeploy), the
+    engine answers its `PlanAction` with `ActionRefused(notImplemented)`
+    and `RunAction` with `unknownPlan`.
   - The admin-mode, audit, crontab and detached-operation messages of
     M4 join v3 with the PRs that implement them (E11, E12, E14, E17),
     rather than all at once here.
