@@ -1355,6 +1355,10 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 theme editing (E25): Settings > Appearance edits the theme with
+  ghost_theme's shared editor (presets, mode, colours, font, corners,
+  copy, paste and reset), in the app and in the desktop settings window,
+  in Klabautermann's words.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container
