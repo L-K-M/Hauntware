@@ -210,6 +210,7 @@ class KlabautermannApp extends StatelessWidget {
               appearance: appearance,
               announcements: announcements,
               appVersion: appVersion,
+              monitorSet: fleet.monitorSettings,
             ),
           },
         );
