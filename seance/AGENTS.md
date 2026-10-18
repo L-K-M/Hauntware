@@ -638,8 +638,11 @@ Do not "simplify" these away — they are load-bearing:
   accent, nullable ("Automatic") colour slots, status colours, an optional
   terminal block, a font family and a corner scale, stored as one JSON
   object in `settings.json` (device-local) and decoded leniently: a bad
-  key costs only itself. The model and the builder now live in Planchette's
-  `ghost_theme` package (design docs/design/ghost-theme.md, F4b PRs 1-2);
+  key costs only itself. The model, the builder and the Appearance editor
+  now live in Planchette's `ghost_theme` package (design
+  docs/design/ghost-theme.md, F4b PRs 1-3); `ui/appearance_settings.dart`
+  wraps `GhostAppearanceSection` with Séance's layout, pickers and its own
+  terminal text and colour-source settings;
   Séance's `lib/theme/*.dart` are compatibility shims plus
   `seanceThemeStyle`/`seanceThemePresets`/`seanceThemeCodec` (its
   `hasTerminal: true`, violet and comfortable binding) and `lib/theme.dart`
