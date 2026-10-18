@@ -5309,6 +5309,18 @@ the engine in `engine_isolate.dart` beside it):
   General, Appearance, Sync, Servers, Docker, Safety, Alerts), a route on
   mobile. The three native settings-window runners are copied and renamed
   with a ledger entry (D32).
+- As built in M4 (E26, owner question Q3): About Klabautermann is a
+  registry command on every desktop, first in the macOS application menu
+  in place of AppKit's About panel, which shows `CFBundleName` (an
+  identity, 04 §12.3), and in a Help menu on Linux and Windows. It opens
+  Material's About dialog with the title "Klabautermann (preview)", the
+  version and the Unlicense line; Settings > General has an about row
+  that opens it on every platform. The version comes from
+  `package_info_plus`, read once in `main`; the settings window's engine
+  has no plugins, so the link's snapshot carries it. Tests tie the title
+  and the `.deb` description to `kPreviewLabel`
+  (`app/klabautermann_app/lib/app_identity.dart`), and M7 drops the label
+  in one change (11.7).
 
 ### 10.3 Fleet view
 

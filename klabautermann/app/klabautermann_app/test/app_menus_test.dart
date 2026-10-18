@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_ui/ghost_ui.dart';
+import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/l10n/app_localizations_en.dart';
@@ -18,6 +19,10 @@ import 'support/fake_ssh_config.dart';
 import 'support/harness.dart';
 
 const _config = 'Host web-1\n  HostName web-1.example\n';
+const _version = '1.2.3';
+const _licence =
+    'Klabautermann is free and unencumbered software released into the '
+    'public domain under the Unlicense.';
 const _desktopPlatforms = [
   TargetPlatform.macOS,
   TargetPlatform.linux,
@@ -51,6 +56,7 @@ void main() {
       platform: platform,
       fleet: on ?? fleet(sshConfig: FakeSshConfigSource.text(_config)),
       onOpenSettings: onOpenSettings ?? () {},
+      appVersion: _version,
       requestClose: requestClose,
     );
 
@@ -60,20 +66,25 @@ void main() {
 
     test('holds only commands with a real action on each platform', () {
       expect(ids(commands(TargetPlatform.macOS)), [
+        kAppAboutCommandId,
         kFleetImportSshConfigCommandId,
         kAppSettingsCommandId,
       ]);
       for (final platform in [TargetPlatform.linux, TargetPlatform.windows]) {
         expect(ids(commands(platform)), [
+          kAppAboutCommandId,
           kFleetImportSshConfigCommandId,
           kAppSettingsCommandId,
           kAppQuitCommandId,
         ], reason: '$platform');
       }
-      // Without an ssh_config source (phones) there is nothing to import.
-      expect(ids(commands(TargetPlatform.android, on: fleet())), [
-        kAppSettingsCommandId,
-      ]);
+      // Without an ssh_config source (phones) there is nothing to import,
+      // and no About: phones reach the dialog from Settings > General.
+      for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+        expect(ids(commands(platform, on: fleet())), [
+          kAppSettingsCommandId,
+        ], reason: '$platform');
+      }
     });
 
     test('Settings… takes ⌘, on macOS and Ctrl+, elsewhere', () {
@@ -190,9 +201,16 @@ void main() {
           platform: TargetPlatform.macOS,
         );
 
-        expect(titles(menus), ['Klabautermann', 'File', 'View', 'Window']);
+        expect(titles(menus), [
+          'Klabautermann $kPreviewLabel',
+          'File',
+          'View',
+          'Window',
+        ]);
+        // The app's own About leads, in place of AppKit's panel, which
+        // shows CFBundleName without the preview label (M16).
         expect(rows(menus[0]), [
-          [PlatformProvidedMenuItemType.about],
+          ['About Klabautermann'],
           ['Settings…'],
           [PlatformProvidedMenuItemType.servicesSubmenu],
           [
@@ -215,21 +233,27 @@ void main() {
           ],
           [PlatformProvidedMenuItemType.arrangeWindowsInFront],
         ]);
+        expect([
+          for (final menu in menus) ...rows(menu).expand((group) => group),
+        ], isNot(contains(PlatformProvidedMenuItemType.about)));
       });
 
       for (final platform in [TargetPlatform.linux, TargetPlatform.windows]) {
-        test('${platform.name}: one File menu, with Settings… and Quit in '
-            'its last section and no AppKit rows', () {
+        test('${platform.name}: File, with Settings… and Quit in its last '
+            'section, Help with About, and no AppKit rows', () {
           final menus = buildAppMenus(
             commands: commands(platform),
             l10n: l10n,
             platform: platform,
           );
 
-          expect(titles(menus), ['File']);
-          expect(rows(menus.single), [
+          expect(titles(menus), ['File', 'Help']);
+          expect(rows(menus[0]), [
             ['Import from ~/.ssh/config'],
             ['Settings…', 'Quit'],
+          ]);
+          expect(rows(menus[1]), [
+            ['About Klabautermann'],
           ]);
         });
       }
@@ -245,7 +269,7 @@ void main() {
           commands: commands(TargetPlatform.linux, on: controller),
           l10n: l10n,
           platform: TargetPlatform.linux,
-        ).single;
+        ).first;
         final specs = [
           for (final group in file.groups)
             for (final row in group) (row as GhostCommandRow).command,
@@ -305,6 +329,40 @@ void main() {
         TargetPlatform.windows,
       }),
     );
+
+    testWidgets(
+      'Linux and Windows: Help ▸ About shows the version, the licence and '
+      'the preview label',
+      (tester) async {
+        await pumpApp(
+          tester,
+          sshConfig: FakeSshConfigSource.text(_config),
+          appVersion: _version,
+        );
+
+        await tester.tap(find.text('Help'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('About Klabautermann'));
+        await tester.pumpAndSettle();
+
+        _expectAboutDialog(version: 'Version $_version');
+      },
+      variant: TargetPlatformVariant(const {
+        TargetPlatform.linux,
+        TargetPlatform.windows,
+      }),
+    );
+
+    testWidgets('About says so when the version is unknown', (tester) async {
+      await pumpApp(tester, sshConfig: FakeSshConfigSource.text(_config));
+
+      await tester.tap(find.text('Help'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('About Klabautermann'));
+      await tester.pumpAndSettle();
+
+      _expectAboutDialog(version: 'Version unknown');
+    }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 
     testWidgets('Linux and Windows: the import row runs the FL-02 import', (
       tester,
@@ -378,7 +436,7 @@ void main() {
       final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
       expect(
         [for (final menu in bar.menus) (menu as PlatformMenu).label],
-        ['Klabautermann', 'File', 'View', 'Window'],
+        ['Klabautermann $kPreviewLabel', 'File', 'View', 'Window'],
       );
       expect('${pushes.last}', contains('Settings…'));
 
@@ -412,6 +470,36 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
       await tester.pumpAndSettle();
       expect(opened, [SettingsTab.general, SettingsTab.general]);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+    testWidgets('macOS: About Klabautermann opens the app\'s About dialog, '
+        'not AppKit\'s panel', (tester) async {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.menu,
+        (_) async => null,
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.menu,
+          null,
+        ),
+      );
+      await pumpApp(
+        tester,
+        sshConfig: FakeSshConfigSource.text(_config),
+        appVersion: _version,
+      );
+
+      final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
+      // AppKit gets no About row of its own to show.
+      expect(
+        _providedTypes(bar.menus),
+        isNot(contains(PlatformProvidedMenuItemType.about)),
+      );
+      _item(bar, 'About Klabautermann').onSelected!();
+      await tester.pumpAndSettle();
+
+      _expectAboutDialog(version: 'Version $_version');
     }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
     testWidgets('macOS: a disabled import is a disabled native item', (
@@ -541,6 +629,37 @@ PlatformMenuItem _item(PlatformMenuBar bar, String label) {
   }
 
   return find(bar.menus)!;
+}
+
+/// Every AppKit-provided row anywhere in [items].
+List<PlatformProvidedMenuItemType> _providedTypes(
+  List<PlatformMenuItem> items,
+) => [
+  for (final item in items)
+    ...switch (item) {
+      PlatformProvidedMenuItem(:final type) => [type],
+      PlatformMenu(:final menus) => _providedTypes(menus),
+      PlatformMenuItemGroup(:final members) => _providedTypes(members),
+      _ => const <PlatformProvidedMenuItemType>[],
+    },
+];
+
+/// The About dialog (M16) is showing, with the app title's preview label,
+/// [version] and the licence.
+void _expectAboutDialog({required String version}) {
+  expect(find.byType(AboutDialog), findsOneWidget);
+  final dialog = find.descendant(
+    of: find.byType(AboutDialog),
+    matching: find.byType(Text),
+  );
+  final texts = [
+    for (final element in dialog.evaluate())
+      (element.widget as Text).data ?? '',
+  ];
+  expect(
+    texts,
+    containsAll(['Klabautermann $kPreviewLabel', version, _licence]),
+  );
 }
 
 /// Quit never reads its context.

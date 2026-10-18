@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_desktop/ghost_desktop.dart' show GhostSettingsLinkMethod;
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:klabautermann_app/app.dart';
+import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
@@ -32,6 +33,9 @@ import 'support/harness.dart';
 const _control = MethodChannel('test/settings_window');
 const _appLink = MethodChannel('test/settings_link/app');
 const _windowLink = MethodChannel('test/settings_link/window');
+
+/// What the app's `readAppVersion` read, which the window cannot read.
+const _appVersion = '1.2.3';
 
 /// An app whose appearance refuses every change.
 final class _RefusingAppearance extends ChangeNotifier
@@ -109,6 +113,7 @@ void main() {
     final host = SettingsWindowHost(
       appearance: appearance,
       announcements: announcements ?? AnnouncementController(),
+      appVersion: _appVersion,
       monitorSet: monitorSet ?? newFleet().monitorSettings,
       control: _control,
       link: _appLink,
@@ -209,6 +214,7 @@ void main() {
             platform,
             appearance: appearance,
             announcements: announcements,
+            appVersion: _appVersion,
             monitorSet: newFleet().monitorSettings,
           ),
           isNull,
@@ -224,6 +230,7 @@ void main() {
           platform,
           appearance: appearance,
           announcements: announcements,
+          appVersion: _appVersion,
           monitorSet: newFleet().monitorSettings,
         );
         expect(host, isNotNull, reason: '$platform');
@@ -384,6 +391,18 @@ void main() {
         ],
       );
       expect(find.byType(SegmentedButton<ThemeModePreference>), findsOneWidget);
+    });
+
+    testWidgets('the General tab\'s about row shows the app\'s version, '
+        'which only the link can bring (M16)', (tester) async {
+      final remote = await pumpWindow(tester);
+      expect(remote.appVersion, _appVersion);
+
+      expect(find.text('Klabautermann $kPreviewLabel'), findsOneWidget);
+      await tester.tap(find.text('Version $_appVersion'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AboutDialog), findsOneWidget);
     });
 
     testWidgets('an appearance change in the window applies to the main '
