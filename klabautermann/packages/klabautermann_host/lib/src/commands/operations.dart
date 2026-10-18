@@ -344,7 +344,12 @@ abstract final class OperationCommands {
       '--collect',
       '--quiet',
       '--',
-      ...wrapped,
+      // The service manager expands `${NAME}`, and `$NAME` as a whole
+      // word, in a transient service's command line (systemd-run's
+      // --expand-environment defaults to on for services, and before
+      // systemd 254 there was no way off), which would empty the
+      // wrapper's own variables; `$$` is its escape for a literal `$`.
+      for (final word in wrapped) word.replaceAll(r'$', r'$$'),
     ];
   }
 
