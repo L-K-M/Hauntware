@@ -676,12 +676,6 @@ abstract class AppLocalizations {
   /// **'Alerts'**
   String get settingsTabAlerts;
 
-  /// No description provided for @themeLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Theme'**
-  String get themeLabel;
-
   /// No description provided for @themeSystem.
   ///
   /// In en, this message translates to:
@@ -3867,6 +3861,330 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The sync file {fileName} was saved by a newer version of Klabautermann. Sync changes will not be kept after a restart.'**
   String syncFileNewer(String fileName);
+
+  /// Appearance tab: heading of the preset grid.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get appearanceThemeTitle;
+
+  /// Appearance tab: title of the theme help dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Themes'**
+  String get appearanceThemeHelpTitle;
+
+  /// Appearance tab: body of the theme help dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'A theme is kept on this device only and never syncs. To use one elsewhere, copy it here and paste it into Klabautermann on the other device.'**
+  String get appearanceThemeHelp;
+
+  /// Appearance tab: small print under the preset grid.
+  ///
+  /// In en, this message translates to:
+  /// **'Picking a theme copies its colours here. It is a starting point, not a mode, so everything below stays yours to change.'**
+  String get appearanceThemeFootnote;
+
+  /// Appearance tab: tooltip of a preset tile.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the {name} theme'**
+  String appearancePresetTooltip(String name);
+
+  /// Appearance tab: heading of the light/dark mode section.
+  ///
+  /// In en, this message translates to:
+  /// **'Mode'**
+  String get appearanceModeTitle;
+
+  /// Appearance tab: line above the mode switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic colours follow'**
+  String get appearanceModeLead;
+
+  /// Appearance tab: note when a dark palette sets its own surface.
+  ///
+  /// In en, this message translates to:
+  /// **'This theme has its own surface, so it is always dark. Set Surface to Automatic to choose a mode.'**
+  String get appearanceOwnSurfaceDark;
+
+  /// Appearance tab: note when a light palette sets its own surface.
+  ///
+  /// In en, this message translates to:
+  /// **'This theme has its own surface, so it is always light. Set Surface to Automatic to choose a mode.'**
+  String get appearanceOwnSurfaceLight;
+
+  /// Appearance tab: heading of the colour slots.
+  ///
+  /// In en, this message translates to:
+  /// **'Colours'**
+  String get appearanceColoursTitle;
+
+  /// Appearance tab: title of the colours help dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic colours'**
+  String get appearanceColoursHelpTitle;
+
+  /// Appearance tab: body of the colours help dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic colours are the light or dark neutrals Klabautermann ships with, as the mode picks them. Once you give the theme a surface of its own, they are mixed from that surface and the text instead. Lines and the selection may be translucent.'**
+  String get appearanceColoursHelp;
+
+  /// Appearance tab: the accent colour row.
+  ///
+  /// In en, this message translates to:
+  /// **'Accent'**
+  String get appearanceAccent;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Surface'**
+  String get appearanceSlotSurface;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Sidebar'**
+  String get appearanceSlotSidebar;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Headers and bars'**
+  String get appearanceSlotRaised;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Text'**
+  String get appearanceSlotText;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Secondary text'**
+  String get appearanceSlotSecondaryText;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Lines'**
+  String get appearanceSlotHairline;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Selection'**
+  String get appearanceSlotSelection;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Online'**
+  String get appearanceSlotOnline;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline'**
+  String get appearanceSlotOffline;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting'**
+  String get appearanceSlotConnecting;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get appearanceSlotUnknown;
+
+  /// Appearance tab: heading of the status colour slots.
+  ///
+  /// In en, this message translates to:
+  /// **'Status colours'**
+  String get appearanceStatusTitle;
+
+  /// Appearance tab: small print under the status colours.
+  ///
+  /// In en, this message translates to:
+  /// **'Each status also keeps its own shape and its name, so these colours never have to say it alone.'**
+  String get appearanceStatusFootnote;
+
+  /// Appearance tab: checkbox beside a colour that follows the mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic'**
+  String get appearanceAutomatic;
+
+  /// Appearance tab: screen reader label of a colour's Automatic checkbox.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: Automatic'**
+  String appearanceAutomaticSemantics(String label);
+
+  /// Appearance tab: tooltip of a colour swatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the {label} colour'**
+  String appearanceChooseColour(String label);
+
+  /// Appearance tab: tooltip of an Automatic colour's swatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a {label} colour (now Automatic)'**
+  String appearanceChooseAutomaticColour(String label);
+
+  /// Appearance tab: heading of the font and corner controls.
+  ///
+  /// In en, this message translates to:
+  /// **'Shape and type'**
+  String get appearanceShapeTitle;
+
+  /// Appearance tab: label of the interface font field.
+  ///
+  /// In en, this message translates to:
+  /// **'Interface font'**
+  String get appearanceInterfaceFont;
+
+  /// Appearance tab: hint of the empty interface font field.
+  ///
+  /// In en, this message translates to:
+  /// **'System default'**
+  String get appearanceInterfaceFontHint;
+
+  /// Appearance tab: helper text under the interface font field.
+  ///
+  /// In en, this message translates to:
+  /// **'Logs and commands keep their monospace font.'**
+  String get appearanceInterfaceFontHelper;
+
+  /// Appearance tab: label of the corner slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Corners'**
+  String get appearanceCorners;
+
+  /// Appearance tab: corner slider value at no rounding.
+  ///
+  /// In en, this message translates to:
+  /// **'Square'**
+  String get appearanceCornersSquare;
+
+  /// Appearance tab: corner slider value as a percentage.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}%'**
+  String appearanceCornersPercent(int percent);
+
+  /// Appearance tab: screen reader value of the corner slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Corners {label}'**
+  String appearanceCornersSemantics(String label);
+
+  /// Appearance tab: heading of copy and paste.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get appearanceShareTitle;
+
+  /// Appearance tab: button that copies the theme as text.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy theme'**
+  String get appearanceCopyTheme;
+
+  /// Appearance tab: button that pastes a theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste theme'**
+  String get appearancePasteTheme;
+
+  /// Appearance tab: small print under copy and paste.
+  ///
+  /// In en, this message translates to:
+  /// **'Copies the theme as text you can keep or send. Pasting reads what it can and leaves everything else at the default.'**
+  String get appearanceShareFootnote;
+
+  /// Appearance tab: toast after Copy theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme copied.'**
+  String get appearanceThemeCopied;
+
+  /// Appearance tab: toast when the clipboard holds no theme.
+  ///
+  /// In en, this message translates to:
+  /// **'The clipboard does not hold a theme. Copy one with Copy theme first.'**
+  String get appearancePasteNotATheme;
+
+  /// Appearance tab: heading of the reset control.
+  ///
+  /// In en, this message translates to:
+  /// **'Start over'**
+  String get appearanceStartOverTitle;
+
+  /// Appearance tab: button that resets the theme to the initial preset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to {name}'**
+  String appearanceResetButton(String name);
+
+  /// Appearance tab: status beside the reset button when no preset matches.
+  ///
+  /// In en, this message translates to:
+  /// **'Using your own colours.'**
+  String get appearanceUsingOwnColours;
+
+  /// Appearance tab: status beside the reset button when a preset matches.
+  ///
+  /// In en, this message translates to:
+  /// **'Using {name}.'**
+  String appearanceUsingPreset(String name);
+
+  /// Appearance tab: title of the reset confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset the theme?'**
+  String get appearanceResetTitle;
+
+  /// Appearance tab: body of the reset confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Every colour, the font and the corners go back to the {name} theme. The mode stays as it is.'**
+  String appearanceResetBody(String name);
+
+  /// Appearance tab: cancels the reset.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get appearanceCancel;
+
+  /// Appearance tab: confirms the reset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get appearanceReset;
+
+  /// Appearance tab: tooltip of a section's help button.
+  ///
+  /// In en, this message translates to:
+  /// **'About {title}'**
+  String appearanceAbout(String title);
+
+  /// Appearance tab: closes a section's help dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get appearanceClose;
 }
 
 class _AppLocalizationsDelegate
