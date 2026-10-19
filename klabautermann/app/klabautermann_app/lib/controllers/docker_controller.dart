@@ -37,6 +37,15 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 /// `/system/df` on demand ([diskUseFor]), since it is slow on large
 /// hosts.
 ///
+/// An Images view that shows a server ([watchImages]) has its images
+/// watched with its containers (03 §7.14 IMG-01): a [DockerWatch] of its
+/// own, one per server while any such view shows, which the engine
+/// serves from the server's one `/events` stream. The containers come
+/// along because they tell which images are in use: below API 1.51 the
+/// image list carries no count, and at any version a container event
+/// re-lists the containers but not the images, so only the container
+/// list follows a container created or removed.
+///
 /// A details view that shows a container ([openContainer]) has it
 /// inspected (03 §7.12 CTR-03, CTR-04): one [DockerContainerQuery] as the
 /// first view opens, and another whenever the container's row in a
@@ -153,6 +162,57 @@ final class DockerController {
   void _unwatchSummary(String serverId, _DockerServer server) {
     final watchId = server.summaryWatchId;
     server.summaryWatchId = null;
+    if (watchId == null || _stopped) return;
+    _send(DockerUnwatch(serverId: serverId, watchId: watchId));
+  }
+
+  /// An Images view shows [serverId]; [unwatchImages] says it no longer
+  /// does. The first view starts the server's image watch.
+  void watchImages(String serverId) {
+    if (!_listed(serverId)) return;
+    final server = _server(serverId);
+    server.imageViews++;
+    if (server.imageViews > 1) return;
+
+    _watchImages(serverId, server);
+  }
+
+  /// The last view to hide ends the server's image watch.
+  void unwatchImages(String serverId) {
+    final server = _servers[serverId];
+    if (server == null || server.imageViews == 0) return;
+    server.imageViews--;
+    if (server.imageViews > 0) return;
+
+    _unwatchImages(serverId, server);
+  }
+
+  /// Watches [serverId]'s images anew after a failure, under a new id, as
+  /// [retryContainers] does.
+  void retryImages(String serverId) {
+    final server = _servers[serverId];
+    if (server == null || server.imagesWatchId == null) return;
+
+    _unwatchImages(serverId, server);
+    _watchImages(serverId, server);
+  }
+
+  void _watchImages(String serverId, _DockerServer server) {
+    if (_stopped) return;
+
+    final watchId = server.imagesWatchId ??= 'images-${_count++}';
+    _send(
+      DockerWatch(
+        serverId: serverId,
+        watchId: watchId,
+        lists: const {DockerWatchList.images, DockerWatchList.containers},
+      ),
+    );
+  }
+
+  void _unwatchImages(String serverId, _DockerServer server) {
+    final watchId = server.imagesWatchId;
+    server.imagesWatchId = null;
     if (watchId == null || _stopped) return;
     _send(DockerUnwatch(serverId: serverId, watchId: watchId));
   }
@@ -571,6 +631,9 @@ final class DockerController {
         )) {
           _followInspected(serverId, server, containers);
         }
+        if (list == DockerWatchList.images) {
+          server.images.value = server.images.value.took(payload, at);
+        }
       case CatalogReplaced(:final entries):
         // SYN-08: a server leaving the fleet takes its endpoint with it.
         final ids = _fleetIds = {for (final entry in entries) entry.serverId};
@@ -942,6 +1005,12 @@ final class _DockerServer {
 
   /// The disk use query in flight, whose answer [diskUse] takes.
   String? diskUseQuery;
+
+  /// How many Images views show the server.
+  int imageViews = 0;
+
+  /// The image watch the engine holds, while any Images view shows.
+  String? imagesWatchId;
 
   /// The containers details views show, by full id.
   final Map<String, _InspectedContainer> inspected = {};

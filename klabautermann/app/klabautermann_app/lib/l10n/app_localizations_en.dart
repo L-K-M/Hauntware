@@ -4064,6 +4064,187 @@ class AppLocalizationsEn extends AppLocalizations {
       'Low-session mode: the list is read again every 15 seconds instead of following engine events, and stats are read one container at a time.';
 
   @override
+  String get dockerImagesColumnTags => 'Tags';
+
+  @override
+  String get dockerImagesColumnId => 'ID';
+
+  @override
+  String get dockerImagesColumnSize => 'Size';
+
+  @override
+  String get dockerImagesColumnCreated => 'Created';
+
+  @override
+  String get dockerImagesColumnUse => 'Use';
+
+  @override
+  String get dockerImagesDangling => 'Dangling';
+
+  @override
+  String dockerImagesInUse(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'In use by $count containers',
+      one: 'In use by 1 container',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dockerImagesInUseShort(int count) {
+    return 'In use ($count)';
+  }
+
+  @override
+  String get dockerImagesUnused => 'Unused';
+
+  @override
+  String dockerImagesCreated(String age, String date) {
+    return '$age, $date';
+  }
+
+  @override
+  String dockerImagesDate(DateTime date) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat.yMMMd(localeName);
+    final String dateString = dateDateFormat.format(date);
+
+    return '$dateString';
+  }
+
+  @override
+  String get dockerImagesAgeNow => 'Less than a minute ago';
+
+  @override
+  String dockerImagesAgeMinutes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count minutes ago',
+      one: '1 minute ago',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dockerImagesAgeHours(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count hours ago',
+      one: '1 hour ago',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dockerImagesAgeDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days ago',
+      one: '1 day ago',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dockerImagesAgeWeeks(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count weeks ago',
+      one: '1 week ago',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dockerImagesAgeMonths(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count months ago',
+      one: '1 month ago',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dockerImagesAgeYears(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count years ago',
+      one: '1 year ago',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerImagesFilterAll => 'All';
+
+  @override
+  String get dockerImagesFilterUnused => 'Unused';
+
+  @override
+  String get dockerImagesFilterDangling => 'Dangling';
+
+  @override
+  String get dockerImagesSearchHint => 'Search by tag or ID';
+
+  @override
+  String get dockerImagesSearchClear => 'Clear search';
+
+  @override
+  String get dockerImagesSortBy => 'Sort by';
+
+  @override
+  String dockerImagesFact(String label, String value) {
+    return '$label: $value';
+  }
+
+  @override
+  String get dockerImagesReading => 'Reading the images…';
+
+  @override
+  String get dockerImagesEmpty => 'This engine has no images.';
+
+  @override
+  String get dockerImagesNoMatch => 'No image matches the search.';
+
+  @override
+  String get dockerImagesNoneUnused => 'Every image is in use by a container.';
+
+  @override
+  String get dockerImagesNoneDangling => 'No image is dangling.';
+
+  @override
+  String dockerImagesFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'tooManyQueries':
+          'This server already has as many Docker watches open as Klabautermann allows.',
+      'daemonError': 'The engine refused or failed to list the images.',
+      'connectionFailed':
+          'The connection to the engine failed while listing the images.',
+      'other': 'The images could not be listed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerImagesKept => 'The list below is the last one read.';
+
+  @override
+  String get dockerImagesUseUnknown =>
+      'Which images are in use is unknown: this engine\'s API reports no count, and the containers could not be listed.';
+
+  @override
+  String get dockerImagesLowSessionRelay =>
+      'Low-session mode: the list is read again every 15 seconds instead of following engine events.';
+
+  @override
   String get dockerDetailsClose => 'Close the container details';
 
   @override

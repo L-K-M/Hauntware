@@ -513,7 +513,7 @@ void main() {
       expect(_inDocker(find.text('web-frontend')), findsOneWidget);
 
       // Another sub-tab hides it; coming back watches anew.
-      await tester.tap(_inDocker(find.text('Images')));
+      await tester.tap(_inDocker(find.text('Stacks')));
       await tester.pumpAndSettle();
       expect(unwatches().single.watchId, watches().single.watchId);
       expect(
@@ -541,6 +541,41 @@ void main() {
         DockerWatchList.containers,
         DockerWatchList.images,
       });
+    });
+
+    testWidgets('the Images sub-tab watches the images while it shows '
+        '(IMG-01)', (tester) async {
+      final harness = await _openWeb1(tester);
+      await _openDockerTab(tester);
+      await _emit(tester, harness, dockerReady('srv-1'));
+      List<DockerWatch> watches() =>
+          harness.engine.sentOfType<DockerWatch>().cast();
+      List<DockerUnwatch> unwatches() =>
+          harness.engine.sentOfType<DockerUnwatch>().cast();
+
+      await tester.tap(_inDocker(find.text('Images')));
+      await tester.pumpAndSettle();
+      expect(watches(), hasLength(2));
+      final images = watches().last;
+      expect(images.lists, {
+        DockerWatchList.images,
+        DockerWatchList.containers,
+      });
+      expect(unwatches().single.watchId, watches().first.watchId);
+      expect(_inDocker(find.text('Reading the images…')), findsOneWidget);
+
+      await _emit(
+        tester,
+        harness,
+        dockerImageList('srv-1', [
+          dockerImage('sha256:3f1c9a6b2e8d', tags: ['nginx:1.27']),
+        ], at: DateTime(2026, 10, 15, 14, 30)),
+      );
+      expect(_inDocker(find.text('nginx:1.27')), findsOneWidget);
+
+      await tester.tap(_inDocker(find.text('Stacks')));
+      await tester.pumpAndSettle();
+      expect(unwatches().last.watchId, images.watchId);
     });
 
     testWidgets('a container row opens its details in the inspector, until '

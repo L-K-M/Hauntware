@@ -217,8 +217,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   tab waits, looks or says why no route works (with the Access link and
   a retry), then shows SAF-08's notice until it is dismissed on the
   device (`settings.json`), the engine strip (DKE-01) and the
-  Containers, Images and Stacks sub-tabs, the last two still empty (D16,
-  D17). Tested against the fake engine only.
+  Containers, Images and Stacks sub-tabs, the last still empty (D17).
+  Tested against the fake engine only.
 - Stack sources (M3, D08, 03 §7.16, §10.1): the stacks list carries a
   verdict per compose project (verified, unverified with a reason, or
   source not on host naming the marked manager) and the compose CLIs
@@ -228,9 +228,9 @@ M2, the host read MVP, is the current milestone. What is on main:
   and falls back to "CLI could not hash" when the flag form fails.
   `DockerStackFileQuery` reads a verified stack's compose or `.env`
   file over SFTP, at most 1 MiB, masked in the engine. Tested over
-  fakes only, plus the `test -f` quoting in a real `sh`; the `--hash`
-  output shape comes from Compose's source and awaits D21's run, and
-  the app shows no stacks yet (D17, D18).
+  fakes only, plus the `test -f` quoting in a real `sh`; D21's run
+  confirms the `--hash` output shape on Compose v5.6, and the app
+  shows no stacks yet (D17, D18).
 - Low-session mode (M3, D09, 03 §5.2, M9): one `ChannelQuota` per server
   serves the host log reads and the Docker session, so on relay ranks
   the pooled connection (one, in a short-action slot until its 30 s idle
@@ -302,6 +302,22 @@ M2, the host read MVP, is the current milestone. What is on main:
   container reads "no such file or log tool". The engine delivers a
   container window oldest first, against `LogStreamSpec`'s newest
   first, so the controller keeps that order. Tested against the fake
+  engine only.
+- Images in the app (M3, D16, 03 §7.14, §10.4): the Images sub-tab
+  holds one `DockerWatch` of the images and containers per server while
+  it shows, apart from the Containers view's, and sends `DockerUnwatch`
+  once hidden. The sortable table lists the tags (a dangling image, one
+  without, as a "Dangling" badge), the short ID, the size (IEC), the age
+  as `docker images` grades it with the date, and whether any container,
+  running or not, uses the image ("In use (2)" or "Unused"), with All,
+  Unused and Dangling filters and a search by tag or ID; phones and
+  200 % text get two-line rows with a sort menu. Use is counted from
+  the container list whenever one was read, since a container event
+  re-lists the containers but not the images; the image list's own
+  count (API 1.51 and later) stands in until then, and below 1.51 a
+  failed container list leaves the use unknown and says so. A failed
+  read keeps the last list with why and a retry, and low-session mode is
+  named on a relay, where the list polls. Tested against the fake
   engine only.
 - Overview Docker summary (M3, D19, 03 §7.1, §10.1, §10.4, OV-02,
   OV-05): once a server's Docker endpoint is ready, the Overview holds
@@ -1330,6 +1346,23 @@ M2, the host read MVP, is the current milestone. What is on main:
   repeated line, and one-shot stats then a stream delta. An idle
   container's CPU now reads 0 % rather than unknown, and Go's zero time
   (a created container's `StartedAt`) reads as absent.
+- Docker engine end to end (M3, D21, 03 §11.3, exit E2):
+  `docker_engine_test.dart` (tags `integration`, `docker`) runs the
+  real engine, links on, over an imported ssh_config against the
+  Docker fixture: rank 1 and its label, negotiation against dind (API
+  1.56 offered, 1.55 used), a `docker run` over SSH in the watched list
+  within 2 s, the events stream resumed with `since` across a stop and
+  start of `docker-sshd`, inspect and stack-file masking of seeded fake
+  secrets, a log follow across `compose restart docker-sshd` with no
+  line lost or repeated, list stats, images with the dangling flag,
+  stacks verified, source not on host and Coolify-managed, and
+  `klab-nosock` denied with the access check's socket row. Spike S1's
+  1,000 lines/s follow delivered every line, none dropped, under 50 ms
+  p95 locally; its numbers go to `fixture/docker-follow.json` in the
+  evidence. The Docker host gained an SFTP subsystem and the seed a
+  `vault` service and a dangling image. D20's own HTTP client is
+  confirmed; `dart:io`'s is not re-run (M1). Locally the suite takes
+  about 46 s.
 - Desktop settings window (03 §10.2, D32): on macOS, Linux and Windows,
   Settings opens in a native window of its own through `ghost_desktop`'s
   `GhostSettingsWindowHost`; phones, and a desktop runner that cannot
@@ -1491,6 +1524,16 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 runner-VM actions suite (E29): on the GitHub-hosted runner, as
+  throwaway accounts, the engine turns admin mode on after a wrong
+  password is asked again, and under `timestamp_timeout=0` (rung 4);
+  admin mode ends when the link drops. It stops, starts, restarts and
+  reloads a unit as root, and polkit refuses the same run without admin
+  mode. The protected `ssh.service` runs only with its typed name. A
+  timer runs now with its service's journal followed. Other users'
+  crontabs are read masked, and another account's process is killed
+  only through elevation. Admin mode's inactivity expiry stays with the
+  unit tests' fake clock, since the shortest choice is five minutes.
 - M4 Docker action planners (E15): `PlanAction` plans container state
   changes and removal, image removal and stack start, stop and restart
   over the server's Docker endpoint. Steps address the full id and are

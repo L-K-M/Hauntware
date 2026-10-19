@@ -65,13 +65,15 @@ DockerEnginePayload dockerEngine() => const DockerEnginePayload(
 );
 
 /// One container as the engine lists it (CTR-01): running unless told
-/// otherwise, in the compose [project] when one is given.
+/// otherwise, in the compose [project] when one is given, created from
+/// the image [imageId] when one is given.
 ContainerSummary dockerContainer(
   String id, {
   String? name,
   String state = 'running',
   String? status,
   String image = 'nginx:1.27',
+  String? imageId,
   String? project,
   List<ContainerPort> ports = const [],
   HealthStatus? health,
@@ -79,6 +81,7 @@ ContainerSummary dockerContainer(
   id: id,
   names: ['/${name ?? id}'],
   image: image,
+  imageId: imageId,
   state: state,
   status:
       status ?? (state == 'running' ? 'Up 2 hours' : 'Exited (0) 1 day ago'),
@@ -131,12 +134,21 @@ DockerListChanged dockerListFailed(
 );
 
 /// One image as the engine lists it (IMG-01): tagged [tags], dangling
-/// with none, and used by [containers] containers.
+/// with none, and used by [containers] containers, a count the list
+/// carries from API 1.51 and leaves null below it.
 ImageSummary dockerImage(
   String id, {
   List<String> tags = const [],
-  int containers = 0,
-}) => ImageSummary(id: id, repoTags: tags, containers: containers);
+  int? containers = 0,
+  int? size,
+  DateTime? created,
+}) => ImageSummary(
+  id: id,
+  repoTags: tags,
+  containers: containers,
+  size: size,
+  created: created,
+);
 
 /// [images] on [serverId], as a watch of the images delivers them.
 DockerListChanged dockerImageList(
