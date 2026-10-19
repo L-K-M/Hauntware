@@ -3706,6 +3706,138 @@ abstract class AppLocalizations {
   /// **'Waiting for the operating system and kernel.'**
   String get overviewHostWaiting;
 
+  /// The health card's heading over the unhealthy containers (OV-02), on a server with a Docker endpoint; count is how many containers report an unhealthy health check.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No unhealthy containers} =1{1 unhealthy container} other{{count} unhealthy containers}}'**
+  String overviewHealthContainersUnhealthy(int count);
+
+  /// One unhealthy container in the health card: its name, or its short ID when it has none, and the engine's status text, such as 'Up 2 hours (unhealthy)'.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}: {status}'**
+  String overviewHealthContainer(String name, String status);
+
+  /// Heading of the Overview's Docker summary card (OV-05).
+  ///
+  /// In en, this message translates to:
+  /// **'Docker'**
+  String get overviewDockerTitle;
+
+  /// The Docker card before the first container and image lists arrived.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the containers and images.'**
+  String get overviewDockerReading;
+
+  /// The Docker card once the server's Docker endpoint is no longer ready: the figures below are the last ones read. time is the older of the two lists' read times, as a date and time in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'These figures are from {time}. The Docker engine cannot be reached now, so they may be out of date.'**
+  String overviewDockerStale(DateTime time);
+
+  /// The Docker card: why the container or image list could not be read; the figures below, if any, are from the last lists read. reason is the engine's failure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} daemonError{The engine refused or failed to list the containers or images.} connectionFailed{The connection to the engine failed while listing the containers or images.} other{The containers or images could not be listed.}}'**
+  String overviewDockerListFailed(String reason);
+
+  /// A count in the Docker card, in the UI locale's number format.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}'**
+  String overviewDockerCount(int count);
+
+  /// Docker card: how many containers are running.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get overviewDockerRunning;
+
+  /// Docker card: how many containers are paused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get overviewDockerPaused;
+
+  /// Docker card: how many containers are neither running nor paused (created, restarting, exited, dead), as docker info counts them.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped'**
+  String get overviewDockerStopped;
+
+  /// Docker card: how many containers report an unhealthy health check.
+  ///
+  /// In en, this message translates to:
+  /// **'Unhealthy'**
+  String get overviewDockerUnhealthy;
+
+  /// Docker card: how many images the engine has.
+  ///
+  /// In en, this message translates to:
+  /// **'Images'**
+  String get overviewDockerImages;
+
+  /// Docker card: how many images at least one container, running or not, was created from.
+  ///
+  /// In en, this message translates to:
+  /// **'Images in use'**
+  String get overviewDockerImagesInUse;
+
+  /// Docker card: how many images have no tag (Docker's dangling images).
+  ///
+  /// In en, this message translates to:
+  /// **'Dangling images'**
+  String get overviewDockerDangling;
+
+  /// Docker card: the space that removing unused images, containers, volumes and build cache would free, from the engine's disk use report.
+  ///
+  /// In en, this message translates to:
+  /// **'Reclaimable space'**
+  String get overviewDockerReclaimable;
+
+  /// Docker card: the reclaimable space before the reader asked for it to be measured.
+  ///
+  /// In en, this message translates to:
+  /// **'Not measured'**
+  String get overviewDockerNotMeasured;
+
+  /// Docker card: under the reclaimable space before it was measured, why it is not measured on its own.
+  ///
+  /// In en, this message translates to:
+  /// **'Measuring asks the engine to add up every image, container, volume and build cache, which can take a while on large hosts.'**
+  String get overviewDockerMeasureNote;
+
+  /// Docker card: button that asks the engine for its disk use report (/system/df) to show the reclaimable space.
+  ///
+  /// In en, this message translates to:
+  /// **'Measure disk use'**
+  String get overviewDockerMeasure;
+
+  /// Docker card: the measure button once a measurement is shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Measure again'**
+  String get overviewDockerMeasureAgain;
+
+  /// Docker card: beside a progress indicator while the disk use report is read.
+  ///
+  /// In en, this message translates to:
+  /// **'Measuring disk use. This can take a while on large hosts.'**
+  String get overviewDockerMeasuring;
+
+  /// Docker card: when the reclaimable space shown was measured, as a date and time in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Measured at {time}.'**
+  String overviewDockerMeasured(DateTime time);
+
+  /// Docker card: why the last disk use measurement failed; a reclaimable space shown is from the measurement before. reason is the engine's failure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, linkUnavailable{Disk use could not be measured: the server is not connected.} profileUnknown{Disk use could not be measured: the server has not been checked yet.} endpointUnavailable{Disk use could not be measured: the Docker engine cannot be reached.} daemonError{The engine refused or failed to measure its disk use.} connectionFailed{The connection to the engine failed or timed out while measuring disk use.} cancelled{The measurement stopped because the connection to the engine changed. Measure again to retry.} other{Disk use could not be measured.}}'**
+  String overviewDockerMeasureFailed(String reason);
+
   /// Tooltip of the sync control in the fleet rail and on phones while this device is not signed in to the Séance sync account; selecting it opens the sign-in. Also told when a sync is asked for before signing in.
   ///
   /// In en, this message translates to:
@@ -4180,6 +4312,42 @@ abstract class AppLocalizations {
   /// **'Managed by {manager}. Acting on it here can conflict with {manager}.'**
   String actionPreviewOwnership(String manager);
 
+  /// Preview note for an operation that runs detached on the server (03 §7.17).
+  ///
+  /// In en, this message translates to:
+  /// **'Runs on the server and continues if you leave or the connection drops. Its result shows under Operations.'**
+  String get actionPreviewDetached;
+
+  /// Preview note for a detached operation on iOS, where the app does not run in the background (03 §7.17).
+  ///
+  /// In en, this message translates to:
+  /// **'Runs on the server and continues if you leave the app or the connection drops. Its result shows under Operations when you come back.'**
+  String get actionPreviewDetachedIos;
+
+  /// Heading above a redeploy's orphan containers (STK-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Containers the stack\'s files no longer name'**
+  String get actionPreviewOrphans;
+
+  /// Switch in a redeploy preview that plans it again with --remove-orphans, which needs the typed confirmation (STK-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Also remove these containers'**
+  String get actionPreviewRemoveOrphans;
+
+  /// A warning in the action preview; warning is the engine's PlanWarning name.
+  ///
+  /// In en, this message translates to:
+  /// **'{warning, select, profileGatedServices{Some running services are enabled only by a compose profile, which Klabautermann cannot see. The redeploy leaves them as they are.} profilesUnknown{The compose CLI could not list every profile\'s services, so some of these containers may belong to a service a profile enables.} mayDieAtLogout{This server ends your processes when you log out, which can stop the operation before it finishes.} other{}}'**
+  String actionPreviewWarning(String warning);
+
+  /// Toast when a detached operation started on the server; its result shows under Operations.
+  ///
+  /// In en, this message translates to:
+  /// **'Started on the server: {target}'**
+  String actionStartedOnServer(String target);
+
   /// Heading above the danger findings in the action preview (AI-01).
   ///
   /// In en, this message translates to:
@@ -4515,6 +4683,120 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{date} {time}'**
   String activityTime(String date, String time);
+
+  /// Server header chip while detached operations run on the server (03 §7.17); count is how many.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 operation running} other{{count} operations running}}'**
+  String detachedChipRunning(int count);
+
+  /// Server header chip when detached operations ended and their results wait to be seen; count is how many.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 operation result} other{{count} operation results}}'**
+  String detachedChipResults(int count);
+
+  /// Title of the sheet listing a server's detached operations; server is its display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Operations on {server}'**
+  String detachedSheetTitle(String server);
+
+  /// Notice in the operations sheet when a directory was denied or its listing was cut short.
+  ///
+  /// In en, this message translates to:
+  /// **'Some operations may be missing: an operation folder on the server could not be read.'**
+  String get detachedIncomplete;
+
+  /// The operations sheet when the server has none.
+  ///
+  /// In en, this message translates to:
+  /// **'No operations.'**
+  String get detachedEmpty;
+
+  /// Under an operation another device started, whose action this device does not know.
+  ///
+  /// In en, this message translates to:
+  /// **'Started on another device.'**
+  String get detachedLaunchedElsewhere;
+
+  /// An operation's name when another device started it; id is its 16-character id.
+  ///
+  /// In en, this message translates to:
+  /// **'Operation {id}'**
+  String detachedUnnamed(String id);
+
+  /// An operation's name: the worded action and the target it acts on.
+  ///
+  /// In en, this message translates to:
+  /// **'{action}: {target}'**
+  String detachedName(String action, String target);
+
+  /// A running operation's state; time is when it started, in local time.
+  ///
+  /// In en, this message translates to:
+  /// **'Running since {time}.'**
+  String detachedRunningSince(String time);
+
+  /// A running operation's state when its start time is unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Running.'**
+  String get detachedRunning;
+
+  /// An operation that ended with exit status 0.
+  ///
+  /// In en, this message translates to:
+  /// **'Finished.'**
+  String get detachedSucceeded;
+
+  /// An operation that ended with a non-zero exit status; code is that status.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed with exit status {code}.'**
+  String detachedFailed(int code);
+
+  /// An operation whose runner ended without recording a result.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped before it finished, for example by a logout or a restart.'**
+  String get detachedLost;
+
+  /// An operation whose state the engine could not determine.
+  ///
+  /// In en, this message translates to:
+  /// **'Its state could not be read.'**
+  String get detachedUnknown;
+
+  /// Button that opens an operation's output, followed live.
+  ///
+  /// In en, this message translates to:
+  /// **'Show output'**
+  String get detachedShowOutput;
+
+  /// Button that acknowledges an ended operation's result, which deletes its files.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get detachedAcknowledge;
+
+  /// Under an acknowledged operation of the root directory, whose files only admin mode can delete.
+  ///
+  /// In en, this message translates to:
+  /// **'Cleared. Its files are deleted once admin mode is on.'**
+  String get detachedCleanupWaits;
+
+  /// Title of the sheet following an operation's output; name is the operation's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Output of {name}'**
+  String detachedOutputTitle(String name);
+
+  /// Tooltip and screen reader label of the button that closes an operation's output sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Close output'**
+  String get detachedOutputClose;
 
   /// The server header's Docker transport label (03 §5.9, E4) before the server is connected and its capability check has answered.
   ///

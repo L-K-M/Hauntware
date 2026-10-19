@@ -2781,6 +2781,136 @@ class AppLocalizationsEn extends AppLocalizations {
       'Waiting for the operating system and kernel.';
 
   @override
+  String overviewHealthContainersUnhealthy(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString unhealthy containers',
+      one: '1 unhealthy container',
+      zero: 'No unhealthy containers',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String overviewHealthContainer(String name, String status) {
+    return '$name: $status';
+  }
+
+  @override
+  String get overviewDockerTitle => 'Docker';
+
+  @override
+  String get overviewDockerReading => 'Reading the containers and images.';
+
+  @override
+  String overviewDockerStale(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return 'These figures are from $timeString. The Docker engine cannot be reached now, so they may be out of date.';
+  }
+
+  @override
+  String overviewDockerListFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'tooManyQueries':
+          'This server already has as many Docker watches open as Klabautermann allows.',
+      'daemonError':
+          'The engine refused or failed to list the containers or images.',
+      'connectionFailed':
+          'The connection to the engine failed while listing the containers or images.',
+      'other': 'The containers or images could not be listed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String overviewDockerCount(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '$countString';
+  }
+
+  @override
+  String get overviewDockerRunning => 'Running';
+
+  @override
+  String get overviewDockerPaused => 'Paused';
+
+  @override
+  String get overviewDockerStopped => 'Stopped';
+
+  @override
+  String get overviewDockerUnhealthy => 'Unhealthy';
+
+  @override
+  String get overviewDockerImages => 'Images';
+
+  @override
+  String get overviewDockerImagesInUse => 'Images in use';
+
+  @override
+  String get overviewDockerDangling => 'Dangling images';
+
+  @override
+  String get overviewDockerReclaimable => 'Reclaimable space';
+
+  @override
+  String get overviewDockerNotMeasured => 'Not measured';
+
+  @override
+  String get overviewDockerMeasureNote =>
+      'Measuring asks the engine to add up every image, container, volume and build cache, which can take a while on large hosts.';
+
+  @override
+  String get overviewDockerMeasure => 'Measure disk use';
+
+  @override
+  String get overviewDockerMeasureAgain => 'Measure again';
+
+  @override
+  String get overviewDockerMeasuring =>
+      'Measuring disk use. This can take a while on large hosts.';
+
+  @override
+  String overviewDockerMeasured(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return 'Measured at $timeString.';
+  }
+
+  @override
+  String overviewDockerMeasureFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'linkUnavailable':
+          'Disk use could not be measured: the server is not connected.',
+      'profileUnknown':
+          'Disk use could not be measured: the server has not been checked yet.',
+      'endpointUnavailable':
+          'Disk use could not be measured: the Docker engine cannot be reached.',
+      'daemonError': 'The engine refused or failed to measure its disk use.',
+      'connectionFailed':
+          'The connection to the engine failed or timed out while measuring disk use.',
+      'cancelled':
+          'The measurement stopped because the connection to the engine changed. Measure again to retry.',
+      'other': 'Disk use could not be measured.',
+    });
+    return '$_temp0';
+  }
+
+  @override
   String get syncSignInTooltip =>
       'Sign in to your Séance account to list its servers';
 
@@ -3146,6 +3276,40 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get actionPreviewDetached =>
+      'Runs on the server and continues if you leave or the connection drops. Its result shows under Operations.';
+
+  @override
+  String get actionPreviewDetachedIos =>
+      'Runs on the server and continues if you leave the app or the connection drops. Its result shows under Operations when you come back.';
+
+  @override
+  String get actionPreviewOrphans =>
+      'Containers the stack\'s files no longer name';
+
+  @override
+  String get actionPreviewRemoveOrphans => 'Also remove these containers';
+
+  @override
+  String actionPreviewWarning(String warning) {
+    String _temp0 = intl.Intl.selectLogic(warning, {
+      'profileGatedServices':
+          'Some running services are enabled only by a compose profile, which Klabautermann cannot see. The redeploy leaves them as they are.',
+      'profilesUnknown':
+          'The compose CLI could not list every profile\'s services, so some of these containers may belong to a service a profile enables.',
+      'mayDieAtLogout':
+          'This server ends your processes when you log out, which can stop the operation before it finishes.',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String actionStartedOnServer(String target) {
+    return 'Started on the server: $target';
+  }
+
+  @override
   String get actionPreviewDanger => 'Warnings';
 
   @override
@@ -3454,6 +3618,94 @@ class AppLocalizationsEn extends AppLocalizations {
   String activityTime(String date, String time) {
     return '$date $time';
   }
+
+  @override
+  String detachedChipRunning(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count operations running',
+      one: '1 operation running',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String detachedChipResults(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count operation results',
+      one: '1 operation result',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String detachedSheetTitle(String server) {
+    return 'Operations on $server';
+  }
+
+  @override
+  String get detachedIncomplete =>
+      'Some operations may be missing: an operation folder on the server could not be read.';
+
+  @override
+  String get detachedEmpty => 'No operations.';
+
+  @override
+  String get detachedLaunchedElsewhere => 'Started on another device.';
+
+  @override
+  String detachedUnnamed(String id) {
+    return 'Operation $id';
+  }
+
+  @override
+  String detachedName(String action, String target) {
+    return '$action: $target';
+  }
+
+  @override
+  String detachedRunningSince(String time) {
+    return 'Running since $time.';
+  }
+
+  @override
+  String get detachedRunning => 'Running.';
+
+  @override
+  String get detachedSucceeded => 'Finished.';
+
+  @override
+  String detachedFailed(int code) {
+    return 'Failed with exit status $code.';
+  }
+
+  @override
+  String get detachedLost =>
+      'Stopped before it finished, for example by a logout or a restart.';
+
+  @override
+  String get detachedUnknown => 'Its state could not be read.';
+
+  @override
+  String get detachedShowOutput => 'Show output';
+
+  @override
+  String get detachedAcknowledge => 'Clear';
+
+  @override
+  String get detachedCleanupWaits =>
+      'Cleared. Its files are deleted once admin mode is on.';
+
+  @override
+  String detachedOutputTitle(String name) {
+    return 'Output of $name';
+  }
+
+  @override
+  String get detachedOutputClose => 'Close output';
 
   @override
   String get dockerTransportWaiting => 'Engine API: waiting for the connection';

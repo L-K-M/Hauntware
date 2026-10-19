@@ -4,10 +4,12 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import '../controllers/docker_controller.dart';
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'chart_strings.dart';
 import 'charts/charts.dart';
+import 'docker/containers_view.dart' show containerNameOf;
 import 'failed_units_summary.dart';
 import 'fleet_row_state.dart' show kFleetRowStaleAfter, kFleetRowThresholds;
 import 'freshness.dart';
@@ -40,6 +42,10 @@ final Duration _slowStaleAfter = kFleetRowStaleAfter[SampleStream.fs]!;
 /// which lists them all; the health card names every full one.
 const int _maxMountsShown = 8;
 
+/// How many unhealthy containers the health card names before "and N
+/// more", as the failed units summary does.
+const int _maxUnhealthyShown = 5;
+
 /// The trailing number of a `/proc/stat` core name such as `cpu12`.
 final RegExp _coreNumber = RegExp(r'\d+$');
 
@@ -65,7 +71,11 @@ List<(String, double)> orderedCores(Map<String, double> perCpu) {
 /// (MEM-01) and swap (MEM-02), with session sparklines from the
 /// controller's rings and bar gauges, then the mounts (DSK-01, DSK-02),
 /// network throughput (NET-01), and the host's OS, kernel, uptime and
-/// boot time (SYS-01, BOOT-01).
+/// boot time (SYS-01, BOOT-01). With a Docker endpoint, the health card
+/// adds the unhealthy containers and the Docker card gives OV-05's
+/// summary from the containers and images it watches while [visible]
+/// ([DockerController.watchSummary]), with the reclaimable space on
+/// demand; a server without one shows neither.
 ///
 /// It shows the last reading of each stream its [SampledSurface]
 /// subscribes, under freshness lines in 9.5 item 4's words, and greys the
@@ -105,6 +115,7 @@ class OverviewPanel extends StatelessWidget {
     final reading = monitoring.lastReadingFor(serverId, SampleStream.core);
     final sampling = monitoring.samplingFor(serverId);
     final slow = _Slow(monitoring, serverId);
+    final docker = _Docker(monitoring.docker, serverId);
     final scope = AnnouncementScope.maybeOf(context);
     // False while a pushed route, such as a phone's Settings, covers the
     // panel; it rebuilds when that changes.
@@ -113,19 +124,31 @@ class OverviewPanel extends StatelessWidget {
       core: latest,
       fs: slow.fs,
       active: visible && onstage && (scope?.notifier?.value ?? false),
-      child: ListenableBuilder(
-        listenable: Listenable.merge([latest, reading, sampling, ...slow.all]),
-        builder: (context, _) => ListenableBuilder(
-          listenable: visible && (reading.value != null || slow.aging)
-              ? monitoring.clock
-              : _silent,
-          builder: (context, _) => _build(
-            context,
-            latest.value,
-            reading.value,
-            sampling.value,
-            slow,
-            scope,
+      child: _DockerSummaryWatch(
+        docker: monitoring.docker,
+        serverId: serverId,
+        visible: visible,
+        child: ListenableBuilder(
+          listenable: Listenable.merge([
+            latest,
+            reading,
+            sampling,
+            ...slow.all,
+            ...docker.all,
+          ]),
+          builder: (context, _) => ListenableBuilder(
+            listenable: visible && (reading.value != null || slow.aging)
+                ? monitoring.clock
+                : _silent,
+            builder: (context, _) => _build(
+              context,
+              latest.value,
+              reading.value,
+              sampling.value,
+              slow,
+              docker,
+              scope,
+            ),
           ),
         ),
       ),
@@ -138,6 +161,7 @@ class OverviewPanel extends StatelessWidget {
     Sample? reading,
     SamplingStatus? sampling,
     _Slow slow,
+    _Docker docker,
     AnnouncementScope? scope,
   ) {
     final l10n = AppLocalizations.of(context);
@@ -170,6 +194,7 @@ class OverviewPanel extends StatelessWidget {
     };
     final partTwo = _PartTwo(
       slow: slow,
+      docker: docker,
       core: cards?.core,
       coreStale: coreFreshness.stale,
       diskFreshness: freshness(_slowStaleAfter, slow.listed.value?.at),
@@ -203,6 +228,13 @@ class OverviewPanel extends StatelessWidget {
         );
         final disks = partTwo.disks(context);
         final host = partTwo.host(context);
+        final dockerCard = docker.shown
+            ? _DockerCard(
+                docker: docker,
+                controller: monitoring.docker,
+                serverId: serverId,
+              )
+            : null;
         return SingleChildScrollView(
           padding: EdgeInsets.all(wide ? 20 : 16),
           child: column([
@@ -232,9 +264,9 @@ class OverviewPanel extends StatelessWidget {
                 column([cards.cpu(context), cards.load(context)]),
                 column([cards.memory(context), cards.swap(context)]),
               ),
-              row(disks, column([cards.network(context), host])),
+              row(disks, column([cards.network(context), host, ?dockerCard])),
             ] else if (wide)
-              row(disks, host)
+              row(disks, dockerCard == null ? host : column([host, dockerCard]))
             else ...[
               if (cards != null) ...[
                 cards.cpu(context),
@@ -245,6 +277,7 @@ class OverviewPanel extends StatelessWidget {
               disks,
               ?cards?.network(context),
               host,
+              ?dockerCard,
             ],
             ?coverage,
           ]),
@@ -344,6 +377,329 @@ final class _Slow {
   }
 }
 
+/// The server's Docker lists and disk use as the Overview reads them
+/// (OV-02, OV-05).
+final class _Docker {
+  _Docker(DockerController docker, String serverId)
+    : endpoint = docker.endpointFor(serverId),
+      containers = docker.containersFor(serverId),
+      images = docker.imagesFor(serverId),
+      diskUse = docker.diskUseFor(serverId);
+
+  final ValueListenable<DockerEndpointState?> endpoint;
+  final ValueListenable<DockerContainerList> containers;
+  final ValueListenable<DockerImageList> images;
+  final ValueListenable<DockerDiskUse> diskUse;
+
+  List<Listenable> get all => [endpoint, containers, images, diskUse];
+
+  bool get ready => endpoint.value?.phase == DockerEndpointPhase.ready;
+
+  /// Whether the server has shown a Docker endpoint: it is ready, or
+  /// lists from one are held. A server without Docker never gets one,
+  /// and the Overview names no Docker card or container for it.
+  bool get shown => ready || containers.value.containers != null;
+
+  /// Whether the lists held are no longer followed: the endpoint is not
+  /// ready, so nothing reads them again.
+  bool get stale => !ready;
+}
+
+/// Holds the server's summary watch while the Overview [visible]
+/// ([DockerController.watchSummary]); the controller sends it once the
+/// endpoint is ready.
+class _DockerSummaryWatch extends StatefulWidget {
+  const _DockerSummaryWatch({
+    required this.docker,
+    required this.serverId,
+    required this.visible,
+    required this.child,
+  });
+
+  final DockerController docker;
+  final String serverId;
+  final bool visible;
+  final Widget child;
+
+  @override
+  State<_DockerSummaryWatch> createState() => _DockerSummaryWatchState();
+}
+
+class _DockerSummaryWatchState extends State<_DockerSummaryWatch> {
+  /// The server [DockerController.watchSummary] was told of, if any.
+  String? _held;
+
+  @override
+  void initState() {
+    super.initState();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_DockerSummaryWatch oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    assert(
+      widget.docker == oldWidget.docker,
+      'new controllers come with a new tree (KlabautermannApp, D44)',
+    );
+    _sync();
+  }
+
+  @override
+  void dispose() {
+    _release();
+    super.dispose();
+  }
+
+  void _sync() {
+    final wanted = widget.visible ? widget.serverId : null;
+    if (_held == wanted) return;
+    _release();
+    if (wanted == null) return;
+
+    widget.docker.watchSummary(wanted);
+    _held = wanted;
+  }
+
+  void _release() {
+    final held = _held;
+    if (held == null) return;
+
+    _held = null;
+    widget.docker.unwatchSummary(held);
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+/// OV-05's Docker summary (03 §7.1): container counts as `docker info`
+/// splits them and the image counts from the watched lists, and the
+/// reclaimable space from `/system/df`, measured only when asked since
+/// it is slow on large hosts. Once the endpoint is not ready, the last
+/// figures grey under the time they were read.
+class _DockerCard extends StatelessWidget {
+  const _DockerCard({
+    required this.docker,
+    required this.controller,
+    required this.serverId,
+  });
+
+  final _Docker docker;
+  final DockerController controller;
+  final String serverId;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final stale = docker.stale;
+    final containerList = docker.containers.value;
+    final imageList = docker.images.value;
+    final containers = containerList.containers;
+    final images = imageList.images;
+    final failure = containerList.failure ?? imageList.failure;
+    final readAt = [
+      ?containerList.at,
+      ?imageList.at,
+    ].fold<DateTime?>(null, (a, b) => a == null || b.isBefore(a) ? b : a);
+    final diskUse = docker.diskUse.value;
+    final summary = containers == null
+        ? null
+        : dockerSummary(containers, images ?? const [], diskUse.df);
+    String count(int value) => l10n.overviewDockerCount(value);
+    String? imageCount(int value) => images == null ? null : count(value);
+
+    return PanelSection(
+      title: l10n.overviewDockerTitle,
+      children: [
+        if (stale && readAt != null)
+          PanelNotice(
+            icon: Icons.history,
+            text: l10n.overviewDockerStale(readAt.toLocal()),
+          ),
+        if (failure != null) ...[
+          PanelNotice(
+            icon: Icons.error_outline,
+            text: l10n.overviewDockerListFailed(failure.failure.name),
+            detail: failure.detail,
+          ),
+          if (docker.ready)
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton(
+                onPressed: () => controller.retrySummary(serverId),
+                child: Text(l10n.dockerRetry),
+              ),
+            ),
+        ] else if (summary == null || images == null)
+          PanelNotice(
+            icon: Icons.hourglass_empty,
+            text: l10n.overviewDockerReading,
+          ),
+        if (summary != null) ...[
+          _Facts(
+            stale: stale,
+            facts: [
+              (l10n.overviewDockerRunning, count(summary.running)),
+              (l10n.overviewDockerPaused, count(summary.paused)),
+              (l10n.overviewDockerStopped, count(summary.stopped)),
+              (l10n.overviewDockerUnhealthy, count(summary.unhealthy)),
+            ],
+          ),
+          _Facts(
+            stale: stale,
+            facts: [
+              (l10n.overviewDockerImages, imageCount(summary.images)),
+              (l10n.overviewDockerImagesInUse, imageCount(summary.imagesInUse)),
+              (l10n.overviewDockerDangling, imageCount(summary.danglingImages)),
+            ],
+          ),
+        ],
+        ..._diskUse(context, l10n, diskUse, stale: stale, muted: muted),
+      ],
+    );
+  }
+
+  /// The reclaimable space, when it was measured, and the action that
+  /// measures it, with its progress or why it failed.
+  List<Widget> _diskUse(
+    BuildContext context,
+    AppLocalizations l10n,
+    DockerDiskUse diskUse, {
+    required bool stale,
+    required Color muted,
+  }) {
+    final theme = Theme.of(context);
+    final df = diskUse.df;
+    final at = diskUse.at;
+    final failure = diskUse.failure;
+    final note = theme.textTheme.bodySmall?.copyWith(color: muted);
+    return [
+      _Facts(
+        stale: stale,
+        facts: [
+          (
+            l10n.overviewDockerReclaimable,
+            df == null
+                ? l10n.overviewDockerNotMeasured
+                : _Cards._bytes(l10n, df.reclaimable),
+          ),
+        ],
+      ),
+      if (df != null && at != null)
+        Text(l10n.overviewDockerMeasured(at.toLocal()), style: note),
+      if (diskUse.inFlight)
+        MergeSemantics(
+          child: Row(
+            spacing: 8,
+            children: [
+              const SizedBox.square(
+                dimension: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              Expanded(child: Text(l10n.overviewDockerMeasuring)),
+            ],
+          ),
+        )
+      else if (failure != null)
+        PanelNotice(
+          icon: Icons.error_outline,
+          text: l10n.overviewDockerMeasureFailed(failure.failure.name),
+          detail: failure.detail,
+        )
+      else if (df == null)
+        Text(l10n.overviewDockerMeasureNote, style: note),
+      Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: TextButton.icon(
+          onPressed: docker.ready && !diskUse.inFlight
+              ? () => controller.measureDiskUse(serverId)
+              : null,
+          icon: const Icon(Icons.data_usage),
+          label: Text(
+            df == null
+                ? l10n.overviewDockerMeasure
+                : l10n.overviewDockerMeasureAgain,
+          ),
+        ),
+      ),
+    ];
+  }
+}
+
+/// OV-02's unhealthy containers beside the failed units: how many, then
+/// each one's name with the engine's status text, in the failed units
+/// summary's shape. The Docker tab has no route to one container yet,
+/// so the names are plain text.
+class _UnhealthyContainers extends StatelessWidget {
+  const _UnhealthyContainers({required this.unhealthy, required this.stale});
+
+  final List<ContainerSummary> unhealthy;
+  final bool stale;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final none = unhealthy.isEmpty;
+    final color = none || stale
+        ? theme.colorScheme.onSurfaceVariant
+        : theme.colorScheme.error;
+    final hidden = unhealthy.length - _maxUnhealthyShown;
+    final line = stale
+        ? TextStyle(color: theme.colorScheme.onSurfaceVariant)
+        : null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 4,
+      children: [
+        Semantics(
+          header: true,
+          child: Row(
+            spacing: 8,
+            children: [
+              Icon(
+                none ? Icons.check_circle_outline : Icons.error_outline,
+                color: color,
+                size: 20,
+              ),
+              Flexible(
+                child: Text(
+                  l10n.overviewHealthContainersUnhealthy(unhealthy.length),
+                  style: theme.textTheme.titleSmall?.copyWith(color: color),
+                ),
+              ),
+            ],
+          ),
+        ),
+        for (final container in unhealthy.take(_maxUnhealthyShown))
+          Padding(
+            padding: const EdgeInsetsDirectional.only(start: 28),
+            child: Text(
+              l10n.overviewHealthContainer(
+                containerNameOf(container),
+                container.status ?? l10n.chartUnknownValue,
+              ),
+              style: line,
+            ),
+          ),
+        if (hidden > 0)
+          Padding(
+            padding: const EdgeInsetsDirectional.only(start: 28),
+            child: Text(
+              l10n.servicesFailedMore(hidden),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: stale ? theme.colorScheme.onSurfaceVariant : null,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 /// How the health card's link words the A11Y-15 switch.
 enum _SwitchState { on, off }
 
@@ -352,6 +708,7 @@ enum _SwitchState { on, off }
 final class _PartTwo {
   const _PartTwo({
     required this.slow,
+    required this.docker,
     required this.core,
     required this.coreStale,
     required this.diskFreshness,
@@ -359,6 +716,7 @@ final class _PartTwo {
   });
 
   final _Slow slow;
+  final _Docker docker;
   final CoreResult? core;
   final bool coreStale;
   final Freshness diskFreshness, healthFreshness;
@@ -378,8 +736,9 @@ final class _PartTwo {
       ? Icons.timer_off_outlined
       : Icons.error_outline;
 
-  /// OV-02: failed units through K34's summary, then the mounts past a
-  /// level, and the link to A11Y-15's switch in Settings (D60).
+  /// OV-02: failed units through K34's summary and, with a Docker
+  /// endpoint, the unhealthy containers, then the mounts past a level, and
+  /// the link to A11Y-15's switch in Settings (D60).
   Widget health(BuildContext context, AnnouncementScope? scope) {
     final l10n = AppLocalizations.of(context);
     final stale = healthFreshness.stale;
@@ -407,6 +766,15 @@ final class _PartTwo {
             icon: Icons.hourglass_empty,
             text: l10n.overviewHealthUnitsWaiting,
           ),
+        if (docker.shown)
+          if (docker.containers.value.containers case final containers?)
+            _UnhealthyContainers(
+              unhealthy: [
+                for (final container in containers)
+                  if (container.health == HealthStatus.unhealthy) container,
+              ],
+              stale: docker.stale,
+            ),
         ..._diskHealth(context, l10n, stale),
         if (scope != null)
           Align(

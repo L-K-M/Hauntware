@@ -163,6 +163,18 @@ DockerListChanged dockerImageList(
   fullRelist: true,
 );
 
+/// A `/system/df` answer whose images free [images] bytes and volumes
+/// [volumes] (OV-05).
+DockerSystemDfPayload dockerDiskUse({int images = 0, int volumes = 0}) =>
+    DockerSystemDfPayload(
+      SystemDf(
+        images: DiskUsageTotals(reclaimable: images),
+        containers: const DiskUsageTotals(reclaimable: 0),
+        volumes: DiskUsageTotals(reclaimable: volumes),
+        buildCache: const DiskUsageTotals(reclaimable: 0),
+      ),
+    );
+
 /// [id] inspected as the engine sends it (CTR-03, CTR-04), masked by the
 /// engine (03 §8.9): a running compose service with a secret in its
 /// environment, a label and its command line, an unhealthy check whose

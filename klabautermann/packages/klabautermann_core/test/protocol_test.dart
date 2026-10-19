@@ -727,6 +727,43 @@ void main() {
       );
     });
 
+    test('a disk use query and its totals survive (02 OV-05)', () async {
+      final query =
+          await roundTrip(
+                const DockerQuery(
+                  serverId: 'srv-1',
+                  queryId: 'q-df',
+                  query: DockerSystemDfQuery(),
+                ),
+              )
+              as DockerQuery;
+      expect(query.query, isA<DockerSystemDfQuery>());
+
+      final result =
+          await roundTrip(
+                const DockerResult(
+                  serverId: 'srv-1',
+                  queryId: 'q-df',
+                  payload: DockerSystemDfPayload(
+                    SystemDf(
+                      images: DiskUsageTotals(
+                        totalCount: 12,
+                        activeCount: 4,
+                        totalSize: 3000,
+                        reclaimable: 1000,
+                      ),
+                      volumes: DiskUsageTotals(reclaimable: 500),
+                    ),
+                  ),
+                ),
+              )
+              as DockerResult;
+      final df = (result.payload as DockerSystemDfPayload).df;
+      expect(df.images!.activeCount, 4);
+      expect(df.containers, isNull);
+      expect(df.reclaimable, 1500);
+    });
+
     test('sampling requests survive with their ids, streams and '
         'profile (D45)', () async {
       final subscribe =

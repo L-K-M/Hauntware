@@ -1033,9 +1033,19 @@ void engineMain(
           reject(message, 'links are off');
           return;
         }
-        if (await tracker.acknowledge(serverId, id) case final reason?) {
-          reject(message, reason);
-        }
+        // Not awaited: the answer waits for the server's listing in
+        // flight, which reads over the link, and the queue keeps serving
+        // the app meanwhile. The tracker is not expected to throw; if it
+        // does, the engine answers rather than dying with every link.
+        unawaited(
+          tracker.acknowledge(serverId, id).then(
+            (reason) {
+              if (reason != null) reject(message, reason);
+            },
+            onError: (Object error) =>
+                reject(message, 'acknowledgement: $error'),
+          ),
+        );
       case ReadUserCrontabs(:final serverId, :final requestId):
         void fail(UserCrontabsFailure failure) => uiPort.send(
           UserCrontabs(

@@ -190,7 +190,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   `Libpod-API-Version` and reports `DockerEndpointState`. Results are
   typed; inspect `Path`/`Args`, `Entrypoint`/`Cmd` and health output
   cross masked, and the list drops its command line. Tested over fakes
-  only; no `/system/df` (D03).
+  only; `DockerSystemDfQuery` reads `/system/df` on demand since D19
+  (below).
 - Docker watches (M3, D06, 03 §7.12, §10.1): `DockerWatch` keeps the
   container, image and stack lists current from one `/events` stream
   per server (250 ms batches, targeted re-reads by container id,
@@ -198,8 +199,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   one-shot list stats for the ids on screen every 5 s (4 at once on
   streamlocal, one at a time on a relay), all as `DockerListChanged`.
   Tested over fakes only; the app watches the containers and their
-  stats since D13, the images since D16 and the stacks since D17
-  (below).
+  stats since D13, the images since D16, the containers and images for
+  the Overview since D19 and the stacks since D17 (below).
 - Container logs (M3, D07, 03 §5.6, §10.1): `ContainerLogSource`
   streams a container's logs through `OpenLogStream` as
   `ContainerRecord`s over the server's Docker endpoint: framing by
@@ -380,6 +381,20 @@ M2, the host read MVP, is the current milestone. What is on main:
   once the endpoint is ready (version, standalone only, v1 only, none),
   and the runtime row "chosen manually". Tested over fakes and the fake
   engine only; D21 and D22 meet the rows on real sshd variants.
+- Overview Docker summary (M3, D19, 03 §7.1, §10.1, §10.4, OV-02,
+  OV-05): once a server's Docker endpoint is ready, the Overview holds
+  a `DockerWatch` of the containers and images of its own while it
+  shows (none for a server without Docker) and ends it when hidden.
+  The health card lists the unhealthy containers after the failed
+  units (up to five, with the engine's status text, as plain text:
+  no route to one container yet). A Docker card after Host counts
+  running, paused, stopped and unhealthy containers, images, images in
+  use and dangling ones through `dockerSummary`, and measures the
+  reclaimable space only when asked (`DockerSystemDfQuery`, within
+  the 30 s request timeout), with progress, its time and why one
+  failed. With the endpoint gone, held figures grey under their read
+  time. Tested against the fake engine only; a large host's
+  `/system/df` timing is unmeasured.
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and
@@ -895,8 +910,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   the new band; where the platform takes no announcements (Android), a
   live region carries it. The switch is a device setting (D60; its key
   is in `settings.json`, below), on Settings' General tab and in the
-  desktop settings window. Not yet: unhealthy containers (M3) and user
-  thresholds (OV-11).
+  desktop settings window. Not yet: user thresholds (OV-11); D19
+  (above) added the unhealthy containers.
 - Coverage part 1 (M2, 03 §9.5 items 1, 2 and 4, K39a, #210): a
   first-run card heads the desktop workspace and the phone's fleet list
   until "Got it", which `settings.json` keeps (below). A coverage chip at
@@ -1335,6 +1350,13 @@ M2, the host read MVP, is the current milestone. What is on main:
   through `mirror.gcr.io`, as the other official images are, and the
   fixture is recaptured from it. Docker Hub has so far kept replaced
   official digests pullable, but promises nothing.
+- Image pin check: the root `Image pins` workflow runs
+  `test/integration/check_image_pins.sh` weekly, by hand and on pull
+  requests that change a pin. It inspects the manifest of every
+  digest-pinned image in the integration scripts, Compose file and sshd
+  Dockerfiles without pulling, and fails naming each dead pin and the
+  files that pin it, so a dropped digest shows up there before it
+  breaks `klabautermann_integration` on every branch.
 - Docker fixture and rank-1 smoke (M3, 03 §5.4, §11.3, D10): the
   fixture adds `dind` (Docker 29.9.1, privileged, unpublished, dockerd
   on one Unix socket with gid 990, on a named volume) and `docker-sshd`
@@ -1602,6 +1624,14 @@ M2, the host read MVP, is the current milestone. What is on main:
   crontabs are read masked, and another account's process is killed
   only through elevation. Admin mode's inactivity expiry stays with the
   unit tests' fake clock, since the shortest choice is five minutes.
+- M4 redeploy preview (E23b): a detached plan's preview says it
+  continues on the server, a redeploy lists its orphans with the switch
+  that plans their removal and the typed name, and the warnings are
+  worded. The stacks view's entry arrives with E22.
+- M4 detached operations in the app (E23, first half): a chip in the
+  server header counts running operations or results to review, and its
+  sheet shows each one's state, follows its output and clears an ended
+  result. The redeploy preview follows E18.
 - M4 Docker action planners (E15): `PlanAction` plans container state
   changes and removal, image removal and stack start, stop and restart
   over the server's Docker endpoint. Steps address the full id and are
@@ -1621,7 +1651,7 @@ M2, the host read MVP, is the current milestone. What is on main:
   unmanaged stack as one detached operation of `config -q`, `pull` and
   `up -d` through the endpoint's `--host`, listing orphans and warning
   about profile-gated services. The runner checks the config hashes
-  again before it launches. The app's redeploy arrives with E23b.
+  again before it launches.
 - M4 operation output (E17c): the engine follows a detached
   operation's output file like any log file, each line redacted.
 - M4 detached runner, second half (E17b): the engine reads each

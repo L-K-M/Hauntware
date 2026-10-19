@@ -4045,6 +4045,29 @@ login user, so no elevation is needed. The follow is the file follow of
 the window bounds what the first batch holds, as for any file. An
 operation the engine does not list ends the stream as `invalid`.
 
+As built in M4 (E23, first half), the app shows a server's detached
+operations from `OperationsChanged`:
+- The server header's chip counts the running ones, or else the results
+  not yet acknowledged, and opens a sheet that lists each operation:
+  - its action and target, or its id when another device started it;
+  - its state;
+  - its output, followed live through `OperationLogSource`;
+  - for an ended result, a Clear button that sends
+    `AcknowledgeOperation`.
+- An acknowledged root operation says its files wait for admin mode.
+- A directory that was denied or cut short says operations may be
+  missing.
+- Each list replaces the one before, so a reconnect re-attaches.
+
+In its second half (E23b) the preview words a detached plan: it says
+the operation continues on the server if the user leaves or the
+connection drops, and on iOS that the result shows on return. A
+redeploy lists its orphans with a switch that plans it again with
+`removeOrphans`, whose preview then asks for the typed name, and each
+`PlanWarning` is worded. A started operation toasts that it started;
+its result comes through the chip. The stacks view's redeploy entry
+arrives with E22's Docker actions.
+
 ### 7.18 Backups (BAK)
 
 - **v1.x.** One-shot database dumps from a container using its own
@@ -5982,6 +6005,17 @@ the engine in `engine_isolate.dart` beside it):
   chosen socket is in use or the endpoint looks, and that it is not in
   use otherwise. The picker sits in the Docker tab's engine strip and,
   so a failing endpoint can be changed, under the failed tab's reason.
+- **Version 3 (M3 disk use).** OV-05's reclaimable space joined
+  version 3 the same way (7.1): `DockerSystemDfQuery` reads
+  `/system/df` without `verbose`, answered by
+  `DockerSystemDfPayload(df)`, `klabautermann_docker`'s `SystemDf` of
+  per-type totals (images, containers, volumes, build cache; a type the
+  daemon did not cover is null) read in the shape the negotiated
+  version gates (5.8), or by a typed failure as any query. The engine
+  reads it only when asked, since the daemon walks every layer and
+  volume to compute it, within the client's 30 s request timeout like
+  every buffered read, so on a relay it holds the one pooled
+  connection no longer than any other query.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period
@@ -6365,6 +6399,30 @@ The health card ends with a link to D60's switch, which reaches the
 Overview, and its announcer in `threshold_announcer.dart`, through an
 inherited scope above the navigator, as the macOS toolbar band does,
 since a phone pushes the server screen as a route of its own.
+
+As built in M3 for OV-05 and the rest of OV-02 (the same file), an
+Overview that shows a server whose Docker endpoint is ready has the
+Docker controller watch its containers and images under a watch of its
+own, apart from the Containers sub-tab's, which carries stats and is
+replaced as rows scroll; the engine serves both from one `/events`
+stream and answers a list it already holds at once. The watch goes out
+only once the endpoint is ready, so a server without Docker is never
+watched, and ends when the Overview hides. The health card then lists
+the unhealthy containers after the failed units, in the failed units
+summary's shape (a count, then up to five names with the engine's
+status text, and "and N more"), as plain text: the Docker tab has no
+route to one container yet. The Docker card follows the Host card
+(in its column when wide) with `dockerSummary`'s running, paused and
+stopped containers, as `docker info` splits them, the unhealthy ones
+from the container list's health, and the images, those in use and
+the dangling ones; the reclaimable space
+reads "not measured" until the reader asks for `/system/df`, which
+shows its progress, the time of the last measurement, or why it
+failed above the one before, and is dropped when the endpoint's socket
+changes. A server shows neither the card nor the unhealthy list
+before its endpoint was ready; once lists are held and the endpoint is
+not ready, they grey under the time they were read and measuring waits
+for the endpoint.
 
 As built in M2 (`app/klabautermann_app/lib/ui/processes_panel.dart`), the
 Processes tab lists PRC-01's processes from the `procs` stream it

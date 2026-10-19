@@ -16,7 +16,9 @@ const double _sheetBelowWidth = 600;
 /// plan once the user confirms (SAF-04, SAF-05). A refused plan says why
 /// in a toast; the run's progress and end come as toasts from
 /// [ActionResultToasts]. [onRun] hears of the preview once its plan runs,
-/// as JOB-08's output sheet does. Returns once the preview is closed.
+/// as JOB-08's output sheet does. A preview that offers another intent
+/// (STK-06's orphan removal) plans that one and shows it instead.
+/// Returns once the preview is closed.
 Future<void> previewAndRun(
   BuildContext context,
   OperationsController operations,
@@ -25,32 +27,48 @@ Future<void> previewAndRun(
 }) async {
   final overlay = Overlay.of(context, rootOverlay: true);
   final l10n = AppLocalizations.of(context);
-  final answer = await operations.plan(intent);
-  if (!context.mounted) return;
+  for (ActionIntent? next = intent; next != null;) {
+    final answer = await operations.plan(next);
+    next = null;
+    if (!context.mounted) return;
 
-  switch (answer) {
-    case PlanRefused(:final reason):
-      if (overlay.mounted) {
-        showTopToast(overlay, message: l10n.actionRefused(reason.name));
-      }
-    case PlanReady(:final planId, :final preview):
-      final confirmation = await showActionPreview(context, preview);
-      if (confirmation == null) return;
-      operations.run(planId, confirmation);
-      onRun?.call(preview);
-      if (overlay.mounted) {
-        showTopToast(overlay, message: l10n.actionRunning(preview.targetName));
-      }
+    switch (answer) {
+      case PlanRefused(:final reason):
+        if (overlay.mounted) {
+          showTopToast(overlay, message: l10n.actionRefused(reason.name));
+        }
+      case PlanReady(:final planId, :final preview):
+        ActionIntent? switched;
+        final confirmation = await showActionPreview(
+          context,
+          preview,
+          onSwitch: (intent) => switched = intent,
+        );
+        if (switched != null) {
+          next = switched;
+          continue;
+        }
+        if (confirmation == null) return;
+        operations.run(planId, confirmation);
+        onRun?.call(preview);
+        if (overlay.mounted) {
+          showTopToast(
+            overlay,
+            message: l10n.actionRunning(preview.targetName),
+          );
+        }
+    }
   }
 }
 
 /// Shows [preview] as a dialog on wide windows and a bottom sheet on
 /// narrow ones, and returns the user's confirmation, or null when they
-/// cancelled.
+/// cancelled or chose another intent, which [onSwitch] hears.
 Future<ActionConfirmation?> showActionPreview(
   BuildContext context,
-  ActionPreview preview,
-) {
+  ActionPreview preview, {
+  ValueChanged<ActionIntent>? onSwitch,
+}) {
   if (MediaQuery.sizeOf(context).width < _sheetBelowWidth) {
     return showModalBottomSheet<ActionConfirmation>(
       context: context,
@@ -64,7 +82,7 @@ Future<ActionConfirmation?> showActionPreview(
             24,
             24 + MediaQuery.viewInsetsOf(context).bottom,
           ),
-          child: ActionPreviewView(preview: preview),
+          child: ActionPreviewView(preview: preview, onSwitch: onSwitch),
         ),
       ),
     );
@@ -76,7 +94,7 @@ Future<ActionConfirmation?> showActionPreview(
         constraints: const BoxConstraints(maxWidth: 640),
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: ActionPreviewView(preview: preview),
+          child: ActionPreviewView(preview: preview, onSwitch: onSwitch),
         ),
       ),
     ),
@@ -86,12 +104,17 @@ Future<ActionConfirmation?> showActionPreview(
 /// The preview's body (03 §8.5): the target, the exact steps in the
 /// monospace stack with a root badge on elevated ones (SAF-03), the
 /// danger findings, the impact, protection and ownership, who runs it,
-/// what it leaves on the server, and the confirmation. It pops its route
-/// with the confirmation, or with null on Cancel.
+/// what it leaves on the server, and the confirmation. A detached
+/// operation says it continues on the server; a redeploy lists its
+/// orphans with the switch that plans their removal. It pops its route
+/// with the confirmation, or with null on Cancel or a switch.
 class ActionPreviewView extends StatelessWidget {
-  const ActionPreviewView({super.key, required this.preview});
+  const ActionPreviewView({super.key, required this.preview, this.onSwitch});
 
   final ActionPreview preview;
+
+  /// Hears the intent the user switched to, before the route pops.
+  final ValueChanged<ActionIntent>? onSwitch;
 
   @override
   Widget build(BuildContext context) {
@@ -112,7 +135,15 @@ class ActionPreviewView extends StatelessWidget {
         l10n.actionPreviewImpact(impact.kind.name, impact.count ?? 0),
       if (preview.ownership case final ownership?)
         l10n.actionPreviewOwnership(ownership.manager),
+      for (final warning in PlanWarning.values)
+        if (preview.warnings.contains(warning))
+          l10n.actionPreviewWarning(warning.name),
     ];
+    final redeploy = switch (preview.intent) {
+      final RedeployStack intent when preview.orphans.isNotEmpty => intent,
+      _ => null,
+    };
+    final switchTo = onSwitch;
 
     return SingleChildScrollView(
       child: Column(
@@ -172,7 +203,39 @@ class ActionPreviewView extends StatelessWidget {
                 ),
               ),
           ],
+          if (preview.orphans.isNotEmpty) ...[
+            Semantics(
+              header: true,
+              child: Text(
+                l10n.actionPreviewOrphans,
+                style: textTheme.titleSmall,
+              ),
+            ),
+            for (final name in preview.orphans) Text(name, style: mono),
+            if ((redeploy, switchTo) case (final intent?, final switchTo?))
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(l10n.actionPreviewRemoveOrphans),
+                value: intent.removeOrphans,
+                onChanged: (remove) {
+                  switchTo(
+                    RedeployStack(
+                      intent.serverId,
+                      project: intent.project,
+                      removeOrphans: remove,
+                    ),
+                  );
+                  Navigator.of(context).pop();
+                },
+              ),
+          ],
           for (final note in notes) Text(note, style: textTheme.bodyMedium),
+          if (preview.detached)
+            Text(
+              theme.platform == TargetPlatform.iOS
+                  ? l10n.actionPreviewDetachedIos
+                  : l10n.actionPreviewDetached,
+            ),
           Text(
             runner.engine == null
                 ? l10n.actionPreviewRunner(runner.identity)
@@ -245,6 +308,8 @@ class _ActionResultToastsState extends State<ActionResultToasts> {
     final target = widget.operations.targetOf(planId) ?? planId;
     final message = switch (state) {
       RunFinished(:final finished) => switch (finished.outcome) {
+        ActionOutcome.succeeded when finished.operationId != null =>
+          l10n.actionStartedOnServer(target),
         ActionOutcome.succeeded => l10n.actionSucceeded(target),
         ActionOutcome.cancelled => l10n.actionCancelled(target),
         ActionOutcome.failed => switch (finished.failure) {

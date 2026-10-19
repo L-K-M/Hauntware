@@ -457,6 +457,51 @@ void main() {
       expect(image.labels['password']!.display, MaskedValue.maskToken);
     });
 
+    test('disk use reads /system/df in the negotiated shape (OV-05)', () async {
+      final (h, daemon) = await ready();
+      daemon.routes['/v1.52/system/df'] = jsonEncode({
+        'ImageUsage': {
+          'TotalCount': 3,
+          'ActiveCount': 1,
+          'TotalSize': 3000,
+          'Reclaimable': 2000,
+        },
+        'ContainerUsage': {
+          'TotalCount': 2,
+          'ActiveCount': 1,
+          'TotalSize': 40,
+          'Reclaimable': 10,
+        },
+        'VolumeUsage': {
+          'TotalCount': 1,
+          'ActiveCount': 1,
+          'TotalSize': 500,
+          'Reclaimable': 0,
+        },
+        'BuildCacheUsage': {
+          'TotalCount': 0,
+          'ActiveCount': 0,
+          'TotalSize': 0,
+          'Reclaimable': 0,
+        },
+      });
+
+      final id = h.query(const DockerSystemDfQuery());
+      final df = (await h.result(id) as DockerSystemDfPayload).df;
+      expect(df.images!.activeCount, 1);
+      expect(df.reclaimable, 2010);
+      expect(daemon.requests, contains('GET /v1.52/system/df HTTP/1.1'));
+
+      daemon.failures['/v1.52/system/df'] = (500, 'busy');
+      final failed = h.query(const DockerSystemDfQuery());
+      expect(
+        await h.result(failed),
+        _failed(
+          DockerQueryFailure.daemonError,
+        ).having((f) => f.detail, 'detail', 'busy'),
+      );
+    });
+
     test('a gone container, a daemon error, an empty id and a server '
         'outside the fleet are answered as such', () async {
       final (h, daemon) = await ready();
