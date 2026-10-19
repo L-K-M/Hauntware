@@ -13,6 +13,7 @@
 library;
 
 import 'dart:async';
+import 'dart:math' as math;
 
 /// A kind of consumer with its own share of a server's session channels
 /// (03 §5.2). The samplers, SFTP and per-operation channels hold one each
@@ -43,6 +44,10 @@ const kFollowerMinSessionLimit = 4;
 /// learned session limit puts a server in (M9).
 const kLowSessionFollowersMax = 1;
 
+/// The session channels the two samplers hold on every link, outside
+/// the shares.
+const kSamplerChannels = 2;
+
 /// One server's [ChannelShare] slots in use, owned by the engine isolate.
 final class ChannelQuota {
   /// A quota on its own; [ChannelQuotas.of] gives the shared one.
@@ -60,17 +65,26 @@ final class ChannelQuota {
   int held(ChannelShare share) => _held[share]!;
 
   /// Takes a slot of [share] and returns true, or returns false when its
-  /// slots are all taken or, for a follower, the session limit the link
-  /// learned ([learnedSessionLimit]) leaves no room for another: none
-  /// below [kFollowerMinSessionLimit], and [kLowSessionFollowersMax] at
-  /// or above it.
+  /// slots are all taken or the session limit the link learned
+  /// ([learnedSessionLimit]) leaves no room for another. Under a learned
+  /// limit the shares together hold what the samplers leave, and
+  /// followers none below [kFollowerMinSessionLimit] and
+  /// [kLowSessionFollowersMax] at or above it. Below that limit the
+  /// samplers leave less than the short-action share, which then keeps
+  /// its own slots and queues on the link as before (D22).
   bool take(ChannelShare share, {int? learnedSessionLimit}) {
     final held = _held[share]!;
-    if (share == ChannelShare.follower &&
-        learnedSessionLimit != null &&
-        (learnedSessionLimit < kFollowerMinSessionLimit ||
-            held >= kLowSessionFollowersMax)) {
-      return false;
+    if (learnedSessionLimit != null) {
+      if (share == ChannelShare.follower &&
+          (learnedSessionLimit < kFollowerMinSessionLimit ||
+              held >= kLowSessionFollowersMax)) {
+        return false;
+      }
+      final room = math.max(
+        ChannelShare.shortAction.limit,
+        learnedSessionLimit - kSamplerChannels,
+      );
+      if (_held.values.fold(0, (sum, n) => sum + n) >= room) return false;
     }
 
     if (held >= share.limit) return false;
@@ -78,11 +92,15 @@ final class ChannelQuota {
     return true;
   }
 
-  /// Takes a slot of [share] once one is free. Only for short actions,
-  /// which a learned session limit does not hold back.
-  Future<void> acquire(ChannelShare share) async {
+  /// Takes a slot of [share] once one is free, under the session limit
+  /// the link has learned by then ([learnedSessionLimit]). Only for short
+  /// actions.
+  Future<void> acquire(
+    ChannelShare share, {
+    int? Function()? learnedSessionLimit,
+  }) async {
     assert(share == ChannelShare.shortAction, 'a follower never waits here');
-    while (!take(share)) {
+    while (!take(share, learnedSessionLimit: learnedSessionLimit?.call())) {
       final freed = Completer<void>();
       _waiters.add(freed);
       await freed.future;

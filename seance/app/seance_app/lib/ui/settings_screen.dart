@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:ghost_fonts/ghost_fonts.dart' show BundledMonoFont;
+import 'package:ghost_fonts/ghost_fonts.dart';
 import 'package:planchette_editor/planchette_editor.dart'
     show
         EditorLigatures,
@@ -10,12 +10,14 @@ import 'package:planchette_editor/planchette_editor.dart'
         editorDefaultFont,
         normalizeEditorExtensions,
         validateEditorDisplayName;
+import 'package:seance_core/catalog.dart' show HostKeyConflict;
 import 'package:seance_core/seance_core.dart';
 
 import '../family_hues.dart';
 import '../services/external_file_opener.dart';
 import '../services/settings_backend.dart';
 import '../services/system_fonts.dart';
+import '../theme.dart' show SeanceTheme;
 import 'appearance_settings.dart';
 import 'app_lock_settings.dart';
 import 'font_picker.dart';
@@ -24,7 +26,6 @@ import 'recovery_settings.dart';
 import 'selected_tab_view.dart';
 import 'settings_layout.dart';
 import 'sync_enrollment_validation.dart';
-import 'terminal_appearance.dart';
 import 'top_toast.dart';
 
 export '../services/settings_backend.dart' show SettingsTab;
@@ -122,11 +123,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   /// would pin the test seam to whatever the first widget instance carried.
   SystemFonts get _systemFonts => widget.systemFonts ?? hostSystemFonts();
 
-  late double _terminalFontSize;
   late int _editorFontSize;
-  late TerminalPalette _terminalPalette;
-  late TerminalLigatures _terminalLigatures;
-  final _terminalFont = TextEditingController();
   late EditorLigatures _editorLigatures;
   final _editorFont = TextEditingController();
   SyncEnrollmentMode _syncMode = SyncEnrollmentMode.login;
@@ -180,11 +177,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     _localShell = s.localShell;
     _keepSessionsAlive = s.keepSessionsAliveInBackground;
     _editorRegistry = EditorRegistry.fromJson(s.editorRegistry.toJson());
-    _terminalFontSize = clampTerminalFontSize(s.terminalFontSize);
     _editorFontSize = EditorTextSize.clamp(s.editorFontSize);
-    _terminalPalette = s.terminalPalette;
-    _terminalLigatures = s.terminalLigatures;
-    _terminalFont.text = s.terminalFontFamily;
     _editorLigatures = s.editorLigatures;
     _editorFont.text = s.editorFontFamily;
     _syncUrl.text = s.syncBaseUrl ?? '';
@@ -221,7 +214,6 @@ class _SettingsScreenState extends State<SettingsScreen>
       _syncPassword,
       _syncEncryptionPassphrase,
       _syncEncryptionPassphraseConfirm,
-      _terminalFont,
       _editorFont,
     ]) {
       c.dispose();
@@ -484,7 +476,8 @@ class _SettingsScreenState extends State<SettingsScreen>
         contentPadding: EdgeInsets.zero,
         title: const Text('Check for updates'),
         subtitle: const Text(
-          'Checks GitHub on launch and only links to the release page.',
+          'Checks GitHub on launch. Nothing is downloaded until you choose '
+          'to update.',
         ),
         value: _checkForUpdates,
         onChanged: (value) {
@@ -514,116 +507,6 @@ class _SettingsScreenState extends State<SettingsScreen>
       ],
       const Divider(height: 40),
       ..._localShellSection(),
-      const Divider(height: 40),
-      SettingsSectionHeader(
-        'Terminal',
-        helpTitle: 'Terminal appearance',
-        help:
-            'Font size, family, colors and ligatures apply to every session '
-            'on this device. With the terminal focused you can zoom without '
-            'opening Settings: ⌘ with +, − or 0 on macOS and iPadOS, '
-            'Ctrl+Shift with the same keys elsewhere (plain Ctrl chords belong '
-            'to the shell). '
-            'Leave the font family blank to use Iosevka Term, which ships '
-            'with Séance and draws ligatures. The button in the field lists '
-            'the fonts Séance includes and, on desktop, the ones installed '
-            'here, each previewed in its own face; you can also type any '
-            'family name the system knows.',
-      ),
-      Row(
-        children: [
-          Expanded(
-            child: Slider(
-              min: kMinTerminalFontSize,
-              max: kMaxTerminalFontSize,
-              divisions:
-                  ((kMaxTerminalFontSize - kMinTerminalFontSize) /
-                          kTerminalFontSizeStep)
-                      .round(),
-              value: _terminalFontSize,
-              label: '${_terminalFontSize.round()} pt',
-              onChanged: (value) => setState(
-                () => _terminalFontSize = clampTerminalFontSize(value),
-              ),
-              onChangeEnd: (_) => _persistTerminalAppearance(),
-            ),
-          ),
-          SizedBox(
-            width: 56,
-            child: Text(
-              '${_terminalFontSize.round()} pt',
-              textAlign: TextAlign.end,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
-        ],
-      ),
-      TextField(
-        controller: _terminalFont,
-        decoration: InputDecoration(
-          labelText: 'Font family (optional)',
-          hintText:
-              'e.g. Fira Code — blank uses ${kDefaultTerminalFont.displayName}',
-          // Everywhere: the fonts Séance includes are always there to pick.
-          // Installed ones join them only where there is a collection to
-          // read (on mobile an app sees the system faces it is given rather
-          // than a user-managed library).
-          suffixIcon: IconButton(
-            tooltip: 'Choose a font',
-            icon: const Icon(Icons.font_download_outlined),
-            onPressed: _pickTerminalFont,
-          ),
-        ),
-        onSubmitted: (_) => _persistTerminalAppearance(),
-        onTapOutside: (_) {
-          // Overriding onTapOutside replaces TextField's default handler, so
-          // the dismissal it would have done has to be done here — otherwise
-          // the soft keyboard stays up after tapping away on mobile.
-          FocusManager.instance.primaryFocus?.unfocus();
-          _persistTerminalAppearance();
-        },
-      ),
-      const SizedBox(height: 16),
-      DropdownButtonFormField<TerminalPalette>(
-        initialValue: _terminalPalette,
-        decoration: const InputDecoration(labelText: 'Colors'),
-        items: const [
-          DropdownMenuItem(
-            value: TerminalPalette.followApp,
-            child: Text('Follow the app theme'),
-          ),
-          DropdownMenuItem(
-            value: TerminalPalette.alwaysDark,
-            child: Text('Always dark'),
-          ),
-          DropdownMenuItem(
-            value: TerminalPalette.alwaysLight,
-            child: Text('Always light'),
-          ),
-        ],
-        onChanged: (value) {
-          if (value == null) return;
-          setState(() => _terminalPalette = value);
-          _persistTerminalAppearance();
-        },
-      ),
-      SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        title: const Text('Ligatures'),
-        subtitle: const Text(
-          'Join character pairs such as -> and != into one symbol, in fonts '
-          'that draw them.',
-        ),
-        value: _terminalLigatures == TerminalLigatures.on,
-        onChanged: (on) {
-          setState(
-            () => _terminalLigatures = on
-                ? TerminalLigatures.on
-                : TerminalLigatures.off,
-          );
-          _persistTerminalAppearance();
-        },
-      ),
       const Divider(height: 40),
       SettingsSectionHeader(
         'Built-in editor',
@@ -1054,6 +937,25 @@ class _SettingsScreenState extends State<SettingsScreen>
           builder: (context, _) => _SyncStatusLine(status: _backend.syncStatus),
         ),
       ),
+      ListenableBuilder(
+        listenable: _backend,
+        builder: (context, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final conflict in _backend.syncStatus.pinConflicts)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: _PinConflictCard(
+                  conflict: conflict,
+                  onResolve: _saving
+                      ? null
+                      : (keepLocal) =>
+                            _resolvePinConflict(conflict, keepLocal: keepLocal),
+                ),
+              ),
+          ],
+        ),
+      ),
       const SizedBox(height: 24),
       RecoverySettings(backend: _backend),
     ],
@@ -1324,19 +1226,6 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
-  /// Persist terminal appearance and repaint every live session. Called on
-  /// slider release and on each discrete choice, so the General tab keeps its
-  /// "saves immediately" contract.
-  Future<void> _persistTerminalAppearance() => _persist(
-    'Terminal appearance',
-    () => _backend.setTerminalAppearance(
-      fontSize: _terminalFontSize,
-      fontFamily: _terminalFont.text.trim(),
-      palette: _terminalPalette,
-      ligatures: _terminalLigatures,
-    ),
-  );
-
   Future<void> _persistEditorFontSize() => _persist(
     'Editor text size',
     () => _backend.setEditorFontSize(_editorFontSize),
@@ -1353,34 +1242,30 @@ class _SettingsScreenState extends State<SettingsScreen>
   /// The terminal font's picker for the editor: a dismissal leaves the
   /// field alone, the default choice clears it.
   Future<void> _pickEditorFont() async {
-    final chosen = await showFontPicker(
+    final chosen = await showMonoFontPicker(
       context,
-      fonts: _systemFonts,
       current: _editorFont.text.trim(),
-      title: 'Editor font',
-      builtInLabel: 'Use ${editorDefaultFont.displayName}',
-      bundled: BundledMonoFont.values,
+      defaultFont: editorDefaultFont,
+      fontSize: _editorFontSize.toDouble(),
+      ligatures: _editorLigatures == EditorLigatures.on
+          ? MonoLigatures.on
+          : MonoLigatures.off,
+      installedFonts: _systemFonts.isSupported
+          ? () async => {
+              for (final font in await _systemFonts.families())
+                font.name: font.monospaced,
+            }
+          : null,
+      labels: const MonoFontPickerLabels(title: 'Editor font'),
     );
     if (chosen == null || !mounted) return;
-    _editorFont.text = chosen;
+    setState(() {
+      _editorFont.text = chosen.family;
+      _editorLigatures = chosen.ligatures == MonoLigatures.on
+          ? EditorLigatures.on
+          : EditorLigatures.off;
+    });
     await _persistEditorFont();
-  }
-
-  /// Opens the installed-font picker and applies what it returns.
-  ///
-  /// A dismissal leaves the field alone; the built-in-stack choice clears it,
-  /// which is what a blank family already means to [TerminalAppearance].
-  Future<void> _pickTerminalFont() async {
-    final chosen = await showFontPicker(
-      context,
-      fonts: _systemFonts,
-      current: _terminalFont.text.trim(),
-      builtInLabel: 'Use ${kDefaultTerminalFont.displayName}',
-      bundled: BundledMonoFont.values,
-    );
-    if (chosen == null || !mounted) return;
-    _terminalFont.text = chosen;
-    await _persistTerminalAppearance();
   }
 
   Future<void> _persistEditorRegistry() => _persist(
@@ -1553,6 +1438,37 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
+  Future<void> _resolvePinConflict(
+    HostKeyConflict conflict, {
+    required bool keepLocal,
+  }) async {
+    setState(() => _saving = true);
+    try {
+      final resolution = await _backend.resolvePinConflict(
+        conflict,
+        keepLocal: keepLocal,
+      );
+      if (!mounted) return;
+      showTopToastIn(
+        context,
+        message: switch (resolution) {
+          PulledPinResolution.resolved when keepLocal =>
+            'Kept this device\'s key for ${conflict.locator}.',
+          PulledPinResolution.resolved =>
+            'Now trusting the new key for ${conflict.locator}.',
+          PulledPinResolution.stale =>
+            'The key for ${conflict.locator} changed on this device since '
+                'this was shown, so nothing was changed. Sync again to see '
+                'where it stands.',
+        },
+      );
+    } catch (e) {
+      if (mounted) showTopToastIn(context, message: 'Host key: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   Future<void> _syncNow() async {
     setState(() {
       _saving = true;
@@ -1627,6 +1543,71 @@ class SyncEnrollmentFields extends StatelessWidget {
         ),
     ],
   );
+}
+
+/// A pulled host key that disagrees with this device's pin (Séance #56):
+/// both fingerprints, and the choice between them. Sync never applies the
+/// pulled key on its own.
+class _PinConflictCard extends StatelessWidget {
+  const _PinConflictCard({required this.conflict, required this.onResolve});
+
+  final HostKeyConflict conflict;
+
+  /// Called with true to keep this device's key. Null while busy.
+  final void Function(bool keepLocal)? onResolve;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final onContainer = TextStyle(color: scheme.onErrorContainer);
+    final mono = SeanceTheme.mono.copyWith(
+      fontSize: 12,
+      color: scheme.onErrorContainer,
+    );
+    final resolve = onResolve;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.errorContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Another device synced a different host key for '
+            '${conflict.locator}. Séance kept this device\'s key and is not '
+            'using the other one. If the server\'s key really changed, trust '
+            'the new one; otherwise keep yours.',
+            style: onContainer,
+          ),
+          const SizedBox(height: 8),
+          Text('This device trusts', style: onContainer),
+          SelectableText(conflict.local.fingerprintSha256, style: mono),
+          const SizedBox(height: 4),
+          Text('The other device synced', style: onContainer),
+          SelectableText(conflict.pulled.fingerprintSha256, style: mono),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.tonal(
+                key: ValueKey('sync.pin.keep.${conflict.locator}'),
+                onPressed: resolve == null ? null : () => resolve(true),
+                child: const Text('Keep this device\'s key'),
+              ),
+              TextButton(
+                key: ValueKey('sync.pin.accept.${conflict.locator}'),
+                onPressed: resolve == null ? null : () => resolve(false),
+                child: const Text('Trust the new key'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// A live, one-line reflection of the app-wide sync state (also updated by

@@ -14,21 +14,15 @@ enum EditorLigatures {
   static EditorLigatures named(Object? name) =>
       values.firstWhere((value) => value.name == name, orElse: () => on);
 
-  /// [style] drawn with this choice. Off turns off contextual alternates
-  /// and standard ligatures, the two features ligature fonts draw them
-  /// with; on keeps [style], since text shaping applies both by default.
-  TextStyle applyTo(TextStyle style) => switch (this) {
-    off => style.copyWith(
-      fontFeatures: [...?style.fontFeatures, ..._ligaturesOff],
-    ),
-    on => style,
-  };
-}
+  /// Preserve host styling while applying the selected font's ligature sets.
+  TextStyle applyTo(TextStyle style) {
+    final features = (this == on ? MonoLigatures.on : MonoLigatures.off)
+        .featuresFor(style.fontFamily);
+    if (features.isEmpty) return style;
 
-const _ligaturesOff = [
-  FontFeature.disable('calt'),
-  FontFeature.disable('liga'),
-];
+    return style.copyWith(fontFeatures: [...?style.fontFeatures, ...features]);
+  }
+}
 
 /// The bundled face the editor draws in when its host names no other, and
 /// the one a font menu marks as the default.

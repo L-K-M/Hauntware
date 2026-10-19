@@ -2,12 +2,15 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as paths;
 
+import 'android_documents.dart';
 import 'document_windows.dart';
 import 'document_workspace.dart';
+import 'document_store.dart';
 
 final class AppDocumentDialogs implements DocumentDialogs {
-  AppDocumentDialogs(this.navigatorKey, {this.pickers});
+  AppDocumentDialogs(this.navigatorKey, {this.pickers, this.android});
   final GlobalKey<NavigatorState> navigatorKey;
+  final AndroidDocuments? android;
 
   /// The window's own native file dialogs. file_selector parents every
   /// dialog to the plugin registry's view — the main window — which may be
@@ -20,6 +23,8 @@ final class AppDocumentDialogs implements DocumentDialogs {
   // Open and Save As work on desktops that run no portal service.
   @override
   Future<List<String>> pickOpenFiles() async {
+    final documents = android;
+    if (documents != null) return documents.pickOpenFiles();
     final window = pickers;
     if (window != null && window.available) {
       return window.pickOpenFiles();
@@ -28,8 +33,28 @@ final class AppDocumentDialogs implements DocumentDialogs {
     return [for (final file in files) file.path];
   }
 
+  Future<String?> pickDirectory() {
+    final window = pickers;
+    if (window != null && window.available) return window.pickDirectory();
+    return getDirectoryPath(confirmButtonText: 'Open Folder');
+  }
+
+  /// Key picking shares the window-owned dialog and bounded UTF-8 reader.
+  Future<String?> pickKeyText() async {
+    final selected = await pickOpenFiles();
+    if (selected.isEmpty) return null;
+    if (selected.length != 1) {
+      throw const FormatException('Choose one private-key file.');
+    }
+    return (await LocalDocumentStore().load(selected.single)).text;
+  }
+
   @override
   Future<String?> pickSavePath(String suggestedName) async {
+    final documents = android;
+    if (documents != null) {
+      return documents.pickSavePath(paths.basename(suggestedName));
+    }
     final window = pickers;
     if (window != null && window.available) {
       return window.pickSavePath(
