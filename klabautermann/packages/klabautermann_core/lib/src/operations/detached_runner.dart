@@ -83,9 +83,10 @@ String? elevatedProgram(DetachedRunner runner) {
 /// Whether the login user's sudo rules let root run [program] with any
 /// arguments (03 §7.17, D66), from `sudo -l` over [link], with
 /// [session]'s password on stdin when it has one. A root login and an
-/// account without sudo are not checked. A listing that cannot be read
-/// refuses nothing: the launch then meets sudo's own refusal, which
-/// reports it.
+/// account without sudo are not checked. A listing that cannot be read,
+/// or a link that fails while reading it, refuses nothing: the launch
+/// then meets sudo's own refusal, or the same link failure, and reports
+/// it.
 Future<bool> sudoAllowsProgram({
   required SshLink link,
   required AdminSession session,
@@ -95,11 +96,16 @@ Future<bool> sudoAllowsProgram({
   if (profile.uid == 0 || profile.sudoVersionLine == null) return true;
 
   final password = session.password;
-  // The C locale keeps sudo's own lines in the English the reader knows.
-  final result = await link.run(
-    password == null ? 'LC_ALL=C sudo -n -l' : "LC_ALL=C sudo -S -p '' -l",
-    stdin: password == null ? const [] : utf8.encode('$password\n'),
-  );
+  final RemoteCommandResult result;
+  try {
+    // The C locale keeps sudo's own lines in the English the reader knows.
+    result = await link.run(
+      password == null ? 'LC_ALL=C sudo -n -l' : "LC_ALL=C sudo -S -p '' -l",
+      stdin: password == null ? const [] : utf8.encode('$password\n'),
+    );
+  } on RemoteCommandException {
+    return true;
+  }
   return sudoListAllows('${result.stdout}\n${result.stderr}', program) ?? true;
 }
 

@@ -330,8 +330,8 @@ void main() {
       );
     });
 
-    test('an unreadable listing, a root login and no sudo refuse '
-        'nothing', () async {
+    test('an unreadable listing, a failed link, a root login and no '
+        'sudo refuse nothing', () async {
       final refused = _Link({
         'sudo': const RemoteCommandResult(
           exitCode: 1,
@@ -346,6 +346,18 @@ void main() {
           program: 'systemd-run',
         ),
         isTrue,
+      );
+      final broken = _Link({})
+        ..failure = const RemoteCommandException('channel closed');
+      expect(
+        await sudoAllowsProgram(
+          link: broken,
+          session: session(broken, null),
+          profile: withSudo,
+          program: 'systemd-run',
+        ),
+        isTrue,
+        reason: 'a link that fails reads no listing',
       );
 
       for (final profile in [

@@ -67,6 +67,14 @@ void main() {
       isFalse,
       reason: 'arguments restrict the command to exactly those',
     );
+    expect(
+      sudoListAllows(
+        _listing(['(root) /usr/bin/systemd-run *']),
+        'systemd-run',
+      ),
+      isTrue,
+      reason: 'a lone * matches any arguments',
+    );
   });
 
   test('another run-as user does not count', () {
@@ -91,6 +99,14 @@ void main() {
     expect(
       sudoListAllows(_listing(['(ALL) ALL, !/usr/bin/su']), 'systemd-run'),
       isTrue,
+    );
+    expect(
+      sudoListAllows(
+        _listing(['(ALL) !/usr/bin/systemd-run', '(root) ALL']),
+        'systemd-run',
+      ),
+      isTrue,
+      reason: 'the last match wins',
     );
   });
 

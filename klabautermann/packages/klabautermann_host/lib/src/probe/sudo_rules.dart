@@ -19,9 +19,10 @@ final _commandSeparator = RegExp(r'(?<!\\),');
 /// Whether [output], `sudo -l` run as the login user, lets root run
 /// [program] (a base name such as `systemd-run`) with any arguments: a
 /// rule whose run-as user is root or `ALL` and whose commands hold `ALL`
-/// or [program] without arguments. A negated command naming [program]
-/// denies it whatever else allows it, since sudoers lets the last match
-/// win and the listing does not keep every rule's order.
+/// or [program] without arguments, or with a lone `*`, which matches any.
+/// A negated command naming [program] denies it unless a later one allows
+/// it again: sudoers lets the last match win, and `sudo -l` lists the
+/// rules in sudoers' order.
 ///
 /// False when sudo says the user may run nothing; null when [output]
 /// holds no listing at all (a refusal, a failed password, or another
@@ -48,9 +49,15 @@ bool? sudoListAllows(String output, String program) {
       final head = words.first;
       final names = head == 'ALL' || _baseName(head) == program;
       if (!names) continue;
-      if (negated) return false;
-      // Arguments in a rule restrict the command to exactly those.
-      if (head == 'ALL' || words.length == 1) allowed = true;
+      if (negated) {
+        allowed = false;
+        continue;
+      }
+      // Arguments in a rule restrict the command to exactly those, but a
+      // lone `*` matches any.
+      final anyArguments =
+          words.length == 1 || (words.length == 2 && words[1] == '*');
+      if (head == 'ALL' || anyArguments) allowed = true;
     }
   }
   return allowed;
