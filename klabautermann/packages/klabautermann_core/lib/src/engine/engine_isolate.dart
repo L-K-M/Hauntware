@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:klabautermann_host/klabautermann_host.dart' show HostProfile;
+import 'package:klabautermann_host/klabautermann_host.dart'
+    show HostProfile, OpDirectoryKind;
 import 'package:meta/meta.dart';
 import 'package:seance_core/catalog.dart'
     show EndpointPin, EndpointPinStore, endpointPinsFileName;
@@ -32,10 +33,17 @@ import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
 import '../logs/log_stream_router.dart';
 import '../operations/confirmation.dart';
+import '../operations/detached_runner.dart';
+import '../operations/operation_plan.dart'
+    show DockerTargetUnchanged, PlanAttempt, StackConfigUnchanged;
 import '../operations/operation_runner.dart';
+import '../operations/operation_tracker.dart';
+import '../operations/operations_shown.dart';
 import '../operations/plan_registry.dart';
 import '../operations/plan_types.dart' show RequiredLevel;
+import '../operations/plans/docker_plans.dart';
 import '../operations/plans/host_plans.dart';
+import '../operations/plans/redeploy_plan.dart';
 import '../operations/protected_targets.dart';
 import '../sampling/sampling_scheduler.dart';
 import '../sampling/subscriptions.dart';
@@ -183,6 +191,9 @@ void engineMain(
   // off. The safety policy the app last sent; until then every server is
   // observe-only (SAF-01).
   AdminModeController? admin;
+  // Each server's detached operations (03 §7.17), over the links; none
+  // while links are off. It opens with the support directory's files.
+  OperationTracker? operations;
   var safetyPolicy = const SafetyPolicy();
   // Previewed plans and the runner of confirmed ones (03 §8.5). A plan
   // runs only on the link generation it was planned on: each server's
@@ -304,6 +315,7 @@ void engineMain(
               } else {
                 readyLinks.remove(event.serverId);
                 admin?.linkLost(event.serverId);
+                operations?.linkLost(event.serverId);
               }
             }
           },
@@ -334,14 +346,101 @@ void engineMain(
         null => null,
       },
       prompts: prompts,
-      emit: uiPort.send,
+      emit: (event) {
+        uiPort.send(event);
+        if (event is! AdminModeState) return;
+        // A sudo relay and an elevated follow live only while admin mode
+        // does (plan M7, LOG-22).
+        docker?.adminChanged(event.serverId);
+        logs?.adminChanged(event.serverId);
+        // A root result's cleanup waits for admin mode (03 §7.17).
+        if (event.phase == AdminModePhase.on) {
+          unawaited(operations?.adminOn(event.serverId));
+        }
+      },
     );
     runner = OperationRunner(
       linkFor: links.link,
       emit: uiPort.send,
-      // A record that cannot be written is lost; the run itself stands.
-      finished: (result) =>
-          unawaited(audit.recordRun(result).catchError((Object _) {})),
+      api: (serverId, step) async {
+        final router = docker;
+        if (router == null) {
+          throw const DockerEndpointUnavailable(DockerQueryFailure.cancelled);
+        }
+        return router.useEndpoint(
+          serverId,
+          (client, _) => runApiStep(client, step),
+        );
+      },
+      docker: (serverId, check) async {
+        final router = docker;
+        if (router == null) return RevalidationFailure.unreadable;
+        try {
+          return await router.useStacks(
+            serverId,
+            (client, _, stacks) => switch (check) {
+              final StackConfigUnchanged stack => revalidateStackConfig(
+                stacks,
+                stack,
+              ),
+              final DockerTargetUnchanged target => revalidateDockerTarget(
+                client,
+                target,
+              ),
+              _ => Future.value(RevalidationFailure.unreadable),
+            },
+          );
+        } on Object {
+          return RevalidationFailure.unreadable;
+        }
+      },
+      launch: (serverId, plan, session) async {
+        final link = links.link(serverId);
+        final uid = profiles[serverId]?.uid;
+        final runner = plan.detachedRunner!;
+        final id = newOpId();
+        if (link == null || uid == null) {
+          return (
+            id: id,
+            dir: null,
+            pid: null,
+            failure: LaunchFailure.transport,
+            exitCode: null,
+          );
+        }
+        final launched = await launchDetached(
+          link: link,
+          runner: runner,
+          uid: uid,
+          argv: detachedArgv(plan),
+          id: id,
+          session: session,
+        );
+        if (launched.failure == null) {
+          await operations?.launched(
+            serverId,
+            id,
+            directory: runner.runsAsRoot
+                ? OpDirectoryKind.root
+                : OpDirectoryKind.user,
+            launch: OperationLaunch.ofPlan(
+              plan,
+              startedAt: DateTime.now().toUtc(),
+            ),
+          );
+        }
+        return launched;
+      },
+      // A record that cannot be written is lost; the run itself stands. A
+      // started detached operation is audited with its result, once the
+      // app has shown it (03 §7.17).
+      finished: (result) {
+        if (result.plan.detached &&
+            result.finished.outcome == ActionOutcome.succeeded) {
+          return;
+        }
+        unawaited(audit.recordRun(result).catchError((Object _) {}));
+      },
     );
     scheduler = SamplingScheduler(
       subscriptions: sampling,
@@ -355,15 +454,19 @@ void engineMain(
         unawaited(capabilities?.probed(serverId, profile));
         docker?.probed(serverId, profile);
       },
+      opsRead: (serverId, section) =>
+          unawaited(operations?.listed(serverId, section)),
     );
     logs = LogStreamRouter(
       linkFor: links.link,
       emit: uiPort.send,
+      adminFor: (serverId) => admin?.session(serverId),
       quotas: channelQuotas,
     );
     docker = DockerRouter(
       linkFor: links.link,
       emit: uiPort.send,
+      adminFor: (serverId) => admin?.session(serverId),
       quotas: channelQuotas,
     );
   }
@@ -441,6 +544,7 @@ void engineMain(
     sampling.fleet = fleetIds;
     scheduler?.retain(fleetIds);
     logs?.retain(fleetIds);
+    operations?.retain(fleetIds);
     channelQuotas.retain(fleetIds);
     links?.forget(before.difference(fleetIds));
     viewed.retainAll(fleetIds);
@@ -701,12 +805,30 @@ void engineMain(
           _ => 'links are off in this engine',
         };
         if (reason != null) reject(message, reason);
-      case OpenLogStream():
-        final reason = switch (logs) {
-          null => 'links are off in this engine',
-          final logs => logs.open(message),
+      case OpenLogStream(:final streamId, :final spec):
+        final router = logs;
+        if (router == null) {
+          reject(message, 'links are off in this engine');
+          return;
+        }
+        // An operation's output is its log file, read redacted (03
+        // §7.17); one the engine does not list reads no file.
+        final open = switch (spec.source) {
+          OperationLogSource(:final operationId) => OpenLogStream(
+            streamId: streamId,
+            spec: LogStreamSpec(
+              serverId: spec.serverId,
+              source: FileLogSource(
+                operations?.logPath(spec.serverId, operationId) ?? '',
+                redacted: true,
+              ),
+              window: spec.window,
+              follow: spec.follow,
+            ),
+          ),
+          _ => message,
         };
-        if (reason != null) reject(message, reason);
+        if (router.open(open) case final reason?) reject(message, reason);
       case CloseStream(:final streamId):
         logs?.closeStream(streamId);
         docker?.closeLogs(streamId);
@@ -798,15 +920,9 @@ void engineMain(
       case PlanAction(:final intent):
         void refuse(ActionRefusalReason reason) =>
             uiPort.send(ActionRefused(reason, intent: intent));
-        // The policy first (M4 plan M4). The Docker planners land with E15.
+        // The policy first (M4 plan M4).
         if (safetyRefusal(safetyPolicy, intent.serverId) case final reason?) {
           refuse(reason);
-          return;
-        }
-        if (intent is! KillProcess &&
-            intent is! UnitAction &&
-            intent is! StartTimer) {
-          refuse(ActionRefusalReason.notImplemented);
           return;
         }
         final serverId = intent.serverId;
@@ -819,19 +935,75 @@ void engineMain(
         // The plan holds the generation it was made on, so a reconnect
         // while it waits for the user makes it stale.
         final generation = linkGenerations[serverId] ?? 0;
+        final protection = protectionContextOf(
+          samplerPids: scheduler?.samplerPids(serverId) ?? const {},
+          profile: profile,
+          safety: safetyPolicy.servers[serverId],
+        );
+        final Future<PlanAttempt> attempt;
+        switch (intent) {
+          case KillProcess() || UnitAction() || StartTimer():
+            attempt = planHostAction(intent, (
+              link: link,
+              profile: profile,
+              protection: protection,
+              adminMode: admin?.session(serverId) != null,
+            ));
+          case ContainerAction() ||
+              RemoveContainer() ||
+              RemoveImage() ||
+              StackAction():
+            final router = docker;
+            if (router == null) {
+              refuse(ActionRefusalReason.engineUnavailable);
+              return;
+            }
+            attempt = router
+                .useEndpoint(
+                  serverId,
+                  (client, route) => planDockerAction(intent, (
+                    client: client,
+                    route: route,
+                    protection: protection,
+                    loginUser: profile.user ?? 'login user',
+                  )),
+                )
+                .catchError(
+                  (Object _) => (
+                    plan: null,
+                    refusal: ActionRefusalReason.engineUnavailable,
+                  ),
+                );
+          case RedeployStack():
+            final router = docker;
+            if (router == null) {
+              refuse(ActionRefusalReason.engineUnavailable);
+              return;
+            }
+            attempt = router
+                .useStacks(
+                  serverId,
+                  (client, route, stacks) => planRedeploy(intent, (
+                    client: client,
+                    route: route,
+                    stacks: stacks,
+                    profile: profile,
+                    adminMode: admin?.session(serverId) != null,
+                    protection: protection,
+                    loginUser: profile.user ?? 'login user',
+                  )),
+                )
+                .catchError(
+                  (Object _) => (
+                    plan: null,
+                    refusal: ActionRefusalReason.engineUnavailable,
+                  ),
+                );
+        }
         // Not awaited: planning reads over the link, and the queue keeps
         // serving the app meanwhile.
         unawaited(
-          planHostAction(intent, (
-            link: link,
-            profile: profile,
-            protection: protectionContextOf(
-              samplerPids: scheduler?.samplerPids(serverId) ?? const {},
-              profile: profile,
-              safety: safetyPolicy.servers[serverId],
-            ),
-            adminMode: admin?.session(serverId) != null,
-          )).then((attempt) {
+          attempt.then((attempt) {
             final plan = attempt.plan;
             if (plan == null) {
               refuse(attempt.refusal!);
@@ -848,6 +1020,15 @@ void engineMain(
           limit: limit,
         );
         uiPort.send(AuditRecords(serverId, records, more: more));
+      case AcknowledgeOperation(:final serverId, :final id):
+        final tracker = operations;
+        if (tracker == null) {
+          reject(message, 'links are off');
+          return;
+        }
+        if (await tracker.acknowledge(serverId, id) case final reason?) {
+          reject(message, reason);
+        }
       case ReadUserCrontabs(:final serverId, :final requestId):
         void fail(UserCrontabsFailure failure) => uiPort.send(
           UserCrontabs(
@@ -1007,6 +1188,21 @@ void engineMain(
         syncedServers = await sync.servers();
         synced = await listSynced(syncedServers);
         trustedIds = {...synced.confirmedIds, ...synced.unreadableIds};
+        if (links != null) {
+          final link = links;
+          operations = OperationTracker(
+            linkFor: link.link,
+            sessionFor: (id) => admin?.session(id),
+            readOps: (id) => scheduler?.readOps(id),
+            store: await OperationsShownStore.open(
+              Directory(start.supportDirectory),
+              access: start.supportDirectoryAccess,
+            ),
+            audit: audit,
+            emit: uiPort.send,
+            deviceId: start.deviceId,
+          );
+        }
         refreshFleet();
         capabilities = await CapabilityCache.open(
           Directory(start.supportDirectory),

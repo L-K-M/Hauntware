@@ -71,6 +71,7 @@ List<String> _sharedPrefix({
   List<String> configFiles = const [],
   String? envFile,
   List<String> envFiles = const [],
+  List<String> profiles = const [],
 }) {
   final argv = <String>[
     binary,
@@ -95,7 +96,21 @@ List<String> _sharedPrefix({
       ..add('--env-file')
       ..add(validateAbsolutePath(e));
   }
+  for (final profile in profiles) {
+    argv
+      ..add('--profile')
+      ..add(_validateProfile(profile));
+  }
   return argv;
+}
+
+/// A compose profile name, or `*` for every profile (03 §7.16 STK-06).
+String _validateProfile(String profile) {
+  if (profile != '*' &&
+      !RegExp(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]*$').hasMatch(profile)) {
+    throw ArgumentError.value(profile, 'profile', 'not a compose profile');
+  }
+  return profile;
 }
 
 /// `docker --host unix://<socket> compose ... ps --format json`
@@ -128,10 +143,11 @@ ComposeInvocation composePs({
 }
 
 /// `... compose ... config` for source verification and viewing
-/// (03 §7.16 STK-01, STK-04). Exactly one of [quiet], [hash] or
-/// [formatJson] is expected; the interpolated plain output is never
-/// captured by the app (it can contain secrets). [envFiles] repeats
-/// `--env-file` for a project that recorded several.
+/// (03 §7.16 STK-01, STK-04, STK-06). Exactly one of [quiet], [hash],
+/// [services] or [formatJson] is expected; the interpolated plain output
+/// is never captured by the app (it can contain secrets). [envFiles]
+/// repeats `--env-file` for a project that recorded several; [profiles]
+/// enables profiles, `*` all of them.
 ComposeInvocation composeConfig({
   String binary = 'docker',
   required String socketPath,
@@ -142,6 +158,8 @@ ComposeInvocation composeConfig({
   List<String> envFiles = const [],
   bool quiet = false,
   String? hash,
+  bool services = false,
+  List<String> profiles = const [],
   bool formatJson = false,
 }) {
   final argv = _sharedPrefix(
@@ -152,8 +170,10 @@ ComposeInvocation composeConfig({
     configFiles: configFiles,
     envFile: envFile,
     envFiles: envFiles,
+    profiles: profiles,
   )..add('config');
   if (quiet) argv.add('-q');
+  if (services) argv.add('--services');
   if (hash != null) {
     argv
       ..add('--hash')
@@ -176,6 +196,7 @@ ComposeInvocation composeUp({
   String? projectDirectory,
   List<String> configFiles = const [],
   String? envFile,
+  List<String> envFiles = const [],
   List<String> services = const [],
   bool detach = true,
   bool removeOrphans = false,
@@ -189,6 +210,7 @@ ComposeInvocation composeUp({
     projectDirectory: projectDirectory,
     configFiles: configFiles,
     envFile: envFile,
+    envFiles: envFiles,
   );
   _composeOutputFlags(argv, plainProgress: plainProgress, noAnsi: noAnsi);
   argv.add('up');
@@ -228,6 +250,7 @@ ComposeInvocation composePull({
   String? projectDirectory,
   List<String> configFiles = const [],
   String? envFile,
+  List<String> envFiles = const [],
   List<String> services = const [],
   bool plainProgress = true,
   bool noAnsi = true,
@@ -239,6 +262,7 @@ ComposeInvocation composePull({
     projectDirectory: projectDirectory,
     configFiles: configFiles,
     envFile: envFile,
+    envFiles: envFiles,
   );
   _composeOutputFlags(argv, plainProgress: plainProgress, noAnsi: noAnsi);
   argv.add('pull');

@@ -5,6 +5,8 @@ import 'package:ghost_ui/ghost_ui.dart' show contrastRatio;
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/logs/log_level.dart';
 import 'package:klabautermann_app/ui/logs/log_text.dart';
+import 'package:klabautermann_app/ui/logs/log_view_controller.dart'
+    show ContainerLine;
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:planchette_core/planchette_core.dart' show TextMatch;
 
@@ -291,6 +293,90 @@ void main() {
       final runs = span.children!.cast<TextSpan>();
       expect(runs.map((run) => run.text), ['cron.service: ', 'hi']);
       expect(runs.first.style, _palette(Brightness.light).sourceStyle);
+    });
+  });
+
+  group('container rows (CTX-01)', () {
+    const line = LogLine(0, '\x1b[1mready\x1b[0m');
+    final at = DateTime(2026, 10, 15, 9, 5, 7, 123);
+
+    test('start with their local time and stream, or spaces for no time', () {
+      expect(
+        logRowText(
+          line,
+          container: ContainerLine(ContainerLogStream.stderr, at),
+        ),
+        '2026-10-15 09:05:07 stderr ready',
+      );
+      expect(
+        logRowText(
+          line,
+          container: const ContainerLine(ContainerLogStream.stdout, null),
+        ),
+        '${' ' * 19} stdout ready',
+      );
+      expect(
+        logContainerSourceLength(
+          const ContainerLine(ContainerLogStream.stdout, null),
+        ),
+        '${' ' * 19} stdout '.length,
+      );
+    });
+
+    test('mark stderr by word, colour and spoken name; stdout plainly', () {
+      final palette = _palette(Brightness.light);
+      List<TextSpan> runs(
+        ContainerLogStream stream, {
+        List<TextMatch> matches = const [],
+      }) => logLineSpan(
+        line,
+        palette: palette,
+        base: const TextStyle(),
+        container: ContainerLine(stream, at),
+        streamLabel: stream.name.toUpperCase(),
+        matches: matches,
+      ).children!.cast<TextSpan>();
+
+      final stderr = runs(ContainerLogStream.stderr);
+      expect(stderr.map((run) => run.text), [
+        '2026-10-15 09:05:07 ',
+        'stderr',
+        ' ',
+        'ready',
+      ]);
+      expect(stderr[0].style, palette.sourceStyle);
+      expect(stderr[1].style, palette.stderrStyle);
+      expect(stderr[1].semanticsLabel, 'STDERR');
+      expect(stderr[3].style!.fontWeight, FontWeight.bold);
+      expect(
+        contrastRatio(palette.stderrStyle.color!, palette.background),
+        greaterThanOrEqualTo(logTextMinContrast),
+      );
+
+      final stdout = runs(ContainerLogStream.stdout);
+      expect(stdout[1].style, palette.sourceStyle);
+
+      // A match across the mark splits it; its name is spoken once.
+      final split = runs(
+        ContainerLogStream.stderr,
+        matches: const [TextMatch(start: 22, end: 25)],
+      );
+      expect(split.map((run) => run.text), [
+        '2026-10-15 09:05:07 ',
+        'st',
+        'der',
+        'r',
+        ' ',
+        'ready',
+      ]);
+      expect(split.map((run) => run.semanticsLabel), [
+        null,
+        'STDERR',
+        '',
+        '',
+        null,
+        null,
+      ]);
     });
   });
 

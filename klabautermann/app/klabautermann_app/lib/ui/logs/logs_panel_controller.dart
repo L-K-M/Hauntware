@@ -23,16 +23,33 @@ const int kLogsPanelWindow = 500;
 /// oldest first once it ends; a full window stays as it is while hidden.
 /// Turning [live] off closes the follow and keeps its entries, or reads
 /// a window when it showed none.
+///
+/// [LogsPanelController.container] reads one container's logs instead
+/// (CTX-01), with no query: like a file, its follow has no cursor and
+/// starts over when shown again, and its window arrives oldest first, as
+/// the Docker API sends it.
 class LogsPanelController extends ChangeNotifier implements LogStreamListener {
   LogsPanelController({
     required this._streams,
     required this.serverId,
+    this._now = DateTime.now,
+  }) : containerId = null;
+
+  /// Reads [containerId]'s logs on [serverId] over its Docker endpoint.
+  LogsPanelController.container({
+    required this._streams,
+    required this.serverId,
+    required String this.containerId,
     this._now = DateTime.now,
   });
 
   final LogStreams _streams;
   final String serverId;
   final DateTime Function() _now;
+
+  /// The container whose logs this reads, or null for the host's logs
+  /// by [query].
+  final String? containerId;
 
   final LogViewController logs = LogViewController();
   late final LogSearch search = LogSearch(logs);
@@ -60,6 +77,10 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
 
   LogQuery get query => _query;
 
+  /// Whether there is something to read: a container, or a [query] that
+  /// is ready.
+  bool get ready => containerId != null || _query.ready;
+
   bool get live => _live;
 
   /// Sent, with no answer yet.
@@ -86,8 +107,9 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
     notifyListeners();
   }
 
-  /// Reads [query] from the start.
+  /// Reads [query] from the start; a container's logs take none.
   void apply(LogQuery query) {
+    assert(containerId == null);
     _query = query;
     _closeStream();
     _cursor = null;
@@ -117,9 +139,11 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
   }
 
   void _open() {
-    if (!_visible || _stream != null || _kept || !_query.ready) return;
+    if (!_visible || _stream != null || _kept || !ready) return;
 
-    final resume = _live && _query.source != LogSourceKind.file
+    final container = containerId;
+    final resume =
+        _live && container == null && _query.source != LogSourceKind.file
         ? _cursor
         : null;
     if (resume == null) {
@@ -131,7 +155,9 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
     _stream = _streams.open(
       LogStreamSpec(
         serverId: serverId,
-        source: _query.toSource(_now()),
+        source: container == null
+            ? _query.toSource(_now())
+            : ContainerLogSource(container),
         window: kLogsPanelWindow,
         follow: _live,
         afterCursor: resume,
@@ -170,7 +196,12 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
     if (status case LogStreamEnded(:final reason)) {
       _stream = null;
       if (!_following) {
-        _append(_window.reversed.toList(), _windowDropped);
+        // A container's window arrives oldest first (D07), unlike the
+        // host's, which LogStreamSpec describes.
+        _append(
+          containerId == null ? _window.reversed.toList() : [..._window],
+          _windowDropped,
+        );
         _window.clear();
         _windowDropped = 0;
         _kept =
@@ -191,33 +222,37 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
   }
 
   /// Appends [records], oldest first, in runs: journal records as journal
-  /// rows, the rest as lines.
+  /// rows, container records as container rows, the rest as lines.
   void _append(List<LogRecord> records, int dropped) {
     var start = 0;
     while (start < records.length || dropped > 0) {
-      final journal = start < records.length && records[start] is JournalRecord;
+      final kind = start < records.length
+          ? _RunKind.of(records[start])
+          : _RunKind.line;
       var end = start;
-      while (end < records.length &&
-          (records[end] is JournalRecord) == journal) {
+      while (end < records.length && _RunKind.of(records[end]) == kind) {
         end++;
       }
       final run = records.sublist(start, end);
-      if (journal) {
-        final entries = run.cast<JournalRecord>();
-        logs.addJournal([
-          for (final record in entries) JournalEntry(record.fields),
-        ], dropped: dropped);
-        for (final record in entries) {
-          if (record.cursor case final cursor?) _cursor = cursor;
-        }
-      } else {
-        logs.add([
-          for (final record in run)
-            if (record case KernelRecord(:final message))
-              message
-            else if (record case FileRecord(:final text))
-              text,
-        ], dropped: dropped);
+      switch (kind) {
+        case _RunKind.journal:
+          final entries = run.cast<JournalRecord>();
+          logs.addJournal([
+            for (final record in entries) JournalEntry(record.fields),
+          ], dropped: dropped);
+          for (final record in entries) {
+            if (record.cursor case final cursor?) _cursor = cursor;
+          }
+        case _RunKind.container:
+          logs.addContainer(run.cast<ContainerRecord>(), dropped: dropped);
+        case _RunKind.line:
+          logs.add([
+            for (final record in run)
+              if (record case KernelRecord(:final message))
+                message
+              else if (record case FileRecord(:final text))
+                text,
+          ], dropped: dropped);
       }
       dropped = 0;
       start = end;
@@ -231,4 +266,17 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
     logs.dispose();
     super.dispose();
   }
+}
+
+/// How [LogsPanelController] appends a run of records.
+enum _RunKind {
+  journal,
+  container,
+  line;
+
+  static _RunKind of(LogRecord record) => switch (record) {
+    JournalRecord() => journal,
+    ContainerRecord() => container,
+    KernelRecord() || FileRecord() => line,
+  };
 }

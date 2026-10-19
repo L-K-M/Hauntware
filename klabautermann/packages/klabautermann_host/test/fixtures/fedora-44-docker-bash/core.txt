@@ -1,39 +1,39 @@
 == stat ==
-cpu  2771519 0 581951 15239241 130399 0 123660 178706 0 0
-cpu0 917916 3855908
-cpu1 919536 3841053
-cpu2 912251 3836669
-cpu3 906128 3836007
-btime 1792260092
+cpu  7573 0 5486 92699 5875 0 855 1603 0 0
+cpu0 4275 24358
+cpu1 3673 24855
+cpu2 3608 24880
+cpu3 3957 24477
+btime 1792396674
 == meminfo ==
 MemTotal: 16479424
-MemFree: 6064544
-MemAvailable: 14584896
-Buffers: 610492
-Cached: 6526988
+MemFree: 10326608
+MemAvailable: 15761984
+Buffers: 149064
+Cached: 5354908
 SwapTotal: 0
 SwapFree: 0
-Shmem: 14680
-SReclaimable: 1735032
+Shmem: 14940
+SReclaimable: 256648
 == loadavg ==
-1.08 1.55 1.24 1/174 17
+1.28 0.66 0.27 3/159 17
 == netdev ==
 eth0 0 42
 == diskstats ==
-vda 537722 26009890 1650317 720103576
-vdb 9 20 0 0
-vdc 2077 312954 0 0
-vdd 637 63978 0 0
-vde 11 36 0 0
-vdf 13 44 0 0
+vda 17301 1584802 30262 9909200
+vdb 7 16 0 0
+vdc 1899 289178 0 0
+vdd 423 56954 0 0
+vde 9 28 0 0
+vdf 9 26 0 0
 == pressure_cpu ==
-some avg10=5.22 avg60=4.42 avg300=7.27
+some avg10=3.40 avg60=2.37 avg300=1.10
 full avg10=0.00 avg60=0.00 avg300=0.00
 == pressure_io ==
-some avg10=5.94 avg60=4.42 avg300=1.36
-full avg10=5.66 avg60=4.13 avg300=1.24
+some avg10=16.49 avg60=10.90 avg300=4.94
+full avg10=16.25 avg60=10.70 avg300=4.82
 == pressure_memory ==
 some avg10=0.00 avg60=0.00 avg300=0.00
 full avg10=0.00 avg60=0.00 avg300=0.00
 == uptime ==
-47410.37 152392.42
+285.48 926.99

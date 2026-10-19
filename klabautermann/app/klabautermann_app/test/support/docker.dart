@@ -129,3 +129,148 @@ DockerListChanged dockerListFailed(
   payload: DockerQueryFailed(failure, detail: detail),
   at: at,
 );
+
+/// [id] inspected as the engine sends it (CTR-03, CTR-04), masked by the
+/// engine (03 §8.9): a running compose service with a secret in its
+/// environment, a label and its command line, an unhealthy check whose
+/// output holds a URL password, a volume and a bind mount, and a network.
+/// [labels] add to the compose labels, as an owning manager's would, and
+/// [healthLog] replaces the two checks.
+/// Times are local, so nothing depends on the test machine's zone; the
+/// container never stopped, so its `FinishedAt` is the API's zero time.
+ContainerDetails dockerContainerDetails(
+  String id, {
+  String name = 'web-db',
+  String status = 'running',
+  int? exitCode,
+  bool oomKilled = false,
+  Map<String, MaskedValue> labels = const {},
+  HealthStatus health = HealthStatus.unhealthy,
+  String restartPolicy = 'unless-stopped',
+  DateTime? startedAt,
+  List<ContainerHealthCheck>? healthLog,
+}) => ContainerDetails(
+  id: id,
+  name: '/$name',
+  created: DateTime(2026, 10, 12, 9, 15),
+  image:
+      'sha256:3f1c9a6b2e8d4c7a5b0e9f8d7c6b5a4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a',
+  restartCount: 2,
+  path: 'docker-entrypoint.sh',
+  args: [
+    MaskedValue.plain('postgres'),
+    MaskedValue.plain('--password'),
+    MaskedValue.secret('hunter2'),
+  ],
+  state: ContainerDetailsState(
+    status: status,
+    running: status == 'running',
+    exitCode: exitCode,
+    oomKilled: oomKilled,
+    pid: status == 'running' ? 4242 : null,
+    startedAt: startedAt ?? DateTime(2026, 10, 15, 11, 30),
+    finishedAt: DateTime.utc(1),
+    health: ContainerDetailsHealth(
+      status: health,
+      failingStreak: health == HealthStatus.unhealthy ? 3 : 0,
+      log:
+          healthLog ??
+          [
+            ContainerHealthCheck(
+              end: DateTime(2026, 10, 15, 14, 29, 30),
+              exitCode: 0,
+              output: MaskedValue.plain('accepting connections'),
+            ),
+            ContainerHealthCheck(
+              end: DateTime(2026, 10, 15, 14, 30),
+              exitCode: 1,
+              output: MaskedValue.redacted(
+                'connect postgres://app:********@db:5432 failed',
+                'connect postgres://app:s3cret@db:5432 failed',
+              ),
+            ),
+          ],
+    ),
+  ),
+  config: ContainerDetailsConfig(
+    image: 'postgres:16',
+    env: [
+      EnvVar('POSTGRES_USER', MaskedValue.plain('app')),
+      EnvVar('POSTGRES_PASSWORD', MaskedValue.secret('hunter2')),
+      EnvVar('PGDATA', MaskedValue.plain('/var/lib/postgresql/data')),
+    ],
+    entrypoint: [MaskedValue.plain('docker-entrypoint.sh')],
+    cmd: [
+      MaskedValue.plain('postgres'),
+      MaskedValue.plain('--password'),
+      MaskedValue.secret('hunter2'),
+    ],
+    labels: {
+      'com.docker.compose.project': MaskedValue.plain('web'),
+      'com.docker.compose.service': MaskedValue.plain('db'),
+      'backup.token': MaskedValue.secret('t0ken'),
+      ...labels,
+    },
+  ),
+  hostConfig: ContainerHostConfig(
+    networkMode: 'web_default',
+    restartPolicy: ContainerRestartPolicy(name: restartPolicy),
+    logConfig: const LogConfig(
+      type: 'splunk',
+      config: {'splunk-token': 'never-shown'},
+    ),
+  ),
+  mounts: const [
+    ContainerMount(
+      type: 'volume',
+      name: 'web_pgdata',
+      source: '/var/lib/docker/volumes/web_pgdata/_data',
+      destination: '/var/lib/postgresql/data',
+      rw: true,
+    ),
+    ContainerMount(
+      type: 'bind',
+      source: '/srv/web/init.sql',
+      destination: '/docker-entrypoint-initdb.d/init.sql',
+      rw: false,
+    ),
+  ],
+  networkSettings: const ContainerNetworkSettings(
+    networks: {
+      'web_default': ContainerNetwork(
+        ipAddress: '172.18.0.3',
+        gateway: '172.18.0.1',
+        aliases: ['db', 'web-db'],
+      ),
+    },
+  ),
+);
+
+/// One line of a container's log (CTX-01) as the engine delivers it, on
+/// stdout unless told otherwise. Pass a local [at], so nothing depends
+/// on the test machine's zone.
+ContainerRecord containerLine(
+  String text, {
+  ContainerLogStream stream = ContainerLogStream.stdout,
+  DateTime? at,
+}) => ContainerRecord(stream: stream, text: text, at: at);
+
+/// The log streams [requests] opened for [containerId]'s logs, oldest
+/// first.
+List<OpenLogStream> containerLogOpens(
+  List<EngineRequest> requests,
+  String containerId,
+) => [
+  for (final request in requests)
+    if (request case OpenLogStream(
+      spec: LogStreamSpec(source: ContainerLogSource(containerId: final id)),
+    ) when id == containerId)
+      request,
+];
+
+/// [records] on [streamId], [dropped] lines lost before them.
+LogBatch containerLogBatch(
+  String streamId,
+  List<ContainerRecord> records, {
+  int dropped = 0,
+}) => LogBatch(streamId: streamId, records: records, dropped: dropped);

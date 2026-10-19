@@ -2,13 +2,15 @@ import 'dart:async' show Timer;
 
 import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart'
-    show ghostFormatBinarySize, ghostIsDesktopPlatform;
+    show SidebarMenuAction, ghostFormatBinarySize, ghostIsDesktopPlatform;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../../controllers/docker_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../sortable_table.dart';
+import 'container_details.dart';
+import 'container_logs.dart';
 import 'containers_view.dart';
 
 /// The panel width from which the containers show as the sortable table;
@@ -46,7 +48,9 @@ const Duration kStatsForSettle = Duration(milliseconds: 250);
 ///
 /// The list carries no sizes: the protocol's container watch does not
 /// ask for `size=1`, so 02 CTR-01's lazy sizes wait for a query that
-/// does. A row opens nothing until D14's details.
+/// does. A container's row opens its details ([openContainerDetails]):
+/// in the desktop inspector, or on a page of its own. The table's row
+/// actions open its logs ([openContainerLogs]).
 class ContainersPanel extends StatefulWidget {
   const ContainersPanel({
     super.key,
@@ -152,6 +156,13 @@ class _ContainersPanelState extends State<ContainersPanel> {
   void _toggle(String? project) => setState(() {
     if (!_collapsed.remove(project)) _collapsed.add(project);
   });
+
+  void _open(ContainerSummary container) => openContainerDetails(
+    context,
+    monitoring: widget.monitoring,
+    serverId: widget.serverId,
+    container: container,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -290,9 +301,24 @@ class _ContainersPanelState extends State<ContainersPanel> {
       sort: _sort,
       onSort: (sort) => setState(() => _sort = sort),
       rowOrder: TableRowOrder.asGiven,
-      // A heading folds; a container opens its details with D14.
-      onRowActivated: (entry) {
-        if (entry case ContainerGroupEntry(:final project)) _toggle(project);
+      // A heading folds; a container opens its details.
+      onRowActivated: (entry) => switch (entry) {
+        ContainerGroupEntry(:final project) => _toggle(project),
+        ContainerEntry(:final container) => _open(container),
+      },
+      rowActions: (entry) => switch (entry) {
+        ContainerGroupEntry() => const [],
+        ContainerEntry(:final container) => [
+          SidebarMenuAction(
+            label: l10n.dockerLogsShow,
+            onSelected: () => openContainerLogs(
+              context,
+              monitoring: widget.monitoring,
+              serverId: widget.serverId,
+              container: container,
+            ),
+          ),
+        ],
       },
       spanningRow: (context, entry) => switch (entry) {
         final ContainerGroupEntry group => _GroupHeading(group: group),
@@ -447,47 +473,53 @@ class _ContainersPanelState extends State<ContainersPanel> {
         final row = Semantics(
           key: ValueKey(_phoneRowKey(entry)),
           container: true,
+          button: true,
           label: [
             for (final cell in cells)
               l10n.tableCellSemantics(cell.label, cell.text),
           ].join('\n'),
           excludeSemantics: true,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: 4,
-              children: [
-                Row(
-                  spacing: 8,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        containerNameOf(container),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall,
-                      ),
-                    ),
-                    if (container.health case final health?
-                        when health != HealthStatus.none)
-                      _HealthBadge(health: health),
-                  ],
-                ),
-                Wrap(
-                  spacing: 16,
-                  runSpacing: 2,
-                  children: [
-                    // The name and the health badge head the row.
-                    for (final cell in cells.skip(1))
-                      if (cell.id != ContainerColumn.health.name)
-                        Text(
-                          l10n.dockerContainersFact(cell.label, cell.text),
-                          style: theme.textTheme.bodySmall,
+          onTap: () => _open(container),
+          child: InkWell(
+            excludeFromSemantics: true,
+            onTap: () => _open(container),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                spacing: 4,
+                children: [
+                  Row(
+                    spacing: 8,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          containerNameOf(container),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall,
                         ),
-                  ],
-                ),
-              ],
+                      ),
+                      if (container.health case final health?
+                          when health != HealthStatus.none)
+                        ContainerHealthBadge(health: health),
+                    ],
+                  ),
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 2,
+                    children: [
+                      // The name and the health badge head the row.
+                      for (final cell in cells.skip(1))
+                        if (cell.id != ContainerColumn.health.name)
+                          Text(
+                            l10n.dockerContainersFact(cell.label, cell.text),
+                            style: theme.textTheme.bodySmall,
+                          ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -596,7 +628,7 @@ class _ContainersPanelState extends State<ContainersPanel> {
         extent: const FixedColumnExtent(104),
         cell: (context, container) => switch (container.health) {
           null || HealthStatus.none => const SizedBox.shrink(),
-          final health => _HealthBadge(health: health),
+          final health => ContainerHealthBadge(health: health),
         },
       ),
       column(
@@ -761,9 +793,10 @@ class _GroupHeading extends StatelessWidget {
 }
 
 /// A health status as an icon and its word, the unhealthy in the error
-/// colour, so colour is never the only cue (A11Y-01).
-class _HealthBadge extends StatelessWidget {
-  const _HealthBadge({required this.health});
+/// colour, so colour is never the only cue (A11Y-01); the list's rows and
+/// a container's details share it.
+class ContainerHealthBadge extends StatelessWidget {
+  const ContainerHealthBadge({super.key, required this.health});
 
   final HealthStatus health;
 

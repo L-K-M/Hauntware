@@ -14,10 +14,11 @@ typedef LogMatch = ({int seq, int index});
 
 /// Text search over the lines a [LogViewController] holds (LOG-05, 03
 /// §7.6): plain text, ignoring case unless [caseSensitive], with stepping
-/// from match to match. It reads each row's visible text ([logRowText])
-/// with `planchette_core`'s `findSearchMatches` and keeps up as lines
-/// arrive and leave, holding only a count for each matching line; a view
-/// asks [matchesIn] for the matches of a line it draws.
+/// from match to match. It reads each row's visible text ([logRowText]),
+/// a container row's time and stream mark included (CTX-02), with
+/// `planchette_core`'s `findSearchMatches` and keeps up as lines arrive
+/// and leave, holding only a count for each matching line; a view asks
+/// [matchesIn] for the matches of a line it draws.
 ///
 /// That search compares exactly where lowercasing would change a text's
 /// length, and `searchText` reports when it did. On the Dart VM, which
@@ -94,7 +95,7 @@ class LogSearch extends ChangeNotifier {
   /// The matches in [line]'s [logRowText], in order.
   List<TextMatch> matchesIn(LogLine line) {
     if (_query.isEmpty || _find(line.seq) < 0) return const [];
-    return _search(logRowText(line));
+    return _search(_rowText(line));
   }
 
   /// The index in [matchesIn] of the current match when it is in [line].
@@ -193,7 +194,7 @@ class LogSearch extends ChangeNotifier {
       final entry = _logs[_searchedTo - first];
       if (entry is! LogLine) continue;
 
-      final count = _search(logRowText(entry)).length;
+      final count = _search(_rowText(entry)).length;
       if (count == 0) continue;
 
       _lines.add((seq: entry.seq, count: count));
@@ -203,6 +204,10 @@ class LogSearch extends ChangeNotifier {
     _searchedTo = end;
     return found;
   }
+
+  /// [line]'s row text, a container line's time and stream included.
+  String _rowText(LogLine line) =>
+      logRowText(line, container: _logs.containerOf(line));
 
   /// Every match in [text]: the limit is the most a text can hold.
   List<TextMatch> _search(String text) => findSearchMatches(

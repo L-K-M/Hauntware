@@ -108,6 +108,10 @@ export 'package:klabautermann_host/klabautermann_host.dart'
 
 export 'src/sampling/sample_results.dart' show kCronLinesEvaluated;
 
+// Detached operations (03 §7.17): which directory an operation records
+// in, and how far each directory's listing got.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show OpDirectoryKind, OpDirectoryListing, OpDirectoryState;
 // The Logs panel's LOG-04 notice: the access check's journal row (K04)
 // over the probe's HostProfile.
 export 'package:klabautermann_host/klabautermann_host.dart'
@@ -178,6 +182,10 @@ export 'package:klabautermann_docker/klabautermann_docker.dart'
         LogConfig,
         Ownership,
         OwnershipMarker;
+// A container's managed-by badge (DKE-10), from its inspected labels; a
+// stack's is its ComposeProject.ownership.
+export 'package:klabautermann_docker/klabautermann_docker.dart'
+    show detectOwnership;
 // The coverage card's external-monitor finding (03 §9.5 item 3): K04's
 // rule over a `units` reading, and what it reports.
 export 'package:klabautermann_host/klabautermann_host.dart'
