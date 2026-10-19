@@ -1200,10 +1200,10 @@ Proposals awaiting the owner close the section; they are not decisions.
     `(root) NOPASSWD: /usr/bin/docker` without asking for a password,
     while `sudo -n true` and `sudo -n systemd-run` ask for one. Before it
     elevates a runner, the engine therefore lists the account's rules
-    (`sudo -l`, with admin mode's password when it has one) and elevates
-    only when a rule lets root run every command (`ALL`) or the program
-    the row elevates, with any arguments: `systemd-run`, or `sh` for the
-    root `setsid` row. Otherwise a root operation's preview names the
+    (`LC_ALL=C sudo -l`, since sudo translates its listing, with admin
+    mode's password when it has one) and elevates only when a rule lets
+    root run every command (`ALL`) or the program the row elevates, with
+    any arguments: `systemd-run`, or `sh` for the root `setsid` row. Otherwise a root operation's preview names the
     missing right, and an operation that needs no root is placed as with
     admin mode off. A rule scoped this way still serves the rank 3 relay
     (5.9).

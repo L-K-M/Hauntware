@@ -33,6 +33,8 @@ to sudo on stdin only.
 | `fixture-busybox-setsid-f` | BusyBox `setsid -f` | n/a | refused: "unrecognized option: f" |
 | `debian-setsid-fork` | util-linux `setsid -f` | yes | the launcher printed no usable PID (0) |
 | `debian-setsid-background` | E08's launcher under util-linux | yes | a new session, led by the printed PID |
+| `vm-docker-host` | root-run `docker version`, with and without `--host` | n/a | see below |
+| `vm-sudo-docker-scoped` | the listing and probes under a docker-scoped rule | n/a | see below |
 
 - **Cleanup through the prelude.** The login user owns its records in
   the root directory but cannot remove them ("Permission denied"); the
