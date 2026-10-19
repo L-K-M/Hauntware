@@ -614,7 +614,16 @@ void main() {
       await tester.tap(find.text('Overview'));
       await tester.pumpAndSettle();
       expect(closed(), [opens().single.streamId]);
-      await _openDockerTab(tester);
+
+      // Shown from another tab, the logs bring the Docker tab back.
+      await tester.tap(
+        find.descendant(
+          of: find.byType(InspectorPane),
+          matching: find.byTooltip('Show logs'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(_inDocker(find.byType(ContainerLogsPane)), findsOneWidget);
       expect(opens(), hasLength(2));
 
       await tester.tap(find.text('db-1'));
