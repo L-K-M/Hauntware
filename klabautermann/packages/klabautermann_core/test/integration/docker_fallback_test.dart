@@ -503,8 +503,9 @@ void main() {
         DockerQueryFailure.endpointUnavailable,
       ),
     );
-    // The waiting query is answered before the state that says why.
-    final failed = await engine.until<DockerEndpointState>(
+    // The state that says why goes out before the waiting query's
+    // answer, so the query has already read it.
+    final failed = engine.seen.whereType<DockerEndpointState>().lastWhere(
       (e) =>
           e.serverId == variantServer &&
           e.phase != DockerEndpointPhase.resolving,
