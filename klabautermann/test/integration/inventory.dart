@@ -63,6 +63,9 @@ final class InventoryEntry {
 /// The line between inventory.sh's stat lines and its hashes.
 const _hashSection = '--- sha256';
 
+/// inventory.sh hashes regular files below this size (`-size -1048577c`).
+const _hashedBelow = 1048577;
+
 /// [text], inventory.sh's output, by path. A line it cannot read is a
 /// broken snapshot, not a path to skip.
 Map<String, InventoryEntry> parseSnapshot(String text) {
@@ -102,6 +105,19 @@ Map<String, InventoryEntry> parseSnapshot(String text) {
       size: int.parse(fields[4]),
     );
   }
+
+  // inventory.sh skips paths it cannot read, so a pass that failed as a
+  // whole (a stat or sha256sum the host lacks) would print nothing and
+  // compare as unchanged. Every root prints itself, and a host with small
+  // files hashes some.
+  if (stats.isEmpty) throw const FormatException('no stat lines');
+  final hashable = stats.values.any(
+    (entry) => entry.type == EntryType.file && entry.size < _hashedBelow,
+  );
+  if (hashable && hashes.isEmpty) {
+    throw const FormatException('no hashes for small files');
+  }
+
   return {
     for (final MapEntry(key: path, value: entry) in stats.entries)
       path: InventoryEntry(

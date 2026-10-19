@@ -62,6 +62,24 @@ void main() {
       );
     });
 
+    test('a pass that printed nothing fails the read', () {
+      expect(
+        () => parseSnapshot('--- sha256\n'),
+        throwsA(isA<FormatException>()),
+        reason: 'no stat lines',
+      );
+      expect(
+        () => parseSnapshot(_snapshot([('81a4', 0, 0, 3, '/etc/f')])),
+        throwsA(isA<FormatException>()),
+        reason: 'no hashes',
+      );
+      expect(
+        parseSnapshot(_snapshot([('81a4', 0, 0, 1048577, '/etc/big')])),
+        contains('/etc/big'),
+        reason: 'only files below 1 MiB are hashed',
+      );
+    });
+
     test('inventory.sh prints what the reader reads', () async {
       final root = await Directory.systemTemp.createTemp('inventory-');
       addTearDown(() => root.delete(recursive: true));
