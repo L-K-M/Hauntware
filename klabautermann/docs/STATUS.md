@@ -188,8 +188,36 @@ M2, the host read MVP, is the current milestone. What is on main:
   `Libpod-API-Version` and reports `DockerEndpointState`. Results are
   typed; inspect `Path`/`Args`, `Entrypoint`/`Cmd` and health output
   cross masked, and the list drops its command line. Tested over fakes
-  only; no app surface yet (D12), no `/system/df` (D03), no watch or
-  events (D06), no low-session mode (D09).
+  only; no `/system/df` (D03), no low-session mode (D09).
+- Docker watches (M3, D06, 03 §7.12, §10.1): `DockerWatch` keeps the
+  container, image and stack lists current from one `/events` stream
+  per server (250 ms batches, targeted re-reads by container id,
+  resume with `since`, a full re-list after a gap over 60 s) and reads
+  one-shot list stats for the ids on screen every 5 s (4 at once on
+  streamlocal, one at a time on a relay), all as `DockerListChanged`.
+  Tested over fakes only; the app does not watch yet (D13), and
+  relay channels are not counted in `ChannelQuota` until D09.
+- Container logs (M3, D07, 03 §5.6, §10.1): `ContainerLogSource`
+  streams a container's logs through `OpenLogStream` as
+  `ContainerRecord`s over the server's Docker endpoint: framing by
+  `Config.Tty` when no `Content-Type` comes (Docker 20.10, Podman),
+  Podman's lines split over two frames joined, the journal follow's
+  ring and pace, a resume after the newest line with `since` and the
+  boundary line dropped, a stopped container read again with backoff,
+  and `logDriverUnreadable` naming a driver whose logs the API cannot
+  read. On relays the streams take follower slots of their own until
+  D09. Tested over fakes only; the app opens none yet (D15), and the
+  background does not pause them.
+- Docker in the app (M3, D12, 03 §5.9, §8.4, §10.2): a Docker controller
+  per engine run asks for each server's endpoint as its link comes up
+  and keeps its `DockerEndpointState`; the server header names the
+  transport in every mode (E4) with SAF-08's engine badge, the
+  low-session indicator (always off until D09) and the runtime the API
+  names (M13). The Docker tab waits, looks or says why no route works
+  (with the Access link and a retry), then shows SAF-08's notice until
+  it is dismissed on the device (`settings.json`), the engine strip
+  (DKE-01) and the Containers, Images and Stacks sub-tabs, still empty
+  (D13, D16, D17). Tested against the fake engine only.
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and
@@ -832,8 +860,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   the detected runtime read-only (CN-09). A tab whose host panels all lack
   a capability the probe answered does not build its panel: a notice in
   its place names what is missing and links to Access, which the desktop
-  selects with focus moved in and a phone pushes. The Docker tab reads
-  "Arrives with Docker support" until M3 (D54). Since K44b turned links
+  selects with focus moved in and a phone pushes. The Docker tab follows
+  its Docker endpoint since M3 (D12, above). Since K44b turned links
   on, the app's engine sends `HostProfileChanged` for a connected server,
   so the rows and the panel gating follow its probe.
 - Localization contract (D35, A11Y-05):
@@ -1036,8 +1064,12 @@ M2, the host read MVP, is the current milestone. What is on main:
   Android, Linux, macOS, iOS and Windows on every PR, launches the three
   desktop release builds, checks the APK's version code and the macOS
   bundle's signature, packages the .deb, AppImage and Flatpak, and runs
-  the macOS fixtures. No release job ships these builds before M4
-  (decision 16).
+  the macOS fixtures. The root `release.yml`'s `client_klabautermann`
+  job (M4 E32) builds the same five targets on a release tag and
+  attaches eight preview assets, all but the .deb with the preview
+  label in their names, which
+  `scripts/release-manifest.txt` and `scripts/check-workflows.sh` hold
+  to the release floor (decision 16).
 - Integration CI legs (M2, K47, #195): `detect_klabautermann_integration`
   in the root `ci.yml` runs on every main push and dispatch, and on PRs
   that touch `klabautermann/**`, `seance_core`, `seance_protocol`, the
@@ -1167,8 +1199,7 @@ M2, the host read MVP, is the current milestone. What is on main:
   `klabautermann_docker/test/fixtures/api-*/`. Check mode compares a
   fresh capture by structure, never by value; `--docker-api-only`
   [`--update`] runs only these. The committed corpus comes from a local
-  cgroup v1 run; replay tests follow in D02, and rootless daemons stay
-  unrecorded.
+  cgroup v1 run; rootless daemons stay unrecorded.
 - Negative sshd variants and refusal evidence (M3, 03 §5.3, §11.3,
   D11): six Docker hosts on 127.0.0.1:2245 to 2250 refuse with
   `AllowStreamLocalForwarding no`, `DisableForwarding yes`,
@@ -1182,6 +1213,19 @@ M2, the host read MVP, is the current milestone. What is on main:
   CLI. Each result, with sshd's log lines, goes to
   `$KLABAUTERMANN_EVIDENCE_DIR/fixture/refusals/`. Locally it adds
   about 8 s to `run.sh` with the images cached.
+- Recorded API replay (M3, 03 §11.1, D02): `RecordedDaemon` in
+  `klabautermann_docker/testing.dart` serves a corpus to the real HTTP
+  client, matching method, path (a lower negotiated version gets the
+  native recording) and normalized query, whole or one byte at a time.
+  `recorded_api_test.dart` replays every `api-*` directory: negotiation
+  from `_ping` and `/version`, the client's floor and server-minimum
+  refusals and the daemons' own 400s (Podman accepts every version),
+  every typed endpoint with no parser warning, the event, image-count,
+  logs `Content-Type` and `/system/df` gates against the lists, the
+  2,000-line follow demultiplexed, a `since` resume with no lost or
+  repeated line, and one-shot stats then a stream delta. An idle
+  container's CPU now reads 0 % rather than unknown, and Go's zero time
+  (a created container's `StartedAt`) reads as absent.
 - Desktop settings window (03 §10.2, D32): on macOS, Linux and Windows,
   Settings opens in a native window of its own through `ghost_desktop`'s
   `GhostSettingsWindowHost`; phones, and a desktop runner that cannot
@@ -1227,12 +1271,14 @@ M2, the host read MVP, is the current milestone. What is on main:
     §4.10 records the file).
   - Menus from one command registry (`lib/ui/menus/`, Poltergeist's
     shape): `PlatformMenuBar` on macOS, a Flutter menu bar strip on Linux
-    and Windows, none on phones. Registered: Settings… (⌘, on macOS,
-    Ctrl+, elsewhere; in the application menu on macOS, File elsewhere),
-    Import from ~/.ssh/config (File, desktops, disabled while an import
-    runs) and Quit (File, Linux and Windows, the close button's path). On
-    macOS AppKit adds About, Services, the hide trio, Quit (⌘Q), Enter
-    Full Screen (View) and Minimize, Zoom and Bring All to Front (Window).
+    and Windows, none on phones. Registered: About Klabautermann (first
+    in the application menu on macOS, Help elsewhere; below), Settings…
+    (⌘, on macOS, Ctrl+, elsewhere; in the application menu on macOS,
+    File elsewhere), Import from ~/.ssh/config (File, desktops, disabled
+    while an import runs) and Quit (File, Linux and Windows, the close
+    button's path). On macOS AppKit adds Services, the hide trio, Quit
+    (⌘Q), Enter Full Screen (View) and Minimize, Zoom and Bring All to
+    Front (Window).
     The same registry binds the shortcuts. No command is a toggle, so
     `klabautermann/menu_checks` stays reserved.
 
@@ -1241,6 +1287,21 @@ M2, the host read MVP, is the current milestone. What is on main:
   client CI legs compile the macOS runner;
   `app/klabautermann_app/test/desktop_chrome_runner_test.dart` also
   guards its wiring on Linux.
+- Preview label (E26, M16; 04 §12.3): until v1 the app title is
+  "Klabautermann (preview)" (`appTitle`), tied by tests to
+  `kPreviewLabel` in `lib/app_identity.dart`, as is the `.deb`
+  description of `scripts/package-linux.sh`. About Klabautermann, on
+  every desktop, opens the app's About dialog (Material's, with the
+  title, the version and the Unlicense line, and View licenses);
+  Settings > General has an about row with the title and version that
+  opens it everywhere, phones included. On macOS the command replaces
+  AppKit's About panel, which shows `CFBundleName`, an identity that
+  stays unchanged (owner question Q3). The version comes from
+  `package_info_plus`, read once in `main`; the settings window's
+  engine has no plugins, so the snapshot of the settings link carries
+  it. The release asset names keep their label from the packaging
+  scripts, and the release job and notes carry it (E32). M7 drops the
+  label in one change.
 - Single desktop instance (03 §4.10): on macOS, Linux and Windows the
   composition root takes an exclusive, non-blocking advisory lock on
   `instance.lock` in the support directory (`klabautermann_core`'s
@@ -1375,6 +1436,16 @@ M2, the host read MVP, is the current milestone. What is on main:
   otherwise try polkit, whose refusal reads as needing admin mode. The
   Docker planners arrive with E15, and the app surfaces with E20 and
   E21.
+- M4 spike S3 (E01): `capture.sh --elevation-only` drives the real
+  elevation executor in containers. It covers sudo 1.9.16p2 under four
+  timestamp and tty rules, sudo-rs 0.2.13 and Alpine's doas, as a
+  non-root account with no tty. The evidence is in `docs/evidence/s3/`,
+  with D65 in 03. Rungs 2 to 4 hold; `requiretty` and password doas
+  need rung 5. Under `timestamp_type=global` a cached record accepts a
+  wrong password, so admin-mode validation (E11) will use
+  `sudo -k -S -p '' -v`. The matrix ran locally; CI runs only its
+  contract tests, since the Alpine package pin can disappear. run0 stays
+  manual.
 - M4 protected targets, ownership and danger (E10): the plan facts
   for 03 §8.6 and §8.7, with no planner using them yet.
   - Protected targets: built-in units, PID 1, the core daemons, the
@@ -1420,6 +1491,14 @@ M2, the host read MVP, is the current milestone. What is on main:
   dash and bash. Nothing runs these builders yet: E14 and E17 will.
   The root-run wrapper's `chown` was checked by hand only, and whether
   the backgrounded `setsid` launch survives logout waits for spike S4.
+- M4 theme editing (E25): Settings > Appearance edits the theme with
+  ghost_theme's shared editor (presets, mode, colours, font, corners,
+  copy, paste and reset), in the app and in the desktop settings window,
+  in Klabautermann's words.
+- M4 Docker fixture for mutations (E27): the Docker fixture gains a
+  registry on its Compose network, which dind alone trusts, and seeds a
+  stack to redeploy, one with an orphan, a managed one and a container
+  on port 22.
 - Probe and sampler additions (M4, E07, 03 §6.2, §7.17): collector-set
   version 8 prints a `SELF <pid> <ppid>` marker before READY, which
   `HwsSessionReady` carries for 8.6's protected targets, and the
@@ -1515,14 +1594,18 @@ between PRs. M1 adds gates of its own:
   Hide Klabautermann, Hide Others, Show All, Quit Klabautermann ⌘Q),
   File (Import from ~/.ssh/config), View (Enter Full Screen) and Window
   (Minimize, Zoom, Bring All to Front), with no tab commands; each item
-  does what it says. ⌘, opens Settings from the main window, from a
+  does what it says. About Klabautermann opens the app's About dialog
+  ("Klabautermann (preview)", the build's version, the Unlicense line),
+  never AppKit's panel. ⌘, opens Settings from the main window, from a
   focused text field, and with Settings in front (it comes forward).
   There is no Edit menu yet: ⌘C, ⌘V, ⌘X, ⌘A and ⌘Z still work in a text
-  field in both windows. Linux and Windows: a File menu strip above the
-  content with Import from ~/.ssh/config, Settings… (Ctrl+, shown and
-  working) and Quit, which closes the app the way the close button does.
-  The import item is dimmed while an import runs. Phones and tablets show
-  no menu. Open: needs a person on each OS; the widget tests check the
+  field in both windows. Linux and Windows: a menu strip above the
+  content with File (Import from ~/.ssh/config, Settings… with Ctrl+,
+  shown and working, and Quit, which closes the app the way the close
+  button does) and Help (About Klabautermann, the same dialog). The
+  import item is dimmed while an import runs. Phones and tablets show
+  no menu. On every OS, Settings > General's about row shows the
+  build's version, in the settings window too, and opens the dialog. Open: needs a person on each OS; the widget tests check the
   model and the Flutter side of `PlatformMenuBar`, not AppKit's menu.
 - Single desktop instance (03 §4.10), once per desktop OS from a build
   that includes the lock. With Klabautermann running, launch it again

@@ -272,6 +272,11 @@ either (plugins come through Swift Package Manager). The one exception is the
 vendored `flutter_pty`, which ships only a podspec: Flutter generates a
 Podfile for it at build time, so building the macOS app needs CocoaPods
 (`brew install cocoapods`; GitHub's macOS runners preinstall it).
+The local build script restores the Apple CocoaPods configuration files to
+their pre-build contents on exit, including failed or interrupted builds.
+It preserves existing local edits and Podfiles, removes newly generated
+Podfiles and locks, and retains build caches and staged artifacts. Direct
+Flutter commands still leave their generated configuration in the checkout.
 `scripts/build.sh` checks for `pod` before starting Flutter. What it has to keep up with is
 the SDK's own macOS minimum, which reached 12.0; raising it is what an
 `unsupported deployment target` build failure after a Flutter upgrade is
@@ -638,8 +643,11 @@ Do not "simplify" these away — they are load-bearing:
   accent, nullable ("Automatic") colour slots, status colours, an optional
   terminal block, a font family and a corner scale, stored as one JSON
   object in `settings.json` (device-local) and decoded leniently: a bad
-  key costs only itself. The model and the builder now live in Planchette's
-  `ghost_theme` package (design docs/design/ghost-theme.md, F4b PRs 1-2);
+  key costs only itself. The model, the builder and the Appearance editor
+  now live in Planchette's `ghost_theme` package (design
+  docs/design/ghost-theme.md, F4b PRs 1-3); `ui/appearance_settings.dart`
+  wraps `GhostAppearanceSection` with Séance's layout, pickers and its own
+  terminal text and colour-source settings;
   Séance's `lib/theme/*.dart` are compatibility shims plus
   `seanceThemeStyle`/`seanceThemePresets`/`seanceThemeCodec` (its
   `hasTerminal: true`, violet and comfortable binding) and `lib/theme.dart`

@@ -15,6 +15,7 @@ import 'controllers/announcement_controller.dart';
 import 'controllers/safety_controller.dart';
 import 'controllers/appearance_controller.dart';
 import 'controllers/coverage_controller.dart';
+import 'controllers/docker_notice_controller.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitoring_controller.dart';
 import 'controllers/operations_controller.dart';
@@ -27,6 +28,7 @@ import 'ui/actions/action_entry.dart' show OperationsScope;
 import 'ui/actions/action_preview.dart' show ActionResultToasts;
 import 'ui/adaptive_shell.dart';
 import 'ui/admin_mode_chip.dart' show AdminScope;
+import 'ui/docker/docker_panel.dart' show DockerNoticeScope;
 import 'ui/macos_toolbar_band.dart';
 import 'ui/menus/app_commands.dart';
 import 'ui/menus/app_menu_host.dart';
@@ -56,6 +58,7 @@ class KlabautermannApp extends StatelessWidget {
     this.safety,
     this.admin,
     this.operations,
+    required this.dockerNotice,
     this.sync,
     this.settingsIssue,
     this.importStoreIssue,
@@ -63,6 +66,7 @@ class KlabautermannApp extends StatelessWidget {
     this.instanceLockIssue,
     this.openSettingsWindow,
     this.toolbarBand,
+    this.appVersion,
   });
 
   final FleetController fleet;
@@ -94,6 +98,10 @@ class KlabautermannApp extends StatelessWidget {
   /// [fleet]. Null in tests that leave it out, where no action can run.
   final OperationsController? operations;
 
+  /// Whether the Docker tab still shows SAF-08's notice on this device
+  /// (03 §8.4); like [appearance], it outlives an engine run.
+  final DockerNoticeController dockerNotice;
+
   /// The sync account (03 §4.3), one engine run's like [fleet]; null in
   /// tests that leave sync out, which shows the sync control idle.
   final SyncController? sync;
@@ -121,6 +129,11 @@ class KlabautermannApp extends StatelessWidget {
   /// integrated titlebar (`installMacosTitlebar`); null everywhere else,
   /// and then no surface reserves a band.
   final ValueListenable<bool>? toolbarBand;
+
+  /// The running build's version for the About dialog and Settings >
+  /// General (`readAppVersion`); null when the platform could not tell,
+  /// and in tests that leave it out.
+  final String? appVersion;
 
   /// The settings window where there is one, otherwise the route. A window
   /// that cannot open falls back to the route, so Settings stays reachable,
@@ -189,13 +202,16 @@ class KlabautermannApp extends StatelessWidget {
           themeMode: themes.themeMode,
           // The band is reserved above every route, so nothing
           // interactive lands under the traffic lights. The Overview reads
-          // the announcement switch on every route, the phone's pushed
-          // server screen included.
+          // the announcement switch, and the Docker tab its notice, on
+          // every route, the phone's pushed server screen included.
           builder: (context, child) {
-            final scoped = AnnouncementScope(
-              announce: announcements,
-              openSettings: (context) => unawaited(_openSettings(context)),
-              child: withMacosToolbarBand(toolbarBand, child: child!),
+            final scoped = DockerNoticeScope(
+              notice: dockerNotice,
+              child: AnnouncementScope(
+                announce: announcements,
+                openSettings: (context) => unawaited(_openSettings(context)),
+                child: withMacosToolbarBand(toolbarBand, child: child!),
+              ),
             );
             final withOperations = switch (operations) {
               final operations? => OperationsScope(
@@ -237,6 +253,7 @@ class KlabautermannApp extends StatelessWidget {
                         platform: Theme.of(context).platform,
                         fleet: fleet,
                         onOpenSettings: openSettings,
+                        appVersion: appVersion,
                       ),
                       child: AdaptiveShell(
                         fleet: fleet,
@@ -255,6 +272,7 @@ class KlabautermannApp extends StatelessWidget {
             kSettingsRoute: (_) => SettingsPage(
               appearance: appearance,
               announcements: announcements,
+              appVersion: appVersion,
               monitorSet: fleet.monitorSettings,
               safety: safety,
             ),

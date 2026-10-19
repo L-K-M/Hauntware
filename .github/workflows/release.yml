@@ -2,11 +2,12 @@ name: Release
 
 # Tag a version (the root release tool, or a manual vX.Y.Z tag) to
 # test, build, and publish ONE coordinated Hauntware release: every
-# Planchette, Séance and Poltergeist artifact under one GitHub Release
-# — 13 client targets (3 Planchette desktop, 5 Séance, 5 Poltergeist)
-# plus the Séance sync-server binaries for three OSes and the GHCR
-# image. Asset names are product-prefixed (scripts/release-manifest.txt
-# is the contract) so the three products' files can never collide.
+# Planchette, Séance, Poltergeist and Klabautermann artifact under one
+# GitHub Release — 19 client targets (4 Planchette, 5 Séance, 5
+# Poltergeist, 5 Klabautermann preview) plus the Séance sync-server
+# binaries for three OSes and the GHCR image. Asset names are
+# product-prefixed (scripts/release-manifest.txt is the contract) so the
+# four products' files can never collide.
 #
 # Atomic publication: the release is created hidden while the build
 # legs attach their assets, the GHCR image is pushed only after every
@@ -66,8 +67,6 @@ jobs:
   # four subtrees, the unified version check, and the dispatch-provenance
   # and release-existence guards. A tag on a broken commit must not
   # publish anything; a version/pubspec mismatch must not either.
-  # Klabautermann's packages are gated here although no release ships
-  # its clients before M4 (docs/design/klabautermann, decision 16).
   test:
     name: Test (release gate)
     runs-on: ubuntu-latest
@@ -1220,6 +1219,225 @@ jobs:
           files: ${{ matrix.files }}
           fail_on_unmatched_files: true
 
+  # Klabautermann's preview clients (docs/design/klabautermann, decision
+  # 16; 04 §12.1): client_poltergeist's matrix and steps with the two
+  # native macOS fixtures of client_seance, as ci.yml's
+  # klabautermann_client builds them. Until v1 every asset name carries
+  # the preview label; the .deb keeps Debian's versioned filename and the
+  # identities (app id, binary, desktop file) never carry it.
+  client_klabautermann:
+    name: Klabautermann client (${{ matrix.target }})
+    needs: [test, flutter]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45   # first run downloads the Flutter toolchain
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Signed with the committed, deliberately public CI keystore, as
+          # Poltergeist's APK is, so a later release upgrades it in place.
+          - os: ubuntu-latest
+            target: android
+            build: apk --release
+            files: klabautermann-preview-android.apk
+          # x64 only: Flutter publishes no linux-arm64 host artifacts.
+          - os: ubuntu-latest
+            target: linux
+            build: linux --release
+            flavor: x64
+            files: |
+              klabautermann-preview-linux-x64.tar.gz
+              klabautermann_*.deb
+              klabautermann-preview-linux-x64.AppImage
+              klabautermann-preview-linux-x64.flatpak
+          - os: macos-latest
+            target: macos
+            build: macos --release
+            files: klabautermann-preview-macos-universal.zip
+          # Unsigned, zipped from the .xcarchive as Poltergeist's is.
+          - os: macos-latest
+            target: ios
+            build: ipa --release --no-codesign
+            files: klabautermann-preview-ios-unsigned.ipa
+          - os: windows-latest
+            target: windows
+            build: windows --release
+            files: klabautermann-preview-windows-x64.zip
+    steps:
+      - name: Resolve the checkout ref
+        id: checkout-ref
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --retry 3 -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/git/ref/tags/$RELEASE_TAG")
+          case "$code" in
+            200) echo "ref=$RELEASE_TAG" >> "$GITHUB_OUTPUT" ;;
+            404) echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "tag ref lookup failed for $RELEASE_TAG (HTTP $code)" >&2
+              exit 1
+              ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
+        with:
+          ref: ${{ steps.checkout-ref.outputs.ref }}
+      # Pin the JDK so the Gradle build is deterministic rather than tracking
+      # the runner's default; keep in step with the app's compileOptions.
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6 (SHA-pinned)
+        if: matrix.target == 'android'
+        with:
+          distribution: temurin
+          java-version: '17'
+      # GTK toolchain for the Flutter Linux embedder, plus libsecret/jsoncpp
+      # for flutter_secure_storage's keyring backend (ghost_keystore);
+      # imagemagick/file feed scripts/package-linux.sh, xvfb and xdotool
+      # the launch check.
+      - name: Install Linux desktop toolchain
+        if: startsWith(matrix.target, 'linux')
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      # The committed project signs ad-hoc already; this keeps the release
+      # on that path if a developer identity is ever committed.
+      - name: Switch macOS signing to ad-hoc (runner has no certificate)
+        if: matrix.target == 'macos'
+        run: |
+          sed -i '' \
+            -e 's/"CODE_SIGN_IDENTITY\[sdk=macosx\*\]" = "Apple Development";/"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";/' \
+            -e 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/' \
+            -e 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = "";/' \
+            klabautermann/app/klabautermann_app/macos/Runner.xcodeproj/project.pbxproj
+      - name: Resolve workspace
+        working-directory: klabautermann
+        run: dart pub get
+      # The Séance license gate runs once, in client_poltergeist; the
+      # tool allows one invocation, and docker and sums need that leg.
+      - name: Resolve app dependencies
+        working-directory: klabautermann/app/klabautermann_app
+        run: flutter pub get
+      - name: Build
+        working-directory: klabautermann/app/klabautermann_app
+        # Built with pub against the committed lock, as client_poltergeist
+        # explains; a lock the build changed fails the leg.
+        shell: bash
+        run: |
+          flutter build ${{ matrix.build }}
+          drift="$(git -C "$GITHUB_WORKSPACE" status --porcelain -- pubspec.lock '**/pubspec.lock')"
+          if [ -n "$drift" ]; then
+            drift_flat="$(printf '%s' "$drift" | tr '\r\n' '  ')"
+            echo "::error::pubspec.lock drift after build: $drift_flat" >&2
+            exit 1
+          fi
+      # Native-asset frameworks must not land on embedded ones, and the app
+      # must pass the codesign check scripts/build.sh --install runs.
+      - name: Verify macOS app bundle
+        if: matrix.target == 'macos'
+        working-directory: klabautermann/app/klabautermann_app
+        run: bash "$GITHUB_WORKSPACE/scripts/verify-macos-app.sh"
+      # Séance's native fixtures, compiled against the runner's copy of its
+      # controller (klabautermann/docs/SHARED.md).
+      - name: Test native accessibility lifecycle
+        if: matrix.target == 'macos'
+        working-directory: klabautermann
+        run: scripts/test-macos-accessibility.sh
+      - name: Test native keyboard modifiers
+        if: matrix.target == 'macos'
+        working-directory: klabautermann
+        run: scripts/test-macos-keyboard.sh
+      # A release-only startup failure leaves a running app without its UI;
+      # unit tests run with asserts on and never see one.
+      - name: Release app launch (macOS)
+        if: matrix.target == 'macos'
+        working-directory: klabautermann/app/klabautermann_app
+        run: python3 "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/macos/Build/Products/Release/Klabautermann.app --menu File
+      - name: Release app launch (Linux)
+        if: matrix.target == 'linux'
+        working-directory: klabautermann/app/klabautermann_app
+        run: xvfb-run -a python3 "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/linux/${{ matrix.flavor }}/release/bundle/klabautermann
+      - name: Release app launch (Windows)
+        if: matrix.target == 'windows'
+        working-directory: klabautermann/app/klabautermann_app
+        shell: bash
+        run: python "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/windows/x64/runner/Release/klabautermann.exe
+      # Prove Gradle consumed the synchronized pubspec code in the real APK.
+      - name: Verify Android version code
+        if: matrix.target == 'android'
+        working-directory: klabautermann/app/klabautermann_app
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/scripts/verify-android-version.sh"
+      # Stage each platform's product under its release asset name: product,
+      # preview label and platform, no version, except Debian's .deb.
+      - name: Package
+        shell: bash
+        run: |
+          shopt -s nullglob
+          case "${{ matrix.target }}" in
+            android)
+              cp klabautermann/app/klabautermann_app/build/app/outputs/flutter-apk/app-release.apk \
+                 klabautermann-preview-android.apk
+              ;;
+            linux)
+              bundles=(klabautermann/app/klabautermann_app/build/linux/*/release/bundle)
+              [[ ${#bundles[@]} -eq 1 ]] || { echo "expected one linux bundle, found ${#bundles[@]}" >&2; exit 1; }
+              mv "${bundles[0]}" "klabautermann-preview-linux-${{ matrix.flavor }}"
+              tar -czf "klabautermann-preview-linux-${{ matrix.flavor }}.tar.gz" "klabautermann-preview-linux-${{ matrix.flavor }}"
+              # The mv above renamed the bundle out of Flutter's layout, so
+              # point the packager at it explicitly.
+              klabautermann/scripts/package-linux.sh --bundle "klabautermann-preview-linux-${{ matrix.flavor }}" --output-dir .
+              # The .flatpak repacks the same .deb under /app.
+              sudo apt-get update && sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
+              # Ubuntu 24.04 denies the unprivileged user namespaces
+              # bubblewrap (flatpak's sandbox helper) builds in.
+              sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
+              klabautermann/scripts/build-flatpak.sh "$(find . -maxdepth 1 -type f -name 'klabautermann_*.deb' -print -quit)"
+              mv klabautermann/dist/klabautermann-preview-linux-x64.flatpak .
+              ;;
+            macos)
+              cd klabautermann/app/klabautermann_app/build/macos/Build/Products/Release
+              apps=(*.app)
+              [[ ${#apps[@]} -eq 1 ]] || { echo "expected one .app, found ${#apps[@]}" >&2; exit 1; }
+              ditto -c -k --keepParent "${apps[0]}" \
+                "$GITHUB_WORKSPACE/klabautermann-preview-macos-universal.zip"
+              ;;
+            ios)
+              app_dir="klabautermann/app/klabautermann_app/build/ios/archive/Runner.xcarchive/Products/Applications"
+              apps=("$app_dir"/*.app)
+              [[ ${#apps[@]} -eq 1 ]] || { echo "expected one .app under $app_dir, found ${#apps[@]}" >&2; exit 1; }
+              mkdir Payload
+              cp -R "${apps[0]}" Payload/
+              zip -qry klabautermann-preview-ios-unsigned.ipa Payload
+              ;;
+            windows)
+              runners=(klabautermann/app/klabautermann_app/build/windows/*/runner/Release)
+              [[ ${#runners[@]} -eq 1 ]] || { echo "expected one windows runner dir, found ${#runners[@]}" >&2; exit 1; }
+              mv "${runners[0]}" klabautermann-preview-windows-x64
+              7z a -bd klabautermann-preview-windows-x64.zip klabautermann-preview-windows-x64
+              ;;
+          esac
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned)
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          draft: true
+          prerelease: >-
+            ${{ startsWith(inputs.tag || github.ref_name, 'v0.') }}
+          files: ${{ matrix.files }}
+          fail_on_unmatched_files: true
+
   # Container image to GitHub Container Registry. It pushes only after
   # EVERY build leg succeeded — an image must never publish for a
   # release whose client floor failed. Deployments build from source;
@@ -1232,6 +1450,7 @@ jobs:
       - client_planchette
       - client_seance
       - client_poltergeist
+      - client_klabautermann
       - flatpak_planchette
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -1310,6 +1529,7 @@ jobs:
       - client_planchette
       - client_seance
       - client_poltergeist
+      - client_klabautermann
       - flatpak_planchette
       - docker
     runs-on: ubuntu-latest
@@ -1362,8 +1582,8 @@ jobs:
           rm -f "$assets_dir/SHA256SUMS"
 
           # Manifest floor: every entry in scripts/release-manifest.txt
-          # must have a downloaded match — 25 product assets across the
-          # three apps plus the sync-server tarballs. A missing leg's
+          # must have a downloaded match — 31 client assets across the
+          # four apps plus the three sync-server tarballs. A missing leg's
           # asset can never sneak into a public release.
           floor_missing=()
           while IFS= read -r asset; do
@@ -1390,6 +1610,9 @@ jobs:
           unsigned iOS IPA, and the sync-server binaries (linux-x64,
           macos-arm64, windows-x64).
           **Poltergeist** — same client matrix as Séance (no server).
+          **Klabautermann (preview)** — same client matrix as Séance (no
+          server). Until v1 its asset names carry the preview label, except
+          the .deb, which keeps Debian's versioned name.
           Séance 0.9.2 and Poltergeist 1.0.1 and earlier used `com.lkm.*`
           app IDs. Suite builds use `ch.lkmc.*`: they install as new apps
           beside those versions and start without their data.

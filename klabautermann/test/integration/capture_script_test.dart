@@ -1,6 +1,8 @@
 // Contract tests for test/integration/capture.sh, the container shell
 // and userland captures (03 §6.5, §11.3; K28c), and the recorded Docker
-// API corpora of its sourced capture_docker_api.sh (03 §11.1, D21). CI
+// API corpora of its sourced capture_docker_api.sh (03 §11.1, D21), and
+// spike S3's elevation matrix of its sourced capture_elevation.sh (03
+// §8.3, M4 E01), which only --elevation-only runs. CI
 // runs the script in `klabautermann_integration` with Docker; these
 // tests read both files and run the `--list` mode, which needs neither
 // Docker nor the network, so the pins, the teardown, where it writes
@@ -42,6 +44,8 @@ void main() {
   late String fixturesRoot;
   late String api;
   late String apiFixturesRoot;
+  late String elevation;
+  late String elevationEvidence;
 
   setUpAll(() async {
     final workspace = await Isolate.resolvePackageUri(
@@ -57,6 +61,10 @@ void main() {
       '${klab.path}test/integration/capture_docker_api.sh',
     ).readAsString();
     apiFixturesRoot = '${klab.path}packages/klabautermann_docker/test/fixtures';
+    elevation = await File(
+      '${klab.path}test/integration/capture_elevation.sh',
+    ).readAsString();
+    elevationEvidence = '${klab.path}docs/evidence/s3';
   });
 
   /// Runs `capture.sh --list` (plus [extra]) from [workingDirectory] with
@@ -384,6 +392,7 @@ void main() {
       for (final bad in [
         ['--update', '--list'],
         ['--docker-api-only', '--docker-api-only'],
+        ['--docker-api-only', '--elevation-only'],
         ['--docker-api'],
       ]) {
         final result = await Process.run('bash', [scriptPath, ...bad]);
@@ -485,7 +494,19 @@ void main() {
       expect(teardown, contains('docker rm -fv'));
       final one = _function(api, 'api_capture_one');
       expect(one, contains(r'docker rm -fv $ids'));
+      // A timeout or interrupt skips the tool's own unpause, and a frozen
+      // container ignores SIGKILL under cgroup v1.
+      expect(
+        one.indexOf('unpause paused'),
+        allOf(isNonNegative, lessThan(one.indexOf(r'docker rm -fv $ids'))),
+      );
       expect(one, contains(r'docker volume rm "$sock_volume" "$data_volume"'));
+    });
+
+    test('keeps proxy settings out of the seeded containers', () {
+      // Podman copies its own proxy variables into every container it
+      // creates by default, and inspect records each container's Env.
+      expect(api, contains('http_proxy = false'));
     });
 
     test('writes only to the evidence and work directories', () {
@@ -583,6 +604,183 @@ void main() {
         expect(
           (manifest['images']! as Map<String, Object?>)['seed'],
           seed,
+          reason: name,
+        );
+      }
+    }, testOn: 'linux');
+  });
+
+  group('elevation', () {
+    /// The `elevation <case> <image> <tool> <variant>` lines of `--list`.
+    Future<List<List<String>>> cases() async {
+      final result = await list(extra: ['--elevation-only']);
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      final lines = '${result.stdout}'.trim().split('\n');
+      expect(lines.first, startsWith('evidence '));
+      expect(lines.skip(1), everyElement(startsWith('elevation ')));
+      return [for (final line in lines.skip(1)) line.split(' ').sublist(1)];
+    }
+
+    test('is sourced and runs only with --elevation-only', () async {
+      expect(
+        script,
+        contains(r'source "$klab_dir/test/integration/capture_elevation.sh"'),
+      );
+      expect(elevation.split('\n').first, '# shellcheck shell=bash');
+      final all = await list();
+      expect('${all.stdout}', isNot(contains('\nelevation ')));
+      expect(await cases(), isNotEmpty);
+      expect(
+        script,
+        contains('if [[ "\$scope" == elevation ]]; then\n  elev_captures'),
+      );
+    }, testOn: 'linux');
+
+    test('runs the cases 06 names, as a non-root account', () async {
+      final listed = await cases();
+      final byTool = <String, Set<String>>{};
+      for (final [_, _, tool, variant] in listed) {
+        (byTool[tool] ??= {}).add(variant);
+      }
+      expect(byTool, {
+        'sudo': {'tty', 'ppid', 'global', 'timeout-0', 'requiretty'},
+        'sudo-rs': {'default', 'timeout-0'},
+        'doas': {'nopass', 'password'},
+      });
+      expect(
+        elevation,
+        contains(
+          "readonly elev_printf_shells=('dash' 'bash' 'busybox ash' "
+          "'mksh' 'zsh')",
+        ),
+      );
+      expect(elevation, contains("readonly elev_user='klab'"));
+      expect(
+        _function(elevation, 'elev_case_in'),
+        contains(r'--user "$elev_user"'),
+      );
+    }, testOn: 'linux');
+
+    test('pins its image and packages', () {
+      final image = RegExp(
+        r"^readonly elev_alpine_image='([^']+)'$",
+        multiLine: true,
+      ).firstMatch(elevation);
+      expect(image, isNotNull);
+      final match = _pinnedImage.firstMatch(image![1]!);
+      expect(match, isNotNull);
+      expect(_registries, contains(match![1]));
+
+      final packages = _array(elevation, 'elev_packages');
+      expect(packages.keys, {
+        'sudo',
+        'libapparmor1',
+        'sudo-rs',
+        'sudo-common',
+        'doas',
+      });
+      for (final MapEntry(key: name, value: pin) in packages.entries) {
+        expect(
+          pin,
+          matches(
+            RegExp(r'^(debian|ubuntu|alpine) \S+\.(deb|apk) [0-9a-f]{64}$'),
+          ),
+          reason: name,
+        );
+      }
+      expect(
+        elevation,
+        contains(
+          "readonly elev_ubuntu_snapshot='https://snapshot.ubuntu.com/"
+          "ubuntu/20261015T000000Z'",
+        ),
+      );
+      expect(
+        _function(elevation, 'elev_prepare'),
+        contains('sha256sum --check'),
+      );
+    });
+
+    test('labels each container, publishes and mounts nothing, and removes '
+        'it', () {
+      final starts = [
+        for (final command in _commands(elevation))
+          if (_startsContainer.hasMatch(command) &&
+              !command.contains('docker pull'))
+            command,
+      ];
+      expect(starts, hasLength(2));
+      for (final command in starts) {
+        expect(command, contains(r'--label "$run_label"'), reason: command);
+        expect(command, contains('--network none'), reason: command);
+        expect(command, isNot(contains('--privileged')), reason: command);
+        expect(command, isNot(matches(RegExp(r'\s(-p|--publish)\b'))));
+        expect(command, isNot(matches(RegExp(r'\s(-v|--volume|--mount)\b'))));
+      }
+      for (final name in ['elev_case_one', 'elev_printf']) {
+        expect(
+          _function(elevation, name),
+          contains(r'docker rm -f "$cid"'),
+          reason: name,
+        );
+      }
+    });
+
+    test('keeps the password out of argv and the evidence', () {
+      final body = _function(elevation, 'elev_case_in');
+      expect(
+        body,
+        contains(
+          r"printf '%s:%s\n' "
+          '"\$elev_user" "\$password" |\n'
+          r'    docker exec -i "$cid" chpasswd',
+        ),
+      );
+      expect(body, contains(r'--password-file "$secret"'));
+      expect(body, contains(r'(umask 077 && printf'));
+      final passes = RegExp(r'\$password\b').allMatches(body).length;
+      expect(passes, 3, reason: 'made, checked and fed to chpasswd only');
+      expect(body, contains(r'rm -f -- "$secret"'));
+    });
+
+    test('--update writes only the committed evidence copy', () {
+      final update = _function(elevation, 'elev_update');
+      final copies = [
+        for (final command in _commands(update))
+          if (command.startsWith('cp ')) command,
+      ];
+      expect(copies, hasLength(1));
+      expect(copies.single, endsWith(r'"$elev_committed/"'));
+      expect(
+        elevation,
+        contains(r'readonly elev_committed="$klab_dir/docs/evidence/s3"'),
+      );
+    });
+
+    test('the committed evidence covers every case and holds no '
+        'password', () async {
+      final listed = await cases();
+      final committed = [
+        for (final file in Directory(elevationEvidence).listSync())
+          if (file.path.endsWith('.json')) file.uri.pathSegments.last,
+      ];
+      expect(
+        committed,
+        unorderedEquals([for (final c in listed) '${c[0]}.json']),
+      );
+      expect(
+        File('$elevationEvidence/printf-builtin.txt').existsSync(),
+        isTrue,
+      );
+      for (final name in committed) {
+        final text = await File('$elevationEvidence/$name').readAsString();
+        final record = jsonDecode(text) as Map<String, Object?>;
+        expect(record['case'], name.replaceAll('.json', ''));
+        expect(record['version'], 1);
+        // The passwords are 48 hex digits made per case; digests are 64.
+        expect(
+          text,
+          isNot(matches(RegExp(r'(?<![0-9a-f])[0-9a-f]{48}(?![0-9a-f])'))),
           reason: name,
         );
       }

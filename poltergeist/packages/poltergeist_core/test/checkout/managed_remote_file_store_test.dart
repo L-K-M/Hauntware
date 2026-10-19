@@ -453,6 +453,196 @@ void main() {
       return sibling;
     }
 
+    for (final fresh in [false, true]) {
+      final age = fresh ? 'recent' : 'stale';
+
+      test('restart completes $age save of pending content', () async {
+        final managed = await _createManagedCheckout(
+          store,
+          id: 'edit-1',
+          serverId: 'server-a',
+          content: 'abc',
+        );
+        await store.put(managed);
+        final local = store.checkoutFile(managed.localPath);
+        await local.writeAsString('durable pending', flush: true);
+        final backup = await tempSibling(
+          managed,
+          'backup',
+          content: await local.readAsString(),
+          fresh: fresh,
+        );
+        final edit = await tempSibling(
+          managed,
+          'edit',
+          content: 'new pending',
+          fresh: fresh,
+        );
+        await local.delete();
+
+        // Reopen the real index: same-store reconciliation misses load cleanup.
+        expect(await indexFile.exists(), isTrue);
+        final restarted = await reopened();
+        expect(
+          (await restarted.list()).single.baselineSha256,
+          managed.baselineSha256,
+        );
+        expect(await local.exists(), isTrue);
+        expect(await local.readAsString(), 'new pending');
+        expect(await backup.readAsString(), 'durable pending');
+        expect(await edit.exists(), isFalse);
+
+        final reconciled = await restarted.reconcile(managed.id);
+        expect(reconciled!.missing, isFalse);
+        expect(reconciled.dirty, isTrue);
+      });
+
+      test('restart restores $age lone backup of pending content', () async {
+        final managed = await _createManagedCheckout(
+          store,
+          id: 'edit-1',
+          serverId: 'server-a',
+          content: 'abc',
+        );
+        await store.put(managed);
+        final local = store.checkoutFile(managed.localPath);
+        await local.writeAsString('durable pending', flush: true);
+        final backup = await local.rename(
+          '${local.path}.poltergeist-deadbeef-cafe.backup',
+        );
+        if (!fresh) await backup.setLastModified(DateTime.utc(2020));
+
+        final restarted = await reopened();
+        final reconciled = await restarted.reconcile(managed.id);
+
+        expect(await local.exists(), isTrue);
+        expect(await local.readAsString(), 'durable pending');
+        expect(await backup.exists(), isFalse);
+        expect(reconciled!.missing, isFalse);
+        expect(reconciled.dirty, isTrue);
+      });
+
+      test('restart keeps $age orphan edit beside missing target', () async {
+        final managed = await _createManagedCheckout(
+          store,
+          id: 'edit-1',
+          serverId: 'server-a',
+          content: 'abc',
+        );
+        await store.put(managed);
+        final local = store.checkoutFile(managed.localPath);
+        await local.delete();
+        final edit = await tempSibling(
+          managed,
+          'edit',
+          content: 'only surviving content',
+          fresh: fresh,
+        );
+
+        final restarted = await reopened();
+        final reconciled = await restarted.reconcile(managed.id);
+
+        expect(await edit.readAsString(), 'only surviving content');
+        expect(await local.exists(), isFalse);
+        expect(reconciled!.missing, isTrue);
+      });
+    }
+
+    for (final targetType in ['directory', 'symlink']) {
+      test('restart keeps artifacts beside a $targetType target', () async {
+        final managed = await _createManagedCheckout(
+          store,
+          id: 'edit-1',
+          serverId: 'server-a',
+          content: 'abc',
+        );
+        await store.put(managed);
+        final local = store.checkoutFile(managed.localPath);
+        await local.delete();
+        final outside = File('${temporaryDirectory.path}/outside.txt');
+        await outside.writeAsString('outside');
+        if (targetType == 'directory') {
+          await Directory(local.path).create();
+        } else {
+          await Link(local.path).create(outside.path);
+        }
+        final edit = await tempSibling(managed, 'edit', content: 'new pending');
+        final backup = await tempSibling(managed, 'backup', content: 'pending');
+
+        final restarted = await reopened();
+        final reconciled = await restarted.reconcile(managed.id);
+
+        expect(await edit.readAsString(), 'new pending');
+        expect(await backup.readAsString(), 'pending');
+        expect(await outside.readAsString(), 'outside');
+        expect(
+          await FileSystemEntity.type(local.path, followLinks: false),
+          targetType == 'directory'
+              ? FileSystemEntityType.directory
+              : FileSystemEntityType.link,
+        );
+        expect(reconciled!.missing, isTrue);
+      }, skip: targetType == 'symlink' && Platform.isWindows);
+    }
+
+    test('restart refuses recovery through ancestor symlinks', () async {
+      const localPath = 'nested/checkout/file.txt';
+      final local = await store.createCheckout(localPath);
+      await local.writeAsString('abc');
+      final managed = _managedFile(id: 'edit-1', localPath: localPath);
+      await store.put(managed);
+      final edit = await tempSibling(managed, 'edit', content: 'new pending');
+      final backup = await tempSibling(managed, 'backup', content: 'pending');
+      final upload = await tempSibling(managed, 'upload', content: 'snapshot');
+      await local.delete();
+      final ancestor = Directory('${checkoutRoot.path}/nested');
+      final outside = await ancestor.rename(
+        '${temporaryDirectory.path}/outside',
+      );
+      await Link(ancestor.path).create(outside.path);
+
+      final restarted = await reopened();
+      final reconciled = await restarted.reconcile(managed.id);
+
+      expect(await local.exists(), isFalse);
+      expect(await edit.readAsString(), 'new pending');
+      expect(await backup.readAsString(), 'pending');
+      expect(await upload.readAsString(), 'snapshot');
+      expect(reconciled!.missing, isTrue);
+    }, skip: Platform.isWindows);
+
+    test('restart protects indexed save-temp-shaped payloads', () async {
+      final managed = await _createManagedCheckout(
+        store,
+        id: 'edit-1',
+        serverId: 'server-a',
+        content: 'abc',
+      );
+      await store.put(managed);
+      for (final suffix in ['edit', 'backup']) {
+        final localPath = '${managed.localPath}.poltergeist-deadbeef.$suffix';
+        final local = await store.createCheckout(localPath);
+        await local.writeAsString('payload $suffix');
+        await store.put(
+          _managedFile(id: suffix, localPath: localPath).copyWith(
+            remotePath: '/home/test/$suffix',
+            remoteSnapshot: _snapshot('/home/test/$suffix'),
+          ),
+        );
+      }
+
+      final restarted = await reopened();
+      expect(await restarted.list(), hasLength(3));
+      for (final suffix in ['edit', 'backup']) {
+        expect(
+          await restarted
+              .checkoutFile('${managed.localPath}.poltergeist-deadbeef.$suffix')
+              .readAsString(),
+          'payload $suffix',
+        );
+      }
+    });
+
     test('stale .edit/.backup beside a live target are reaped', () async {
       final managed = await _createManagedCheckout(
         store,

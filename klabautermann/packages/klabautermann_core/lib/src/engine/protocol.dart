@@ -27,6 +27,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
 import 'package:klabautermann_docker/klabautermann_docker.dart'
     show
         ApiVersion,
+        ComposeGrouping,
         ContainerHostConfig,
         ContainerMount,
         ContainerNetworkSettings,
@@ -134,6 +135,19 @@ import '../operations/plan_types.dart';
 /// the id and carries a sealed [DockerPayload] of typed, masked values
 /// instead of decoded JSON, and [DockerEndpointState] reports the route,
 /// the runtime as the Docker API names it and the negotiated version.
+///
+/// Docker watches then joined v3 the same way (03 §7.12 DKE-02, CST-01):
+/// [DockerWatch] and [DockerUnwatch] name the lists a view shows and the
+/// containers it wants stats for, and [DockerListChanged] carries each
+/// list as a typed [DockerPayload] in place of the opaque `DockerEvent`
+/// record, which is gone.
+///
+/// Container logs then joined v3 the same way (03 §7.12 CTX-01):
+/// [ContainerLogSource] reads one container's logs over its server's
+/// Docker endpoint as [ContainerRecord]s through the same
+/// [OpenLogStream], [LogBatch] and [LogStreamState], and
+/// [LogStreamEndReason] gained `logDriverUnreadable`, whose detail names
+/// the driver.
 ///
 /// Operation plans then joined v3 the same way (03 §8.5, §10.1, M4 E09):
 /// [ActionIntent] became sealed, one variant per MVP action, [ActionPreview]
@@ -407,6 +421,45 @@ final class DockerQuery extends EngineRequest {
   final String queryId;
 
   final DockerQuerySpec query;
+}
+
+/// Watches [lists] on [serverId]'s engine (03 §7.12 DKE-02, CST-01), as
+/// [DockerListChanged] events, until [DockerUnwatch] or the session
+/// ends. While any watch holds, the engine follows the engine's
+/// `/events` and reads a list again when an event changes it; with
+/// [DockerWatchList.stats] it reads one-shot stats for [statsFor]'s
+/// containers at the list cadence. A watch with a [watchId] the server
+/// already holds replaces it, which is how a view reports the rows it
+/// shows now. Like a [DockerQuery], it opens the server's endpoint, and
+/// it starts once the endpoint is ready. A watch the engine cannot hold
+/// is answered with a [DockerQueryFailed] list for each of its [lists].
+final class DockerWatch extends EngineRequest {
+  const DockerWatch({
+    required this.serverId,
+    required this.watchId,
+    required this.lists,
+    this.statsFor = const {},
+  });
+
+  final String serverId;
+
+  /// The app's own id for the watch, unique per server.
+  final String watchId;
+  final Set<DockerWatchList> lists;
+
+  /// The containers, by id, whose stats [DockerWatchList.stats] reads:
+  /// the rows on screen (CST-01). At most [kDockerStatsForMax].
+  final Set<String> statsFor;
+}
+
+/// Ends the [DockerWatch] [watchId] on [serverId]. The last one ends the
+/// server's `/events` stream and stats reads; ending a watch the server
+/// does not hold does nothing.
+final class DockerUnwatch extends EngineRequest {
+  const DockerUnwatch({required this.serverId, required this.watchId});
+
+  final String serverId;
+  final String watchId;
 }
 
 /// Previews an operation: the engine answers [ActionPlanned], or
@@ -906,13 +959,29 @@ final class DockerEndpointState extends EngineEvent {
   DockerRouteLabel get label => route?.rank.label ?? DockerRouteLabel.none;
 }
 
-/// One Docker Engine `/events` record (03 §10.1); kept opaque until the
-/// Docker events model lands in its milestone.
-final class DockerEvent extends EngineEvent {
-  const DockerEvent(this.serverId, this.payload);
+/// [list] on [serverId], as a [DockerWatch] asked for it (03 §7.12
+/// DKE-02, CST-01): the whole list each time, read at [at] by the
+/// engine's clock. The payload is [DockerContainersPayload],
+/// [DockerImagesPayload], [DockerStacksPayload] or [DockerStatsPayload]
+/// by [list], or [DockerQueryFailed] when the read failed.
+final class DockerListChanged extends EngineEvent {
+  const DockerListChanged({
+    required this.serverId,
+    required this.list,
+    required this.payload,
+    required this.at,
+    this.fullRelist = false,
+  });
 
   final String serverId;
-  final Map<String, Object?> payload;
+  final DockerWatchList list;
+  final DockerPayload payload;
+  final DateTime at;
+
+  /// Whether the list was read from nothing rather than after events: a
+  /// watch's first read, or one after the events stream was lost for
+  /// over 60 s or could not resume, so changes in between went unseen.
+  final bool fullRelist;
 }
 
 /// The plan [PlanAction] computed: what would run, in the user's words, and
@@ -1601,8 +1670,9 @@ final class LogStreamSpec {
     this.afterCursor,
   }) : assert(window >= 0, 'window counts records'),
        assert(
-         afterCursor == null || source is! FileLogSource,
-         'a file tail has no cursor',
+         afterCursor == null ||
+             (source is! FileLogSource && source is! ContainerLogSource),
+         'a file tail and a container log have no cursor',
        ),
        assert(
          !follow || source is! JournalLogSource || source.until == null,
@@ -1623,7 +1693,9 @@ final class LogStreamSpec {
 
   /// A [JournalRecord.cursor] the read continues after, in the stream's
   /// order: a window reads older records, a follow the ones written after
-  /// it. File tails and `dmesg` have no cursor. Null starts at the newest
+  /// it. File tails, `dmesg` and container logs have no cursor: a
+  /// container follow resumes after its newest line itself, as long as
+  /// the stream stays open. Null starts at the newest
   /// record. journalctl refuses `--since` together with a cursor, so with
   /// one the engine applies [JournalLogSource.since] itself: a window ends
   /// with [LogStreamEndReason.oldestReached] at the first record older
@@ -1631,8 +1703,9 @@ final class LogStreamSpec {
   final String? afterCursor;
 }
 
-/// Where an [OpenLogStream] reads (03 §7.6). Container logs (CTX-01) are
-/// not a source yet: they come from the Docker Engine API with M3.
+/// Where an [OpenLogStream] reads (03 §7.6, §7.12): the host's journal,
+/// kernel log or a file over its link, or a container's logs over its
+/// Docker endpoint.
 @immutable
 sealed class LogSource {
   const LogSource();
@@ -1687,6 +1760,21 @@ final class FileLogSource extends LogSource {
   /// The absolute path, typed or picked from the common paths; the engine
   /// validates it (03 §8.8) before it quotes it into the command.
   final String path;
+}
+
+/// One container's logs through the Docker Engine API (CTX-01, 03 §5.6),
+/// read as [ContainerRecord]s: `GET /containers/{id}/logs` with
+/// `timestamps=1`, its last [LogStreamSpec.window] lines, then the new
+/// ones for a follow. A follow outlasts the container's stops: it reads
+/// on, after the newest line it delivered, once the container runs
+/// again. The read waits for the server's Docker endpoint
+/// ([DockerEndpointState]) as [LogStreamWaitReason.link].
+final class ContainerLogSource extends LogSource {
+  const ContainerLogSource(this.containerId);
+
+  /// The container's id, or its name; the engine validates it before it
+  /// puts it in a path.
+  final String containerId;
 }
 
 /// A syslog severity as journald and the kernel record it, most urgent
@@ -1778,6 +1866,24 @@ final class FileRecord extends LogRecord {
   final String text;
 }
 
+/// One line of a container's log (CTX-01), as the engine assembled it
+/// from the API's frames (03 §5.6): a line the engine split across
+/// frames arrives whole, without its line break.
+final class ContainerRecord extends LogRecord {
+  const ContainerRecord({required this.stream, required this.text, this.at});
+
+  final ContainerLogStream stream;
+
+  /// When the engine received the line, by the daemon's clock, to the
+  /// microsecond; null when the line carried no timestamp.
+  final DateTime? at;
+  final String text;
+}
+
+/// The container stream a [ContainerRecord] came from. A TTY container
+/// has one stream, read as [stdout].
+enum ContainerLogStream { stdout, stderr }
+
 /// A log stream's state behind [LogStreamState]. Compares by value, as
 /// [LinkStatus] does, because a status that crosses the boundary may
 /// arrive as a copy.
@@ -1852,7 +1958,8 @@ enum LogReader {
 
 /// The stream ended for [reason], and nothing more arrives for it.
 /// [detail] is the host's error output when the host ended it, control
-/// characters stripped, or null.
+/// characters stripped, the daemon's message for a container's logs, the
+/// driver's name for [LogStreamEndReason.logDriverUnreadable], or null.
 final class LogStreamEnded extends LogStreamStatus {
   const LogStreamEnded(this.reason, {this.detail});
 
@@ -1865,7 +1972,9 @@ final class LogStreamEnded extends LogStreamStatus {
 
 /// What a [LogStreamWaiting] stream waits for.
 enum LogStreamWaitReason {
-  /// The server's link; [LinkState] says why it is not ready.
+  /// The server's link; [LinkState] says why it is not ready. Container
+  /// logs also wait here for the Docker endpoint over it, which
+  /// [DockerEndpointState] reports.
   link,
 
   /// A free session channel: reads of its kind already hold their share
@@ -1896,7 +2005,8 @@ enum LogStreamEndReason {
   /// unit name or path its validation rejects (03 §8.8).
   invalid,
 
-  /// The tool or file the source reads is absent on the host.
+  /// The tool, file or container the source reads is absent on the
+  /// host.
   missing,
 
   /// The host refused the read, such as a file only `adm` or root may
@@ -1905,6 +2015,12 @@ enum LogStreamEndReason {
 
   /// The read failed otherwise.
   failed,
+
+  /// The container's logging driver keeps no logs the API can read (03
+  /// §7.12 CTX-01): `none`, or a remote driver with Docker's dual-logging
+  /// cache disabled, or on Podman, which has no such cache, any but
+  /// `k8s-file`, `json-file` and `journald`. [LogStreamEnded.detail] names the driver.
+  logDriverUnreadable,
 }
 
 /// What a [DockerQuery] reads (03 §7.12 to §7.14).
@@ -1939,7 +2055,31 @@ final class DockerImagesQuery extends DockerQuerySpec {
   const DockerImagesQuery();
 }
 
-/// What a [DockerResult] carries.
+/// A list a [DockerWatch] follows (03 §7.12 to §7.14).
+enum DockerWatchList {
+  /// Every container (CTR-01), as [DockerContainersPayload].
+  containers,
+
+  /// The image list (IMG-01), as [DockerImagesPayload].
+  images,
+
+  /// The containers grouped by compose project (STK-01), as
+  /// [DockerStacksPayload].
+  stacks,
+
+  /// One-shot stats for the watch's `statsFor` (CST-01), as
+  /// [DockerStatsPayload].
+  stats,
+}
+
+/// The most watches one server holds [E]: a Docker view holds one or two.
+const kDockerWatchesMax = 16;
+
+/// The most containers one watch reads stats for [E]: more rows than a
+/// screen shows.
+const kDockerStatsForMax = 64;
+
+/// What a [DockerResult] or [DockerListChanged] carries.
 @immutable
 sealed class DockerPayload {
   const DockerPayload();
@@ -1976,6 +2116,48 @@ final class DockerImagesPayload extends DockerPayload {
   final List<ImageSummary> images;
 }
 
+/// The containers grouped by compose project (STK-01), from the same
+/// list [DockerContainersPayload] carries.
+final class DockerStacksPayload extends DockerPayload {
+  const DockerStacksPayload(this.grouping);
+
+  final ComposeGrouping grouping;
+}
+
+/// One stats round over a watch's `statsFor` (CST-01): a row for each
+/// running container that answered, in no set order.
+final class DockerStatsPayload extends DockerPayload {
+  const DockerStatsPayload(this.stats);
+
+  final List<ContainerListStats> stats;
+}
+
+/// One container's list stats (03 §7.12 CST-01), read at [at] by the
+/// engine's clock.
+@immutable
+final class ContainerListStats {
+  const ContainerListStats({
+    required this.containerId,
+    required this.at,
+    this.cpuPercent,
+    this.memoryUsed,
+    this.memoryLimit,
+  });
+
+  final String containerId;
+  final DateTime at;
+
+  /// CPU % by the spec formula over the time since the previous read,
+  /// so null on a container's first one, on the first after a read of it
+  /// failed, and on the first after a [DockerListChanged.fullRelist]
+  /// (one-shot `precpu_stats` is not meaningful, 03 §5.6).
+  final double? cpuPercent;
+
+  /// Bytes in use less `inactive_file` (cgroup v2) or the cache (v1).
+  final int? memoryUsed;
+  final int? memoryLimit;
+}
+
 /// The query read nothing, for [failure]; [detail] is the daemon's own
 /// message or the transport error, for diagnostics.
 final class DockerQueryFailed extends DockerPayload {
@@ -1985,7 +2167,7 @@ final class DockerQueryFailed extends DockerPayload {
   final String? detail;
 }
 
-/// Why a [DockerQuery] read nothing.
+/// Why a [DockerQuery] or a watched list read nothing.
 enum DockerQueryFailure {
   /// The server is not in the fleet.
   notInFleet,
@@ -2001,10 +2183,12 @@ enum DockerQueryFailure {
   /// query looks for it again.
   endpointUnavailable,
 
-  /// The server already holds the most queries waiting for its endpoint.
+  /// The server already holds the most queries waiting for its endpoint,
+  /// or the most watches.
   tooManyQueries,
 
-  /// The query names no container.
+  /// The query names no container, or the watch names more stats
+  /// containers than [kDockerStatsForMax].
   invalidQuery,
 
   /// The object is gone (404); a list query shows what remains.

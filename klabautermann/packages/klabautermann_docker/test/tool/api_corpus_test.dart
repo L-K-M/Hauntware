@@ -103,12 +103,18 @@ void main() {
     });
 
     test('keeps the whole chunk when a line ends inside it', () {
-      final raw = '$head${_chunked(['{"n":', '1}\n{"n":2}\n{"n"', ':3}\n'])}';
+      final raw = '$head${_chunked(['{"n":', '1}\n{"n":2}\n', '{"n":3}\n'])}';
       final cut = truncationPoint(_bytes(raw), 1)!;
       expect(
         latin1.decode(_bytes(raw).sublist(0, cut)),
-        '$head${_chunked(['{"n":', '1}\n{"n":2}\n{"n"'], last: false)}',
+        '$head${_chunked(['{"n":', '1}\n{"n":2}\n'], last: false)}',
       );
+    });
+
+    test('is null when that chunk ends inside the next line', () {
+      // A cut there would keep a partial line, which reads as text.
+      final raw = '$head${_chunked(['{"n":', '1}\n{"n":2}\n{"n"', ':3}\n'])}';
+      expect(truncationPoint(_bytes(raw), 1), isNull);
     });
 
     test('cuts a close-delimited body after the newline', () {
@@ -212,6 +218,14 @@ void main() {
       final v2 = {'Name': 'h'};
       expect(jsonKeyPaths(v1), {'Name'});
       expect(jsonKeyPaths(v1), jsonKeyPaths(v2));
+      // Below the top level they are API shape: 1.41's inspect has them
+      // in HostConfig, and later versions drop them.
+      expect(
+        jsonKeyPaths({
+          'HostConfig': {'KernelMemory': 0},
+        }),
+        {'HostConfig', 'HostConfig.KernelMemory'},
+      );
     });
 
     test('stops below free-form maps and collapses id keys', () {

@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "case": "debian-13-sudo-timeout-0",
+  "description": "sudo in mirror.gcr.io/library/debian:13@sha256:913f6706df59a68922d1dd08f78c2476560a8d367897200a6005b00e5f67c2d5, rule: Defaults timestamp_timeout=0;klab ALL=(ALL) ALL",
+  "probe": {
+    "isRoot": false,
+    "sudoVersionLine": "Sudo version 1.9.16p2",
+    "sudoIsRs": false,
+    "sudoNopasswd": false,
+    "doasPresent": false,
+    "doasNopasswd": false,
+    "printfIsBuiltin": true
+  },
+  "probeCalls": [
+    {
+      "command": "id -u",
+      "exit": 0,
+      "stdout": "1000\n",
+      "stderr": ""
+    },
+    {
+      "command": "sudo -V 2>/dev/null | head -n 1",
+      "exit": 0,
+      "stdout": "Sudo version 1.9.16p2\n",
+      "stderr": ""
+    },
+    {
+      "command": "sudo -n true",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "sudo: a password is required\n"
+    },
+    {
+      "command": "command -v doas",
+      "exit": 127,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": "command -V printf",
+      "exit": 0,
+      "stdout": "printf is a shell builtin\n",
+      "stderr": ""
+    }
+  ],
+  "outcomes": {
+    "rightPassword": {
+      "outcome": "ran",
+      "exit": 0,
+      "commands": 2,
+      "stdout": "0\n",
+      "stderr": "",
+      "calls": [
+        {
+          "command": "env LC_ALL=C sh -c 'IFS= read -r p\nprintf '\"'\"'%s'\"\\\\\"'n'\"'\"' \"$p\" | sudo -S -p '\"'\"\"'\"' -v || exit 125\np=\nsudo -n -- \"$@\"\nexit $?' elevate 'id' '-u'",
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sudo: a password is required\n"
+        },
+        {
+          "command": "env LC_ALL=C sudo -S -p '' -- 'id' '-u'",
+          "exit": 0,
+          "stdout": "0\n",
+          "stderr": ""
+        }
+      ]
+    },
+    "wrongPassword": {
+      "outcome": "refused",
+      "kind": "wrongPassword",
+      "commands": 1,
+      "refusalStderr": "Sorry, try again.\n\nsudo: no password was provided\nsudo: 1 incorrect password attempt\n",
+      "calls": [
+        {
+          "command": "env LC_ALL=C sh -c 'IFS= read -r p\nprintf '\"'\"'%s'\"\\\\\"'n'\"'\"' \"$p\" | sudo -S -p '\"'\"\"'\"' -v || exit 125\np=\nsudo -n -- \"$@\"\nexit $?' elevate 'id' '-u'",
+          "exit": 125,
+          "stdout": "",
+          "stderr": "Sorry, try again.\n\nsudo: no password was provided\nsudo: 1 incorrect password attempt\n"
+        }
+      ]
+    },
+    "noPassword": {
+      "outcome": "refused",
+      "kind": "passwordRequired",
+      "commands": 0,
+      "refusalStderr": "",
+      "calls": []
+    },
+    "stdinAfterPassword": {
+      "outcome": "ran",
+      "exit": 0,
+      "commands": 2,
+      "stdout": "stdin-reaches-the-command\n",
+      "stderr": "",
+      "calls": [
+        {
+          "command": "env LC_ALL=C sh -c 'IFS= read -r p\nprintf '\"'\"'%s'\"\\\\\"'n'\"'\"' \"$p\" | sudo -S -p '\"'\"\"'\"' -v || exit 125\np=\nsudo -n -- \"$@\"\nexit $?' elevate 'cat'",
+          "exit": 1,
+          "stdout": "",
+          "stderr": "sudo: a password is required\n"
+        },
+        {
+          "command": "env LC_ALL=C sudo -S -p '' -- 'cat'",
+          "exit": 0,
+          "stdout": "stdin-reaches-the-command\n",
+          "stderr": ""
+        }
+      ]
+    }
+  },
+  "stdinPayloadEchoed": true,
+  "ranAsRoot": true,
+  "rawCalls": [
+    {
+      "command": "sudo -n -l",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "sudo: a password is required\n"
+    }
+  ]
+}

@@ -2,9 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:seance_core/seance_core.dart' show SshLink;
 import 'package:test/test.dart';
 
 import 'fixture.dart';
+import 'ssh_link.dart';
 
 /// Why the runner-VM suite skips: runner_vm.sh exports its environment.
 const runnerVmSkipReason =
@@ -37,7 +39,7 @@ final _connectionTitle = RegExp(r'^sshd: ([^\s@\[]+)(?:[\s@]|$)');
 
 /// The runner-VM leg runner_vm.sh started (03 §11.3, K28a): a second sshd
 /// on loopback of the GitHub-hosted runner, which is a systemd host, with
-/// two throwaway accounts whose login shell is `/bin/sh`, dash on Ubuntu.
+/// throwaway accounts whose login shell is `/bin/sh`, dash on Ubuntu.
 /// It comes from the variables runner_vm.sh exports.
 final class RunnerVm {
   RunnerVm._(this._environment);
@@ -83,10 +85,36 @@ final class RunnerVm {
   /// The account in `systemd-journal`.
   String get journalUser => _variable('JOURNAL_USER');
 
+  /// The account with password sudo (`ALL=(ALL) ALL`), and its password,
+  /// made at job start (spike S4, M4 E02).
+  String get sudoUser => _variable('SUDO_USER');
+  Future<String> sudoPassword() async =>
+      (await File(_variable('SUDO_PASSWORD_FILE')).readAsString()).trim();
+
+  /// The account with linger on, and none of sudo.
+  String get lingerUser => _variable('LINGER_USER');
+
+  /// The account whose only sudo rule is NOPASSWD for [dockerCli].
+  String get dockerUser => _variable('DOCKER_USER');
+  String get dockerCli => _variable('DOCKER_CLI');
+
+  /// The runner's own engine socket, and the Docker context root's CLI
+  /// defaults to, on a socket nothing listens on: a step reaches the
+  /// engine as root only through its own `--host`.
+  String get dockerSocket => _variable('DOCKER_SOCKET');
+  String get deadDockerContext => _variable('DEAD_DOCKER_CONTEXT');
+
   /// The transient system timer runner_vm.sh started, and its
   /// `OnCalendar=` expression in systemd's normalized form.
   String get timer => _variable('TIMER');
   String get calendar => _variable('CALENDAR');
+
+  /// Where spike S4's runner-VM cases write their evidence, or null
+  /// (klabautermann/docs/evidence/s4/).
+  String? get s4EvidenceDirectory => switch (_evidenceDirectory) {
+    final directory? => '$directory/s4',
+    null => null,
+  };
 
   /// Where the leg collects evidence, or null.
   String? get _evidenceDirectory =>
@@ -124,6 +152,16 @@ Host journal
     sshConfig: _sshConfig,
     hosts: 2,
     evidenceDirectory: _evidenceDirectory,
+  );
+
+  /// A seance_core link to the leg's sshd as [user], the transport the
+  /// engine's elevation runs over. The test's teardown closes it.
+  Future<SshLink> link(String user) => connectLink(
+    id: 'runner-vm-$user',
+    endpoint: endpoint,
+    user: user,
+    identityFile: _identityFile,
+    hostKeys: {_hostKeyFingerprint},
   );
 
   /// Runs [command] as [user] through OpenSSH's client to the same sshd,

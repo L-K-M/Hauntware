@@ -51,6 +51,10 @@ enum SettingsLinkMethod {
   /// [ThemeModePreference] name.
   setThemeMode,
 
+  /// The Appearance tab's editor (M4 E25); the argument is an appearance
+  /// as [encodeAppearance] writes it.
+  setAppearance,
+
   /// The General tab's A11Y-15 switch; the argument is a bool (D60).
   setAnnounceThresholdBands,
 
@@ -77,6 +81,10 @@ enum SettingsLinkKey {
   palette,
   mode,
   announceThresholdBands,
+
+  /// The running build's version for the about row, a string or null:
+  /// the window's engine registers no plugins to read it itself.
+  appVersion,
   monitorSet,
   serverId,
   label,

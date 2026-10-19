@@ -61,6 +61,35 @@ void main() {
       }
     });
 
+    test('the systemd rows escape every dollar sign, which a service '
+        "manager would otherwise expand in the unit's command line", () {
+      final setsid = OperationCommands.detachedLaunch(
+        DetachedRunner.loginSetsid,
+        dir: _userDir,
+        id: _id,
+        uid: 1000,
+        argv: const ['echo', r'$HOME', r'${PATH}'],
+      );
+      final script = _wrapped(setsid)[2];
+      expect(script, contains(r'$'));
+      for (final runner in [
+        DetachedRunner.rootSystemd,
+        DetachedRunner.loginSystemdUid,
+        DetachedRunner.loginSystemdUser,
+      ]) {
+        final argv = OperationCommands.detachedLaunch(
+          runner,
+          dir: runner.runsAsRoot ? kRootOpsDir : _userDir,
+          id: _id,
+          uid: 1000,
+          argv: const ['echo', r'$HOME', r'${PATH}'],
+        );
+        final wrapped = _wrapped(argv);
+        expect(wrapped[2], script.replaceAll(r'$', r'$$'), reason: runner.name);
+        expect(wrapped.sublist(wrapped.length - 2), [r'$$HOME', r'$${PATH}']);
+      }
+    });
+
     test('the setsid rows go through the launcher and record no unit', () {
       for (final runner in [
         DetachedRunner.rootSetsid,
@@ -85,8 +114,14 @@ void main() {
     });
 
     test('every row runs the same constant wrapper', () {
+      // The systemd rows carry it escaped for the service manager.
+      String script(DetachedRunner r) {
+        final word = _wrapped(_launch(r))[2];
+        return r.transientUnit ? word.replaceAll(r'$$', r'$') : word;
+      }
+
       final scripts = {
-        for (final r in DetachedRunner.values) _wrapped(_launch(r))[2],
+        for (final r in DetachedRunner.values) script(r),
         _wrapped(
           _launch(DetachedRunner.loginSetsid, id: 'ffffffffffffffff'),
         )[2],

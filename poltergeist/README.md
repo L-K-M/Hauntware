@@ -9,7 +9,7 @@ Windows, Linux, and Android. Built as a sibling of
 
 *The ghost that moves your files.*
 
-**Current version:** v<!-- version -->1.9.1<!-- /version --> · [Downloads and first-launch steps](docs/INSTALL.md) · [Releases](https://github.com/L-K-M/Hauntware/releases)
+**Current version:** v<!-- version -->1.9.2<!-- /version --> · [Downloads and first-launch steps](docs/INSTALL.md) · [Releases](https://github.com/L-K-M/Hauntware/releases)
 
 
 ## Known issues

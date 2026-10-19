@@ -111,32 +111,6 @@ class AccessPage extends StatelessWidget {
   );
 }
 
-/// The detected runtime (CN-09), read-only: the engine sockets the probe
-/// found or why it found none. The Docker tab shows it until M3.
-class DetectedRuntime extends StatelessWidget {
-  const DetectedRuntime({super.key, required this.profile});
-
-  final HostProfile? profile;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final profile = this.profile;
-    if (profile == null) return Text(l10n.accessNotChecked);
-
-    final access = evaluateAccess(profile);
-    final row = access.row(AccessItem.runtime);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: 4,
-      children: [
-        Text(_reasonText(l10n, row.reason, profile)),
-        ..._engineLines(context, access.engines),
-      ],
-    );
-  }
-}
-
 /// What the tab's last copy did.
 enum _CopyOutcome { copied, failed }
 
@@ -583,11 +557,17 @@ List<Widget> _engineLines(BuildContext context, List<EngineEndpoint> engines) {
 }
 
 /// [engine]'s runtime and mode in words, such as "Docker, rootful": the
-/// Access and Docker tabs' engine lines and the server header's runtime.
-String engineNameText(AppLocalizations l10n, EngineEndpoint engine) => switch ((
-  engine.runtime,
-  engine.mode,
-)) {
+/// Access tab's engine lines and the server header's runtime.
+String engineNameText(AppLocalizations l10n, EngineEndpoint engine) =>
+    engineModeText(l10n, engine.runtime, engine.mode);
+
+/// [runtime] and [mode] in words, such as "Docker, rootful": a detected
+/// engine's ([engineNameText]) or the one a Docker route reaches.
+String engineModeText(
+  AppLocalizations l10n,
+  EngineRuntime runtime,
+  EngineMode mode,
+) => switch ((runtime, mode)) {
   (EngineRuntime.docker, EngineMode.rootful) => l10n.accessEngineDockerRootful,
   (EngineRuntime.docker, EngineMode.rootless) =>
     l10n.accessEngineDockerRootless,

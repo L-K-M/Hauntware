@@ -4,7 +4,7 @@ description: >-
   release APK the user chose to install, proves its size and SHA-256, and
   hands it to the system package installer. Android only; the apps keep
   the release lookup and every user-facing string.
-version: 1.9.1
+version: 1.9.2
 publish_to: none
 
 environment:

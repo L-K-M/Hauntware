@@ -108,6 +108,7 @@ export 'src/log_resume.dart'
         TimestampedLogLine,
         dropInclusiveSince,
         dropInclusiveSinceLines,
+        joinTimestampedLogLines,
         lastDeliveredTimestamp,
         parseTimestampedLogLine,
         parseTimestampedLogLines;
