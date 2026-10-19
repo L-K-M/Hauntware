@@ -44,12 +44,14 @@ void main() {
   }
 
   /// An engine with management on for every imported server, connected
-  /// to [servers] and holding their probes.
+  /// to [servers] and holding their probes. The probe runs with the
+  /// sampler, so each server's identity stream is subscribed.
   Future<FixtureEngine> managed(String name, List<String> servers) async {
     final engine = await vm.engine(name);
     manage(engine, [limitedServer, journalServer, sudoServer, nocacheServer]);
     for (final server in servers) {
       await engine.connect(server, vm.hostKeys);
+      await engine.subscribe(server, {SampleStream.identity});
       await _profile(engine, server);
     }
     return engine;
