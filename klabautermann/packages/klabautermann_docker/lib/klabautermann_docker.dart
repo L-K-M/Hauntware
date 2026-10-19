@@ -44,6 +44,7 @@ export 'src/compose/commands.dart'
         validateComposeProjectName,
         validateComposeServiceName,
         validateSocketPath;
+export 'src/compose/file_masking.dart' show StackFileKind, maskStackFile;
 export 'src/compose/grouping.dart'
     show ComposeGrouping, ComposeProject, ComposeService, groupComposeProjects;
 export 'src/compose/labels.dart' show ComposeLabelKeys, ComposeLabels;
@@ -57,9 +58,9 @@ export 'src/compose/parsers.dart'
         ComposeServiceConfig,
         ComposeVersionInfo,
         parseComposeConfig,
-        parseComposeConfigHash,
         parseComposePsEntries,
         parseComposePsJson,
+        parseComposeServiceHashes,
         parseComposeVersion;
 export 'src/docker_client.dart' show DockerClient, negotiateDockerClient;
 export 'src/docker_parse_result.dart' show DockerParseResult;
@@ -122,7 +123,8 @@ export 'src/masking.dart'
         maskedLabels,
         maskedValueFor,
         maskedValueWithUrlCheck,
-        secretKeyPattern;
+        secretKeyPattern,
+        urlCredentialSpans;
 export 'src/models/container.dart'
     show
         ContainerConfig,

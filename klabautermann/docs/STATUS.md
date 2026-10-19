@@ -218,6 +218,18 @@ M2, the host read MVP, is the current milestone. What is on main:
   it is dismissed on the device (`settings.json`), the engine strip
   (DKE-01) and the Containers, Images and Stacks sub-tabs, still empty
   (D13, D16, D17). Tested against the fake engine only.
+- Stack sources (M3, D08, 03 §7.16, §10.1): the stacks list carries a
+  verdict per compose project (verified, unverified with a reason, or
+  source not on host naming the marked manager) and the compose CLIs
+  found, the standalone v1 read-only. Verification runs `test -f` on
+  the config files, then `compose config --hash '*'` with `--host`
+  against each service's `config-hash`, both in short-action slots,
+  and falls back to "CLI could not hash" when the flag form fails.
+  `DockerStackFileQuery` reads a verified stack's compose or `.env`
+  file over SFTP, at most 1 MiB, masked in the engine. Tested over
+  fakes only, plus the `test -f` quoting in a real `sh`; the `--hash`
+  output shape comes from Compose's source and awaits D21's run, and
+  the app shows no stacks yet (D17, D18).
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and

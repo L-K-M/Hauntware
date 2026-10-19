@@ -100,14 +100,31 @@ Map<String, MaskedValue> maskedLabels(Map<String, String> labels) => {
 /// Replaces `scheme://user:pass@` credentials in [text] with the mask
 /// token (03 §8.9: URL credentials are a secret even in a value whose key
 /// does not look secret).
+String maskUrlCredentials(String text) {
+  final spans = urlCredentialSpans(text);
+  if (spans.isEmpty) return text;
+
+  final masked = StringBuffer();
+  var copied = 0;
+  for (final (start, end) in spans) {
+    masked
+      ..write(text.substring(copied, start))
+      ..write(MaskedValue.maskToken);
+    copied = end;
+  }
+  return (masked..write(text.substring(copied))).toString();
+}
+
+/// The `pass` of each `scheme://user:pass@` in [text], as start and end
+/// offsets in order (03 §8.9).
 ///
 /// The text may come from a host, a process argument of up to 128 KiB for
 /// one, so the scan is linear: it looks for each `://` and checks the
 /// characters before it once, where one regular expression for the whole
 /// rule would restart at every character of a long scheme-like run.
-String maskUrlCredentials(String text) {
-  final masked = StringBuffer();
-  // The end of the last credentials masked; a scheme starts after it.
+List<(int, int)> urlCredentialSpans(String text) {
+  final spans = <(int, int)>[];
+  // The end of the last credentials found; a scheme starts after it.
   var copied = 0;
   for (
     var separator = text.indexOf('://');
@@ -121,13 +138,13 @@ String maskUrlCredentials(String text) {
     );
     if (credentials == null) continue;
 
-    masked
-      ..write(text.substring(copied, separator + 3))
-      ..write('${credentials[1]}:${MaskedValue.maskToken}@');
+    spans.add((
+      separator + 3 + credentials[1]!.length + 1,
+      credentials.end - 1,
+    ));
     copied = credentials.end;
   }
-  if (copied == 0) return text;
-  return (masked..write(text.substring(copied))).toString();
+  return spans;
 }
 
 /// Whether the run of scheme characters that ends at [end], starting at

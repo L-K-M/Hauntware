@@ -8,7 +8,8 @@ import 'dart:convert';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/admin/admin_mode.dart';
 import 'package:klabautermann_core/src/links/prompt_broker.dart';
-import 'package:seance_core/seance_core.dart' show RemoteCommandResult;
+import 'package:seance_core/seance_core.dart'
+    show ChannelOpenException, ChannelRefusal, RemoteCommandResult;
 import 'package:test/test.dart';
 
 import '../support/scripted_link.dart';
@@ -25,6 +26,9 @@ final class _SudoLink extends TestLinkBase {
   final bool cachesNothing;
   final commands = <String>[];
 
+  /// Refuses every channel, as a link at its session limit does.
+  bool full = false;
+
   @override
   Future<RemoteCommandResult> run(
     String command, {
@@ -32,6 +36,12 @@ final class _SudoLink extends TestLinkBase {
     int maxOutputBytes = 256 * 1024,
     List<int>? stdin,
   }) async {
+    if (full) {
+      throw const ChannelOpenException(
+        ChannelRefusal.sessionLimit,
+        'no session channel',
+      );
+    }
     commands.add(command);
     final line = utf8.decode(stdin ?? const []).split('\n').first;
     if (command.contains('sudo -n -- ') && !command.contains(' elevate ')) {
@@ -216,6 +226,19 @@ void main() {
     await pumpEventQueue();
     await answer(null);
     expect(states().last.failure, AdminFailure.cancelled);
+  });
+
+  test('a refused channel fails validation, and a later enable starts '
+      'again', () async {
+    final admin = controller()..probed(_server, _profile(sudoNopasswd: true));
+    link.full = true;
+    await admin.enable(_server);
+    expect(states().last.phase, AdminModePhase.failed);
+    expect(states().last.failure, AdminFailure.noLink);
+
+    link.full = false;
+    await admin.enable(_server);
+    expect(states().last.phase, AdminModePhase.on);
   });
 
   test('without a link or a probe it fails at once', () async {
