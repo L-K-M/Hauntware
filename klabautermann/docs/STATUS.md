@@ -1420,6 +1420,16 @@ M2, the host read MVP, is the current milestone. What is on main:
   `sudo -k -S -p '' -v`. The matrix ran locally; CI runs only its
   contract tests, since the Alpine package pin can disappear. run0 stays
   manual.
+- M4 command builders (E08): `klabautermann_host` builds the guarded
+  kill (PRC-02), which signals only when the PID's start ticks still
+  match and exits 4 for a reused PID. It also builds `timerStart`
+  (JOB-08), the crontab spool listing (JOB-03) and the detached
+  operation commands (SAF-23): the inline wrapper, which writes
+  `<id>.json` records atomically with `mv`, the launch argv of the five
+  runner rows, cleanup and the 7-day prune. Real-shell tests run under
+  dash and bash. Nothing runs these builders yet: E14 and E17 will.
+  The root-run wrapper's `chown` was checked by hand only, and whether
+  the backgrounded `setsid` launch survives logout waits for spike S4.
 - M4 theme editing (E25): Settings > Appearance edits the theme with
   ghost_theme's shared editor (presets, mode, colours, font, corners,
   copy, paste and reset), in the app and in the desktop settings window,

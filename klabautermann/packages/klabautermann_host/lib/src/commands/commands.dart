@@ -6,6 +6,7 @@ library;
 
 import '../hws/collector.dart' show ArgValidators;
 import '../hws/request.dart' show ShellQuote;
+import 'proc_stat.dart';
 
 /// The first systemd major whose `systemd-analyze calendar` takes
 /// `--iterations`; older ones print one elapse per expression (03 §7.7).
@@ -40,6 +41,134 @@ enum SystemctlVerb {
   enable,
   disable,
 }
+
+/// The signals a guarded kill may send (PRC-02, 03 §7.2, §8.8 "signal
+/// names (enum)"): the ones a person picks for a process. Each [wireName]
+/// passes [ArgValidators.signalName].
+enum KillSignal {
+  sighup('HUP'),
+  sigint('INT'),
+  sigquit('QUIT'),
+  sigabrt('ABRT'),
+  sigkill('KILL'),
+  sigusr1('USR1'),
+  sigusr2('USR2'),
+  sigalrm('ALRM'),
+  sigterm('TERM'),
+  sigcont('CONT'),
+  sigstop('STOP'),
+  sigtstp('TSTP'),
+  sigwinch('WINCH');
+
+  const KillSignal(this.wireName);
+
+  /// The name `kill -s` takes, without the `SIG` prefix.
+  final String wireName;
+}
+
+/// [HostCommands.guardedKill]'s exit when the signal was sent.
+const int kGuardedKillSignalled = 0;
+
+/// [HostCommands.guardedKill]'s exit when `/proc/<pid>` is gone: the
+/// process has exited.
+const int kGuardedKillGone = kStartTicksGone;
+
+/// [HostCommands.guardedKill]'s exit when the start ticks differ: the PID
+/// now names another process, which was not signalled.
+const int kGuardedKillReused = 4;
+
+/// [HostCommands.guardedKill]'s exit when `/proc/<pid>/stat` could not be
+/// read or split; nothing was signalled.
+const int kGuardedKillUnreadable = kStartTicksUnreadable;
+
+/// [HostCommands.guardedKill]'s exit when the start ticks matched but
+/// `kill` failed; its stderr says why (`Operation not permitted` asks for
+/// elevation, `No such process` means the process exited in between).
+const int kGuardedKillFailed = 6;
+
+/// [HostCommands.guardedKill]'s exit when the script refused its own
+/// positional parameters (a second check behind the builder's).
+const int kGuardedKillInvalid = 7;
+
+/// What a guarded kill's exit status means (03 §7.2). The codes avoid 1
+/// and 2, which sudo, `sh` and `kill` use for their own failures, and
+/// 126 and 127, which mean the script never ran.
+enum GuardedKillOutcome {
+  signalled(kGuardedKillSignalled),
+  gone(kGuardedKillGone),
+  reused(kGuardedKillReused),
+  unreadable(kGuardedKillUnreadable),
+  killFailed(kGuardedKillFailed),
+  invalid(kGuardedKillInvalid);
+
+  const GuardedKillOutcome(this.exitCode);
+
+  /// The script's exit status for this outcome.
+  final int exitCode;
+
+  /// The outcome [exitCode] names, or null for any other status (the
+  /// elevation or the login shell failed before the script decided).
+  static GuardedKillOutcome? fromExitCode(int exitCode) {
+    for (final o in values) {
+      if (o.exitCode == exitCode) return o;
+    }
+    return null;
+  }
+}
+
+/// The guarded kill script (03 §7.2): checks its parameters, re-reads the
+/// start ticks, and signals only on a match. The window between the read
+/// and `kill` is the shell's own; PID reuse inside it needs the PID space
+/// to wrap within that instant. The signal check spells its letters out:
+/// a range such as `[A-Z]` follows the locale's collation.
+const String _kGuardedKillScript =
+    '''
+$kStartTicksFunction
+case \$1 in '' | 0* | *[!0-9]*) exit $kGuardedKillInvalid ;; esac
+case \$2 in '' | *[!0-9]*) exit $kGuardedKillInvalid ;; esac
+case \$3 in '' | *[!ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789]*) exit $kGuardedKillInvalid ;; esac
+klab_ticks "\$1" || exit \$?
+[ "\$KT" = "\$2" ] || exit $kGuardedKillReused
+kill -s "\$3" "\$1" || exit $kGuardedKillFailed''';
+
+/// The crontab spools JOB-03 lists, in the order tried (03 §7.7, M14):
+/// Debian, Ubuntu and BusyBox crond keep `crontabs/` under
+/// `/var/spool/cron`, which on Debian holds other spools too; cronie
+/// (RHEL, Fedora) keeps the files in `/var/spool/cron` itself.
+const List<String> kCrontabSpools = [
+  '/var/spool/cron/crontabs',
+  '/var/spool/cron',
+];
+
+/// [HostCommands.crontabSpoolList]'s exit when it listed a spool (the
+/// list may be empty).
+const int kCrontabSpoolListed = 0;
+
+/// [HostCommands.crontabSpoolList]'s exit when no spool directory exists.
+const int kCrontabSpoolMissing = 3;
+
+/// [HostCommands.crontabSpoolList]'s exit when the first spool that exists
+/// cannot be listed: Debian's is `1730 root:crontab`, so the listing needs
+/// elevation. An unreadable directory never reads as an empty one.
+const int kCrontabSpoolDenied = 4;
+
+/// The spool listing (03 §7.7, M14): the first directory among its
+/// positional parameters that exists, on the first line, then the name
+/// of each regular file in it that is not a symlink, one per line. The
+/// glob skips dot files; the reader validates each name as a user name.
+const String _kCrontabSpoolScript =
+    '''
+for d do
+  [ -d "\$d" ] || continue
+  [ -r "\$d" ] && [ -x "\$d" ] || exit $kCrontabSpoolDenied
+  printf '%s\\n' "\$d"
+  for f in "\$d"/*; do
+    [ -f "\$f" ] && [ ! -h "\$f" ] || continue
+    printf '%s\\n' "\${f##*/}"
+  done
+  exit $kCrontabSpoolListed
+done
+exit $kCrontabSpoolMissing''';
 
 /// The order `journalctl` reads in (03 §7.6, §10.1). journalctl refuses
 /// `--reverse` together with `--follow`, so the two are one choice.
@@ -102,6 +231,59 @@ abstract final class HostCommands {
   static List<String> systemctl(SystemctlVerb verb, String unit) {
     _check(ArgValidators.unitName, unit);
     return ['systemctl', '--no-ask-password', verb.name, '--', unit];
+  }
+
+  /// `systemctl --no-ask-password start -- <unit>` for "run timer now"
+  /// (JOB-08, 03 §7.7, M13): starts the unit the timer activates, with
+  /// SVC-03's guards. [activates] is the timer's `Unit=`, any unit but a
+  /// timer [R: systemd.timer(5)]; the caller follows its journal with
+  /// [journalctl]'s `unit`, `since` and [JournalOrder.follow].
+  static List<String> timerStart(String activates) {
+    _check(ArgValidators.unitName, activates);
+    if (activates.endsWith('.timer')) {
+      throw HostCommandError('a timer activates no timer', argument: activates);
+    }
+    return systemctl(SystemctlVerb.start, activates);
+  }
+
+  /// The guarded kill (PRC-02, 03 §7.2): `sh -c` with a constant script
+  /// that re-reads field 22 of `/proc/<pid>/stat` and runs
+  /// `kill -s <signal> <pid>` only when it equals [startTicks], the value
+  /// the plan recorded from the `procs` row. The PID, ticks and signal
+  /// follow the script as positional parameters. The exit status is one
+  /// of [GuardedKillOutcome]'s; [kGuardedKillReused] means the PID now
+  /// names another process. Elevation, for other users' processes, wraps
+  /// the whole argv.
+  static List<String> guardedKill(int pid, int startTicks, KillSignal signal) {
+    if (pid <= 0) {
+      throw HostCommandError('pid must be positive', argument: '$pid');
+    }
+    if (startTicks < 0) {
+      throw HostCommandError('negative start ticks', argument: '$startTicks');
+    }
+    return [
+      'sh',
+      '-c',
+      _kGuardedKillScript,
+      'klabautermann-kill',
+      '$pid',
+      '$startTicks',
+      signal.wireName,
+    ];
+  }
+
+  /// The crontab spool listing for JOB-03 (03 §7.7, M14), run elevated:
+  /// the first of [kCrontabSpools] that exists, then its file names, read
+  /// by `parseCrontabSpool`. The exit is [kCrontabSpoolListed],
+  /// [kCrontabSpoolMissing] or [kCrontabSpoolDenied]. Each name then goes
+  /// to [crontabList] after the user-name check. The spools are
+  /// positional parameters, so [spools] can point a test elsewhere.
+  static List<String> crontabSpoolList({List<String> spools = kCrontabSpools}) {
+    if (spools.isEmpty) throw const HostCommandError('no spool directory');
+    for (final d in spools) {
+      _check(ArgValidators.absolutePath, d);
+    }
+    return ['sh', '-c', _kCrontabSpoolScript, 'klabautermann-spool', ...spools];
   }
 
   /// `journalctl -o json` with the log view's filters (03 §7.6, §10.1):

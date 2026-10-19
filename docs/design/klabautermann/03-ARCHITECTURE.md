@@ -3049,6 +3049,16 @@ unless the user enables admin mode for that panel.
   and container attribution from `/proc/<pid>/cgroup`, state highlighting.
 - **v1.x.** Renice and ionice, per-process I/O (sudo).
 
+As built in M4 (E08, `klabautermann_host/lib/src/commands/commands.dart`),
+`HostCommands.guardedKill(pid, startTicks, KillSignal)` is that `sh -c`:
+a constant script that takes the PID, ticks and signal as positional
+parameters and checks them again. It exits 0 once signalled, 3 when
+`/proc/<pid>` is gone, 4 when the ticks differ (the PID was reused, and
+nothing is signalled), 5 when the stat line has fewer than 20 fields
+after its last `) ` (a comm holding a newline), 6 when `kill` fails
+and 7 when it refuses a parameter (`GuardedKillOutcome`). The codes
+avoid 1 and 2, which sudo and the shell use, and 126 and 127.
+
 ### 7.3 Disks and storage (DSK)
 
 - **MVP.** Usage per mount from `df -PT -B1` with pseudo filesystems filtered
@@ -3382,6 +3392,18 @@ each row's source and the user its line names:
   instead of a failed timers reading. The phone reaches the tab
   through More (10.5).
 
+As built in M4 (E08, the same `commands.dart`), `HostCommands.timerStart`
+starts a timer's `Unit=` (any unit but a timer) with SVC-03's
+`systemctl --no-ask-password start --`, and JOB-08's follow uses the
+existing `journalctl` builder with `unit`, `since` and a follow.
+`HostCommands.crontabSpoolList()` is JOB-03's elevated listing: a
+constant script over `/var/spool/cron/crontabs`, then `/var/spool/cron`,
+that prints the first existing directory and then each regular,
+non-symlink file name in it. It exits 0, 3 when neither exists, and 4
+when the directory cannot be listed, so an unreadable spool never reads
+as empty. `parseCrontabSpool` keeps only names that pass the user-name
+check for `crontab -l -u`.
+
 ### 7.8 Packages and updates (PKG)
 
 - **v1 (read-only).** `apt-get -s upgrade` (`Inst` lines; not `apt`, whose
@@ -3685,6 +3707,40 @@ matching row applies:
   older than 7 days [E] are pruned on connect, those in the root directory
   by the next root-run wrapper or in admin mode. Never `/tmp`. Both
   directories are rows in the host write inventory (8.11).
+
+As built in M4 (E08, `klabautermann_host/lib/src/commands/operations.dart`),
+`OperationCommands.detachedLaunch` builds each `DetachedRunner` row's
+argv; nothing runs it before E17. Decisions:
+
+- The wrapper takes one more parameter than the table shows:
+  `klabautermann-op <dir> <id> <uid> <unit|-> -- <cmd...>`, the unit
+  `klabautermann-op-<id>.service` on the systemd rows (also passed as
+  `--unit=`), so the record names it.
+- Both `setsid` rows use one launcher, `setsid "$@" </dev/null
+  >/dev/null 2>&1 &`, then print `$!`. A background child of a
+  non-interactive shell leads no process group, so util-linux and
+  BusyBox `setsid` both call setsid(2) in place, and `$!` is the
+  record's PID. Spike S4 still has to confirm that it survives logout.
+- The wrapper checks its parameters again. As root it writes only to
+  `/var/lib/klabautermann/ops` (parents 0755) and `chown`s each file to
+  the uid; otherwise it writes only as that uid (0700). It refuses a
+  symlinked directory or one it does not own. As root it prunes first.
+  It creates `<id>.log` exclusively, writes each record to `.<id>.tmp`
+  and `mv`s it over `<id>.json`, and runs the command from `/` with
+  `command`, stdin on `/dev/null`. It exits with the command's status,
+  or 125 when it refused to start, which leaves no record.
+- A record is one JSON line holding every key, `null` where a value is
+  unknown: `v` (1), `id`, `state` (`running` or `done`), `pid` (the
+  wrapper's `$$`), `startTicks` (field 22 of its stat), `unit`, `exit`,
+  `startedAt` and `endedAt` (epoch seconds from `date +%s`).
+- `opCleanup(dir, ids)` removes the record, the log and any temp file.
+  `opPrune(dir, days)` removes the operation files older than `days`
+  whole days, matched by name (`find -mtime +<days-1>`). Both validate
+  the directory: an absolute path ending in `/klabautermann/ops`, never
+  under `/tmp`, and the root directory only on the root rows.
+
+Real-shell tests run under dash and bash. The root path and its
+`chown` were checked by hand only (E30 covers them on the runner VM).
 
 As built in M4 (E07, `klabautermann_host/lib/src/parse/ops.dart`), the
 slow `ops` collector lists
