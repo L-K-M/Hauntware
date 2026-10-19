@@ -197,14 +197,14 @@ class _ContainersPanelState extends State<ContainersPanel> {
           spacing: 12,
           children: [
             if (endpoint?.lowSession ?? false)
-              _Notice(
+              DockerNotice(
                 icon: Icons.speed_outlined,
                 text: endpoint?.route?.rank == DockerRank.streamlocal
                     ? l10n.dockerContainersLowSession
                     : l10n.dockerContainersLowSessionRelay,
               ),
             if (failure != null) ...[
-              _Notice(
+              DockerNotice(
                 icon: Icons.error_outline,
                 text: l10n.dockerContainersFailed(failure.failure.name),
                 detail: failure.detail,
@@ -214,14 +214,17 @@ class _ContainersPanelState extends State<ContainersPanel> {
                 ),
               ),
               if (containers != null)
-                _Notice(icon: Icons.history, text: l10n.dockerContainersKept),
+                DockerNotice(
+                  icon: Icons.history,
+                  text: l10n.dockerContainersKept,
+                ),
             ] else if (containers == null)
-              _Notice(
+              DockerNotice(
                 icon: Icons.hourglass_empty,
                 text: l10n.dockerContainersReading,
               ),
             if (list.statsFailure != null && containers != null)
-              _Notice(
+              DockerNotice(
                 icon: Icons.error_outline,
                 text: l10n.dockerContainersStatsFailed,
                 detail: list.statsFailure?.detail,
@@ -939,9 +942,11 @@ class _BuiltRowState extends State<_BuiltRow> {
 }
 
 /// A state in words beside an icon, read as one node, with the engine's
-/// own [detail] under it, never translated, and an optional [action].
-class _Notice extends StatelessWidget {
-  const _Notice({
+/// own [detail] under it, never translated, and an optional [action];
+/// the Containers and Images sub-tabs share it.
+class DockerNotice extends StatelessWidget {
+  const DockerNotice({
+    super.key,
     required this.icon,
     required this.text,
     this.detail,

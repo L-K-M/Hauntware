@@ -130,6 +130,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'docker-${_count++}'",
     r"'containers-${_count++}'",
     r"'container-${_count++}'",
+    r"'images-${_count++}'",
   },
   'lib/controllers/log_streams.dart': {
     // A log stream id the engine keys a stream's events by (03 §10.1), and
@@ -247,12 +248,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/docker/container_details.dart': {
     // A mount's type as the Engine API names it, matched, never shown;
     // the empty type a mount without one reads as; the separator between
-    // a network's aliases and the one an image id's algorithm ends with,
-    // machine data.
+    // a network's aliases, machine data.
     "'volume'",
     "''",
     "', '",
-    "':'",
   },
   'lib/ui/docker/container_details_view.dart': {
     // The Engine API's restart policy names, matched, never shown; the
@@ -368,6 +367,24 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'0.0.0.0'",
     "'::'",
     // The separator `docker ps` prints between ports; machine data.
+    "', '",
+  },
+  'lib/ui/docker/images_panel.dart': {
+    // The key tests find a phone row by, in the table rows' form, and the
+    // line break between its cells in its screen-reader label, each ARB
+    // text.
+    r"'${DockerWatchList.images.name}.row.${_rowKey(entry)}'",
+    r"'\n'",
+  },
+  'lib/ui/docker/images_view.dart': {
+    // The tag `docker images` prints for none and the digest algorithm
+    // image ids start with, matched, never shown; the one an image id's
+    // algorithm ends with; the line break between the fields the search
+    // reads; the separator between an image's tags, machine data.
+    "'<none>:<none>'",
+    "'sha256:'",
+    "':'",
+    r"'\n'",
     "', '",
   },
   'lib/ui/docker/docker_panel.dart': {

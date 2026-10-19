@@ -215,8 +215,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   tab waits, looks or says why no route works (with the Access link and
   a retry), then shows SAF-08's notice until it is dismissed on the
   device (`settings.json`), the engine strip (DKE-01) and the
-  Containers, Images and Stacks sub-tabs, the last two still empty (D16,
-  D17). Tested against the fake engine only.
+  Containers, Images and Stacks sub-tabs, the last still empty (D17).
+  Tested against the fake engine only.
 - Stack sources (M3, D08, 03 §7.16, §10.1): the stacks list carries a
   verdict per compose project (verified, unverified with a reason, or
   source not on host naming the marked manager) and the compose CLIs
@@ -300,6 +300,22 @@ M2, the host read MVP, is the current milestone. What is on main:
   container reads "no such file or log tool". The engine delivers a
   container window oldest first, against `LogStreamSpec`'s newest
   first, so the controller keeps that order. Tested against the fake
+  engine only.
+- Images in the app (M3, D16, 03 §7.14, §10.4): the Images sub-tab
+  holds one `DockerWatch` of the images and containers per server while
+  it shows, apart from the Containers view's, and sends `DockerUnwatch`
+  once hidden. The sortable table lists the tags (a dangling image, one
+  without, as a "Dangling" badge), the short ID, the size (IEC), the age
+  as `docker images` grades it with the date, and whether any container,
+  running or not, uses the image ("In use (2)" or "Unused"), with All,
+  Unused and Dangling filters and a search by tag or ID; phones and
+  200 % text get two-line rows with a sort menu. Use is counted from
+  the container list whenever one was read, since a container event
+  re-lists the containers but not the images; the image list's own
+  count (API 1.51 and later) stands in until then, and below 1.51 a
+  failed container list leaves the use unknown and says so. A failed
+  read keeps the last list with why and a retry, and low-session mode is
+  named on a relay, where the list polls. Tested against the fake
   engine only.
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
