@@ -220,7 +220,10 @@ void main() {
         expect(h.daemon.eventStreams, isEmpty);
 
         // The journal follow opened first, so it has the one slot.
-        expect(h.status('j1'), limit < 4 ? _forChannel : _running);
+        expect(
+          h.status('j1'),
+          limit < kFollowerMinSessionLimit ? _forChannel : _running,
+        );
         expect(h.status('c1'), _forChannel);
         expect(h.daemon.logStreams, isEmpty);
         await h.close();
@@ -249,7 +252,10 @@ void main() {
         expect(h.status('c1'), _running);
         expect(h.status('c2'), _running);
         expect(h.daemon.logStreams, hasLength(2));
-        expect(h.status('j1'), limit < 4 ? _forChannel : _running);
+        expect(
+          h.status('j1'),
+          limit < kFollowerMinSessionLimit ? _forChannel : _running,
+        );
         expect(h.status('j2'), _forChannel);
         expect(h.daemon.held, hasLength(1));
         h.daemon.release();
@@ -439,10 +445,9 @@ void main() {
       await h.settle();
       expect(h.quota.held(ChannelShare.shortAction), 1);
       final stacks = h.events.whereType<DockerListChanged>().last.payload;
-      expect(
-        (stacks as DockerStacksPayload).verdicts.values,
-        everyElement(isA<StackSourceNotOnHost>()),
-      );
+      final verdicts = (stacks as DockerStacksPayload).verdicts.values;
+      expect(verdicts, isNotEmpty);
+      expect(verdicts, everyElement(isA<StackSourceNotOnHost>()));
       await h.close();
     });
   });

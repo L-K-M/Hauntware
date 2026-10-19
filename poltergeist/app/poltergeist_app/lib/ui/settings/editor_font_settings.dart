@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:ghost_fonts/ghost_fonts.dart' show BundledMonoFont;
+import 'package:ghost_fonts/ghost_fonts.dart';
 import 'package:planchette_editor/planchette_editor.dart'
-    show EditorLigatures, editorDefaultFont;
+    show EditorLigatures, EditorTextSize, editorDefaultFont;
 
 import '../../l10n/app_localizations.dart';
 import '../../services/application_error_reporter.dart';
@@ -15,19 +15,16 @@ import '../top_toast.dart';
 /// included fonts and whether their ligatures draw. Every editor window,
 /// route and compare view redraws as it changes.
 class EditorFontSection extends StatefulWidget {
-  const EditorFontSection({super.key, required this.model});
+  const EditorFontSection({super.key, required this.model, this.textSize});
 
   final EditorFontModel model;
+  final EditorTextSizeModel? textSize;
 
   @override
   State<EditorFontSection> createState() => _EditorFontSectionState();
 }
 
 class _EditorFontSectionState extends State<EditorFontSection> {
-  /// The menu's value for the editor's default: storing no family keeps
-  /// editors on the default should it ever change.
-  static const _standard = '';
-
   /// What the rows show from a choice until the model shows it. In the
   /// Settings window the model trails each write by a round trip to the
   /// app, so the rows would otherwise flick back.
@@ -120,41 +117,59 @@ class _EditorFontSectionState extends State<EditorFontSection> {
     );
   }
 
-  /// The included fonts, each drawn in its own face, the editor's default
-  /// marked. A family stored some other way leads the list, so opening it
-  /// changes nothing.
   Widget _menu(AppLocalizations l10n, EditorFont font) {
     final chosen = font.chosenFamily;
     final bundled = chosen == null
         ? editorDefaultFont
         : BundledMonoFont.named(chosen);
-    final selected = switch (bundled) {
-      null => chosen!,
-      editorDefaultFont => _standard,
-      final named => named.displayName,
-    };
-    return DropdownButton<String>(
+    return OutlinedButton.icon(
       key: const ValueKey('editor.font'),
-      isExpanded: true,
-      value: selected,
-      items: [
-        if (bundled == null)
-          DropdownMenuItem(value: chosen, child: Text(chosen!)),
-        for (final option in BundledMonoFont.values)
-          DropdownMenuItem(
-            value: option == editorDefaultFont ? _standard : option.displayName,
-            child: Text(
-              option == editorDefaultFont
-                  ? l10n.editorFontDefault(option.displayName)
-                  : option.displayName,
-              style: TextStyle(fontFamily: option.family),
-            ),
-          ),
-      ],
-      onChanged: (family) {
-        if (family == null) return;
-        unawaited(_write(font.copyWith(family: family)));
-      },
+      icon: const Icon(Icons.font_download_outlined),
+      label: Text(
+        bundled == editorDefaultFont
+            ? l10n.editorFontDefault(editorDefaultFont.displayName)
+            : bundled?.displayName ?? chosen!,
+        overflow: TextOverflow.ellipsis,
+      ),
+      onPressed: () => _pickFont(l10n, font),
+    );
+  }
+
+  Future<void> _pickFont(AppLocalizations l10n, EditorFont font) async {
+    final chosen = await showMonoFontPicker(
+      context,
+      current: font.chosenFamily ?? '',
+      defaultFont: editorDefaultFont,
+      fontSize: (widget.textSize?.value ?? EditorTextSize.standard).toDouble(),
+      ligatures: font.ligatures == EditorLigatures.on
+          ? MonoLigatures.on
+          : MonoLigatures.off,
+      labels: MonoFontPickerLabels(
+        title: l10n.editorFontPickerTitle,
+        search: l10n.editorFontPickerSearch,
+        included: l10n.editorFontPickerIncluded,
+        installed: l10n.editorFontPickerInstalled,
+        empty: l10n.editorFontPickerEmpty,
+        ligatures: l10n.editorLigaturesLabel,
+        apply: l10n.editorFontPickerUse,
+        cancel: l10n.editorDialogCancel,
+        defaultLabel: l10n.editorFontPickerDefault,
+        monospaceOnly: l10n.editorFontPickerMonospace,
+        preview: l10n.previewPanelLabel,
+        noLigatures: l10n.editorFontPickerNoLigatures,
+      ),
+    );
+    if (chosen == null || !mounted) return;
+
+    unawaited(
+      _write(
+        font.copyWith(
+          family: chosen.family,
+          ligatures: chosen.ligatures == MonoLigatures.on
+              ? EditorLigatures.on
+              : EditorLigatures.off,
+        ),
+      ),
     );
   }
 }

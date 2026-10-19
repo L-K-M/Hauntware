@@ -56,8 +56,8 @@ const _owedReadRetry = Duration(seconds: 15);
 
 /// The longest wait before the next probe [E]. Each probe that brings no
 /// reply doubles the wait from [_owedReadRetry]: one that hangs holds the
-/// slow sampler for its whole deadline, 165 s, and its streams lose their
-/// readings meanwhile, which the cap bounds to about 15 % of the time.
+/// slow sampler for its whole deadline, 175 s, and its streams lose their
+/// readings meanwhile, which the cap bounds to about 16 % of the time.
 const _maxProbeRetry = Duration(minutes: 15);
 
 /// The stream whose collector also serves [stream]'s, or null: a `core`
@@ -135,6 +135,23 @@ final class SamplingScheduler {
   /// One per engine, so a server's [Sample.seq] keeps rising (D44).
   final _sequence = SampleSequence();
   final Map<String, _Server> _servers = {};
+
+  /// The PIDs of [serverId]'s running sampler shells and their parents,
+  /// the sshd processes serving them (03 §8.6, E07): acting on one would
+  /// end this session's sampling. A parent outside the shells' PID
+  /// namespace reads 0 and is left out.
+  Set<int> samplerPids(String serverId) {
+    final run = _servers[serverId]?.run;
+    if (run == null) return const {};
+    return {
+      for (final sampler in [run.fast, run.slow])
+        if (sampler.session.self case (:final pid, :final parentPid)) ...[
+          pid,
+          if (parentPid > 0) parentPid,
+        ],
+    };
+  }
+
   final Set<Future<void>> _closing = {};
   AppActivity _activity = AppActivity.foreground;
 

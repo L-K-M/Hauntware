@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
+import 'package:seance_core/catalog.dart' show HostKeyConflict;
 import 'package:seance_core/seance_core.dart';
 
 import '../app_state.dart';
@@ -46,6 +47,7 @@ class LocalSettingsBackend implements SettingsBackend {
     syncing: _state.syncing,
     lastSyncAt: _state.lastSyncAt,
     lastSyncError: _state.lastSyncError,
+    pinConflicts: _state.services.pinConflicts,
   );
 
   @override
@@ -470,6 +472,12 @@ class LocalSettingsBackend implements SettingsBackend {
     final outcome = await _state.syncNow();
     return SyncCounts(pulled: outcome.pulled, pushed: outcome.pushed);
   }
+
+  @override
+  Future<PulledPinResolution> resolvePinConflict(
+    HostKeyConflict conflict, {
+    required bool keepLocal,
+  }) => _state.resolvePinConflict(conflict, keepLocal: keepLocal);
 
   @override
   Future<InboxAppsView> inboxApps() async => InboxAppsView(

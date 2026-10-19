@@ -14,26 +14,45 @@
   host keys or AES-CBC ciphers still connect. Servers that offer only
   `diffie-hellman-group1-sha1`, `hmac-md5` or truncated `hmac-sha2-*-96`
   MACs no longer connect. Each product's changelog has the details.
+- Séance's terminal text size, font, ligatures and colour choice moved
+  from Settings ▸ General to Settings ▸ Appearance. Its preview there now
+  draws in the terminal's font instead of the code font.
 
 ### Added
 
+- The font catalog now has 20 families, including Cascadia Code, Victor
+  Mono, Lilex, 0xProto and all five Monaspace faces. A searchable picker
+  previews code, ambiguous characters and emphasis before applying a
+  font. Ligatures are on by default and can be disabled, including the
+  font-specific sets used by Monaspace, Geist Mono and Intel One Mono.
+  All fonts work offline and ship with their OFL notices.
+- Séance and Poltergeist on Android update themselves when you ask.
+  When a newer release is out, Séance's update banner and Poltergeist's
+  Alerts tab offer Update with the download size. The app downloads
+  that release's APK, discards it unless its size and SHA-256 match what
+  the release lists, and opens Android's installer, which asks you to
+  allow installs from the app the first time and then to confirm. The
+  launch check is unchanged, nothing downloads until you choose Update,
+  and desktop and iOS builds still link to the release page.
 - Planchette, Séance and Poltergeist let you choose the built-in
   editor's font and turn its ligatures off. Each app keeps the choice on
   the device, like the editor's text size.
-- Every app ships four open-source monospace fonts: Iosevka Term,
+- Every app ships open-source monospace fonts, including Iosevka Term,
   JetBrains Mono, Fira Code and Maple Mono, all with ligatures such as
   `->` and `!=`. Code and editors in Planchette, Séance and Poltergeist
   draw in JetBrains Mono on every platform, where they used to fall back
   to Menlo, Cascadia Mono or DejaVu Sans Mono unless JetBrains Mono was
   installed. Planchette's settings-file `fontFamily` and Séance's
-  terminal font accept any of the four by name. The fonts are under the
+  terminal font accept the bundled families by name. The fonts are under the
   SIL Open Font License; each app's licence notices include it.
 - Klabautermann, the fourth product: an agentless manager for servers
   and Docker over SSH, still in development. CI builds its Android, iOS,
   Linux, macOS and Windows clients on every pull request and launches
   the desktop ones, and `scripts/build.sh` builds it with the other
-  products. Suite releases do not ship it until its preview milestone;
-  its [changelog](klabautermann/CHANGELOG.md) tracks the work so far.
+  products. Suite releases ship its five clients as previews: until v1
+  their asset names start with `klabautermann-preview-`, except the
+  .deb, which keeps Debian's versioned name. Its
+  [changelog](klabautermann/CHANGELOG.md) tracks the work so far.
 
 ## 1.9.0 (2026-10-04)
 

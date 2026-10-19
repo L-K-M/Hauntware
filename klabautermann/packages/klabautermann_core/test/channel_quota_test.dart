@@ -57,6 +57,55 @@ void main() {
     expect(quota.held(ChannelShare.follower), 2);
   });
 
+  test('under a learned limit, short actions and followers together keep '
+      'within what the two samplers leave (M9)', () {
+    // Limit 4: a follower and one short action. On a relay the pooled
+    // connection is that short action while a watch keeps it open.
+    final quota = ChannelQuota();
+    expect(quota.take(ChannelShare.follower, learnedSessionLimit: 4), isTrue);
+    expect(
+      quota.take(ChannelShare.shortAction, learnedSessionLimit: 4),
+      isTrue,
+    );
+    expect(
+      quota.take(ChannelShare.shortAction, learnedSessionLimit: 4),
+      isFalse,
+    );
+    quota.give(ChannelShare.follower);
+    expect(
+      quota.take(ChannelShare.shortAction, learnedSessionLimit: 4),
+      isTrue,
+    );
+
+    // Limit 5 leaves three.
+    final five = ChannelQuota();
+    expect(five.take(ChannelShare.follower, learnedSessionLimit: 5), isTrue);
+    expect(five.take(ChannelShare.shortAction, learnedSessionLimit: 5), isTrue);
+    expect(five.take(ChannelShare.shortAction, learnedSessionLimit: 5), isTrue);
+  });
+
+  test('a waiting short action counts the limit the link has learned '
+      'by then', () async {
+    final quota = ChannelQuota();
+    int? limit;
+    await quota.acquire(ChannelShare.shortAction);
+    expect(quota.take(ChannelShare.follower), isTrue);
+
+    limit = 4;
+    var second = false;
+    unawaited(
+      quota
+          .acquire(ChannelShare.shortAction, learnedSessionLimit: () => limit)
+          .then((_) => second = true),
+    );
+    await pumpEventQueue();
+    expect(second, isFalse, reason: 'the samplers leave two, both taken');
+
+    quota.give(ChannelShare.follower);
+    await pumpEventQueue();
+    expect(second, isTrue);
+  });
+
   test('a short action waits for a slot, which a give hands on', () async {
     final quota = ChannelQuota();
     await quota.acquire(ChannelShare.shortAction);

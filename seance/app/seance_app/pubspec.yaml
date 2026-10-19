@@ -1,7 +1,7 @@
 name: seance_app
 description: "Séance — a personal cross-platform SSH client."
 publish_to: none
-version: 1.9.0+1090099
+version: 1.9.2+1090299
 
 environment:
   sdk: ^3.12.0
@@ -29,6 +29,9 @@ dependencies:
   # the shipped presets and the codec, shared with the Ghost app family.
   ghost_theme:
     path: ../../../planchette/packages/ghost_theme
+  # The Android in-app update: download, verify and open the release APK.
+  ghost_apk_update:
+    path: ../../../planchette/packages/ghost_apk_update
   characters: ^1.4.0
   flutter:
     sdk: flutter

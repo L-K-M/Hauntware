@@ -26,7 +26,7 @@
 #      (least-privilege tokens: only that job pushes to GHCR),
 #  10. the checksum job drops a stale SHA256SUMS before recomputing,
 #      so re-running it stays idempotent,
-#  11. both Android client legs verify the built APK's version code.
+#  11. all Android client legs verify the built APK's version code.
 
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -236,12 +236,12 @@ grep -q 'rm -f "$assets_dir/SHA256SUMS"' .github/workflows/release.yml ||
   err "release.yml sums job must drop a stale SHA256SUMS before computing sums"
 
 # --- 11. Android legs verify the APK version code ---------------------------
-# Both APK legs must prove Gradle consumed the synchronized pubspec
+# All APK legs must prove Gradle consumed the synchronized pubspec
 # version code in the real APK (Poltergeist's mechanism), so a stale
 # build cannot ship an APK that refuses to upgrade in place.
 # awk matches by itself: `| grep -q` would exit at the first hit and,
 # under pipefail, the SIGPIPE awk gets would fail a passing check.
-for leg in client_seance client_poltergeist; do
+for leg in client_planchette client_seance client_poltergeist client_klabautermann; do
   awk -v leg="$leg" '
     $0 == "  " leg ":" { inside = 1; next }
     inside && /^  [A-Za-z0-9_-]+:/ { inside = 0 }

@@ -1,0 +1,173 @@
+{
+  "LayersSize": 20000000,
+  "Images": [
+    {
+      "Id": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "ParentId": "",
+      "RepoTags": ["alpine:3.21"],
+      "RepoDigests": [],
+      "Created": 1779000000,
+      "Size": 8200000,
+      "SharedSize": 0,
+      "Labels": {},
+      "Containers": 4
+    },
+    {
+      "Id": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+      "ParentId": "",
+      "RepoTags": [],
+      "RepoDigests": [],
+      "Created": 1779000100,
+      "Size": 4100000,
+      "SharedSize": 0,
+      "Labels": {},
+      "Containers": 0
+    },
+    {
+      "Id": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+      "ParentId": "",
+      "RepoTags": ["redis:7.4"],
+      "RepoDigests": [],
+      "Created": 1779000200,
+      "Size": 7700000,
+      "SharedSize": 1000000,
+      "Labels": {},
+      "Containers": 0
+    },
+    {
+      "Id": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+      "ParentId": "",
+      "RepoTags": ["busybox:1.37"],
+      "RepoDigests": [],
+      "Created": 1779000300,
+      "Size": 5000000,
+      "SharedSize": -1,
+      "Labels": {},
+      "Containers": 0
+    }
+  ],
+  "Containers": [
+    {
+      "Id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "Names": ["/web-1"],
+      "Image": "alpine:3.21",
+      "ImageID": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "Command": "httpd -f",
+      "Created": 1780001000,
+      "SizeRw": 1000,
+      "SizeRootFs": 8201000,
+      "Labels": {},
+      "State": "running",
+      "Status": "Up 2 hours"
+    },
+    {
+      "Id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "Names": ["/cron-1"],
+      "Image": "alpine:3.21",
+      "ImageID": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "Command": "crond -f",
+      "Created": 1780001100,
+      "SizeRw": 2000,
+      "SizeRootFs": 8202000,
+      "Labels": {},
+      "State": "paused",
+      "Status": "Up 1 hour (Paused)"
+    },
+    {
+      "Id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "Names": ["/job-1"],
+      "Image": "alpine:3.21",
+      "ImageID": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "Command": "redis-cli ping",
+      "Created": 1780001200,
+      "SizeRw": 30000,
+      "SizeRootFs": 7730000,
+      "Labels": {},
+      "State": "exited",
+      "Status": "Exited (0) 5 minutes ago"
+    },
+    {
+      "Id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "Names": ["/init-1"],
+      "Image": "alpine:3.21",
+      "ImageID": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "Command": "true",
+      "Created": 1780001300,
+      "SizeRw": 400,
+      "SizeRootFs": 5000400,
+      "Labels": {},
+      "State": "created",
+      "Status": "Created"
+    }
+  ],
+  "Volumes": [
+    {
+      "CreatedAt": "2026-05-01T10:00:00Z",
+      "Driver": "local",
+      "Labels": null,
+      "Mountpoint": "/var/lib/docker/volumes/web_data/_data",
+      "Name": "web_data",
+      "Options": null,
+      "Scope": "local",
+      "UsageData": { "Size": 500000, "RefCount": 1 }
+    },
+    {
+      "CreatedAt": "2026-05-02T11:30:00Z",
+      "Driver": "local",
+      "Labels": null,
+      "Mountpoint": "/var/lib/docker/volumes/old_cache/_data",
+      "Name": "old_cache",
+      "Options": null,
+      "Scope": "local",
+      "UsageData": { "Size": 250000, "RefCount": 0 }
+    },
+    {
+      "CreatedAt": "2026-05-03T09:15:00Z",
+      "Driver": "nfs-plugin",
+      "Labels": null,
+      "Mountpoint": "",
+      "Name": "remote_share",
+      "Options": null,
+      "Scope": "global",
+      "UsageData": { "Size": -1, "RefCount": 0 }
+    }
+  ],
+  "BuildCache": [
+    {
+      "ID": "hw53o5aio51xtltp5xjp8v7fx",
+      "Parents": [],
+      "Type": "regular",
+      "Description": "mount / from exec /bin/sh -c apk add curl",
+      "InUse": false,
+      "Shared": false,
+      "Size": 120000,
+      "CreatedAt": "2026-05-01T10:00:00Z",
+      "LastUsedAt": "2026-05-04T08:00:00Z",
+      "UsageCount": 3
+    },
+    {
+      "ID": "ndlpt0hhvkqcdfkputsk4cq9c",
+      "Parents": ["hw53o5aio51xtltp5xjp8v7fx"],
+      "Type": "exec.cachemount",
+      "Description": "cached mount /root/.cache",
+      "InUse": true,
+      "Shared": false,
+      "Size": 80000,
+      "CreatedAt": "2026-05-01T10:00:01Z",
+      "LastUsedAt": "2026-05-04T08:00:01Z",
+      "UsageCount": 7
+    },
+    {
+      "ID": "q8ux9e5k1qkzp3hm6f0e4r2wt",
+      "Parents": [],
+      "Type": "regular",
+      "Description": "pulled from docker.io/library/alpine:3.21",
+      "InUse": false,
+      "Shared": true,
+      "Size": 60000,
+      "CreatedAt": "2026-05-01T09:59:00Z",
+      "LastUsedAt": "2026-05-04T07:59:00Z",
+      "UsageCount": 12
+    }
+  ]
+}

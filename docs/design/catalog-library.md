@@ -797,6 +797,21 @@ and the Séance pin audit (`poltergeist/tool/seance_pin_audit`,
 `poltergeist/scripts/audit-seance-pin.sh`) runs because `seance/`
 changed, refreshing its record only if it reports a mismatch (section 11).
 
+As built (M4 E06): `SyncCoordinator` takes a `ConflictAwareHostKeyStore`
+and an optional `PinVerdictStore`, writes a pulled pin only through
+`putIfNoConflict`, and exposes the round's conflicts as `pinConflicts`
+(the shared `HostKeyConflict`). `PulledPinResolver`
+(`SC/src/sync/pulled_pin_resolver.dart`) performs keep-local and
+accept-pulled through `replaceIfCurrent`, so a choice made after the local
+pin changed reports `stale` and does nothing. Séance's own
+`FileHostKeyStore` gained the two conditional writes rather than an
+adapter, and its verdicts live in `settings.json`
+(`untrustedPinLocators`, `keptPinVerdicts`) behind
+`SettingsPinVerdictStore`. The resolution surface is a card per conflict
+in Settings ▸ Sync with both fingerprints and the two buttons, not a
+separate sheet. `kMinSharedVersionIncludesSeance56Fix` still flips in the
+release that carries the fix.
+
 ## 8. F3b: pure stores into `SC/src/store/`
 
 Sources: `PA/services/file_stores.dart`, which holds

@@ -24,10 +24,27 @@ String aliasServer(int i) => 'ssh-config:alias-$i';
 enum FixtureService {
   /// The sampled host, published on loopback and reached by the jump host
   /// under its service name.
-  sshd,
+  sshd('sshd'),
 
   /// The ProxyJump host.
-  jump,
+  jump('jump'),
+
+  /// The Docker host, whose /var/run/docker.sock is dind's socket.
+  dockerHost('docker-sshd'),
+
+  /// The Docker host's negative variants (M3 D11), each refusing with one
+  /// sshd setting or key option.
+  noStreamlocal('neg-nostreamlocal'),
+  disableForwarding('neg-disableforwarding'),
+  noTcp('neg-notcp'),
+  permitOpen('neg-permitopen'),
+  maxSessions2('neg-maxsessions2'),
+  restrict('neg-restrict');
+
+  const FixtureService(this.composeName);
+
+  /// The service's name in docker-compose.yml.
+  final String composeName;
 }
 
 /// What a host-key prompt's machine is: its host and port.
@@ -67,7 +84,10 @@ final class Fixture {
   String get _host => _variable('HOST');
   int get _port => int.parse(_variable('PORT'));
   int get _jumpPort => int.parse(_variable('JUMP_PORT'));
-  String get _user => _variable('USER');
+  int get _dockerPort => int.parse(_variable('DOCKER_PORT'));
+
+  /// The account the fixture's keys sign in as.
+  String get user => _variable('USER');
 
   /// run.sh's directory for this run, which it removes on every exit. A
   /// second signal ends the suites before their teardowns run, so files
@@ -78,7 +98,21 @@ final class Fixture {
   /// the jump host reaches the sampled host.
   Endpoint get direct => (host: _host, port: _port);
   Endpoint get jumpHost => (host: _host, port: _jumpPort);
-  Endpoint get behind => (host: FixtureService.sshd.name, port: 22);
+  Endpoint get behind => (host: FixtureService.sshd.composeName, port: 22);
+
+  /// Where the Docker suites dial the Docker host.
+  Endpoint get dockerHost => (host: _host, port: _dockerPort);
+
+  /// Where [service] publishes its SSH port, refused unless on loopback
+  /// as run.sh's `published_port` does. The negative variants have no
+  /// variable of their own: Compose names their ports.
+  Future<Endpoint> endpoint(FixtureService service) async {
+    final address = (await compose(['port', service.composeName, '22'])).trim();
+    if (address.split(':') case [final host, final port] when host == _host) {
+      return (host: host, port: int.parse(port));
+    }
+    fail('${service.composeName} publishes on $address, not on $_host');
+  }
 
   /// The key file the `IdentityFile` hosts sign in with.
   String get identityFile => _variable('IDENTITY_FILE');
@@ -96,6 +130,23 @@ final class Fixture {
         _ => null,
       };
 
+  /// Where spike S4's Docker host cases write their evidence, or null
+  /// (klabautermann/docs/evidence/s4/).
+  String? get s4EvidenceDirectory => switch (_evidenceDirectory) {
+    final directory? => '$directory/s4',
+    null => null,
+  };
+
+  /// Writes [contents] to [name] under the evidence directory, when
+  /// run.sh collects evidence.
+  Future<void> recordEvidence(String name, String contents) async {
+    final directory = _evidenceDirectory;
+    if (directory == null) return;
+    final file = File('$directory/$name');
+    await file.parent.create(recursive: true);
+    await file.writeAsString(contents);
+  }
+
   /// The client config the engine imports: [directServer] with the key
   /// file, [agentServer] with the agent, and [behindServer] through the
   /// jump host, which reaches the sampled host by its service name.
@@ -104,25 +155,25 @@ final class Fixture {
 Host direct
   HostName $_host
   Port $_port
-  User $_user
+  User $user
   IdentityFile $identityFile
 
 Host agent
   HostName $_host
   Port $_port
-  User $_user
+  User $user
 
 Host behind
   HostName ${behind.host}
   Port ${behind.port}
-  User $_user
+  User $user
   IdentityFile $identityFile
   ProxyJump hop
 
 Host hop
   HostName $_host
   Port $_jumpPort
-  User $_user
+  User $user
   IdentityFile $identityFile
 ''';
 
@@ -135,7 +186,7 @@ Host hop
 Host alias-$i
   HostName $_host
   Port $_port
-  User $_user
+  User $user
   IdentityFile $identityFile
 ''',
   ].join('\n');
@@ -143,15 +194,16 @@ Host alias-$i
   /// Each endpoint a host-key prompt may name, with the fingerprints of the
   /// service that answers there.
   Future<Map<Endpoint, Set<String>>> hostKeys() async {
-    final sshd = await _hostKeyFingerprints(FixtureService.sshd);
+    final sshd = await hostKeyFingerprints(FixtureService.sshd);
     return {
       direct: sshd,
       behind: sshd,
-      jumpHost: await _hostKeyFingerprints(FixtureService.jump),
+      jumpHost: await hostKeyFingerprints(FixtureService.jump),
     };
   }
 
-  Future<Set<String>> _hostKeyFingerprints(FixtureService service) async {
+  /// The SHA256 fingerprints of [service]'s host keys.
+  Future<Set<String>> hostKeyFingerprints(FixtureService service) async {
     final listing = await exec(service, [
       'sh',
       '-c',
@@ -186,7 +238,7 @@ Host alias-$i
   /// Runs [command] as root in [service]'s container, out of the engine's
   /// sight: the tests' side channel for signals and flags.
   Future<String> exec(FixtureService service, List<String> command) =>
-      compose(['exec', '-T', service.name, ...command]);
+      compose(['exec', '-T', service.composeName, ...command]);
 
   /// A new directory under run.sh's runtime directory, for engines that
   /// share one support directory across restarts
@@ -199,7 +251,7 @@ Host alias-$i
   Future<void> regenerateHostKeys(FixtureService service) async {
     final logged = (await logs(service)).length;
     await exec(service, ['sh', '-c', 'rm -f /etc/ssh/ssh_host_*']);
-    await compose(['restart', service.name]);
+    await compose(['restart', service.composeName]);
     var lines = const <String>[];
     for (var i = 0; i < 60; i++) {
       lines = (await logs(service)).skip(logged).toList();
@@ -207,7 +259,7 @@ Host alias-$i
       await Future<void>.delayed(const Duration(milliseconds: 500));
     }
     fail(
-      '${service.name} did not listen again after its new host keys; '
+      '${service.composeName} did not listen again after its new host keys; '
       'it logged:\n${lines.join('\n')}',
     );
   }
@@ -215,7 +267,12 @@ Host alias-$i
   /// The lines [service] has logged so far.
   Future<List<String>> logs(FixtureService service) async =>
       const LineSplitter().convert(
-        await compose(['logs', '--no-color', '--no-log-prefix', service.name]),
+        await compose([
+          'logs',
+          '--no-color',
+          '--no-log-prefix',
+          service.composeName,
+        ]),
       );
 
   /// The PIDs of the engine's sampler shells on the sampled host, oldest
