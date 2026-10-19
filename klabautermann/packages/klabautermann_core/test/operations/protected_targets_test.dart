@@ -60,7 +60,13 @@ void main() {
         processProtection(pid: 1, comm: 'systemd', context: _none),
         ProtectedReason.builtIn,
       );
-      for (final comm in ['sshd', 'dockerd', 'containerd']) {
+      for (final comm in [
+        'sshd',
+        'sshd-session',
+        'sshd-auth',
+        'dockerd',
+        'containerd',
+      ]) {
         expect(
           processProtection(pid: 77, comm: comm, context: _none),
           ProtectedReason.builtIn,

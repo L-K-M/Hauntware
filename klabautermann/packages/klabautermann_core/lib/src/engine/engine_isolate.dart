@@ -850,6 +850,11 @@ void engineMain(
           refuse(ActionRefusalReason.confirmationMismatch);
           return;
         }
+        final planRunner = runner;
+        if (planRunner == null) {
+          refuse(ActionRefusalReason.notImplemented);
+          return;
+        }
         final session = admin?.session(serverId);
         if (plan.requiredLevel == RequiredLevel.admin && session == null) {
           refuse(ActionRefusalReason.adminRequired);
@@ -859,7 +864,7 @@ void engineMain(
         // Not awaited, like the reads: a plan's steps take as long as
         // they take, and the queue keeps serving the app meanwhile.
         unawaited(
-          runner?.run(planId, plan, session: session).then((finished) {
+          planRunner.run(planId, plan, session: session).then((finished) {
             if (session != null) admin?.touch(serverId);
           }),
         );

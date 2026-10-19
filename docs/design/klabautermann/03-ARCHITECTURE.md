@@ -4186,8 +4186,9 @@ consequence ("drops your session", "stops 23 running containers").
 As built in M4 (E10, `KC/lib/src/operations/`):
 
 - `protected_targets.dart` holds the built-in unit list (with `*` globs
-  such as `wg-quick@*.service`), PID 1 and `sshd`, `dockerd` and
-  `containerd` by `comm`. It reads the session's path from three PIDs:
+  such as `wg-quick@*.service`), PID 1 and `sshd` (with OpenSSH 9.8's
+  `sshd-session` and 10.0's `sshd-auth`), `dockerd` and `containerd` by
+  `comm`. It reads the session's path from three PIDs:
   - the sampler shells and their sshd parents, from E07's `SELF`,
     which `SamplerSession.self` keeps and the scheduler's `samplerPids`
     reads;
