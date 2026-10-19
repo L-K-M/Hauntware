@@ -17,6 +17,7 @@
 import 'package:klabautermann_docker/klabautermann_docker.dart';
 import 'package:klabautermann_host/klabautermann_host.dart' show HostProfile;
 
+import '../../docker/docker_ladder.dart' show DockerRank;
 import '../../docker/stack_sources.dart';
 import '../../engine/protocol.dart';
 import '../confirmation.dart';
@@ -95,9 +96,12 @@ Future<PlanAttempt> planRedeploy(
   }
   orphans.sort();
 
-  // Only a relay route (rank 3, E16) needs root; the files were read as
-  // the login user to verify them.
-  const level = RequiredLevel.login;
+  // Only the sudo relay (rank 3, E16) needs root: its socket refuses the
+  // login user, whom the CLI steps would otherwise run as. The files were
+  // read as the login user to verify them either way.
+  final level = c.route.rank == DockerRank.sudoRelay
+      ? RequiredLevel.admin
+      : RequiredLevel.login;
   final choice = selectDetachedRunner(
     profile: c.profile,
     level: level,
