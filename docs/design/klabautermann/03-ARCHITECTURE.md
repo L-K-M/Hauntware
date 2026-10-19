@@ -248,7 +248,8 @@ placement · D54 runtime override in M3 · D55 no health overlay in the MVP
 cron zone rules · D59 capability cache · D60 threshold announcements ·
 D61 host-key pins and re-pin ·
 D62 sync state files and the keystore port · D63 pull-only sync in the
-engine · D64 a server's confirmation covers its route.
+engine · D64 a server's confirmation covers its route · D65 spike S3
+and admin validation · D66 spike S4 and Docker-scoped sudo rules.
 Proposals awaiting the owner close the section; they are not decisions.
 
 ### Shape and scope
@@ -1168,6 +1169,51 @@ Proposals awaiting the owner close the section; they are not decisions.
     second round trip, to guard a case that grants no privilege;
   - `sudo -K` before validation: it removes the account's records in
     every session, the user's own terminal included.
+- **D66. Spike S4 confirms the runner table; the account's sudo rules
+  decide the root rows (M4 E02).** The spike ran E08's wrapper and launch
+  argv over SSH on the GitHub-hosted Ubuntu runner (systemd 255) and the
+  Docker fixture (BusyBox 1.38), and in a Debian 13 container (util-linux
+  2.41) (evidence and table in `klabautermann/docs/evidence/s4/`).
+
+  7.17's table holds:
+  - `systemd-run` system through the prelude runs as root and leaves its
+    records 0600, owned by the login user, in root's 0755 directory,
+    which only the prelude can clean; `--collect` unloads the unit after
+    a success and after a failure;
+  - `systemd-run --uid` through the prelude outlives the logout without
+    linger; `--user` outlives it with linger and dies with the user
+    manager without it, so the `Linger=yes` condition stays, and the
+    record it leaves says "running" until re-attach finds the PID gone;
+  - a step's `--host` reaches the engine through sudo's `env_reset` and
+    the unit's clean environment, where root's default context would
+    not;
+  - logind's `KillUserProcesses` reads without privilege over D-Bus.
+    What it does when on stays [U]: the runner has it off.
+
+  The amendments:
+  - Both `setsid` rows use E08's one launcher, a backgrounded `setsid`
+    that prints `$!`. BusyBox's applet refuses `-f`, and util-linux
+    `setsid -f` forks away, so its launcher has no PID to record. The
+    backgrounded launch leads a new session under the printed PID and
+    survived the session's end under both.
+  - Under a NOPASSWD rule scoped to the docker CLI, `sudo -n -l` lists
+    `(root) NOPASSWD: /usr/bin/docker` without asking for a password,
+    while `sudo -n true` and `sudo -n systemd-run` ask for one. With admin
+    mode on, the engine therefore lists the account's rules (`sudo -l`
+    through admin mode's elevation) before it places a root operation,
+    and runs a root row only when a rule allows every command (`ALL`) or
+    names the row's runner; otherwise the preview names the missing
+    right. A rule scoped this way still serves the rank 3 relay (5.9).
+
+  *Rejected:*
+  - a login-user wrapper that elevates each Docker step: it runs
+    unattended, so no password can follow the launch, and each step would
+    have to match the scoped rule's argv exactly;
+  - launching and classifying the refusal: it costs an elevated exec per
+    operation and reads as a generic failure;
+  - `nohup ... &` or a plain `&` as the launcher: both survived on the
+    fixture too, but stay in the launching shell's process group and
+    session, which `setsid` leaves.
 
 ### Persistence, alerts and tiers
 
@@ -3853,15 +3899,15 @@ matching row applies:
 | Condition | Runner | Operation directory |
 |---|---|---|
 | Needs root (admin mode on), systemd system manager | `systemd-run --unit=klabautermann-op-<id> --collect --quiet -- /bin/sh -c '<wrapper>' klabautermann-op <dir> <id> <uid> -- <cmd...>` through the elevation prelude | `/var/lib/klabautermann/ops/` (directory root-owned 0755; files 0600 owned by the login user) |
-| Needs root (admin mode on), no systemd system manager | `setsid -f /bin/sh -c '<wrapper>' klabautermann-op <dir> <id> <uid> -- <cmd...>` through the elevation prelude, with all standard streams on `/dev/null` (util-linux `setsid -f`; the BusyBox applet has no `-f`, so a backgrounded `setsid` or `nohup ... &` [U], spike S4) | `/var/lib/klabautermann/ops/` as above |
+| Needs root (admin mode on), no systemd system manager | `setsid /bin/sh -c '<wrapper>' klabautermann-op <dir> <id> <uid> -- <cmd...> &`, backgrounded and printing `$!`, through the elevation prelude, with all standard streams on `/dev/null` (the BusyBox applet has no `-f`; spike S4, D66) | `/var/lib/klabautermann/ops/` as above |
 | Needs no root, admin mode on, systemd system manager | `systemd-run --uid=<login user> --unit=klabautermann-op-<id> --collect --quiet -- /bin/sh -c '<wrapper>' ...` through the elevation prelude; the service runs as the login user [R: systemd-run(1)] | user directory as below |
 | Needs no root, admin mode off, user manager reachable and `Linger=yes` | `systemd-run --user --unit=klabautermann-op-<id> --collect --quiet -- /bin/sh -c '<wrapper>' ...` | `${XDG_STATE_HOME:-~/.local/state}/klabautermann/ops/` (0700, files 0600) |
-| Otherwise (no systemd, or no linger) | `setsid -f /bin/sh -c '<wrapper>' ...` with all standard streams on `/dev/null` (util-linux `setsid -f`; the BusyBox applet has no `-f`, so a backgrounded `setsid` or `nohup ... &` [U], spike S4) | user directory as above |
+| Otherwise (no systemd, or no linger) | `setsid /bin/sh -c '<wrapper>' ... &`, backgrounded and printing `$!`, with all standard streams on `/dev/null` (spike S4, D66) | user directory as above |
 
 - A user manager stops shortly after the user's last session ends unless
   linger is enabled, which would kill a `--user` unit when the phone
-  disconnects [R: review; logind behaviour]; hence the `Linger=yes`
-  condition. With logind `KillUserProcesses=yes`, a `setsid` process in the
+  disconnects [R: review; logind behaviour; spike S4, D66]; hence the
+  `Linger=yes` condition. With logind `KillUserProcesses=yes`, a `setsid` process in the
   session scope may also be killed at logout [U]; the preview then says so
   and suggests admin mode (not on a host whose sudo rights cannot start the
   system runners, see Docker-scoped sudo rules below), enabling linger or
@@ -3881,11 +3927,10 @@ matching row applies:
   On a host with only such a rule, a detached operation that needs root
   does not start and the preview names the missing sudo right; one that
   needs no root is placed as with admin mode off, and the rank 3 relay
-  (5.9) still works. Spike S4 settles how the app
-  tells this refusal from the `timestamp_timeout=0` case of 8.3 (for
-  example with `sudo -n -l`, which needs no password while any of the
-  user's entries is NOPASSWD [R: sudoers(5)]) and whether a login-user
-  wrapper that elevates each Docker step is worth adding [U].
+  (5.9) still works. The app tells this refusal from the
+  `timestamp_timeout=0` case of 8.3 with `sudo -n -l`, which lists such
+  a rule without asking for a password (spike S4, D66). A login-user
+  wrapper that elevates each Docker step is not added (D66).
 - Root-run operations never write into a user-writable directory (a symlink
   swap there would let a non-root process redirect root's writes); they use
   the root-owned directory and `chown` each new file to the login user so it
@@ -3930,7 +3975,8 @@ argv; nothing runs it before E17. Decisions:
   >/dev/null 2>&1 &`, then print `$!`. A background child of a
   non-interactive shell leads no process group, so util-linux and
   BusyBox `setsid` both call setsid(2) in place, and `$!` is the
-  record's PID. Spike S4 still has to confirm that it survives logout.
+  record's PID. Spike S4 confirmed that it survives the session's end
+  under BusyBox and util-linux (D66).
 - The wrapper checks its parameters again. As root it writes only to
   `/var/lib/klabautermann/ops` (parents 0755) and `chown`s each file to
   the uid; otherwise it writes only as that uid (0700). It refuses a
