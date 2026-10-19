@@ -1,0 +1,54 @@
+{
+  "case": "vm-systemd-run-user-linger",
+  "recordedAt": "2026-10-19T19:38:15.134368Z",
+  "user": "klab-vm-linger",
+  "uid": 1005,
+  "runner": "loginSystemdUser",
+  "linger": "yes",
+  "sessionEnvironment": "XDG_RUNTIME_DIR=/run/user/1001\nDBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1005/bus\n",
+  "launch": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "runningRecord": {
+    "v": 1,
+    "id": "2d4e88889d0aac52",
+    "state": "running",
+    "pid": 28360,
+    "startTicks": 47304,
+    "unit": "klabautermann-op-2d4e88889d0aac52.service",
+    "exit": null,
+    "startedAt": 1792438665,
+    "endedAt": null
+  },
+  "beforeLogout": {
+    "state": "S",
+    "ppid": 24732,
+    "pgrp": 28360,
+    "session": 28360,
+    "uid": 1005
+  },
+  "loggedOut": true,
+  "afterLogout": {
+    "state": "S",
+    "ppid": 24732,
+    "pgrp": 28360,
+    "session": 28360,
+    "uid": 1005
+  },
+  "userManagerAfter": "active",
+  "survived": true,
+  "doneRecord": {
+    "v": 1,
+    "id": "2d4e88889d0aac52",
+    "state": "done",
+    "pid": 28360,
+    "startTicks": 47304,
+    "unit": "klabautermann-op-2d4e88889d0aac52.service",
+    "exit": 0,
+    "startedAt": 1792438665,
+    "endedAt": 1792438695
+  },
+  "log": "1005\ns4-done\n"
+}

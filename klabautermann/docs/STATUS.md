@@ -1768,8 +1768,22 @@ What is on main:
   `<id>.json` records atomically with `mv`, the launch argv of the five
   runner rows, cleanup and the 7-day prune. Real-shell tests run under
   dash and bash. Nothing runs these builders yet: E14 and E17 will.
-  The root-run wrapper's `chown` was checked by hand only, and whether
-  the backgrounded `setsid` launch survives logout waits for spike S4.
+  Spike S4 (below) ran them on real hosts.
+- M4 spike S4 (E02, 03 D66, evidence in
+  [docs/evidence/s4](evidence/s4/README.md)): `runner_vm_s4_test.dart`
+  on the runner VM and `s4_setsid_test.dart` on the Docker fixture and
+  in a Debian 13 container run E08's wrapper through each runner row and
+  record what survives the session's end. `systemd-run` system and
+  `--uid` through the prelude, `--user` with linger and the
+  backgrounded `setsid` launcher under BusyBox and util-linux survive;
+  `--user` without linger dies with the user manager. Root-run records
+  are the login user's but only the prelude removes them, `--collect`
+  unloads failed units too, a step's `--host` reaches the engine through
+  sudo and the unit's clean environment, and `KillUserProcesses` reads
+  without privilege. Under a NOPASSWD rule scoped to the docker CLI,
+  `sudo -n -l` lists the rule without a password while `systemd-run`
+  needs one; the engine does not read the rules yet, so such an account
+  still has its elevated launches refused by sudo (E30).
 - M4 theme editing (E25): Settings > Appearance edits the theme with
   ghost_theme's shared editor (presets, mode, colours, font, corners,
   copy, paste and reset), in the app and in the desktop settings window,

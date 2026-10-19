@@ -1,0 +1,14 @@
+{
+  "case": "fixture-busybox-setsid-f",
+  "recordedAt": "2026-10-19T19:31:48.012068Z",
+  "host": "docker-sshd",
+  "user": "klab",
+  "busybox": "BusyBox v1.38.0 (2026-07-24 11:50:59 UTC) multi-call binary.",
+  "setsid": "/bin/busybox",
+  "command": "setsid -f true",
+  "result": {
+    "exit": 1,
+    "stdout": "",
+    "stderr": "setsid: unrecognized option: f\nBusyBox v1.38.0 (2026-07-24 11:50:59 UTC) multi-call binary.\n\nUsage: setsid [-c] PROG ARGS\n\nRun PROG in a new session. PROG will have no controlling terminal\nand will not be affected by keyboard signals (^C etc).\n\n\t-c\tSet controlling terminal to stdin\n"
+  }
+}
