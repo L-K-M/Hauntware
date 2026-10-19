@@ -6,13 +6,13 @@
         "type": "overlay",
         "mountPoint": "/",
         "sizeBytes": 270553174016,
-        "usedBytes": 37897572352,
-        "availBytes": 3926286336,
-        "capacityPercent": 91,
+        "usedBytes": 35309195264,
+        "availBytes": 6514663424,
+        "capacityPercent": 85,
         "inodesTotal": 16777216,
-        "inodesUsed": 1350865,
-        "inodesFree": 15426351,
-        "inodeUsePercent": 9
+        "inodesUsed": 1285658,
+        "inodesFree": 15491558,
+        "inodeUsePercent": 8
       },
       {
         "device": "tmpfs",
@@ -58,13 +58,13 @@
         "type": "ext4",
         "mountPoint": "/etc/hosts",
         "sizeBytes": 270553174016,
-        "usedBytes": 37897572352,
-        "availBytes": 3926286336,
-        "capacityPercent": 91,
+        "usedBytes": 35309195264,
+        "availBytes": 6514663424,
+        "capacityPercent": 85,
         "inodesTotal": 16777216,
-        "inodesUsed": 1350865,
-        "inodesFree": 15426351,
-        "inodeUsePercent": 9
+        "inodesUsed": 1285658,
+        "inodesFree": 15491558,
+        "inodeUsePercent": 8
       },
       {
         "device": "tmpfs",

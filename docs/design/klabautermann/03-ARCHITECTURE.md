@@ -1866,7 +1866,32 @@ stays disabled until the assertion is ticked, so `EnrollSync` is sent
 only then. Once signed in, the control runs a round; it opens the sheet
 again while no record has confirmed the passphrase or after the server
 refused the session. Step 4 is built outside the sheet (K30, below);
-step 5 is not built yet.
+step 5 is built in M4 (E19a, below).
+
+As built in M4 (E19a), step 5 is a notice in the server header while
+management is off for that server: it says Klabautermann only reads
+the server and points to the header's Safety menu, whose Allow actions
+switch turns management on and whose Read-only switch hides the
+server's actions. A second notice says when actions are hidden, by the
+server's switch or by global read-only. Settings > Safety holds global
+read-only, admin mode's expiry and the user's marks, each with a button
+that removes it. The app applies the policy to the engine at spawn and
+before it saves each change, so the engine never enforces less than
+the screen shows.
+
+As built in M4 (E19b), a server whose actions are allowed shows an
+admin mode chip beside the Safety menu (8.2). Tapping it sends
+`SetAdminMode`; the chip then follows the engine's `AdminModeState`:
+"Turning on admin mode" while the engine detects, waits for the
+password or checks it, and "Admin mode until <time>" while it is on,
+tinted with the error container color, with a header notice that
+confirmed actions run as root. Tapping again turns it off, which also
+cancels a start. The header words why it failed or ended (D35), the
+app going to the background on a phone included. Read-only disables
+the chip. The engine's elevation prompt is a password dialog with the
+retry line and no "remember" (v1.x). The chip shows when admin mode
+ends rather than a ticking countdown, since the expiry moves with
+every elevated action.
 
 As built in M2 (K41, D64), step 3 is a notice atop the fleet rows of the
 rail and the phone's list, scrolling with them, that counts the synced
@@ -2198,7 +2223,7 @@ platform identities in 04, section 12.3):
 | `sync_enrollment.json` [E] | Enrollment state (M2, K49a, D62): the push hold, the raised notices and the enrolled account (server URL, user name, mode); never the token or vault key, which stay in the keystore (4.5), and not the device id, which stays in `settings.json`. Kept like the verdict files; a damaged file reads as not enrolled | `klabautermann_core` [E] | MVP |
 | `endpoint_pins.json` | Confirmed endpoints. As built in M2 (K41), written by the engine through the catalog library's `FileEndpointPinStore` only with exclusive access; otherwise pins last for the engine's run (4.7) | catalog library | MVP |
 | `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config`, replaced whole by each import; never pushed (D14). Schema 3 (M2) holds each host's alias, host, port, user, `IdentityFile` and `ProxyJump` with the values ssh would use (10.1): the effective host (`%h` expanded, lowercased unless an address) and port, the first `IdentityFile` that is not `none`, and the `ProxyJump` as written; under `hops` it holds the same for each other name a stored route gives. An older file holds addresses only: schema 1 (M1) kept no `IdentityFile` or `ProxyJump` and kept `HostName` as written, `%h` included, and schema 2 read each host's values from its first block alone. Its hosts are listed as stored, with no `jumpRoute`, `authKind` or `locatorConflict`, and get no connect config until the next import rewrites the file. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
-| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), whether threshold-band changes are announced (`klabautermann.accessibility.announceThresholdBands`, M2, D60; anything but `false` announces), whether the Docker tab's root-equivalence notice was dismissed (`klabautermann.docker.rootEquivalenceNoticeDismissed`, M3, 8.4; anything but `true` shows it again), the servers pinned to the top of the fleet list (`klabautermann.fleet.pinnedServerIds`, M2, 10.3; a sorted list of server ids, anything else reading as none), FL-21's monitor set as the user chose it (`klabautermann.monitorSet`, M2, K30, 4.3 step 4; a sorted list of server ids, anything else reading as never chosen, so the platform's default applies), per-server device preferences | app | MVP |
+| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), whether threshold-band changes are announced (`klabautermann.accessibility.announceThresholdBands`, M2, D60; anything but `false` announces), whether the Docker tab's root-equivalence notice was dismissed (`klabautermann.docker.rootEquivalenceNoticeDismissed`, M3, 8.4; anything but `true` shows it again), the servers pinned to the top of the fleet list (`klabautermann.fleet.pinnedServerIds`, M2, 10.3; a sorted list of server ids, anything else reading as none), FL-21's monitor set as the user chose it (`klabautermann.monitorSet`, M2, K30, 4.3 step 4; a sorted list of server ids, anything else reading as never chosen, so the platform's default applies), the safety preferences the engine enforces (`klabautermann.safety`, M4, E19a: global read-only, admin expiry in minutes, and per server management, read-only and the user's marks; anything unreadable reads as management off, so a damaged file only takes actions away), per-server device preferences | app | MVP |
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
 | `instance.lock` [E] | Empty. One desktop instance per support directory (built in M2): the composition root takes an exclusive, non-blocking advisory lock on it after the settings window's branch and before `settings.json` and `window_state.json` open and the engine isolate starts, so one process mints the device id and writes these files, and holds it for the life of the process; the file is never deleted. A second instance opens no other file and only says it is already running, until the user quits it. A lock that fails for another reason (no write access, no lock support) lets the app run unguarded and says so at startup. Phones run one process per app and take none | app, through `klabautermann_core`'s `InstanceLock` | MVP |
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
@@ -3064,6 +3089,25 @@ after its last `) ` (a comm holding a newline), 6 when `kill` fails
 and 7 when it refuses a parameter (`GuardedKillOutcome`). The codes
 avoid 1 and 2, which sudo and the shell use, and 126 and 127.
 
+As built in M4 (E14,
+`klabautermann_core/lib/src/operations/plans/host_plans.dart`),
+planning a kill reads the process over the link first: its start
+ticks, which must still match the intent's, then
+`HostCommands.processFacts`, the owner of its `/proc` entry and its
+`comm`. The plan elevates only when the owner differs from the probe's
+login uid (a non-dumpable process, such as `ssh-agent`, is owned by
+root there, so killing one's own elevates too), names the target
+by its `comm` for a typed confirmation, and drops the session when the
+PID is on its path. The runner reads the guarded kill's exits 3 and 4
+as re-validation failures (process gone, PID reused), not as a failed
+step.
+
+As built in M4 (E21a), where actions are allowed the Processes table's
+row menu offers Terminate and Kill, then every other signal under Send
+signal, and a process's details offer the same as buttons, which phones
+reach by tapping a row. A row without its start time offers none, since
+the guarded kill needs it.
+
 ### 7.3 Disks and storage (DSK)
 
 - **MVP.** Usage per mount from `df -PT -B1` with pseudo filesystems filtered
@@ -3153,6 +3197,18 @@ no longer holds that value.
   rejects every one, the page says unit logs are not available in this
   version; a read the engine can no longer answer, because it stopped,
   says so and asks for a restart of the app.
+
+As built in M4 (E14), SVC-03 offers start, stop, restart and reload; the
+other verbs are refused as invalid targets. In admin mode the step runs
+through the elevation executor. Outside it the step runs unelevated, and
+a polkit refusal (`Interactive authentication required` or
+`Access denied` on stderr) ends the run as needing admin mode rather
+than as a failed step. Every unit action re-validates that the unit
+still loads, and only start reports no impact.
+
+As built in M4 (E21a), where actions are allowed the Services table's
+row menu and a unit's page offer Start, Stop, Restart and Reload; the
+table keeps no action slot otherwise, so its layout does not change.
 
 ### 7.6 Logs (LOG)
 
@@ -3408,6 +3464,36 @@ non-symlink file name in it. It exits 0, 3 when neither exists, and 4
 when the directory cannot be listed, so an unreadable spool never reads
 as empty. `parseCrontabSpool` keeps only names that pass the user-name
 check for `crontab -l -u`.
+
+As built in M4 (E14), run timer now reads the timer's `Unit=` with
+`HostCommands.timerActivates`, refuses a timer with none or one that
+activates a timer, and plans `timerStart` on that unit with SVC-03's
+elevation rule and re-validation. The preview names the unit as
+`followUnit`, whose journal the app follows from the run's start.
+
+As built in M4 (E21b), where actions are allowed a timer's row menu and
+its details offer Run now. Once the run is confirmed, a sheet follows
+the started service's journal live through the Logs panel's reading,
+from the last 15 minutes so the run's start is in it, and closing the
+sheet closes the follow.
+
+As built in M4 (E14b,
+`klabautermann_core/lib/src/admin/user_crontabs.dart`),
+`ReadUserCrontabs` runs JOB-03 in admin mode only: the spool listing, then `crontab -l -u` for at most 64 [E] of its
+valid names, each through the elevation executor. `parseUserCrontab`
+reads each as a user table whose jobs name their user, with the source
+`crontab -u <user>`. A crontab removed since the listing ("no crontab
+for") is left out, any other failure names the user as unreadable, and
+the jobs rows carry next runs as the `cron` stream's do. Nothing is
+cached.
+
+As built in M4 (E21c), the Jobs tab shows a source switch while admin
+mode is on: "Yours and the system's" lists the streams' rows, and
+"Other users" reads every other user's crontab through
+`ReadUserCrontabs` and lists their lines read-only, each named as that
+user's crontab, with any unreadable user, the users past the read's
+limit and the masking said above the table, and a button that reads
+them again. Admin mode that ends returns the tab to the streams' rows.
 
 ### 7.8 Packages and updates (PKG)
 
@@ -4010,7 +4096,8 @@ SAF-17 generates narrow, validated rules (v1.x): a blanket rule equals root
     expired or failed.
   - It reads the elevation facts from the probe's `HostProfile` and asks
     for the password through the prompt broker only for the prelude rung.
-    A wrong password is retried up to three times.
+    A password is asked for at most three times: a wrong one gets two
+    retries.
   - Validation runs `true` through `ElevatedExecutor`, so rung 4 and the
     refusal classifier apply. Password doas fails `ttyRequired` without a
     prompt. E04's validation, which ignores cached records (D65), replaces
@@ -4193,6 +4280,23 @@ OperationPlan {
   `chown --reference`, `chmod --reference`, `restorecon` when SELinux
   enforces [U: ACL and label details, spike S6]).
 
+As built in M4 (E20, `app/klabautermann_app/lib/ui/actions/`), the app
+asks for one preview at a time through `OperationsController`: the
+engine's answer to `PlanAction` carries no request id, and planning
+reads the host, so answers can come out of order; the preview is modal,
+so the app never needs two. The preview is a dialog on wide windows and
+a bottom sheet below 600 dp. It shows the target, each step's exact
+command line or API request in the monospace stack with a root badge on
+elevated steps (SAF-03), the danger findings, protection, impact and
+ownership, who runs it with which credentials, and what it leaves on
+the server, all worded from the engine's typed facts (D35). Tier 1
+names the target; tier 2 enables Run and Enter only once the target's
+name is typed exactly; Escape and Cancel close it. A toast says when a
+run starts and how it ended. `ActionEntry` wraps every action control
+by its `ActionEntryPoint`, hiding it unless the server's actions are
+allowed and nothing is read-only, which one test checks for every
+point.
+
 ### 8.6 Confirmation tiers and protected targets (SAF-05, SAF-22)
 
 | Tier | Examples | Confirmation |
@@ -4295,7 +4399,11 @@ CI.
   M3 (D05) the engine masks an inspected container's `Path` and `Args`,
   and its `Entrypoint` and `Cmd`, by the same rules, each pair read as
   one command line, and each health check's output as one argument;
-  the container list drops its command line.
+  the container list drops its command line. From M4 (E14b) every cron
+  line's command and raw text cross masked by the same rules, each read
+  as one command line, both the `cron` stream's and JOB-03's; the jobs
+  merge reads `run-parts` lines from the real commands first. Cron lines
+  have no reveal yet.
 - Reveal (M2, the Processes tab): a tap on a masked argument in a
   process's details shows it there for 30 s, and it is masked again
   sooner when the details close or the app turns inactive, as it loses
@@ -4343,6 +4451,16 @@ CI.
     `AuditRecords(records, more)`.
   - The log stores redacted steps only, so E24's export has nothing
     secret to include.
+
+As built in M4 (E24), the server header's Safety menu opens Activity: a
+sortable table of each record's time, target, action, confirmation and
+result, newest first, whose rows open the run's redacted steps and how
+it ended; Show older reads the next page. The table has no device
+column, since the log is this device's own (D28). Copy puts the records
+on the clipboard as JSON lines, as stored; the include-secrets toggle
+of SAF-07 is not offered, because the log holds no secret to include,
+and saving to a file waits for a file plugin. When the engine keeps the
+log in memory, the page says it lasts only for this run.
 
 ### 8.11 Host write inventory (D27)
 

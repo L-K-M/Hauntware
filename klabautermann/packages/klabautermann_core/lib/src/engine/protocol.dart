@@ -522,6 +522,16 @@ final class AuditQuery extends EngineRequest {
   final int limit;
 }
 
+/// Reads every user's crontab on [serverId] (JOB-03, 03 §7.7, M14): in
+/// admin mode only, tier 0 and never cached. One [UserCrontabs] with
+/// [requestId] answers it.
+final class ReadUserCrontabs extends EngineRequest {
+  const ReadUserCrontabs(this.serverId, {required this.requestId});
+
+  final String serverId;
+  final String requestId;
+}
+
 /// Answers an outstanding [Prompt] event (03 §10.1).
 final class AnswerPrompt extends EngineRequest {
   const AnswerPrompt(this.promptId, this.answer);
@@ -1065,6 +1075,10 @@ enum ActionFailure {
 
   /// The engine has no runner for an API step yet (M4 E15).
   unsupportedStep,
+
+  /// polkit refused a step run without elevation: admin mode would run
+  /// it (03 §7.5).
+  adminRequired,
 }
 
 /// What re-validation found changed (03 §8.5).
@@ -1127,6 +1141,86 @@ enum ActionRefusalReason {
 
   /// The plan needs admin mode, which is off for the server (03 §8.2).
   adminRequired,
+
+  /// The intent names no valid target: a unit name outside systemd's
+  /// grammar, a verb the MVP does not offer, a timer that activates
+  /// nothing.
+  invalidTarget,
+
+  /// The target changed since the app saw it: the process exited, or its
+  /// PID now names another process.
+  targetChanged,
+
+  /// The server has no ready link to plan over.
+  noLink,
+}
+
+/// Why [UserCrontabs] read no crontab.
+enum UserCrontabsFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// Admin mode is off for the server.
+  adminRequired,
+
+  /// Elevation refused, so nothing ran.
+  elevationRefused,
+
+  /// Neither spool directory exists (`kCrontabSpools`).
+  noSpool,
+
+  /// The spool exists but cannot be listed.
+  spoolDenied,
+
+  /// The listing did not read as a spool.
+  unreadable,
+
+  /// The link failed while reading.
+  transport,
+}
+
+/// The answer to [ReadUserCrontabs]: the listed users' crontab lines as
+/// jobs rows, commands masked (8.9), with their next runs as the `cron`
+/// stream's rows have them. A user whose crontab could not be read is in
+/// [unreadable]; one that was removed since the listing is left out.
+final class UserCrontabs extends EngineEvent {
+  UserCrontabs({
+    required this.serverId,
+    required this.requestId,
+    this.directory,
+    Iterable<JobEntry> jobs = const [],
+    Iterable<String> unreadable = const [],
+    this.skipped = 0,
+    this.notRead = 0,
+    this.zoneName,
+    this.zoneFallback,
+    this.failure,
+  }) : jobs = List.unmodifiable(jobs),
+       unreadable = List.unmodifiable(unreadable);
+
+  final String serverId;
+  final String requestId;
+
+  /// The spool directory the listing found.
+  final String? directory;
+
+  final List<JobEntry> jobs;
+  final List<String> unreadable;
+
+  /// Spool file names that are not user names, which are never read.
+  final int skipped;
+
+  /// Users past `kUserCrontabsRead`, whose crontabs were not read.
+  final int notRead;
+
+  /// As [CronResult.zoneName].
+  final String? zoneName;
+
+  /// As [CronResult.zoneFallback].
+  final CronZoneFallback? zoneFallback;
+
+  /// Why nothing was read, or null.
+  final UserCrontabsFailure? failure;
 }
 
 /// The answer to an [AuditQuery]: [records] newest first, and whether
@@ -1181,6 +1275,24 @@ final class AuditRecord {
   final int? failedStep;
   final int? exitCode;
   final int? httpStatus;
+
+  /// The record as the Activity page's export carries it (SAF-11): every
+  /// field, its steps redacted as stored, times in UTC.
+  Map<String, Object?> toJson() => {
+    'serverId': serverId,
+    'action': action,
+    'target': targetName,
+    'steps': steps,
+    'tier': tier.name,
+    'outcome': outcome.name,
+    'startedAt': startedAt.toUtc().toIso8601String(),
+    'endedAt': endedAt.toUtc().toIso8601String(),
+    'deviceId': ?deviceId,
+    'failure': ?failure?.name,
+    'failedStep': ?failedStep,
+    'exitCode': ?exitCode,
+    'httpStatus': ?httpStatus,
+  };
 }
 
 /// Where admin mode stands on [serverId] (03 §8.2, M4 plan M5). The app
@@ -2699,6 +2811,7 @@ final class ActionPreview {
     this.impact,
     this.ownership,
     this.protected,
+    this.followUnit,
   });
 
   final ActionIntent intent;
@@ -2723,6 +2836,10 @@ final class ActionPreview {
 
   /// Why the target is protected, or null when it is not.
   final ProtectedReason? protected;
+
+  /// The unit whose journal shows the run's effect, from the run's start:
+  /// JOB-08's timer service (03 §7.7).
+  final String? followUnit;
 }
 
 /// A running plan's end state (03 §10.1).

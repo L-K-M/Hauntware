@@ -25,6 +25,7 @@ import 'package:klabautermann_core/klabautermann_core.dart'
 import '../../controllers/prompt_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
+import 'elevation_dialog.dart';
 
 /// Shows the engine's prompts through `ghost_servers`' dialogs (D8; 03
 /// §10.1, version 3 M2 prompts) and answers each with what the user chose.
@@ -37,9 +38,11 @@ import '../../theme/app_theme.dart';
 /// - Keyboard-interactive questions are answered with
 ///   [PromptResponsesAnswer] in question order, or [PromptCancelAnswer]
 ///   on Cancel.
-/// - Credential and elevation prompts have no dialog yet, and no producer
-///   in the engine; one is dismissed with `PromptSecretAnswer(null)`
-///   rather than left to expire.
+/// - Admin mode's sudo password (SAF-02) is answered with
+///   [PromptSecretAnswer], null on Cancel.
+/// - Credential prompts have no dialog yet, and no producer in the
+///   engine; one is dismissed with `PromptSecretAnswer(null)` rather than
+///   left to expire.
 ///
 /// A prompt the engine withdraws closes its dialog without an answer. Each
 /// dialog is keyed, so only its own route goes, even under another route.
@@ -174,7 +177,21 @@ class _PromptHostState extends State<PromptHost> {
           }),
         );
         return true;
-      case CredentialPromptRequest() || ElevationPromptRequest():
+      case final ElevationPromptRequest request:
+        unawaited(
+          _ask(prompt, const PromptSecretAnswer(null), (dialogKey) async {
+            final password = await showElevationPasswordDialog(
+              context,
+              user: request.user,
+              host: _endpointHost(prompt.host),
+              retry: request.retry,
+              dialogKey: dialogKey,
+            );
+            return PromptSecretAnswer(password);
+          }),
+        );
+        return true;
+      case CredentialPromptRequest():
         widget.prompts.answer(prompt.promptId, const PromptSecretAnswer(null));
         return false;
     }

@@ -3844,6 +3844,600 @@ abstract class AppLocalizations {
   /// **'The sync file {fileName} was saved by a newer version of Klabautermann. Sync changes will not be kept after a restart.'**
   String syncFileNewer(String fileName);
 
+  /// Switch on the Safety settings tab (SAF-06): global read-only.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only everywhere'**
+  String get settingsSafetyReadOnly;
+
+  /// Explanation under the global read-only switch on the Safety settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'While this is on, no server takes an action and every action is hidden. Monitoring, logs and other reads work as before, so it is safe for screen sharing.'**
+  String get settingsSafetyReadOnlyDetail;
+
+  /// Label above the admin mode expiry choices on the Safety settings tab (SAF-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Admin mode ends after'**
+  String get settingsSafetyAdminExpiry;
+
+  /// One admin mode expiry choice on the Safety settings tab; minutes is 5, 15, 30 or 60.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String settingsSafetyAdminExpiryMinutes(int minutes);
+
+  /// Explanation under the admin mode expiry choices on the Safety settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin mode turns off after this long without an action. It also turns off when the link drops, and on a phone when Klabautermann goes to the background.'**
+  String get settingsSafetyAdminExpiryDetail;
+
+  /// Heading of the user's protected marks on the Safety settings tab (SAF-22).
+  ///
+  /// In en, this message translates to:
+  /// **'Marked protected'**
+  String get settingsSafetyMarksTitle;
+
+  /// Explanation under the protected marks heading on the Safety settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'An action on a target you marked protected asks you to type its name first. Marks stay on this device.'**
+  String get settingsSafetyMarksDetail;
+
+  /// Shown on the Safety settings tab when the user marked no target protected.
+  ///
+  /// In en, this message translates to:
+  /// **'You have not marked anything protected.'**
+  String get settingsSafetyMarksEmpty;
+
+  /// One protected mark on the Safety settings tab: the marked unit, container or stack name, and the server's name.
+  ///
+  /// In en, this message translates to:
+  /// **'{target} on {server}'**
+  String settingsSafetyMark(String target, String server);
+
+  /// Tooltip and screen reader label of the button that removes one protected mark on the Safety settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the mark on {target}'**
+  String settingsSafetyMarkRemove(String target);
+
+  /// Toast when a safety setting applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The setting changed, but it could not be saved, so it will not be kept after a restart.'**
+  String get settingsSafetyNotSaved;
+
+  /// Toast when the app did not take a change of a safety setting.
+  ///
+  /// In en, this message translates to:
+  /// **'The setting could not be changed.'**
+  String get settingsSafetyNotChanged;
+
+  /// Tooltip and screen reader label of the server header's safety menu button, which holds the Allow actions and Read-only switches.
+  ///
+  /// In en, this message translates to:
+  /// **'Safety'**
+  String get serverSafetyMenu;
+
+  /// Switch in the server header's safety menu (SAF-01): management, off by default. While off, Klabautermann only reads the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow actions'**
+  String get serverAllowActions;
+
+  /// Switch in the server header's safety menu (SAF-06): hides every action on this server.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only'**
+  String get serverReadOnly;
+
+  /// Notice in the server header while management is off for the server (03 §4.3 step 5, SAF-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Observe only: Klabautermann reads this server and changes nothing. To act on it, turn on Allow actions in the Safety menu.'**
+  String get serverObserveOnly;
+
+  /// Notice in the server header while the server, or every server, is read-only (SAF-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only: actions on this server are hidden.'**
+  String get serverReadOnlyNotice;
+
+  /// Title of the admin mode password dialog (SAF-02); host is the server's address.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin password for {host}'**
+  String elevationTitle(String host);
+
+  /// Explanation in the admin mode password dialog; user is the login account sudo runs for.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann asks sudo for root as {user} with this password. It is kept in memory only while admin mode is on, and never saved.'**
+  String elevationDetail(String user);
+
+  /// Shown in the admin mode password dialog when sudo refused the previous password.
+  ///
+  /// In en, this message translates to:
+  /// **'That password did not work. Try again.'**
+  String get elevationRetry;
+
+  /// Label of the password field in the admin mode password dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get elevationPassword;
+
+  /// Button that closes the admin mode password dialog without turning admin mode on.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get elevationCancel;
+
+  /// Button that sends the password and turns admin mode on.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on'**
+  String get elevationTurnOn;
+
+  /// Label of the server header's admin mode chip while admin mode is off (SAF-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Admin mode'**
+  String get adminChipOff;
+
+  /// Label of the admin mode chip while the engine detects how to elevate, waits for the password or checks it.
+  ///
+  /// In en, this message translates to:
+  /// **'Turning on admin mode'**
+  String get adminChipStarting;
+
+  /// Label of the admin mode chip while it is on; time is when inactivity ends it.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin mode until {time}'**
+  String adminChipOn(String time);
+
+  /// Tooltip of the disabled admin mode chip while the server or every server is read-only (SAF-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Admin mode is not available while the server is read-only.'**
+  String get adminChipReadOnly;
+
+  /// Notice in the server header while admin mode is on.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin mode is on: actions you confirm here run as root.'**
+  String get adminOnNotice;
+
+  /// Notice in the server header when admin mode could not start; reason is the engine's AdminFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, observeOnly{Admin mode needs Allow actions turned on for this server.} readOnly{Admin mode is not available while this server is read-only.} noLink{Admin mode needs a connection to this server.} notProbed{Klabautermann has not checked this server yet. Try admin mode again in a moment.} unavailable{This server offers no way to become root that Klabautermann can use.} ttyRequired{This server lets you become root only from a terminal, so admin mode is not available.} notInSudoers{Your account on this server may not use sudo.} wrongPassword{The password was refused three times, so admin mode stayed off.} cancelled{Admin mode stayed off because no password was given.} other{Admin mode could not be turned on.}}'**
+  String adminFailure(String reason);
+
+  /// Notice in the server header after admin mode ended; reason is the engine's AdminEnd name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, inactivity{Admin mode ended after a while without an action.} background{Admin mode ended when Klabautermann went to the background.} linkLost{Admin mode ended when the connection dropped.} serverRemoved{Admin mode ended because the server changed.} other{Admin mode ended.}}'**
+  String adminEnded(String reason);
+
+  /// Title of the action preview (SAF-04), which shows exactly what will run before the user confirms.
+  ///
+  /// In en, this message translates to:
+  /// **'Review before it runs'**
+  String get actionPreviewTitle;
+
+  /// Line naming the target in the action preview; target is the unit, process, container, image or stack name.
+  ///
+  /// In en, this message translates to:
+  /// **'Target: {target}'**
+  String actionPreviewTarget(String target);
+
+  /// Heading above the exact commands and API requests in the action preview.
+  ///
+  /// In en, this message translates to:
+  /// **'What will run'**
+  String get actionPreviewSteps;
+
+  /// Badge on a step that runs as root through admin mode (SAF-03). Lowercase on purpose: the account name.
+  ///
+  /// In en, this message translates to:
+  /// **'root'**
+  String get actionPreviewRoot;
+
+  /// Tooltip and screen reader label of the root badge on a step in the action preview.
+  ///
+  /// In en, this message translates to:
+  /// **'This step runs as root through admin mode.'**
+  String get actionPreviewRootDetail;
+
+  /// Line naming who runs the steps; identity is an account name such as root or deploy.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs as {identity}'**
+  String actionPreviewRunner(String identity);
+
+  /// Line naming who runs the steps and through which container engine.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs as {identity} through {engine}'**
+  String actionPreviewRunnerEngine(String identity, String engine);
+
+  /// Line saying which credentials the run uses; credentials is the engine's RunnerCredentials name.
+  ///
+  /// In en, this message translates to:
+  /// **'{credentials, select, session{Signs in with this connection\'s own sign-in.} adminPassword{Uses the admin mode password.} passwordless{Needs no password.} other{}}'**
+  String actionPreviewCredentials(String credentials);
+
+  /// Heading above the host writes the action causes (03 §8.11).
+  ///
+  /// In en, this message translates to:
+  /// **'What it leaves on the server'**
+  String get actionPreviewHostWrites;
+
+  /// One host write in the action preview; row is the engine's HostWriteRow name.
+  ///
+  /// In en, this message translates to:
+  /// **'{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine\'s own state} loginRecords{Login records, as every SSH command leaves} other{A change on the server}}'**
+  String actionPreviewHostWrite(String row);
+
+  /// The action's impact in the preview; kind is the engine's ImpactKind name and count a number of containers.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, dropsSession{This can drop your connection to the server.} stopsContainers{This stops {count} running containers.} removesVolumes{This deletes the container\'s volumes and the data in them.} forcesImageInUse{{count} containers still use this image.} interruptsTarget{This interrupts what the target is doing.} other{}}'**
+  String actionPreviewImpact(String kind, int count);
+
+  /// Why the target is protected (SAF-22); reason is the engine's ProtectedReason name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, builtIn{Protected: Klabautermann always protects this target.} sessionPath{Protected: your connection to the server runs through it.} publishesSessionPort{Protected: it publishes the SSH port or a VPN port.} userMarked{Protected: you marked it protected.} other{Protected.}}'**
+  String actionPreviewProtected(String reason);
+
+  /// Notice in the action preview when another tool manages the container or stack (03 §8.7).
+  ///
+  /// In en, this message translates to:
+  /// **'Managed by {manager}. Acting on it here can conflict with {manager}.'**
+  String actionPreviewOwnership(String manager);
+
+  /// Heading above the danger findings in the action preview (AI-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Warnings'**
+  String get actionPreviewDanger;
+
+  /// One danger finding in the action preview (AI-01): its severity, then the linter's explanation.
+  ///
+  /// In en, this message translates to:
+  /// **'{severity, select, critical{Critical} other{Warning}}: {explanation}'**
+  String actionPreviewFinding(String severity, String explanation);
+
+  /// Confirmation line for an action that needs an acknowledgement (SAF-05 tier 1).
+  ///
+  /// In en, this message translates to:
+  /// **'This acts on {target}.'**
+  String actionConfirmNames(String target);
+
+  /// Label of the field where the user types the target's name to confirm a protected or irreversible action (SAF-05 tier 2).
+  ///
+  /// In en, this message translates to:
+  /// **'Type {target} to confirm'**
+  String actionConfirmType(String target);
+
+  /// Button that runs the previewed action.
+  ///
+  /// In en, this message translates to:
+  /// **'Run'**
+  String get actionConfirmRun;
+
+  /// Button that closes the action preview without running anything.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get actionConfirmCancel;
+
+  /// Toast when a confirmed action starts.
+  ///
+  /// In en, this message translates to:
+  /// **'Running on {target}'**
+  String actionRunning(String target);
+
+  /// Toast when an action finished successfully.
+  ///
+  /// In en, this message translates to:
+  /// **'Done: {target}'**
+  String actionSucceeded(String target);
+
+  /// Toast when an action failed; failure is the engine's ActionFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{target} did not finish: {failure, select, noLink{there is no connection to the server.} revalidation{the target changed since the preview.} elevationRefused{admin mode refused the step.} stepFailed{a step failed.} transport{the connection failed during the run.} unsupportedStep{this version cannot run one of its steps.} adminRequired{it needs admin mode.} other{it failed.}}'**
+  String actionFailed(String target, String failure);
+
+  /// Toast when an action failed without a typed reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{target} did not finish.'**
+  String actionFailedPlain(String target);
+
+  /// Toast when an action was cancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'{target} was cancelled.'**
+  String actionCancelled(String target);
+
+  /// Toast when the engine refused to plan or run an action; reason is the engine's ActionRefusalReason name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} other{The action was refused.}}'**
+  String actionRefused(String reason);
+
+  /// Process action (PRC-02): sends SIGTERM, asking the process to end.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminate'**
+  String get processTerminate;
+
+  /// Process action (PRC-02): sends SIGKILL, ending the process at once.
+  ///
+  /// In en, this message translates to:
+  /// **'Kill'**
+  String get processKill;
+
+  /// Process action menu holding every other signal (PRC-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Send signal'**
+  String get processSendSignal;
+
+  /// A signal's name in the Send signal menu; name is its kill -s name such as HUP.
+  ///
+  /// In en, this message translates to:
+  /// **'SIG{name}'**
+  String processSignalName(String name);
+
+  /// Unit action (SVC-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get unitStart;
+
+  /// Unit action (SVC-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get unitStop;
+
+  /// Unit action (SVC-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Restart'**
+  String get unitRestart;
+
+  /// Unit action (SVC-03): reloads the unit's configuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Reload'**
+  String get unitReload;
+
+  /// Timer action (JOB-08): starts the unit the timer activates now.
+  ///
+  /// In en, this message translates to:
+  /// **'Run now'**
+  String get jobsRunNow;
+
+  /// Title of the sheet that follows a timer run's journal; unit is the service the timer started.
+  ///
+  /// In en, this message translates to:
+  /// **'Output of {unit}'**
+  String jobsRunOutputTitle(String unit);
+
+  /// Tooltip and screen reader label of the button that closes the run output sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Close output'**
+  String get jobsRunOutputClose;
+
+  /// A job's source when it is another user's crontab, read in admin mode (JOB-03); user is the account name.
+  ///
+  /// In en, this message translates to:
+  /// **'{user}\'s crontab'**
+  String jobsSourceUserCrontab(String user);
+
+  /// Choice on the Jobs tab's source switch: the login user's crontab, the system crontabs and the timers (the cron and timers streams).
+  ///
+  /// In en, this message translates to:
+  /// **'Yours and the system\'s'**
+  String get jobsSourceMine;
+
+  /// Choice on the Jobs tab's source switch, in admin mode: every other user's crontab, read-only (JOB-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Other users'**
+  String get jobsSourceOtherUsers;
+
+  /// Notice while the other users' crontabs are being read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading other users\' crontabs.'**
+  String get jobsOtherUsersReading;
+
+  /// Button that reads the other users' crontabs again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get jobsOtherUsersRefresh;
+
+  /// Shown when the spool holds no other user's crontab.
+  ///
+  /// In en, this message translates to:
+  /// **'No other user has a crontab.'**
+  String get jobsOtherUsersEmpty;
+
+  /// Notice when the other users' crontabs could not be read; failure is the engine's UserCrontabsFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Other users\' crontabs need a connection to the server.} adminRequired{Other users\' crontabs need admin mode.} elevationRefused{Admin mode could not read the crontabs.} noSpool{This server keeps no crontab spool.} spoolDenied{Even admin mode may not list the crontab spool.} unreadable{The crontab spool could not be read.} transport{The connection failed while reading.} other{Other users\' crontabs could not be read.}}'**
+  String jobsOtherUsersFailure(String failure);
+
+  /// Notice naming the users whose crontab could not be read; users is a comma-separated list of account names.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the crontab of {users}.'**
+  String jobsOtherUsersUnreadable(String users);
+
+  /// Notice when the spool lists more users than one read takes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more user\'s crontab was not read.} other{{count} more users\' crontabs were not read.}}'**
+  String jobsOtherUsersNotRead(int count);
+
+  /// Notice under the other users' crontabs (03 §8.9).
+  ///
+  /// In en, this message translates to:
+  /// **'Commands are masked where they look like they hold secrets.'**
+  String get jobsOtherUsersMasked;
+
+  /// Item in the server header's Safety menu that opens the server's activity log (SAF-11).
+  ///
+  /// In en, this message translates to:
+  /// **'Activity'**
+  String get activityMenu;
+
+  /// Title of the activity log page; server is the server's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity on {server}'**
+  String activityTitle(String server);
+
+  /// Explanation at the top of the activity log page (03 §8.10).
+  ///
+  /// In en, this message translates to:
+  /// **'Every action this device ran on the server, newest first. Records are kept for 90 days and never synced. Commands are stored with secrets removed.'**
+  String get activityDetail;
+
+  /// Notice on the activity log page when the audit log is kept in memory only.
+  ///
+  /// In en, this message translates to:
+  /// **'Another Klabautermann window has the settings folder, so this log lasts only until this window closes.'**
+  String get activityInMemory;
+
+  /// Column of the activity log: when the run ended.
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get activityColumnTime;
+
+  /// Column of the activity log: the unit, process, container or other target.
+  ///
+  /// In en, this message translates to:
+  /// **'Target'**
+  String get activityColumnTarget;
+
+  /// Column of the activity log: what was done.
+  ///
+  /// In en, this message translates to:
+  /// **'Action'**
+  String get activityColumnAction;
+
+  /// Column of the activity log: how the run was confirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmation'**
+  String get activityColumnTier;
+
+  /// Column of the activity log: how the run ended.
+  ///
+  /// In en, this message translates to:
+  /// **'Result'**
+  String get activityColumnResult;
+
+  /// An activity log row's action; action is the engine's intent type name.
+  ///
+  /// In en, this message translates to:
+  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} StackAction{Stack action} RedeployStack{Redeploy stack} other{Action}}'**
+  String activityAction(String action);
+
+  /// An activity log row's confirmation; tier is the engine's ConfirmationTier name.
+  ///
+  /// In en, this message translates to:
+  /// **'{tier, select, none{None} acknowledge{Confirmed} typedPhrase{Name typed} other{}}'**
+  String activityTier(String tier);
+
+  /// An activity log row's result; outcome is the engine's ActionOutcome name.
+  ///
+  /// In en, this message translates to:
+  /// **'{outcome, select, succeeded{Done} failed{Failed} cancelled{Cancelled} other{}}'**
+  String activityResult(String outcome);
+
+  /// Why a run failed, in the activity record's details; failure is the engine's ActionFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{No connection to the server.} revalidation{The target changed since the preview.} elevationRefused{Admin mode refused the step.} stepFailed{A step failed.} transport{The connection failed during the run.} unsupportedStep{This version could not run a step.} adminRequired{It needed admin mode.} other{It failed.}}'**
+  String activityFailure(String failure);
+
+  /// A failed step's exit status in an activity record's details.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit status {code}'**
+  String activityExitCode(int code);
+
+  /// A failed Docker step's HTTP status in an activity record's details.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine answered HTTP {status}'**
+  String activityHttpStatus(int status);
+
+  /// Heading above an activity record's steps, secrets removed.
+  ///
+  /// In en, this message translates to:
+  /// **'What ran'**
+  String get activitySteps;
+
+  /// Shown in the activity table while the log is read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the log.'**
+  String get activityReading;
+
+  /// Shown when the activity log is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing has run on this server from this device.'**
+  String get activityEmpty;
+
+  /// Button that reads the next page of older activity records.
+  ///
+  /// In en, this message translates to:
+  /// **'Show older'**
+  String get activityOlder;
+
+  /// Tooltip and screen reader label of the button that copies the activity log as JSON, secrets already removed.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy the log'**
+  String get activityCopy;
+
+  /// Toast after the activity log was copied.
+  ///
+  /// In en, this message translates to:
+  /// **'The log is on the clipboard, with secrets removed.'**
+  String get activityCopied;
+
+  /// Toast when the clipboard refused the activity log.
+  ///
+  /// In en, this message translates to:
+  /// **'Not copied. Try again.'**
+  String get activityNotCopied;
+
+  /// An activity log row's time: its local date, then its time of day, both formatted by the locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{date} {time}'**
+  String activityTime(String date, String time);
+
   /// The server header's Docker transport label (03 §5.9, E4) before the server is connected and its capability check has answered.
   ///
   /// In en, this message translates to:

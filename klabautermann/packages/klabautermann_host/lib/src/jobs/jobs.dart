@@ -94,6 +94,15 @@ final class CronJobEntry extends JobEntry {
   @override
   List<ScheduleDescription> get schedules => [?schedule];
 
+  /// This row carrying [shown] in place of its line.
+  CronJobEntry _showing(CronJob shown) => CronJobEntry._(
+    id: id,
+    job: shown,
+    schedule: schedule,
+    nextRuns: nextRuns,
+    runsUnknown: runsUnknown,
+  );
+
   @override
   DateTime? get nextRunUtc => nextRuns.firstOrNull?.atUtc;
 
@@ -270,8 +279,10 @@ typedef CronZoneResolver = ServerZone? Function(String timeZone);
 /// no runs. Each lists up to [runCount] runs strictly after [nowUtc];
 /// with an [evaluateLimit], only that many lines in payload order get
 /// their runs evaluated, and later ones give
-/// [JobRunsUnknown.notEvaluated]. Pure; throws only for a nonpositive
-/// [runCount], a caller error.
+/// [JobRunsUnknown.notEvaluated]. [shownJob], when given, is the line
+/// each cron row carries, applied after the `run-parts` lines are read
+/// from the real commands: the engine masks commands with it (03 §8.9).
+/// Pure; throws only for a nonpositive [runCount], a caller error.
 List<JobEntry> mergeJobs({
   CronSnapshot? cron,
   TimersSnapshot? timers,
@@ -280,6 +291,7 @@ List<JobEntry> mergeJobs({
   CronZoneResolver? zoneFor,
   int runCount = 5,
   int? evaluateLimit,
+  CronJob Function(CronJob job)? shownJob,
 }) {
   if (runCount <= 0) {
     throw ArgumentError.value(runCount, 'runCount', 'must be positive');
@@ -344,7 +356,8 @@ List<JobEntry> mergeJobs({
   ];
 
   return [
-    ...cronEntries,
+    for (final entry in cronEntries)
+      shownJob == null ? entry : entry._showing(shownJob(entry.job)),
     ...periodic,
     for (final timer in timers?.timers ?? const <SystemdTimer>[])
       TimerJobEntry(timer: timer),

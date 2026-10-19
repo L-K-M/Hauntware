@@ -3512,6 +3512,615 @@
       }
     }
   },
+  "settingsSafetyReadOnly": "Read-only everywhere",
+  "@settingsSafetyReadOnly": {
+    "description": "Switch on the Safety settings tab (SAF-06): global read-only."
+  },
+  "settingsSafetyReadOnlyDetail": "While this is on, no server takes an action and every action is hidden. Monitoring, logs and other reads work as before, so it is safe for screen sharing.",
+  "@settingsSafetyReadOnlyDetail": {
+    "description": "Explanation under the global read-only switch on the Safety settings tab."
+  },
+  "settingsSafetyAdminExpiry": "Admin mode ends after",
+  "@settingsSafetyAdminExpiry": {
+    "description": "Label above the admin mode expiry choices on the Safety settings tab (SAF-02)."
+  },
+  "settingsSafetyAdminExpiryMinutes": "{minutes} min",
+  "@settingsSafetyAdminExpiryMinutes": {
+    "description": "One admin mode expiry choice on the Safety settings tab; minutes is 5, 15, 30 or 60.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsSafetyAdminExpiryDetail": "Admin mode turns off after this long without an action. It also turns off when the link drops, and on a phone when Klabautermann goes to the background.",
+  "@settingsSafetyAdminExpiryDetail": {
+    "description": "Explanation under the admin mode expiry choices on the Safety settings tab."
+  },
+  "settingsSafetyMarksTitle": "Marked protected",
+  "@settingsSafetyMarksTitle": {
+    "description": "Heading of the user's protected marks on the Safety settings tab (SAF-22)."
+  },
+  "settingsSafetyMarksDetail": "An action on a target you marked protected asks you to type its name first. Marks stay on this device.",
+  "@settingsSafetyMarksDetail": {
+    "description": "Explanation under the protected marks heading on the Safety settings tab."
+  },
+  "settingsSafetyMarksEmpty": "You have not marked anything protected.",
+  "@settingsSafetyMarksEmpty": {
+    "description": "Shown on the Safety settings tab when the user marked no target protected."
+  },
+  "settingsSafetyMark": "{target} on {server}",
+  "@settingsSafetyMark": {
+    "description": "One protected mark on the Safety settings tab: the marked unit, container or stack name, and the server's name.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      },
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsSafetyMarkRemove": "Remove the mark on {target}",
+  "@settingsSafetyMarkRemove": {
+    "description": "Tooltip and screen reader label of the button that removes one protected mark on the Safety settings tab.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsSafetyNotSaved": "The setting changed, but it could not be saved, so it will not be kept after a restart.",
+  "@settingsSafetyNotSaved": {
+    "description": "Toast when a safety setting applied but settings.json could not be written."
+  },
+  "settingsSafetyNotChanged": "The setting could not be changed.",
+  "@settingsSafetyNotChanged": {
+    "description": "Toast when the app did not take a change of a safety setting."
+  },
+  "serverSafetyMenu": "Safety",
+  "@serverSafetyMenu": {
+    "description": "Tooltip and screen reader label of the server header's safety menu button, which holds the Allow actions and Read-only switches."
+  },
+  "serverAllowActions": "Allow actions",
+  "@serverAllowActions": {
+    "description": "Switch in the server header's safety menu (SAF-01): management, off by default. While off, Klabautermann only reads the server."
+  },
+  "serverReadOnly": "Read-only",
+  "@serverReadOnly": {
+    "description": "Switch in the server header's safety menu (SAF-06): hides every action on this server."
+  },
+  "serverObserveOnly": "Observe only: Klabautermann reads this server and changes nothing. To act on it, turn on Allow actions in the Safety menu.",
+  "@serverObserveOnly": {
+    "description": "Notice in the server header while management is off for the server (03 §4.3 step 5, SAF-01)."
+  },
+  "serverReadOnlyNotice": "Read-only: actions on this server are hidden.",
+  "@serverReadOnlyNotice": {
+    "description": "Notice in the server header while the server, or every server, is read-only (SAF-06)."
+  },
+  "elevationTitle": "Admin password for {host}",
+  "@elevationTitle": {
+    "description": "Title of the admin mode password dialog (SAF-02); host is the server's address.",
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "elevationDetail": "Klabautermann asks sudo for root as {user} with this password. It is kept in memory only while admin mode is on, and never saved.",
+  "@elevationDetail": {
+    "description": "Explanation in the admin mode password dialog; user is the login account sudo runs for.",
+    "placeholders": {
+      "user": {
+        "type": "String"
+      }
+    }
+  },
+  "elevationRetry": "That password did not work. Try again.",
+  "@elevationRetry": {
+    "description": "Shown in the admin mode password dialog when sudo refused the previous password."
+  },
+  "elevationPassword": "Password",
+  "@elevationPassword": {
+    "description": "Label of the password field in the admin mode password dialog."
+  },
+  "elevationCancel": "Cancel",
+  "@elevationCancel": {
+    "description": "Button that closes the admin mode password dialog without turning admin mode on."
+  },
+  "elevationTurnOn": "Turn on",
+  "@elevationTurnOn": {
+    "description": "Button that sends the password and turns admin mode on."
+  },
+  "adminChipOff": "Admin mode",
+  "@adminChipOff": {
+    "description": "Label of the server header's admin mode chip while admin mode is off (SAF-02)."
+  },
+  "adminChipStarting": "Turning on admin mode",
+  "@adminChipStarting": {
+    "description": "Label of the admin mode chip while the engine detects how to elevate, waits for the password or checks it."
+  },
+  "adminChipOn": "Admin mode until {time}",
+  "@adminChipOn": {
+    "description": "Label of the admin mode chip while it is on; time is when inactivity ends it.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "adminChipReadOnly": "Admin mode is not available while the server is read-only.",
+  "@adminChipReadOnly": {
+    "description": "Tooltip of the disabled admin mode chip while the server or every server is read-only (SAF-06)."
+  },
+  "adminOnNotice": "Admin mode is on: actions you confirm here run as root.",
+  "@adminOnNotice": {
+    "description": "Notice in the server header while admin mode is on."
+  },
+  "adminFailure": "{reason, select, observeOnly{Admin mode needs Allow actions turned on for this server.} readOnly{Admin mode is not available while this server is read-only.} noLink{Admin mode needs a connection to this server.} notProbed{Klabautermann has not checked this server yet. Try admin mode again in a moment.} unavailable{This server offers no way to become root that Klabautermann can use.} ttyRequired{This server lets you become root only from a terminal, so admin mode is not available.} notInSudoers{Your account on this server may not use sudo.} wrongPassword{The password was refused three times, so admin mode stayed off.} cancelled{Admin mode stayed off because no password was given.} other{Admin mode could not be turned on.}}",
+  "@adminFailure": {
+    "description": "Notice in the server header when admin mode could not start; reason is the engine's AdminFailure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "adminEnded": "{reason, select, inactivity{Admin mode ended after a while without an action.} background{Admin mode ended when Klabautermann went to the background.} linkLost{Admin mode ended when the connection dropped.} serverRemoved{Admin mode ended because the server changed.} other{Admin mode ended.}}",
+  "@adminEnded": {
+    "description": "Notice in the server header after admin mode ended; reason is the engine's AdminEnd name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "actionPreviewTitle": "Review before it runs",
+  "@actionPreviewTitle": {
+    "description": "Title of the action preview (SAF-04), which shows exactly what will run before the user confirms."
+  },
+  "actionPreviewTarget": "Target: {target}",
+  "@actionPreviewTarget": {
+    "description": "Line naming the target in the action preview; target is the unit, process, container, image or stack name.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "actionPreviewSteps": "What will run",
+  "@actionPreviewSteps": {
+    "description": "Heading above the exact commands and API requests in the action preview."
+  },
+  "actionPreviewRoot": "root",
+  "@actionPreviewRoot": {
+    "description": "Badge on a step that runs as root through admin mode (SAF-03). Lowercase on purpose: the account name."
+  },
+  "actionPreviewRootDetail": "This step runs as root through admin mode.",
+  "@actionPreviewRootDetail": {
+    "description": "Tooltip and screen reader label of the root badge on a step in the action preview."
+  },
+  "actionPreviewRunner": "Runs as {identity}",
+  "@actionPreviewRunner": {
+    "description": "Line naming who runs the steps; identity is an account name such as root or deploy.",
+    "placeholders": {
+      "identity": {
+        "type": "String"
+      }
+    }
+  },
+  "actionPreviewRunnerEngine": "Runs as {identity} through {engine}",
+  "@actionPreviewRunnerEngine": {
+    "description": "Line naming who runs the steps and through which container engine.",
+    "placeholders": {
+      "identity": {
+        "type": "String"
+      },
+      "engine": {
+        "type": "String"
+      }
+    }
+  },
+  "actionPreviewCredentials": "{credentials, select, session{Signs in with this connection's own sign-in.} adminPassword{Uses the admin mode password.} passwordless{Needs no password.} other{}}",
+  "@actionPreviewCredentials": {
+    "description": "Line saying which credentials the run uses; credentials is the engine's RunnerCredentials name.",
+    "placeholders": {
+      "credentials": {
+        "type": "String"
+      }
+    }
+  },
+  "actionPreviewHostWrites": "What it leaves on the server",
+  "@actionPreviewHostWrites": {
+    "description": "Heading above the host writes the action causes (03 §8.11)."
+  },
+  "actionPreviewHostWrite": "{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine's own state} loginRecords{Login records, as every SSH command leaves} other{A change on the server}}",
+  "@actionPreviewHostWrite": {
+    "description": "One host write in the action preview; row is the engine's HostWriteRow name.",
+    "placeholders": {
+      "row": {
+        "type": "String"
+      }
+    }
+  },
+  "actionPreviewImpact": "{kind, select, dropsSession{This can drop your connection to the server.} stopsContainers{This stops {count} running containers.} removesVolumes{This deletes the container's volumes and the data in them.} forcesImageInUse{{count} containers still use this image.} interruptsTarget{This interrupts what the target is doing.} other{}}",
+  "@actionPreviewImpact": {
+    "description": "The action's impact in the preview; kind is the engine's ImpactKind name and count a number of containers.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "actionPreviewProtected": "{reason, select, builtIn{Protected: Klabautermann always protects this target.} sessionPath{Protected: your connection to the server runs through it.} publishesSessionPort{Protected: it publishes the SSH port or a VPN port.} userMarked{Protected: you marked it protected.} other{Protected.}}",
+  "@actionPreviewProtected": {
+    "description": "Why the target is protected (SAF-22); reason is the engine's ProtectedReason name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "actionPreviewOwnership": "Managed by {manager}. Acting on it here can conflict with {manager}.",
+  "@actionPreviewOwnership": {
+    "description": "Notice in the action preview when another tool manages the container or stack (03 §8.7).",
+    "placeholders": {
+      "manager": {
+        "type": "String"
+      }
+    }
+  },
+  "actionPreviewDanger": "Warnings",
+  "@actionPreviewDanger": {
+    "description": "Heading above the danger findings in the action preview (AI-01)."
+  },
+  "actionPreviewFinding": "{severity, select, critical{Critical} other{Warning}}: {explanation}",
+  "@actionPreviewFinding": {
+    "description": "One danger finding in the action preview (AI-01): its severity, then the linter's explanation.",
+    "placeholders": {
+      "severity": {
+        "type": "String"
+      },
+      "explanation": {
+        "type": "String"
+      }
+    }
+  },
+  "actionConfirmNames": "This acts on {target}.",
+  "@actionConfirmNames": {
+    "description": "Confirmation line for an action that needs an acknowledgement (SAF-05 tier 1).",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "actionConfirmType": "Type {target} to confirm",
+  "@actionConfirmType": {
+    "description": "Label of the field where the user types the target's name to confirm a protected or irreversible action (SAF-05 tier 2).",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "actionConfirmRun": "Run",
+  "@actionConfirmRun": {
+    "description": "Button that runs the previewed action."
+  },
+  "actionConfirmCancel": "Cancel",
+  "@actionConfirmCancel": {
+    "description": "Button that closes the action preview without running anything."
+  },
+  "actionRunning": "Running on {target}",
+  "@actionRunning": {
+    "description": "Toast when a confirmed action starts.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "actionSucceeded": "Done: {target}",
+  "@actionSucceeded": {
+    "description": "Toast when an action finished successfully.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "actionFailed": "{target} did not finish: {failure, select, noLink{there is no connection to the server.} revalidation{the target changed since the preview.} elevationRefused{admin mode refused the step.} stepFailed{a step failed.} transport{the connection failed during the run.} unsupportedStep{this version cannot run one of its steps.} adminRequired{it needs admin mode.} other{it failed.}}",
+  "@actionFailed": {
+    "description": "Toast when an action failed; failure is the engine's ActionFailure name.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      },
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "actionFailedPlain": "{target} did not finish.",
+  "@actionFailedPlain": {
+    "description": "Toast when an action failed without a typed reason.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "actionCancelled": "{target} was cancelled.",
+  "@actionCancelled": {
+    "description": "Toast when an action was cancelled.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "actionRefused": "{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} other{The action was refused.}}",
+  "@actionRefused": {
+    "description": "Toast when the engine refused to plan or run an action; reason is the engine's ActionRefusalReason name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "processTerminate": "Terminate",
+  "@processTerminate": {
+    "description": "Process action (PRC-02): sends SIGTERM, asking the process to end."
+  },
+  "processKill": "Kill",
+  "@processKill": {
+    "description": "Process action (PRC-02): sends SIGKILL, ending the process at once."
+  },
+  "processSendSignal": "Send signal",
+  "@processSendSignal": {
+    "description": "Process action menu holding every other signal (PRC-02)."
+  },
+  "processSignalName": "SIG{name}",
+  "@processSignalName": {
+    "description": "A signal's name in the Send signal menu; name is its kill -s name such as HUP.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "unitStart": "Start",
+  "@unitStart": {
+    "description": "Unit action (SVC-03)."
+  },
+  "unitStop": "Stop",
+  "@unitStop": {
+    "description": "Unit action (SVC-03)."
+  },
+  "unitRestart": "Restart",
+  "@unitRestart": {
+    "description": "Unit action (SVC-03)."
+  },
+  "unitReload": "Reload",
+  "@unitReload": {
+    "description": "Unit action (SVC-03): reloads the unit's configuration."
+  },
+  "jobsRunNow": "Run now",
+  "@jobsRunNow": {
+    "description": "Timer action (JOB-08): starts the unit the timer activates now."
+  },
+  "jobsRunOutputTitle": "Output of {unit}",
+  "@jobsRunOutputTitle": {
+    "description": "Title of the sheet that follows a timer run's journal; unit is the service the timer started.",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsRunOutputClose": "Close output",
+  "@jobsRunOutputClose": {
+    "description": "Tooltip and screen reader label of the button that closes the run output sheet."
+  },
+  "jobsSourceUserCrontab": "{user}'s crontab",
+  "@jobsSourceUserCrontab": {
+    "description": "A job's source when it is another user's crontab, read in admin mode (JOB-03); user is the account name.",
+    "placeholders": {
+      "user": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsSourceMine": "Yours and the system's",
+  "@jobsSourceMine": {
+    "description": "Choice on the Jobs tab's source switch: the login user's crontab, the system crontabs and the timers (the cron and timers streams)."
+  },
+  "jobsSourceOtherUsers": "Other users",
+  "@jobsSourceOtherUsers": {
+    "description": "Choice on the Jobs tab's source switch, in admin mode: every other user's crontab, read-only (JOB-03)."
+  },
+  "jobsOtherUsersReading": "Reading other users' crontabs.",
+  "@jobsOtherUsersReading": {
+    "description": "Notice while the other users' crontabs are being read."
+  },
+  "jobsOtherUsersRefresh": "Read again",
+  "@jobsOtherUsersRefresh": {
+    "description": "Button that reads the other users' crontabs again."
+  },
+  "jobsOtherUsersEmpty": "No other user has a crontab.",
+  "@jobsOtherUsersEmpty": {
+    "description": "Shown when the spool holds no other user's crontab."
+  },
+  "jobsOtherUsersFailure": "{failure, select, noLink{Other users' crontabs need a connection to the server.} adminRequired{Other users' crontabs need admin mode.} elevationRefused{Admin mode could not read the crontabs.} noSpool{This server keeps no crontab spool.} spoolDenied{Even admin mode may not list the crontab spool.} unreadable{The crontab spool could not be read.} transport{The connection failed while reading.} other{Other users' crontabs could not be read.}}",
+  "@jobsOtherUsersFailure": {
+    "description": "Notice when the other users' crontabs could not be read; failure is the engine's UserCrontabsFailure name.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsOtherUsersUnreadable": "Could not read the crontab of {users}.",
+  "@jobsOtherUsersUnreadable": {
+    "description": "Notice naming the users whose crontab could not be read; users is a comma-separated list of account names.",
+    "placeholders": {
+      "users": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsOtherUsersNotRead": "{count, plural, =1{1 more user's crontab was not read.} other{{count} more users' crontabs were not read.}}",
+  "@jobsOtherUsersNotRead": {
+    "description": "Notice when the spool lists more users than one read takes.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "jobsOtherUsersMasked": "Commands are masked where they look like they hold secrets.",
+  "@jobsOtherUsersMasked": {
+    "description": "Notice under the other users' crontabs (03 §8.9)."
+  },
+  "activityMenu": "Activity",
+  "@activityMenu": {
+    "description": "Item in the server header's Safety menu that opens the server's activity log (SAF-11)."
+  },
+  "activityTitle": "Activity on {server}",
+  "@activityTitle": {
+    "description": "Title of the activity log page; server is the server's name.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "activityDetail": "Every action this device ran on the server, newest first. Records are kept for 90 days and never synced. Commands are stored with secrets removed.",
+  "@activityDetail": {
+    "description": "Explanation at the top of the activity log page (03 §8.10)."
+  },
+  "activityInMemory": "Another Klabautermann window has the settings folder, so this log lasts only until this window closes.",
+  "@activityInMemory": {
+    "description": "Notice on the activity log page when the audit log is kept in memory only."
+  },
+  "activityColumnTime": "Time",
+  "@activityColumnTime": {
+    "description": "Column of the activity log: when the run ended."
+  },
+  "activityColumnTarget": "Target",
+  "@activityColumnTarget": {
+    "description": "Column of the activity log: the unit, process, container or other target."
+  },
+  "activityColumnAction": "Action",
+  "@activityColumnAction": {
+    "description": "Column of the activity log: what was done."
+  },
+  "activityColumnTier": "Confirmation",
+  "@activityColumnTier": {
+    "description": "Column of the activity log: how the run was confirmed."
+  },
+  "activityColumnResult": "Result",
+  "@activityColumnResult": {
+    "description": "Column of the activity log: how the run ended."
+  },
+  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} StackAction{Stack action} RedeployStack{Redeploy stack} other{Action}}",
+  "@activityAction": {
+    "description": "An activity log row's action; action is the engine's intent type name.",
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "activityTier": "{tier, select, none{None} acknowledge{Confirmed} typedPhrase{Name typed} other{}}",
+  "@activityTier": {
+    "description": "An activity log row's confirmation; tier is the engine's ConfirmationTier name.",
+    "placeholders": {
+      "tier": {
+        "type": "String"
+      }
+    }
+  },
+  "activityResult": "{outcome, select, succeeded{Done} failed{Failed} cancelled{Cancelled} other{}}",
+  "@activityResult": {
+    "description": "An activity log row's result; outcome is the engine's ActionOutcome name.",
+    "placeholders": {
+      "outcome": {
+        "type": "String"
+      }
+    }
+  },
+  "activityFailure": "{failure, select, noLink{No connection to the server.} revalidation{The target changed since the preview.} elevationRefused{Admin mode refused the step.} stepFailed{A step failed.} transport{The connection failed during the run.} unsupportedStep{This version could not run a step.} adminRequired{It needed admin mode.} other{It failed.}}",
+  "@activityFailure": {
+    "description": "Why a run failed, in the activity record's details; failure is the engine's ActionFailure name.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "activityExitCode": "Exit status {code}",
+  "@activityExitCode": {
+    "description": "A failed step's exit status in an activity record's details.",
+    "placeholders": {
+      "code": {
+        "type": "int"
+      }
+    }
+  },
+  "activityHttpStatus": "Engine answered HTTP {status}",
+  "@activityHttpStatus": {
+    "description": "A failed Docker step's HTTP status in an activity record's details.",
+    "placeholders": {
+      "status": {
+        "type": "int"
+      }
+    }
+  },
+  "activitySteps": "What ran",
+  "@activitySteps": {
+    "description": "Heading above an activity record's steps, secrets removed."
+  },
+  "activityReading": "Reading the log.",
+  "@activityReading": {
+    "description": "Shown in the activity table while the log is read."
+  },
+  "activityEmpty": "Nothing has run on this server from this device.",
+  "@activityEmpty": {
+    "description": "Shown when the activity log is empty."
+  },
+  "activityOlder": "Show older",
+  "@activityOlder": {
+    "description": "Button that reads the next page of older activity records."
+  },
+  "activityCopy": "Copy the log",
+  "@activityCopy": {
+    "description": "Tooltip and screen reader label of the button that copies the activity log as JSON, secrets already removed."
+  },
+  "activityCopied": "The log is on the clipboard, with secrets removed.",
+  "@activityCopied": {
+    "description": "Toast after the activity log was copied."
+  },
+  "activityNotCopied": "Not copied. Try again.",
+  "@activityNotCopied": {
+    "description": "Toast when the clipboard refused the activity log."
+  },
+  "activityTime": "{date} {time}",
+  "@activityTime": {
+    "description": "An activity log row's time: its local date, then its time of day, both formatted by the locale.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "dockerTransportWaiting": "Engine API: waiting for the connection",
   "@dockerTransportWaiting": {
     "description": "The server header's Docker transport label (03 §5.9, E4) before the server is connected and its capability check has answered."
