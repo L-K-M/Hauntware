@@ -97,23 +97,40 @@ void main() {
     return watchId;
   }
 
-  /// The next container list in which [test] holds for the container
-  /// [id], or for its absence when [test] gets null.
+  /// Returns once the latest [list] that [accept] takes arrives. A list
+  /// can arrive while an action runs, before its ActionFinished, and
+  /// `run` reads past it: the latest one already seen counts too, since
+  /// it is the list as it stands.
+  Future<void> untilList(
+    FixtureEngine engine,
+    DockerWatchList list,
+    bool Function(DockerPayload payload) accept,
+  ) async {
+    bool ours(DockerListChanged event) =>
+        event.serverId == dockerServer && event.list == list;
+    final latest = engine.seen.whereType<DockerListChanged>().where(ours);
+    if (latest.lastOrNull case final event? when accept(event.payload)) {
+      return;
+    }
+    await engine.until<DockerListChanged>(
+      (event) => ours(event) && accept(event.payload),
+      _listWait,
+    );
+  }
+
+  /// Returns once the container list holds [test] for the container [id],
+  /// or for its absence when [test] gets null.
   Future<void> untilContainer(
     FixtureEngine engine,
     String id,
     bool Function(ContainerSummary? container) test,
-  ) => engine.until<DockerListChanged>((event) {
-    if (event.serverId != dockerServer ||
-        event.list != DockerWatchList.containers) {
-      return false;
-    }
-    if (event.payload case DockerQueryFailed(:final failure)) {
+  ) => untilList(engine, DockerWatchList.containers, (payload) {
+    if (payload case DockerQueryFailed(:final failure)) {
       fail('the container list failed: ${failure.name}');
     }
-    final containers = (event.payload as DockerContainersPayload).containers;
+    final containers = (payload as DockerContainersPayload).containers;
     return test(containers.where((c) => c.id == id).firstOrNull);
-  }, _listWait);
+  });
 
   test('each container action runs on the id and the list follows '
       '(CTR-02, CTR-05)', () async {
@@ -200,14 +217,12 @@ void main() {
     );
     expect(removed.preview.requiredTier, ConfirmationTier.acknowledge);
     expectSucceeded(await run(engine, removed));
-    await engine.until<DockerListChanged>(
-      (e) =>
-          e.list == DockerWatchList.images &&
-          e.payload is DockerImagesPayload &&
-          !(e.payload as DockerImagesPayload).images.any(
-            (i) => i.repoTags.contains(unused),
-          ),
-      _listWait,
+    await untilList(
+      engine,
+      DockerWatchList.images,
+      (payload) =>
+          payload is DockerImagesPayload &&
+          !payload.images.any((i) => i.repoTags.contains(unused)),
     );
 
     expect(
