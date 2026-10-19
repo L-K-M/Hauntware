@@ -1,0 +1,33 @@
+name: Image pins
+
+# Checks that every image Klabautermann's integration fixture and
+# captures pin by digest still resolves on its registry
+# (klabautermann/test/integration/check_image_pins.sh), reading
+# manifests only. quay.io dropped the pinned fedora:44 digest twice
+# within days (#259, #313), and each time the integration job broke on
+# every branch at once; this weekly run names a dead pin first. A pull
+# request that changes the pins or the check runs it too.
+
+on:
+  schedule:
+    - cron: '41 5 * * 1'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'klabautermann/test/integration/*.sh'
+      - 'klabautermann/test/integration/docker-compose*.yml'
+      - 'klabautermann/test/integration/sshd/Dockerfile*'
+      - '.github/workflows/image-pins.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Digest-pinned images resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Inspect every pinned image manifest
+        run: klabautermann/test/integration/check_image_pins.sh

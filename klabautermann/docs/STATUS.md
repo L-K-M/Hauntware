@@ -1313,6 +1313,13 @@ M2, the host read MVP, is the current milestone. What is on main:
   through `mirror.gcr.io`, as the other official images are, and the
   fixture is recaptured from it. Docker Hub has so far kept replaced
   official digests pullable, but promises nothing.
+- Image pin check: the root `Image pins` workflow runs
+  `test/integration/check_image_pins.sh` weekly, by hand and on pull
+  requests that change a pin. It inspects the manifest of every
+  digest-pinned image in the integration scripts, Compose file and sshd
+  Dockerfiles without pulling, and fails naming each dead pin and the
+  files that pin it, so a dropped digest shows up there before it
+  breaks `klabautermann_integration` on every branch.
 - Docker fixture and rank-1 smoke (M3, 03 §5.4, §11.3, D10): the
   fixture adds `dind` (Docker 29.9.1, privileged, unpublished, dockerd
   on one Unix socket with gid 990, on a named volume) and `docker-sshd`
