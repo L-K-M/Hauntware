@@ -1,0 +1,149 @@
+HTTP/1.1 200 OK
+Api-Version: 1.52
+Content-Type: application/json
+Docker-Experimental: false
+Ostype: linux
+Server: Docker/29.0.4 (linux)
+Date: Sat, 17 Oct 2026 16:14:01 GMT
+Transfer-Encoding: chunked
+
+10f
+{"Type":"image","Action":"pull","Actor":{"ID":"mirror.gcr.io/library/busybox@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e","Attributes":{"name":"mirror.gcr.io/library/busybox"}},"scope":"local","time":1792253627,"timeNano":1792253627157433404}
+
+f7
+{"Type":"image","Action":"tag","Actor":{"ID":"sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e","Attributes":{"name":"mirror.gcr.io/library/busybox:1.37.0"}},"scope":"local","time":1792253627,"timeNano":1792253627196341467}
+
+ed
+{"Type":"network","Action":"create","Actor":{"ID":"9f39152346a33ce285eb6816bf63279f2656bbb8ae6ced9bfd83578128d05c49","Attributes":{"name":"demo_default","type":"bridge"}},"scope":"local","time":1792253627,"timeNano":1792253627383789498}
+
+a0
+{"Type":"volume","Action":"create","Actor":{"ID":"demo_data","Attributes":{"driver":"local"}},"scope":"local","time":1792253627,"timeNano":1792253627388142858}
+
+11e
+{"Type":"container","Action":"create","Actor":{"ID":"2a923cf9aafa9d7565d78bb357b86135301ed78f998244e6d5a079884a46a76b","Attributes":{"image":"mirror.gcr.io/library/busybox:1.37.0","name":"web","org.example.role":"web"}},"scope":"local","time":1792253628,"timeNano":1792253628139062415}
+
+15c
+{"Type":"container","Action":"create","Actor":{"ID":"2a3ce47da628dd201d5598618e979c8c24276a0ec99904dc1289d63c72d48f9f","Attributes":{"image":"mirror.gcr.io/library/busybox:1.37.0","name":"worker","org.example.backup":"https://fixture:fixture-password@backup.example.invalid/demo"}},"scope":"local","time":1792253628,"timeNano":1792253628292194279}
+
+105
+{"Type":"container","Action":"create","Actor":{"ID":"1d4f8500d429476a3fdf6cf2be18a29465de476c58ebe758ea9d343d98600b14","Attributes":{"image":"mirror.gcr.io/library/busybox:1.37.0","name":"job"}},"scope":"local","time":1792253628,"timeNano":1792253628672317265}
+
+105
+{"Type":"container","Action":"create","Actor":{"ID":"1cc19bb77ee443d6a6433349faa1fb6a9338ef3fcf53fa893f388933ec3be664","Attributes":{"image":"mirror.gcr.io/library/busybox:1.37.0","name":"tty"}},"scope":"local","time":1792253628,"timeNano":1792253628994524809}
+
+108
+{"Type":"container","Action":"create","Actor":{"ID":"3552837504a74f7a57c307559a05150702d8a35697e9e8c838d04e2b0ed38ef2","Attributes":{"image":"mirror.gcr.io/library/busybox:1.37.0","name":"paused"}},"scope":"local","time":1792253629,"timeNano":1792253629373566482}
+
+344
+{"Type":"container","Action":"create","Actor":{"ID":"870292c7f04a21b5eda3921e3fc3703ad6f7db628daaf5ab2bcddb58d0d36208","Attributes":{"com.docker.compose.config-hash":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","com.docker.compose.container-number":"1","com.docker.compose.depends_on":"cache:service_started:true","com.docker.compose.image":"sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e","com.docker.compose.oneoff":"False","com.docker.compose.project":"demo","com.docker.compose.project.config_files":"/srv/demo/compose.yaml","com.docker.compose.project.working_dir":"/srv/demo","com.docker.compose.service":"web","com.docker.compose.version":"5.6.0","image":"mirror.gcr.io/library/busybox:1.37.0","name":"demo-web-1"}},"scope":"local","time":1792253629,"timeNano":1792253629450497823}
+
+32e
+{"Type":"container","Action":"create","Actor":{"ID":"ace1f39e9c6abd28fe63d783f24c0c7bb97af04672d7624ae57905b27d222563","Attributes":{"com.docker.compose.config-hash":"fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210","com.docker.compose.container-number":"1","com.docker.compose.depends_on":"","com.docker.compose.image":"sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e","com.docker.compose.oneoff":"False","com.docker.compose.project":"demo","com.docker.compose.project.config_files":"/srv/demo/compose.yaml","com.docker.compose.project.working_dir":"/srv/demo","com.docker.compose.service":"cache","com.docker.compose.version":"5.6.0","image":"mirror.gcr.io/library/busybox:1.37.0","name":"demo-cache-1"}},"scope":"local","time":1792253629,"timeNano":1792253629543377156}
+
+158
+{"Type":"container","Action":"create","Actor":{"ID":"261631e037485023624e9b91608a210309c8824e218d3e60f3cc56ab919ebafb","Attributes":{"coolify.managed":"true","coolify.name":"app","coolify.type":"application","image":"mirror.gcr.io/library/busybox:1.37.0","name":"coolify-app"}},"scope":"local","time":1792253629,"timeNano":1792253629614780591}
+
+137
+{"Type":"network","Action":"connect","Actor":{"ID":"b43909449e2bf7926da3d5241c97568746d12902167bdade7a94785a764cfab1","Attributes":{"container":"1cc19bb77ee443d6a6433349faa1fb6a9338ef3fcf53fa893f388933ec3be664","name":"bridge","type":"bridge"}},"scope":"local","time":1792253629,"timeNano":1792253629961795419}
+
+104
+{"Type":"container","Action":"start","Actor":{"ID":"1cc19bb77ee443d6a6433349faa1fb6a9338ef3fcf53fa893f388933ec3be664","Attributes":{"image":"mirror.gcr.io/library/busybox:1.37.0","name":"tty"}},"scope":"local","time":1792253629,"timeNano":1792253629979846317}
+
+137
+{"Type":"network","Action":"connect","Actor":{"ID":"b43909449e2bf7926da3d5241c97568746d12902167bdade7a94785a764cfab1","Attributes":{"container":"3552837504a74f7a57c307559a05150702d8a35697e9e8c838d04e2b0ed38ef2","name":"bridge","type":"bridge"}},"scope":"local","time":1792253631,"timeNano":1792253631756795535}
+
+107
+{"Type":"container","Action":"start","Actor":{"ID":"3552837504a74f7a57c307559a05150702d8a35697e9e8c838d04e2b0ed38ef2","Attributes":{"image":"mirror.gcr.io/library/busybox:1.37.0","name":"paused"}},"scope":"local","time":1792253631,"timeNano":1792253631796222559}
+
+13d
+{"Type":"network","Action":"connect","Actor":{"ID":"9f39152346a33ce285eb6816bf63279f2656bbb8ae6ced9bfd83578128d05c49","Attributes":{"container":"870292c7f04a21b5eda3921e3fc3703ad6f7db628daaf5ab2bcddb58d0d36208","name":"demo_default","type":"bridge"}},"scope":"local","time":1792253633,"timeNano":1792253633686276388}
+
+343
+{"Type":"container","Action":"start","Actor":{"ID":"870292c7f04a21b5eda3921e3fc3703ad6f7db628daaf5ab2bcddb58d0d36208","Attributes":{"com.docker.compose.config-hash":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","com.docker.compose.container-number":"1","com.docker.compose.depends_on":"cache:service_started:true","com.docker.compose.image":"sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e","com.docker.compose.oneoff":"False","com.docker.compose.project":"demo","com.docker.compose.project.config_files":"/srv/demo/compose.yaml","com.docker.compose.project.working_dir":"/srv/demo","com.docker.compose.service":"web","com.docker.compose.version":"5.6.0","image":"mirror.gcr.io/library/busybox:1.37.0","name":"demo-web-1"}},"scope":"local","time":1792253633,"timeNano":1792253633911220328}
+
+129
+{"Type":"volume","Action":"mount","Actor":{"ID":"demo_data","Attributes":{"container":"ace1f39e9c6abd28fe63d783f24c0c7bb97af04672d7624ae57905b27d222563","destination":"/data","driver":"local","propagation":"","read/write":"true"}},"scope":"local","time":1792253633,"timeNano":1792253633989413642}
+
+13d
+{"Type":"network","Action":"connect","Actor":{"ID":"9f39152346a33ce285eb6816bf63279f2656bbb8ae6ced9bfd83578128d05c49","Attributes":{"container":"ace1f39e9c6abd28fe63d783f24c0c7bb97af04672d7624ae57905b27d222563","name":"demo_default","type":"bridge"}},"scope":"local","time":1792253635,"timeNano":1792253635037696215}
+
+32d
+{"Type":"container","Action":"start","Actor":{"ID":"ace1f39e9c6abd28fe63d783f24c0c7bb97af04672d7624ae57905b27d222563","Attributes":{"com.docker.compose.config-hash":"fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210","com.docker.compose.container-number":"1","com.docker.compose.depends_on":"","com.docker.compose.image":"sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e","com.docker.compose.oneoff":"False","com.docker.compose.project":"demo","com.docker.compose.project.config_files":"/srv/demo/compose.yaml","com.docker.compose.project.working_dir":"/srv/demo","com.docker.compose.service":"cache","com.docker.compose.version":"5.6.0","image":"mirror.gcr.io/library/busybox:1.37.0","name":"demo-cache-1"}},"scope":"local","time":1792253635,"timeNano":1792253635063047347}
+
+137
+{"Type":"network","Action":"connect","Actor":{"ID":"b43909449e2bf7926da3d5241c97568746d12902167bdade7a94785a764cfab1","Attributes":{"container":"261631e037485023624e9b91608a210309c8824e218d3e60f3cc56ab919ebafb","name":"bridge","type":"bridge"}},"scope":"local","time":1792253635,"timeNano":1792253635314470810}
+
+157
+{"Type":"container","Action":"start","Actor":{"ID":"261631e037485023624e9b91608a210309c8824e218d3e60f3cc56ab919ebafb","Attributes":{"coolify.managed":"true","coolify.name":"app","coolify.type":"application","image":"mirror.gcr.io/library/busybox:1.37.0","name":"coolify-app"}},"scope":"local","time":1792253635,"timeNano":1792253635672370395}
+
+107
+{"Type":"container","Action":"pause","Actor":{"ID":"3552837504a74f7a57c307559a05150702d8a35697e9e8c838d04e2b0ed38ef2","Attributes":{"image":"mirror.gcr.io/library/busybox:1.37.0","name":"paused"}},"scope":"local","time":1792253635,"timeNano":1792253635746830017}
+
+137
+{"Type":"network","Action":"connect","Actor":{"ID":"b43909449e2bf7926da3d5241c97568746d12902167bdade7a94785a764cfab1","Attributes":{"container":"1d4f8500d429476a3fdf6cf2be18a29465de476c58ebe758ea9d343d98600b14","name":"bridge","type":"bridge"}},"scope":"local","time":1792253636,"timeNano":1792253636923819960}
+
+104
+{"Type":"container","Action":"start","Actor":{"ID":"1d4f8500d429476a3fdf6cf2be18a29465de476c58ebe758ea9d343d98600b14","Attributes":{"image":"mirror.gcr.io/library/busybox:1.37.0","name":"job"}},"scope":"local","time":1792253637,"timeNano":1792253637142712480}
+
+13a
+{"Type":"network","Action":"disconnect","Actor":{"ID":"b43909449e2bf7926da3d5241c97568746d12902167bdade7a94785a764cfab1","Attributes":{"container":"1d4f8500d429476a3fdf6cf2be18a29465de476c58ebe758ea9d343d98600b14","name":"bridge","type":"bridge"}},"scope":"local","time":1792253639,"timeNano":1792253639362695067}
+
+124
+{"Type":"container","Action":"die","Actor":{"ID":"1d4f8500d429476a3fdf6cf2be18a29465de476c58ebe758ea9d343d98600b14","Attributes":{"execDuration":"3","exitCode":"0","image":"mirror.gcr.io/library/busybox:1.37.0","name":"job"}},"scope":"local","time":1792253639,"timeNano":1792253639529677243}
+
+11d
+{"Type":"image","Action":"create","Actor":{"ID":"sha256:a05d0888cb0467e557de32fc78d9cdfdc1d0f894d1f9d5831da6f7372ac5c49a","Attributes":{"name":"sha256:a05d0888cb0467e557de32fc78d9cdfdc1d0f894d1f9d5831da6f7372ac5c49a"}},"scope":"local","time":1792253640,"timeNano":1792253640042837193}
+
+189
+{"Type":"container","Action":"commit","Actor":{"ID":"1d4f8500d429476a3fdf6cf2be18a29465de476c58ebe758ea9d343d98600b14","Attributes":{"comment":"klabautermann capture","image":"mirror.gcr.io/library/busybox:1.37.0","imageID":"sha256:a05d0888cb0467e557de32fc78d9cdfdc1d0f894d1f9d5831da6f7372ac5c49a","imageRef":"","name":"job"}},"scope":"local","time":1792253640,"timeNano":1792253640050240698}
+
+137
+{"Type":"network","Action":"connect","Actor":{"ID":"b43909449e2bf7926da3d5241c97568746d12902167bdade7a94785a764cfab1","Attributes":{"container":"2a923cf9aafa9d7565d78bb357b86135301ed78f998244e6d5a079884a46a76b","name":"bridge","type":"bridge"}},"scope":"local","time":1792253640,"timeNano":1792253640329701234}
+
+11d
+{"Type":"container","Action":"start","Actor":{"ID":"2a923cf9aafa9d7565d78bb357b86135301ed78f998244e6d5a079884a46a76b","Attributes":{"image":"mirror.gcr.io/library/busybox:1.37.0","name":"web","org.example.role":"web"}},"scope":"local","time":1792253640,"timeNano":1792253640373149648}
+
+137
+{"Type":"network","Action":"connect","Actor":{"ID":"b43909449e2bf7926da3d5241c97568746d12902167bdade7a94785a764cfab1","Attributes":{"container":"2a3ce47da628dd201d5598618e979c8c24276a0ec99904dc1289d63c72d48f9f","name":"bridge","type":"bridge"}},"scope":"local","time":1792253640,"timeNano":1792253640644328330}
+
+15b
+{"Type":"container","Action":"start","Actor":{"ID":"2a3ce47da628dd201d5598618e979c8c24276a0ec99904dc1289d63c72d48f9f","Attributes":{"image":"mirror.gcr.io/library/busybox:1.37.0","name":"worker","org.example.backup":"https://fixture:fixture-password@backup.example.invalid/demo"}},"scope":"local","time":1792253640,"timeNano":1792253640663453710}
+
+19c
+{"Type":"container","Action":"exec_create: wget -q -O /dev/null http://127.0.0.1:8080/","Actor":{"ID":"2a923cf9aafa9d7565d78bb357b86135301ed78f998244e6d5a079884a46a76b","Attributes":{"execID":"0d2c88586004ca505ba80fd50bb96dcbbe521c0fd3570eff040074f62cd078d0","image":"mirror.gcr.io/library/busybox:1.37.0","name":"web","org.example.role":"web"}},"scope":"local","time":1792253641,"timeNano":1792253641373962376}
+
+19b
+{"Type":"container","Action":"exec_start: wget -q -O /dev/null http://127.0.0.1:8080/","Actor":{"ID":"2a923cf9aafa9d7565d78bb357b86135301ed78f998244e6d5a079884a46a76b","Attributes":{"execID":"0d2c88586004ca505ba80fd50bb96dcbbe521c0fd3570eff040074f62cd078d0","image":"mirror.gcr.io/library/busybox:1.37.0","name":"web","org.example.role":"web"}},"scope":"local","time":1792253641,"timeNano":1792253641374006903}
+
+17b
+{"Type":"container","Action":"exec_die","Actor":{"ID":"2a923cf9aafa9d7565d78bb357b86135301ed78f998244e6d5a079884a46a76b","Attributes":{"execID":"0d2c88586004ca505ba80fd50bb96dcbbe521c0fd3570eff040074f62cd078d0","exitCode":"0","image":"mirror.gcr.io/library/busybox:1.37.0","name":"web","org.example.role":"web"}},"scope":"local","time":1792253641,"timeNano":1792253641450853738}
+
+12e
+{"Type":"container","Action":"health_status: healthy","Actor":{"ID":"2a923cf9aafa9d7565d78bb357b86135301ed78f998244e6d5a079884a46a76b","Attributes":{"image":"mirror.gcr.io/library/busybox:1.37.0","name":"web","org.example.role":"web"}},"scope":"local","time":1792253641,"timeNano":1792253641451318122}
+
+1e5
+{"Type":"container","Action":"exec_create: /bin/sh -c echo worker not ready \u003e\u00262; exit 1","Actor":{"ID":"2a3ce47da628dd201d5598618e979c8c24276a0ec99904dc1289d63c72d48f9f","Attributes":{"execID":"93c01c9c61bcf33fe517c46177bbe823ebedce3b5c578f8caba5d32445c011cd","image":"mirror.gcr.io/library/busybox:1.37.0","name":"worker","org.example.backup":"https://fixture:fixture-password@backup.example.invalid/demo"}},"scope":"local","time":1792253641,"timeNano":1792253641663823951}
+
+1e4
+{"Type":"container","Action":"exec_start: /bin/sh -c echo worker not ready \u003e\u00262; exit 1","Actor":{"ID":"2a3ce47da628dd201d5598618e979c8c24276a0ec99904dc1289d63c72d48f9f","Attributes":{"execID":"93c01c9c61bcf33fe517c46177bbe823ebedce3b5c578f8caba5d32445c011cd","image":"mirror.gcr.io/library/busybox:1.37.0","name":"worker","org.example.backup":"https://fixture:fixture-password@backup.example.invalid/demo"}},"scope":"local","time":1792253641,"timeNano":1792253641663862763}
+
+1b9
+{"Type":"container","Action":"exec_die","Actor":{"ID":"2a3ce47da628dd201d5598618e979c8c24276a0ec99904dc1289d63c72d48f9f","Attributes":{"execID":"93c01c9c61bcf33fe517c46177bbe823ebedce3b5c578f8caba5d32445c011cd","exitCode":"1","image":"mirror.gcr.io/library/busybox:1.37.0","name":"worker","org.example.backup":"https://fixture:fixture-password@backup.example.invalid/demo"}},"scope":"local","time":1792253641,"timeNano":1792253641727013896}
+
+16e
+{"Type":"container","Action":"health_status: unhealthy","Actor":{"ID":"2a3ce47da628dd201d5598618e979c8c24276a0ec99904dc1289d63c72d48f9f","Attributes":{"image":"mirror.gcr.io/library/busybox:1.37.0","name":"worker","org.example.backup":"https://fixture:fixture-password@backup.example.invalid/demo"}},"scope":"local","time":1792253641,"timeNano":1792253641727455858}
+
+19c
+{"Type":"container","Action":"exec_create: wget -q -O /dev/null http://127.0.0.1:8080/","Actor":{"ID":"2a923cf9aafa9d7565d78bb357b86135301ed78f998244e6d5a079884a46a76b","Attributes":{"execID":"8d4ef75e2777514c46f7b5cd76f701d9a2d3b78621cb664fe1213c34b318758d","image":"mirror.gcr.io/library/busybox:1.37.0","name":"web","org.example.role":"web"}},"scope":"local","time":1792253642,"timeNano":1792253642494811766}
+
+19b
+{"Type":"container","Action":"exec_start: wget -q -O /dev/null http://127.0.0.1:8080/","Actor":{"ID":"2a923cf9aafa9d7565d78bb357b86135301ed78f998244e6d5a079884a46a76b","Attributes":{"execID":"8d4ef75e2777514c46f7b5cd76f701d9a2d3b78621cb664fe1213c34b318758d","image":"mirror.gcr.io/library/busybox:1.37.0","name":"web","org.example.role":"web"}},"scope":"local","time":1792253642,"timeNano":1792253642494868264}
+
+1e5
+{"Type":"container","Action":"exec_create: /bin/sh -c echo worker not ready \u003e\u00262; exit 1","Actor":{"ID":"2a3ce47da628dd201d5598618e979c8c24276a0ec99904dc1289d63c72d48f9f","Attributes":{"execID":"3f0941b610e009ee156f7b50f21f1d166f77d5cf0dea0b1bdb1f6b2dc5769cf1","image":"mirror.gcr.io/library/busybox:1.37.0","name":"worker","org.example.backup":"https://fixture:fixture-password@backup.example.invalid/demo"}},"scope":"local","time":1792253642,"timeNano":1792253642728362819}
+
+1e4
+{"Type":"container","Action":"exec_start: /bin/sh -c echo worker not ready \u003e\u00262; exit 1","Actor":{"ID":"2a3ce47da628dd201d5598618e979c8c24276a0ec99904dc1289d63c72d48f9f","Attributes":{"execID":"3f0941b610e009ee156f7b50f21f1d166f77d5cf0dea0b1bdb1f6b2dc5769cf1","image":"mirror.gcr.io/library/busybox:1.37.0","name":"worker","org.example.backup":"https://fixture:fixture-password@backup.example.invalid/demo"}},"scope":"local","time":1792253642,"timeNano":1792253642728404360}
+
+0
+

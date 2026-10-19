@@ -21,6 +21,7 @@ import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
+import 'package:klabautermann_app/controllers/docker_notice_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/controllers/prompt_controller.dart';
@@ -75,6 +76,7 @@ void main() {
     final appearance = AppearanceController();
     final coverage = CoverageController(firstRunCardDismissed: true);
     final announcements = AnnouncementController();
+    final dockerNotice = DockerNoticeController(dismissed: true);
     final load = _Load(engine.events);
     addTearDown(() async {
       await load.cancel();
@@ -84,6 +86,7 @@ void main() {
       appearance.dispose();
       coverage.dispose();
       announcements.dispose();
+      dockerNotice.dispose();
       await engine.shutdown();
     });
 
@@ -119,6 +122,7 @@ void main() {
         appearance: appearance,
         coverage: coverage,
         announcements: announcements,
+        dockerNotice: dockerNotice,
       ),
     );
     await _until(

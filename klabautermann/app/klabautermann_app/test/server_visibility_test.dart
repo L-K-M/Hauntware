@@ -228,6 +228,7 @@ void main() {
         appearance: harness.appearance,
         coverage: harness.coverage,
         announcements: harness.announcements,
+        dockerNotice: harness.dockerNotice,
       ),
     );
     await tester.pumpAndSettle();

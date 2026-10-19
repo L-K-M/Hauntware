@@ -3,7 +3,7 @@ description: >-
   Monospace fonts bundled with every Ghost app (Planchette, Poltergeist,
   Seance and Klabautermann), with the names settings store and the family
   stack code text falls back through.
-version: 1.9.1
+version: 1.9.2
 publish_to: none
 
 environment:
@@ -18,6 +18,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  crypto: ^3.0.7
 
 # Each family is registered as 'packages/ghost_fonts/<family>'; see
 # BundledMonoFont. README.md records where every file comes from.
@@ -59,3 +60,144 @@ flutter:
         - asset: fonts/MapleMono/MapleMono-BoldItalic.ttf
           weight: 700
           style: italic
+    # Additional open-licensed families. Files are unmodified upstream bytes.
+    - family: Cascadia Code
+      fonts:
+        - asset: "fonts/CascadiaCode/CascadiaCode-Regular.ttf"
+        - asset: "fonts/CascadiaCode/CascadiaCode-Bold.ttf"
+          weight: 700
+        - asset: "fonts/CascadiaCode/CascadiaCode-Italic.ttf"
+          style: italic
+        - asset: "fonts/CascadiaCode/CascadiaCode-BoldItalic.ttf"
+          weight: 700
+          style: italic
+    - family: Victor Mono
+      fonts:
+        - asset: "fonts/VictorMono/VictorMono-Regular.ttf"
+        - asset: "fonts/VictorMono/VictorMono-Bold.ttf"
+          weight: 700
+        - asset: "fonts/VictorMono/VictorMono-Italic.ttf"
+          style: italic
+        - asset: "fonts/VictorMono/VictorMono-BoldItalic.ttf"
+          weight: 700
+          style: italic
+    - family: Lilex
+      fonts:
+        - asset: "fonts/Lilex/Lilex-Regular.ttf"
+        - asset: "fonts/Lilex/Lilex-Bold.ttf"
+          weight: 700
+        - asset: "fonts/Lilex/Lilex-Italic.ttf"
+          style: italic
+        - asset: "fonts/Lilex/Lilex-BoldItalic.ttf"
+          weight: 700
+          style: italic
+    - family: 0xProto
+      fonts:
+        - asset: "fonts/0xProto/0xProto-Regular.ttf"
+        - asset: "fonts/0xProto/0xProto-Bold.ttf"
+          weight: 700
+        - asset: "fonts/0xProto/0xProto-Italic.ttf"
+          style: italic
+    - family: Monaspace Neon
+      fonts:
+        - asset: "fonts/MonaspaceNeon/MonaspaceNeon-Regular.otf"
+        - asset: "fonts/MonaspaceNeon/MonaspaceNeon-Bold.otf"
+          weight: 700
+        - asset: "fonts/MonaspaceNeon/MonaspaceNeon-Italic.otf"
+          style: italic
+        - asset: "fonts/MonaspaceNeon/MonaspaceNeon-BoldItalic.otf"
+          weight: 700
+          style: italic
+    - family: Monaspace Argon
+      fonts:
+        - asset: "fonts/MonaspaceArgon/MonaspaceArgon-Regular.otf"
+        - asset: "fonts/MonaspaceArgon/MonaspaceArgon-Bold.otf"
+          weight: 700
+        - asset: "fonts/MonaspaceArgon/MonaspaceArgon-Italic.otf"
+          style: italic
+        - asset: "fonts/MonaspaceArgon/MonaspaceArgon-BoldItalic.otf"
+          weight: 700
+          style: italic
+    - family: Monaspace Xenon
+      fonts:
+        - asset: "fonts/MonaspaceXenon/MonaspaceXenon-Regular.otf"
+        - asset: "fonts/MonaspaceXenon/MonaspaceXenon-Bold.otf"
+          weight: 700
+        - asset: "fonts/MonaspaceXenon/MonaspaceXenon-Italic.otf"
+          style: italic
+        - asset: "fonts/MonaspaceXenon/MonaspaceXenon-BoldItalic.otf"
+          weight: 700
+          style: italic
+    - family: Monaspace Radon
+      fonts:
+        - asset: "fonts/MonaspaceRadon/MonaspaceRadon-Regular.otf"
+        - asset: "fonts/MonaspaceRadon/MonaspaceRadon-Bold.otf"
+          weight: 700
+        - asset: "fonts/MonaspaceRadon/MonaspaceRadon-Italic.otf"
+          style: italic
+        - asset: "fonts/MonaspaceRadon/MonaspaceRadon-BoldItalic.otf"
+          weight: 700
+          style: italic
+    - family: Monaspace Krypton
+      fonts:
+        - asset: "fonts/MonaspaceKrypton/MonaspaceKrypton-Regular.otf"
+        - asset: "fonts/MonaspaceKrypton/MonaspaceKrypton-Bold.otf"
+          weight: 700
+        - asset: "fonts/MonaspaceKrypton/MonaspaceKrypton-Italic.otf"
+          style: italic
+        - asset: "fonts/MonaspaceKrypton/MonaspaceKrypton-BoldItalic.otf"
+          weight: 700
+          style: italic
+    - family: Martian Mono
+      fonts:
+        - asset: "fonts/MartianMono/MartianMono-StdRg.ttf"
+        - asset: "fonts/MartianMono/MartianMono-StdBd.ttf"
+          weight: 700
+    - family: Geist Mono
+      fonts:
+        - asset: "fonts/GeistMono/GeistMono-Regular.ttf"
+        - asset: "fonts/GeistMono/GeistMono-Bold.ttf"
+          weight: 700
+        - asset: "fonts/GeistMono/GeistMono-Italic.ttf"
+          style: italic
+        - asset: "fonts/GeistMono/GeistMono-BoldItalic.ttf"
+          weight: 700
+          style: italic
+    - family: Intel One Mono
+      fonts:
+        - asset: "fonts/IntelOneMono/IntelOneMono-Regular.ttf"
+        - asset: "fonts/IntelOneMono/IntelOneMono-Bold.ttf"
+          weight: 700
+        - asset: "fonts/IntelOneMono/IntelOneMono-Italic.ttf"
+          style: italic
+        - asset: "fonts/IntelOneMono/IntelOneMono-BoldItalic.ttf"
+          weight: 700
+          style: italic
+    - family: Fragment Mono
+      fonts:
+        - asset: "fonts/FragmentMono/FragmentMono-Regular.ttf"
+        - asset: "fonts/FragmentMono/FragmentMono-Italic.ttf"
+          style: italic
+    - family: Google Sans Code
+      fonts:
+        - asset: fonts/GoogleSansCode/GoogleSansCode-Regular.ttf
+        - asset: fonts/GoogleSansCode/GoogleSansCode-Italic.ttf
+          style: italic
+        - asset: fonts/GoogleSansCode/GoogleSansCode-Regular.ttf
+          weight: 700
+        - asset: fonts/GoogleSansCode/GoogleSansCode-Italic.ttf
+          weight: 700
+          style: italic
+    - family: Commit Mono
+      fonts:
+        - asset: "fonts/CommitMono/CommitMono-400-Regular.ttf"
+        - asset: "fonts/CommitMono/CommitMono-700-Regular.ttf"
+          weight: 700
+        - asset: "fonts/CommitMono/CommitMono-400-Italic.ttf"
+          style: italic
+        - asset: "fonts/CommitMono/CommitMono-700-Italic.ttf"
+          weight: 700
+          style: italic
+    - family: Departure Mono
+      fonts:
+        - asset: "fonts/DepartureMono/DepartureMono-Regular.otf"

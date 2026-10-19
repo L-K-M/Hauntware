@@ -9,7 +9,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'Klabautermann';
+  String get appTitle => 'Klabautermann (preview)';
 
   @override
   String get fleetTitle => 'Fleet';
@@ -32,6 +32,37 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get fleetPinNotSaved =>
       'Klabautermann could not save your pinned servers, so the change lasts only until it quits.';
+
+  @override
+  String get fleetRowMonitor => 'Monitor';
+
+  @override
+  String get fleetRowStopMonitoring => 'Stop monitoring';
+
+  @override
+  String monitorSetFull(int limit) {
+    return 'You can monitor up to $limit servers on this device. Stop monitoring one first.';
+  }
+
+  @override
+  String get monitorSetNotSaved =>
+      'Klabautermann could not save your monitored servers, so the change lasts only until it quits.';
+
+  @override
+  String get monitorSetNotChanged =>
+      'The monitored servers could not be changed.';
+
+  @override
+  String get monitorIneligibleEndpoint =>
+      'Confirm this server\'s endpoint to monitor it.';
+
+  @override
+  String get monitorIneligibleCredentials =>
+      'Signs in with a password or a stored key, which asks you first, so it is read only while you have it open.';
+
+  @override
+  String get monitorIneligibleUnknown =>
+      'Import your ssh_config again to monitor this server.';
 
   @override
   String get fleetEmptyTitle => 'No servers yet';
@@ -156,6 +187,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get menuWindow => 'Window';
+
+  @override
+  String get menuHelp => 'Help';
+
+  @override
+  String get aboutCommand => 'About Klabautermann';
+
+  @override
+  String aboutVersion(String version) {
+    return 'Version $version';
+  }
+
+  @override
+  String get aboutVersionUnknown => 'Version unknown';
+
+  @override
+  String get aboutLicence =>
+      'Klabautermann is free and unencumbered software released into the public domain under the Unlicense.';
 
   @override
   String get statusConnected => 'Connected';
@@ -331,9 +380,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsTabAlerts => 'Alerts';
-
-  @override
-  String get themeLabel => 'Theme';
 
   @override
   String get themeSystem => 'System';
@@ -1384,16 +1430,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get accessRuntimeAlias =>
       'Podman can also answer on Docker\'s socket path. Docker support will tell them apart.';
-
-  @override
-  String get accessDockerPendingTitle => 'Arrives with Docker support';
-
-  @override
-  String get accessDockerPendingBody =>
-      'Containers, images and stacks arrive with Docker support. Until then, this tab shows the runtime Klabautermann detected, read-only.';
-
-  @override
-  String get accessDetectedRuntime => 'Detected runtime';
 
   @override
   String accessPanelHiddenTitle(String panel) {
@@ -2554,6 +2590,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAnnounceNotChanged => 'The setting could not be changed.';
 
   @override
+  String get settingsAboutTitle => 'About';
+
+  @override
+  String get settingsMonitorTitle => 'Monitoring';
+
+  @override
+  String settingsMonitorDetail(int limit) {
+    return 'Monitored servers are read continuously while Klabautermann is open, and their rows show CPU, memory and disk. A server can be monitored once its endpoint is confirmed and it signs in with an SSH agent or a key file, without asking you. Up to $limit servers.';
+  }
+
+  @override
+  String settingsMonitorCount(int monitored, int limit) {
+    return '$monitored of $limit servers monitored';
+  }
+
+  @override
+  String get settingsMonitorEmpty =>
+      'No servers yet. Servers you sync or import show here.';
+
+  @override
   String overviewBandAnnouncement(String metric, String value, String band) {
     String _temp0 = intl.Intl.selectLogic(band, {
       'warning': 'warning level',
@@ -2797,4 +2853,1053 @@ class AppLocalizationsEn extends AppLocalizations {
   String syncFileNewer(String fileName) {
     return 'The sync file $fileName was saved by a newer version of Klabautermann. Sync changes will not be kept after a restart.';
   }
+
+  @override
+  String get settingsSafetyReadOnly => 'Read-only everywhere';
+
+  @override
+  String get settingsSafetyReadOnlyDetail =>
+      'While this is on, no server takes an action and every action is hidden. Monitoring, logs and other reads work as before, so it is safe for screen sharing.';
+
+  @override
+  String get settingsSafetyAdminExpiry => 'Admin mode ends after';
+
+  @override
+  String settingsSafetyAdminExpiryMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String get settingsSafetyAdminExpiryDetail =>
+      'Admin mode turns off after this long without an action. It also turns off when the link drops, and on a phone when Klabautermann goes to the background.';
+
+  @override
+  String get settingsSafetyMarksTitle => 'Marked protected';
+
+  @override
+  String get settingsSafetyMarksDetail =>
+      'An action on a target you marked protected asks you to type its name first. Marks stay on this device.';
+
+  @override
+  String get settingsSafetyMarksEmpty =>
+      'You have not marked anything protected.';
+
+  @override
+  String settingsSafetyMark(String target, String server) {
+    return '$target on $server';
+  }
+
+  @override
+  String settingsSafetyMarkRemove(String target) {
+    return 'Remove the mark on $target';
+  }
+
+  @override
+  String get settingsSafetyNotSaved =>
+      'The setting changed, but it could not be saved, so it will not be kept after a restart.';
+
+  @override
+  String get settingsSafetyNotChanged => 'The setting could not be changed.';
+
+  @override
+  String get serverSafetyMenu => 'Safety';
+
+  @override
+  String get serverAllowActions => 'Allow actions';
+
+  @override
+  String get serverReadOnly => 'Read-only';
+
+  @override
+  String get serverObserveOnly =>
+      'Observe only: Klabautermann reads this server and changes nothing. To act on it, turn on Allow actions in the Safety menu.';
+
+  @override
+  String get serverReadOnlyNotice =>
+      'Read-only: actions on this server are hidden.';
+
+  @override
+  String elevationTitle(String host) {
+    return 'Admin password for $host';
+  }
+
+  @override
+  String elevationDetail(String user) {
+    return 'Klabautermann asks sudo for root as $user with this password. It is kept in memory only while admin mode is on, and never saved.';
+  }
+
+  @override
+  String get elevationRetry => 'That password did not work. Try again.';
+
+  @override
+  String get elevationPassword => 'Password';
+
+  @override
+  String get elevationCancel => 'Cancel';
+
+  @override
+  String get elevationTurnOn => 'Turn on';
+
+  @override
+  String get adminChipOff => 'Admin mode';
+
+  @override
+  String get adminChipStarting => 'Turning on admin mode';
+
+  @override
+  String adminChipOn(String time) {
+    return 'Admin mode until $time';
+  }
+
+  @override
+  String get adminChipReadOnly =>
+      'Admin mode is not available while the server is read-only.';
+
+  @override
+  String get adminOnNotice =>
+      'Admin mode is on: actions you confirm here run as root.';
+
+  @override
+  String adminFailure(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'observeOnly':
+          'Admin mode needs Allow actions turned on for this server.',
+      'readOnly': 'Admin mode is not available while this server is read-only.',
+      'noLink': 'Admin mode needs a connection to this server.',
+      'notProbed':
+          'Klabautermann has not checked this server yet. Try admin mode again in a moment.',
+      'unavailable':
+          'This server offers no way to become root that Klabautermann can use.',
+      'ttyRequired':
+          'This server lets you become root only from a terminal, so admin mode is not available.',
+      'notInSudoers': 'Your account on this server may not use sudo.',
+      'wrongPassword':
+          'The password was refused three times, so admin mode stayed off.',
+      'cancelled': 'Admin mode stayed off because no password was given.',
+      'other': 'Admin mode could not be turned on.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String adminEnded(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'inactivity': 'Admin mode ended after a while without an action.',
+      'background':
+          'Admin mode ended when Klabautermann went to the background.',
+      'linkLost': 'Admin mode ended when the connection dropped.',
+      'serverRemoved': 'Admin mode ended because the server changed.',
+      'other': 'Admin mode ended.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get actionPreviewTitle => 'Review before it runs';
+
+  @override
+  String actionPreviewTarget(String target) {
+    return 'Target: $target';
+  }
+
+  @override
+  String get actionPreviewSteps => 'What will run';
+
+  @override
+  String get actionPreviewRoot => 'root';
+
+  @override
+  String get actionPreviewRootDetail =>
+      'This step runs as root through admin mode.';
+
+  @override
+  String actionPreviewRunner(String identity) {
+    return 'Runs as $identity';
+  }
+
+  @override
+  String actionPreviewRunnerEngine(String identity, String engine) {
+    return 'Runs as $identity through $engine';
+  }
+
+  @override
+  String actionPreviewCredentials(String credentials) {
+    String _temp0 = intl.Intl.selectLogic(credentials, {
+      'session': 'Signs in with this connection\'s own sign-in.',
+      'adminPassword': 'Uses the admin mode password.',
+      'passwordless': 'Needs no password.',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get actionPreviewHostWrites => 'What it leaves on the server';
+
+  @override
+  String actionPreviewHostWrite(String row) {
+    String _temp0 = intl.Intl.selectLogic(row, {
+      'userOperationRecords': 'An operation record in your home directory',
+      'rootOperationRecords':
+          'An operation record under /var/lib/klabautermann',
+      'transientUnit': 'A transient systemd unit, gone when it ends',
+      'engineState': 'The container engine\'s own state',
+      'loginRecords': 'Login records, as every SSH command leaves',
+      'other': 'A change on the server',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String actionPreviewImpact(String kind, int count) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'dropsSession': 'This can drop your connection to the server.',
+      'stopsContainers': 'This stops $count running containers.',
+      'removesVolumes':
+          'This deletes the container\'s volumes and the data in them.',
+      'forcesImageInUse': '$count containers still use this image.',
+      'interruptsTarget': 'This interrupts what the target is doing.',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String actionPreviewProtected(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'builtIn': 'Protected: Klabautermann always protects this target.',
+      'sessionPath':
+          'Protected: your connection to the server runs through it.',
+      'publishesSessionPort':
+          'Protected: it publishes the SSH port or a VPN port.',
+      'userMarked': 'Protected: you marked it protected.',
+      'other': 'Protected.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String actionPreviewOwnership(String manager) {
+    return 'Managed by $manager. Acting on it here can conflict with $manager.';
+  }
+
+  @override
+  String get actionPreviewDanger => 'Warnings';
+
+  @override
+  String actionPreviewFinding(String severity, String explanation) {
+    String _temp0 = intl.Intl.selectLogic(severity, {
+      'critical': 'Critical',
+      'other': 'Warning',
+    });
+    return '$_temp0: $explanation';
+  }
+
+  @override
+  String actionConfirmNames(String target) {
+    return 'This acts on $target.';
+  }
+
+  @override
+  String actionConfirmType(String target) {
+    return 'Type $target to confirm';
+  }
+
+  @override
+  String get actionConfirmRun => 'Run';
+
+  @override
+  String get actionConfirmCancel => 'Cancel';
+
+  @override
+  String actionRunning(String target) {
+    return 'Running on $target';
+  }
+
+  @override
+  String actionSucceeded(String target) {
+    return 'Done: $target';
+  }
+
+  @override
+  String actionFailed(String target, String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'there is no connection to the server.',
+      'revalidation': 'the target changed since the preview.',
+      'elevationRefused': 'admin mode refused the step.',
+      'stepFailed': 'a step failed.',
+      'transport': 'the connection failed during the run.',
+      'unsupportedStep': 'this version cannot run one of its steps.',
+      'adminRequired': 'it needs admin mode.',
+      'other': 'it failed.',
+    });
+    return '$target did not finish: $_temp0';
+  }
+
+  @override
+  String actionFailedPlain(String target) {
+    return '$target did not finish.';
+  }
+
+  @override
+  String actionCancelled(String target) {
+    return '$target was cancelled.';
+  }
+
+  @override
+  String actionRefused(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'notImplemented': 'This action is not available yet.',
+      'unknownPlan': 'The preview is out of date. Open it again.',
+      'expiredPlan': 'The preview is out of date. Open it again.',
+      'stalePlan': 'The connection changed since the preview. Open it again.',
+      'confirmationMismatch': 'The confirmation did not match.',
+      'observeOnly': 'Turn on Allow actions for this server first.',
+      'readOnly': 'The server is read-only.',
+      'adminRequired': 'Turn on admin mode first.',
+      'invalidTarget': 'This target cannot be acted on.',
+      'targetChanged': 'The target changed. Look again before acting.',
+      'noLink': 'Connect to the server first.',
+      'other': 'The action was refused.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get processTerminate => 'Terminate';
+
+  @override
+  String get processKill => 'Kill';
+
+  @override
+  String get processSendSignal => 'Send signal';
+
+  @override
+  String processSignalName(String name) {
+    return 'SIG$name';
+  }
+
+  @override
+  String get unitStart => 'Start';
+
+  @override
+  String get unitStop => 'Stop';
+
+  @override
+  String get unitRestart => 'Restart';
+
+  @override
+  String get unitReload => 'Reload';
+
+  @override
+  String get jobsRunNow => 'Run now';
+
+  @override
+  String jobsRunOutputTitle(String unit) {
+    return 'Output of $unit';
+  }
+
+  @override
+  String get jobsRunOutputClose => 'Close output';
+
+  @override
+  String jobsSourceUserCrontab(String user) {
+    return '$user\'s crontab';
+  }
+
+  @override
+  String get jobsSourceMine => 'Yours and the system\'s';
+
+  @override
+  String get jobsSourceOtherUsers => 'Other users';
+
+  @override
+  String get jobsOtherUsersReading => 'Reading other users\' crontabs.';
+
+  @override
+  String get jobsOtherUsersRefresh => 'Read again';
+
+  @override
+  String get jobsOtherUsersEmpty => 'No other user has a crontab.';
+
+  @override
+  String jobsOtherUsersFailure(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Other users\' crontabs need a connection to the server.',
+      'adminRequired': 'Other users\' crontabs need admin mode.',
+      'elevationRefused': 'Admin mode could not read the crontabs.',
+      'noSpool': 'This server keeps no crontab spool.',
+      'spoolDenied': 'Even admin mode may not list the crontab spool.',
+      'unreadable': 'The crontab spool could not be read.',
+      'transport': 'The connection failed while reading.',
+      'other': 'Other users\' crontabs could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String jobsOtherUsersUnreadable(String users) {
+    return 'Could not read the crontab of $users.';
+  }
+
+  @override
+  String jobsOtherUsersNotRead(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count more users\' crontabs were not read.',
+      one: '1 more user\'s crontab was not read.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get jobsOtherUsersMasked =>
+      'Commands are masked where they look like they hold secrets.';
+
+  @override
+  String get activityMenu => 'Activity';
+
+  @override
+  String activityTitle(String server) {
+    return 'Activity on $server';
+  }
+
+  @override
+  String get activityDetail =>
+      'Every action this device ran on the server, newest first. Records are kept for 90 days and never synced. Commands are stored with secrets removed.';
+
+  @override
+  String get activityInMemory =>
+      'Another Klabautermann window has the settings folder, so this log lasts only until this window closes.';
+
+  @override
+  String get activityColumnTime => 'Time';
+
+  @override
+  String get activityColumnTarget => 'Target';
+
+  @override
+  String get activityColumnAction => 'Action';
+
+  @override
+  String get activityColumnTier => 'Confirmation';
+
+  @override
+  String get activityColumnResult => 'Result';
+
+  @override
+  String activityAction(String action) {
+    String _temp0 = intl.Intl.selectLogic(action, {
+      'KillProcess': 'Signal',
+      'UnitAction': 'Unit action',
+      'StartTimer': 'Run timer now',
+      'ContainerAction': 'Container action',
+      'RemoveContainer': 'Remove container',
+      'RemoveImage': 'Remove image',
+      'StackAction': 'Stack action',
+      'RedeployStack': 'Redeploy stack',
+      'other': 'Action',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String activityTier(String tier) {
+    String _temp0 = intl.Intl.selectLogic(tier, {
+      'none': 'None',
+      'acknowledge': 'Confirmed',
+      'typedPhrase': 'Name typed',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String activityResult(String outcome) {
+    String _temp0 = intl.Intl.selectLogic(outcome, {
+      'succeeded': 'Done',
+      'failed': 'Failed',
+      'cancelled': 'Cancelled',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String activityFailure(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'No connection to the server.',
+      'revalidation': 'The target changed since the preview.',
+      'elevationRefused': 'Admin mode refused the step.',
+      'stepFailed': 'A step failed.',
+      'transport': 'The connection failed during the run.',
+      'unsupportedStep': 'This version could not run a step.',
+      'adminRequired': 'It needed admin mode.',
+      'other': 'It failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String activityExitCode(int code) {
+    return 'Exit status $code';
+  }
+
+  @override
+  String activityHttpStatus(int status) {
+    return 'Engine answered HTTP $status';
+  }
+
+  @override
+  String get activitySteps => 'What ran';
+
+  @override
+  String get activityReading => 'Reading the log.';
+
+  @override
+  String get activityEmpty =>
+      'Nothing has run on this server from this device.';
+
+  @override
+  String get activityOlder => 'Show older';
+
+  @override
+  String get activityCopy => 'Copy the log';
+
+  @override
+  String get activityCopied =>
+      'The log is on the clipboard, with secrets removed.';
+
+  @override
+  String get activityNotCopied => 'Not copied. Try again.';
+
+  @override
+  String activityTime(String date, String time) {
+    return '$date $time';
+  }
+
+  @override
+  String get dockerTransportWaiting => 'Engine API: waiting for the connection';
+
+  @override
+  String get dockerTransportResolving => 'Engine API: looking for a route';
+
+  @override
+  String get dockerTransportSocketForward =>
+      'Engine API via SSH socket forward';
+
+  @override
+  String get dockerTransportCliRelay =>
+      'Engine API via docker CLI relay (limited streams)';
+
+  @override
+  String get dockerTransportSocatRelay => 'Engine API via socat relay';
+
+  @override
+  String get dockerTransportNoRelay =>
+      'No Engine API route: forwarding is off and there is no relay';
+
+  @override
+  String get dockerTransportNeedsAdminMode =>
+      'No Engine API route: the socket needs admin mode';
+
+  @override
+  String get dockerTransportSocketDenied =>
+      'No Engine API route: your account cannot use the socket';
+
+  @override
+  String get dockerTransportProbeFailed =>
+      'No Engine API route: the socket check failed';
+
+  @override
+  String get dockerTransportNoSocket =>
+      'No Engine API route: no engine socket found';
+
+  @override
+  String get dockerTransportSocketsUnknown =>
+      'No Engine API route: the sockets were not checked';
+
+  @override
+  String get dockerTransportUnreachable =>
+      'Engine API: the engine did not answer';
+
+  @override
+  String get dockerTransportUnsupported =>
+      'Engine API: the engine\'s API version is not supported';
+
+  @override
+  String get dockerTransportLinkError =>
+      'Engine API: the connection failed while looking for a route';
+
+  @override
+  String get dockerLowSession => 'Low-session mode';
+
+  @override
+  String get dockerBadgeRootfulSocket => 'Rootful socket: root-equivalent';
+
+  @override
+  String dockerBadgeRootlessEngine(String user) {
+    return 'Rootless engine: equals user $user';
+  }
+
+  @override
+  String get dockerBadgeRootlessEngineLogin =>
+      'Rootless engine: equals your login user';
+
+  @override
+  String get dockerBadgeCustomSocket => 'Custom socket: root-equivalent';
+
+  @override
+  String get dockerRuntimeDocker => 'Docker';
+
+  @override
+  String get dockerRuntimePodman => 'Podman';
+
+  @override
+  String get dockerGateWaitingTitle => 'Waiting for the connection';
+
+  @override
+  String get dockerGateWaitingBody =>
+      'Klabautermann looks for the Docker engine once it is connected to this server and knows what the server offers.';
+
+  @override
+  String get dockerGateResolvingTitle => 'Looking for the Docker engine';
+
+  @override
+  String get dockerGateResolvingBody =>
+      'Klabautermann is finding a way to reach the engine socket and agreeing on an API version with the engine.';
+
+  @override
+  String get dockerGateNoRelay =>
+      'Socket forwarding is off on this server, and it has nothing to relay through: no docker or podman command, no socat and no nc.';
+
+  @override
+  String get dockerGateNeedsAdminMode =>
+      'Your account cannot use the engine socket. Reaching it through sudo needs admin mode, which arrives in a later milestone.';
+
+  @override
+  String get dockerGateSocketDenied =>
+      'Your account cannot use the engine socket, and this server has no sudo. The Access tab shows how access is granted.';
+
+  @override
+  String get dockerGateProbeFailed =>
+      'Checking the engine socket failed, so Klabautermann cannot tell how to reach it.';
+
+  @override
+  String get dockerGateNoSocket =>
+      'No Docker or Podman socket was found on this server.';
+
+  @override
+  String get dockerGateSocketsUnknown =>
+      'The server\'s capability check has not reported its engine sockets.';
+
+  @override
+  String get dockerGateUnreachable =>
+      'A route to the engine socket opened, but the engine did not answer over it.';
+
+  @override
+  String get dockerGateBelowClientFloor =>
+      'The engine\'s newest API version is older than 1.41, the oldest Klabautermann supports.';
+
+  @override
+  String get dockerGateBelowServerMinimum =>
+      'The engine only accepts API versions newer than Klabautermann supports.';
+
+  @override
+  String get dockerGateApiVersionUnknown =>
+      'The engine did not report an API version Klabautermann can read.';
+
+  @override
+  String get dockerGateLinkError =>
+      'The connection to this server failed while Klabautermann looked for the engine.';
+
+  @override
+  String get dockerRetry => 'Try again';
+
+  @override
+  String get dockerTabContainers => 'Containers';
+
+  @override
+  String get dockerTabImages => 'Images';
+
+  @override
+  String get dockerTabStacks => 'Stacks';
+
+  @override
+  String get dockerEngineHeading => 'Engine';
+
+  @override
+  String dockerEngineApi(String version) {
+    return 'API $version';
+  }
+
+  @override
+  String dockerEngineVersion(String name, String version) {
+    return '$name $version';
+  }
+
+  @override
+  String dockerEngineVersionUnknown(String name) {
+    return '$name, version unknown';
+  }
+
+  @override
+  String dockerEngineOs(String os, String architecture) {
+    return '$os on $architecture';
+  }
+
+  @override
+  String get dockerEngineOsUnknown => 'Operating system unknown';
+
+  @override
+  String get dockerEngineReading => 'Reading the engine details…';
+
+  @override
+  String get dockerEngineReadFailed => 'The engine details could not be read.';
+
+  @override
+  String get dockerNoticeDismiss => 'Got it';
+
+  @override
+  String get dockerNoticeNotSaved =>
+      'Klabautermann could not save that you dismissed the root-equivalence note, so it shows again after a restart.';
+
+  @override
+  String get appearanceThemeTitle => 'Theme';
+
+  @override
+  String get appearanceThemeHelpTitle => 'Themes';
+
+  @override
+  String get appearanceThemeHelp =>
+      'A theme is kept on this device only and never syncs. To use one elsewhere, copy it here and paste it into Klabautermann on the other device.';
+
+  @override
+  String get appearanceThemeFootnote =>
+      'Picking a theme copies its colours here. It is a starting point, not a mode, so everything below stays yours to change.';
+
+  @override
+  String appearancePresetTooltip(String name) {
+    return 'Use the $name theme';
+  }
+
+  @override
+  String get appearanceModeTitle => 'Mode';
+
+  @override
+  String get appearanceModeLead => 'Automatic colours follow';
+
+  @override
+  String get appearanceOwnSurfaceDark =>
+      'This theme has its own surface, so it is always dark. Set Surface to Automatic to choose a mode.';
+
+  @override
+  String get appearanceOwnSurfaceLight =>
+      'This theme has its own surface, so it is always light. Set Surface to Automatic to choose a mode.';
+
+  @override
+  String get appearanceColoursTitle => 'Colours';
+
+  @override
+  String get appearanceColoursHelpTitle => 'Automatic colours';
+
+  @override
+  String get appearanceColoursHelp =>
+      'Automatic colours are the light or dark neutrals Klabautermann ships with, as the mode picks them. Once you give the theme a surface of its own, they are mixed from that surface and the text instead. Lines and the selection may be translucent.';
+
+  @override
+  String get appearanceAccent => 'Accent';
+
+  @override
+  String get appearanceSlotSurface => 'Surface';
+
+  @override
+  String get appearanceSlotSidebar => 'Sidebar';
+
+  @override
+  String get appearanceSlotRaised => 'Headers and bars';
+
+  @override
+  String get appearanceSlotText => 'Text';
+
+  @override
+  String get appearanceSlotSecondaryText => 'Secondary text';
+
+  @override
+  String get appearanceSlotHairline => 'Lines';
+
+  @override
+  String get appearanceSlotSelection => 'Selection';
+
+  @override
+  String get appearanceSlotOnline => 'Online';
+
+  @override
+  String get appearanceSlotOffline => 'Offline';
+
+  @override
+  String get appearanceSlotConnecting => 'Connecting';
+
+  @override
+  String get appearanceSlotUnknown => 'Unknown';
+
+  @override
+  String get appearanceStatusTitle => 'Status colours';
+
+  @override
+  String get appearanceStatusFootnote =>
+      'Each status also keeps its own shape and its name, so these colours never have to say it alone.';
+
+  @override
+  String get appearanceAutomatic => 'Automatic';
+
+  @override
+  String appearanceAutomaticSemantics(String label) {
+    return '$label: Automatic';
+  }
+
+  @override
+  String appearanceChooseColour(String label) {
+    return 'Choose the $label colour';
+  }
+
+  @override
+  String appearanceChooseAutomaticColour(String label) {
+    return 'Choose a $label colour (now Automatic)';
+  }
+
+  @override
+  String get appearanceShapeTitle => 'Shape and type';
+
+  @override
+  String get appearanceInterfaceFont => 'Interface font';
+
+  @override
+  String get appearanceInterfaceFontHint => 'System default';
+
+  @override
+  String get appearanceInterfaceFontHelper =>
+      'Logs and commands keep their monospace font.';
+
+  @override
+  String get appearanceCorners => 'Corners';
+
+  @override
+  String get appearanceCornersSquare => 'Square';
+
+  @override
+  String appearanceCornersPercent(int percent) {
+    return '$percent%';
+  }
+
+  @override
+  String appearanceCornersSemantics(String label) {
+    return 'Corners $label';
+  }
+
+  @override
+  String get appearanceShareTitle => 'Share';
+
+  @override
+  String get appearanceCopyTheme => 'Copy theme';
+
+  @override
+  String get appearancePasteTheme => 'Paste theme';
+
+  @override
+  String get appearanceShareFootnote =>
+      'Copies the theme as text you can keep or send. Pasting reads what it can and leaves everything else at the default.';
+
+  @override
+  String get appearanceThemeCopied => 'Theme copied.';
+
+  @override
+  String get appearancePasteNotATheme =>
+      'The clipboard does not hold a theme. Copy one with Copy theme first.';
+
+  @override
+  String get appearanceStartOverTitle => 'Start over';
+
+  @override
+  String appearanceResetButton(String name) {
+    return 'Reset to $name';
+  }
+
+  @override
+  String get appearanceUsingOwnColours => 'Using your own colours.';
+
+  @override
+  String appearanceUsingPreset(String name) {
+    return 'Using $name.';
+  }
+
+  @override
+  String get appearanceResetTitle => 'Reset the theme?';
+
+  @override
+  String appearanceResetBody(String name) {
+    return 'Every colour, the font and the corners go back to the $name theme. The mode stays as it is.';
+  }
+
+  @override
+  String get appearanceCancel => 'Cancel';
+
+  @override
+  String get appearanceReset => 'Reset';
+
+  @override
+  String appearanceAbout(String title) {
+    return 'About $title';
+  }
+
+  @override
+  String get appearanceClose => 'Close';
+
+  @override
+  String get dockerContainersColumnName => 'Name';
+
+  @override
+  String get dockerContainersColumnState => 'State';
+
+  @override
+  String get dockerContainersColumnHealth => 'Health';
+
+  @override
+  String get dockerContainersColumnStatus => 'Status';
+
+  @override
+  String get dockerContainersColumnImage => 'Image';
+
+  @override
+  String get dockerContainersColumnPorts => 'Ports';
+
+  @override
+  String get dockerContainersColumnStack => 'Stack';
+
+  @override
+  String get dockerContainersColumnCpu => 'CPU';
+
+  @override
+  String get dockerContainersColumnMemory => 'Memory';
+
+  @override
+  String dockerContainerState(String state) {
+    String _temp0 = intl.Intl.selectLogic(state, {
+      'created': 'Created',
+      'running': 'Running',
+      'paused': 'Paused',
+      'restarting': 'Restarting',
+      'removing': 'Removing',
+      'exited': 'Exited',
+      'dead': 'Dead',
+      'other': 'Unknown',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerContainerHealth(String health) {
+    String _temp0 = intl.Intl.selectLogic(health, {
+      'healthy': 'Healthy',
+      'unhealthy': 'Unhealthy',
+      'starting': 'Starting',
+      'other': 'No health check',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerContainersCpu(double share) {
+    final intl.NumberFormat shareNumberFormat =
+        intl.NumberFormat.decimalPercentPattern(
+          locale: localeName,
+          decimalDigits: 1,
+        );
+    final String shareString = shareNumberFormat.format(share);
+
+    return '$shareString';
+  }
+
+  @override
+  String dockerContainersStale(String value) {
+    return '$value, stale';
+  }
+
+  @override
+  String dockerContainersSwarmService(String service) {
+    return '$service (Swarm)';
+  }
+
+  @override
+  String get dockerContainersNoStack => 'Not in a stack';
+
+  @override
+  String dockerContainersGroupSummary(int count, int up) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count containers',
+      one: '1 container',
+    );
+    return '$_temp0, $up running';
+  }
+
+  @override
+  String get dockerContainersSearchHint => 'Search by name, image or ID';
+
+  @override
+  String get dockerContainersSearchClear => 'Clear search';
+
+  @override
+  String get dockerContainersRunningOnly => 'Running only';
+
+  @override
+  String get dockerContainersSortBy => 'Sort by';
+
+  @override
+  String dockerContainersFact(String label, String value) {
+    return '$label: $value';
+  }
+
+  @override
+  String get dockerContainersReading => 'Reading the containers…';
+
+  @override
+  String get dockerContainersEmpty => 'This engine has no containers.';
+
+  @override
+  String get dockerContainersNoneRunning =>
+      'No container is running. Turn off Running only to see the stopped ones.';
+
+  @override
+  String get dockerContainersNoMatch => 'No container matches the search.';
+
+  @override
+  String dockerContainersFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'tooManyQueries':
+          'This server already has as many Docker watches open as Klabautermann allows.',
+      'daemonError': 'The engine refused or failed to list the containers.',
+      'connectionFailed':
+          'The connection to the engine failed while listing the containers.',
+      'other': 'The containers could not be listed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerContainersKept => 'The list below is the last one read.';
+
+  @override
+  String get dockerContainersStatsFailed =>
+      'The CPU and memory figures could not be read, so the ones shown may be old.';
+
+  @override
+  String get dockerContainersLowSession =>
+      'Low-session mode: stats are read one container at a time, so they update more slowly.';
+
+  @override
+  String get dockerContainersLowSessionRelay =>
+      'Low-session mode: the list is read again every 15 seconds instead of following engine events, and stats are read one container at a time.';
 }

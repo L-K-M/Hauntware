@@ -129,6 +129,9 @@ Future<_HostState> _pump(
   TargetPlatform platform = TargetPlatform.linux,
   Brightness brightness = Brightness.light,
   Size size = const Size(400, 160),
+  TableRowOrder rowOrder = TableRowOrder.bySort,
+  Widget? Function(BuildContext context, _Proc row)? spanningRow,
+  ValueChanged<List<_Proc>>? onShownRowsChanged,
 }) async {
   tester.view.physicalSize = const Size(800, 600);
   tester.view.devicePixelRatio = 1;
@@ -154,6 +157,9 @@ Future<_HostState> _pump(
           ? null
           : (proc) => activated.add(proc.pid),
       rowActions: rowActions,
+      rowOrder: rowOrder,
+      spanningRow: spanningRow,
+      onShownRowsChanged: onShownRowsChanged,
     ),
   );
   await tester.pumpWidget(
@@ -780,6 +786,94 @@ void main() {
       ],
     );
     expect(tester.getSize(_header('thin')).width, 64);
+  });
+
+  group('grouped lists (D13)', () {
+    testWidgets('rows as given keep the caller order while the headers '
+        'show and change the sort', (tester) async {
+      final sorts = <TableSort>[];
+      await _pump(
+        tester,
+        sort: const TableSort('cpu', TableSortDirection.descending),
+        sorts: sorts,
+        rowOrder: TableRowOrder.asGiven,
+      );
+      expect(_drawnOrder(tester), [1, 2, 3, 4]);
+      expect(
+        tester.getSemantics(_header('cpu')),
+        isSemantics(value: 'Sorted descending'),
+      );
+
+      await tester.tap(_header('name'));
+      await tester.pumpAndSettle();
+      expect(sorts, [const TableSort('name', TableSortDirection.ascending)]);
+      expect(_drawnOrder(tester), [1, 2, 3, 4]);
+    });
+
+    testWidgets('a spanning row draws across the width, is announced by its '
+        'own label and activates as a row does', (tester) async {
+      final activated = <int>[];
+      await _pump(
+        tester,
+        activated: activated,
+        spanningRow: (context, proc) => proc.pid == 2
+            ? Semantics(
+                label: 'Web services',
+                excludeSemantics: true,
+                child: const Text('Web services'),
+              )
+            : null,
+      );
+      expect(find.text('Web services'), findsOneWidget);
+      expect(find.text('nginx'), findsNothing, reason: 'no cells');
+      expect(tester.getSize(find.text('Web services')).width, greaterThan(64));
+      expect(
+        tester.getSemantics(_row(2)),
+        isSemantics(label: 'Web services', isButton: true),
+      );
+
+      await tester.tap(find.text('Web services'));
+      await tester.pumpAndSettle();
+      expect(activated, [2]);
+    });
+
+    testWidgets('reports the rows the body shows as they change', (
+      tester,
+    ) async {
+      final reports = <List<int>>[];
+      final host = await _pump(
+        tester,
+        rows: _many,
+        onShownRowsChanged: (rows) => reports.add(_pids(rows)),
+      );
+      // 160 px less the 22 px header shows rows 1 to 7, the last in part.
+      expect(reports, [
+        [1, 2, 3, 4, 5, 6, 7],
+      ]);
+
+      // Five rows down.
+      tester
+          .state<ScrollableState>(
+            find.descendant(
+              of: find.byType(ListView),
+              matching: find.byType(Scrollable),
+            ),
+          )
+          .position
+          .jumpTo(110);
+      await tester.pumpAndSettle();
+      expect(reports.last, [6, 7, 8, 9, 10, 11, 12]);
+
+      // A rebuild that shows the same rows says nothing.
+      final heard = reports.length;
+      host.update(() => host.rows = [..._many]);
+      await tester.pumpAndSettle();
+      expect(reports, hasLength(heard));
+
+      host.update(() => host.rows = const []);
+      await tester.pumpAndSettle();
+      expect(reports.last, isEmpty);
+    });
   });
 
   group('golden', () {

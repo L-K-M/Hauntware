@@ -143,6 +143,13 @@ final class Fixture {
         _ => null,
       };
 
+  /// Where spike S4's Docker host cases write their evidence, or null
+  /// (klabautermann/docs/evidence/s4/).
+  String? get s4EvidenceDirectory => switch (_evidenceDirectory) {
+    final directory? => '$directory/s4',
+    null => null,
+  };
+
   /// Writes [contents] to [name] under the evidence directory, when
   /// run.sh collects evidence.
   Future<void> recordEvidence(String name, String contents) async {

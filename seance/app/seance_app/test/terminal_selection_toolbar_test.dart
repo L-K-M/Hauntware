@@ -152,12 +152,38 @@ void main() {
     expect(copyButton(), findsOneWidget);
     expect(find.text('Paste'), findsOneWidget);
     expect(find.text('Select all'), findsOneWidget);
+    expect(find.byType(CompositedTransformFollower), findsNWidgets(2));
 
     await tester.tap(copyButton());
     await settle(tester);
 
     expect(clipboard, 'bravo');
     expect(copyButton(), findsNothing);
+    expect(find.byType(CompositedTransformFollower), findsNothing);
+  });
+
+  testWidgets('Copy takes the range adjusted with a selection handle', (
+    tester,
+  ) async {
+    await pumpTerminal(tester);
+    await tester.longPressAt(cell(tester, 2, 0));
+    await settle(tester);
+
+    expect(find.byType(CompositedTransformFollower), findsNWidgets(2));
+    final endHandle = find
+        .descendant(
+          of: find.byType(CompositedTransformFollower).at(1),
+          matching: find.byType(RawGestureDetector),
+        )
+        .first;
+    await tester.drag(endHandle, cell(tester, 13, 1) - cell(tester, 5, 0));
+    await settle(tester);
+    expect(copyButton(), findsOneWidget);
+
+    await tester.tap(copyButton());
+    await settle(tester);
+    expect(clipboard, 'alpha bravo\ncharlie delta');
+    expect(find.byType(CompositedTransformFollower), findsNothing);
   });
 
   testWidgets('the toolbar opens above the selection, or below it at the '

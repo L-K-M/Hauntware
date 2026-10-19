@@ -38,6 +38,14 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // settings route, which is what the user sees.
     "'while opening the settings window'",
   },
+  // The preview label's marker, which tests tie the ARB title and the
+  // Linux package description to; never displayed by itself.
+  'lib/app_identity.dart': {"'(preview)'"},
+  // A diagnostic; the About dialog shows its own ARB text
+  // (aboutVersionUnknown) when the version cannot be read.
+  'lib/services/app_version.dart': {
+    r"'The app version could not be read: $error'",
+  },
   'lib/main.dart': {
     // A file path inside the app's support directory.
     r"'${supportDirectory.path}${Platform.pathSeparator}$name'",
@@ -65,6 +73,19 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/announcement_controller.dart': {
     r"'The announcement setting was not saved: $error'",
   },
+  // The not-saved diagnostic; the Safety tab and the header's Safety menu
+  // print it and show their own ARB text (settingsSafetyNotSaved).
+  'lib/controllers/safety_controller.dart': {
+    r"'The safety settings were not saved: $error'",
+  },
+  // A caller error's diagnostic: the preview is modal, so no screen ever
+  // shows it.
+  'lib/controllers/operations_controller.dart': {
+    "'a preview is already pending'",
+  },
+  // The Activity table's key prefix, never shown, and the copied log's
+  // line break between JSON records.
+  'lib/ui/actions/activity_page.dart': {"'activity'", r"'\n'"},
   'lib/controllers/fleet_controller.dart': {
     // The row subtitle's address: host or user@host, with :port when the
     // port is not 22 and an IPv6 host then bracketed before it. Machine
@@ -84,10 +105,31 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The rejected requests' class names, which RequestRejected carries.
     r"'$ImportSshConfig'",
     r"'$ConfirmEndpoints'",
+    r"'$SetMonitorSet'",
+    // A rejected monitor set's debugPrint diagnostic, an ineligible
+    // server's programmer error and the not-saved diagnostic; surfaces
+    // show ARB text (monitorSetNotSaved, monitorSetNotChanged).
+    r"'$requestName: $reason'",
+    "'serverId'",
+    "'not eligible'",
+    r"'The monitor set was not saved: $error'",
   },
+  // The full set's diagnostic; surfaces show their own ARB text
+  // (monitorSetFull).
+  'lib/controllers/monitor_set.dart': {
+    r"'The monitor set already holds $kMonitorSetLimit servers'",
+  },
+  // debugPrint diagnostics beside the toasts' ARB text.
+  'lib/ui/monitor_set_feedback.dart': {r"'$error'"},
   // The diagnostic of a sync answer the stopped engine never gave;
   // surfaces show ARB text for its failure kind (syncFailed).
   'lib/controllers/sync_controller.dart': {"'the engine stopped'"},
+  // A Docker query id the engine echoes in its answer (03 §10.1).
+  // The query and watch ids the engine keys Docker answers by (03 §10.1).
+  'lib/controllers/docker_controller.dart': {
+    r"'docker-${_count++}'",
+    r"'containers-${_count++}'",
+  },
   'lib/controllers/log_streams.dart': {
     // A log stream id the engine keys a stream's events by (03 §10.1), and
     // the rejected request's class name, which RequestRejected carries.
@@ -201,6 +243,43 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // debugPrint of a dismissal that was not saved; the toast is ARB text.
   'lib/ui/coverage.dart': {r"'$error'"},
+  'lib/ui/docker/containers_panel.dart': {
+    // The key tests find a phone row by, in the table rows' form, and the
+    // line break between its cells in its screen-reader label, each ARB
+    // text; a heading's row key; empty cells and no ports.
+    r"'${DockerWatchList.containers.name}.row.${_rowKey(entry)}'",
+    r"'\n'",
+    r"'group.${project ?? ''}'",
+    "''",
+  },
+  'lib/ui/docker/containers_view.dart': {
+    // The compose project label key (compose's pkg/api/labels.go).
+    "'com.docker.compose.project'",
+    // The search's term separator and the line break between the fields
+    // it searches; empty values.
+    r"r'\s+'",
+    r"'\n'",
+    "''",
+    // The engine's Status text as go-units prints it, matched, never
+    // shown: the health marker the health column replaces, the uptime's
+    // words, and the wildcard addresses `docker ps` leaves out.
+    r"r'\s*\((healthy|unhealthy|health: starting)\)'",
+    "'less than a second'",
+    "'about a minute'",
+    "'about an hour'",
+    r"r'^Up (.+?)(?: \(.*\))?$'",
+    r"r'^(\d+) (second|minute|hour|day|week|month|year)s?$'",
+    "'0.0.0.0'",
+    "'::'",
+    // The separator `docker ps` prints between ports; machine data.
+    "', '",
+  },
+  'lib/ui/docker/docker_panel.dart': {
+    // An assert message; programmer diagnostic, never rendered.
+    "'new controllers come with a new tree (KlabautermannApp, D44)'",
+    // debugPrint of a dismissal that was not saved; the toast is ARB text.
+    r"'$error'",
+  },
   'lib/ui/fleet_row_state.dart': {
     // The root mount point whose use the pressure bar shows.
     "'/'",
@@ -231,7 +310,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The probe's tool name for crontab, looked up in its answer; never
   // rendered.
-  'lib/ui/jobs_panel.dart': {"'crontab'"},
+  'lib/ui/jobs_panel.dart': {
+    "'crontab'",
+    // The other users' table's key prefix, never shown.
+    r"'${ServerPanel.jobs.name}.others'",
+  },
   'lib/ui/logs/log_query.dart': {
     // The path rule's separators and dot parts (03 §8.8), and the empty
     // defaults of the text filters.
@@ -284,6 +367,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The command registry's ids, keys of the menus and shortcuts.
   'lib/ui/menus/app_commands.dart': {
+    "'app.about'",
     "'app.settings'",
     "'fleet.importSshConfig'",
     "'app.quit'",

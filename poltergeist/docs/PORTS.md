@@ -2460,9 +2460,9 @@ the commit-level detail, without adding names to docs.
 - Source: `seance_protocol` at `seance/packages/seance_protocol` (path dependency)
 - Component: `seance/` at `HEAD`
 - Lineage: `75b1e84bf231d149d64c295430a9dda9dc7f4ffb`, `76e466fbcbfe5dc90b4fa399e5dfac990b23c30d`
-- Identity: 32 lines; `sha256:2e10b1bab6544e2c08709838075d83be92605d33beb72ed328cb15b1579ce232`
+- Identity: 33 lines; `sha256:9810d86033404b02632a07c9a44990c2fe4fc41af99fc0ea7875f3775ff9239d`
 - Unmatched attributions: 1 lines; `sha256:41240f7bf814a29257ba1dcf6ca3af20d744a98f374fdd6781eef8d4950b4bab`
 - License scan: 63 lines; `sha256:8b61e1556adb906492d2257b3911df631ff45815e7f47304401e645f7470242f`
-- Vendored paths: 153 lines; `sha256:56cad425a70d20f266b6a29746c2d88e24589671b29c9ce7d7c0e34900d088e4`
+- Vendored paths: 154 lines; `sha256:17fa21f471ab3205122e9f4ed03adcaba4679866d424b3938f7f19fe623d7de2`
 - Gitlinks: 0 lines; `sha256:8c9771035e10619d9c2e084cc0f914772bfff45bd0b0a37c831f98bdf4a94839`
 <!-- SEANCE_PIN_AUDIT_V3:END -->

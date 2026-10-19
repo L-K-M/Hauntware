@@ -2,12 +2,15 @@
 # The runner-VM leg of Klabautermann's integration run (03 §11.3, K28a).
 # The GitHub-hosted Ubuntu runner is itself a systemd host, so this
 # starts a second sshd on its loopback with its own config and host key,
-# creates two throwaway accounts whose login shell is /bin/sh (dash on
+# creates throwaway accounts whose login shell is /bin/sh (dash on
 # Ubuntu), captures the host's collector fixtures as the unprivileged
-# one, and runs the engine's runner-VM suite against it
+# one, and runs the engine's runner-VM suites against it
 # (klabautermann_core/test/integration/runner_vm_test.dart): units,
 # timers and OnCalendar next runs, a journal follow resumed across a
-# forced reconnect, unit logs, the kernel log, LOG-04 and journal paging.
+# forced reconnect, unit logs, the kernel log, LOG-04 and journal paging;
+# and spike S4's detached runners (runner_vm_s4_test.dart, tag
+# runner-vm-s4): systemd-run system, --user and --uid, linger, logout,
+# --collect, root-run files, --host and sudo -n -l (03 §7.17, M4 E02).
 #
 # run.sh calls it after the fixture suites. It creates accounts and runs
 # a root sshd, so it runs only on a GitHub-hosted runner, the ephemeral
@@ -15,10 +18,19 @@
 # anywhere else it changes nothing and skips with a notice.
 #
 # What it changes on the runner, all undone on every exit: the accounts
-# klab-vm (outside systemd-journal and adm, for LOG-04) and
-# klab-vm-journal (in systemd-journal) with their homes and sessions;
-# the sshd on 127.0.0.1:2243 with its root-owned directory under /tmp; a
-# transient system timer; and its key and capture directories. The
+# klab-vm (outside systemd-journal and adm, for LOG-04), klab-vm-journal
+# (in systemd-journal), klab-vm-sudo (password sudo), klab-vm-linger
+# (linger on) and klab-vm-docker (a NOPASSWD rule scoped to the docker
+# CLI) with their homes, sessions and linger; the sudoers drop-in with
+# those two rules; root's Docker CLI directory, whose default context it
+# points at a socket nothing listens on, so only a step's own --host
+# reaches the engine (M4 plan M17); the sshd on 127.0.0.1:2243 with its
+# root-owned directory under /tmp; a transient system timer; the
+# operation units and the root operation directory the S4 suite leaves;
+# and its key and capture directories. klab-vm-sudo's password is made
+# at job start, kept in a 0600 file in the runner's own key directory,
+# and handed to chpasswd on stdin by a builtin printf: never in argv, the
+# environment, a log or the repository. Later legs reuse the accounts. The
 # system sshd, its config and port 22 stay as they are. Should
 # /usr/sbin/sshd be missing, it installs openssh-server with apt first,
 # with a policy-rc.d that refuses the package's start of the system
@@ -36,7 +48,9 @@
 #   capture.log           the tool's output
 #   host.txt              the image, systemd, sh and journal facts
 #   sshd.log              the leg's sshd log
-#   engine-tests.json     the suite's results, and an .events log per test
+#   engine-tests.json     the suites' results, and an .events log per test
+#   s4/                   spike S4's evidence, one JSON file per case
+#                         (klabautermann/docs/evidence/s4/README.md)
 set -euo pipefail
 
 integration_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -47,6 +61,9 @@ readonly dart_binary="${DART_BIN:-dart}"
 readonly evidence_dir="${KLABAUTERMANN_EVIDENCE_DIR:+$KLABAUTERMANN_EVIDENCE_DIR/runner-vm}"
 readonly limited_user='klab-vm'
 readonly journal_user='klab-vm-journal'
+readonly sudo_user='klab-vm-sudo'
+readonly linger_user='klab-vm-linger'
+readonly docker_user='klab-vm-docker'
 readonly sshd_host='127.0.0.1'
 # Beside the fixture's 2241 and 2242; never the system sshd's 22.
 readonly sshd_port=2243
@@ -69,6 +86,21 @@ readonly shared_tmp='/tmp'
 # The account names, the port and the timer are fixed, so one leg runs
 # at a time.
 readonly lock_file='/tmp/klabautermann-runner-vm.lock'
+# The sudo rules of klab-vm-sudo and klab-vm-docker.
+readonly sudoers_file='/etc/sudoers.d/klabautermann-runner-vm'
+# What root-run operations create: the wrapper makes
+# /var/lib/klabautermann/ops (03 §7.17), and teardown removes it all.
+readonly root_ops_parent='/var/lib/klabautermann'
+# Root's Docker CLI directory, which the leg creates for the dead
+# default context and removes; one the image has is moved aside into the
+# sshd's root-owned directory meanwhile and put back.
+readonly root_docker_dir='/root/.docker'
+readonly dead_context='klabautermann-dead'
+readonly dead_socket='/run/klabautermann-runner-vm-dead.sock'
+# The runner's own engine, which a step reaches with --host.
+readonly docker_socket='/var/run/docker.sock'
+# The S4 suite's transient units (klabautermann_host's kOpUnitPrefix).
+readonly op_units='klabautermann-op-*.service'
 
 skip() {
   echo "::notice::Runner-VM leg skipped: $*"
@@ -95,16 +127,26 @@ fi
 [[ "$(uname -s)" == Linux ]] || die 'needs Linux'
 [[ -d "$systemd_marker" ]] || die 'PID 1 is not systemd'
 sudo -n true 2>/dev/null || die 'needs passwordless sudo'
-for tool in flock ssh ssh-keygen ssh-keyscan systemctl "$dart_binary"; do
+for tool in flock ssh ssh-keygen ssh-keyscan systemctl od docker "$dart_binary"; do
   command -v "$tool" >/dev/null || die "needs $tool"
 done
+# The docker rule names the CLI by the path sudo will find.
+docker_cli="$(command -v docker)"
+[[ "$docker_cli" == /* ]] || die "docker is $docker_cli, not a path"
+readonly docker_cli
 
 exec 8>"$lock_file"
 flock --nonblock 8 || die "another runner-VM leg holds $lock_file"
 
-for user in "$limited_user" "$journal_user"; do
+for user in "$limited_user" "$journal_user" "$sudo_user" "$linger_user" \
+  "$docker_user"; do
   if id "$user" >/dev/null 2>&1; then
     die "$user exists; this leg removes only accounts it created"
+  fi
+done
+for path in "$sudoers_file" "$root_ops_parent"; do
+  if sudo -n test -e "$path"; then
+    die "$path exists; this leg removes only what it created"
   fi
 done
 
@@ -117,6 +159,10 @@ child_pid=''
 timer_started=0
 policy_installed=0
 privsep_created=0
+sudoers_installed=0
+root_docker_created=0
+root_docker_saved=''
+suite_started=0
 created_users=()
 
 # Runs "$@" in the background and waits for it: on a signal bash runs the
@@ -136,6 +182,8 @@ run_child() {
 remove_user() {
   local user="$1" uid attempt pids
   uid="$(id -u "$user" 2>/dev/null)" || return 0
+  # With linger on, logind would start the user manager again.
+  sudo -n loginctl disable-linger "$user" 2>/dev/null || true
   sudo -n loginctl terminate-user "$user" 2>/dev/null || true
   sudo -n systemctl stop "user@$uid.service" "user-runtime-dir@$uid.service" \
     2>/dev/null || true
@@ -202,6 +250,18 @@ on_exit() {
     sudo -n systemctl reset-failed "$timer_unit.timer" "$timer_unit.service" \
       2>/dev/null || true
   fi
+  # Before the accounts: an operation unit may run as one of them.
+  if ((suite_started)); then
+    sudo -n systemctl stop "$op_units" 2>/dev/null || true
+    sudo -n systemctl reset-failed "$op_units" 2>/dev/null || true
+    sudo -n rm -rf -- "$root_ops_parent" || cleanup=1
+  fi
+  if ((root_docker_created)); then
+    sudo -n rm -rf -- "$root_docker_dir" || cleanup=1
+    if [[ -n "$root_docker_saved" ]]; then
+      sudo -n mv -- "$root_docker_saved" "$root_docker_dir" || cleanup=1
+    fi
+  fi
   if ((sshd_started)); then
     stop_sshd || cleanup=1
   fi
@@ -209,6 +269,9 @@ on_exit() {
     # Root reads the log; the copy is the runner's, as the artifact is.
     # shellcheck disable=SC2024
     sudo -n cat -- "$sshd_dir/sshd.log" >"$evidence_dir/sshd.log" 2>/dev/null || true
+  fi
+  if ((sudoers_installed)); then
+    sudo -n rm -f -- "$sudoers_file" || cleanup=1
   fi
   for user in "${created_users[@]}"; do
     remove_user "$user" || cleanup=1
@@ -288,6 +351,51 @@ create_user() {
   sudo -n install -d -m 0700 -o "$user" -g "$user" "$home/.ssh"
   sudo -n install -m 0600 -o "$user" -g "$user" "$runtime_dir/identity.pub" \
     "$home/.ssh/authorized_keys"
+}
+
+# Gives klab-vm-sudo a password made now. It stays in this shell and a
+# 0600 file under the runner's own key directory, which the suite reads;
+# printf is a bash builtin, so the line chpasswd reads is in no process's
+# argv. Nothing prints it.
+set_sudo_password() {
+  local password
+  password="$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')"
+  [[ "$password" =~ ^[0-9a-f]{48}$ ]] || die 'no password from /dev/urandom'
+  (umask 077 && printf '%s\n' "$password" >"$runtime_dir/sudo-password")
+  printf '%s:%s\n' "$sudo_user" "$password" | sudo -n chpasswd
+}
+
+# Password sudo for klab-vm-sudo, and for klab-vm-docker a NOPASSWD rule
+# scoped to the docker CLI, which the S4 suite reads with sudo -n -l and
+# which cannot start systemd-run (03 §7.17, Docker-scoped sudo rules).
+# Checked before it is installed: a broken drop-in disables sudo for the
+# rest of the job.
+install_sudoers() {
+  printf '%s\n' \
+    "$sudo_user ALL=(ALL) ALL" \
+    "$docker_user ALL=(root) NOPASSWD: $docker_cli" >"$runtime_dir/sudoers"
+  sudo -n visudo -cf "$runtime_dir/sudoers" >/dev/null
+  sudoers_installed=1
+  sudo -n install -m 0440 -o root -g root "$runtime_dir/sudoers" \
+    "$sudoers_file"
+  sudo -n visudo -cf "$sudoers_file" >/dev/null
+  sudo -n true
+}
+
+# Root's default Docker context on a socket nothing listens on, so a
+# docker step that runs as root reaches the runner's engine only through
+# the --host in its own argv (03 §7.17, M4 plan M17).
+use_dead_docker_context() {
+  # Only once it has moved does teardown remove the path.
+  if sudo -n test -e "$root_docker_dir"; then
+    sudo -n mv -- "$root_docker_dir" "$sshd_dir/root-docker"
+    root_docker_saved="$sshd_dir/root-docker"
+  fi
+  root_docker_created=1
+  sudo -n docker --config "$root_docker_dir" context create "$dead_context" \
+    --docker "host=unix://$dead_socket" >/dev/null
+  sudo -n docker --config "$root_docker_dir" context use "$dead_context" \
+    >/dev/null
 }
 
 os_release() {
@@ -374,6 +482,11 @@ ssh_args=(-F /dev/null -o BatchMode=yes -o IdentitiesOnly=yes
 
 create_user "$limited_user"
 create_user "$journal_user" --groups systemd-journal
+create_user "$sudo_user"
+create_user "$linger_user"
+create_user "$docker_user"
+set_sudo_password
+install_sudoers
 
 # Root's own directory: sshd refuses a host key or config that others
 # could change.
@@ -388,7 +501,7 @@ cat >"$runtime_dir/sshd_config" <<EOF
 ListenAddress $sshd_host:$sshd_port
 HostKey $sshd_dir/ssh_host_ed25519_key
 PidFile $sshd_dir/sshd.pid
-AllowUsers $limited_user $journal_user
+AllowUsers $limited_user $journal_user $sudo_user $linger_user $docker_user
 AuthenticationMethods publickey
 PubkeyAuthentication yes
 PasswordAuthentication no
@@ -446,6 +559,11 @@ else
   echo '::notice::No KLABAUTERMANN_EVIDENCE_DIR: the runner-VM capture is skipped'
 fi
 
+# After the capture, so the captured units list is the image's: linger
+# starts a user manager.
+sudo -n loginctl enable-linger "$linger_user"
+use_dead_docker_context
+
 timer_started=1
 sudo -n systemd-run --quiet --unit="$timer_unit" --on-calendar="$calendar" \
   --timer-property=AccuracySec=1us /bin/true
@@ -454,6 +572,13 @@ export KLABAUTERMANN_RUNNER_VM_HOST="$sshd_host"
 export KLABAUTERMANN_RUNNER_VM_PORT="$sshd_port"
 export KLABAUTERMANN_RUNNER_VM_USER="$limited_user"
 export KLABAUTERMANN_RUNNER_VM_JOURNAL_USER="$journal_user"
+export KLABAUTERMANN_RUNNER_VM_SUDO_USER="$sudo_user"
+export KLABAUTERMANN_RUNNER_VM_SUDO_PASSWORD_FILE="$runtime_dir/sudo-password"
+export KLABAUTERMANN_RUNNER_VM_LINGER_USER="$linger_user"
+export KLABAUTERMANN_RUNNER_VM_DOCKER_USER="$docker_user"
+export KLABAUTERMANN_RUNNER_VM_DOCKER_CLI="$docker_cli"
+export KLABAUTERMANN_RUNNER_VM_DOCKER_SOCKET="$docker_socket"
+export KLABAUTERMANN_RUNNER_VM_DEAD_DOCKER_CONTEXT="$dead_context"
 export KLABAUTERMANN_RUNNER_VM_IDENTITY_FILE="$runtime_dir/identity"
 export KLABAUTERMANN_RUNNER_VM_KNOWN_HOSTS="$runtime_dir/known_hosts"
 export KLABAUTERMANN_RUNNER_VM_HOST_KEY_FINGERPRINT="$host_key_fingerprint"
@@ -470,9 +595,10 @@ fi
 # One test at a time: they share the sshd, and one pauses it.
 cd "$klabautermann_dir"
 suite_status=0
-run_child "$dart_binary" test --concurrency=1 --tags runner-vm \
-  "${reporter[@]}" packages/klabautermann_core/test/integration ||
-  suite_status="$?"
+suite_started=1
+run_child "$dart_binary" test --concurrency=1 \
+  --tags 'runner-vm || runner-vm-s4' "${reporter[@]}" \
+  packages/klabautermann_core/test/integration || suite_status="$?"
 
 if ((suite_status != 0)); then
   exit "$suite_status"

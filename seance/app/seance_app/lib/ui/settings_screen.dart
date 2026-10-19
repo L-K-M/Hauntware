@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:ghost_fonts/ghost_fonts.dart' show BundledMonoFont;
+import 'package:ghost_fonts/ghost_fonts.dart';
 import 'package:planchette_editor/planchette_editor.dart'
     show
         EditorLigatures,
@@ -10,12 +10,14 @@ import 'package:planchette_editor/planchette_editor.dart'
         editorDefaultFont,
         normalizeEditorExtensions,
         validateEditorDisplayName;
+import 'package:seance_core/catalog.dart' show HostKeyConflict;
 import 'package:seance_core/seance_core.dart';
 
 import '../family_hues.dart';
 import '../services/external_file_opener.dart';
 import '../services/settings_backend.dart';
 import '../services/system_fonts.dart';
+import '../theme.dart' show SeanceTheme;
 import 'appearance_settings.dart';
 import 'app_lock_settings.dart';
 import 'font_picker.dart';
@@ -935,6 +937,25 @@ class _SettingsScreenState extends State<SettingsScreen>
           builder: (context, _) => _SyncStatusLine(status: _backend.syncStatus),
         ),
       ),
+      ListenableBuilder(
+        listenable: _backend,
+        builder: (context, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final conflict in _backend.syncStatus.pinConflicts)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: _PinConflictCard(
+                  conflict: conflict,
+                  onResolve: _saving
+                      ? null
+                      : (keepLocal) =>
+                            _resolvePinConflict(conflict, keepLocal: keepLocal),
+                ),
+              ),
+          ],
+        ),
+      ),
       const SizedBox(height: 24),
       RecoverySettings(backend: _backend),
     ],
@@ -1221,16 +1242,29 @@ class _SettingsScreenState extends State<SettingsScreen>
   /// The terminal font's picker for the editor: a dismissal leaves the
   /// field alone, the default choice clears it.
   Future<void> _pickEditorFont() async {
-    final chosen = await showFontPicker(
+    final chosen = await showMonoFontPicker(
       context,
-      fonts: _systemFonts,
       current: _editorFont.text.trim(),
-      title: 'Editor font',
-      builtInLabel: 'Use ${editorDefaultFont.displayName}',
-      bundled: BundledMonoFont.values,
+      defaultFont: editorDefaultFont,
+      fontSize: _editorFontSize.toDouble(),
+      ligatures: _editorLigatures == EditorLigatures.on
+          ? MonoLigatures.on
+          : MonoLigatures.off,
+      installedFonts: _systemFonts.isSupported
+          ? () async => {
+              for (final font in await _systemFonts.families())
+                font.name: font.monospaced,
+            }
+          : null,
+      labels: const MonoFontPickerLabels(title: 'Editor font'),
     );
     if (chosen == null || !mounted) return;
-    _editorFont.text = chosen;
+    setState(() {
+      _editorFont.text = chosen.family;
+      _editorLigatures = chosen.ligatures == MonoLigatures.on
+          ? EditorLigatures.on
+          : EditorLigatures.off;
+    });
     await _persistEditorFont();
   }
 
@@ -1404,6 +1438,37 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
+  Future<void> _resolvePinConflict(
+    HostKeyConflict conflict, {
+    required bool keepLocal,
+  }) async {
+    setState(() => _saving = true);
+    try {
+      final resolution = await _backend.resolvePinConflict(
+        conflict,
+        keepLocal: keepLocal,
+      );
+      if (!mounted) return;
+      showTopToastIn(
+        context,
+        message: switch (resolution) {
+          PulledPinResolution.resolved when keepLocal =>
+            'Kept this device\'s key for ${conflict.locator}.',
+          PulledPinResolution.resolved =>
+            'Now trusting the new key for ${conflict.locator}.',
+          PulledPinResolution.stale =>
+            'The key for ${conflict.locator} changed on this device since '
+                'this was shown, so nothing was changed. Sync again to see '
+                'where it stands.',
+        },
+      );
+    } catch (e) {
+      if (mounted) showTopToastIn(context, message: 'Host key: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   Future<void> _syncNow() async {
     setState(() {
       _saving = true;
@@ -1478,6 +1543,71 @@ class SyncEnrollmentFields extends StatelessWidget {
         ),
     ],
   );
+}
+
+/// A pulled host key that disagrees with this device's pin (Séance #56):
+/// both fingerprints, and the choice between them. Sync never applies the
+/// pulled key on its own.
+class _PinConflictCard extends StatelessWidget {
+  const _PinConflictCard({required this.conflict, required this.onResolve});
+
+  final HostKeyConflict conflict;
+
+  /// Called with true to keep this device's key. Null while busy.
+  final void Function(bool keepLocal)? onResolve;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final onContainer = TextStyle(color: scheme.onErrorContainer);
+    final mono = SeanceTheme.mono.copyWith(
+      fontSize: 12,
+      color: scheme.onErrorContainer,
+    );
+    final resolve = onResolve;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.errorContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Another device synced a different host key for '
+            '${conflict.locator}. Séance kept this device\'s key and is not '
+            'using the other one. If the server\'s key really changed, trust '
+            'the new one; otherwise keep yours.',
+            style: onContainer,
+          ),
+          const SizedBox(height: 8),
+          Text('This device trusts', style: onContainer),
+          SelectableText(conflict.local.fingerprintSha256, style: mono),
+          const SizedBox(height: 4),
+          Text('The other device synced', style: onContainer),
+          SelectableText(conflict.pulled.fingerprintSha256, style: mono),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.tonal(
+                key: ValueKey('sync.pin.keep.${conflict.locator}'),
+                onPressed: resolve == null ? null : () => resolve(true),
+                child: const Text('Keep this device\'s key'),
+              ),
+              TextButton(
+                key: ValueKey('sync.pin.accept.${conflict.locator}'),
+                onPressed: resolve == null ? null : () => resolve(false),
+                child: const Text('Trust the new key'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// A live, one-line reflection of the app-wide sync state (also updated by

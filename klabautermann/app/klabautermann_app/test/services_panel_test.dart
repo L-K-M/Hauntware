@@ -3,9 +3,13 @@ import 'package:flutter/services.dart' show LogicalKeyboardKey, SystemChannels;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/controllers/operations_controller.dart';
+import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
+import 'package:klabautermann_app/ui/actions/action_entry.dart';
 import 'package:klabautermann_app/ui/logs/log_view.dart';
+import 'package:klabautermann_app/ui/server_safety.dart';
 import 'package:klabautermann_app/ui/services_panel.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -135,6 +139,7 @@ Future<_Panel> _pump(
   Brightness brightness = Brightness.light,
   TargetPlatform platform = TargetPlatform.linux,
   UnitLogPlacement logPlacement = UnitLogPlacement.inline,
+  SafetyPolicy? safety,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -157,12 +162,25 @@ Future<_Panel> _pump(
   final theme = base.copyWith(
     textTheme: base.textTheme.apply(fontFamily: goldenFontFamily),
   );
+  final operations = OperationsController(engine);
+  addTearDown(operations.dispose);
+  final policy = safety == null
+      ? null
+      : SafetyController(initial: safety, apply: (_) {});
+  if (policy != null) addTearDown(policy.dispose);
   await tester.pumpWidget(
     MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: theme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      // Actions show only with safety preferences that allow them.
+      builder: (context, child) => policy == null
+          ? child!
+          : SafetyScope(
+              safety: policy,
+              child: OperationsScope(operations: operations, child: child!),
+            ),
       home: MediaQuery.withClampedTextScaling(
         minScaleFactor: textScale,
         maxScaleFactor: textScale,
@@ -738,5 +756,68 @@ void main() {
         );
       }, skip: !goldensCompareHere);
     }
+  });
+
+  group('unit verbs (SVC-03, M4 E21)', () {
+    List<(String, SystemctlVerb)> planned(_Panel panel) => [
+      for (final PlanAction(:intent)
+          in panel.engine.sentOfType<PlanAction>().cast<PlanAction>())
+        switch (intent) {
+          UnitAction(:final unit, :final verb) => (unit, verb),
+          _ => throw StateError('$intent'),
+        },
+    ];
+
+    testWidgets('the row menu and the unit page start, stop, restart and '
+        'reload', (tester) async {
+      final panel = await _pump(
+        tester,
+        safety: const SafetyPolicy(
+          servers: {'srv-1': ServerSafety(management: true)},
+        ),
+      );
+      await panel.sample(tester);
+
+      await tester.tap(
+        find.byKey(const ValueKey('units.rowActions.nginx.service')),
+      );
+      await tester.pumpAndSettle();
+      for (final verb in ['Start', 'Stop', 'Restart', 'Reload']) {
+        expect(find.text(verb), findsOneWidget, reason: verb);
+      }
+      await tester.tap(find.text('Restart'));
+      await tester.pumpAndSettle();
+      // A second preview waits for the first's answer.
+      panel.engine.emit(
+        const ActionRefused(
+          ActionRefusalReason.readOnly,
+          intent: UnitAction(
+            'srv-1',
+            unit: 'nginx.service',
+            verb: SystemctlVerb.restart,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _open(tester, 'nginx.service');
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Reload'));
+      await tester.pumpAndSettle();
+      expect(planned(panel), [
+        ('nginx.service', SystemctlVerb.restart),
+        ('nginx.service', SystemctlVerb.reload),
+      ]);
+    });
+
+    testWidgets('observe-only offers none', (tester) async {
+      final panel = await _pump(tester, safety: const SafetyPolicy());
+      await panel.sample(tester);
+      expect(
+        find.byKey(const ValueKey('units.rowActions.nginx.service')),
+        findsNothing,
+      );
+      await _open(tester, 'nginx.service');
+      expect(find.widgetWithText(OutlinedButton, 'Restart'), findsNothing);
+    });
   });
 }

@@ -87,15 +87,114 @@ void main() {
       final client = await spawnEngine();
       final (:events, fleet: _) = await started(client);
 
-      client
-        ..send(const PlanAction(ActionIntent(serverId: 'srv-1', action: 'x')))
-        ..send(const SetMonitorSet(['srv-1']));
+      client.send(const OpenTerminal(serverId: 'srv-1'));
 
-      final names = [
-        for (var i = 0; i < 2; i++)
-          ((await next(events)) as RequestRejected).requestName,
-      ];
-      expect(names, ['PlanAction', 'SetMonitorSet']);
+      expect(
+        ((await next(events)) as RequestRejected).requestName,
+        'OpenTerminal',
+      );
+    });
+
+    test('without a link a host plan is refused, and no plan runs '
+        '(03 §8.5)', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+      const intent = UnitAction(
+        'srv-1',
+        unit: 'nginx.service',
+        verb: SystemctlVerb.restart,
+      );
+
+      client
+        ..send(
+          const SetSafetyPolicy(
+            SafetyPolicy(servers: {'srv-1': ServerSafety(management: true)}),
+          ),
+        )
+        ..send(const PlanAction(intent))
+        ..send(
+          const RunAction(
+            'plan-1',
+            ActionConfirmation(tier: ConfirmationTier.acknowledge),
+          ),
+        );
+
+      final planned = (await next(events)) as ActionRefused;
+      expect(planned.reason, ActionRefusalReason.noLink, reason: 'links off');
+      expect(planned.intent, isA<UnitAction>());
+      expect((planned.intent! as UnitAction).unit, 'nginx.service');
+      final ran = (await next(events)) as ActionRefused;
+      expect(ran.reason, ActionRefusalReason.unknownPlan);
+      expect(ran.planId, 'plan-1');
+    });
+
+    test('an audit query answers from the log, empty at first', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+
+      client.send(const AuditQuery('ssh-config:web'));
+      final answer = (await next(events)) as AuditRecords;
+      expect(answer.serverId, 'ssh-config:web');
+      expect(answer.records, isEmpty);
+      expect(answer.more, isFalse);
+    });
+
+    test('the safety policy refuses plans and admin mode in the engine '
+        '(SAF-01, SAF-06)', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+      const plan = PlanAction(StartTimer('ssh-config:web', timer: 'a.timer'));
+      Future<ActionRefusalReason> refusal() async =>
+          ((await next(events)) as ActionRefused).reason;
+
+      client
+        ..send(const ImportSshConfig('Host web\n  HostName 192.0.2.10\n'))
+        ..send(plan);
+      expect(await next(events), isA<CatalogReplaced>());
+      expect(await next(events), isA<SshConfigImported>());
+      expect(await refusal(), ActionRefusalReason.observeOnly);
+
+      client
+        ..send(const SetAdminMode('ssh-config:web', enabled: true))
+        ..send(const SetAdminMode('nowhere', enabled: true));
+      final observed = (await next(events)) as AdminModeState;
+      expect(observed.phase, AdminModePhase.failed);
+      expect(observed.failure, AdminFailure.observeOnly);
+      expect(
+        ((await next(events)) as RequestRejected).requestName,
+        'SetAdminMode',
+      );
+
+      const managed = {'ssh-config:web': ServerSafety(management: true)};
+      client
+        ..send(
+          const SetSafetyPolicy(
+            SafetyPolicy(globalReadOnly: true, servers: managed),
+          ),
+        )
+        ..send(plan)
+        ..send(const SetSafetyPolicy(SafetyPolicy(servers: managed)))
+        ..send(plan)
+        ..send(const SetAdminMode('ssh-config:web', enabled: true))
+        ..send(
+          const SetSafetyPolicy(
+            SafetyPolicy(adminExpiry: Duration(minutes: 7)),
+          ),
+        );
+      expect(await refusal(), ActionRefusalReason.readOnly);
+      expect(await refusal(), ActionRefusalReason.noLink);
+      final noLinks = (await next(events)) as AdminModeState;
+      expect(noLinks.failure, AdminFailure.noLink, reason: 'links are off');
+      expect(
+        ((await next(events)) as RequestRejected).requestName,
+        'SetSafetyPolicy',
+      );
+
+      // JOB-03's read needs the link, then admin mode.
+      client.send(const ReadUserCrontabs('ssh-config:web', requestId: 'r-1'));
+      final crontabs = (await next(events)) as UserCrontabs;
+      expect(crontabs.requestId, 'r-1');
+      expect(crontabs.failure, UserCrontabsFailure.noLink);
     });
 
     test('links stay off unless spawn turns them on', () async {

@@ -1,19 +1,10 @@
-import 'dart:io';
-
 import 'package:klabautermann_core/src/docker/duplex_adapters.dart';
 import 'package:klabautermann_docker/klabautermann_docker.dart' as docker;
-import 'package:seance_core/seance_core.dart'
-    show
-        AuthMethod,
-        HostKeyVerdict,
-        InMemoryHostKeyStore,
-        ServerConfig,
-        SshCredentials,
-        SshLink,
-        TofuVerifier;
+import 'package:seance_core/seance_core.dart' show SshLink;
 import 'package:test/test.dart';
 
 import 'fixture.dart';
+import 'ssh_link.dart';
 
 /// The engine's first candidate path (03 §5.4), a link to dind's socket
 /// on the Docker host and its variants (`sshd/docker-setup.sh`).
@@ -30,30 +21,13 @@ Future<SshLink> connectDockerHost(
   FixtureService service,
   String user,
 ) async {
-  final hostKeys = await fixture.hostKeyFingerprints(service);
-  final endpoint = await fixture.endpoint(service);
-  final link = await SshLink.connect(
-    config: ServerConfig(
-      id: '${service.composeName}-$user',
-      label: service.composeName,
-      host: endpoint.host,
-      port: endpoint.port,
-      username: user,
-      authMethod: AuthMethod.privateKey,
-      identityFilePath: fixture.identityFile,
-      createdAt: 0,
-      updatedAt: 0,
-    ),
-    credentials: SshCredentials.privateKey(
-      await File(fixture.identityFile).readAsString(),
-    ),
-    tofu: TofuVerifier(InMemoryHostKeyStore()),
-    onHostKey: (decision) async =>
-        decision.verdict == HostKeyVerdict.firstUse &&
-        hostKeys.contains(decision.presented.fingerprintSha256),
+  return connectLink(
+    id: '${service.composeName}-$user',
+    endpoint: await fixture.endpoint(service),
+    user: user,
+    identityFile: fixture.identityFile,
+    hostKeys: await fixture.hostKeyFingerprints(service),
   );
-  addTearDown(link.close);
-  return link;
 }
 
 /// An HTTP client whose every connection is a new streamlocal duplex to

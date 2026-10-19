@@ -8,6 +8,10 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
+import 'admin_mode_chip.dart' show AdminScope;
+import 'actions/host_actions.dart';
+import 'actions/run_output_sheet.dart';
 import 'freshness.dart';
 import 'jobs_view.dart';
 import 'server_surfaces.dart' show ServerPanel;
@@ -40,6 +44,10 @@ const String _crontabTool = 'crontab';
 
 /// The jobs table's columns, whose names key them.
 enum _Column { job, source, schedule, next }
+
+/// Which jobs the panel lists: the cron and timers streams', or, in admin
+/// mode, every other user's crontab (JOB-03).
+enum _Source { mine, otherUsers }
 
 /// What a source's reading said, which the empty list's ARB phrase
 /// selects: it answered, gave no clear answer, or the server has no such
@@ -85,6 +93,206 @@ class _JobsPanelState extends State<JobsPanel> {
   /// panel built once opened. The next job to run leads.
   TableSort? _sort = TableSort(_Column.next.name, TableSortDirection.ascending);
 
+  _Source _source = _Source.mine;
+
+  /// The last read of the other users' crontabs, and whether one runs.
+  UserCrontabs? _others;
+  bool _readingOthers = false;
+
+  /// Whether admin mode is on for the server, which JOB-03 needs.
+  bool _adminOn(BuildContext context) =>
+      AdminScope.maybeOf(context)?.stateFor(widget.serverId)?.phase ==
+      AdminModePhase.on;
+
+  /// A desktop selection moves the panel to another server in place:
+  /// the last one's crontabs, and a read still out for it, are not this
+  /// one's.
+  @override
+  void didUpdateWidget(JobsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.serverId != widget.serverId) _forgetOthers();
+  }
+
+  void _forgetOthers() {
+    _source = _Source.mine;
+    _others = null;
+    _readingOthers = false;
+  }
+
+  Future<void> _readOthers(BuildContext context) async {
+    final admin = AdminScope.maybeOf(context);
+    if (admin == null || _readingOthers) return;
+    final serverId = widget.serverId;
+    setState(() => _readingOthers = true);
+    final read = await admin.readUserCrontabs(serverId);
+    if (!mounted || serverId != widget.serverId) return;
+    setState(() {
+      _others = read;
+      _readingOthers = false;
+    });
+  }
+
+  /// The source switch, shown only in admin mode.
+  Widget? _sourceSwitch(BuildContext context) {
+    if (!_adminOn(context)) return null;
+    final l10n = AppLocalizations.of(context);
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: SegmentedButton<_Source>(
+        segments: [
+          ButtonSegment(value: _Source.mine, label: Text(l10n.jobsSourceMine)),
+          ButtonSegment(
+            value: _Source.otherUsers,
+            label: Text(l10n.jobsSourceOtherUsers),
+          ),
+        ],
+        selected: {_source},
+        onSelectionChanged: (choice) {
+          setState(() => _source = choice.first);
+          if (_source == _Source.otherUsers && _others == null) {
+            unawaited(_readOthers(context));
+          }
+        },
+      ),
+    );
+  }
+
+  /// JOB-03's view: the other users' crontab lines, read-only, their
+  /// commands masked by the engine (03 §8.9), with why any could not be
+  /// read and a button to read them again. Nothing here acts.
+  Widget _buildOthers(BuildContext context, HostProfile? profile) {
+    final l10n = AppLocalizations.of(context);
+    final read = _others;
+    final now = widget.monitoring.clock.value;
+    final jobs = read?.jobs ?? const <JobEntry>[];
+    final notices = [
+      ?_sourceSwitch(context),
+      if (_readingOthers)
+        PanelNotice(
+          icon: Icons.hourglass_empty,
+          text: l10n.jobsOtherUsersReading,
+        ),
+      if (read?.failure case final failure?)
+        PanelNotice(
+          icon: Icons.error_outline,
+          text: l10n.jobsOtherUsersFailure(failure.name),
+        ),
+      if (read != null && read.unreadable.isNotEmpty)
+        PanelNotice(
+          icon: Icons.info_outline,
+          text: l10n.jobsOtherUsersUnreadable(
+            read.unreadable.join(l10n.fleetRowListSeparator),
+          ),
+        ),
+      if (read != null && read.notRead > 0)
+        PanelNotice(
+          icon: Icons.info_outline,
+          text: l10n.jobsOtherUsersNotRead(read.notRead),
+        ),
+      if (read != null && read.failure == null)
+        PanelNotice(
+          icon: Icons.visibility_off_outlined,
+          text: l10n.jobsOtherUsersMasked,
+        ),
+      Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: TextButton.icon(
+          onPressed: _readingOthers ? null : () => _readOthers(context),
+          icon: const Icon(Icons.refresh),
+          label: Text(l10n.jobsOtherUsersRefresh),
+        ),
+      ),
+    ];
+    return LayoutBuilder(
+      builder: (context, box) {
+        final wide =
+            box.maxWidth >= MediaQuery.textScalerOf(context).scale(_wideWidth);
+        return Padding(
+          padding: EdgeInsets.all(wide ? 20 : 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: box.maxHeight * _headerShare,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    spacing: 8,
+                    children: notices,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (read != null && read.failure == null)
+                Expanded(
+                  child: SortableTable<JobEntry>(
+                    tableId: '${ServerPanel.jobs.name}.others',
+                    columns: _columns(
+                      context,
+                      jobs,
+                      wide: wide,
+                      stale: false,
+                      serverOffset: profile?.serverZone?.offset,
+                      now: now,
+                    ),
+                    rows: jobs,
+                    rowKey: (job) => job.id,
+                    sort: _sort,
+                    onSort: (sort) => setState(() => _sort = sort),
+                    onRowActivated: (job) => _showDetails(
+                      context,
+                      job,
+                      profile,
+                      now,
+                      run: (_, _) => null,
+                    ),
+                    empty: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(l10n.jobsOtherUsersEmpty),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// JOB-08's output sheet for [unit], the service a run started.
+  void _showOutput(String unit) {
+    if (!mounted) return;
+    unawaited(
+      showRunOutput(
+        context,
+        monitoring: widget.monitoring,
+        serverId: widget.serverId,
+        unit: unit,
+      ),
+    );
+  }
+
+  /// The details' Run now, for a timer row where actions are allowed.
+  Widget? _runNow(BuildContext context, JobEntry job) => switch (job) {
+    TimerJobEntry(:final timer)
+        when actionsAllowedAt(
+          context,
+          widget.serverId,
+          ActionEntryPoint.timerRunNow,
+        ) =>
+      TimerRunButton(
+        serverId: widget.serverId,
+        timer: timer.unit,
+        onRun: (unit) {
+          Navigator.of(context).pop();
+          _showOutput(unit);
+        },
+      ),
+    _ => null,
+  };
+
   @override
   Widget build(BuildContext context) {
     final monitoring = widget.monitoring;
@@ -100,6 +308,15 @@ class _JobsPanelState extends State<JobsPanel> {
     );
     final profile = monitoring.profileFor(serverId);
     final sampling = monitoring.samplingFor(serverId);
+    // Admin mode that ended takes the other users' crontabs with it,
+    // so turning it on again starts from the streams' rows.
+    if (!_adminOn(context)) _forgetOthers();
+    if (_source == _Source.otherUsers) {
+      return ValueListenableBuilder(
+        valueListenable: profile,
+        builder: (context, profile, _) => _buildOthers(context, profile),
+      );
+    }
     return ListenableBuilder(
       listenable: Listenable.merge([
         cron,
@@ -194,6 +411,7 @@ class _JobsPanelState extends State<JobsPanel> {
       (job) => job is TimerJobEntry && job.timer.nextUtc != null,
     );
     final notices = [
+      ?_sourceSwitch(context),
       if (oldest != null || freshnessAt(clock.value) is FreshnessPaused)
         ListenableBuilder(
           listenable: ticking ? clock : _silent,
@@ -270,8 +488,31 @@ class _JobsPanelState extends State<JobsPanel> {
                       onSort: (sort) => setState(() => _sort = sort),
                       // The table cuts commands and schedules short
                       // (A11Y-09); the details do not.
-                      onRowActivated: (job) =>
-                          _showDetails(context, job, profile, clock.value),
+                      onRowActivated: (job) => _showDetails(
+                        context,
+                        job,
+                        profile,
+                        clock.value,
+                        run: _runNow,
+                      ),
+                      // JOB-08 on timer rows where actions are allowed (M4
+                      // E21); the table keeps no slot otherwise.
+                      rowActions:
+                          actionsAllowedAt(
+                            context,
+                            widget.serverId,
+                            ActionEntryPoint.timerRunNow,
+                          )
+                          ? (job) => switch (job) {
+                              TimerJobEntry(:final timer) => timerActionEntries(
+                                context,
+                                serverId: widget.serverId,
+                                timer: timer.unit,
+                                onRun: _showOutput,
+                              ),
+                              _ => const [],
+                            }
+                          : null,
                       empty: empty == null
                           ? null
                           : Padding(
@@ -641,8 +882,9 @@ void _showDetails(
   BuildContext context,
   JobEntry job,
   HostProfile? profile,
-  DateTime now,
-) {
+  DateTime now, {
+  required Widget? Function(BuildContext context, JobEntry job) run,
+}) {
   unawaited(
     showModalBottomSheet<void>(
       context: context,
@@ -651,7 +893,14 @@ void _showDetails(
       builder: (context) => SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-          child: JobDetails(job: job, profile: profile, now: now),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: 16,
+            children: [
+              JobDetails(job: job, profile: profile, now: now),
+              ?run(context, job),
+            ],
+          ),
         ),
       ),
     ),
