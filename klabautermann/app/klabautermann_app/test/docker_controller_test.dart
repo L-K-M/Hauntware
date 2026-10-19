@@ -598,7 +598,15 @@ void main() {
         ),
       );
       expect(details.value.container, isNull);
+      // The view that still shows it keeps a working listenable that
+      // says why, until it closes.
+      expect(details.value.failure?.failure, DockerQueryFailure.notInFleet);
+      void listener() {}
+      details
+        ..addListener(listener)
+        ..removeListener(listener);
       docker.closeContainer('srv-1', 'c-1');
+      expect(() => details.addListener(listener), throwsFlutterError);
 
       final unlisted = docker.openContainer('srv-1', 'c-1');
       expect(unlisted.value.failure?.failure, DockerQueryFailure.notInFleet);
