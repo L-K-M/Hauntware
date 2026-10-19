@@ -2591,8 +2591,12 @@ ended fails. Admin mode ending drops a sudo relay endpoint, which
 resolves again and reads `needsAdminMode`; admin mode starting resolves
 a failed endpoint again. The route's root equivalence is `sudoRelay`,
 whatever the engine. Without admin mode the ladder never offers it; a
-host with no engine CLI has no sudo relay (`noRelay`). The app's label
-and SAF-08 badge arrive with E22.
+host with no engine CLI has no sudo relay (`noRelay`). The app's server
+header names it with SAF-08's badge ("Sudo relay: root-equivalent"). An
+admin mode change while the route is being looked for drops that attempt
+and looks again, so a relay never outlives admin mode. Over the relay a
+Docker action needs admin: its plan names root, and a redeploy's CLI
+steps go to a root runner row, since the socket refuses the login user.
 
 ### 5.10 dartssh2 defects and mitigations (D23)
 
@@ -3758,8 +3762,9 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   - The steps are `config -q` with its output on `/dev/null`, `pull`
     and `up -d` (`--remove-orphans` only on request, typed), each with
     `--host` and every recorded `-f` and `--env-file`. The runner row
-    comes from 7.17's table at planning (the login user's until rank 3,
-    E16), with its host writes and the `setsid` logout warning.
+    comes from 7.17's table at planning (the login user's, or root's
+    over the sudo relay, rank 3), with its host writes and the `setsid`
+    logout warning.
   - Right before the launch the runner re-validates the containers' ids
     and runs `config --hash '*'` again, which must print the hash each
     named service's containers carry. Then it launches one operation,
@@ -3942,7 +3947,9 @@ calls it before E17b. Decisions:
   `systemd-run --uid=0` and takes the `setsid` row. Under a sudo rule
   that does not cover the runners, work that needs root is refused with
   the missing right named, and other work is placed as with admin mode
-  off. `mayDieAtLogout` is the preview's warning for the `setsid` row
+  off; the selection takes that fact, but nothing derives it from the
+  probe yet, so every sudo rule counts as covering them (follow-up).
+  `mayDieAtLogout` is the preview's warning for the `setsid` row
   under `KillUserProcesses=yes`.
 - Operation ids are 16 lowercase hex digits from a secure random
   source.
@@ -3983,9 +3990,10 @@ each server's operations. Decisions:
   the operation stays listed as acknowledged until admin mode turns on,
   which also prunes the root directory once per admin session. A cleanup
   that fails is retried by the next listing.
-- The user directory is pruned once per link. Nothing launches yet: E18's
-  redeploy plan is the first caller of the launch and of the tracker's
-  `launched`, which keeps the launch facts.
+- The user directory is pruned once per link. E18's redeploy plan is
+  the first caller of the launch and of the tracker's `launched`, which
+  keeps the launch facts, their steps redacted as the audit log stores
+  them.
 - [U] A record older than 7 days is pruned even while its operation
   runs; the operation then drops from the list.
 
