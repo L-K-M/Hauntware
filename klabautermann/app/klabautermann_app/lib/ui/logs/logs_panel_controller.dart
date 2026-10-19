@@ -29,9 +29,12 @@ const int kLogsPanelWindow = 500;
 /// starts over when shown again, and its window arrives oldest first, as
 /// the Docker API sends it.
 class LogsPanelController extends ChangeNotifier implements LogStreamListener {
+  /// A source given here is read whatever the query says, as a file is
+  /// read: a detached operation's output (03 §7.17) has no query.
   LogsPanelController({
     required this._streams,
     required this.serverId,
+    this._source,
     this._now = DateTime.now,
   }) : containerId = null;
 
@@ -41,10 +44,11 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
     required this.serverId,
     required String this.containerId,
     this._now = DateTime.now,
-  });
+  }) : _source = null;
 
   final LogStreams _streams;
   final String serverId;
+  final LogSource? _source;
   final DateTime Function() _now;
 
   /// The container whose logs this reads, or null for the host's logs
@@ -77,9 +81,9 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
 
   LogQuery get query => _query;
 
-  /// Whether there is something to read: a container, or a [query] that
-  /// is ready.
-  bool get ready => containerId != null || _query.ready;
+  /// Whether there is something to read: a container, a given source, or
+  /// a [query] that is ready.
+  bool get ready => containerId != null || _source != null || _query.ready;
 
   bool get live => _live;
 
@@ -141,9 +145,13 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
   void _open() {
     if (!_visible || _stream != null || _kept || !ready) return;
 
-    final container = containerId;
+    // A container's logs, or a given source, are read as a file is.
+    final source = switch (containerId) {
+      final container? => ContainerLogSource(container),
+      null => _source,
+    };
     final resume =
-        _live && container == null && _query.source != LogSourceKind.file
+        _live && source == null && _query.source != LogSourceKind.file
         ? _cursor
         : null;
     if (resume == null) {
@@ -155,9 +163,7 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
     _stream = _streams.open(
       LogStreamSpec(
         serverId: serverId,
-        source: container == null
-            ? _query.toSource(_now())
-            : ContainerLogSource(container),
+        source: source ?? _query.toSource(_now()),
         window: kLogsPanelWindow,
         follow: _live,
         afterCursor: resume,

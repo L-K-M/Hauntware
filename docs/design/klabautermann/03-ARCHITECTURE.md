@@ -4045,6 +4045,29 @@ login user, so no elevation is needed. The follow is the file follow of
 the window bounds what the first batch holds, as for any file. An
 operation the engine does not list ends the stream as `invalid`.
 
+As built in M4 (E23, first half), the app shows a server's detached
+operations from `OperationsChanged`:
+- The server header's chip counts the running ones, or else the results
+  not yet acknowledged, and opens a sheet that lists each operation:
+  - its action and target, or its id when another device started it;
+  - its state;
+  - its output, followed live through `OperationLogSource`;
+  - for an ended result, a Clear button that sends
+    `AcknowledgeOperation`.
+- An acknowledged root operation says its files wait for admin mode.
+- A directory that was denied or cut short says operations may be
+  missing.
+- Each list replaces the one before, so a reconnect re-attaches.
+
+In its second half (E23b) the preview words a detached plan: it says
+the operation continues on the server if the user leaves or the
+connection drops, and on iOS that the result shows on return. A
+redeploy lists its orphans with a switch that plans it again with
+`removeOrphans`, whose preview then asks for the typed name, and each
+`PlanWarning` is worded. A started operation toasts that it started;
+its result comes through the chip. The stacks view's redeploy entry
+arrives with E22's Docker actions.
+
 ### 7.18 Backups (BAK)
 
 - **v1.x.** One-shot database dumps from a container using its own

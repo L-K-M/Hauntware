@@ -1580,6 +1580,14 @@ M2, the host read MVP, is the current milestone. What is on main:
   crontabs are read masked, and another account's process is killed
   only through elevation. Admin mode's inactivity expiry stays with the
   unit tests' fake clock, since the shortest choice is five minutes.
+- M4 redeploy preview (E23b): a detached plan's preview says it
+  continues on the server, a redeploy lists its orphans with the switch
+  that plans their removal and the typed name, and the warnings are
+  worded. The stacks view's entry arrives with E22.
+- M4 detached operations in the app (E23, first half): a chip in the
+  server header counts running operations or results to review, and its
+  sheet shows each one's state, follows its output and clears an ended
+  result. The redeploy preview follows E18.
 - M4 Docker action planners (E15): `PlanAction` plans container state
   changes and removal, image removal and stack start, stop and restart
   over the server's Docker endpoint. Steps address the full id and are
@@ -1599,7 +1607,7 @@ M2, the host read MVP, is the current milestone. What is on main:
   unmanaged stack as one detached operation of `config -q`, `pull` and
   `up -d` through the endpoint's `--host`, listing orphans and warning
   about profile-gated services. The runner checks the config hashes
-  again before it launches. The app's redeploy arrives with E23b.
+  again before it launches.
 - M4 operation output (E17c): the engine follows a detached
   operation's output file like any log file, each line redacted.
 - M4 detached runner, second half (E17b): the engine reads each

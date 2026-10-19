@@ -4108,6 +4108,42 @@ abstract class AppLocalizations {
   /// **'Managed by {manager}. Acting on it here can conflict with {manager}.'**
   String actionPreviewOwnership(String manager);
 
+  /// Preview note for an operation that runs detached on the server (03 §7.17).
+  ///
+  /// In en, this message translates to:
+  /// **'Runs on the server and continues if you leave or the connection drops. Its result shows under Operations.'**
+  String get actionPreviewDetached;
+
+  /// Preview note for a detached operation on iOS, where the app does not run in the background (03 §7.17).
+  ///
+  /// In en, this message translates to:
+  /// **'Runs on the server and continues if you leave the app or the connection drops. Its result shows under Operations when you come back.'**
+  String get actionPreviewDetachedIos;
+
+  /// Heading above a redeploy's orphan containers (STK-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Containers the stack\'s files no longer name'**
+  String get actionPreviewOrphans;
+
+  /// Switch in a redeploy preview that plans it again with --remove-orphans, which needs the typed confirmation (STK-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Also remove these containers'**
+  String get actionPreviewRemoveOrphans;
+
+  /// A warning in the action preview; warning is the engine's PlanWarning name.
+  ///
+  /// In en, this message translates to:
+  /// **'{warning, select, profileGatedServices{Some running services are enabled only by a compose profile, which Klabautermann cannot see. The redeploy leaves them as they are.} profilesUnknown{The compose CLI could not list every profile\'s services, so some of these containers may belong to a service a profile enables.} mayDieAtLogout{This server ends your processes when you log out, which can stop the operation before it finishes.} other{}}'**
+  String actionPreviewWarning(String warning);
+
+  /// Toast when a detached operation started on the server; its result shows under Operations.
+  ///
+  /// In en, this message translates to:
+  /// **'Started on the server: {target}'**
+  String actionStartedOnServer(String target);
+
   /// Heading above the danger findings in the action preview (AI-01).
   ///
   /// In en, this message translates to:
@@ -4443,6 +4479,120 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{date} {time}'**
   String activityTime(String date, String time);
+
+  /// Server header chip while detached operations run on the server (03 §7.17); count is how many.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 operation running} other{{count} operations running}}'**
+  String detachedChipRunning(int count);
+
+  /// Server header chip when detached operations ended and their results wait to be seen; count is how many.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 operation result} other{{count} operation results}}'**
+  String detachedChipResults(int count);
+
+  /// Title of the sheet listing a server's detached operations; server is its display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Operations on {server}'**
+  String detachedSheetTitle(String server);
+
+  /// Notice in the operations sheet when a directory was denied or its listing was cut short.
+  ///
+  /// In en, this message translates to:
+  /// **'Some operations may be missing: an operation folder on the server could not be read.'**
+  String get detachedIncomplete;
+
+  /// The operations sheet when the server has none.
+  ///
+  /// In en, this message translates to:
+  /// **'No operations.'**
+  String get detachedEmpty;
+
+  /// Under an operation another device started, whose action this device does not know.
+  ///
+  /// In en, this message translates to:
+  /// **'Started on another device.'**
+  String get detachedLaunchedElsewhere;
+
+  /// An operation's name when another device started it; id is its 16-character id.
+  ///
+  /// In en, this message translates to:
+  /// **'Operation {id}'**
+  String detachedUnnamed(String id);
+
+  /// An operation's name: the worded action and the target it acts on.
+  ///
+  /// In en, this message translates to:
+  /// **'{action}: {target}'**
+  String detachedName(String action, String target);
+
+  /// A running operation's state; time is when it started, in local time.
+  ///
+  /// In en, this message translates to:
+  /// **'Running since {time}.'**
+  String detachedRunningSince(String time);
+
+  /// A running operation's state when its start time is unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Running.'**
+  String get detachedRunning;
+
+  /// An operation that ended with exit status 0.
+  ///
+  /// In en, this message translates to:
+  /// **'Finished.'**
+  String get detachedSucceeded;
+
+  /// An operation that ended with a non-zero exit status; code is that status.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed with exit status {code}.'**
+  String detachedFailed(int code);
+
+  /// An operation whose runner ended without recording a result.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped before it finished, for example by a logout or a restart.'**
+  String get detachedLost;
+
+  /// An operation whose state the engine could not determine.
+  ///
+  /// In en, this message translates to:
+  /// **'Its state could not be read.'**
+  String get detachedUnknown;
+
+  /// Button that opens an operation's output, followed live.
+  ///
+  /// In en, this message translates to:
+  /// **'Show output'**
+  String get detachedShowOutput;
+
+  /// Button that acknowledges an ended operation's result, which deletes its files.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get detachedAcknowledge;
+
+  /// Under an acknowledged operation of the root directory, whose files only admin mode can delete.
+  ///
+  /// In en, this message translates to:
+  /// **'Cleared. Its files are deleted once admin mode is on.'**
+  String get detachedCleanupWaits;
+
+  /// Title of the sheet following an operation's output; name is the operation's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Output of {name}'**
+  String detachedOutputTitle(String name);
+
+  /// Tooltip and screen reader label of the button that closes an operation's output sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Close output'**
+  String get detachedOutputClose;
 
   /// The server header's Docker transport label (03 §5.9, E4) before the server is connected and its capability check has answered.
   ///

@@ -3093,6 +3093,40 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get actionPreviewDetached =>
+      'Runs on the server and continues if you leave or the connection drops. Its result shows under Operations.';
+
+  @override
+  String get actionPreviewDetachedIos =>
+      'Runs on the server and continues if you leave the app or the connection drops. Its result shows under Operations when you come back.';
+
+  @override
+  String get actionPreviewOrphans =>
+      'Containers the stack\'s files no longer name';
+
+  @override
+  String get actionPreviewRemoveOrphans => 'Also remove these containers';
+
+  @override
+  String actionPreviewWarning(String warning) {
+    String _temp0 = intl.Intl.selectLogic(warning, {
+      'profileGatedServices':
+          'Some running services are enabled only by a compose profile, which Klabautermann cannot see. The redeploy leaves them as they are.',
+      'profilesUnknown':
+          'The compose CLI could not list every profile\'s services, so some of these containers may belong to a service a profile enables.',
+      'mayDieAtLogout':
+          'This server ends your processes when you log out, which can stop the operation before it finishes.',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String actionStartedOnServer(String target) {
+    return 'Started on the server: $target';
+  }
+
+  @override
   String get actionPreviewDanger => 'Warnings';
 
   @override
@@ -3401,6 +3435,94 @@ class AppLocalizationsEn extends AppLocalizations {
   String activityTime(String date, String time) {
     return '$date $time';
   }
+
+  @override
+  String detachedChipRunning(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count operations running',
+      one: '1 operation running',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String detachedChipResults(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count operation results',
+      one: '1 operation result',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String detachedSheetTitle(String server) {
+    return 'Operations on $server';
+  }
+
+  @override
+  String get detachedIncomplete =>
+      'Some operations may be missing: an operation folder on the server could not be read.';
+
+  @override
+  String get detachedEmpty => 'No operations.';
+
+  @override
+  String get detachedLaunchedElsewhere => 'Started on another device.';
+
+  @override
+  String detachedUnnamed(String id) {
+    return 'Operation $id';
+  }
+
+  @override
+  String detachedName(String action, String target) {
+    return '$action: $target';
+  }
+
+  @override
+  String detachedRunningSince(String time) {
+    return 'Running since $time.';
+  }
+
+  @override
+  String get detachedRunning => 'Running.';
+
+  @override
+  String get detachedSucceeded => 'Finished.';
+
+  @override
+  String detachedFailed(int code) {
+    return 'Failed with exit status $code.';
+  }
+
+  @override
+  String get detachedLost =>
+      'Stopped before it finished, for example by a logout or a restart.';
+
+  @override
+  String get detachedUnknown => 'Its state could not be read.';
+
+  @override
+  String get detachedShowOutput => 'Show output';
+
+  @override
+  String get detachedAcknowledge => 'Clear';
+
+  @override
+  String get detachedCleanupWaits =>
+      'Cleared. Its files are deleted once admin mode is on.';
+
+  @override
+  String detachedOutputTitle(String name) {
+    return 'Output of $name';
+  }
+
+  @override
+  String get detachedOutputClose => 'Close output';
 
   @override
   String get dockerTransportWaiting => 'Engine API: waiting for the connection';
