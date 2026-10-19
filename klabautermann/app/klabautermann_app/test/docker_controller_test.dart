@@ -236,4 +236,188 @@ void main() {
       ..retry('srv-1');
     expect(queries(), isEmpty);
   });
+
+  group('the container watch (CTR-01, CST-01)', () {
+    final at = DateTime(2026, 10, 15, 14, 30);
+
+    List<DockerWatch> watches() => engine.sentOfType<DockerWatch>().cast();
+    List<DockerUnwatch> unwatches() =>
+        engine.sentOfType<DockerUnwatch>().cast();
+
+    ContainerListStats stats(String id, double cpu) => ContainerListStats(
+      containerId: id,
+      at: at,
+      cpuPercent: cpu,
+      memoryUsed: 64 << 20,
+    );
+
+    test('one watch per server while any view shows, replaced as the rows '
+        'on screen change', () async {
+      docker.watchContainers('srv-1');
+      expect(watches(), hasLength(1));
+      final first = watches().single;
+      expect(first.serverId, 'srv-1');
+      expect(first.lists, {DockerWatchList.containers, DockerWatchList.stats});
+      expect(first.statsFor, isEmpty);
+
+      // A second view shares it.
+      docker.watchContainers('srv-1', statsFor: ['c-9']);
+      expect(watches(), hasLength(1));
+
+      docker.showStatsFor('srv-1', ['c-1', 'c-2']);
+      expect(watches(), hasLength(2));
+      expect(watches().last.watchId, first.watchId, reason: 'replaces it');
+      expect(watches().last.statsFor, {'c-1', 'c-2'});
+
+      docker.showStatsFor('srv-1', ['c-2', 'c-1']);
+      expect(watches(), hasLength(2), reason: 'the same rows');
+
+      // No more than the engine reads.
+      docker.showStatsFor('srv-1', [for (var i = 0; i < 80; i++) 'c-$i']);
+      expect(watches().last.statsFor, hasLength(kDockerStatsForMax));
+      expect(watches().last.statsFor, contains('c-0'));
+      expect(watches().last.statsFor, isNot(contains('c-79')));
+
+      docker.unwatchContainers('srv-1');
+      expect(unwatches(), isEmpty, reason: 'a view still shows');
+      docker.unwatchContainers('srv-1');
+      expect(unwatches().single.watchId, first.watchId);
+      expect(unwatches().single.serverId, 'srv-1');
+      docker.unwatchContainers('srv-1');
+      expect(unwatches(), hasLength(1));
+
+      // Hidden, rows on screen change nothing; a new view watches anew
+      // with the rows it shows.
+      docker.showStatsFor('srv-1', ['c-3']);
+      final sent = watches().length;
+      docker.watchContainers('srv-1', statsFor: ['c-3']);
+      expect(watches(), hasLength(sent + 1));
+      expect(watches().last.watchId, isNot(first.watchId));
+      expect(watches().last.statsFor, {'c-3'});
+    });
+
+    test('keeps the latest containers and stats, and a failed read beside '
+        'the last list', () async {
+      docker.watchContainers('srv-1');
+      final list = docker.containersFor('srv-1');
+      expect(list.value.containers, isNull);
+
+      await emit(
+        dockerContainerList('srv-1', [
+          dockerContainer('c-1'),
+          dockerContainer('c-2'),
+        ], at: at),
+      );
+      expect(list.value.containers, hasLength(2));
+      expect(list.value.at, at);
+
+      await emit(
+        dockerStatsRound('srv-1', [stats('c-1', 5), stats('c-2', 7)], at: at),
+      );
+      await emit(dockerStatsRound('srv-1', [stats('c-1', 9)], at: at));
+      expect(list.value.stats['c-1']?.cpuPercent, 9);
+      expect(
+        list.value.stats['c-2']?.cpuPercent,
+        7,
+        reason: 'a row off screen keeps its last stats',
+      );
+
+      await emit(
+        dockerListFailed(
+          'srv-1',
+          DockerWatchList.stats,
+          DockerQueryFailure.connectionFailed,
+          at: at,
+        ),
+      );
+      expect(
+        list.value.statsFailure?.failure,
+        DockerQueryFailure.connectionFailed,
+      );
+      expect(list.value.stats, hasLength(2));
+
+      await emit(
+        dockerListFailed(
+          'srv-1',
+          DockerWatchList.containers,
+          DockerQueryFailure.daemonError,
+          at: at,
+          detail: 'Error response from daemon',
+        ),
+      );
+      expect(list.value.failure?.failure, DockerQueryFailure.daemonError);
+      expect(list.value.failure?.detail, 'Error response from daemon');
+      expect(list.value.containers, hasLength(2));
+
+      // A container that went takes its stats along.
+      await emit(
+        dockerContainerList('srv-1', [dockerContainer('c-1')], at: at),
+      );
+      expect(list.value.failure, isNull);
+      expect(list.value.stats.keys, ['c-1']);
+      await emit(dockerStatsRound('srv-1', [stats('c-1', 1)], at: at));
+      expect(list.value.statsFailure, isNull);
+
+      // Other lists and servers leave it be.
+      await emit(
+        DockerListChanged(
+          serverId: 'srv-1',
+          list: DockerWatchList.images,
+          payload: const DockerImagesPayload([]),
+          at: at,
+        ),
+      );
+      await emit(dockerContainerList('srv-2', const [], at: at));
+      expect(list.value.containers, hasLength(1));
+    });
+
+    test('a retry watches anew under a new id', () async {
+      docker.watchContainers('srv-1');
+      docker.showStatsFor('srv-1', ['c-1']);
+      final before = watches().last;
+      await emit(
+        dockerListFailed(
+          'srv-1',
+          DockerWatchList.containers,
+          DockerQueryFailure.tooManyQueries,
+          at: at,
+        ),
+      );
+
+      docker.retryContainers('srv-1');
+      expect(unwatches().single.watchId, before.watchId);
+      expect(watches().last.watchId, isNot(before.watchId));
+      expect(watches().last.statsFor, {'c-1'});
+    });
+
+    test('a server that leaves the fleet drops its watch and lists '
+        '(SYN-08)', () async {
+      docker.watchContainers('srv-1');
+      await emit(
+        dockerContainerList('srv-1', [dockerContainer('c-1')], at: at),
+      );
+      final before = docker.containersFor('srv-1');
+
+      await emit(CatalogReplaced(const []));
+      expect(docker.containersFor('srv-1'), isNot(same(before)));
+      expect(docker.containersFor('srv-1').value.containers, isNull);
+
+      // The engine ended the watch with the session: nothing to end.
+      docker.unwatchContainers('srv-1');
+      docker.watchContainers('srv-1');
+      expect(unwatches(), isEmpty);
+      expect(watches(), hasLength(1), reason: 'not in the fleet');
+    });
+
+    test('sends nothing once the engine stopped', () async {
+      await engine.close();
+      await pumpEventQueue();
+      docker
+        ..watchContainers('srv-1')
+        ..showStatsFor('srv-1', ['c-1'])
+        ..unwatchContainers('srv-1');
+      expect(watches(), isEmpty);
+      expect(unwatches(), isEmpty);
+    });
+  });
 }

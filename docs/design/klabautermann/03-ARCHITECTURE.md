@@ -2402,11 +2402,37 @@ takes a short-action slot, and one that finds the share full waits in
 the engine as `LogStreamWaiting(channel)`, where the app can show it,
 rather than on the link. A follower (K26) gets no slot while the link
 has learned a session limit below 4 (the two samplers, one follower and
-one short action), and only one at 4, each session above it making room
-for one more, so it reports waiting for a channel instead of holding
-the last free one and leaving short actions none; the rest of
-low-session mode is M3. The link still opens every session channel at
-one priority, since `seance_core`'s `start` and `run` take none yet.
+one short action), so it reports waiting for a channel instead of
+holding the last free one and leaving short actions none. The link
+still opens every session channel at one priority, since
+`seance_core`'s `start` and `run` take none yet.
+
+As built in M3 (D09, M9), one `ChannelQuota` per server, from the
+engine's `ChannelQuotas`, serves the log router and the Docker session
+alike, so their channels on one link count against the same shares; a
+slot one gives back wakes the other's waiting reads in a microtask. On
+relay ranks each Docker connection is a session channel: the pool holds
+one connection, which takes a short-action slot while open and gives it
+back at its 30 s idle close [E]; the events stream takes a follower
+slot, and a container log follow a follower's and a window a short
+action's, as the host's do. The stack checks take short-action slots on
+every rank, since each is an exec. Streamlocal costs no session. So on a
+relay with no learned limit, a journal follow and a container follow
+fill the follower share, and the events stream then gives way to a full
+re-list every 15 s [E], trying for a slot again each time. Any learned
+session limit is low-session mode: followers are held to one at 4 or
+more and none below, short actions and followers together hold no more
+than the two samplers leave (at 4, one of each; on a relay the pooled
+connection is that short action while a watch keeps it open), the
+Docker events stream on a relay is not opened (and one already open
+closes) in favour of the 15 s re-lists while a watch holds, stats are
+read one at a time on every rank, and `DockerEndpointState.lowSession`
+names the mode, on streamlocal too. Below 4 the samplers leave less
+than the short-action share, so the cap there is that share's two
+slots: short actions keep them, and what the link cannot open yet
+queues on it. A new link has learned nothing, so reconnecting ends the
+mode. Stack logs merged through one `docker compose logs -f` are not
+built yet.
 
 ### 5.3 Failure classification
 
@@ -3081,9 +3107,12 @@ avoid 1 and 2, which sudo and the shell use, and 126 and 127.
 
 As built in M4 (E14,
 `klabautermann_core/lib/src/operations/plans/host_plans.dart`),
-planning a kill reads the process over the link first: its start ticks, which must still match the intent's, then
-`HostCommands.processFacts`, its real uid and `comm`. The plan elevates
-only when the uid differs from the probe's login uid, names the target
+planning a kill reads the process over the link first: its start
+ticks, which must still match the intent's, then
+`HostCommands.processFacts`, the owner of its `/proc` entry and its
+`comm`. The plan elevates only when the owner differs from the probe's
+login uid (a non-dumpable process, such as `ssh-agent`, is owned by
+root there, so killing one's own elevates too), names the target
 by its `comm` for a typed confirmation, and drops the session when the
 PID is on its path. The runner reads the guarded kill's exits 3 and 4
 as re-validation failures (process gone, PID reused), not as a failed
@@ -5713,15 +5742,20 @@ the engine in `engine_isolate.dart` beside it):
   ladder's reason, unreachable, below the client floor, below the
   server minimum, version unknown, link error). The runtime is the
   API's: `Libpod-API-Version` on `_ping`, or a Podman component in
-  `/version`, names Podman behind a Docker path. `lowSession` stays false until low-session mode lands. The
+  `/version`, names Podman behind a Docker path. `lowSession` names
+  5.2's low-session mode (D09): any session limit the link learned,
+  sent again when the live link learns one. The
   engine runs one session per queried server over its ready link, once
   that link's probe has answered (the device cache's copy is not
   used); a route over which `_ping` or `/version` fails is passed
   over and the ladder runs again without it. A new link, a
   probe answer with other sockets, tools or sudo, or a connection that
-  drops resolves again; a failure stands until the next query. On
-  relay ranks the pool holds at most the short-action share's 2
-  connections and closes them after 30 s without a query [E]. The
+  drops resolves again; a failure stands until the next query, or,
+  while a watch holds and the engine did not answer or the link failed
+  under the ladder, until a retry after 5 s doubling to 2 min [E]. On
+  relay ranks the pool holds one connection, in a short-action slot
+  (5.2), and closes it after 30 s without a query or a watch's read
+  [E], so a watch keeps it open. The
   endpoint override is not in the protocol yet.
 - **Monitor set (M2, K30).** `SetMonitorSet(ids)` replaces FL-21's set
   without a shape change. The engine keeps only the fleet servers that
@@ -5753,7 +5787,9 @@ the engine in `engine_isolate.dart` beside it):
   watch's first read, or one after the stream was lost for over 60 s
   or could not resume. As built, the engine opens one `/events` stream
   per server while any watch holds, on a connection of its own (on a
-  relay a follower-type channel that D09 accounts for), filtered to
+  relay in a follower slot; on a relay without one, or in low-session
+  mode, a full re-list marked `fullRelist` every 15 s [E] instead,
+  while streamlocal always opens it), filtered to
   container, image, volume and network events, and lists only once its
   head has arrived. Container actions that change no list (`exec_*`,
   `attach`, `resize`, `top`, archive and export) are skipped. Each
@@ -5771,9 +5807,9 @@ the engine in `engine_isolate.dart` beside it):
   containers it stopped. Stats are one-shot reads of the ids on screen
   that the list does not know as stopped, every 5 s [E] after the last
   round, at most 4 at once on streamlocal and one at a time on a
-  relay, the CPU % taken against the previous read, so a container's
-  first read has none, nor the first after a failed read or a gap
-  over 60 s. The last unwatch, Disconnect,
+  relay or in low-session mode, the CPU % taken against the previous
+  read, so a container's first read has none, nor the first after a
+  failed read or a gap over 60 s. The last unwatch, Disconnect,
   fleet removal and an endpoint change end it all.
 - **Version 3 (M3 container logs).** Container logs joined version 3
   the same way (D07), as a log source rather than Docker rows (M7):
@@ -5810,12 +5846,12 @@ the engine in `engine_isolate.dart` beside it):
   30 s [E], since the newest line, so a follow outlasts a restart; a
   window ends once its response does. On relay ranks a running follow
   holds a follower slot and a window a short-action slot (2 each, with
-  the learned-limit rule), from shares the Docker session keeps apart
-  from the host log reads' until D09 joins them, and others wait for a
-  channel; streamlocal costs none. Container log streams count apart from the
-  host's, up to 16 per server, and ids stay unique across both. The
-  background does not pause them yet. CloseStream, Disconnect, fleet
-  removal and an endpoint change end them.
+  the learned-limit rule), from the quota the host log reads take from
+  (5.2), and others wait for a channel; streamlocal costs none.
+  Container log streams count apart from the host's, up to 16 per
+  server, and ids stay unique across both. The background does not
+  pause them yet. CloseStream, Disconnect, fleet removal and an
+  endpoint change end them.
 - **Version 3 (M3 stack sources).** Stack verification and files joined
   version 3 the same way (D08; 7.16, M11). `DockerStacksPayload` gained
   `verdicts`, a `StackVerdict` per project: `StackVerifying`,
@@ -5846,10 +5882,11 @@ the engine in `engine_isolate.dart` beside it):
   refused flag or other output is `cliCouldNotHash`; another failure is
   `configFailed`, its error text dropped unread. The docker CLI checks
   a Podman engine too, through `--host`. Each exec takes a short-action
-  slot of the Docker session's quota on every rank, so two run at once,
-  each within 30 s [E]. A verdict holds while the project's labels stay the
-  same, until a watch asks for the stacks again; the stacks list goes
-  out with `StackVerifying` for the rest and again once they are
+  slot of the server's quota on every rank, so two run at once, each
+  within 30 s [E], sharing them with the host's log reads and a relay's
+  pooled connection. A verdict holds while the project's labels stay
+  the same, until a watch asks for the stacks again; the stacks list
+  goes out with `StackVerifying` for the rest and again once they are
   checked. A file read lists the project's containers, so the verdict
   is current, and refuses an unknown stack, a path that is none of its
   files and an unverified stack before SFTP; then it stats the path
@@ -6086,7 +6123,14 @@ tab:
   engine as the API names it, the negotiated API version, the product
   and version, and the host's OS and architecture, read while the tab
   shows), over the Containers, Images and Stacks sub-tabs, whose bodies
-  land with their panels.
+  land with their panels. As built in D13
+  (`ui/docker/containers_panel.dart`), the Containers sub-tab holds one
+  container and stats watch per server while it shows, replaced under
+  its id as the running rows on screen change (CST-01) and ended when
+  it hides; it groups by the compose project label rather than the
+  stacks list, whose source checks would run compose on the host, and
+  greys stats older than 20 s. The list carries no sizes until a query
+  asks for `size=1`.
 
 As built in M2 (`app/klabautermann_app/lib/ui/system_panel.dart`), the
 System tab shows SYS-01's identity, BOOT-01's uptime and boot time,

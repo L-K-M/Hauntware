@@ -104,12 +104,28 @@ class _JobsPanelState extends State<JobsPanel> {
       AdminScope.maybeOf(context)?.stateFor(widget.serverId)?.phase ==
       AdminModePhase.on;
 
+  /// A desktop selection moves the panel to another server in place:
+  /// the last one's crontabs, and a read still out for it, are not this
+  /// one's.
+  @override
+  void didUpdateWidget(JobsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.serverId != widget.serverId) _forgetOthers();
+  }
+
+  void _forgetOthers() {
+    _source = _Source.mine;
+    _others = null;
+    _readingOthers = false;
+  }
+
   Future<void> _readOthers(BuildContext context) async {
     final admin = AdminScope.maybeOf(context);
     if (admin == null || _readingOthers) return;
+    final serverId = widget.serverId;
     setState(() => _readingOthers = true);
-    final read = await admin.readUserCrontabs(widget.serverId);
-    if (!mounted) return;
+    final read = await admin.readUserCrontabs(serverId);
+    if (!mounted || serverId != widget.serverId) return;
     setState(() {
       _others = read;
       _readingOthers = false;
@@ -292,8 +308,10 @@ class _JobsPanelState extends State<JobsPanel> {
     );
     final profile = monitoring.profileFor(serverId);
     final sampling = monitoring.samplingFor(serverId);
-    // Admin mode that ended takes the other users' crontabs with it.
-    if (_source == _Source.otherUsers && _adminOn(context)) {
+    // Admin mode that ended takes the other users' crontabs with it,
+    // so turning it on again starts from the streams' rows.
+    if (!_adminOn(context)) _forgetOthers();
+    if (_source == _Source.otherUsers) {
       return ValueListenableBuilder(
         valueListenable: profile,
         builder: (context, profile, _) => _buildOthers(context, profile),

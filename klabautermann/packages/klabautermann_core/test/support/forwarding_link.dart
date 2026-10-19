@@ -2,7 +2,7 @@
 // daemons or are refused as sshd refuses them, the exec probe answers
 // as scripted (or in a real local `sh`), and relay starts reach a fake
 // daemon through a process's stdin and stdout. A test may answer other
-// runs itself and hand out an SFTP file system.
+// runs and starts itself and hand out an SFTP file system.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -121,6 +121,9 @@ final class ForwardingLink extends TestLinkBase {
   /// Answers a run before the exec probe does, when it returns a result.
   Future<RemoteCommandResult>? Function(String command)? answer;
 
+  /// Answers a start before a relay does, when it returns a process.
+  Future<RemoteProcess>? Function(String command)? answerStart;
+
   /// What [openFileSystem] hands out; without one SFTP is unsupported.
   RemoteFileSystem? fileSystem;
 
@@ -185,6 +188,7 @@ final class ForwardingLink extends TestLinkBase {
   @override
   Future<RemoteProcess> start(String command, {PtyRequest? pty}) async {
     started.add(command);
+    if (answerStart?.call(command) case final answered?) return answered;
     final failing = failingRelays.any(
       (program) => command.contains(" '$program' "),
     );

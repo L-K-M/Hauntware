@@ -27,6 +27,7 @@ import '../fleet/ssh_config_import_store.dart';
 import '../fleet/synced_fleet.dart';
 import '../links/credential_source.dart';
 import '../links/host_key_pins.dart';
+import '../links/channel_quota.dart';
 import '../links/link_connector.dart';
 import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
@@ -215,6 +216,11 @@ void engineMain(
   // login uid, the session's path and its SSH port.
   final profiles = <String, HostProfile>{};
   OperationRunner? runner;
+
+  // Each server's channel slots, one quota for both routers, so the host
+  // log reads and the Docker session's channels count against the same
+  // shares (M9).
+  final channelQuotas = ChannelQuotas();
 
   // FL-02's imported hosts, in D13's device-local store (03 §4.10),
   // opened before the first request is handled. Each import replaces the
@@ -458,11 +464,13 @@ void engineMain(
       linkFor: links.link,
       emit: uiPort.send,
       adminFor: (serverId) => admin?.session(serverId),
+      quotas: channelQuotas,
     );
     docker = DockerRouter(
       linkFor: links.link,
       emit: uiPort.send,
       adminFor: (serverId) => admin?.session(serverId),
+      quotas: channelQuotas,
     );
   }
 
@@ -540,6 +548,7 @@ void engineMain(
     scheduler?.retain(fleetIds);
     logs?.retain(fleetIds);
     operations?.retain(fleetIds);
+    channelQuotas.retain(fleetIds);
     links?.forget(before.difference(fleetIds));
     viewed.retainAll(fleetIds);
     // A monitored server that left the fleet or is no longer eligible (a
