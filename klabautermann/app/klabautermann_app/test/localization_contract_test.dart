@@ -343,7 +343,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'less than a second'",
     "'about a minute'",
     "'about an hour'",
-    r"r'^Up (.+?)(?: \(.*\))?$'",
+    r"r'^Up (.+?)(?: ago)?(?: \(.*\))?$'",
     r"r'^(\d+) (second|minute|hour|day|week|month|year)s?$'",
     "'0.0.0.0'",
     "'::'",
