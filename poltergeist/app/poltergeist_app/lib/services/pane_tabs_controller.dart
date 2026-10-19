@@ -187,6 +187,7 @@ class PaneTabsController extends ChangeNotifier {
   PaneTabsController({
     required this.paneId,
     PaneEngineLanes? lanes,
+    String? appStoragePath,
     this.newTabTarget = NewTabTarget.duplicate,
     DoubleClickAction doubleClickAction = DoubleClickAction.open,
     DirectoryGrouping directoryGrouping = DirectoryGrouping.first,
@@ -208,6 +209,8 @@ class PaneTabsController extends ChangeNotifier {
        // Keep the lanes seam private to the strip.
        // ignore: prefer_initializing_formals
        _lanes = lanes,
+       // ignore: prefer_initializing_formals
+       _appStoragePath = appStoragePath,
        // Keep the reporter private while allowing test-only injection.
        // ignore: prefer_initializing_formals
        _onError = onError;
@@ -215,6 +218,8 @@ class PaneTabsController extends ChangeNotifier {
   /// 'pane.left' / 'pane.right' — prefixes the generated tab ids and
   /// selects the pane's name in semantics.
   final String paneId;
+
+  final String? _appStoragePath;
 
   /// The canonical pane ids (02 §1's pane A/pane B) — surfaces compare
   /// against these names rather than spreading the literal. The values
@@ -878,6 +883,7 @@ class PaneTabsController extends ChangeNotifier {
   PaneController _newController() => PaneController(
     paneTabId: '$paneId.tab${_nextTabOrdinal++}',
     lanes: _lanes,
+    appStoragePath: _appStoragePath,
     onError: _onError,
   );
 

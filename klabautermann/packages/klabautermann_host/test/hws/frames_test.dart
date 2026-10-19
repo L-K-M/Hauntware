@@ -38,6 +38,7 @@ final Uint8List _reply = Uint8List.fromList([
 
 String _describe(HwsEvent e) {
   if (e is HwsReady) return 'ready ${e.version}';
+  if (e is HwsSelf) return 'self ${e.pid} ${e.parentPid}';
   if (e is HwsBegin) return 'begin ${e.seq} ${e.uptimeSeconds}';
   if (e is HwsSection) {
     return 'section ${e.collector} ${e.status.name} ${e.payload.length} '
@@ -178,6 +179,28 @@ void main() {
       for (final body in ['E 7', 'B 1 1.0', 'XXXXXXHWS/1 2']) {
         expect(_parseRaw(_marker(body)), [
           'error marker before READY',
+        ], reason: body);
+      }
+    });
+
+    test('SELF may come first, with login-shell output before it', () {
+      // The program prints SELF just before READY (03 §6.2, §8.6); the
+      // order is the assembler's check, the parser reads both.
+      expect(
+        _parseRaw([
+          ...utf8.encode('banner\r\n'),
+          ..._marker('SELF 4242 1'),
+          ..._marker('READY HWS/1 $kCollectorSetVersion'),
+        ]),
+        ['self 4242 1', 'ready $kCollectorSetVersion'],
+      );
+      expect(_parseAll(_marker('SELF 9 0')), ['self 9 0']);
+    });
+
+    test('a malformed SELF marker is a framing error', () {
+      for (final body in ['SELF 1', 'SELF 0 1', 'SELF -1 2', 'SELF 1 2 3']) {
+        expect(_parseRaw(_marker(body)), [
+          'error malformed SELF marker',
         ], reason: body);
       }
     });

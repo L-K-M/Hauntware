@@ -1,0 +1,10 @@
+HTTP/1.1 200 OK
+Api-Version: 1.44
+Content-Type: application/json
+Libpod-Api-Version: 5.8.7
+Server: Libpod/5.8.7 (linux)
+X-Reference-Id: 0x16fa713222a8
+Date: Sat, 17 Oct 2026 16:14:44 GMT
+Content-Length: 1006
+
+{"Platform":{"Name":"linux/amd64/fedora-44"},"Components":[{"Name":"Podman Engine","Version":"5.8.7","Details":{"APIVersion":"5.8.7","Arch":"amd64","BuildTime":"2026-09-16T00:00:00Z","Experimental":"false","GitCommit":"c593b672bf3db1173aebea565ebf1a724ea196dc","GoVersion":"go1.26.8-X:nodwarf5","KernelVersion":"6.18.44-fc-v139","MinAPIVersion":"4.0.0","Os":"linux"}},{"Name":"Conmon","Version":"conmon version 2.2.1, commit: ","Details":{"Package":"conmon-2.2.1-2.fc44.x86_64"}},{"Name":"OCI Runtime (crun)","Version":"crun version 1.28\ncommit: 54f16ffbefcd022bf032af768b5c5ce075c18bfc\nrundir: /run/crun\nspec: 1.0.0\n+SYSTEMD +SELINUX +APPARMOR +CAP +SECCOMP +EBPF +CRIU +LIBKRUN +WASM:wasmedge +JSON_C","Details":{"Package":"crun-1.28-1.fc44.x86_64"}}],"Version":"5.8.7","ApiVersion":"1.44","MinAPIVersion":"1.24","GitCommit":"c593b672bf3db1173aebea565ebf1a724ea196dc","GoVersion":"go1.26.8-X:nodwarf5","Os":"linux","Arch":"amd64","KernelVersion":"6.18.44-fc-v139","BuildTime":"2026-09-16T00:00:00Z"}

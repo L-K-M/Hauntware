@@ -1,0 +1,22 @@
+FROM ghcr.io/l-k-m/poltergeist-sshd-modern-base@sha256:c65af9a1e573bde503036e412d2aace7ecec9c11309f15f0691d67f9090bf8e8
+
+# The Docker host (03 §11.3): the sshd fixture's base and entrypoint, and
+# the docker CLI with its Compose plugin for the CLI relay, stack
+# discovery and verification. Both binaries are static, so they are
+# copied from the official CLI image, pinned by digest, rather than built
+# into a frozen base of our own: a new GHCR package starts private, and
+# only the owner can publish it (06; M3 decision M5).
+COPY --from=mirror.gcr.io/library/docker:29.9.1-cli@sha256:6fae2214c3121a28d5aa639d09032f61310b7c9c75ffbad1025f261a1b621800 \
+  /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=mirror.gcr.io/library/docker:29.9.1-cli@sha256:6fae2214c3121a28d5aa639d09032f61310b7c9c75ffbad1025f261a1b621800 \
+  /usr/local/libexec/docker/cli-plugins/docker-compose \
+  /usr/local/libexec/docker/cli-plugins/docker-compose
+COPY entrypoint.sh /usr/local/bin/fixture-entrypoint
+COPY docker-setup.sh /usr/local/bin/fixture-setup
+COPY sshd_config.docker sshd_config.neg-* /etc/klabautermann/
+
+RUN chmod 0755 /usr/local/bin/fixture-entrypoint /usr/local/bin/fixture-setup
+
+EXPOSE 22
+
+ENTRYPOINT ["/usr/local/bin/fixture-entrypoint"]

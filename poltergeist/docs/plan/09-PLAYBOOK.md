@@ -549,7 +549,8 @@ is a plan violation. Changing any requires a 00 edit with rationale first.
    unchanged. There is no "small tweak" in this category.
 4. **No telemetry, no crash reporting, no accounts, no phoning home**
    (D19). The update check stays link-only. Adding any network call that is
-   not user-initiated file/sync traffic is out.
+   not user-initiated file/sync traffic, or the user-initiated Android
+   update download (D23's 2026-10-17 amendment), is out.
 5. **No unguarded deletes.** Every delete path goes through the D15 trash
    story or an explicit confirmation that quantifies what is lost (02 §10);
    sync deletions ride the plan's safety rails (05 §8). No code path may

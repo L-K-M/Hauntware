@@ -5,7 +5,9 @@
 /// ```text
 ///   attach(endpoint) ─▶ GET /events (since the last event, when the
 ///     │                 stream was lost 60 s ago or less on this socket)
-///     ├─ no resume ─▶ full re-list of every watched list
+///     ├─ resume ─▶ re-list every watched list (a restarted daemon
+///     │            replays nothing)
+///     ├─ no resume ─▶ full re-list, and a new stats baseline
 ///     ▼
 ///   event ─▶ planEventRefresh ─▶ container ids, or whole lists
 ///     └─ 250 ms batch ─▶ ids: one list filtered to them, merged in
@@ -322,11 +324,15 @@ final class DockerWatcher {
         lostAt != null && _now().difference(lostAt) <= eventGapThreshold
         ? _lastEvent
         : null;
-    if (since == null) {
-      for (final list in _fetched(_lists)) {
-        _due(list, fresh: true);
-      }
+    // `since` replays the daemon's in-memory events, which a restarted
+    // daemon has lost along with the containers that died meanwhile, so
+    // a resumed stream re-lists too; only past the gap is the re-list a
+    // fresh one. Past it the stats baseline is stale as well: a CPU %
+    // over the outage would read as current.
+    for (final list in _fetched(_lists)) {
+      _due(list, fresh: since == null);
     }
+    if (since == null) _previous.clear();
 
     _opening = true;
     _stream = lease;
@@ -715,9 +721,14 @@ final class DockerWatcher {
           : 1,
       queue.length,
     );
-    await Future.wait([for (var i = 0; i < width; i++) worker()]);
+    try {
+      await Future.wait([for (var i = 0; i < width; i++) worker()]);
+    } finally {
+      // Anything but a DockerException escaping a worker is a bug; the
+      // round still ends, so the next one is scheduled.
+      if (epoch == _epoch) _polling = null;
+    }
     if (epoch != _epoch) return;
-    _polling = null;
     if (dropped) return _dropped();
     if (_lists.contains(DockerWatchList.stats)) {
       _emitList(DockerWatchList.stats, DockerStatsPayload(rows));

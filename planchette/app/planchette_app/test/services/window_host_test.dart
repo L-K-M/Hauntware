@@ -140,6 +140,73 @@ void main() {
     });
   });
 
+  test('folder picker targets extra and main views explicitly', () async {
+    const directory = '/tmp/workspace ü';
+    answer((_) => directory);
+    final host = MethodChannelWindowHost(engineId: () => 1);
+
+    expect(await host.pickDirectory(4), directory);
+    expect(await host.pickDirectory(mainWindowViewId), directory);
+    expect(
+      calls.map((call) => call.method),
+      everyElement(WindowHostMethod.pickDirectory.name),
+    );
+    expect(
+      [for (final call in calls) call.arguments],
+      [
+        {WindowHostKey.viewId.name: 4},
+        {WindowHostKey.viewId.name: mainWindowViewId},
+      ],
+    );
+  });
+
+  test('folder picker cancellation returns null', () async {
+    answer((_) => null);
+    final host = MethodChannelWindowHost(engineId: () => 1);
+
+    expect(await host.pickDirectory(4), isNull);
+  });
+
+  test('folder picker reports missing hosts and native failures', () async {
+    final host = MethodChannelWindowHost(engineId: () => 1);
+    await expectLater(
+      host.pickDirectory(4),
+      throwsA(
+        isA<WindowHostException>().having(
+          (error) => error.message,
+          'message',
+          'no window host on this platform',
+        ),
+      ),
+    );
+
+    for (final message in ['no window has that view id', null]) {
+      answer(
+        (_) => throw PlatformException(code: 'PICKER_FAILED', message: message),
+      );
+      await expectLater(
+        host.pickDirectory(4),
+        throwsA(
+          isA<WindowHostException>().having(
+            (error) => error.message,
+            'message',
+            message ?? 'PICKER_FAILED',
+          ),
+        ),
+      );
+    }
+  });
+
+  test('folder picker rejects malformed native results', () async {
+    answer((_) => ['/tmp/workspace']);
+    final host = MethodChannelWindowHost(engineId: () => 1);
+
+    await expectLater(
+      host.pickDirectory(4),
+      throwsA(isA<WindowHostException>()),
+    );
+  });
+
   test('picker answers that are not a list are a host failure', () async {
     answer((_) => 'not a list');
     final host = MethodChannelWindowHost(engineId: () => 1);

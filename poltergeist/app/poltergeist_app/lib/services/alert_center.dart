@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:ghost_apk_update/ghost_apk_update.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import 'activity_panel_controller.dart';
@@ -97,11 +98,22 @@ final class LocalEditsAlert extends AppAlert {
   AlertSeverity get severity => AlertSeverity.warning;
 }
 
-/// A newer release exists (D19's link-only update check).
+/// A newer release exists (D19's update check).
 final class UpdateAvailableAlert extends AppAlert {
-  const UpdateAvailableAlert(this.info);
+  const UpdateAvailableAlert(
+    this.info, {
+    this.apk,
+    this.download = const ApkUpdateIdle(),
+  });
 
   final UpdateInfo info;
+
+  /// The APK an Android build updates in place from; null where the row
+  /// only links to the release page.
+  final ApkRelease? apk;
+
+  /// The in-place update's progress while [apk] is set.
+  final ApkUpdateState download;
 
   @override
   String get key => 'update:${info.latestVersion}';
@@ -259,8 +271,17 @@ class AlertCenter extends ChangeNotifier {
         result.add(DragOutAlert(notice));
       }
     }
-    final update = _updates?.update;
-    if (update != null) result.add(UpdateAvailableAlert(update));
+    final updates = _updates;
+    final update = updates?.update;
+    if (updates != null && update != null) {
+      result.add(
+        UpdateAvailableAlert(
+          update,
+          apk: updates.updateApk,
+          download: updates.download,
+        ),
+      );
+    }
     return result;
   }
 

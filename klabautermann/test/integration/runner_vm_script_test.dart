@@ -14,6 +14,16 @@ import 'package:yaml/yaml.dart';
 
 const _limitedUser = 'klab-vm';
 const _journalUser = 'klab-vm-journal';
+const _sudoUser = 'klab-vm-sudo';
+const _lingerUser = 'klab-vm-linger';
+const _dockerUser = 'klab-vm-docker';
+const _users = [
+  _limitedUser,
+  _journalUser,
+  _sudoUser,
+  _lingerUser,
+  _dockerUser,
+];
 const _timer = 'klabautermann-runner-vm.timer';
 
 /// The lines of runner_vm.sh that name the machine's paths, which the
@@ -25,11 +35,18 @@ const _shLine = "readonly system_sh='/bin/sh'";
 const _osReleaseLine = "readonly os_release_file='/etc/os-release'";
 const _tmpLine = "readonly shared_tmp='/tmp'";
 const _lockLine = "readonly lock_file='/tmp/klabautermann-runner-vm.lock'";
+const _sudoersLine =
+    "readonly sudoers_file='/etc/sudoers.d/klabautermann-runner-vm'";
+const _rootOpsLine = "readonly root_ops_parent='/var/lib/klabautermann'";
+const _rootDockerLine = "readonly root_docker_dir='/root/.docker'";
 
 /// Bodies of the stand-ins, which log to `$STUB_LOG` and keep the
 /// accounts `useradd` made in `$STUB_STATE/users`. sudo runs what only
 /// touches the sandbox (mktemp, install without its owner, rm, cat, kill
-/// of the stand-in sshd) and logs everything else without running it.
+/// of the stand-in sshd) and logs everything else without running it;
+/// it refuses a changing command on a path outside the sandbox, so a
+/// path line the copy failed to point there cannot touch the machine.
+/// It keeps what chpasswd would read in `$STUB_STATE/chpasswd`.
 /// The suite keeps its PID in `$STUB_SUITE_PID` while it runs, exits
 /// with `$STUB_SUITE_EXIT` when set, and otherwise stops as package:test
 /// does: a first SIGTERM drains, a second stops it. `userdel` takes
@@ -39,6 +56,17 @@ const _stubs = {
 if [[ "${1:-}" == -n ]]; then shift; fi
 echo "sudo $*" >>"$STUB_LOG"
 case "${1:-}" in
+  rm | rmdir | install | chmod | tee)
+    for arg in "$@"; do
+      case "$arg" in
+        "$TMPDIR"/*) ;;
+        /*) echo "sudo stand-in refuses $arg" >&2; exit 97 ;;
+      esac
+    done
+    ;;
+esac
+case "${1:-}" in
+  chpasswd) cat >"$STUB_STATE/chpasswd" ;;
   true | mktemp | cat | rm | rmdir | kill | test | tee | chmod) exec "$@" ;;
   install)
     args=()
@@ -83,7 +111,7 @@ pidfile="$(awk '$1 == "PidFile" { print $2 }' "$config")"
   'id': r'''
 user="${*: -1}"
 case "$user" in
-  klab-vm | klab-vm-journal) ;;
+  klab-vm | klab-vm-*) ;;
   *) exec /usr/bin/id "$@" ;;
 esac
 if [[ ! -e "$STUB_STATE/users/$user" ]]; then
@@ -97,6 +125,9 @@ mkdir -p "$STUB_STATE/home/$2"
 echo "$2:x:4242:4242::$STUB_STATE/home/$2:/bin/sh"
 ''',
   'pgrep': 'exit 1\n',
+  'docker':
+      r'echo "docker $*" >>"$STUB_LOG"'
+      '\n',
   'ssh':
       r'echo "ssh $*" >>"$STUB_LOG"'
       '\n',
@@ -201,7 +232,8 @@ void main() {
       expect(script, isNot(matches(RegExp(r'^\s*Port\s', multiLine: true))));
     });
 
-    test('puts only the second account in a journal group (LOG-04)', () {
+    test('puts only the second account in a journal group (LOG-04), and '
+        'adds the S4 accounts', () {
       final creates = [
         for (final line in lines(script))
           if (line.startsWith('create_user ')) line,
@@ -209,6 +241,9 @@ void main() {
       expect(creates, [
         'create_user "\$limited_user"',
         'create_user "\$journal_user" --groups systemd-journal',
+        'create_user "\$sudo_user"',
+        'create_user "\$linger_user"',
+        'create_user "\$docker_user"',
       ]);
       expect(script, contains("readonly limited_user='$_limitedUser'"));
       expect(script, contains("readonly journal_user='$_journalUser'"));
@@ -235,8 +270,9 @@ void main() {
       expect(
         lines(script).join('\n'),
         contains(
-          'run_child "\$dart_binary" test --concurrency=1 --tags runner-vm '
-          '"\${reporter[@]}" packages/klabautermann_core/test/integration',
+          'run_child "\$dart_binary" test --concurrency=1 '
+          "--tags 'runner-vm || runner-vm-s4' \"\${reporter[@]}\" "
+          'packages/klabautermann_core/test/integration',
         ),
       );
       for (final path in [
@@ -244,7 +280,9 @@ void main() {
         'packages/klabautermann_core/dart_test.yaml',
       ]) {
         final tags = loadYaml(File('${root.path}$path').readAsStringSync());
-        expect((tags['tags'] as YamlMap).containsKey('runner-vm'), isTrue);
+        for (final tag in ['runner-vm', 'runner-vm-s4']) {
+          expect((tags['tags'] as YamlMap).containsKey(tag), isTrue);
+        }
       }
     });
   });
@@ -288,6 +326,9 @@ void main() {
         _osReleaseLine,
         _tmpLine,
         _lockLine,
+        _sudoersLine,
+        _rootOpsLine,
+        _rootDockerLine,
       ]) {
         expect(script, contains(line));
       }
@@ -297,6 +338,7 @@ void main() {
       Directory('${state.path}/users').createSync();
       Directory('${sandbox.path}/tmp').createSync();
       Directory('${sandbox.path}/systemd').createSync();
+      Directory('${sandbox.path}/sudoers.d').createSync();
       log = File('${sandbox.path}/stub.log');
       suitePid = File('${sandbox.path}/suite.pid');
       addTearDown(() async {
@@ -349,6 +391,18 @@ void main() {
               .replaceFirst(
                 _lockLine,
                 "readonly lock_file='${sandbox.path}/leg.lock'",
+              )
+              .replaceFirst(
+                _sudoersLine,
+                "readonly sudoers_file='${sandbox.path}/sudoers.d/leg'",
+              )
+              .replaceFirst(
+                _rootOpsLine,
+                "readonly root_ops_parent='${sandbox.path}/var-lib'",
+              )
+              .replaceFirst(
+                _rootDockerLine,
+                "readonly root_docker_dir='${sandbox.path}/root-docker'",
               ),
         );
       final chmod = await Process.run('chmod', [
@@ -405,8 +459,8 @@ void main() {
         containsAll([
           'sudo systemctl stop $_timer',
           'sshd stopped',
-          'sudo userdel --remove $_limitedUser',
-          'sudo userdel --remove $_journalUser',
+          for (final user in _users) 'sudo userdel --remove $user',
+          'sudo rm -f -- ${sandbox.path}/sudoers.d/leg',
         ]),
         reason: lines.join('\n'),
       );
@@ -493,10 +547,10 @@ void main() {
         reason: lines.join('\n'),
       );
       expect(
-        lines.where((l) => l.startsWith('sudo useradd ')).last,
+        lines.where((l) => l.startsWith('sudo useradd ')).elementAt(1),
         endsWith('--groups systemd-journal $_journalUser'),
       );
-      for (final user in [_limitedUser, _journalUser]) {
+      for (final user in _users) {
         expect(
           File('${state.path}/home/$user/.ssh/authorized_keys').existsSync(),
           isTrue,
@@ -505,12 +559,60 @@ void main() {
       }
       final config = File('${state.path}/sshd_config').readAsLinesSync();
       expect(config, contains('ListenAddress 127.0.0.1:2243'));
-      expect(config, contains('AllowUsers $_limitedUser $_journalUser'));
+      expect(config, contains('AllowUsers ${_users.join(' ')}'));
       expect(config, contains('AuthenticationMethods publickey'));
       final exported = File('${state.path}/suite.env').readAsStringSync();
       expect(exported, contains('KLABAUTERMANN_RUNNER_VM_SSHD_PID='));
       expect(exported, contains('KLABAUTERMANN_RUNNER_VM_TIMER=$_timer\n'));
       expectTornDown();
+    });
+
+    test('gives the sudo account a fresh password that no argv, log or '
+        'variable carries, and checks the drop-in first', () async {
+      final (process: _, :exitCode, :output) = await start({
+        ...onRunner,
+        'STUB_SUITE_EXIT': '0',
+      });
+
+      expect(await exitCode, 0, reason: '$output');
+      final fed = File('${state.path}/chpasswd').readAsStringSync();
+      final password = RegExp(
+        '^$_sudoUser:([0-9a-f]{48})\n\$',
+      ).firstMatch(fed)?[1];
+      expect(password, isNotNull, reason: 'chpasswd read "$fed"');
+      final lines = logged();
+      final exported = File('${state.path}/suite.env').readAsStringSync();
+      for (final (name, text) in [
+        ('the log of every command', lines.join('\n')),
+        ('the output', '$output'),
+        ('the exported variables', exported),
+      ]) {
+        expect(text, isNot(contains(password)), reason: name);
+      }
+      expect(exported, contains('KLABAUTERMANN_RUNNER_VM_SUDO_PASSWORD_FILE='));
+
+      final drop = '${sandbox.path}/sudoers.d/leg';
+      expect(
+        lines,
+        containsAllInOrder([
+          'sudo chpasswd',
+          matches(RegExp(r'^sudo visudo -cf \S+/sudoers$')),
+          startsWith('sudo install -m 0440 -o root -g root '),
+          'sudo visudo -cf $drop',
+          startsWith('suite started '),
+          'sudo rm -f -- $drop',
+        ]),
+        reason: lines.join('\n'),
+      );
+      expect(File(drop).existsSync(), isFalse, reason: 'the drop-in is left');
+      expect(
+        lines,
+        containsAllInOrder([
+          'sudo loginctl enable-linger $_lingerUser',
+          startsWith('suite started '),
+          'sudo loginctl disable-linger $_lingerUser',
+        ]),
+      );
     });
 
     test('exits with the suite\'s status after teardown', () async {
