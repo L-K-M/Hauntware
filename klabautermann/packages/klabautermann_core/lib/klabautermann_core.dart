@@ -15,6 +15,14 @@ export 'src/engine/engine_client.dart';
 // handed; the app's restart test runs one.
 export 'src/engine/engine_isolate.dart' show EngineStart;
 export 'src/engine/protocol.dart';
+// The plain-data plan parts an ActionPreview carries (03 §8.5), and
+// DangerLinter's findings in it.
+export 'src/operations/plan_types.dart';
+export 'package:seance_core/seance_core.dart'
+    show DangerFinding, DangerSeverity;
+// The signal and unit verb an ActionIntent names (PRC-02, SVC-03).
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show KillSignal, SystemctlVerb;
 // FL-21's monitor set rules, which the engine enforces and the app's
 // toggles offer (03 §4.3 step 4).
 export 'src/fleet/monitor_set.dart'

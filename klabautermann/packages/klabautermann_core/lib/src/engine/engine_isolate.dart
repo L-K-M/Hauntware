@@ -8,6 +8,9 @@ import 'package:seance_core/catalog.dart'
 import 'package:seance_core/seance_core.dart'
     show ImportedHost, Prober, ServerConfig, SshLink, TcpBannerProber;
 
+import '../admin/admin_mode.dart';
+import '../audit/audit_log.dart';
+import '../admin/safety_policy.dart';
 import '../capabilities/capability_cache.dart';
 import '../catalog/engine_sync.dart';
 import '../catalog/keystore_channel.dart';
@@ -26,6 +29,10 @@ import '../links/link_connector.dart';
 import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
 import '../logs/log_stream_router.dart';
+import '../operations/confirmation.dart';
+import '../operations/operation_runner.dart';
+import '../operations/plan_registry.dart';
+import '../operations/plan_types.dart' show RequiredLevel;
 import '../sampling/sampling_scheduler.dart';
 import '../sampling/subscriptions.dart';
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
@@ -119,8 +126,10 @@ final class EngineStart {
 /// [ConnectRejected], [SetMonitorSet] samples its eligible servers'
 /// `overview` over links dialed unattended (FL-21, 03 §4.3 step 4),
 /// [AnswerKeystore] completes the keystore call it names ahead of the
-/// queue, [Shutdown] ends every log stream and exits, and every other
-/// 03 §10.1 row gets [RequestRejected] until its milestone lands.
+/// queue, a [PlanAction] gets [ActionRefused] until its planner lands and
+/// a [RunAction] because no plan is held yet (03 §8.5), [Shutdown] ends
+/// every log stream and exits, and every other 03 §10.1 row gets
+/// [RequestRejected] until its milestone lands.
 ///
 /// With probes on, the fleet's confirmed endpoints are probed once the
 /// app has the fleet ([Hello]'s answer), and each answer goes out as a
@@ -166,6 +175,29 @@ void engineMain(
   // none while links are off. It follows every LinkState and probe
   // answer.
   DockerRouter? docker;
+  // Admin mode per server (03 §8.2), over the links; none while links are
+  // off. The safety policy the app last sent; until then every server is
+  // observe-only (SAF-01).
+  AdminModeController? admin;
+  var safetyPolicy = const SafetyPolicy();
+  // Previewed plans and the runner of confirmed ones (03 §8.5). A plan
+  // runs only on the link generation it was planned on: each server's
+  // generation counts the times its link became ready.
+  final plans = PlanRegistry();
+  // The device audit log (03 §8.10): a record per finished run, in files
+  // only while this process has the support directory to itself.
+  final audit = AuditLog(
+    Directory(
+      '${start.supportDirectory}${Platform.pathSeparator}$auditDirectoryName',
+    ),
+    storage: start.supportDirectoryAccess == SupportDirectoryAccess.exclusive
+        ? AuditStorage.files
+        : AuditStorage.memory,
+    deviceId: start.deviceId,
+  );
+  final linkGenerations = <String, int>{};
+  final readyLinks = <String>{};
+  OperationRunner? runner;
 
   // Each server's channel slots, one quota for both routers, so the host
   // log reads and the Docker session's channels count against the same
@@ -254,6 +286,18 @@ void engineMain(
               scheduler?.update(event.serverId);
               logs?.update(event.serverId);
               docker?.update(event.serverId);
+              if (event.status is LinkReady || event.status is LinkDegraded) {
+                if (readyLinks.add(event.serverId)) {
+                  linkGenerations.update(
+                    event.serverId,
+                    (n) => n + 1,
+                    ifAbsent: () => 1,
+                  );
+                }
+              } else {
+                readyLinks.remove(event.serverId);
+                admin?.linkLost(event.serverId);
+              }
             }
           },
           policy: Platform.isAndroid || Platform.isIOS
@@ -272,6 +316,26 @@ void engineMain(
   final viewed = <String>{};
 
   if (links != null) {
+    admin = AdminModeController(
+      linkFor: links.link,
+      endpointOf: (id) => switch (configOf(id)) {
+        final config? => (
+          host: config.host,
+          port: config.port,
+          user: config.username,
+        ),
+        null => null,
+      },
+      prompts: prompts,
+      emit: uiPort.send,
+    );
+    runner = OperationRunner(
+      linkFor: links.link,
+      emit: uiPort.send,
+      // A record that cannot be written is lost; the run itself stands.
+      finished: (result) =>
+          unawaited(audit.recordRun(result).catchError((Object _) {})),
+    );
     scheduler = SamplingScheduler(
       subscriptions: sampling,
       linkFor: links.link,
@@ -279,6 +343,7 @@ void engineMain(
       deadPeerHint: links.deadPeerHint,
       clearDeadPeerHint: links.clearDeadPeerHint,
       probed: (serverId, profile) {
+        admin?.probed(serverId, profile);
         unawaited(capabilities?.probed(serverId, profile));
         docker?.probed(serverId, profile);
       },
@@ -386,6 +451,8 @@ void engineMain(
     docker
       ?..forget(forgotten)
       ..retain(fleetIds);
+    admin?.forget(forgotten);
+    plans.forget(forgotten);
     // Before the caller sends the fleet or an EndpointChanged, so no
     // probe of a server starts, and no answer for it goes out, once the
     // app hears it left or lost its pin.
@@ -536,6 +603,7 @@ void engineMain(
             importStoreIssue: imports.issue,
             syncAccount: sync.account,
             syncStoreIssues: sync.issues,
+            auditInMemory: audit.storage == AuditStorage.memory,
           ),
         );
         // The fleet as the engine starts: the servers the last sync left
@@ -587,6 +655,7 @@ void engineMain(
         }
       case SetAppActivity(:final activity):
         links?.setActivity(activity);
+        admin?.setActivity(activity);
         scheduler?.activity = activity;
         logs?.activity = activity;
         reachability?.activity = activity;
@@ -717,6 +786,103 @@ void engineMain(
         runSync(SyncOperation.enroll, () => sync.enroll(message));
       case RunSyncRound():
         runSync(SyncOperation.round, sync.runRound);
+      case PlanAction(:final intent):
+        // The policy first (M4 plan M4); the planners land with E14 (host)
+        // and E15 (Docker).
+        uiPort.send(
+          ActionRefused(
+            safetyRefusal(safetyPolicy, intent.serverId) ??
+                ActionRefusalReason.notImplemented,
+            intent: intent,
+          ),
+        );
+      case AuditQuery(:final serverId, :final before, :final limit):
+        final (:records, :more) = await audit.query(
+          serverId,
+          before: before,
+          limit: limit,
+        );
+        uiPort.send(AuditRecords(serverId, records, more: more));
+      case SetSafetyPolicy(:final policy):
+        if (validateSafetyPolicy(policy) case final problem?) {
+          reject(message, problem);
+          return;
+        }
+        safetyPolicy = policy;
+        admin?.expiry = policy.adminExpiry;
+        // A server the new policy forbids changing leaves admin mode.
+        for (final serverId in [...?admin?.servers]) {
+          if (adminRefusal(policy, serverId) != null) admin?.disable(serverId);
+        }
+      case SetAdminMode(:final serverId, :final enabled):
+        if (!fleetIds.contains(serverId)) {
+          reject(message, 'no fleet server $serverId');
+          return;
+        }
+        if (!enabled) {
+          admin?.disable(serverId);
+          return;
+        }
+        final failure =
+            adminRefusal(safetyPolicy, serverId) ??
+            (admin == null ? AdminFailure.noLink : null);
+        if (failure != null) {
+          uiPort.send(
+            AdminModeState(serverId, AdminModePhase.failed, failure: failure),
+          );
+          return;
+        }
+        // Not awaited: the password prompt's answer comes through this
+        // queue.
+        unawaited(admin!.enable(serverId));
+      case RunAction(:final planId, :final confirmation):
+        // A plan is taken once: a refused run needs a new preview.
+        final (:plan, :missing) = plans.take(
+          planId,
+          linkGeneration: (id) => linkGenerations[id] ?? 0,
+        );
+        void refuse(ActionRefusalReason reason) =>
+            uiPort.send(ActionRefused(reason, planId: planId));
+        if (plan == null) {
+          refuse(switch (missing!) {
+            PlanMissing.unknown => ActionRefusalReason.unknownPlan,
+            PlanMissing.expired => ActionRefusalReason.expiredPlan,
+            PlanMissing.stale => ActionRefusalReason.stalePlan,
+          });
+          return;
+        }
+        final serverId = plan.intent.serverId;
+        if (safetyRefusal(safetyPolicy, serverId) case final reason?) {
+          refuse(reason);
+          return;
+        }
+        if (!confirmationSatisfies(
+          required: plan.tier,
+          given: confirmation.tier,
+          targetName: plan.targetName,
+          phrase: confirmation.phrase,
+        )) {
+          refuse(ActionRefusalReason.confirmationMismatch);
+          return;
+        }
+        final planRunner = runner;
+        if (planRunner == null) {
+          refuse(ActionRefusalReason.notImplemented);
+          return;
+        }
+        final session = admin?.session(serverId);
+        if (plan.requiredLevel == RequiredLevel.admin && session == null) {
+          refuse(ActionRefusalReason.adminRequired);
+          return;
+        }
+        if (session != null) admin?.touch(serverId);
+        // Not awaited, like the reads: a plan's steps take as long as
+        // they take, and the queue keeps serving the app meanwhile.
+        unawaited(
+          planRunner.run(planId, plan, session: session).then((finished) {
+            if (session != null) admin?.touch(serverId);
+          }),
+        );
       case Shutdown():
         // Each stream's end goes out before the isolate does, and its
         // process goes with the isolate.
@@ -753,6 +919,9 @@ void engineMain(
         ),
       ).then((store) async {
         imports = store;
+        // 90 days [E] (03 §8.10); a prune that fails leaves the old
+        // records for the next start.
+        await audit.prune().catchError((Object _) {});
         sync = await EngineSync.open(
           supportDirectory: Directory(start.supportDirectory),
           access: start.supportDirectoryAccess,

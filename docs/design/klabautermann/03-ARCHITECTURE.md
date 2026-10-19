@@ -4002,6 +4002,32 @@ SAF-17 generates narrow, validated rules (v1.x): a blanket rule equals root
   the prompt: admin mode still starts explicitly, shows its chip and
   expires as above. A remembered password that sudo rejects is not
   retried; the prompt returns and offers to replace it.
+- **As built (M4 E11).** `KC/lib/src/admin/` holds admin mode and the
+  safety policy.
+  - `AdminModeController` runs the M5 state machine per server: off,
+    detecting, awaiting password, validating, on (with `expiresAt`), then
+    expired or failed.
+  - It reads the elevation facts from the probe's `HostProfile` and asks
+    for the password through the prompt broker only for the prelude rung.
+    A wrong password is retried up to three times.
+  - Validation runs `true` through `ElevatedExecutor`, so rung 4 and the
+    refusal classifier apply. Password doas fails `ttyRequired` without a
+    prompt. E04's validation, which ignores cached records (D65), replaces
+    this check.
+  - Admin mode ends:
+    - after the expiry (5, 15, 30 or 60 minutes) without elevated work,
+      which resets the clock;
+    - when the app goes to the background;
+    - when the link leaves ready or degraded;
+    - when the server leaves the fleet or changes endpoint;
+    - on `SetAdminMode(enabled: false)`.
+  - The password is held only in the controller's session and never in
+    an event, argv or `toString`.
+  - The engine keeps the app's `SetSafetyPolicy` and, until the first
+    one, treats every server as observe-only. It refuses `PlanAction`
+    and `SetAdminMode` with `observeOnly` or `readOnly` for a server it
+    may not change. A new policy that forbids a server ends that server's
+    admin mode.
 
 ### 8.3 The elevation prelude (D24)
 
@@ -4097,6 +4123,58 @@ OperationPlan {
 
 - The preview (SAF-04) renders `steps` and `hostWrites`; execution runs the
   same `steps`. No second code path builds commands.
+- **As built (M4 E09).** `KC/lib/src/operations/` holds the model.
+  - `OperationPlan` is immutable, and its `preview` hands `ActionPlanned`
+    the same step, host-write and finding lists, never copies.
+  - Steps are `ShellStep` (an argv quoted under the C locale into its
+    exact command line, `elevated` through 8.3) and `ApiStep` (method,
+    versioned path and query). `HostWriteRow` names 8.11's MVP rows.
+  - `DangerLinter` reads each shell step's argv words: the exact line
+    quotes every word behind its locale wrapper, which the linter's
+    patterns cannot see through.
+  - `confirmationTier` is 8.6's table as a pure function, raised to typed
+    for a protected target, an owned one (8.7's act-anyway) or a
+    fleet-wide action.
+  - `PlanRegistry` holds a previewed plan for 5 minutes [E] with the
+    server's link generation. A plan runs once; an expired or stale one
+    is refused.
+  - `ActionIntent` is sealed, one variant per MVP action:
+    - `KillProcess` (pid, start ticks, signal);
+    - `UnitAction`;
+    - `StartTimer`;
+    - `ContainerAction`;
+    - `RemoveContainer`;
+    - `RemoveImage`;
+    - `StackAction` (act anyway);
+    - `RedeployStack` (remove orphans).
+  - `ActionPreview` carries the typed facts the app words (D35): steps,
+    host writes, required level, runner (identity, Docker route,
+    credentials), danger findings, impact, ownership, protection reason
+    and tier.
+  - Until the planners land (E14 host, E15 Docker), the engine answers
+    `PlanAction` with `ActionRefused(notImplemented)` and `RunAction`
+    with `unknownPlan`.
+  - The admin-mode, audit, crontab and detached-operation messages of
+    M4 join v3 with the PRs that implement them (E11, E12, E14, E17),
+    rather than all at once here.
+- **As built (M4 E12a).** `operation_runner.dart` runs a confirmed plan.
+  - `RunAction` takes the plan from the registry once. The engine then
+    checks the safety policy, the confirmation (a typed phrase must equal
+    the target name) and, for an admin plan, admin mode, each a typed
+    `ActionRefused`. A refused run needs a new preview.
+  - The runner re-validates each `Revalidation` the planner listed:
+    `UnitLoaded` reads `systemctl show --property=LoadState`;
+    `ProcessStarted` reads field 22 of `/proc/<pid>/stat`;
+    `DockerTargetUnchanged` goes to the Docker planners' checker (E15).
+  - It runs the plan's own steps in order: shell steps over the link, or
+    through the admin session's executor when `elevated`, and API steps
+    through the Docker runner (E15). It stops at the first failure.
+  - It reports `ActionProgress` per step, then one `ActionFinished` with
+    typed facts: the failure, the step, its exit or HTTP status, and what
+    re-validation found.
+  - Each server's link generation counts the times its link became
+    ready, so a plan previewed before a reconnect is stale. An admin run
+    resets the inactivity clock before and after.
 - Re-validation immediately before execution: the unit still exists, the
   container ID is unchanged, the PID start time matches, the file hash
   matches (compare-and-swap for edits), the stack's config hash still
@@ -4129,6 +4207,31 @@ the session's own path (from `$SSH_CONNECTION` and the sshd parent of the
 session), containers publishing the SSH port or a VPN port, and user-marked
 targets (synced in `pref`, sealed removal). The impact line names the
 consequence ("drops your session", "stops 23 running containers").
+
+As built in M4 (E10, `KC/lib/src/operations/`):
+
+- `protected_targets.dart` holds the built-in unit list (with `*` globs
+  such as `wg-quick@*.service`), PID 1 and `sshd` (with OpenSSH 9.8's
+  `sshd-session` and 10.0's `sshd-auth`), `dockerd` and `containerd` by
+  `comm`. It reads the session's path from three PIDs:
+  - the sampler shells and their sshd parents, from E07's `SELF`,
+    which `SamplerSession.self` keeps and the scheduler's `samplerPids`
+    reads;
+  - the probe's `sessionParentPid`;
+  - and the SSH port from `$SSH_CONNECTION`.
+- A container is protected when it publishes that port, port 22, or a
+  VPN port (51820/udp, 1194, 41641/udp [guess list]).
+- User marks are `ServerSafety.marks` in `SetSafetyPolicy`, which stay on
+  the device until v1's `pref` records (M4 plan Q1).
+- Any protection reason raises the tier to typed. A target another
+  manager owns does the same: `ownership.dart` reads 8.7's markers
+  through `detectOwnership`.
+- `danger.dart` lints each shell step's words, and each API step as the
+  Docker CLI command that does the same, so `DELETE /volumes/x` is
+  flagged like `docker volume rm x`.
+- `impact.dart` gives the typed impact facts the app words:
+  `dropsSession`, `stopsContainers(n)`, `removesVolumes`,
+  `forcesImageInUse(n)` and `interruptsTarget`.
 
 ### 8.7 Ownership markers of other managers (DKE-10, STK-10, JOB-09)
 
@@ -4219,6 +4322,26 @@ CI.
   events and sudo logs corroborate it, and every device and admin sees the
   same trail on the host.
 - **Not synced** (D28).
+- **As built (M4 E12b).** `KC/lib/src/audit/audit_log.dart` appends one
+  JSON line per finished run to `audit/<stem>.jsonl`. The fields:
+  - the device id, the server, the intent's kind and the target;
+  - the steps as the preview showed them, through `SecretRedactor`;
+  - the tier and the outcome, with the typed failure, the step and its
+    exit or HTTP status;
+  - the start and end times.
+
+  The file name follows 4.10's rule, now shared with the capability cache
+  as `serverFileStem`. An id that names no file keeps its records in
+  memory.
+  - Records older than 90 days [E] are pruned at engine start.
+  - A line that does not decode marks the file damaged: it is copied
+    aside as `.corrupt-<time>` and rewritten with the lines that do.
+  - Without exclusive access to the support directory the log lives in
+    memory, and `EngineReady.auditInMemory` tells the app.
+  - `AuditQuery(serverId, before, limit)` answers newest first with
+    `AuditRecords(records, more)`.
+  - The log stores redacted steps only, so E24's export has nothing
+    secret to include.
 
 ### 8.11 Host write inventory (D27)
 
@@ -4800,7 +4923,9 @@ shows there.
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
 | `DockerQuery(serverId, queryId, query)`, `DockerWatch(serverId, watchId, lists, statsFor)`, `DockerUnwatch(serverId, watchId)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason)`, `DockerListChanged(serverId, list, payload, at, fullRelist)` |
-| `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(preview)`, `ActionProgress`, `ActionFinished` |
+| `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(planId, preview)`, `ActionProgress`, `ActionFinished`, `ActionRefused(reason, intent or planId)` |
+| `AuditQuery(serverId, before, limit)` (8.10, M4) | `AuditRecords(serverId, records, more)` |
+| `SetSafetyPolicy(policy)`, `SetAdminMode(serverId, enabled)` (8.2, M4) | `AdminModeState(serverId, phase, expiresAt, retry, failure, ended)`; a refused plan's `ActionRefused` names `observeOnly` or `readOnly` |
 | `AnswerPrompt(promptId, answer)` (trust, responses or cancel, secret) | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
 | `SetAppActivity(activity)` (foreground or background; D34, D45) | no event: it changes what runs |
 | none: the engine's probe sweeps (5.12) | `Reachability(serverId, status)` (FL-04) |

@@ -1423,6 +1423,41 @@ M2, the host read MVP, is the current milestone. What is on main:
   `sudo -k -S -p '' -v`. The matrix ran locally; CI runs only its
   contract tests, since the Alpine package pin can disappear. run0 stays
   manual.
+- M4 protected targets, ownership and danger (E10): the plan facts
+  for 03 §8.6 and §8.7, with no planner using them yet.
+  - Protected targets: built-in units, PID 1, the core daemons, the
+    session's own sshd and sampler PIDs (from E07's `SELF`), containers
+    on the SSH or a VPN port, and the user's device-local marks.
+  - Managed containers and stacks raise the tier to typed.
+  - API steps are linted as their Docker CLI equivalents.
+  - Typed impact facts.
+
+  E14 and E15 build plans from these facts.
+- M4 audit log (E12b): every finished run appends a redacted record to
+  the server's `audit/` file. Records are pruned after 90 days, and a
+  damaged file is quarantined. Without exclusive access the log lives in
+  memory, and the engine says so at start. `AuditQuery` reads it; the
+  viewer and export arrive with E24.
+- M4 operation runner (E12a): a confirmed plan is re-validated (unit
+  loaded, process start time, Docker target unchanged), then its own
+  steps run in order. Shell steps go over the link or through admin
+  mode's executor; API steps go through the Docker runner E15 adds. A
+  failure stops the run and is reported with typed facts. Plans run
+  once, and only on the link generation they were previewed on.
+- M4 admin mode and safety policy (E11): the engine runs admin mode
+  per server (03 §8.2). It detects how to elevate, asks for the password
+  only when the prelude needs it, and validates it through the elevation
+  executor. Admin mode ends after inactivity, in the background, on link
+  loss or when the server leaves. The engine enforces the app's safety
+  policy: observe-only by default, read-only above it. No app surface
+  sends these messages yet: E19 adds the Safety settings and the chip.
+- M4 operation model (E09): `klabautermann_core` builds immutable
+  operation plans, whose preview shares the steps the runner will take
+  (03 §8.5). It also computes 8.6's confirmation tiers and holds
+  previewed plans for 5 minutes, refusing stale ones. `ActionIntent` is
+  sealed, one variant per MVP action, and `ActionPreview` carries typed
+  steps and risk facts. Until the planners land (E14, E15), the engine
+  refuses every plan with `ActionRefused`.
 - M4 command builders (E08): `klabautermann_host` builds the guarded
   kill (PRC-02), which signals only when the PID's start ticks still
   match and exits 4 for a reused PID. It also builds `timerStart`
