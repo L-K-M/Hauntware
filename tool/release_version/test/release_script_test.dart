@@ -98,6 +98,7 @@ exit 1
       unorderedEquals([
         'pubspec.yaml',
         'planchette/app/planchette_app/pubspec.yaml',
+        'planchette/packages/ghost_apk_update/pubspec.yaml',
         'planchette/packages/ghost_desktop/pubspec.yaml',
         'planchette/packages/ghost_fonts/pubspec.yaml',
         'planchette/packages/ghost_keystore/pubspec.yaml',

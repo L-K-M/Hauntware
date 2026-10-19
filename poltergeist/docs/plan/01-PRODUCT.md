@@ -270,7 +270,9 @@ the update request is a plain GET of a static URL with no version
 string, platform hint, install identifier, or other payload — the
 response is compared locally — and the egress test asserts the request
 shape too, failing on any query parameter, non-standard header, or body
-sent to that URL, not just on the destination host. Any future change that would
+sent to that URL, not just on the destination host. The Android
+Update download (D23's 2026-10-17 amendment) is not an allowance: like
+a connection, it happens only when the user chooses it. Any future change that would
 falsify a sentence of this copy requires editing the governing decision
 first — D18 (keystore sealing, TOFU, E2E blobs), D4 (bookmark records on
 the sync server), D23 (link-only update distribution), or D19

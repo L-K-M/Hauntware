@@ -30,10 +30,11 @@ export 'src/archive/local_archive_service.dart'
 
 export 'package:seance_core/seance_core.dart'
     show
-        // D19/D23's link-only update check (07 §3.10): Séance's checker,
-        // version compare, and info record — bound to this repo by
-        // [poltergeistUpdateRepo] below.
+        // D19/D23's update check (07 §3.10): Séance's checker, version
+        // compare, and info record with the release's files — bound to
+        // this repo by [poltergeistUpdateRepo] below.
         AppVersion,
+        ReleaseAsset,
         UpdateChecker,
         UpdateInfo,
         Argon2Params,

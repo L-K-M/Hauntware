@@ -6,6 +6,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart' show GlobalKey, ScaffoldMessengerState;
 import 'package:flutter/services.dart' show ServicesBinding;
 import 'package:flutter/widgets.dart';
+import 'package:ghost_apk_update/ghost_apk_update.dart' show ApkUpdater;
 import 'package:ghost_desktop/ghost_desktop.dart' show MacosToolbarBandChannel;
 import 'package:ghost_ui/ghost_ui.dart' show CheckedPlatformMenuDelegate;
 import 'package:package_info_plus/package_info_plus.dart';
@@ -522,11 +523,13 @@ Future<void> main(List<String> args) async {
     transferLimits: transferLimits,
   );
 
-  // The D19 link-only update check (07 §3.10, 01 §6): one plain GET of
-  // GitHub's latest-release endpoint per launch, compared locally —
-  // opt-out via Settings → General, and never a download. The checker
-  // is Séance's UpdateChecker pinned to this repo.
+  // The D19 update check (07 §3.10, 01 §6): one plain GET of GitHub's
+  // latest-release endpoint per launch, compared locally — opt-out via
+  // Settings → General, and never a download by itself. The checker is
+  // Séance's UpdateChecker pinned to this repo. On Android the alert
+  // can download the release APK once the user chooses Update (D23).
   final updateCheck = UpdateCheckController(
+    apkUpdater: Platform.isAndroid ? ApkUpdater() : null,
     enabled: await preferences.loadUpdateChecksEnabled(),
     onEnabledChanged: preferences.saveUpdateChecksEnabled,
   );

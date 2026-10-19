@@ -15,6 +15,19 @@ import 'package:xterm/xterm.dart' show TerminalTheme;
 
 void main() {
   group('terminal appearance', () {
+    test('font-specific ligature features reach terminal text shaping', () {
+      for (final mode in TerminalLigatures.values) {
+        final style = TerminalAppearance.resolve(
+          AppSettings(terminalFontFamily: 'Geist Mono', terminalLigatures: mode),
+          Brightness.dark,
+        ).style;
+        expect(
+          style.toTextStyle().fontFeatures,
+          contains(FontFeature('ss11', mode == TerminalLigatures.on ? 1 : 0)),
+        );
+      }
+    });
+
     test('defaults keep xterm\'s size and draw bundled Iosevka Term', () {
       final appearance = TerminalAppearance.resolve(
         AppSettings(),

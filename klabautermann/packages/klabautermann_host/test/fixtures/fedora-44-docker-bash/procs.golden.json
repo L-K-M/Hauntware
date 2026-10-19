@@ -7,11 +7,11 @@
         "comm": "sleep",
         "state": "S",
         "uid": 0,
-        "rssKb": 1740,
+        "rssKb": 1620,
         "userName": null,
-        "utime": 2,
+        "utime": 3,
         "stime": 0,
-        "startTicks": 630959,
+        "startTicks": 4741016,
         "argv": [
           "sleep",
           "[redacted]"
@@ -24,13 +24,13 @@
         "comm": "sh",
         "state": "R",
         "uid": 0,
-        "rssKb": 4016,
+        "rssKb": 4068,
         "userName": null,
-        "utime": 0,
+        "utime": 1,
         "stime": 1,
-        "startTicks": 630977,
+        "startTicks": 4741038,
         "argv": [
-          "/tmp/klab-sh-UAJRBF/sh",
+          "/tmp/klab-sh-CMGBWF/sh",
           "[redacted]"
         ],
         "argsJoined": null
@@ -41,11 +41,11 @@
         "comm": "dart:capture_fi",
         "state": "S",
         "uid": 0,
-        "rssKb": 8988,
+        "rssKb": 9192,
         "userName": null,
-        "utime": 2,
-        "stime": 1,
-        "startTicks": 630971,
+        "utime": 3,
+        "stime": 0,
+        "startTicks": 4741030,
         "argv": [
           "/opt/klab/capture_fixtures",
           "[redacted]",

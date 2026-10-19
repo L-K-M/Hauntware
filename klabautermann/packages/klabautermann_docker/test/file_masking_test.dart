@@ -54,6 +54,26 @@ void main() {
       expect(_revealed(spans), text);
     });
 
+    test('YAML-style and bracketed keys are assignments too, as compose '
+        'reads them', () {
+      const text =
+          'DB_PASSWORD: hunter2\n'
+          'API_TOKEN:abc123\n'
+          'ARR[0]=s3cret\n'
+          'export TZ: UTC\n';
+      final spans = maskStackFile(text, StackFileKind.environment);
+
+      expect(
+        _shown(spans),
+        'DB_PASSWORD: $_m\n'
+        'API_TOKEN:$_m\n'
+        'ARR[0]=$_m\n'
+        'export TZ: $_m\n',
+      );
+      expect(_secrets(spans), ['hunter2', 'abc123', 's3cret', 'UTC']);
+      expect(_revealed(spans), text);
+    });
+
     test('a line that is no assignment masks its URL credentials only', () {
       final spans = maskStackFile(
         'see https://bob:s3cret@example.com',
@@ -109,6 +129,29 @@ void main() {
         '      - MODE=prod\n',
       );
       expect(_secrets(spans), ['hunter2', 'a=b']);
+      expect(_revealed(spans), text);
+    });
+
+    test('a quoted secret value over several lines stays masked to its '
+        'closing quote', () {
+      const text =
+          'services:\n'
+          '  app:\n'
+          '    environment:\n'
+          '      DB_PASSWORD: "first\n'
+          '        second-half"\n'
+          '      - "API_TOKEN=abc\n'
+          '      def"\n'
+          '      MODE: dev\n';
+      final spans = maskStackFile(text, StackFileKind.compose);
+
+      expect(_shown(spans), isNot(contains('second-half')));
+      expect(_shown(spans), isNot(contains('def')));
+      expect(_shown(spans), contains('MODE: dev'));
+      expect(
+        _secrets(spans).join(),
+        allOf(contains('second-half'), contains('def')),
+      );
       expect(_revealed(spans), text);
     });
 

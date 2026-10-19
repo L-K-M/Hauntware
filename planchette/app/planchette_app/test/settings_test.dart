@@ -209,7 +209,13 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('settings.font')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Maple Mono').last);
+    await tester.enterText(
+      find.byKey(const ValueKey('font.search')),
+      'Maple Mono',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('font.choice.Maple Mono')));
+    await tester.tap(find.byKey(const ValueKey('font.apply')));
     await tester.pumpAndSettle();
     expect(settings.value.fontFamily, 'Maple Mono');
     expect(documentStyle(tester).fontFamily, BundledMonoFont.mapleMono.family);
@@ -217,7 +223,8 @@ void main() {
     // Back to the default stores no family, so it follows the default.
     await tester.tap(find.byKey(const ValueKey('settings.font')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('JetBrains Mono (default)').last);
+    await tester.tap(find.byKey(const ValueKey('font.choice.')));
+    await tester.tap(find.byKey(const ValueKey('font.apply')));
     await tester.pumpAndSettle();
     expect(settings.value.fontFamily, isNull);
     expect(documentStyle(tester).fontFamily, editorDefaultFont.family);
@@ -230,10 +237,7 @@ void main() {
     workspace.newDocument();
     await mount(tester);
     await openSettings(tester);
-    final menu = tester.widget<DropdownButton<String>>(
-      find.byKey(const ValueKey('settings.font')),
-    );
-    expect(menu.value, 'Menlo');
+    expect(find.widgetWithText(OutlinedButton, 'Menlo'), findsOneWidget);
     expect(settings.value.fontFamily, 'Menlo');
   }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
 

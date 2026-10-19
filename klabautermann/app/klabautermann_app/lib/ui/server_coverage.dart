@@ -350,7 +350,9 @@ class _FreshnessLine extends StatelessWidget {
         now: monitoring.clock.value,
         staleAfter: kFleetRowStaleAfter[SampleStream.core]!,
         lastSampleAt: reading?.at,
-        // No monitor set watches a server yet (FL-21).
+        // The monitor set changes nothing here: the engine samples a
+        // monitored server's `overview`, so its phase already says that
+        // something samples it (FL-21).
         watched: false,
         sampling: sampling,
       );

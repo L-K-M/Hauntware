@@ -1,0 +1,8 @@
+# A negative variant of the Docker host (03 §5.3, §11.3; M3 D11):
+# streamlocal off by its own keyword while local TCP forwarding stays
+# on, so only AllowStreamLocalForwarding decides. sshd keeps the first
+# value it reads (sshd_config(5)), so both lines come before the
+# Include of the common config, whose AllowTcpForwarding no would win.
+AllowTcpForwarding local
+AllowStreamLocalForwarding no
+Include /etc/ssh/fixture/sshd_config.common

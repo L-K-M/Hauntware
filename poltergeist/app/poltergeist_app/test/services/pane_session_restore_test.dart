@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:poltergeist_app/l10n/app_localizations_en.dart';
 import 'package:poltergeist_app/services/pane_controller.dart';
 import 'package:poltergeist_app/services/pane_location.dart';
 import 'package:poltergeist_app/services/pane_tabs_controller.dart';
@@ -138,6 +139,38 @@ void main() {
           const LocalPaneLocation('/home/tester/docs'));
       expect(controller.remoteBookmark, isNull);
       expect(lanes.calls, isEmpty);
+    });
+
+    test('app storage labels restored local roots without a channel', () {
+      const storage = '/data/user/0/ch.lkmc.poltergeist/app_flutter';
+      final l10n = AppLocalizationsEn();
+      final controller = PaneController(
+        paneTabId: 'pane.left.tab1',
+        lanes: lanes,
+        appStoragePath: storage,
+      );
+      addTearDown(controller.dispose);
+      controller.markRestored(const SessionTabState.local(path: storage));
+
+      expect(controller.pathLabel(storage, l10n), 'App storage');
+      expect(controller.pathLabel('$storage/app_flutter', l10n), 'app_flutter');
+      expect(controller.pathLabel('/other/app_flutter', l10n), 'app_flutter');
+      expect(controller.location, const LocalPaneLocation(storage));
+      expect(lanes.calls, isEmpty);
+
+      final remote = PaneController(
+        paneTabId: 'pane.right.tab1',
+        appStoragePath: storage,
+      );
+      addTearDown(remote.dispose);
+      remote.markRestored(
+        SessionTabState.remote(
+          serverId: 'b1',
+          path: storage,
+          bookmark: _bookmark('b1'),
+        ),
+      );
+      expect(remote.pathLabel(storage, l10n), 'app_flutter');
     });
 
     test('an unbound record leaves the tab on the launcher', () {
