@@ -33,6 +33,7 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
         DockerServerVersion,
         EngineInfo,
         EnvVar,
+        ExternalManager,
         HealthStatus,
         ImageSummary,
         MaskedValue;
@@ -143,6 +144,12 @@ import '../docker/docker_ladder.dart'
 /// [OpenLogStream], [LogBatch] and [LogStreamState], and
 /// [LogStreamEndReason] gained `logDriverUnreadable`, whose detail names
 /// the driver.
+///
+/// Stack sources then joined v3 the same way (03 §7.16 STK-01, STK-04,
+/// STK-05): [DockerStacksPayload] gained each project's [StackVerdict]
+/// and the [DockerComposeCli] found, and [DockerStackFileQuery] reads a
+/// verified stack's file, answered by [DockerStackFilePayload] or
+/// [DockerStackFileFailed].
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -1649,6 +1656,21 @@ final class DockerImagesQuery extends DockerQuerySpec {
   const DockerImagesQuery();
 }
 
+/// One file of the compose project [project] (03 §7.16 STK-04, M11):
+/// a config file or an environment file its containers recorded, or the
+/// `.env` in its working directory, read over SFTP once the project's
+/// source is verified. Answered by [DockerStackFilePayload] or
+/// [DockerStackFileFailed].
+final class DockerStackFileQuery extends DockerQuerySpec {
+  const DockerStackFileQuery({required this.project, required this.path});
+
+  /// The compose project name.
+  final String project;
+
+  /// The file's absolute path, as the project's labels name it.
+  final String path;
+}
+
 /// A list a [DockerWatch] follows (03 §7.12 to §7.14).
 enum DockerWatchList {
   /// Every container (CTR-01), as [DockerContainersPayload].
@@ -1711,11 +1733,173 @@ final class DockerImagesPayload extends DockerPayload {
 }
 
 /// The containers grouped by compose project (STK-01), from the same
-/// list [DockerContainersPayload] carries.
+/// list [DockerContainersPayload] carries, with each project's source
+/// verdict and the compose CLI the host has (STK-05). A project's
+/// managed-by badge (STK-10) is its [ComposeProject.ownership].
 final class DockerStacksPayload extends DockerPayload {
-  const DockerStacksPayload(this.grouping);
+  const DockerStacksPayload(
+    this.grouping, {
+    this.verdicts = const {},
+    this.composeCli,
+  });
 
   final ComposeGrouping grouping;
+
+  /// The verdict for each project in [grouping], by name; a project the
+  /// engine has not checked yet reads [StackVerifying], and the list is
+  /// sent again once it has.
+  final Map<String, StackVerdict> verdicts;
+
+  /// The compose CLI found, once the engine has looked.
+  final DockerComposeCli? composeCli;
+}
+
+/// Whether a compose project's files are its source (03 §7.16 STK-01).
+@immutable
+sealed class StackVerdict {
+  const StackVerdict();
+}
+
+/// The engine is checking the project's files.
+final class StackVerifying extends StackVerdict {
+  const StackVerifying();
+}
+
+/// Every config file exists and `compose config --hash '*'` over them
+/// matches the `config-hash` label of every service's containers: the
+/// files are the project's source.
+final class StackVerified extends StackVerdict {
+  const StackVerified();
+}
+
+/// "Unverified source", for [reason].
+final class StackUnverified extends StackVerdict {
+  const StackUnverified(this.reason);
+
+  final StackUnverifiedReason reason;
+}
+
+/// "Source not on host": a config file the containers name is missing.
+/// A manager that runs compose in its own container records paths
+/// inside it (Dockge's rule), so [deployedBy] names the manager the
+/// project's labels mark, when they mark one.
+final class StackSourceNotOnHost extends StackVerdict {
+  const StackSourceNotOnHost({this.deployedBy});
+
+  final ExternalManager? deployedBy;
+}
+
+/// Why a project's files are not its verified source.
+enum StackUnverifiedReason {
+  /// The containers record no config files.
+  noSourceLabels,
+
+  /// A recorded project name or path fails 03 §8.8's validation, so no
+  /// command names it.
+  unsafeLabels,
+
+  /// A service's container carries no `config-hash` label.
+  noHashLabels,
+
+  /// The host has no compose CLI.
+  noComposeCli,
+
+  /// The host has only the standalone `docker-compose`, which is
+  /// read-only (STK-05) and does not verify.
+  standaloneComposeOnly,
+
+  /// The compose CLI did not print service hashes for `config --hash
+  /// '*'`, as one without that flag form would not.
+  cliCouldNotHash,
+
+  /// `compose config` failed over the files: a file it cannot read or
+  /// parse, or a variable it cannot interpolate.
+  configFailed,
+
+  /// A service's hash differs from its containers' label, or the files
+  /// define no such service: the files changed since the deploy, or
+  /// are not the ones it used.
+  hashMismatch,
+
+  /// The check could not run: the link failed or timed out.
+  checkFailed,
+}
+
+/// The compose CLIs on the host (03 §7.16 STK-05), each version as it
+/// printed it without a leading `v`.
+@immutable
+final class DockerComposeCli {
+  const DockerComposeCli({this.pluginVersion, this.standaloneVersion});
+
+  /// `docker compose version`; null without the plugin.
+  final String? pluginVersion;
+
+  /// `docker-compose version`; null without the standalone binary.
+  final String? standaloneVersion;
+
+  /// Whether the standalone binary is the Python Compose v1, unmaintained
+  /// since 2023 and read-only here (STK-05).
+  bool get standaloneLegacy => standaloneVersion?.startsWith('1.') ?? false;
+}
+
+/// One stack file (03 §7.16 STK-04, M11) as spans whose
+/// [MaskedValue.display]s joined are the file with its secrets masked
+/// (03 §8.9); the app reveals one span at a time. Read fresh for each
+/// query, and never cached or logged by the engine.
+final class DockerStackFilePayload extends DockerPayload {
+  const DockerStackFilePayload({
+    required this.project,
+    required this.path,
+    required this.text,
+    required this.size,
+    this.truncated = false,
+  });
+
+  final String project;
+  final String path;
+  final List<MaskedValue> text;
+
+  /// The file's size in bytes, as SFTP reported it.
+  final int size;
+
+  /// Whether the file is over [kStackFileMaxBytes], so [text] holds only
+  /// its complete lines within that many bytes.
+  final bool truncated;
+}
+
+/// The most bytes of a stack file the engine reads (M11 [E]).
+const kStackFileMaxBytes = 1024 * 1024;
+
+/// A [DockerStackFileQuery] the engine did not answer with the file.
+final class DockerStackFileFailed extends DockerPayload {
+  const DockerStackFileFailed(this.failure);
+
+  final StackFileFailure failure;
+}
+
+/// Why a [DockerStackFileQuery] read no file.
+enum StackFileFailure {
+  /// No container belongs to the project.
+  unknownStack,
+
+  /// The project's source is not verified ([StackVerdict]).
+  notVerified,
+
+  /// The path is none of the project's files.
+  notStackFile,
+
+  /// SFTP found no file at the path.
+  notFound,
+
+  /// The login user cannot read the file; admin mode's elevated read
+  /// arrives with M4.
+  permissionDenied,
+
+  /// The path is a symbolic link, directory or other non-regular file.
+  notRegularFile,
+
+  /// SFTP failed, or the file changed while it was read.
+  readFailed,
 }
 
 /// One stats round over a watch's `statsFor` (CST-01): a row for each

@@ -70,6 +70,7 @@ List<String> _sharedPrefix({
   String? projectDirectory,
   List<String> configFiles = const [],
   String? envFile,
+  List<String> envFiles = const [],
 }) {
   final argv = <String>[
     binary,
@@ -89,10 +90,10 @@ List<String> _sharedPrefix({
       ..add('-f')
       ..add(validateAbsolutePath(f));
   }
-  if (envFile != null) {
+  for (final e in [?envFile, ...envFiles]) {
     argv
       ..add('--env-file')
-      ..add(validateAbsolutePath(envFile));
+      ..add(validateAbsolutePath(e));
   }
   return argv;
 }
@@ -129,7 +130,8 @@ ComposeInvocation composePs({
 /// `... compose ... config` for source verification and viewing
 /// (03 §7.16 STK-01, STK-04). Exactly one of [quiet], [hash] or
 /// [formatJson] is expected; the interpolated plain output is never
-/// captured by the app (it can contain secrets).
+/// captured by the app (it can contain secrets). [envFiles] repeats
+/// `--env-file` for a project that recorded several.
 ComposeInvocation composeConfig({
   String binary = 'docker',
   required String socketPath,
@@ -137,6 +139,7 @@ ComposeInvocation composeConfig({
   String? projectDirectory,
   List<String> configFiles = const [],
   String? envFile,
+  List<String> envFiles = const [],
   bool quiet = false,
   String? hash,
   bool formatJson = false,
@@ -148,6 +151,7 @@ ComposeInvocation composeConfig({
     projectDirectory: projectDirectory,
     configFiles: configFiles,
     envFile: envFile,
+    envFiles: envFiles,
   )..add('config');
   if (quiet) argv.add('-q');
   if (hash != null) {
