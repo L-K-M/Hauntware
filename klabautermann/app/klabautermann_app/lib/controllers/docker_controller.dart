@@ -27,6 +27,16 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 /// the views start and end it. The lists it delivers stay here
 /// ([containersFor]) after the views hide.
 ///
+/// An Overview that shows a server ([watchSummary]) has its containers
+/// and images watched for 02 OV-05's summary and OV-02's unhealthy
+/// containers: a [DockerWatch] of its own, apart from the Containers
+/// view's, which the engine serves from one `/events` stream per server
+/// and answers at once from the lists it holds. It is sent only once the
+/// endpoint is ready, so a server without Docker is never watched, and
+/// ends when the last Overview hides. [measureDiskUse] reads
+/// `/system/df` on demand ([diskUseFor]), since it is slow on large
+/// hosts.
+///
 /// An Images view that shows a server ([watchImages]) has its images
 /// watched with its containers (03 §7.14 IMG-01): a [DockerWatch] of its
 /// own, one per server while any such view shows, which the engine
@@ -63,17 +73,19 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 /// output is never kept, synced or stored (03 §8.9).
 ///
 /// Every query and watch id is minted here and never reused this run; at
-/// most one engine query per server is in flight, and at most one inspect
-/// per container a view shows. A server that leaves the fleet takes its
-/// state with it and comes back without it (SYN-08), as in
-/// `MonitoringController`; the engine ends its session, and with it the
-/// server's watches, too.
+/// most one engine query and one disk use query per server are in
+/// flight, and at most one inspect per container a view shows. A server
+/// that leaves the fleet takes its state with it and comes back without
+/// it (SYN-08), as in `MonitoringController`; the engine ends its
+/// session, and with it the server's watches, too.
 final class DockerController {
-  DockerController(this._engine) {
+  /// [now] stamps disk use measurements, as the monitoring clock reads.
+  DockerController(this._engine, {this._now = DateTime.now}) {
     _events = _engine.events.listen(_onEvent, onDone: _onEngineDone);
   }
 
   final EngineClient _engine;
+  final DateTime Function() _now;
   late final StreamSubscription<EngineEvent> _events;
   int _count = 0;
   bool _stopped = false;
@@ -101,8 +113,9 @@ final class DockerController {
   ValueListenable<DockerPayload?> engineFor(String serverId) =>
       _server(serverId).engine;
 
-  /// What [serverId]'s container watch last delivered: the containers
-  /// and their list stats, or why they could not be read.
+  /// What [serverId]'s watches last delivered of its containers, the
+  /// Containers view's or the Overview's: the containers and their list
+  /// stats, or why they could not be read.
   ValueListenable<DockerContainerList> containersFor(String serverId) =>
       _server(serverId).containers;
 
@@ -110,6 +123,65 @@ final class DockerController {
   /// could not be read.
   ValueListenable<DockerImageList> imagesFor(String serverId) =>
       _server(serverId).images;
+
+  /// [serverId]'s last disk use measurement ([measureDiskUse]).
+  ValueListenable<DockerDiskUse> diskUseFor(String serverId) =>
+      _server(serverId).diskUse;
+
+  /// An Overview shows [serverId]; [unwatchSummary] says it no longer
+  /// does. The containers and images are watched while any does and the
+  /// endpoint has been ready since.
+  void watchSummary(String serverId) {
+    if (!_listed(serverId)) return;
+    final server = _server(serverId);
+    server.summaryViews++;
+    _syncSummary(serverId, server);
+  }
+
+  void unwatchSummary(String serverId) {
+    final server = _servers[serverId];
+    if (server == null || server.summaryViews == 0) return;
+    server.summaryViews--;
+    _syncSummary(serverId, server);
+  }
+
+  /// Watches the summary's lists anew after a failure, under a new id, as
+  /// [retryContainers] does.
+  void retrySummary(String serverId) {
+    final server = _servers[serverId];
+    if (server == null || server.summaryWatchId == null) return;
+
+    _unwatchSummary(serverId, server);
+    _syncSummary(serverId, server);
+  }
+
+  /// Sends the summary watch while an Overview shows the server and its
+  /// endpoint is ready, and ends it once none shows. The engine keeps it
+  /// across a dropped endpoint.
+  void _syncSummary(String serverId, _DockerServer server) {
+    if (server.summaryViews == 0) {
+      _unwatchSummary(serverId, server);
+      return;
+    }
+    if (server.summaryWatchId != null || _stopped) return;
+    if (server.endpoint.value?.phase != DockerEndpointPhase.ready) return;
+
+    final watchId = server.summaryWatchId = 'summary-${_count++}';
+    _send(
+      DockerWatch(
+        serverId: serverId,
+        watchId: watchId,
+        lists: const {DockerWatchList.containers, DockerWatchList.images},
+      ),
+    );
+  }
+
+  void _unwatchSummary(String serverId, _DockerServer server) {
+    final watchId = server.summaryWatchId;
+    server.summaryWatchId = null;
+    if (watchId == null || _stopped) return;
+    _send(DockerUnwatch(serverId: serverId, watchId: watchId));
+  }
 
   /// What [serverId]'s stack watch last delivered: the compose projects
   /// with their source verdicts and the compose CLI found, or why they
@@ -258,6 +330,30 @@ final class DockerController {
     server.imagesWatchId = null;
     if (watchId == null || _stopped) return;
     _send(DockerUnwatch(serverId: serverId, watchId: watchId));
+  }
+
+  /// Reads [serverId]'s disk use (`/system/df`) unless a read is in
+  /// flight or the endpoint is not ready; [diskUseFor] says how it went.
+  void measureDiskUse(String serverId) {
+    if (!_listed(serverId)) return;
+    final server = _server(serverId);
+    final endpoint = server.endpoint.value;
+    if (server.diskUseQuery != null || _stopped) return;
+    if (endpoint?.phase != DockerEndpointPhase.ready) return;
+
+    final queryId = 'df-${_count++}';
+    _send(
+      DockerQuery(
+        serverId: serverId,
+        queryId: queryId,
+        query: const DockerSystemDfQuery(),
+      ),
+    );
+    if (_stopped) return;
+    server.diskUseQuery = queryId;
+    server.diskUse.value = server.diskUse.value.measuring(
+      endpoint?.route?.socketPath,
+    );
   }
 
   /// A Containers view shows [serverId]; [unwatchContainers] says it no
@@ -590,10 +686,24 @@ final class DockerController {
             _inspectAfterFailure(serverId, server);
           }
         }
+        // Disk use describes the engine on the socket it was read from,
+        // and a read under way there answers for that engine too.
+        final measured = server.diskUse.value.socketPath;
+        final socket = event.route?.socketPath;
+        if (measured != null && socket != null && socket != measured) {
+          server.diskUseQuery = null;
+          server.diskUse.value = const DockerDiskUse();
+        }
         _readIfShown(serverId, server);
+        _syncSummary(serverId, server);
       case DockerResult(:final serverId, :final queryId, :final payload):
         final server = _servers[serverId];
         if (server == null) return;
+        if (server.diskUseQuery == queryId) {
+          server.diskUseQuery = null;
+          server.diskUse.value = server.diskUse.value.took(payload, _now());
+          return;
+        }
         if (server.fileReads.remove(queryId) case final read?) {
           read.complete(payload);
           return;
@@ -631,6 +741,9 @@ final class DockerController {
           payload,
           at,
         );
+        if (list == DockerWatchList.images) {
+          server.images.value = server.images.value.took(payload, at);
+        }
         if ((list, payload) case (
           DockerWatchList.containers,
           DockerContainersPayload(:final containers),
@@ -670,6 +783,13 @@ final class DockerController {
     _stopped = true;
     for (final server in _servers.values) {
       server.engineQuery = null;
+      if (server.diskUseQuery != null) {
+        server.diskUseQuery = null;
+        server.diskUse.value = server.diskUse.value.took(
+          const DockerQueryFailed(DockerQueryFailure.cancelled),
+          _now(),
+        );
+      }
       server.endFileReads(DockerQueryFailure.cancelled);
       for (final inspected in server.inspected.values) {
         if (inspected.queryId == null) continue;
@@ -838,6 +958,62 @@ final class DockerImageList {
   };
 }
 
+/// A server's disk use measurement (02 OV-05): the last `/system/df`
+/// read, and whether one is under way or why the last one failed.
+@immutable
+final class DockerDiskUse {
+  const DockerDiskUse({
+    this.df,
+    this.at,
+    this.inFlight = false,
+    this.failure,
+    this.socketPath,
+  });
+
+  /// The last measurement; null until one succeeded.
+  final SystemDf? df;
+
+  /// When [df] arrived, by this device's clock.
+  final DateTime? at;
+
+  /// Whether a measurement is under way.
+  final bool inFlight;
+
+  /// Why the latest measurement failed, while [df] keeps the one before;
+  /// null once one succeeds.
+  final DockerQueryFailed? failure;
+
+  /// The engine socket [df] was read from: another engine's reading is
+  /// dropped.
+  final String? socketPath;
+
+  /// This measurement with another under way over [socketPath]; the
+  /// last failure is moot.
+  DockerDiskUse measuring(String? socketPath) => DockerDiskUse(
+    df: df,
+    at: at,
+    inFlight: true,
+    socketPath: socketPath ?? this.socketPath,
+  );
+
+  /// This measurement with [payload], the answer that arrived at [now],
+  /// taken in.
+  DockerDiskUse took(DockerPayload payload, DateTime now) => switch (payload) {
+    DockerSystemDfPayload(:final df) => DockerDiskUse(
+      df: df,
+      at: now,
+      socketPath: socketPath,
+    ),
+    final DockerQueryFailed failure => DockerDiskUse(
+      df: df,
+      at: at,
+      failure: failure,
+      socketPath: socketPath,
+    ),
+    _ => DockerDiskUse(df: df, at: at, socketPath: socketPath),
+  };
+}
+
 /// What a server's stack watch delivered (03 §7.16 STK-01, STK-05).
 @immutable
 final class DockerStackList {
@@ -958,6 +1134,9 @@ final class _DockerServer {
   final ValueNotifier<DockerImageList> images = ValueNotifier(
     const DockerImageList(),
   );
+  final ValueNotifier<DockerDiskUse> diskUse = ValueNotifier(
+    const DockerDiskUse(),
+  );
   final ValueNotifier<DockerStackList> stacks = ValueNotifier(
     const DockerStackList(),
   );
@@ -979,6 +1158,15 @@ final class _DockerServer {
 
   /// The containers whose stats the watch reads: the rows on screen.
   Set<String> statsFor = const {};
+
+  /// How many Overviews show the server.
+  int summaryViews = 0;
+
+  /// The summary watch the engine holds, while any Overview shows.
+  String? summaryWatchId;
+
+  /// The disk use query in flight, whose answer [diskUse] takes.
+  String? diskUseQuery;
 
   /// How many Images views show the server.
   int imageViews = 0;
@@ -1014,6 +1202,7 @@ final class _DockerServer {
     engine.dispose();
     containers.dispose();
     images.dispose();
+    diskUse.dispose();
     stacks.dispose();
     for (final container in inspected.values) {
       container.dispose();

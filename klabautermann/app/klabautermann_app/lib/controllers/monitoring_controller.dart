@@ -145,7 +145,7 @@ final class MonitoringController extends ChangeNotifier {
   }) : _clock = _FreshnessClock(now) {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
     logs = LogStreams(_engine);
-    docker = DockerController(_engine);
+    docker = DockerController(_engine, now: now);
   }
 
   /// The log streams panels open, and each server's journal access for

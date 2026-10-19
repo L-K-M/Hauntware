@@ -807,6 +807,11 @@ final class DockerRouter {
         case DockerImagesQuery():
           final images = await client.listImages();
           return read(DockerImagesPayload(images.value), images.warnings);
+        case DockerSystemDfQuery():
+          // Bounded by the client's request timeout, as every buffered
+          // read is: on a relay it holds the one pooled connection.
+          final df = await client.systemDf();
+          return read(DockerSystemDfPayload(df.value), df.warnings);
         case DockerStackFileQuery(:final project, :final path):
           return read(
             await endpoint.stacks.readFile(client, project, path),

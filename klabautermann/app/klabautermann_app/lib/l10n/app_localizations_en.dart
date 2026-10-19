@@ -2728,6 +2728,136 @@ class AppLocalizationsEn extends AppLocalizations {
       'Waiting for the operating system and kernel.';
 
   @override
+  String overviewHealthContainersUnhealthy(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString unhealthy containers',
+      one: '1 unhealthy container',
+      zero: 'No unhealthy containers',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String overviewHealthContainer(String name, String status) {
+    return '$name: $status';
+  }
+
+  @override
+  String get overviewDockerTitle => 'Docker';
+
+  @override
+  String get overviewDockerReading => 'Reading the containers and images.';
+
+  @override
+  String overviewDockerStale(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return 'These figures are from $timeString. The Docker engine cannot be reached now, so they may be out of date.';
+  }
+
+  @override
+  String overviewDockerListFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'tooManyQueries':
+          'This server already has as many Docker watches open as Klabautermann allows.',
+      'daemonError':
+          'The engine refused or failed to list the containers or images.',
+      'connectionFailed':
+          'The connection to the engine failed while listing the containers or images.',
+      'other': 'The containers or images could not be listed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String overviewDockerCount(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '$countString';
+  }
+
+  @override
+  String get overviewDockerRunning => 'Running';
+
+  @override
+  String get overviewDockerPaused => 'Paused';
+
+  @override
+  String get overviewDockerStopped => 'Stopped';
+
+  @override
+  String get overviewDockerUnhealthy => 'Unhealthy';
+
+  @override
+  String get overviewDockerImages => 'Images';
+
+  @override
+  String get overviewDockerImagesInUse => 'Images in use';
+
+  @override
+  String get overviewDockerDangling => 'Dangling images';
+
+  @override
+  String get overviewDockerReclaimable => 'Reclaimable space';
+
+  @override
+  String get overviewDockerNotMeasured => 'Not measured';
+
+  @override
+  String get overviewDockerMeasureNote =>
+      'Measuring asks the engine to add up every image, container, volume and build cache, which can take a while on large hosts.';
+
+  @override
+  String get overviewDockerMeasure => 'Measure disk use';
+
+  @override
+  String get overviewDockerMeasureAgain => 'Measure again';
+
+  @override
+  String get overviewDockerMeasuring =>
+      'Measuring disk use. This can take a while on large hosts.';
+
+  @override
+  String overviewDockerMeasured(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return 'Measured at $timeString.';
+  }
+
+  @override
+  String overviewDockerMeasureFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'linkUnavailable':
+          'Disk use could not be measured: the server is not connected.',
+      'profileUnknown':
+          'Disk use could not be measured: the server has not been checked yet.',
+      'endpointUnavailable':
+          'Disk use could not be measured: the Docker engine cannot be reached.',
+      'daemonError': 'The engine refused or failed to measure its disk use.',
+      'connectionFailed':
+          'The connection to the engine failed or timed out while measuring disk use.',
+      'cancelled':
+          'The measurement stopped because the connection to the engine changed. Measure again to retry.',
+      'other': 'Disk use could not be measured.',
+    });
+    return '$_temp0';
+  }
+
+  @override
   String get syncSignInTooltip =>
       'Sign in to your Séance account to list its servers';
 

@@ -189,7 +189,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   `Libpod-API-Version` and reports `DockerEndpointState`. Results are
   typed; inspect `Path`/`Args`, `Entrypoint`/`Cmd` and health output
   cross masked, and the list drops its command line. Tested over fakes
-  only; no `/system/df` (D03).
+  only; `DockerSystemDfQuery` reads `/system/df` on demand since D19
+  (below).
 - Docker watches (M3, D06, 03 §7.12, §10.1): `DockerWatch` keeps the
   container, image and stack lists current from one `/events` stream
   per server (250 ms batches, targeted re-reads by container id,
@@ -197,8 +198,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   one-shot list stats for the ids on screen every 5 s (4 at once on
   streamlocal, one at a time on a relay), all as `DockerListChanged`.
   Tested over fakes only; the app watches the containers and their
-  stats since D13, the images since D16 and the stacks since D17
-  (below).
+  stats since D13, the images since D16, the containers and images for
+  the Overview since D19 and the stacks since D17 (below).
 - Container logs (M3, D07, 03 §5.6, §10.1): `ContainerLogSource`
   streams a container's logs through `OpenLogStream` as
   `ContainerRecord`s over the server's Docker endpoint: framing by
@@ -359,6 +360,20 @@ M2, the host read MVP, is the current milestone. What is on main:
   output. The editor's text field reads a mask as its asterisks; the
   count of masked values is said beside it. Tested against the fake
   engine only.
+- Overview Docker summary (M3, D19, 03 §7.1, §10.1, §10.4, OV-02,
+  OV-05): once a server's Docker endpoint is ready, the Overview holds
+  a `DockerWatch` of the containers and images of its own while it
+  shows (none for a server without Docker) and ends it when hidden.
+  The health card lists the unhealthy containers after the failed
+  units (up to five, with the engine's status text, as plain text:
+  no route to one container yet). A Docker card after Host counts
+  running, paused, stopped and unhealthy containers, images, images in
+  use and dangling ones through `dockerSummary`, and measures the
+  reclaimable space only when asked (`DockerSystemDfQuery`, within
+  the 30 s request timeout), with progress, its time and why one
+  failed. With the endpoint gone, held figures grey under their read
+  time. Tested against the fake engine only; a large host's
+  `/system/df` timing is unmeasured.
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and
@@ -874,8 +889,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   the new band; where the platform takes no announcements (Android), a
   live region carries it. The switch is a device setting (D60; its key
   is in `settings.json`, below), on Settings' General tab and in the
-  desktop settings window. Not yet: unhealthy containers (M3) and user
-  thresholds (OV-11).
+  desktop settings window. Not yet: user thresholds (OV-11); D19
+  (above) added the unhealthy containers.
 - Coverage part 1 (M2, 03 §9.5 items 1, 2 and 4, K39a, #210): a
   first-run card heads the desktop workspace and the phone's fleet list
   until "Got it", which `settings.json` keeps (below). A coverage chip at

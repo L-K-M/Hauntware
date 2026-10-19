@@ -421,6 +421,199 @@ void main() {
     });
   });
 
+  group('the Overview summary (OV-05, OV-02)', () {
+    final at = DateTime(2026, 10, 15, 14, 30);
+
+    List<DockerWatch> watches() => engine.sentOfType<DockerWatch>().cast();
+    List<DockerUnwatch> unwatches() =>
+        engine.sentOfType<DockerUnwatch>().cast();
+    List<DockerQuery> dfQueries() => [
+      for (final query in queries())
+        if (query.query is DockerSystemDfQuery) query,
+    ];
+
+    test('watches the containers and images once the endpoint is ready, '
+        'while any Overview shows', () async {
+      docker.watchSummary('srv-1');
+      expect(watches(), isEmpty, reason: 'no endpoint, so maybe no Docker');
+      await emit(dockerNoRoute('srv-1', DockerNoRouteReason.noSocket));
+      expect(watches(), isEmpty);
+
+      await emit(dockerReady('srv-1'));
+      final first = watches().single;
+      expect(first.lists, {DockerWatchList.containers, DockerWatchList.images});
+      expect(first.statsFor, isEmpty);
+
+      // A second Overview shares it; the engine keeps it across a drop.
+      docker.watchSummary('srv-1');
+      await emit(
+        const DockerEndpointState(
+          serverId: 'srv-1',
+          phase: DockerEndpointPhase.resolving,
+        ),
+      );
+      await emit(dockerReady('srv-1'));
+      expect(watches(), hasLength(1));
+
+      // Apart from the Containers view's watch.
+      docker.watchContainers('srv-1');
+      expect(watches(), hasLength(2));
+      expect(watches().last.watchId, isNot(first.watchId));
+
+      docker.unwatchSummary('srv-1');
+      expect(unwatches(), isEmpty, reason: 'an Overview still shows');
+      docker.unwatchSummary('srv-1');
+      expect(unwatches().single.watchId, first.watchId);
+      docker.unwatchSummary('srv-1');
+      expect(unwatches(), hasLength(1));
+
+      // A new Overview watches anew, at once over the ready endpoint.
+      docker.watchSummary('srv-1');
+      expect(watches(), hasLength(3));
+      expect(watches().last.watchId, isNot(first.watchId));
+    });
+
+    test('a retry watches anew under a new id', () async {
+      await emit(dockerReady('srv-1'));
+      docker.retrySummary('srv-1');
+      expect(watches(), isEmpty, reason: 'nothing to retry');
+
+      docker.watchSummary('srv-1');
+      final first = watches().single;
+      docker.retrySummary('srv-1');
+      expect(unwatches().single.watchId, first.watchId);
+      expect(watches().last.watchId, isNot(first.watchId));
+      expect(watches().last.lists, first.lists);
+    });
+
+    test('keeps the latest images, and a failed read beside the last list; '
+        'the containers land where the Containers view reads them', () async {
+      await emit(dockerReady('srv-1'));
+      docker.watchSummary('srv-1');
+      final images = docker.imagesFor('srv-1');
+      expect(images.value.images, isNull);
+
+      await emit(
+        dockerImageList('srv-1', [
+          dockerImage('sha256:a', tags: ['nginx:1.27'], containers: 1),
+          dockerImage('sha256:b'),
+        ], at: at),
+      );
+      await emit(
+        dockerContainerList('srv-1', [dockerContainer('c-1')], at: at),
+      );
+      expect(images.value.images, hasLength(2));
+      expect(images.value.at, at);
+      expect(docker.containersFor('srv-1').value.containers, hasLength(1));
+
+      final later = at.add(const Duration(minutes: 1));
+      await emit(
+        dockerListFailed(
+          'srv-1',
+          DockerWatchList.images,
+          DockerQueryFailure.daemonError,
+          at: later,
+        ),
+      );
+      expect(images.value.failure?.failure, DockerQueryFailure.daemonError);
+      expect(images.value.images, hasLength(2));
+      expect(images.value.at, at, reason: 'the list kept is that old');
+
+      await emit(dockerImageList('srv-1', const [], at: later));
+      expect(images.value.failure, isNull);
+      expect(images.value.images, isEmpty);
+    });
+
+    test('measures disk use on demand, one read at a time', () async {
+      var now = at;
+      final timed = DockerController(engine, now: () => now);
+      addTearDown(timed.dispose);
+      final diskUse = timed.diskUseFor('srv-1');
+
+      timed.measureDiskUse('srv-1');
+      expect(dfQueries(), isEmpty, reason: 'no ready endpoint');
+
+      await emit(dockerReady('srv-1'));
+      timed.measureDiskUse('srv-1');
+      expect(dfQueries(), hasLength(1));
+      expect(diskUse.value.inFlight, isTrue);
+      timed.measureDiskUse('srv-1');
+      expect(dfQueries(), hasLength(1), reason: 'one in flight');
+
+      now = at.add(const Duration(seconds: 40));
+      await emit(dockerAnswer(dfQueries().single, dockerDiskUse(images: 900)));
+      expect(diskUse.value.inFlight, isFalse);
+      expect(diskUse.value.df?.reclaimable, 900);
+      expect(diskUse.value.at, now);
+
+      // A failure keeps the last measurement beside why.
+      timed.measureDiskUse('srv-1');
+      await emit(
+        dockerAnswer(
+          dfQueries().last,
+          const DockerQueryFailed(
+            DockerQueryFailure.connectionFailed,
+            detail: 'timed out',
+          ),
+        ),
+      );
+      expect(
+        diskUse.value.failure?.failure,
+        DockerQueryFailure.connectionFailed,
+      );
+      expect(diskUse.value.df?.reclaimable, 900);
+
+      // The next one clears it while it runs.
+      timed.measureDiskUse('srv-1');
+      expect(diskUse.value.failure, isNull);
+      expect(diskUse.value.inFlight, isTrue);
+    });
+
+    test(
+      'another engine socket drops the measurement and its answer',
+      () async {
+        await emit(dockerReady('srv-1'));
+        docker.measureDiskUse('srv-1');
+        await emit(dockerAnswer(dfQueries().single, dockerDiskUse(volumes: 5)));
+        final diskUse = docker.diskUseFor('srv-1');
+
+        // The same engine over a new route keeps it.
+        await emit(dockerReady('srv-1', rank: DockerRank.cliRelay));
+        expect(diskUse.value.df?.reclaimable, 5);
+
+        docker.measureDiskUse('srv-1');
+        await emit(
+          dockerReady(
+            'srv-1',
+            socketPath: '/run/user/1000/docker.sock',
+            mode: EngineMode.rootless,
+          ),
+        );
+        expect(diskUse.value.df, isNull);
+        expect(diskUse.value.inFlight, isFalse);
+        await emit(dockerAnswer(dfQueries().last, dockerDiskUse(volumes: 7)));
+        expect(diskUse.value.df, isNull, reason: 'it measured the other one');
+      },
+    );
+
+    test('a stopped engine ends a measurement as cancelled and sends '
+        'nothing more', () async {
+      await emit(dockerReady('srv-1'));
+      docker.measureDiskUse('srv-1');
+      await engine.close();
+      await pumpEventQueue();
+      final diskUse = docker.diskUseFor('srv-1');
+      expect(diskUse.value.inFlight, isFalse);
+      expect(diskUse.value.failure?.failure, DockerQueryFailure.cancelled);
+
+      docker
+        ..watchSummary('srv-1')
+        ..measureDiskUse('srv-1');
+      expect(watches(), isEmpty);
+      expect(dfQueries(), hasLength(1));
+    });
+  });
+
   group('the image watch (IMG-01)', () {
     final at = DateTime(2026, 10, 15, 14, 30);
 

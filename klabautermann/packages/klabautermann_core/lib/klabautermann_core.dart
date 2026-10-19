@@ -150,8 +150,9 @@ export 'package:klabautermann_docker/klabautermann_docker.dart'
     show MaskedValue;
 
 // The Docker tab (03 §7.12 to §7.14, §10.1): the route a
-// DockerEndpointState names and the plain-data Docker models a
-// DockerResult or DockerListChanged carries (D52).
+// DockerEndpointState names, the plain-data Docker models a
+// DockerResult or DockerListChanged carries (D52), and the Overview's
+// Docker summary over them (OV-05).
 export 'src/docker/docker_ladder.dart'
     show
         DockerNoRouteReason,
@@ -172,7 +173,9 @@ export 'package:klabautermann_docker/klabautermann_docker.dart'
         ContainerPort,
         ContainerRestartPolicy,
         ContainerSummary,
+        DiskUsageTotals,
         DockerServerVersion,
+        DockerSummary,
         EngineComponent,
         EngineInfo,
         EnvVar,
@@ -181,7 +184,9 @@ export 'package:klabautermann_docker/klabautermann_docker.dart'
         ImageSummary,
         LogConfig,
         Ownership,
-        OwnershipMarker;
+        OwnershipMarker,
+        SystemDf,
+        dockerSummary;
 // A container's managed-by badge (DKE-10), from its inspected labels; a
 // stack's is its ComposeProject.ownership.
 export 'package:klabautermann_docker/klabautermann_docker.dart'

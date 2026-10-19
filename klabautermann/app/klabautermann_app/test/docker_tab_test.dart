@@ -520,9 +520,10 @@ void main() {
       await tester.tap(_inDocker(find.text('Containers')));
       await tester.pumpAndSettle();
       expect(watches(), hasLength(3));
-      expect(watches().last.lists, watches().first.lists);
+      final containers = watches().last;
+      expect(containers.lists, watches().first.lists);
 
-      // So does another server tab.
+      // So does another server tab; the Overview holds its own (OV-05).
       await tester.tap(
         find
             .descendant(
@@ -533,7 +534,11 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(unwatches(), hasLength(3));
-      expect(unwatches().last.watchId, watches().last.watchId);
+      expect(unwatches().last.watchId, containers.watchId);
+      expect(watches().last.lists, {
+        DockerWatchList.containers,
+        DockerWatchList.images,
+      });
     });
 
     testWidgets('the Images sub-tab watches the images while it shows '

@@ -40,7 +40,8 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
         ExternalManager,
         HealthStatus,
         ImageSummary,
-        MaskedValue;
+        MaskedValue,
+        SystemDf;
 import 'package:meta/meta.dart';
 // DangerLinter's findings are plain data: a severity and three values.
 import 'package:seance_core/seance_core.dart' show DangerFinding;
@@ -169,6 +170,10 @@ import '../operations/plan_types.dart';
 /// Low-session mode then set [DockerEndpointState.lowSession] (03 §5.2,
 /// M9), which goes out again when a link learns a session limit; no
 /// message changed shape.
+///
+/// Disk use then joined v3 the same way (03 §7.1 OV-05): a
+/// [DockerSystemDfQuery] reads `/system/df` on demand, answered by a
+/// [DockerSystemDfPayload] of per-type totals.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -2238,6 +2243,14 @@ final class DockerImagesQuery extends DockerQuerySpec {
   const DockerImagesQuery();
 }
 
+/// Disk use by type (02 OV-05): `/system/df` without `verbose`, which
+/// the daemon computes by walking images, containers, volumes and the
+/// build cache, so the app asks for it only on demand. Answered by
+/// [DockerSystemDfPayload].
+final class DockerSystemDfQuery extends DockerQuerySpec {
+  const DockerSystemDfQuery();
+}
+
 /// One file of the compose project [project] (03 §7.16 STK-04, M11):
 /// a config file or an environment file its containers recorded, or the
 /// `.env` in its working directory, read over SFTP once the project's
@@ -2312,6 +2325,14 @@ final class DockerImagesPayload extends DockerPayload {
   const DockerImagesPayload(this.images);
 
   final List<ImageSummary> images;
+}
+
+/// `/system/df`'s totals per type (02 OV-05), read in the shape the
+/// negotiated version gates; a type the daemon did not cover is null.
+final class DockerSystemDfPayload extends DockerPayload {
+  const DockerSystemDfPayload(this.df);
+
+  final SystemDf df;
 }
 
 /// The containers grouped by compose project (STK-01), from the same
