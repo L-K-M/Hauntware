@@ -12,8 +12,10 @@ import 'dart:isolate';
 import 'package:test/test.dart';
 import 'package:yaml/yaml.dart';
 
+/// Any registry image pinned by digest, with or without a port or tag.
 final _pinnedImage = RegExp(
-  r'[a-z0-9.-]+/[A-Za-z0-9._/-]+:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}',
+  r'[a-z0-9.-]+(:[0-9]+)?/[A-Za-z0-9._/-]+(:[A-Za-z0-9._-]+)?'
+  r'@sha256:[0-9a-f]{64}',
 );
 
 /// The files whose pins the user-facing request names, by how their
