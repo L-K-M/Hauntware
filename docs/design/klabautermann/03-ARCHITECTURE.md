@@ -6167,7 +6167,14 @@ tab:
   the server's coverage, or on a phone's pushed page: one inspect per
   container a view shows, read again as its list row changes, with
   8.9's reveal and a raw JSON view drawn from the masked model. Ports
-  come from the list row, as the inspect model carries none.
+  come from the list row, as the inspect model carries none. As built
+  in D15 (`ui/docker/container_logs.dart`), the details and a table
+  row's menu open a container's logs (CTX-01, CTX-02): on the desktop
+  in a pane under the sub-tabs, where 10.2's bottom dock (v1) will
+  hold them, since the 300 px inspector is too narrow for log lines;
+  on a phone in a bottom sheet like SVC-04's. The pane reads through
+  the Logs panel's controller only while the tab shows, and 10.8's
+  viewer starts each row with the line's local time and stream.
 
 As built in M2 (`app/klabautermann_app/lib/ui/system_panel.dart`), the
 System tab shows SYS-01's identity, BOOT-01's uptime and boot time,

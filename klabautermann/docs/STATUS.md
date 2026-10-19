@@ -205,8 +205,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   ring and pace, a resume after the newest line with `since` and the
   boundary line dropped, a stopped container read again with backoff,
   and `logDriverUnreadable` naming a driver whose logs the API cannot
-  read. Tested over fakes only; the app opens none yet (D15), and the
-  background does not pause them.
+  read. Tested over fakes only; the app opens them since D15 (below),
+  and the background does not pause them.
 - Docker in the app (M3, D12, 03 §5.9, §8.4, §10.2): a Docker controller
   per engine run asks for each server's endpoint as its link comes up
   and keeps its `DockerEndpointState`; the server header names the
@@ -282,6 +282,25 @@ M2, the host read MVP, is the current milestone. What is on main:
   "(masked)" to a screen reader. Logging driver options stay out of the
   JSON: the model carries them unmasked. Tested against the fake engine
   only.
+- Container logs in the app (M3, D15, 03 §7.12, §10.2, §10.8): the
+  details (an inspector button, a phone page's app bar) and a table
+  row's menu open a container's logs, on the desktop in a pane under
+  the Docker tab's sub-tabs, which follows only while the tab shows and
+  closes with Escape, its button or another server's selection, and on
+  a phone in a bottom sheet (60 % of the screen, dragging from a quarter
+  to full), whose close by button, drag or Back closes the stream. The
+  Logs panel's controller reads `ContainerLogSource` with the same
+  buffer, Live chip, gap notice, dropped-lines rows, status line and
+  search; like a file, the follow has no cursor and starts over when
+  shown again. Each row starts with its local time and its stream,
+  `stderr` in the error colour and spoken as "standard error"; search
+  reads both. `logDriverUnreadable` names the driver and why (`none`,
+  Podman's readable drivers, or "driver X, cache disabled") without a
+  Retry; other ends keep the Logs panel's wording, so a removed
+  container reads "no such file or log tool". The engine delivers a
+  container window oldest first, against `LogStreamSpec`'s newest
+  first, so the controller keeps that order. Tested against the fake
+  engine only.
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and
