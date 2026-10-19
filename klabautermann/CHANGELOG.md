@@ -122,3 +122,23 @@
   signs in with an SSH agent or a key file; Settings says why one
   cannot. Until you choose, desktops monitor up to 10 eligible servers
   and phones none. Your choice is kept on this device only.
+- A server's Docker tab shows its containers, images and compose stacks
+  over the same SSH connection, with nothing installed on the server.
+  Klabautermann reaches the engine by forwarding its socket over SSH, or
+  through the server's docker or podman command, or socat, when sshd
+  forbids forwarding; the server header says which, and says so when the
+  server allows too few SSH sessions to keep everything live. Containers
+  are listed with state, health, CPU and memory, grouped by compose
+  project, with a running-only filter and a search; a container's row
+  opens its details and its logs, which you can search. Passwords and
+  tokens in environment variables, labels, commands and compose files
+  are masked, and you can reveal them for 30 seconds. Images show their
+  size, age and whether a container uses them. A stack shows whether its
+  files on the server still match what runs, which tool manages it, and
+  its compose and `.env` files, read-only. The Overview counts running,
+  paused, stopped and unhealthy containers and images, and measures the
+  space you could reclaim when you ask. When Klabautermann picks the
+  wrong engine socket, choose another one, or type its path, in the
+  Docker tab; the choice is kept on this device. The Access tab says
+  whether socket forwarding works and which Compose is installed.
+  Starting, stopping and removing arrive in a later version.

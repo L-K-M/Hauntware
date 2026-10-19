@@ -20,6 +20,13 @@ item 6: pin publication starts at v1, behind the enrollment assertion;
 the Séance release it names is the first suite release after the #56 fix
 (F3d) merges, which the owner cuts as a separate task (see Releases).
 
+The M3 plan's one owner question, Q1, is settled the same way, by its
+recommendation: a corpus recorded in CI from rootful daemons meets exit
+E1. D01 recorded Docker 20.10.24, 25.0.5, 29.0.4 and 29.7.2 and Podman
+5.8.7's compat service (03, 11.1). Rootless Docker, rootless Podman and
+Docker on real hosts stay on the manual checklist, under the real-hosts
+gate below.
+
 ## Environment
 
 Implementation runs on Linux without Docker or a C compiler. Docker,
@@ -61,6 +68,7 @@ until a person with the hardware signs them off (04, section 13).
 | macOS keychain check after the keystore switch | F3 | open |
 | Engine budgets on a low-end Android phone and an older iPhone | S5 | open |
 | Real hosts on systemd 239 and 245, Alpine and a BusyBox NAS | M2 to M4 | open |
+| Docker on real hosts: rootless Docker and Podman, Snap Docker | M3 to M4 | open |
 | Manual checklist on one phone per OS and three real hosts | M4 | open |
 | Manual checklist on every platform; owner sign-off | M7 | open |
 

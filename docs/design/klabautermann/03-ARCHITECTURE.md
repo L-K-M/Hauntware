@@ -248,7 +248,8 @@ placement · D54 runtime override in M3 · D55 no health overlay in the MVP
 cron zone rules · D59 capability cache · D60 threshold announcements ·
 D61 host-key pins and re-pin ·
 D62 sync state files and the keystore port · D63 pull-only sync in the
-engine · D64 a server's confirmation covers its route.
+engine · D64 a server's confirmation covers its route · D65 spike S3
+and admin validation.
 Proposals awaiting the owner close the section; they are not decisions.
 
 ### Shape and scope
@@ -6774,7 +6775,7 @@ codec's lenient reading; v1 adds nothing beyond it.
 | Integration | sshd plus Docker fixture (11.3) | `klabautermann/test/integration`, Ubuntu only |
 | Helper and alert delivery (v1.x, D42) | Rust unit tests of `klabautermann-inbox` and `klabautermann-notify` (format v1 validation, credential-file mode refusal, exit statuses per HTTP answer); cross-language vectors: blobs sealed in Rust open with the Dart sealing under the alert domain and vice versa, and never under `seance/v1/inbox/`; app-side fetch, validation, replay filter, an item fetched again behind a stopped cursor left on the server, two devices merging one status record, wrong-server rejection, acknowledgement and deletion against a fake inbox; end to end on the fixture host: install with hash check, a real deposit to a sync server, fetch, acknowledge, delete, revoke (exit status 2), spool fallback, uninstall leaving nothing | `klabautermann/rust` tests, `klabautermann_host/test`, `klabautermann_core/test`, integration, CI Rust job |
 | Companion parity (M9) | The shared fixture corpus through the Dart parsers and rule evaluator and through the Rust companion; identical parsed results and rule verdicts required (9.4) | `klabautermann_host/test/fixtures`, `klabautermann/rust` companion tests, CI Rust job |
-| Manual checklist | iOS background disclosure and return banner; Android battery and data use; macOS keychain prompts; RHEL 8, Ubuntu 26.04 (sudo-rs) and a Synology host | `klabautermann/docs/` |
+| Manual checklist | iOS background disclosure and return banner; Android battery and data use; macOS keychain prompts; RHEL 8, Ubuntu 26.04 (sudo-rs) and a Synology host; rootless Docker and Podman, Docker on real hosts and a Snap Docker install | `klabautermann/docs/` |
 
 As built in M3 (D01), `klabautermann_docker/tool/capture_api.dart`,
 run by `test/integration/capture.sh` through `capture_docker_api.sh`,
