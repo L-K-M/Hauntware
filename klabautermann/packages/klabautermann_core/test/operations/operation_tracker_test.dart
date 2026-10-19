@@ -303,6 +303,36 @@ void main() {
     expect(store.notesOf(_s1), isEmpty);
   });
 
+  test('a server that leaves the fleet while its result is acknowledged '
+      'skips the cleanup', () async {
+    await tracker.listed(_s1, _section(user: {_done: _record(_done)}));
+    final first = tracker;
+    tracker = OperationTracker(
+      linkFor: (id) => id == _s1 ? link : null,
+      sessionFor: (_) => session,
+      readOps: reads.add,
+      store: store,
+      audit: audit,
+      emit: (event) {
+        events.add(event);
+        // The fleet changes as the acknowledgement reports.
+        if (event is OperationsChanged &&
+            event.operations.any((o) => o.acknowledged)) {
+          tracker.retain({});
+        }
+      },
+      deviceId: 'device-1',
+      startTimer: clock.startTimer,
+      now: () => clock.now,
+    );
+    first.close();
+    await tracker.listed(_s1, _section(user: {_done: _record(_done)}));
+
+    expect(await tracker.acknowledge(_s1, _done), isNull);
+    await pumpEventQueue();
+    expect(link.containing("'rm'"), isEmpty);
+  });
+
   test("a launch's facts name its result's audit record", () async {
     await tracker.launched(
       _s1,

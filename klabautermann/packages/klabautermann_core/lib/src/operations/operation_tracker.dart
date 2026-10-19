@@ -268,9 +268,12 @@ final class OperationTracker {
   /// so an acknowledgement or cleanup that landed in between would be
   /// written back over: the cleaned-up result would show again, and
   /// acknowledging it again would audit it twice. Each step looks its
-  /// server up again, since [retain] or [close] may have dropped it.
+  /// server up again, since [retain] or [close] may have dropped it, and
+  /// a step queued after that, such as an acknowledgement's cleanup,
+  /// finds nothing to do.
   Future<T> _serially<T>(String serverId, Future<T> Function() step) {
-    final server = _servers[serverId]!;
+    final server = _servers[serverId];
+    if (server == null) return step();
     final result = server.steps.then((_) => step());
     server.steps = result.then<void>((_) {}, onError: (Object _) {});
     return result;
