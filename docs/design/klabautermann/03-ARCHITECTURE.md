@@ -2395,11 +2395,15 @@ relay with no learned limit, a journal follow and a container follow
 fill the follower share, and the events stream then gives way to a full
 re-list every 15 s [E], trying for a slot again each time. Any learned
 session limit is low-session mode: followers are held to one at 4 or
-more and none below, the Docker events stream on a relay is not opened
-(and one already open closes) in favour of the 15 s re-lists while a
-watch holds, stats are read one at a time on every rank, and
-`DockerEndpointState.lowSession` names the mode, on streamlocal too,
-where it holds back the host follows only. A new link has learned
+more and none below, short actions and followers together hold no more
+than the two samplers leave (at 4, one of each; on a relay the pooled
+connection is that short action while a watch keeps it open), the
+Docker events stream on a relay is not opened (and one already open
+closes) in favour of the 15 s re-lists while a watch holds, stats are
+read one at a time on every rank, and `DockerEndpointState.lowSession`
+names the mode, on streamlocal too. Below 4 the samplers leave less
+than the short-action share, which keeps its two slots and queues on
+the link. A new link has learned
 nothing, so reconnecting ends the mode. Stack logs merged through one
 `docker compose logs -f` are not built yet.
 
@@ -5361,7 +5365,8 @@ the engine in `engine_isolate.dart` beside it):
   while a watch holds and the engine did not answer or the link failed
   under the ladder, until a retry after 5 s doubling to 2 min [E]. On
   relay ranks the pool holds one connection, in a short-action slot
-  (5.2), and closes it after 30 s without a query [E]. The
+  (5.2), and closes it after 30 s without a query or a watch's read
+  [E], so a watch keeps it open. The
   endpoint override is not in the protocol yet.
 - **Version 3 (M3 Docker watches).** Watches joined version 3 the same
   way (D06), and the opaque `DockerEvent` row is gone. `DockerWatch`

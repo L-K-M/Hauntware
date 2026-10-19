@@ -193,7 +193,11 @@ final class DockerRouter {
       opened.watches.values,
       asked: request.lists.difference(before?.lists ?? const {}),
     );
-    if (before == null) opened.failed = false;
+    if (before == null) {
+      opened
+        ..failed = false
+        ..retries = 0;
+    }
     _pump(opened);
   }
 
@@ -588,7 +592,10 @@ final class DockerRouter {
     SshLink link,
     DockerRoute route,
   ) async {
-    await quota.acquire(ChannelShare.shortAction);
+    await quota.acquire(
+      ChannelShare.shortAction,
+      learnedSessionLimit: () => link.seen.learnedSessionLimit,
+    );
     final ByteDuplex duplex;
     try {
       duplex = await openDockerDuplex(link, route);
@@ -708,7 +715,10 @@ final class DockerRouter {
     _Session session,
     Future<RemoteCommandResult> Function() action,
   ) async {
-    await session.quota.acquire(ChannelShare.shortAction);
+    await session.quota.acquire(
+      ChannelShare.shortAction,
+      learnedSessionLimit: () => session.link?.seen.learnedSessionLimit,
+    );
     try {
       return await action();
     } finally {
@@ -746,6 +756,7 @@ final class DockerRouter {
       ..epoch += 1
       ..resolving = false
       ..failed = false
+      ..retries = 0
       ..target = null;
     session.retry?.cancel();
     session.retry = null;

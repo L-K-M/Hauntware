@@ -602,6 +602,26 @@ void main() {
       expect(h.lists(), [_list(DockerWatchList.containers, fullRelist: true)]);
     });
 
+    test('a new watch looks again at once, and its retries start at 5 s '
+        'again', () async {
+      final h = _Harness();
+      h.daemon.failures['/_ping'] = (500, 'starting');
+      h.watch({DockerWatchList.containers});
+      h.router.probed(_srv, _profile());
+      await h.settle();
+      int pings() => h.requests('_ping').length;
+      await h.clock.elapse(const Duration(seconds: 5));
+      await h.clock.elapse(const Duration(seconds: 10));
+      expect(pings(), 3);
+
+      h.router.unwatch(const DockerUnwatch(serverId: _srv, watchId: 'w-1'));
+      h.watch({DockerWatchList.containers});
+      await h.settle();
+      expect(pings(), 4);
+      await h.clock.elapse(const Duration(seconds: 5));
+      expect(pings(), 5);
+    });
+
     test('without a watch a failure stands until asked again', () async {
       final h = _Harness();
       h.daemon.failures['/_ping'] = (500, 'starting');
