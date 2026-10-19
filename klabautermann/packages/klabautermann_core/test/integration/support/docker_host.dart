@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:klabautermann_core/src/docker/duplex_adapters.dart';
 import 'package:klabautermann_docker/klabautermann_docker.dart' as docker;
 import 'package:seance_core/seance_core.dart' show SshLink;

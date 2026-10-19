@@ -572,14 +572,12 @@ void main() {
       // Another sub-tab hides it; coming back watches anew.
       await tester.tap(_inDocker(find.text('Stacks')));
       await tester.pumpAndSettle();
-      expect(unwatches().single.watchId, watches().single.watchId);
-      expect(
-        _inDocker(find.text('Available in a later milestone.')),
-        findsOneWidget,
-      );
+      expect(unwatches().single.watchId, watches().first.watchId);
+      expect(_inDocker(find.text('Reading the stacks…')), findsOneWidget);
       await tester.tap(_inDocker(find.text('Containers')));
       await tester.pumpAndSettle();
-      expect(watches(), hasLength(2));
+      expect(watches(), hasLength(3));
+      expect(watches().last.lists, watches().first.lists);
 
       // So does another server tab.
       await tester.tap(
@@ -591,7 +589,7 @@ void main() {
             .first,
       );
       await tester.pumpAndSettle();
-      expect(unwatches(), hasLength(2));
+      expect(unwatches(), hasLength(3));
       expect(unwatches().last.watchId, watches().last.watchId);
     });
 
@@ -628,6 +626,72 @@ void main() {
       await tester.tap(_inDocker(find.text('Stacks')));
       await tester.pumpAndSettle();
       expect(unwatches().last.watchId, images.watchId);
+    });
+
+    testWidgets('the Stacks sub-tab watches the stacks only while it shows, '
+        'and its containers open in the inspector (STK-01, STK-02)', (
+      tester,
+    ) async {
+      final harness = await _openWeb1(tester);
+      await _openDockerTab(tester);
+      await _emit(tester, harness, dockerReady('srv-1'));
+      List<DockerWatch> watches() =>
+          harness.engine.sentOfType<DockerWatch>().cast();
+      List<DockerUnwatch> unwatches() =>
+          harness.engine.sentOfType<DockerUnwatch>().cast();
+      expect(
+        watches().map((watch) => watch.lists),
+        isNot(contains(contains(DockerWatchList.stacks))),
+        reason: 'the Containers sub-tab never asks for the stacks',
+      );
+
+      await tester.tap(_inDocker(find.text('Stacks')));
+      await tester.pumpAndSettle();
+      final stacks = watches().last;
+      expect(stacks.lists, {DockerWatchList.stacks});
+      expect(_inDocker(find.text('Reading the stacks…')), findsOneWidget);
+
+      await _emit(
+        tester,
+        harness,
+        dockerStackList(
+          'srv-1',
+          [
+            dockerStack('web', [
+              dockerService('db', [
+                dockerContainer('b7e9d0c1a2f3', name: 'web-db', project: 'web'),
+              ]),
+            ]),
+          ],
+          at: DateTime(2026, 10, 15, 14, 30),
+          verdicts: const {'web': StackVerified()},
+        ),
+      );
+      expect(_inDocker(find.text('Verified source')), findsWidgets);
+
+      // The overview shows beside the list on a 1280 px window, its
+      // containers below the engine strip's endpoint picker.
+      await tester.ensureVisible(
+        find.descendant(
+          of: find.byType(DockerPanel),
+          matching: find.text('web-db', skipOffstage: false),
+          skipOffstage: false,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(_inDocker(find.text('web-db')));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byType(InspectorPane),
+          matching: find.byType(ContainerDetailsView),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(_inDocker(find.text('Containers')));
+      await tester.pumpAndSettle();
+      expect(unwatches().last.watchId, stacks.watchId);
     });
 
     testWidgets('a container row opens its details in the inspector, until '

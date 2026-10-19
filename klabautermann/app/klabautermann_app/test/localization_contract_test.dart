@@ -136,6 +136,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'container-${_count++}'",
     r"'compose-${_count++}'",
     r"'images-${_count++}'",
+    r"'stacks-${_count++}'",
+    r"'stack-file-${_count++}'",
   },
   'lib/controllers/docker_endpoint_choices.dart': {
     // The not-saved diagnostic of a purge, which no surface starts; a
@@ -403,6 +405,19 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "':'",
     r"'\n'",
     "', '",
+  },
+  'lib/ui/docker/stacks_panel.dart': {
+    // The key tests find a stack's row by.
+    r"'stacks.row.${project.name}'",
+  },
+  'lib/ui/docker/stacks_view.dart': {
+    // The name compose reads a working directory's environment file by,
+    // the path separator, and the file's path joined from them, as the
+    // engine joins it; machine data.
+    "'.env'",
+    "'/'",
+    r"'$directory$_dotEnv'",
+    r"'$directory/$_dotEnv'",
   },
   'lib/ui/docker/docker_panel.dart': {
     // An assert message; programmer diagnostic, never rendered.
