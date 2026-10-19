@@ -10,6 +10,10 @@ a4473d69aaa3316fd23ef5dd1f393e6fb694bd9f:packages/seance_core/test/pure_logic_te
 0829194d51a75aa5b3a97eae76b626a0ce0cceaf:packages/seance_core/test/pure_logic_test.dart:github-pat:175
 fe90dc33ea50172ed9a0dd4a085efac7c120fec1:packages/seance_core/test/pure_logic_test.dart:generic-api-key:179
 fe90dc33ea50172ed9a0dd4a085efac7c120fec1:packages/seance_core/test/pure_logic_test.dart:gitlab-pat:186
+# Synthetic token the Klabautermann log tests feed the masking; no
+# credential.
+b5d86dd228f24c21e3866e732640325ef04d2d03:klabautermann/packages/klabautermann_core/test/logs/log_follower_test.dart:generic-api-key:42
+b5d86dd228f24c21e3866e732640325ef04d2d03:klabautermann/packages/klabautermann_core/test/logs/log_service_test.dart:generic-api-key:81
 # Public loopback-only SSH fixture host keys; scope is separately gated.
 4af1787bfcb73896d5344f8de13a884447b186ae:test/integration/keys/ssh_host_ed25519_key:private-key:1
 4af1787bfcb73896d5344f8de13a884447b186ae:test/integration/keys/ssh_host_ed25519_key_swap:private-key:1
