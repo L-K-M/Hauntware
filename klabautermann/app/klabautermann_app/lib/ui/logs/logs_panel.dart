@@ -70,7 +70,7 @@ const _retryable = {
 _LiveWord _liveWord(LogsPanelController panel) {
   if (!panel.live) return _LiveWord.paused;
   if (panel.rejected) return _LiveWord.unavailable;
-  if (!panel.query.ready) return _LiveWord.stopped;
+  if (!panel.ready) return _LiveWord.stopped;
   return switch (panel.status) {
     LogStreamRunning() => _LiveWord.live,
     LogStreamWaiting(reason: LogStreamWaitReason.link) =>
@@ -83,7 +83,7 @@ _LiveWord _liveWord(LogsPanelController panel) {
 }
 
 _StatusWord? _statusWord(LogsPanelController panel) {
-  if (!panel.query.ready) return _StatusWord.needsPath;
+  if (!panel.ready) return _StatusWord.needsPath;
   if (panel.rejected) return _StatusWord.rejected;
   if (panel.opening) return _StatusWord.opening;
   return switch (panel.status) {
@@ -100,7 +100,8 @@ _StatusWord? _statusWord(LogsPanelController panel) {
       LogStreamEndReason.invalid => _StatusWord.invalid,
       LogStreamEndReason.missing => _StatusWord.missing,
       LogStreamEndReason.denied => _StatusWord.denied,
-      // Container logs, which this panel does not open yet (D15).
+      // Only a container's logs end for their driver, and their view
+      // names it in place of this status (ContainerLogsView).
       LogStreamEndReason.failed ||
       LogStreamEndReason.logDriverUnreadable => _StatusWord.failed,
       LogStreamEndReason.windowFilled ||
@@ -110,6 +111,13 @@ _StatusWord? _statusWord(LogsPanelController panel) {
     null => null,
   };
 }
+
+/// Whether [panel]'s read ended with no entries and nothing else to say,
+/// so the view says the log is empty.
+bool logsPanelEndedEmpty(LogsPanelController panel) =>
+    panel.logs.length == 0 &&
+    panel.status is LogStreamEnded &&
+    _statusWord(panel) == null;
 
 /// The Logs panel (03 §10.4, §10.8): a filter bar with the source picker
 /// (journal, kernel, file), LOG-01's journal filters or LOG-22's path
@@ -172,7 +180,7 @@ class _LogsPanelState extends State<LogsPanel> {
         builder: (context, _) => LayoutBuilder(
           builder: (context, constraints) {
             final compact = constraints.maxWidth < scaler.scale(_phoneWidth);
-            final search = _SearchField(search: _panel.search);
+            final search = LogSearchField(search: _panel.search);
             final header = Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -192,13 +200,13 @@ class _LogsPanelState extends State<LogsPanel> {
                   builder: (context, limited, _) =>
                       switch (_panel.query.source) {
                         _ when limited != true => const SizedBox.shrink(),
-                        LogSourceKind.journal => _Notice(
+                        LogSourceKind.journal => LogNotice(
                           icon: Icons.info_outline,
                           text: l10n.logsPanelJournalLimited,
                         ),
                         // The journal shows such an account no kernel
                         // messages (K04's kPanelNeeds); `dmesg` may.
-                        LogSourceKind.kernel => _Notice(
+                        LogSourceKind.kernel => LogNotice(
                           icon: Icons.info_outline,
                           text: l10n.logsPanelKernelLimited,
                         ),
@@ -206,7 +214,7 @@ class _LogsPanelState extends State<LogsPanel> {
                         LogSourceKind.file => const SizedBox.shrink(),
                       },
                 ),
-                ?_status(l10n),
+                LogStatusNotice(panel: _panel),
               ],
             );
             return Column(
@@ -235,7 +243,6 @@ class _LogsPanelState extends State<LogsPanel> {
     required Widget search,
   }) {
     final query = _panel.query;
-    final word = _liveWord(_panel);
     final filters = query.source != LogSourceKind.kernel;
     return Wrap(
       spacing: compact ? 8 : 12,
@@ -284,47 +291,13 @@ class _LogsPanelState extends State<LogsPanel> {
             sheet: false,
             onApply: _panel.apply,
           ),
-        FilterChip(
-          selected: _panel.live,
-          showCheckmark: false,
-          avatar: Icon(word.icon, size: 18),
-          label: Text(l10n.logsPanelLiveState(word.name)),
-          tooltip: l10n.logsPanelLiveTooltip,
-          onSelected: _panel.setLive,
-        ),
+        LogLiveChip(panel: _panel),
         if (!compact)
           SizedBox(
             width: MediaQuery.textScalerOf(context).scale(_fieldWidth * 1.75),
             child: search,
           ),
       ],
-    );
-  }
-
-  Widget? _status(AppLocalizations l10n) {
-    final word = _statusWord(_panel);
-    if (word == null) return null;
-
-    final retry = _retryable.contains(word);
-    return _Notice(
-      icon: switch (word) {
-        _ when retry => Icons.error_outline,
-        _StatusWord.gap => Icons.info_outline,
-        _ => Icons.hourglass_empty,
-      },
-      text: l10n.logsPanelStatus(word.name),
-      // The host's error output is server data, shown as sent.
-      detail: switch (_panel.status) {
-        LogStreamEnded(:final detail?) => detail,
-        _ => null,
-      },
-      action: retry
-          ? TextButton(
-              onPressed: _panel.retry,
-              child: Text(l10n.logsPanelRetry),
-            )
-          : null,
-      announce: true,
     );
   }
 
@@ -336,9 +309,7 @@ class _LogsPanelState extends State<LogsPanel> {
         search: _panel.search,
         levelOf: LogLevel.ofJournalLine,
       ),
-      if (_panel.logs.length == 0 &&
-          _panel.status is LogStreamEnded &&
-          _statusWord(_panel) == null)
+      if (logsPanelEndedEmpty(_panel))
         ValueListenableBuilder(
           valueListenable: widget.monitoring.logs.journalLimitedFor(
             widget.serverId,
@@ -604,18 +575,76 @@ class _FilterFormState extends State<_FilterForm> {
   }
 }
 
+/// LOG-02's Live chip over [panel]'s stream: on follows, off reads a
+/// window or keeps what the follow showed. It names the stream's state
+/// by word and icon, never by colour alone.
+class LogLiveChip extends StatelessWidget {
+  const LogLiveChip({super.key, required this.panel});
+
+  final LogsPanelController panel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final word = _liveWord(panel);
+    return FilterChip(
+      selected: panel.live,
+      showCheckmark: false,
+      avatar: Icon(word.icon, size: 18),
+      label: Text(l10n.logsPanelLiveState(word.name)),
+      tooltip: l10n.logsPanelLiveTooltip,
+      onSelected: panel.setLive,
+    );
+  }
+}
+
+/// The status line over [panel]'s stream, a live region: what the read
+/// is doing or why it stopped, with any host error output and a Retry
+/// where reading again may help; nothing while a follow runs.
+class LogStatusNotice extends StatelessWidget {
+  const LogStatusNotice({super.key, required this.panel});
+
+  final LogsPanelController panel;
+
+  @override
+  Widget build(BuildContext context) {
+    final word = _statusWord(panel);
+    if (word == null) return const SizedBox.shrink();
+
+    final l10n = AppLocalizations.of(context);
+    final retry = _retryable.contains(word);
+    return LogNotice(
+      icon: switch (word) {
+        _ when retry => Icons.error_outline,
+        _StatusWord.gap => Icons.info_outline,
+        _ => Icons.hourglass_empty,
+      },
+      text: l10n.logsPanelStatus(word.name),
+      // The host's error output is server data, shown as sent.
+      detail: switch (panel.status) {
+        LogStreamEnded(:final detail?) => detail,
+        _ => null,
+      },
+      action: retry
+          ? TextButton(onPressed: panel.retry, child: Text(l10n.logsPanelRetry))
+          : null,
+      announce: true,
+    );
+  }
+}
+
 /// LOG-05's search field over the lines held, with case matching and
 /// stepping; Enter steps to the next match.
-class _SearchField extends StatefulWidget {
-  const _SearchField({required this.search});
+class LogSearchField extends StatefulWidget {
+  const LogSearchField({super.key, required this.search});
 
   final LogSearch search;
 
   @override
-  State<_SearchField> createState() => _SearchFieldState();
+  State<LogSearchField> createState() => _LogSearchFieldState();
 }
 
-class _SearchFieldState extends State<_SearchField> {
+class _LogSearchFieldState extends State<LogSearchField> {
   late final _text = TextEditingController(text: widget.search.query);
   Timer? _debounce;
 
@@ -703,8 +732,9 @@ class _SearchFieldState extends State<_SearchField> {
 /// A line of state above the log: an icon, the words, and optionally the
 /// host's output and an action. [announce] makes it a live region, for
 /// the stream's state changes (03 §10.10).
-class _Notice extends StatelessWidget {
-  const _Notice({
+class LogNotice extends StatelessWidget {
+  const LogNotice({
+    super.key,
     required this.icon,
     required this.text,
     this.detail,

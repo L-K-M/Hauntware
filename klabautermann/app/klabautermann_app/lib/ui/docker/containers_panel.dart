@@ -2,7 +2,7 @@ import 'dart:async' show Timer;
 
 import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart'
-    show ghostFormatBinarySize, ghostIsDesktopPlatform;
+    show SidebarMenuAction, ghostFormatBinarySize, ghostIsDesktopPlatform;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../../controllers/docker_controller.dart';
@@ -10,6 +10,7 @@ import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../sortable_table.dart';
 import 'container_details.dart';
+import 'container_logs.dart';
 import 'containers_view.dart';
 
 /// The panel width from which the containers show as the sortable table;
@@ -48,7 +49,8 @@ const Duration kStatsForSettle = Duration(milliseconds: 250);
 /// The list carries no sizes: the protocol's container watch does not
 /// ask for `size=1`, so 02 CTR-01's lazy sizes wait for a query that
 /// does. A container's row opens its details ([openContainerDetails]):
-/// in the desktop inspector, or on a page of its own.
+/// in the desktop inspector, or on a page of its own. The table's row
+/// actions open its logs ([openContainerLogs]).
 class ContainersPanel extends StatefulWidget {
   const ContainersPanel({
     super.key,
@@ -303,6 +305,20 @@ class _ContainersPanelState extends State<ContainersPanel> {
       onRowActivated: (entry) => switch (entry) {
         ContainerGroupEntry(:final project) => _toggle(project),
         ContainerEntry(:final container) => _open(container),
+      },
+      rowActions: (entry) => switch (entry) {
+        ContainerGroupEntry() => const [],
+        ContainerEntry(:final container) => [
+          SidebarMenuAction(
+            label: l10n.dockerLogsShow,
+            onSelected: () => openContainerLogs(
+              context,
+              monitoring: widget.monitoring,
+              serverId: widget.serverId,
+              container: container,
+            ),
+          ),
+        ],
       },
       spanningRow: (context, entry) => switch (entry) {
         final ContainerGroupEntry group => _GroupHeading(group: group),

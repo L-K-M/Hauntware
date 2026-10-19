@@ -1490,6 +1490,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get logLevelDebug => 'Debug';
 
   @override
+  String logContainerStream(String stream) {
+    String _temp0 = intl.Intl.selectLogic(stream, {
+      'stderr': 'standard error',
+      'other': 'standard output',
+    });
+    return '$_temp0';
+  }
+
+  @override
   String logDroppedLines(int count) {
     final intl.NumberFormat countNumberFormat =
         intl.NumberFormat.decimalPattern(localeName);
@@ -4169,4 +4178,30 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dockerDetailsRawNote => 'Masked values stay masked here.';
+
+  @override
+  String get dockerLogsShow => 'Show logs';
+
+  @override
+  String get dockerLogsTitle => 'Logs';
+
+  @override
+  String get dockerLogsClose => 'Close logs';
+
+  @override
+  String get dockerLogsEmpty => 'This container has no log lines.';
+
+  @override
+  String dockerLogsDriverUnreadable(String reason, String driver) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'none': 'This container keeps no logs: driver none.',
+      'podman':
+          'Podman cannot read this container\'s logs: driver $driver. Podman reads only the json-file, k8s-file and journald drivers.',
+      'cacheDisabled':
+          'Docker cannot read this container\'s logs: driver $driver, cache disabled. Docker reads another driver\'s logs only through its local cache.',
+      'other':
+          'Docker cannot read this container\'s logs: its logging driver keeps none it can read.',
+    });
+    return '$_temp0';
+  }
 }
