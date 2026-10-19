@@ -4,6 +4,7 @@
 // result is audited and its files deleted, the root directory's through
 // admin mode, now or later; the user directory is pruned once per link
 // and the root one once per admin session.
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -45,8 +46,12 @@ final class _Link extends TestLinkBase {
     List<int>? stdin,
   }) async {
     commands.add(command);
+    if (hold?.call(command) case final held?) await held;
     return answer?.call(command) ?? const RemoteCommandResult(exitCode: 0);
   }
+
+  /// A future [command] waits for before it is answered, or null.
+  Future<void>? Function(String command)? hold;
 
   Iterable<String> containing(String text) =>
       commands.where((c) => c.contains(text));
@@ -231,6 +236,7 @@ void main() {
       'once', () async {
     await tracker.listed(_s1, _section(user: {_done: _record(_done, exit: 2)}));
     expect(await tracker.acknowledge(_s1, _done), isNull);
+    await pumpEventQueue();
 
     final (:records, more: _) = await audit.query(_s1);
     final record = records.single;
@@ -248,6 +254,53 @@ void main() {
     expect(last().operations, isEmpty);
     expect(store.notesOf(_s1), isEmpty);
     expect(await tracker.acknowledge(_s1, _done), 'unknown operation');
+  });
+
+  test('an acknowledgement during a listing lands after it, and the '
+      'listing does not bring the cleaned-up result back', () async {
+    final ticks = Completer<void>();
+    link.answer = (c) => c.contains('klabautermann-ticks')
+        ? const RemoteCommandResult(exitCode: 0, stdout: '777\n')
+        : null;
+    final section = _section(
+      user: {
+        _done: _record(_done),
+        _running: _record(_running, state: 'running'),
+      },
+    );
+    await tracker.listed(_s1, section);
+
+    link.hold = (c) => c.contains('klabautermann-ticks') ? ticks.future : null;
+    final listing = tracker.listed(_s1, section);
+    await pumpEventQueue();
+    final acknowledged = tracker.acknowledge(_s1, _done);
+    await pumpEventQueue();
+    ticks.complete();
+    await listing;
+    expect(await acknowledged, isNull);
+    await pumpEventQueue();
+
+    expect(last().operations.map((o) => o.id), [_running]);
+    expect(store.notesOf(_s1), isEmpty);
+    expect(await tracker.acknowledge(_s1, _done), 'unknown operation');
+    expect((await audit.query(_s1)).records, hasLength(1));
+  });
+
+  test('an acknowledgement answers once audited; the cleanup follows '
+      'without holding it up', () async {
+    final rm = Completer<void>();
+    await tracker.listed(_s1, _section(user: {_done: _record(_done)}));
+    link.hold = (c) => c.contains("'rm'") ? rm.future : null;
+
+    expect(await tracker.acknowledge(_s1, _done), isNull);
+    expect((await audit.query(_s1)).records, hasLength(1));
+    expect(op(_done).acknowledged, isTrue);
+    expect(store.notesOf(_s1)[_done]?.acknowledged, isTrue);
+
+    rm.complete();
+    await pumpEventQueue();
+    expect(last().operations, isEmpty);
+    expect(store.notesOf(_s1), isEmpty);
   });
 
   test("a launch's facts name its result's audit record", () async {
@@ -298,6 +351,7 @@ void main() {
     final section = _section(root: {_rootDone: _record(_rootDone)});
     await tracker.listed(_s1, section);
     await tracker.acknowledge(_s1, _rootDone);
+    await pumpEventQueue();
     expect(op(_rootDone).acknowledged, isTrue);
     expect(link.containing("'rm'"), isEmpty);
     expect(store.notesOf(_s1)[_rootDone]?.acknowledged, isTrue);

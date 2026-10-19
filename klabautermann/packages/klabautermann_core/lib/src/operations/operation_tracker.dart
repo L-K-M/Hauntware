@@ -38,6 +38,10 @@ final class _Server {
   AdminSession? rootPrunedIn;
 
   Timer? reread;
+
+  /// The tail of this server's steps, run one after another (see
+  /// [OperationTracker._serially]).
+  Future<void> steps = Future.value();
 }
 
 /// Follows every server's detached operations. The engine isolate owns
@@ -73,8 +77,14 @@ final class OperationTracker {
   final Map<String, _Server> _servers = {};
 
   /// Follows [serverId]'s `ops` [section], read on its current link.
-  Future<void> listed(String serverId, HwsSection section) async {
-    final server = _servers.putIfAbsent(serverId, _Server.new);
+  Future<void> listed(String serverId, HwsSection section) {
+    _servers.putIfAbsent(serverId, _Server.new);
+    return _serially(serverId, () => _listed(serverId, section));
+  }
+
+  Future<void> _listed(String serverId, HwsSection section) async {
+    final server = _servers[serverId];
+    if (server == null) return;
     server.reread?.cancel();
     server.reread = null;
 
@@ -118,21 +128,33 @@ final class OperationTracker {
     String id, {
     required OpDirectoryKind directory,
     required OperationLaunch launch,
-  }) async {
-    // A note the file misses is kept in memory.
-    await _quietly(
-      () => _store.put(
-        serverId,
-        id,
-        OperationNote(directory: directory, launch: launch),
-      ),
-    );
-    _readOps(serverId);
+  }) {
+    _servers.putIfAbsent(serverId, _Server.new);
+    return _serially(serverId, () async {
+      // A note the file misses is kept in memory.
+      await _quietly(
+        () => _store.put(
+          serverId,
+          id,
+          OperationNote(directory: directory, launch: launch),
+        ),
+      );
+      _readOps(serverId);
+    });
   }
 
   /// Audits the shown result of [serverId]'s operation [id], then deletes
-  /// its files where it can. Returns why it refused, or null.
-  Future<String?> acknowledge(String serverId, String id) async {
+  /// its files where it can. Returns why it refused, or null, once the
+  /// audit record and note are written; the deletion follows, since a
+  /// slow link must not hold up the answer.
+  Future<String?> acknowledge(String serverId, String id) {
+    if (!_servers.containsKey(serverId)) {
+      return Future.value('unknown operation');
+    }
+    return _serially(serverId, () => _acknowledge(serverId, id));
+  }
+
+  Future<String?> _acknowledge(String serverId, String id) async {
     final server = _servers[serverId];
     final operation = server?.operations[id];
     if (server == null || operation == null) return 'unknown operation';
@@ -161,15 +183,28 @@ final class OperationTracker {
       id: _withNote(operation, _store.notesOf(serverId)[id]),
     };
 
-    if (_linkFor(serverId) case final link?) await _cleanUp(serverId, link);
     _report(serverId);
+
+    unawaited(
+      _serially(serverId, () async {
+        final link = _linkFor(serverId);
+        if (link == null) return;
+        await _cleanUp(serverId, link);
+        _report(serverId);
+      }),
+    );
     return null;
   }
 
   /// Follows admin mode turning on for [serverId]: the root directory's
   /// acknowledged operations are deleted, and its old files pruned once
   /// per admin session.
-  Future<void> adminOn(String serverId) async {
+  Future<void> adminOn(String serverId) {
+    if (!_servers.containsKey(serverId)) return Future.value();
+    return _serially(serverId, () => _adminOn(serverId));
+  }
+
+  Future<void> _adminOn(String serverId) async {
     final server = _servers[serverId];
     final link = _linkFor(serverId);
     if (server == null || link == null) return;
@@ -226,6 +261,19 @@ final class OperationTracker {
       server.reread?.cancel();
     }
     _servers.clear();
+  }
+
+  /// Runs [step] after every earlier step of [serverId]'s. A listing
+  /// awaits the link per running record before it stores its operations,
+  /// so an acknowledgement or cleanup that landed in between would be
+  /// written back over: the cleaned-up result would show again, and
+  /// acknowledging it again would audit it twice. Each step looks its
+  /// server up again, since [retain] or [close] may have dropped it.
+  Future<T> _serially<T>(String serverId, Future<T> Function() step) {
+    final server = _servers[serverId]!;
+    final result = server.steps.then((_) => step());
+    server.steps = result.then<void>((_) {}, onError: (Object _) {});
+    return result;
   }
 
   // -- listing ----------------------------------------------------------
