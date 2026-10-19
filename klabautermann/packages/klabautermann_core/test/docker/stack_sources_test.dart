@@ -503,6 +503,46 @@ void main() {
       );
     });
 
+    /// Has [h]'s next runs refused at sshd's `MaxSessions`, each one
+    /// teaching the link the limit in [limits], in order.
+    void refuseAt(_Harness h, List<int> limits) {
+      final answer = h.forwarding.answer!;
+      h.forwarding.answer = (command) {
+        if (limits.isEmpty) return answer(command);
+        h.forwarding.seen = SshLinkSeen(
+          learnedSessionLimit: limits.removeAt(0),
+        );
+        return Future.error(
+          const ChannelOpenException(ChannelRefusal.sessionLimit, 'refused'),
+        );
+      };
+    }
+
+    test('a check sshd refuses at its MaxSessions runs again at the limit '
+        'the link learned (M3 D22)', () async {
+      // The link queues an open at the limit it learned rather than
+      // sending it (03 §5.2). It counts the opens in flight, so a check
+      // refused beside another can learn one too many first.
+      final h = _Harness(_demo());
+      refuseAt(h, [3, 2]);
+
+      expect((await h.verified()).verdicts['demo'], isA<StackVerified>());
+      expect(h.kinds, [_Run.test, _Run.cli, _Run.config]);
+      expect(h.forwarding.commands, hasLength(5));
+    });
+
+    test('a refusal that teaches nothing new is unverified as a failed '
+        'check', () async {
+      final h = _Harness(_demo());
+      refuseAt(h, [2, 2]);
+
+      expect(
+        (await h.verified()).verdicts['demo'],
+        _unverified(StackUnverifiedReason.checkFailed),
+      );
+      expect(h.forwarding.commands, hasLength(2));
+    });
+
     test('checks take short-action slots: two at once', () async {
       final h = _Harness([
         for (final name in ['a', 'b', 'c'])

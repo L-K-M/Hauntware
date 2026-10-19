@@ -118,6 +118,10 @@ final class ForwardingLink extends TestLinkBase {
   /// The working directory of [ProbeShell.local] runs.
   String? workingDirectory;
 
+  /// Variables [ProbeShell.local] runs add to this process's
+  /// environment, such as a `PATH` with a stand-in `nc`.
+  Map<String, String>? environment;
+
   /// Answers a run before the exec probe does, when it returns a result.
   Future<RemoteCommandResult>? Function(String command)? answer;
 
@@ -157,10 +161,12 @@ final class ForwardingLink extends TestLinkBase {
     if (runFailures.isNotEmpty) throw runFailures.removeAt(0);
     if (answer?.call(command) case final answered?) return answered;
     if (probeShell == ProbeShell.local) {
-      final r = await Process.run('sh', [
-        '-c',
-        command,
-      ], workingDirectory: workingDirectory);
+      final r = await Process.run(
+        'sh',
+        ['-c', command],
+        workingDirectory: workingDirectory,
+        environment: environment,
+      );
       return RemoteCommandResult(
         stdout: r.stdout as String,
         stderr: r.stderr as String,

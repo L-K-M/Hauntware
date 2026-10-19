@@ -22,7 +22,7 @@ const _rootless = '/run/user/1000/docker.sock';
 const _podman = '/run/podman/podman.sock';
 const _podmanRootless = '/run/user/1000/podman/podman.sock';
 
-/// The exec probe's answers: `test -S`, `test -w`, `command -v nc`.
+/// The exec probe's answers: `test -S`, `test -w`, an `nc` with `-U`.
 const _missing = '1\n1\n1\n';
 const _denied = '0\n1\n1\n';
 const _disabled = '0\n0\n1\n';
@@ -62,7 +62,7 @@ String _probeCommand(String path) => HostCommands.commandLine([
   'sh',
   '-c',
   r'test -S "$1"; echo $?; test -w "$1"; echo $?; '
-      r'command -v nc >/dev/null 2>&1; echo $?',
+      r'nc -h </dev/null 2>&1 | grep -q -e -U; echo $?',
   'sh',
   path,
 ], quote: quoteShellWord);
@@ -424,6 +424,87 @@ void main() {
 
       expect(route.relayArgv, ['nc', '-U', odd]);
     });
+
+    group('over a local shell, with a stand-in nc', () {
+      /// A writable socket and a `PATH` whose `nc` prints [usage] on
+      /// stderr and exits 1, as every `nc` here does for `-h`. Without
+      /// [usage], the `PATH` holds only `sh` and `grep`.
+      Future<(ForwardingLink, String)> withNc(String? usage) async {
+        final dir = await Directory.systemTemp.createTemp('klab-nc-');
+        addTearDown(() => dir.delete(recursive: true));
+        final socket = '${dir.path}/docker.sock';
+        final server = await ServerSocket.bind(
+          InternetAddress(socket, type: InternetAddressType.unix),
+          0,
+        );
+        addTearDown(server.close);
+        final bin = await Directory('${dir.path}/bin').create();
+        final String path;
+        if (usage == null) {
+          for (final tool in ['sh', 'grep']) {
+            final found = await Process.run('sh', ['-c', 'command -v $tool']);
+            await Link(
+              '${bin.path}/$tool',
+            ).create((found.stdout as String).trim());
+          }
+          path = bin.path;
+        } else {
+          final nc = File('${bin.path}/nc');
+          await nc.writeAsString(
+            "#!/bin/sh\ncat >&2 <<'EOF'\n${usage}EOF\nexit 1\n",
+          );
+          expect((await Process.run('chmod', ['0755', nc.path])).exitCode, 0);
+          path = '${bin.path}:${Platform.environment['PATH']}';
+        }
+
+        final link = ForwardingLink(probeShell: ProbeShell.local)
+          ..environment = {'PATH': path};
+        return (link, socket);
+      }
+
+      test("BusyBox's nc, which has no -U, is no relay (M3 D22)", () async {
+        // BusyBox 1.38's usage, abridged; netcat-traditional's lacks -U
+        // too.
+        final (link, socket) = await withNc(
+          'Usage: nc [OPTIONS] HOST PORT  - connect\n'
+          '\t-l\tListen mode, for inbound connects\n'
+          '\t-u\tUDP mode\n'
+          '\t-z\tZero-I/O mode (scanning)\n',
+        );
+
+        expect(
+          await _none(link, _profile(const []), override: socket),
+          DockerNoRouteReason.noRelay,
+        );
+      });
+
+      test("OpenBSD's nc and ncat, which list -U, relay with nc -U", () async {
+        for (final usage in [
+          '\t-U\t\tUse UNIX domain socket\n',
+          '  -U, --unixsock             Use Unix domain sockets only\n',
+        ]) {
+          final (link, socket) = await withNc('usage: nc [-46U]\n$usage');
+
+          final route = await _route(
+            link,
+            _profile(const []),
+            override: socket,
+          );
+
+          expect(route.rank, DockerRank.socketRelay, reason: usage);
+          expect(route.relayArgv, ['nc', '-U', socket]);
+        }
+      });
+
+      test('no nc on the PATH is no relay', () async {
+        final (link, socket) = await withNc(null);
+
+        expect(
+          await _none(link, _profile(const []), override: socket),
+          DockerNoRouteReason.noRelay,
+        );
+      });
+    }, tags: ['shell']);
 
     test('neither socat nor nc is no relay', () async {
       final link = ForwardingLink()..probeAnswers[_rootful] = _disabled;
