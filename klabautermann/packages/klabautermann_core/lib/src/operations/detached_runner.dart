@@ -3,6 +3,7 @@
 // audit and cleanup follow (E17b). Only an operation that needs root runs
 // as root; admin mode alone only asks the system manager to start a login
 // user's operation, so it survives logout without linger.
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:klabautermann_host/klabautermann_host.dart';
@@ -69,6 +70,37 @@ RunnerChoice selectDetachedRunner({
     return _chosen(DetachedRunner.loginSystemdUser, profile);
   }
   return _chosen(DetachedRunner.loginSetsid, profile);
+}
+
+/// The program sudo runs when [runner]'s row elevates its launch (E08's
+/// argv): `systemd-run` on the systemd rows, `sh` running the `setsid`
+/// launcher on the root `setsid` row; null when the row elevates nothing.
+String? elevatedProgram(DetachedRunner runner) {
+  if (!runner.elevated) return null;
+  return runner.transientUnit ? 'systemd-run' : 'sh';
+}
+
+/// Whether the login user's sudo rules let root run [program] with any
+/// arguments (03 §7.17, D66), from `sudo -l` over [link], with
+/// [session]'s password on stdin when it has one. A root login and an
+/// account without sudo are not checked. A listing that cannot be read
+/// refuses nothing: the launch then meets sudo's own refusal, which
+/// reports it.
+Future<bool> sudoAllowsProgram({
+  required SshLink link,
+  required AdminSession session,
+  required HostProfile profile,
+  required String program,
+}) async {
+  if (profile.uid == 0 || profile.sudoVersionLine == null) return true;
+
+  final password = session.password;
+  // The C locale keeps sudo's own lines in the English the reader knows.
+  final result = await link.run(
+    password == null ? 'LC_ALL=C sudo -n -l' : "LC_ALL=C sudo -S -p '' -l",
+    stdin: password == null ? const [] : utf8.encode('$password\n'),
+  );
+  return sudoListAllows('${result.stdout}\n${result.stderr}', program) ?? true;
 }
 
 RunnerChoice _refused(DetachedRefusal refusal) =>

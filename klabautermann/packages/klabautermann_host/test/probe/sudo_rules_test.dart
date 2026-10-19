@@ -1,0 +1,127 @@
+// `sudo -l` listing tests (03 §7.17, D66): which listed rules let root
+// run a detached runner's program, from the listing spike S4 recorded
+// under a rule scoped to the docker CLI and from sudoers' other forms.
+import 'package:klabautermann_host/klabautermann_host.dart';
+import 'package:test/test.dart';
+
+/// [rules] as sudo lists them for `klab`, after its defaults.
+String _listing(List<String> rules) => [
+  'Matching Defaults entries for klab on host:',
+  '    env_reset, mail_badpass, secure_path=/usr/local/sbin\\:/usr/bin, '
+      'use_pty',
+  '',
+  'User klab may run the following commands on host:',
+  for (final rule in rules) '    $rule',
+  '',
+].join('\n');
+
+void main() {
+  test('a rule scoped to the docker CLI allows neither runner', () {
+    // vm-sudo-docker-scoped in klabautermann/docs/evidence/s4/.
+    const recorded =
+        'Matching Defaults entries for klab-vm-docker on runnervmxehtw:\n'
+        '    env_reset, mail_badpass, secure_path=/usr/local/sbin\\:'
+        '/usr/local/bin\\:/usr/sbin\\:/usr/bin\\:/sbin\\:/bin\\:/snap/bin, '
+        'use_pty\n'
+        '\n'
+        'User klab-vm-docker may run the following commands on '
+        'runnervmxehtw:\n'
+        '    (root) NOPASSWD: /usr/bin/docker\n';
+    expect(sudoListAllows(recorded, 'systemd-run'), isFalse);
+    expect(sudoListAllows(recorded, 'sh'), isFalse);
+    expect(sudoListAllows(recorded, 'docker'), isTrue);
+  });
+
+  test('ALL as root allows every program, with or without tags', () {
+    for (final rule in [
+      '(ALL : ALL) ALL',
+      '(ALL) NOPASSWD: ALL',
+      '(root) NOPASSWD: SETENV: ALL',
+    ]) {
+      expect(
+        sudoListAllows(_listing([rule]), 'systemd-run'),
+        isTrue,
+        reason: rule,
+      );
+    }
+  });
+
+  test('a rule naming the program allows it only without arguments', () {
+    expect(
+      sudoListAllows(_listing(['(root) /usr/bin/systemd-run']), 'systemd-run'),
+      isTrue,
+    );
+    expect(
+      sudoListAllows(
+        _listing(['(root) /usr/bin/docker, /usr/bin/systemd-run']),
+        'systemd-run',
+      ),
+      isTrue,
+      reason: 'the second of a command list',
+    );
+    expect(
+      sudoListAllows(
+        _listing(['(root) /usr/bin/systemd-run --user']),
+        'systemd-run',
+      ),
+      isFalse,
+      reason: 'arguments restrict the command to exactly those',
+    );
+  });
+
+  test('another run-as user does not count', () {
+    expect(
+      sudoListAllows(_listing(['(www-data) NOPASSWD: ALL']), 'systemd-run'),
+      isFalse,
+    );
+    expect(
+      sudoListAllows(_listing(['(www-data, root) ALL']), 'systemd-run'),
+      isTrue,
+    );
+  });
+
+  test('a negated entry naming the program denies it', () {
+    expect(
+      sudoListAllows(
+        _listing(['(ALL) ALL, !/usr/bin/systemd-run']),
+        'systemd-run',
+      ),
+      isFalse,
+    );
+    expect(
+      sudoListAllows(_listing(['(ALL) ALL, !/usr/bin/su']), 'systemd-run'),
+      isTrue,
+    );
+  });
+
+  test('a user with no rule may run nothing', () {
+    expect(
+      sudoListAllows(
+        'User klab is not allowed to run sudo on host.\n',
+        'systemd-run',
+      ),
+      isFalse,
+    );
+  });
+
+  test('output without a listing tells nothing', () {
+    expect(
+      sudoListAllows('sudo: a password is required\n', 'systemd-run'),
+      isNull,
+    );
+    expect(
+      sudoListAllows('sudo: interactive authentication is required\n', 'sh'),
+      isNull,
+      reason: "sudo-rs's refusal",
+    );
+    expect(sudoListAllows('', 'sh'), isNull);
+  });
+
+  test('the listing ends at the next unindented line', () {
+    final output =
+        '${_listing(['(root) /usr/bin/docker'])}'
+        'Runas and Command-specific defaults for klab:\n'
+        '    (root) ALL\n';
+    expect(sudoListAllows(output, 'systemd-run'), isFalse);
+  });
+}

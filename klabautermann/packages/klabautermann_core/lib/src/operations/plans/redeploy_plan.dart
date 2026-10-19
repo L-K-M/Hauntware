@@ -31,13 +31,15 @@ import 'docker_plans.dart' show stackFingerprint;
 
 /// What planning a redeploy on one server sees: its Docker endpoint and
 /// stack checks, the host profile the runner row comes from, whether
-/// admin mode is on, the session's protected targets and the login user.
+/// admin mode is on, whether the account's sudo rules let root run a
+/// program (D66), the session's protected targets and the login user.
 typedef RedeployPlanContext = ({
   DockerClient client,
   DockerEndpointRoute route,
   StackSources stacks,
   HostProfile profile,
   bool adminMode,
+  Future<bool> Function(String program) sudoAllows,
   ProtectionContext protection,
   String loginUser,
 });
@@ -102,11 +104,24 @@ Future<PlanAttempt> planRedeploy(
   final level = c.route.rank == DockerRank.sudoRelay
       ? RequiredLevel.admin
       : RequiredLevel.login;
-  final choice = selectDetachedRunner(
+  var choice = selectDetachedRunner(
     profile: c.profile,
     level: level,
     adminMode: c.adminMode,
   );
+  // A row that elevates its launch needs a sudo rule for the program it
+  // elevates; without one, the rows that elevate nothing remain.
+  if (choice.runner case final runner?) {
+    final program = elevatedProgram(runner);
+    if (program != null && !await c.sudoAllows(program)) {
+      choice = selectDetachedRunner(
+        profile: c.profile,
+        level: level,
+        adminMode: c.adminMode,
+        sudoCoversRunners: false,
+      );
+    }
+  }
   final runner = choice.runner;
   if (runner == null) {
     return _refused(switch (choice.refusal!) {
