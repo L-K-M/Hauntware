@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
+import 'package:seance_core/catalog.dart' show HostKeyConflict;
+import 'package:seance_core/seance_core.dart' show PulledPinResolution;
 
 import '../app_state.dart';
 import '../theme/app_appearance.dart';
@@ -73,6 +75,7 @@ enum SettingsLinkMethod {
   setSyncPrefs,
   enrollSync,
   syncNow,
+  resolvePinConflict,
   inboxApps,
   addInboxApp,
   updateInboxApp,
@@ -207,6 +210,14 @@ class SettingsWindowHost {
         await _backend.enrollSync(SyncEnrollment.fromJson(map()));
       case SettingsLinkMethod.syncNow:
         return (await _backend.syncNow()).toJson();
+      case SettingsLinkMethod.resolvePinConflict:
+        final json = map();
+        return (await _backend.resolvePinConflict(
+          hostKeyConflictFromJson(
+            (json['conflict'] as Map).cast<String, dynamic>(),
+          ),
+          keepLocal: json['keepLocal'] as bool,
+        )).name;
       case SettingsLinkMethod.inboxApps:
         return (await _backend.inboxApps()).toJson();
       case SettingsLinkMethod.addInboxApp:
@@ -430,6 +441,17 @@ class RemoteSettingsBackend extends GhostSettingsWindowClient<SettingsTab>
   @override
   Future<SyncCounts> syncNow() async =>
       SyncCounts.fromJson(_map(await _call(SettingsLinkMethod.syncNow)));
+
+  @override
+  Future<PulledPinResolution> resolvePinConflict(
+    HostKeyConflict conflict, {
+    required bool keepLocal,
+  }) async => PulledPinResolution.values.byName(
+    (await _call(SettingsLinkMethod.resolvePinConflict, {
+      'conflict': hostKeyConflictToJson(conflict),
+      'keepLocal': keepLocal,
+    }))! as String,
+  );
 
   @override
   Future<InboxAppsView> inboxApps() async =>

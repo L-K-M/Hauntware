@@ -10,9 +10,16 @@ tags:
   # Engine tests against the runner VM's systemd, which runner_vm.sh
   # starts from run.sh on a GitHub-hosted runner; skipped without it.
   runner-vm:
+  # Spike S4's detached-runner cases on the runner VM (M4 E02), which
+  # runner_vm.sh runs beside runner-vm; skipped without it.
+  runner-vm-s4:
   # The soak and 03 §11.4's budgets against the sshd fixture, which
   # run.sh's soak block runs alone; skipped without it.
   soak:
+  # Docker API tests against the Docker host and dind, which run.sh
+  # starts and seeds; they also carry `integration`, so they run with
+  # the engine suites, and skip without the fixture (03 §11.3).
+  docker:
 # A wedged shell test (an unread pipe or a hung child shell) would pin the
 # VM; cap every test instead.
 timeout: 60s

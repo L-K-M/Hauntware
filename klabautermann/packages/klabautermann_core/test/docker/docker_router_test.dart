@@ -161,15 +161,16 @@ void main() {
       final id = h.query(const DockerContainersQuery());
 
       expect((await h.state()).phase, DockerEndpointPhase.resolving);
-      expect(
-        await h.result(id),
-        _failed(DockerQueryFailure.endpointUnavailable),
-      );
+      // The state that explains the failure goes out before the answers.
       final failed = await h.state();
       expect(failed.phase, DockerEndpointPhase.failed);
       expect(failed.failure, DockerEndpointFailure.belowClientFloor);
       expect(failed.route?.rank, DockerRank.streamlocal);
       expect(failed.negotiatedApi, isNull);
+      expect(
+        await h.result(id),
+        _failed(DockerQueryFailure.endpointUnavailable),
+      );
     });
 
     test('an engine whose minimum is above 1.55 fails', () async {
@@ -280,11 +281,11 @@ void main() {
       final id = h.query(const DockerImagesQuery());
       expect((await h.state()).phase, DockerEndpointPhase.resolving);
       // The ladder reads the profile, which still lists no socket.
+      expect((await h.state()).failure, DockerEndpointFailure.noRoute);
       expect(
         await h.result(id),
         _failed(DockerQueryFailure.endpointUnavailable),
       );
-      expect((await h.state()).failure, DockerEndpointFailure.noRoute);
     });
   });
 

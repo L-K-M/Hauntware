@@ -217,6 +217,7 @@ void main() {
       (e) => e.streamId == id && e.status == const LogStreamRunning(),
     );
 
+    await _untilFollowing(vm, engine, tag, id);
     await vm.logMarkers(vm.journalUser, tag, [1, 2, 3, 4, 5]);
     await _untilMarkers(engine, id, 5);
     final first = await _journalctl(vm, vm.journalUser);
@@ -523,6 +524,32 @@ List<int> _markers(Iterable<LogRecord> records) => [
     if (record case JournalRecord(:final message?))
       if (_marker.firstMatch(message) case final match?) int.parse(match[1]!),
 ];
+
+/// Writes `ready` lines tagged [tag] as the journal account until stream
+/// [streamId] delivers one. A follow from the tail (`-n 0`) shows what
+/// arrives after the tail journalctl finds once it has opened the
+/// journal, which on the runner can come a second after the stream
+/// reports running; a marker written before then never shows.
+Future<void> _untilFollowing(
+  RunnerVm vm,
+  FixtureEngine engine,
+  String tag,
+  String streamId,
+) async {
+  var following = false;
+  final writer = () async {
+    while (!following) {
+      await vm.ssh(vm.journalUser, 'logger -t ${quoteShellWord(tag)} ready');
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+    }
+  }();
+  try {
+    await engine.until<LogBatch>((b) => b.streamId == streamId, _journalWait);
+  } finally {
+    following = true;
+    await writer;
+  }
+}
 
 /// Reads until stream [streamId] has delivered [count] markers.
 Future<void> _untilMarkers(

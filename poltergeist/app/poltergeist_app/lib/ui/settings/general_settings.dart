@@ -84,7 +84,8 @@ Future<void> showGeneralSettingsDialog(
                 const Divider(height: 32),
               if (editorTextSize != null)
                 EditorTextSizeSection(model: editorTextSize),
-              if (editorFont != null) EditorFontSection(model: editorFont),
+              if (editorFont != null)
+                EditorFontSection(model: editorFont, textSize: editorTextSize),
             ],
           ),
         ),

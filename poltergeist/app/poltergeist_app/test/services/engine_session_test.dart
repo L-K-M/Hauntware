@@ -582,6 +582,7 @@ void main() {
   /// the store paths).
   Future<(EngineSession?, FakeAppEngine?)> startSession({
     FakeAppEngine? engine,
+    String? fallbackHome,
     List<EngineConfig>? spawnedConfigs,
     Object? spawnFailure,
     GlobalKey<NavigatorState>? navigatorKey,
@@ -593,6 +594,7 @@ void main() {
     addTearDown(scripted.close);
     final session = await startEngineSession(
       supportDirectoryPath: support.path,
+      fallbackHome: fallbackHome,
       bookmarks: bookmarks,
       navigatorKey: navigatorKey ?? GlobalKey<NavigatorState>(),
       pinStore: pinStore,
@@ -609,6 +611,34 @@ void main() {
   }
 
   group('startup spawn and seeding', () {
+    test('a missing fallback home still starts the engine', () async {
+      final home = '${support.path}/missing';
+      final configs = <EngineConfig>[];
+      final (session, _) = await startSession(
+        fallbackHome: home,
+        spawnedConfigs: configs,
+      );
+      expect(session, isNotNull);
+      addTearDown(session!.shutdown);
+
+      expect(configs.single.fallbackHome, home);
+      expect(reported, isEmpty);
+    });
+
+    test('an unresolvable fallback home still starts the engine', () async {
+      final loop = Link('${support.path}/loop')..createSync('loop');
+      final configs = <EngineConfig>[];
+      final (session, _) = await startSession(
+        fallbackHome: loop.path,
+        spawnedConfigs: configs,
+      );
+      expect(session, isNotNull);
+      addTearDown(session!.shutdown);
+
+      expect(configs.single.fallbackHome, loop.path);
+      expect(reported.single, isA<RemoteFileException>());
+    }, skip: Platform.isWindows);
+
     test('spawns the engine with pins and incidents seeded together', () async {
       // The persisted stores hold one pin and the incident that names it.
       await FileHostKeyStore(

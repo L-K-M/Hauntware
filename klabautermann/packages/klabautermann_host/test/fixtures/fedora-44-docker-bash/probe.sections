@@ -41,6 +41,7 @@ sudo_noninteractive=0
 doas=absent
 doas_noninteractive=
 run0=absent
+run0_noninteractive=
 printf=builtin
 ### tools ok
 journalctl=
@@ -86,7 +87,7 @@ ssh_connection=
 ppid=7
 ppid_comm=dart:capture_fi
 ### clock ok
-epoch=1792220534
+epoch=1792307502
 offset=+0000
 localtime=/usr/share/zoneinfo/Etc/UTC
 ### linger ok

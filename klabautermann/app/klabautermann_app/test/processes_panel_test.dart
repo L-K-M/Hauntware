@@ -3,11 +3,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:intl/intl.dart' show DateFormat;
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/controllers/operations_controller.dart';
+import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
+import 'package:klabautermann_app/ui/actions/action_entry.dart';
 import 'package:klabautermann_app/ui/processes_panel.dart';
 import 'package:klabautermann_app/ui/processes_view.dart'
     show ProcessColumn, kProcessTextLimit;
+import 'package:klabautermann_app/ui/server_safety.dart';
 import 'package:klabautermann_app/ui/sortable_table.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -127,6 +131,7 @@ Future<_Panel> _pump(
   double textScale = 1,
   Brightness brightness = Brightness.light,
   TargetPlatform platform = TargetPlatform.linux,
+  SafetyPolicy? safety,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -146,12 +151,25 @@ Future<_Panel> _pump(
   final theme = base.copyWith(
     textTheme: base.textTheme.apply(fontFamily: goldenFontFamily),
   );
+  final operations = OperationsController(engine);
+  addTearDown(operations.dispose);
+  final policy = safety == null
+      ? null
+      : SafetyController(initial: safety, apply: (_) {});
+  if (policy != null) addTearDown(policy.dispose);
   await tester.pumpWidget(
     MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: theme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      // Actions show only with safety preferences that allow them.
+      builder: (context, child) => policy == null
+          ? child!
+          : SafetyScope(
+              safety: policy,
+              child: OperationsScope(operations: operations, child: child!),
+            ),
       home: MediaQuery.withClampedTextScaling(
         minScaleFactor: textScale,
         maxScaleFactor: textScale,
@@ -570,6 +588,81 @@ void main() {
           );
         }, skip: !goldensCompareHere);
       }
+    }
+  });
+
+  group('signals (PRC-02, M4 E21)', () {
+    const managed = SafetyPolicy(
+      servers: {_serverId: ServerSafety(management: true)},
+    );
+
+    List<KillProcess> planned(_Panel panel) => [
+      for (final PlanAction(:intent)
+          in panel.engine.sentOfType<PlanAction>().cast<PlanAction>())
+        intent as KillProcess,
+    ];
+
+    testWidgets('the row menu terminates, kills or sends any signal, with '
+        'the row\'s start time', (tester) async {
+      final panel = await _pump(tester, safety: managed);
+      await panel.all(tester);
+
+      await tester.tap(find.byKey(const ValueKey('procs.rowActions.812')));
+      await tester.pumpAndSettle();
+      expect(find.text('Terminate'), findsOneWidget);
+      expect(find.text('Send signal'), findsOneWidget);
+      await tester.tap(find.text('Kill'));
+      await tester.pumpAndSettle();
+
+      final kill = planned(panel).single;
+      expect(
+        (kill.serverId, kill.pid, kill.startTicks, kill.signal),
+        (_serverId, 812, 5000, KillSignal.sigkill),
+      );
+      expect(
+        find.byKey(const ValueKey('procs.rowActions.3100')),
+        findsNothing,
+        reason: 'no start time to guard the kill',
+      );
+    });
+
+    testWidgets('a process\'s details offer the same signals', (tester) async {
+      final panel = await _pump(tester, safety: managed);
+      await panel.all(tester);
+      await tester.tap(_row(2041));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.text('Terminate'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(planned(panel).single.signal, KillSignal.sigterm);
+    });
+
+    for (final (name, policy) in [
+      ('observe-only', const SafetyPolicy()),
+      (
+        'read-only',
+        const SafetyPolicy(
+          globalReadOnly: true,
+          servers: {_serverId: ServerSafety(management: true)},
+        ),
+      ),
+    ]) {
+      testWidgets('$name offers none', (tester) async {
+        final panel = await _pump(tester, safety: policy);
+        await panel.all(tester);
+        expect(
+          find.byKey(const ValueKey('procs.rowActions.812')),
+          findsNothing,
+        );
+        await tester.tap(_row(2041));
+        await tester.pumpAndSettle();
+        expect(find.text('Terminate'), findsNothing);
+      });
     }
   });
 }

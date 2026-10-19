@@ -36,6 +36,8 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
     required bool alwaysShowCursor,
     EditableRectCallback? onEditableRect,
     String? composingText,
+    LayerLink? selectionStartLink,
+    LayerLink? selectionEndLink,
   })  : _terminal = terminal,
         _controller = controller,
         _offset = offset,
@@ -46,6 +48,8 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
         _alwaysShowCursor = alwaysShowCursor,
         _onEditableRect = onEditableRect,
         _composingText = composingText,
+        _selectionStartLink = selectionStartLink,
+        _selectionEndLink = selectionEndLink,
         _painter = TerminalPainter(
           theme: theme,
           textStyle: textStyle,
@@ -152,6 +156,13 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
   TerminalSize? _viewportSize;
 
   final TerminalPainter _painter;
+
+  final LayerLink? _selectionStartLink;
+  final LayerLink? _selectionEndLink;
+
+  @override
+  bool get alwaysNeedsCompositing =>
+      _selectionStartLink != null || _selectionEndLink != null;
 
   var _stickToBottom = true;
 
@@ -500,6 +511,18 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
     );
   }
 
+  /// [seance fork] Handles move exclusive cell boundaries, including the
+  /// right edge of the last column, rather than selecting the cell under them.
+  CellAnchor createSelectionBoundaryAnchorAt(Offset offset) {
+    final cell = getCellOffset(offset);
+    final column = ((offset.dx - _padding.left) / cellSize.width)
+        .round()
+        .clamp(0, _terminal.viewWidth);
+    return _terminal.buffer.createAnchorFromOffset(
+      _clampToContent(CellOffset(column, cell.y)),
+    );
+  }
+
   /// [seance fork] Creates owned anchors pinning the word at pixel [offset],
   /// or null when there is no word there. The caller must dispose them.
   (CellAnchor, CellAnchor)? createWordAnchorsAt(Offset offset) {
@@ -655,7 +678,36 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
     canvas.clipRect(offset & size);
     _paint(context, offset);
     canvas.restore();
+    _paintSelectionHandleLinks(context, offset);
     context.setWillChangeHint();
+  }
+
+  void _paintSelectionHandleLinks(PaintingContext context, Offset offset) {
+    final selection = _controller.selection?.normalized;
+    final base = _controller.selectionBaseAnchor;
+    if (selection == null ||
+        base == null ||
+        !_terminal.buffer.ownsAnchor(base)) {
+      return;
+    }
+    for (final (link, cell) in [
+      (_selectionStartLink, selection.begin),
+      (_selectionEndLink, selection.end),
+    ]) {
+      if (link == null) continue;
+      final point = getOffset(cell) + Offset(0, lineHeight);
+      if (point.dx < 0 ||
+          point.dx > size.width ||
+          point.dy < 0 ||
+          point.dy > size.height) continue;
+      // Followers track paint geometry through output, reflow and scrolling;
+      // offscreen endpoints have no leader, so their handles cannot leak out.
+      context.pushLayer(
+        LeaderLayer(link: link, offset: offset + point),
+        (context, offset) {},
+        Offset.zero,
+      );
+    }
   }
 
   void _paint(PaintingContext context, Offset offset) {

@@ -9,13 +9,17 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'app.dart';
+import 'controllers/admin_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/docker_notice_controller.dart';
 import 'controllers/fleet_controller.dart';
+import 'controllers/monitor_set.dart';
 import 'controllers/monitoring_controller.dart';
+import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
 import 'controllers/sync_controller.dart';
+import 'services/app_version.dart';
 import 'services/engine_keystore.dart';
 import 'services/instance_guard.dart';
 import 'services/macos_titlebar.dart';
@@ -23,6 +27,7 @@ import 'services/settings_window/settings_window_host.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'services/ssh_config_source.dart';
 import 'services/stored_appearance.dart';
+import 'services/stored_safety.dart';
 import 'services/window_state.dart';
 import 'settings_window_app.dart';
 import 'ui/already_running_app.dart';
@@ -123,9 +128,12 @@ Future<void> main(List<String> args) async {
   // directory alone; otherwise it keeps this run's pins in memory (D59,
   // D61, D63). It gets the device id read above, after the lock, so
   // enrollment never reads an id another process may have minted.
+  // Probes are on too (FL-04): the engine probes confirmed endpoints and
+  // the fleet rows show the answers.
   final engine = await IsolateEngineClient.spawn(
     supportDirectory: supportDirectory.path,
     linksEnabled: true,
+    probesEnabled: true,
     supportDirectoryAccess: supportDirectoryAccessFor(instanceLock),
     deviceId: settings.deviceId,
   );
@@ -145,6 +153,16 @@ Future<void> main(List<String> args) async {
   final fleet = FleetController(
     engine,
     sshConfig: sshConfigSourceFor(defaultTargetPlatform, Platform.environment),
+    // The rail's pinned shortlist (03 §10.3), device-local in
+    // settings.json as Séance keeps its pins.
+    pinnedServerIds: settings.pinnedServerIds,
+    savePins: settings.setPinnedServerIds,
+    // FL-21's monitor set (03 §4.3 step 4), device-local in settings.json:
+    // until the user chooses one, every eligible server on a desktop and
+    // none on a phone.
+    monitorSet: settings.monitorSet,
+    monitorSetDefault: monitorSetDefaultFor(defaultTargetPlatform),
+    saveMonitorSet: settings.setMonitorSet,
   );
   // Spawned once per launch: a restarted engine would be a new client
   // with new controllers over it, whose seq floors start empty (D44), and
@@ -153,6 +171,15 @@ Future<void> main(List<String> args) async {
   // The host-key and keyboard-interactive prompts the engine raises while
   // it connects, shown one at a time over every route.
   final prompts = PromptController(engine);
+  // Admin mode per server (03 §8.2): the engine runs it and holds the
+  // password; the header's chip asks and shows its state.
+  final admin = AdminController(engine);
+  // Action previews and runs (03 §8.5): the engine plans and runs them;
+  // the app shows the preview and the results.
+  final operations = OperationsController(
+    engine,
+    auditInMemory: engine.ready.auditInMemory,
+  );
   // Pull-only sync (03 §4.3, D14): the sign-in and rounds the user asks
   // for, and the OS keystore the engine's sync reaches through this
   // isolate, which alone can call the keystore plugin (D62).
@@ -175,12 +202,29 @@ Future<void> main(List<String> args) async {
     save: settings.setAnnounceThresholdBands,
   );
 
+  // The safety preferences (M4 plan M4), device-local in settings.json and
+  // applied to the engine now, since it starts with every server
+  // observe-only, and on every change.
+  final safety = safetyFromSettings(
+    settings,
+    engine,
+    labelOf: (serverId) =>
+        fleet.servers
+            .where((server) => server.id == serverId)
+            .firstOrNull
+            ?.displayName ??
+        serverId,
+  );
+
   // SAF-08's notice heads the Docker tab until dismissed on this device,
   // which settings.json keeps (03 §8.4).
   final dockerNotice = DockerNoticeController(
     dismissed: settings.rootEquivalenceNoticeDismissed,
     saveDismissal: settings.dismissRootEquivalenceNotice,
   );
+  // The About dialog's version (M16), read here once: the settings
+  // window's engine has no plugins and gets it over the link.
+  final appVersion = await readAppVersion();
 
   // Desktop only: the runners there host the settings window; phones keep
   // the settings route.
@@ -188,6 +232,9 @@ Future<void> main(List<String> args) async {
     defaultTargetPlatform,
     appearance: appearance,
     announcements: announcements,
+    appVersion: appVersion,
+    monitorSet: fleet.monitorSettings,
+    safety: safety,
   );
 
   runApp(
@@ -198,6 +245,9 @@ Future<void> main(List<String> args) async {
       appearance: appearance,
       coverage: coverage,
       announcements: announcements,
+      safety: safety,
+      admin: admin,
+      operations: operations,
       dockerNotice: dockerNotice,
       sync: sync,
       settingsIssue: settings.issue,
@@ -206,6 +256,7 @@ Future<void> main(List<String> args) async {
       instanceLockIssue: instanceLockIssue,
       openSettingsWindow: settingsWindow?.open,
       toolbarBand: toolbarBand,
+      appVersion: appVersion,
     ),
   );
 }

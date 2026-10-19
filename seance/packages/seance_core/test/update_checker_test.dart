@@ -71,6 +71,60 @@ void main() {
           'https://github.com/L-K-M/Hauntware/releases/latest');
     });
 
+    test('reports the release files that carry a SHA-256 digest', () async {
+      const digest =
+          'F6FDD1E716651A6C7392EC2D8BD74F47863091858F09F55CF0F67E5BF5E81D15';
+      Map<String, Object?> asset(String name,
+              {String url = 'https://github.com/L-K-M/Hauntware/releases/'
+                  'download/v0.3.0/seance-android.apk',
+              Object? size = 74211084,
+              Object? digest = 'sha256:$digest'}) =>
+          {
+            'name': name,
+            'browser_download_url': url,
+            'size': size,
+            'digest': digest,
+          };
+      final checker = checkerReturning(jsonEncode({
+        'tag_name': 'v0.3.0',
+        'assets': [
+          asset('seance-android.apk'),
+          asset('no-digest.apk', digest: null),
+          asset('md5.apk', digest: 'md5:0123'),
+          asset('short.apk', digest: 'sha256:${digest.substring(1)}'),
+          asset('not-hex.apk', digest: 'sha256:${'g' * 64}'),
+          asset('plain-http.apk', url: 'http://example.com/a.apk'),
+          asset('empty.apk', size: 0),
+          'not an asset',
+        ],
+      }));
+
+      final info = await checker.check('0.2.0');
+
+      expect(info!.assets.keys, ['seance-android.apk']);
+      final apk = info.assets['seance-android.apk']!;
+      expect(
+          apk.downloadUrl.toString(),
+          'https://github.com/L-K-M/Hauntware/releases/download/v0.3.0/'
+          'seance-android.apk');
+      expect(apk.size, 74211084);
+      expect(apk.sha256, digest.toLowerCase());
+      // A caller cannot edit the check's answer in place.
+      expect(() => info.assets.clear(), throwsUnsupportedError);
+    });
+
+    test('a release without assets, or with malformed ones, reports none',
+        () async {
+      for (final release in [
+        {'tag_name': 'v0.3.0'},
+        {'tag_name': 'v0.3.0', 'assets': []},
+        {'tag_name': 'v0.3.0', 'assets': 'garbage'},
+      ]) {
+        final info = await checkerReturning(jsonEncode(release)).check('0.2.0');
+        expect(info!.assets, isEmpty);
+      }
+    });
+
     test('reports nothing when up to date', () async {
       final checker = checkerReturning(jsonEncode({'tag_name': 'v0.2.0'}));
       expect(await checker.check('0.2.0'), isNull);

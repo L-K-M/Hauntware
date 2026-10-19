@@ -94,10 +94,10 @@ abstract class AppLocalizations {
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[Locale('en')];
 
-  /// No description provided for @appTitle.
+  /// The app's title, with the preview label until v1 (04 §12.3): the task switcher, the About dialog and the about row on the General settings tab. Klabautermann is the display name, an identity: never translated.
   ///
   /// In en, this message translates to:
-  /// **'Klabautermann'**
+  /// **'Klabautermann (preview)'**
   String get appTitle;
 
   /// No description provided for @fleetTitle.
@@ -111,6 +111,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Servers'**
   String get fleetSectionServers;
+
+  /// Fleet list section header over the synced servers pinned to the top on this device (03 §10.3); drawn in caps.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned'**
+  String get fleetSectionPinned;
+
+  /// Fleet list section header over the servers imported from this device's SSH config (FL-02), listed apart from the synced servers and their groups; drawn in caps.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported'**
+  String get fleetSectionImported;
+
+  /// A synced fleet row's menu verb that lists the server under the Pinned section on this device.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin to top'**
+  String get fleetRowPin;
+
+  /// A pinned fleet row's menu verb that returns the server to its section.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin'**
+  String get fleetRowUnpin;
+
+  /// Top toast when pinning or unpinning a server could not be written to the device's settings file; the change holds for this session.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save your pinned servers, so the change lasts only until it quits.'**
+  String get fleetPinNotSaved;
+
+  /// A fleet row's menu verb that adds the server to this device's monitor set (FL-21): Klabautermann then reads it continuously while open and its row shows CPU, memory and disk. Disabled for a server that cannot be monitored.
+  ///
+  /// In en, this message translates to:
+  /// **'Monitor'**
+  String get fleetRowMonitor;
+
+  /// A monitored fleet row's menu verb that takes the server out of this device's monitor set (FL-21); it is then read only while a view has it open.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop monitoring'**
+  String get fleetRowStopMonitoring;
+
+  /// Top toast when the user asks to monitor a server while the monitor set (FL-21) is full; limit is the most servers it holds.
+  ///
+  /// In en, this message translates to:
+  /// **'You can monitor up to {limit} servers on this device. Stop monitoring one first.'**
+  String monitorSetFull(int limit);
+
+  /// Top toast when a monitor set change applied but could not be written to the device's settings file; the change holds for this session.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save your monitored servers, so the change lasts only until it quits.'**
+  String get monitorSetNotSaved;
+
+  /// Top toast when the app did not take a monitor set change, such as one from the settings window that the app refused.
+  ///
+  /// In en, this message translates to:
+  /// **'The monitored servers could not be changed.'**
+  String get monitorSetNotChanged;
+
+  /// Why a synced server cannot join the monitor set (FL-21): this device has not confirmed its endpoint, or a sync changed it since (SAF-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm this server\'s endpoint to monitor it.'**
+  String get monitorIneligibleEndpoint;
+
+  /// Why a server cannot join the monitor set (FL-21): its sign-in needs the user's answer, and continuous reading never asks.
+  ///
+  /// In en, this message translates to:
+  /// **'Signs in with a password or a stored key, which asks you first, so it is read only while you have it open.'**
+  String get monitorIneligibleCredentials;
+
+  /// Why an imported server cannot join the monitor set (FL-21): it came from an older import, whose sign-in Klabautermann does not know until the next import.
+  ///
+  /// In en, this message translates to:
+  /// **'Import your ssh_config again to monitor this server.'**
+  String get monitorIneligibleUnknown;
 
   /// No description provided for @fleetEmptyTitle.
   ///
@@ -279,6 +357,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Window'**
   String get menuWindow;
+
+  /// Title of the Help menu (Linux and Windows, where it holds About Klabautermann).
+  ///
+  /// In en, this message translates to:
+  /// **'Help'**
+  String get menuHelp;
+
+  /// The menu command that opens the About dialog: first in the macOS application menu, in the Help menu on Linux and Windows. Klabautermann is the display name: never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'About Klabautermann'**
+  String get aboutCommand;
+
+  /// The running build's version in the About dialog and the about row on the General settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version}'**
+  String aboutVersion(String version);
+
+  /// In place of aboutVersion when the platform could not tell the app's version.
+  ///
+  /// In en, this message translates to:
+  /// **'Version unknown'**
+  String get aboutVersionUnknown;
+
+  /// The app's licence line in the About dialog. Klabautermann and Unlicense are names: never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann is free and unencumbered software released into the public domain under the Unlicense.'**
+  String get aboutLicence;
 
   /// No description provided for @statusConnected.
   ///
@@ -567,12 +675,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Alerts'**
   String get settingsTabAlerts;
-
-  /// No description provided for @themeLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Theme'**
-  String get themeLabel;
 
   /// No description provided for @themeSystem.
   ///
@@ -3268,6 +3370,102 @@ abstract class AppLocalizations {
   /// **'You can\'t connect to this server yet: it comes from an earlier import that kept only its address. Import your SSH config again to connect.'**
   String get connectRejectedAddressOnly;
 
+  /// Banner on a server's workspace or screen when the engine will not connect a synced server because its endpoint (host, port, user, jump route) is not confirmed on this device or changed since (03 §4.7, SAF-09). The user confirms it from the notice over the fleet list, whose button is endpointsReview.
+  ///
+  /// In en, this message translates to:
+  /// **'You can\'t connect to this server yet: its address comes from your sync account and isn\'t confirmed on this device, or it changed since you confirmed it. Choose Review over the server list to check and confirm it.'**
+  String get connectRejectedEndpointNotConfirmed;
+
+  /// Notice over the fleet list while synced servers wait for endpoint confirmation on this device (03 §4.3 step 3, SAF-09): new from the sync account, or changed since they were confirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} synced server waits for you to confirm its address.} other{{count} synced servers wait for you to confirm their addresses.}}'**
+  String endpointsPendingNotice(int count);
+
+  /// Button on endpointsPendingNotice that opens the endpoint confirmation list.
+  ///
+  /// In en, this message translates to:
+  /// **'Review'**
+  String get endpointsReview;
+
+  /// Title of the endpoint confirmation list (03 §4.3 step 3).
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm server addresses'**
+  String get endpointsTitle;
+
+  /// Explanation at the top of the endpoint confirmation list (SAF-09): any device on the account can rewrite a server's address, and a background connect would then hand a credential to the new host.
+  ///
+  /// In en, this message translates to:
+  /// **'These servers come from your sync account. Klabautermann connects only to addresses you confirm on this device, so an address changed on another device cannot receive your sign-in unnoticed. Check each host, port, user and jump route before you confirm it.'**
+  String get endpointsBody;
+
+  /// Label of the search field of the endpoint confirmation list; it matches names, users and addresses.
+  ///
+  /// In en, this message translates to:
+  /// **'Search servers'**
+  String get endpointsSearch;
+
+  /// Line of an endpoint confirmation row naming the jump hosts the server is reached through, first hop first.
+  ///
+  /// In en, this message translates to:
+  /// **'via {route}'**
+  String endpointsRoute(String route);
+
+  /// Between the jump hosts in endpointsRoute, from the first hop towards the server.
+  ///
+  /// In en, this message translates to:
+  /// **' → '**
+  String get endpointsRouteSeparator;
+
+  /// Line of an endpoint confirmation row whose server, or a jump host it goes through, was changed by a sync after this device confirmed it (03 §4.7).
+  ///
+  /// In en, this message translates to:
+  /// **'Changed since you confirmed it'**
+  String get endpointsChanged;
+
+  /// Shown in place of the rows when the search of the endpoint confirmation list matches no server.
+  ///
+  /// In en, this message translates to:
+  /// **'No servers match your search.'**
+  String get endpointsNoMatch;
+
+  /// Shown in place of the rows when no synced server waits for confirmation any more.
+  ///
+  /// In en, this message translates to:
+  /// **'Every synced server\'s address is confirmed on this device.'**
+  String get endpointsNoneLeft;
+
+  /// Button of the endpoint confirmation list that confirms every row the search shows, whatever its toggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm all shown'**
+  String get endpointsConfirmAllShown;
+
+  /// Main button of the endpoint confirmation list: confirms the rows whose toggles are on; disabled while none is.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Confirm selected} one{Confirm {count} server} other{Confirm {count} servers}}'**
+  String endpointsConfirmSelected(int count);
+
+  /// Toast after the confirmed servers left the list; Klabautermann may now connect to them.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Confirmed {count} server address.} other{Confirmed {count} server addresses.}}'**
+  String endpointsConfirmed(int count);
+
+  /// Under the endpoint confirmation list when a confirmed server stays listed because a jump host on its route changed and needs its own confirmation (D64).
+  ///
+  /// In en, this message translates to:
+  /// **'Some servers still need confirming: confirm the jump hosts they go through too.'**
+  String get endpointsStillPending;
+
+  /// Under the endpoint confirmation list when the engine could not save the confirmation or stopped before answering.
+  ///
+  /// In en, this message translates to:
+  /// **'The confirmation could not be saved on this device, so these servers stay unconfirmed. Try again.'**
+  String get endpointsFailed;
+
   /// Heading of the accessibility settings on the General settings tab.
   ///
   /// In en, this message translates to:
@@ -3297,6 +3495,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The setting could not be changed.'**
   String get settingsAnnounceNotChanged;
+
+  /// Heading of the about row on the General settings tab, which shows the app's title and version and opens the About dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get settingsAboutTitle;
+
+  /// Heading of the monitor set's switches (FL-21) on the Servers settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Monitoring'**
+  String get settingsMonitorTitle;
+
+  /// Explanation above the monitor set's switches on the Servers settings tab (FL-21); limit is the most servers the set holds.
+  ///
+  /// In en, this message translates to:
+  /// **'Monitored servers are read continuously while Klabautermann is open, and their rows show CPU, memory and disk. A server can be monitored once its endpoint is confirmed and it signs in with an SSH agent or a key file, without asking you. Up to {limit} servers.'**
+  String settingsMonitorDetail(int limit);
+
+  /// How many servers the monitor set holds (FL-21) out of the most it can, above its switches on the Servers settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'{monitored} of {limit} servers monitored'**
+  String settingsMonitorCount(int monitored, int limit);
+
+  /// The Servers settings tab's monitor set section while the fleet has no servers.
+  ///
+  /// In en, this message translates to:
+  /// **'No servers yet. Servers you sync or import show here.'**
+  String get settingsMonitorEmpty;
 
   /// Screen-reader announcement (A11Y-15) when a value on a server's Overview has crossed into the warning or critical band, or back below the warning level; metric names the value (CPU, Memory, Disk /var), value is its percentage.
   ///
@@ -3748,6 +3976,600 @@ abstract class AppLocalizations {
   /// **'The sync file {fileName} was saved by a newer version of Klabautermann. Sync changes will not be kept after a restart.'**
   String syncFileNewer(String fileName);
 
+  /// Switch on the Safety settings tab (SAF-06): global read-only.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only everywhere'**
+  String get settingsSafetyReadOnly;
+
+  /// Explanation under the global read-only switch on the Safety settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'While this is on, no server takes an action and every action is hidden. Monitoring, logs and other reads work as before, so it is safe for screen sharing.'**
+  String get settingsSafetyReadOnlyDetail;
+
+  /// Label above the admin mode expiry choices on the Safety settings tab (SAF-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Admin mode ends after'**
+  String get settingsSafetyAdminExpiry;
+
+  /// One admin mode expiry choice on the Safety settings tab; minutes is 5, 15, 30 or 60.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String settingsSafetyAdminExpiryMinutes(int minutes);
+
+  /// Explanation under the admin mode expiry choices on the Safety settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin mode turns off after this long without an action. It also turns off when the link drops, and on a phone when Klabautermann goes to the background.'**
+  String get settingsSafetyAdminExpiryDetail;
+
+  /// Heading of the user's protected marks on the Safety settings tab (SAF-22).
+  ///
+  /// In en, this message translates to:
+  /// **'Marked protected'**
+  String get settingsSafetyMarksTitle;
+
+  /// Explanation under the protected marks heading on the Safety settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'An action on a target you marked protected asks you to type its name first. Marks stay on this device.'**
+  String get settingsSafetyMarksDetail;
+
+  /// Shown on the Safety settings tab when the user marked no target protected.
+  ///
+  /// In en, this message translates to:
+  /// **'You have not marked anything protected.'**
+  String get settingsSafetyMarksEmpty;
+
+  /// One protected mark on the Safety settings tab: the marked unit, container or stack name, and the server's name.
+  ///
+  /// In en, this message translates to:
+  /// **'{target} on {server}'**
+  String settingsSafetyMark(String target, String server);
+
+  /// Tooltip and screen reader label of the button that removes one protected mark on the Safety settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the mark on {target}'**
+  String settingsSafetyMarkRemove(String target);
+
+  /// Toast when a safety setting applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The setting changed, but it could not be saved, so it will not be kept after a restart.'**
+  String get settingsSafetyNotSaved;
+
+  /// Toast when the app did not take a change of a safety setting.
+  ///
+  /// In en, this message translates to:
+  /// **'The setting could not be changed.'**
+  String get settingsSafetyNotChanged;
+
+  /// Tooltip and screen reader label of the server header's safety menu button, which holds the Allow actions and Read-only switches.
+  ///
+  /// In en, this message translates to:
+  /// **'Safety'**
+  String get serverSafetyMenu;
+
+  /// Switch in the server header's safety menu (SAF-01): management, off by default. While off, Klabautermann only reads the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow actions'**
+  String get serverAllowActions;
+
+  /// Switch in the server header's safety menu (SAF-06): hides every action on this server.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only'**
+  String get serverReadOnly;
+
+  /// Notice in the server header while management is off for the server (03 §4.3 step 5, SAF-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Observe only: Klabautermann reads this server and changes nothing. To act on it, turn on Allow actions in the Safety menu.'**
+  String get serverObserveOnly;
+
+  /// Notice in the server header while the server, or every server, is read-only (SAF-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only: actions on this server are hidden.'**
+  String get serverReadOnlyNotice;
+
+  /// Title of the admin mode password dialog (SAF-02); host is the server's address.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin password for {host}'**
+  String elevationTitle(String host);
+
+  /// Explanation in the admin mode password dialog; user is the login account sudo runs for.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann asks sudo for root as {user} with this password. It is kept in memory only while admin mode is on, and never saved.'**
+  String elevationDetail(String user);
+
+  /// Shown in the admin mode password dialog when sudo refused the previous password.
+  ///
+  /// In en, this message translates to:
+  /// **'That password did not work. Try again.'**
+  String get elevationRetry;
+
+  /// Label of the password field in the admin mode password dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get elevationPassword;
+
+  /// Button that closes the admin mode password dialog without turning admin mode on.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get elevationCancel;
+
+  /// Button that sends the password and turns admin mode on.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on'**
+  String get elevationTurnOn;
+
+  /// Label of the server header's admin mode chip while admin mode is off (SAF-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Admin mode'**
+  String get adminChipOff;
+
+  /// Label of the admin mode chip while the engine detects how to elevate, waits for the password or checks it.
+  ///
+  /// In en, this message translates to:
+  /// **'Turning on admin mode'**
+  String get adminChipStarting;
+
+  /// Label of the admin mode chip while it is on; time is when inactivity ends it.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin mode until {time}'**
+  String adminChipOn(String time);
+
+  /// Tooltip of the disabled admin mode chip while the server or every server is read-only (SAF-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Admin mode is not available while the server is read-only.'**
+  String get adminChipReadOnly;
+
+  /// Notice in the server header while admin mode is on.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin mode is on: actions you confirm here run as root.'**
+  String get adminOnNotice;
+
+  /// Notice in the server header when admin mode could not start; reason is the engine's AdminFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, observeOnly{Admin mode needs Allow actions turned on for this server.} readOnly{Admin mode is not available while this server is read-only.} noLink{Admin mode needs a connection to this server.} notProbed{Klabautermann has not checked this server yet. Try admin mode again in a moment.} unavailable{This server offers no way to become root that Klabautermann can use.} ttyRequired{This server lets you become root only from a terminal, so admin mode is not available.} notInSudoers{Your account on this server may not use sudo.} wrongPassword{The password was refused three times, so admin mode stayed off.} cancelled{Admin mode stayed off because no password was given.} other{Admin mode could not be turned on.}}'**
+  String adminFailure(String reason);
+
+  /// Notice in the server header after admin mode ended; reason is the engine's AdminEnd name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, inactivity{Admin mode ended after a while without an action.} background{Admin mode ended when Klabautermann went to the background.} linkLost{Admin mode ended when the connection dropped.} serverRemoved{Admin mode ended because the server changed.} other{Admin mode ended.}}'**
+  String adminEnded(String reason);
+
+  /// Title of the action preview (SAF-04), which shows exactly what will run before the user confirms.
+  ///
+  /// In en, this message translates to:
+  /// **'Review before it runs'**
+  String get actionPreviewTitle;
+
+  /// Line naming the target in the action preview; target is the unit, process, container, image or stack name.
+  ///
+  /// In en, this message translates to:
+  /// **'Target: {target}'**
+  String actionPreviewTarget(String target);
+
+  /// Heading above the exact commands and API requests in the action preview.
+  ///
+  /// In en, this message translates to:
+  /// **'What will run'**
+  String get actionPreviewSteps;
+
+  /// Badge on a step that runs as root through admin mode (SAF-03). Lowercase on purpose: the account name.
+  ///
+  /// In en, this message translates to:
+  /// **'root'**
+  String get actionPreviewRoot;
+
+  /// Tooltip and screen reader label of the root badge on a step in the action preview.
+  ///
+  /// In en, this message translates to:
+  /// **'This step runs as root through admin mode.'**
+  String get actionPreviewRootDetail;
+
+  /// Line naming who runs the steps; identity is an account name such as root or deploy.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs as {identity}'**
+  String actionPreviewRunner(String identity);
+
+  /// Line naming who runs the steps and through which container engine.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs as {identity} through {engine}'**
+  String actionPreviewRunnerEngine(String identity, String engine);
+
+  /// Line saying which credentials the run uses; credentials is the engine's RunnerCredentials name.
+  ///
+  /// In en, this message translates to:
+  /// **'{credentials, select, session{Signs in with this connection\'s own sign-in.} adminPassword{Uses the admin mode password.} passwordless{Needs no password.} other{}}'**
+  String actionPreviewCredentials(String credentials);
+
+  /// Heading above the host writes the action causes (03 §8.11).
+  ///
+  /// In en, this message translates to:
+  /// **'What it leaves on the server'**
+  String get actionPreviewHostWrites;
+
+  /// One host write in the action preview; row is the engine's HostWriteRow name.
+  ///
+  /// In en, this message translates to:
+  /// **'{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine\'s own state} loginRecords{Login records, as every SSH command leaves} other{A change on the server}}'**
+  String actionPreviewHostWrite(String row);
+
+  /// The action's impact in the preview; kind is the engine's ImpactKind name and count a number of containers.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, dropsSession{This can drop your connection to the server.} stopsContainers{This stops {count} running containers.} removesVolumes{This deletes the container\'s volumes and the data in them.} forcesImageInUse{{count} containers still use this image.} interruptsTarget{This interrupts what the target is doing.} other{}}'**
+  String actionPreviewImpact(String kind, int count);
+
+  /// Why the target is protected (SAF-22); reason is the engine's ProtectedReason name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, builtIn{Protected: Klabautermann always protects this target.} sessionPath{Protected: your connection to the server runs through it.} publishesSessionPort{Protected: it publishes the SSH port or a VPN port.} userMarked{Protected: you marked it protected.} other{Protected.}}'**
+  String actionPreviewProtected(String reason);
+
+  /// Notice in the action preview when another tool manages the container or stack (03 §8.7).
+  ///
+  /// In en, this message translates to:
+  /// **'Managed by {manager}. Acting on it here can conflict with {manager}.'**
+  String actionPreviewOwnership(String manager);
+
+  /// Heading above the danger findings in the action preview (AI-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Warnings'**
+  String get actionPreviewDanger;
+
+  /// One danger finding in the action preview (AI-01): its severity, then the linter's explanation.
+  ///
+  /// In en, this message translates to:
+  /// **'{severity, select, critical{Critical} other{Warning}}: {explanation}'**
+  String actionPreviewFinding(String severity, String explanation);
+
+  /// Confirmation line for an action that needs an acknowledgement (SAF-05 tier 1).
+  ///
+  /// In en, this message translates to:
+  /// **'This acts on {target}.'**
+  String actionConfirmNames(String target);
+
+  /// Label of the field where the user types the target's name to confirm a protected or irreversible action (SAF-05 tier 2).
+  ///
+  /// In en, this message translates to:
+  /// **'Type {target} to confirm'**
+  String actionConfirmType(String target);
+
+  /// Button that runs the previewed action.
+  ///
+  /// In en, this message translates to:
+  /// **'Run'**
+  String get actionConfirmRun;
+
+  /// Button that closes the action preview without running anything.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get actionConfirmCancel;
+
+  /// Toast when a confirmed action starts.
+  ///
+  /// In en, this message translates to:
+  /// **'Running on {target}'**
+  String actionRunning(String target);
+
+  /// Toast when an action finished successfully.
+  ///
+  /// In en, this message translates to:
+  /// **'Done: {target}'**
+  String actionSucceeded(String target);
+
+  /// Toast when an action failed; failure is the engine's ActionFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{target} did not finish: {failure, select, noLink{there is no connection to the server.} revalidation{the target changed since the preview.} elevationRefused{admin mode refused the step.} stepFailed{a step failed.} transport{the connection failed during the run.} unsupportedStep{this version cannot run one of its steps.} adminRequired{it needs admin mode.} other{it failed.}}'**
+  String actionFailed(String target, String failure);
+
+  /// Toast when an action failed without a typed reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{target} did not finish.'**
+  String actionFailedPlain(String target);
+
+  /// Toast when an action was cancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'{target} was cancelled.'**
+  String actionCancelled(String target);
+
+  /// Toast when the engine refused to plan or run an action; reason is the engine's ActionRefusalReason name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} other{The action was refused.}}'**
+  String actionRefused(String reason);
+
+  /// Process action (PRC-02): sends SIGTERM, asking the process to end.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminate'**
+  String get processTerminate;
+
+  /// Process action (PRC-02): sends SIGKILL, ending the process at once.
+  ///
+  /// In en, this message translates to:
+  /// **'Kill'**
+  String get processKill;
+
+  /// Process action menu holding every other signal (PRC-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Send signal'**
+  String get processSendSignal;
+
+  /// A signal's name in the Send signal menu; name is its kill -s name such as HUP.
+  ///
+  /// In en, this message translates to:
+  /// **'SIG{name}'**
+  String processSignalName(String name);
+
+  /// Unit action (SVC-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get unitStart;
+
+  /// Unit action (SVC-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get unitStop;
+
+  /// Unit action (SVC-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Restart'**
+  String get unitRestart;
+
+  /// Unit action (SVC-03): reloads the unit's configuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Reload'**
+  String get unitReload;
+
+  /// Timer action (JOB-08): starts the unit the timer activates now.
+  ///
+  /// In en, this message translates to:
+  /// **'Run now'**
+  String get jobsRunNow;
+
+  /// Title of the sheet that follows a timer run's journal; unit is the service the timer started.
+  ///
+  /// In en, this message translates to:
+  /// **'Output of {unit}'**
+  String jobsRunOutputTitle(String unit);
+
+  /// Tooltip and screen reader label of the button that closes the run output sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Close output'**
+  String get jobsRunOutputClose;
+
+  /// A job's source when it is another user's crontab, read in admin mode (JOB-03); user is the account name.
+  ///
+  /// In en, this message translates to:
+  /// **'{user}\'s crontab'**
+  String jobsSourceUserCrontab(String user);
+
+  /// Choice on the Jobs tab's source switch: the login user's crontab, the system crontabs and the timers (the cron and timers streams).
+  ///
+  /// In en, this message translates to:
+  /// **'Yours and the system\'s'**
+  String get jobsSourceMine;
+
+  /// Choice on the Jobs tab's source switch, in admin mode: every other user's crontab, read-only (JOB-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Other users'**
+  String get jobsSourceOtherUsers;
+
+  /// Notice while the other users' crontabs are being read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading other users\' crontabs.'**
+  String get jobsOtherUsersReading;
+
+  /// Button that reads the other users' crontabs again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get jobsOtherUsersRefresh;
+
+  /// Shown when the spool holds no other user's crontab.
+  ///
+  /// In en, this message translates to:
+  /// **'No other user has a crontab.'**
+  String get jobsOtherUsersEmpty;
+
+  /// Notice when the other users' crontabs could not be read; failure is the engine's UserCrontabsFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Other users\' crontabs need a connection to the server.} adminRequired{Other users\' crontabs need admin mode.} elevationRefused{Admin mode could not read the crontabs.} noSpool{This server keeps no crontab spool.} spoolDenied{Even admin mode may not list the crontab spool.} unreadable{The crontab spool could not be read.} transport{The connection failed while reading.} other{Other users\' crontabs could not be read.}}'**
+  String jobsOtherUsersFailure(String failure);
+
+  /// Notice naming the users whose crontab could not be read; users is a comma-separated list of account names.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the crontab of {users}.'**
+  String jobsOtherUsersUnreadable(String users);
+
+  /// Notice when the spool lists more users than one read takes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more user\'s crontab was not read.} other{{count} more users\' crontabs were not read.}}'**
+  String jobsOtherUsersNotRead(int count);
+
+  /// Notice under the other users' crontabs (03 §8.9).
+  ///
+  /// In en, this message translates to:
+  /// **'Commands are masked where they look like they hold secrets.'**
+  String get jobsOtherUsersMasked;
+
+  /// Item in the server header's Safety menu that opens the server's activity log (SAF-11).
+  ///
+  /// In en, this message translates to:
+  /// **'Activity'**
+  String get activityMenu;
+
+  /// Title of the activity log page; server is the server's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity on {server}'**
+  String activityTitle(String server);
+
+  /// Explanation at the top of the activity log page (03 §8.10).
+  ///
+  /// In en, this message translates to:
+  /// **'Every action this device ran on the server, newest first. Records are kept for 90 days and never synced. Commands are stored with secrets removed.'**
+  String get activityDetail;
+
+  /// Notice on the activity log page when the audit log is kept in memory only.
+  ///
+  /// In en, this message translates to:
+  /// **'Another Klabautermann window has the settings folder, so this log lasts only until this window closes.'**
+  String get activityInMemory;
+
+  /// Column of the activity log: when the run ended.
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get activityColumnTime;
+
+  /// Column of the activity log: the unit, process, container or other target.
+  ///
+  /// In en, this message translates to:
+  /// **'Target'**
+  String get activityColumnTarget;
+
+  /// Column of the activity log: what was done.
+  ///
+  /// In en, this message translates to:
+  /// **'Action'**
+  String get activityColumnAction;
+
+  /// Column of the activity log: how the run was confirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmation'**
+  String get activityColumnTier;
+
+  /// Column of the activity log: how the run ended.
+  ///
+  /// In en, this message translates to:
+  /// **'Result'**
+  String get activityColumnResult;
+
+  /// An activity log row's action; action is the engine's intent type name.
+  ///
+  /// In en, this message translates to:
+  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} StackAction{Stack action} RedeployStack{Redeploy stack} other{Action}}'**
+  String activityAction(String action);
+
+  /// An activity log row's confirmation; tier is the engine's ConfirmationTier name.
+  ///
+  /// In en, this message translates to:
+  /// **'{tier, select, none{None} acknowledge{Confirmed} typedPhrase{Name typed} other{}}'**
+  String activityTier(String tier);
+
+  /// An activity log row's result; outcome is the engine's ActionOutcome name.
+  ///
+  /// In en, this message translates to:
+  /// **'{outcome, select, succeeded{Done} failed{Failed} cancelled{Cancelled} other{}}'**
+  String activityResult(String outcome);
+
+  /// Why a run failed, in the activity record's details; failure is the engine's ActionFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{No connection to the server.} revalidation{The target changed since the preview.} elevationRefused{Admin mode refused the step.} stepFailed{A step failed.} transport{The connection failed during the run.} unsupportedStep{This version could not run a step.} adminRequired{It needed admin mode.} other{It failed.}}'**
+  String activityFailure(String failure);
+
+  /// A failed step's exit status in an activity record's details.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit status {code}'**
+  String activityExitCode(int code);
+
+  /// A failed Docker step's HTTP status in an activity record's details.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine answered HTTP {status}'**
+  String activityHttpStatus(int status);
+
+  /// Heading above an activity record's steps, secrets removed.
+  ///
+  /// In en, this message translates to:
+  /// **'What ran'**
+  String get activitySteps;
+
+  /// Shown in the activity table while the log is read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the log.'**
+  String get activityReading;
+
+  /// Shown when the activity log is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing has run on this server from this device.'**
+  String get activityEmpty;
+
+  /// Button that reads the next page of older activity records.
+  ///
+  /// In en, this message translates to:
+  /// **'Show older'**
+  String get activityOlder;
+
+  /// Tooltip and screen reader label of the button that copies the activity log as JSON, secrets already removed.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy the log'**
+  String get activityCopy;
+
+  /// Toast after the activity log was copied.
+  ///
+  /// In en, this message translates to:
+  /// **'The log is on the clipboard, with secrets removed.'**
+  String get activityCopied;
+
+  /// Toast when the clipboard refused the activity log.
+  ///
+  /// In en, this message translates to:
+  /// **'Not copied. Try again.'**
+  String get activityNotCopied;
+
+  /// An activity log row's time: its local date, then its time of day, both formatted by the locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{date} {time}'**
+  String activityTime(String date, String time);
+
   /// The server header's Docker transport label (03 §5.9, E4) before the server is connected and its capability check has answered.
   ///
   /// In en, this message translates to:
@@ -4047,6 +4869,330 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Klabautermann could not save that you dismissed the root-equivalence note, so it shows again after a restart.'**
   String get dockerNoticeNotSaved;
+
+  /// Appearance tab: heading of the preset grid.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get appearanceThemeTitle;
+
+  /// Appearance tab: title of the theme help dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Themes'**
+  String get appearanceThemeHelpTitle;
+
+  /// Appearance tab: body of the theme help dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'A theme is kept on this device only and never syncs. To use one elsewhere, copy it here and paste it into Klabautermann on the other device.'**
+  String get appearanceThemeHelp;
+
+  /// Appearance tab: small print under the preset grid.
+  ///
+  /// In en, this message translates to:
+  /// **'Picking a theme copies its colours here. It is a starting point, not a mode, so everything below stays yours to change.'**
+  String get appearanceThemeFootnote;
+
+  /// Appearance tab: tooltip of a preset tile.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the {name} theme'**
+  String appearancePresetTooltip(String name);
+
+  /// Appearance tab: heading of the light/dark mode section.
+  ///
+  /// In en, this message translates to:
+  /// **'Mode'**
+  String get appearanceModeTitle;
+
+  /// Appearance tab: line above the mode switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic colours follow'**
+  String get appearanceModeLead;
+
+  /// Appearance tab: note when a dark palette sets its own surface.
+  ///
+  /// In en, this message translates to:
+  /// **'This theme has its own surface, so it is always dark. Set Surface to Automatic to choose a mode.'**
+  String get appearanceOwnSurfaceDark;
+
+  /// Appearance tab: note when a light palette sets its own surface.
+  ///
+  /// In en, this message translates to:
+  /// **'This theme has its own surface, so it is always light. Set Surface to Automatic to choose a mode.'**
+  String get appearanceOwnSurfaceLight;
+
+  /// Appearance tab: heading of the colour slots.
+  ///
+  /// In en, this message translates to:
+  /// **'Colours'**
+  String get appearanceColoursTitle;
+
+  /// Appearance tab: title of the colours help dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic colours'**
+  String get appearanceColoursHelpTitle;
+
+  /// Appearance tab: body of the colours help dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic colours are the light or dark neutrals Klabautermann ships with, as the mode picks them. Once you give the theme a surface of its own, they are mixed from that surface and the text instead. Lines and the selection may be translucent.'**
+  String get appearanceColoursHelp;
+
+  /// Appearance tab: the accent colour row.
+  ///
+  /// In en, this message translates to:
+  /// **'Accent'**
+  String get appearanceAccent;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Surface'**
+  String get appearanceSlotSurface;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Sidebar'**
+  String get appearanceSlotSidebar;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Headers and bars'**
+  String get appearanceSlotRaised;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Text'**
+  String get appearanceSlotText;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Secondary text'**
+  String get appearanceSlotSecondaryText;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Lines'**
+  String get appearanceSlotHairline;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Selection'**
+  String get appearanceSlotSelection;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Online'**
+  String get appearanceSlotOnline;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline'**
+  String get appearanceSlotOffline;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting'**
+  String get appearanceSlotConnecting;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get appearanceSlotUnknown;
+
+  /// Appearance tab: heading of the status colour slots.
+  ///
+  /// In en, this message translates to:
+  /// **'Status colours'**
+  String get appearanceStatusTitle;
+
+  /// Appearance tab: small print under the status colours.
+  ///
+  /// In en, this message translates to:
+  /// **'Each status also keeps its own shape and its name, so these colours never have to say it alone.'**
+  String get appearanceStatusFootnote;
+
+  /// Appearance tab: checkbox beside a colour that follows the mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic'**
+  String get appearanceAutomatic;
+
+  /// Appearance tab: screen reader label of a colour's Automatic checkbox.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: Automatic'**
+  String appearanceAutomaticSemantics(String label);
+
+  /// Appearance tab: tooltip of a colour swatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the {label} colour'**
+  String appearanceChooseColour(String label);
+
+  /// Appearance tab: tooltip of an Automatic colour's swatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a {label} colour (now Automatic)'**
+  String appearanceChooseAutomaticColour(String label);
+
+  /// Appearance tab: heading of the font and corner controls.
+  ///
+  /// In en, this message translates to:
+  /// **'Shape and type'**
+  String get appearanceShapeTitle;
+
+  /// Appearance tab: label of the interface font field.
+  ///
+  /// In en, this message translates to:
+  /// **'Interface font'**
+  String get appearanceInterfaceFont;
+
+  /// Appearance tab: hint of the empty interface font field.
+  ///
+  /// In en, this message translates to:
+  /// **'System default'**
+  String get appearanceInterfaceFontHint;
+
+  /// Appearance tab: helper text under the interface font field.
+  ///
+  /// In en, this message translates to:
+  /// **'Logs and commands keep their monospace font.'**
+  String get appearanceInterfaceFontHelper;
+
+  /// Appearance tab: label of the corner slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Corners'**
+  String get appearanceCorners;
+
+  /// Appearance tab: corner slider value at no rounding.
+  ///
+  /// In en, this message translates to:
+  /// **'Square'**
+  String get appearanceCornersSquare;
+
+  /// Appearance tab: corner slider value as a percentage.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}%'**
+  String appearanceCornersPercent(int percent);
+
+  /// Appearance tab: screen reader value of the corner slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Corners {label}'**
+  String appearanceCornersSemantics(String label);
+
+  /// Appearance tab: heading of copy and paste.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get appearanceShareTitle;
+
+  /// Appearance tab: button that copies the theme as text.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy theme'**
+  String get appearanceCopyTheme;
+
+  /// Appearance tab: button that pastes a theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste theme'**
+  String get appearancePasteTheme;
+
+  /// Appearance tab: small print under copy and paste.
+  ///
+  /// In en, this message translates to:
+  /// **'Copies the theme as text you can keep or send. Pasting reads what it can and leaves everything else at the default.'**
+  String get appearanceShareFootnote;
+
+  /// Appearance tab: toast after Copy theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme copied.'**
+  String get appearanceThemeCopied;
+
+  /// Appearance tab: toast when the clipboard holds no theme.
+  ///
+  /// In en, this message translates to:
+  /// **'The clipboard does not hold a theme. Copy one with Copy theme first.'**
+  String get appearancePasteNotATheme;
+
+  /// Appearance tab: heading of the reset control.
+  ///
+  /// In en, this message translates to:
+  /// **'Start over'**
+  String get appearanceStartOverTitle;
+
+  /// Appearance tab: button that resets the theme to the initial preset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to {name}'**
+  String appearanceResetButton(String name);
+
+  /// Appearance tab: status beside the reset button when no preset matches.
+  ///
+  /// In en, this message translates to:
+  /// **'Using your own colours.'**
+  String get appearanceUsingOwnColours;
+
+  /// Appearance tab: status beside the reset button when a preset matches.
+  ///
+  /// In en, this message translates to:
+  /// **'Using {name}.'**
+  String appearanceUsingPreset(String name);
+
+  /// Appearance tab: title of the reset confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset the theme?'**
+  String get appearanceResetTitle;
+
+  /// Appearance tab: body of the reset confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Every colour, the font and the corners go back to the {name} theme. The mode stays as it is.'**
+  String appearanceResetBody(String name);
+
+  /// Appearance tab: cancels the reset.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get appearanceCancel;
+
+  /// Appearance tab: confirms the reset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get appearanceReset;
+
+  /// Appearance tab: tooltip of a section's help button.
+  ///
+  /// In en, this message translates to:
+  /// **'About {title}'**
+  String appearanceAbout(String title);
+
+  /// Appearance tab: closes a section's help dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get appearanceClose;
 
   /// Containers table column: the container's name.
   ///

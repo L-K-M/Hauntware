@@ -8,6 +8,7 @@ library;
 import 'package:meta/meta.dart';
 
 import '../cron/expression.dart';
+import '../hws/collector.dart' show ArgValidators;
 import '../hws/program.dart' show kTimeoutAbsentMarker;
 import 'models.dart' show splitBlocks;
 import 'parse_result.dart';
@@ -15,6 +16,10 @@ import 'parse_result.dart';
 /// The [CronJob.source] of a line in the invoking user's own crontab
 /// (`crontab -l`); system crontab lines carry their file path.
 const String kOwnCrontabSource = 'crontab';
+
+/// The [CronJob.source] of a line in [user]'s crontab, which JOB-03 reads
+/// with `crontab -l -u` (03 §7.7, M14).
+String userCrontabSource(String user) => 'crontab -u $user';
 
 /// Which `cron.{hourly,daily,weekly,monthly}` directory a script came
 /// from (03 §7.7 JOB-04).
@@ -44,7 +49,8 @@ final class CronJob {
   /// expression with `isReboot`.
   final CronExpression? expression;
 
-  /// The system-crontab user field; null for `crontab -l` jobs.
+  /// The system-crontab user field, or the user whose crontab JOB-03
+  /// read; null for the invoking user's `crontab -l` jobs.
   final String? user;
 
   /// The command text, verbatim (a `%` keeps its stdin meaning).
@@ -163,6 +169,36 @@ ParseResult<CronSnapshot> parseCron(String raw, ParseContext ctx) {
     ),
     warnings,
   );
+}
+
+/// Parses [user]'s crontab, `crontab -l -u <user>`'s output when it
+/// exited 0 (JOB-03, 03 §7.7): a user table, each job carrying [user] and
+/// [userCrontabSource]. Never throws.
+ParseResult<List<CronJob>> parseUserCrontab(
+  String stdout, {
+  required String user,
+}) {
+  final warnings = <String>[];
+  final parsed = <CronJob>[];
+  _parseCrontab(
+    stdout.split('\n'),
+    source: userCrontabSource(user),
+    table: _CronTable.user,
+    jobs: parsed,
+    warnings: warnings,
+  );
+  return ParseResult([
+    for (final job in parsed)
+      CronJob(
+        source: job.source,
+        schedule: job.schedule,
+        command: job.command,
+        raw: job.raw,
+        expression: job.expression,
+        user: user,
+        cronTz: job.cronTz,
+      ),
+  ], warnings);
 }
 
 /// The `crontab_meta` block: `tool=missing` or `rc=<n>`. rc 0 means a
@@ -367,4 +403,54 @@ void _parseCronDirs(
     }
     out.add(CronDirEntry(period: period, name: t.substring(sp + 1).trim()));
   }
+}
+
+/// The crontab spool JOB-03 listed (03 §7.7, M14): the directory and the
+/// user name of each crontab in it.
+@immutable
+final class CrontabSpool {
+  const CrontabSpool({
+    required this.directory,
+    required this.users,
+    required this.skipped,
+  });
+
+  /// The spool directory the listing found.
+  final String directory;
+
+  /// The file names that are valid user names, in listing order; each may
+  /// go to `HostCommands.crontabList`.
+  final List<String> users;
+
+  /// How many file names were not valid user names (cron's own temp
+  /// files, or anything else in the directory). They are never read.
+  final int skipped;
+}
+
+/// Reads `HostCommands.crontabSpoolList`'s output when it exited
+/// `kCrontabSpoolListed`: the directory on the first line, then one file
+/// name per line. Null when the first line is not an absolute path.
+CrontabSpool? parseCrontabSpool(String stdout) {
+  final lines = stdout.split('\n');
+  while (lines.isNotEmpty && lines.last.isEmpty) {
+    lines.removeLast();
+  }
+  if (lines.isEmpty || ArgValidators.absolutePath(lines.first) != null) {
+    return null;
+  }
+
+  final users = <String>[];
+  var skipped = 0;
+  for (final name in lines.skip(1)) {
+    if (ArgValidators.userName(name) == null) {
+      users.add(name);
+    } else {
+      skipped++;
+    }
+  }
+  return CrontabSpool(
+    directory: lines.first,
+    users: List.unmodifiable(users),
+    skipped: skipped,
+  );
 }
