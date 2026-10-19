@@ -188,15 +188,14 @@ M2, the host read MVP, is the current milestone. What is on main:
   `Libpod-API-Version` and reports `DockerEndpointState`. Results are
   typed; inspect `Path`/`Args`, `Entrypoint`/`Cmd` and health output
   cross masked, and the list drops its command line. Tested over fakes
-  only; no `/system/df` (D03), no low-session mode (D09).
+  only; no `/system/df` (D03).
 - Docker watches (M3, D06, 03 §7.12, §10.1): `DockerWatch` keeps the
   container, image and stack lists current from one `/events` stream
   per server (250 ms batches, targeted re-reads by container id,
   resume with `since`, a full re-list after a gap over 60 s) and reads
   one-shot list stats for the ids on screen every 5 s (4 at once on
   streamlocal, one at a time on a relay), all as `DockerListChanged`.
-  Tested over fakes only; the app does not watch yet (D13), and
-  relay channels are not counted in `ChannelQuota` until D09.
+  Tested over fakes only; the app does not watch yet (D13).
 - Container logs (M3, D07, 03 §5.6, §10.1): `ContainerLogSource`
   streams a container's logs through `OpenLogStream` as
   `ContainerRecord`s over the server's Docker endpoint: framing by
@@ -205,15 +204,13 @@ M2, the host read MVP, is the current milestone. What is on main:
   ring and pace, a resume after the newest line with `since` and the
   boundary line dropped, a stopped container read again with backoff,
   and `logDriverUnreadable` naming a driver whose logs the API cannot
-  read. On relays the streams take follower slots of their own until
-  D09. Tested over fakes only; the app opens none yet (D15), and the
+  read. Tested over fakes only; the app opens none yet (D15), and the
   background does not pause them.
 - Docker in the app (M3, D12, 03 §5.9, §8.4, §10.2): a Docker controller
   per engine run asks for each server's endpoint as its link comes up
   and keeps its `DockerEndpointState`; the server header names the
   transport in every mode (E4) with SAF-08's engine badge, the
-  low-session indicator (always off until D09) and the runtime the API
-  names (M13). The Docker tab waits, looks or says why no route works
+  low-session indicator and the runtime the API names (M13). The Docker tab waits, looks or says why no route works
   (with the Access link and a retry), then shows SAF-08's notice until
   it is dismissed on the device (`settings.json`), the engine strip
   (DKE-01) and the Containers, Images and Stacks sub-tabs, still empty
@@ -230,6 +227,23 @@ M2, the host read MVP, is the current milestone. What is on main:
   fakes only, plus the `test -f` quoting in a real `sh`; the `--hash`
   output shape comes from Compose's source and awaits D21's run, and
   the app shows no stacks yet (D17, D18).
+- Low-session mode (M3, D09, 03 §5.2, M9): one `ChannelQuota` per server
+  serves the host log reads and the Docker session, so on relay ranks
+  the pooled connection (one, in a short-action slot until its 30 s idle
+  close), the events stream and container log follows (follower slots),
+  and the stack checks count against the same shares as journal reads.
+  Without a follower slot the events stream gives way to a full re-list
+  every 15 s. A learned session limit holds followers to one (none below
+  4) and the shares together to what the two samplers leave (at 4, one
+  follower and one short action), keeps a relay's events stream closed
+  in favour of the re-lists (streamlocal keeps its stream), reads stats
+  one at a time and sets `DockerEndpointState.lowSession`, on
+  streamlocal too; a new link ends it. A failed endpoint (unreachable,
+  link error) is looked for again while a watch holds, after 5 s
+  doubling to 2 min, from 5 s again after a new link or watch. Tested
+  over fakes only at learned limits of 2 to 4; D22 checks
+  `MaxSessions 2` on a real sshd, and the server header shows the mode
+  (D12).
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and

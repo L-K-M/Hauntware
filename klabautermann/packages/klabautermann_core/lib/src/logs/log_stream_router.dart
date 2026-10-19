@@ -51,18 +51,27 @@ Duration Function() _monotonicClock() {
 /// [disconnect], [retain] for the fleet and [close].
 final class LogStreamRouter {
   /// [linkFor] gives a server's ready link, null while it has none.
-  /// [startTimer] and [elapsed], a monotonic clock, pace the follows'
-  /// batches; tests pass a fake clock.
+  /// [quotas] holds each server's channel slots, shared with the Docker
+  /// router (M9); without it the router counts alone. [startTimer] and
+  /// [elapsed], a monotonic clock, pace the follows' batches; tests pass
+  /// a fake clock.
   LogStreamRouter({
     required this._linkFor,
     required this._emit,
+    ChannelQuotas? quotas,
     this._openService = _defaultService,
     this._startTimer = Timer.new,
     Duration Function()? elapsed,
-  }) : _elapsed = elapsed ?? _monotonicClock();
+  }) : _quotas = quotas ?? ChannelQuotas(),
+       _elapsed = elapsed ?? _monotonicClock() {
+    // A slot another consumer of the server's link gave back may let a
+    // waiting read start.
+    _quotas.onFreed((serverId) => update(serverId));
+  }
 
   final SshLink? Function(String serverId) _linkFor;
   final void Function(EngineEvent event) _emit;
+  final ChannelQuotas _quotas;
   final LogServiceOpener _openService;
   final Timer Function(Duration duration, void Function() callback) _startTimer;
   final Duration Function() _elapsed;
@@ -103,7 +112,10 @@ final class LogStreamRouter {
       return null;
     }
 
-    final server = _servers.putIfAbsent(serverId, () => _Server(serverId));
+    final server = _servers.putIfAbsent(
+      serverId,
+      () => _Server(serverId, _quotas.of(serverId)),
+    );
     final stream = _Stream(streamId, spec, server);
     if (spec.follow) stream.follower = _follower(stream);
     _streams[streamId] = stream;
@@ -366,10 +378,12 @@ final class LogStreamRouter {
 
 /// One server's open streams and the service on its current link.
 final class _Server {
-  _Server(this.id);
+  _Server(this.id, this.quota);
 
   final String id;
-  final quota = ChannelQuota();
+
+  /// The server's slots, which the Docker session's channels share.
+  final ChannelQuota quota;
 
   /// Streams not running, oldest first.
   final List<_Stream> waiting = [];
