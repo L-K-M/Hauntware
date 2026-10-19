@@ -5917,9 +5917,10 @@ the engine in `engine_isolate.dart` beside it):
   server's link comes up, and drops it when the fleet drops the server
   or lists it under another endpoint, as the engine does (SYN-08). The
   engine keeps the choice apart from the session, so it holds across
-  links, until another arrives or the server is forgotten; the same
-  choice again changes nothing, and one for a server outside the fleet
-  is ignored. A session lets its endpoint go and resolves again with
+  links, until another arrives or the server is forgotten (it leaves
+  the fleet or its endpoint now names another machine, SYN-08); the
+  same choice again changes nothing, and one for a server outside the
+  fleet is ignored. A session lets its endpoint go and resolves again with
   it. A socket choice is the ladder's first candidate, ahead of 5.4's
   detected sockets, so one that answers on no rung gives way to them
   (a default, as 5.4 words it, rather than a pin); the path is checked

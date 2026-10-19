@@ -37,6 +37,10 @@ final class DockerEndpointChoices extends ChangeNotifier {
 
   final Map<String, DockerEndpointOverride> _overrides;
   final SaveDockerEndpointChoice? _save;
+
+  /// The servers whose last save failed: choosing the same again saves
+  /// again rather than changing nothing.
+  final Set<String> _unsaved = {};
   final PurgeDockerEndpointChoices? _purge;
 
   FleetController? _fleet;
@@ -51,9 +55,9 @@ final class DockerEndpointChoices extends ChangeNotifier {
 
   /// Makes [choice] [serverId]'s, at once, and saves it. A save that fails
   /// rethrows, and the choice holds until the app quits, so the caller can
-  /// say it was not kept.
+  /// say it was not kept; choosing it again tries the save again.
   Future<void> choose(String serverId, DockerEndpointChoice choice) async {
-    if (choiceFor(serverId) == choice) return;
+    if (choiceFor(serverId) == choice && !_unsaved.contains(serverId)) return;
 
     final override = switch (choice) {
       DockerEndpointAuto() => null,
@@ -68,7 +72,15 @@ final class DockerEndpointChoices extends ChangeNotifier {
       _overrides[serverId] = override;
     }
     notifyListeners();
-    await _save?.call(serverId, override);
+    final save = _save;
+    if (save == null) return;
+    try {
+      await save(serverId, override);
+      _unsaved.remove(serverId);
+    } catch (_) {
+      _unsaved.add(serverId);
+      rethrow;
+    }
   }
 
   /// Drops the choices [fleet] no longer backs whenever its list changes.
