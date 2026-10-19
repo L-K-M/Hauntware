@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/services/macos_titlebar.dart';
+import 'package:klabautermann_app/ui/coverage.dart' show FleetCoverageChip;
 import 'package:klabautermann_app/ui/desktop_shell.dart';
 import 'package:klabautermann_app/ui/fleet_rail.dart';
 import 'package:klabautermann_app/ui/inspector_pane.dart';
 import 'package:klabautermann_app/ui/macos_toolbar_band.dart';
 import 'package:klabautermann_app/ui/server_workspace.dart';
-import 'package:klabautermann_app/ui/sidebar_kit.dart'
-    show SidebarFilterField, SidebarSectionHeader;
+import 'package:klabautermann_app/ui/sidebar_kit.dart' show SidebarFilterField;
 
 import 'support/harness.dart';
 
@@ -143,10 +143,10 @@ void main() {
       expect(tester.getTopLeft(paneFill(FleetRail)).dy, 0);
       expect(tester.getTopLeft(paneFill(InspectorPane)).dy, 0);
       // The rail's list does not pad for the band a second time: the
-      // filter above its rows starts right under the section header.
+      // filter above its sections starts right under the coverage chip.
       expect(
         tester.getTopLeft(find.byType(SidebarFilterField)).dy,
-        tester.getBottomLeft(find.byType(SidebarSectionHeader)).dy,
+        tester.getBottomLeft(find.byType(FleetCoverageChip)).dy,
       );
     }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 

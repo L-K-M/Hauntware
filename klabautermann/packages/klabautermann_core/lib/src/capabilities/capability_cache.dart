@@ -9,12 +9,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:crypto/crypto.dart' show sha256;
 import 'package:klabautermann_host/klabautermann_host.dart' show HostProfile;
 import 'package:meta/meta.dart';
 
 import '../engine/protocol.dart' show HostProfileChanged;
-import '../fleet/imported_fleet.dart' show importIdPrefix;
+import '../fleet/server_file_stem.dart';
 import '../sampling/sample_pipeline.dart' show volatileProfileKeys;
 import '../settings/device_settings_store.dart' show writeFileAtomically;
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
@@ -33,13 +32,7 @@ const int _version = 1;
 /// A profile's JSON is a few kilobytes; a file far larger is not one.
 const int _maxFileBytes = 256 * 1024;
 
-const String _importFilePrefix = 'ssh-config-';
 const String _extension = '.json';
-
-final _uuid = RegExp(
-  r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
-  r'[0-9a-fA-F]{12}$',
-);
 
 /// The names [capabilityCacheFileName] gives, and the temporary files an
 /// interrupted atomic write leaves beside them.
@@ -49,19 +42,12 @@ final _ownName = RegExp(
 );
 
 /// The cache file name of [serverId] (D59), or null when the id names
-/// none. A synced id is a UUID, written in lowercase. An import id,
-/// `ssh-config:<alias>`, becomes `ssh-config-` and the lowercase hex
-/// SHA-256 of the alias's UTF-8 bytes: an alias may hold path separators
-/// or `:`, or differ from another only in case, and the hash keeps the
-/// name short, safe on every file system and unequal to any UUID.
-String? capabilityCacheFileName(String serverId) {
-  if (_uuid.hasMatch(serverId)) return '${serverId.toLowerCase()}$_extension';
-  if (!serverId.startsWith(importIdPrefix)) return null;
-
-  final alias = serverId.substring(importIdPrefix.length);
-  if (alias.isEmpty) return null;
-  return '$_importFilePrefix${sha256.convert(utf8.encode(alias))}$_extension';
-}
+/// none: its [serverFileStem] and `.json`.
+String? capabilityCacheFileName(String serverId) =>
+    switch (serverFileStem(serverId)) {
+      final stem? => '$stem$_extension',
+      null => null,
+    };
 
 /// What reading one server's cache file found.
 sealed class CachedProfileRead {

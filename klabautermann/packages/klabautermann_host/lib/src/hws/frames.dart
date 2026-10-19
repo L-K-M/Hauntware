@@ -7,8 +7,9 @@
 /// newline, and `E seq` closes the tick. A forged marker inside a payload
 /// is consumed as payload, so forgery fails even if a nonce leaks. Any
 /// framing mismatch resynchronizes on the next `E` marker carrying this
-/// parser's nonce. Before READY, output that does not start a marker for
-/// this nonce is skipped up to [kMaxPreambleBytes].
+/// parser's nonce. Before the first marker (`SELF`, then READY), output
+/// that does not start a marker for this nonce is skipped up to
+/// [kMaxPreambleBytes].
 library;
 
 import 'dart:convert';
@@ -63,6 +64,19 @@ final class HwsReady extends HwsEvent {
 
   /// The collector-set version of the running program (03 §6.3).
   final String version;
+}
+
+/// `SELF <pid> <ppid>`, printed just before READY: the sampler shell's
+/// `$$` and `$PPID`, which the protected targets need (03 §8.6).
+final class HwsSelf extends HwsEvent {
+  const HwsSelf(this.pid, this.parentPid);
+
+  /// The sampler shell's PID.
+  final int pid;
+
+  /// Its parent's PID: the sshd process serving the session, or 0 when
+  /// the parent lies outside the shell's PID namespace.
+  final int parentPid;
 }
 
 /// `B <seq> <uptime>`: a tick or on-demand reply begins.
@@ -179,9 +193,10 @@ final class HwsFrameParser {
   // -- state handlers -------------------------------------------------
 
   /// Drops everything before the first marker for this nonce, which must
-  /// be READY (03 §6.2). The login shell's startup files may print
-  /// partial lines, carriage returns or stray `\036` bytes, so the scan
-  /// is byte-wise rather than line-wise.
+  /// be `SELF` or READY (03 §6.2); the session layer checks their order.
+  /// The login shell's startup files may print partial lines, carriage
+  /// returns or stray `\036` bytes, so the scan is byte-wise rather than
+  /// line-wise.
   bool _preReadyStep(List<HwsEvent> events) {
     final at = _prefixCandidate();
     final noise = at < 0 ? _buf.length : at;
@@ -205,6 +220,12 @@ final class HwsFrameParser {
     final line = _take(nl + 1);
     final body = latin1.decode(line.sublist(_prefix.length, nl));
     const readyKind = 'READY ';
+    const selfKind = 'SELF ';
+    if (body.startsWith(selfKind)) {
+      _state = _State.marker;
+      _parseSelf(body.substring(selfKind.length), events);
+      return true;
+    }
     if (!body.startsWith(readyKind)) {
       _fail(events, 'marker before READY');
       return true;
@@ -327,6 +348,8 @@ final class HwsFrameParser {
     switch (kind) {
       case 'READY':
         _parseReady(rest, events);
+      case 'SELF':
+        _parseSelf(rest, events);
       case 'B':
         _parseBegin(rest, events);
       case 'S':
@@ -346,6 +369,18 @@ final class HwsFrameParser {
       return;
     }
     events.add(HwsReady(parts[1]));
+  }
+
+  void _parseSelf(String rest, List<HwsEvent> events) {
+    // `SELF <pid> <ppid>`; the shell's own PID is never 0.
+    final parts = rest.split(' ');
+    final pid = parts.length == 2 ? _parseUintStr(parts[0]) : null;
+    final parentPid = parts.length == 2 ? _parseUintStr(parts[1]) : null;
+    if (pid == null || pid == 0 || parentPid == null) {
+      _fail(events, 'malformed SELF marker');
+      return;
+    }
+    events.add(HwsSelf(pid, parentPid));
   }
 
   void _parseBegin(String rest, List<HwsEvent> events) {

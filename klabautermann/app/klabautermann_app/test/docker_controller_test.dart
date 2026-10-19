@@ -111,6 +111,23 @@ void main() {
     expect(queries(), hasLength(2));
   });
 
+  test('details read over a replaced endpoint are dropped, and the new '
+      'one is read', () async {
+    docker.openView('srv-1');
+    await emit(dockerReady('srv-1'));
+    expect(queries(), hasLength(1));
+
+    // The route changes while the old endpoint's read is in flight; the
+    // engine still answers that read with what the old endpoint said.
+    await emit(dockerReady('srv-1', rank: DockerRank.socketRelay));
+    expect(queries(), hasLength(2), reason: 'the new endpoint is read');
+    await emit(dockerAnswer(queries().first, dockerEngine()));
+    expect(docker.engineFor('srv-1').value, isNull);
+
+    await emit(dockerAnswer(queries().last, dockerEngine()));
+    expect(docker.engineFor('srv-1').value, isA<DockerEnginePayload>());
+  });
+
   test('a hidden tab reads nothing until it shows', () async {
     await emit(dockerReady('srv-1'));
     expect(queries(), isEmpty);

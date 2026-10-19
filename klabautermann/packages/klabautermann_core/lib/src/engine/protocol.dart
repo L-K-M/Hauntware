@@ -10,12 +10,16 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         FsSnapshot,
         HostProfile,
         JobEntry,
+        KillSignal,
         LoadAvg,
         NetRate,
         ProcsSelection,
         SystemdUnit,
+        SystemctlVerb,
         TimersSnapshot,
-        UnitsSnapshot;
+        UnitsSnapshot,
+        EngineMode,
+        EngineRuntime;
 // A masked process argument (03 §8.9): its display and toString carry the
 // mask, so the app shows a secret only through the reveal action. The
 // Docker models are plain data too: no field holds a function, and the
@@ -35,9 +39,9 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
         HealthStatus,
         ImageSummary,
         MaskedValue;
-import 'package:klabautermann_host/klabautermann_host.dart'
-    show EngineMode, EngineRuntime;
 import 'package:meta/meta.dart';
+// DangerLinter's findings are plain data: a severity and three values.
+import 'package:seance_core/seance_core.dart' show DangerFinding;
 
 import '../docker/docker_ladder.dart'
     show
@@ -46,6 +50,7 @@ import '../docker/docker_ladder.dart'
         DockerRootEquivalence,
         DockerRouteLabel,
         dockerSocketPathProblem;
+import '../operations/plan_types.dart';
 
 /// The isolate protocol version; [Hello] and [EngineReady] compare it so an
 /// app and engine built apart fail loudly instead of silently desynchronizing
@@ -120,6 +125,12 @@ import '../docker/docker_ladder.dart'
 /// asks the app for the OS keystore with [KeystoreRequest], which
 /// [AnswerKeystore] answers.
 ///
+/// Endpoint confirmation then joined v3 the same way (03 §4.7, K41):
+/// [FleetEntry] gains `endpoint`, whether a synced server's endpoint is
+/// confirmed on this device, [ConfirmEndpoints] confirms them,
+/// [EndpointChanged] reports a confirmed one a sync changed, and
+/// [ConnectRejectedReason] gains `endpointNotConfirmed`.
+///
 /// Docker reads then joined v3 the same way (03 §5.8, §5.9, §10.1):
 /// [DockerQuery] gained a `queryId` and reads a sealed [DockerQuerySpec]
 /// instead of an endpoint kind and API arguments, [DockerResult] echoes
@@ -145,6 +156,14 @@ import '../docker/docker_ladder.dart'
 /// and the [DockerComposeCli] found, and [DockerStackFileQuery] reads a
 /// verified stack's file, answered by [DockerStackFilePayload] or
 /// [DockerStackFileFailed].
+///
+/// Operation plans then joined v3 the same way (03 §8.5, §10.1, M4 E09):
+/// [ActionIntent] became sealed, one variant per MVP action, [ActionPreview]
+/// carries the plan's typed steps, host writes, runner and risk facts
+/// instead of display strings, and [ActionRefused] answers a [PlanAction]
+/// or [RunAction] the engine will not carry out. Admin mode and the safety
+/// policy joined next (03 §8.2, M4 E11): [SetSafetyPolicy], [SetAdminMode]
+/// and [AdminModeState].
 ///
 /// Low-session mode then set [DockerEndpointState.lowSession] (03 §5.2,
 /// M9), which goes out again when a link learns a session limit; no
@@ -242,14 +261,30 @@ final class ImportSshConfig extends EngineRequest {
   final String text;
 }
 
-/// Confirms probed endpoints into the fleet (03 §5.1, §10.1).
+/// Confirms the endpoints of the synced servers [serverIds] on this
+/// device as they stand (03 §4.3 step 3, §4.7, SAF-09): their host, port,
+/// user and jump route, and those of each jump host on a route that has
+/// none confirmed yet (D64). Only a confirmed synced server is dialed.
+/// An id that is no synced server is skipped; imports count as confirmed
+/// on the device that imported them. Device-local: the pins never sync
+/// (03 §4.9). Answered by [CatalogReplaced] with the new
+/// [FleetEntry.endpoint] values, after a [RequestRejected] when a pin
+/// could not be saved.
 final class ConfirmEndpoints extends EngineRequest {
   const ConfirmEndpoints(this.serverIds);
 
   final List<String> serverIds;
 }
 
-/// Sets which servers the monitor set samples continuously (03 §10.3).
+/// Sets FL-21's monitor set (03 §4.3 step 4, §6.4): the servers whose
+/// `overview` the engine samples while the app is in the foreground,
+/// whether or not a view shows them, over links it dials unattended, so
+/// nothing prompts. It replaces the last set. Only a fleet server that
+/// `monitorEligibilityOf` allows joins; others are skipped and named in a
+/// [RequestRejected], and a set of more than `kMonitorSetLimit` (10)
+/// servers is rejected whole, leaving the last one. A server that leaves the fleet
+/// or stops being eligible leaves the set. No other event answers it.
+/// Device-local: the app keeps the set in `settings.json` (03 §4.9).
 final class SetMonitorSet extends EngineRequest {
   const SetMonitorSet(this.serverIds);
 
@@ -306,7 +341,9 @@ final class Subscribe extends EngineRequest {
 
   final String serverId;
 
-  /// The surface's own id, unique among the server's subscriptions.
+  /// The surface's own id, unique among the server's subscriptions. The
+  /// engine's monitor set holds one of its own (`engine:monitorSet`),
+  /// which the app never uses.
   final String subscriptionId;
 
   /// What the surface shows. Pass an unmodifiable set.
@@ -465,8 +502,9 @@ final class SetDockerEndpoint extends EngineRequest {
   final DockerEndpointChoice choice;
 }
 
-/// Previews an operation: the engine answers [ActionPlanned] and nothing runs
-/// until [RunAction] carries the matching plan id (03 §8.5, §10.1).
+/// Previews an operation: the engine answers [ActionPlanned], or
+/// [ActionRefused], and nothing runs until [RunAction] carries the
+/// matching plan id (03 §8.5, §10.1).
 final class PlanAction extends EngineRequest {
   const PlanAction(this.intent);
 
@@ -480,6 +518,37 @@ final class RunAction extends EngineRequest {
 
   final String planId;
   final ActionConfirmation confirmation;
+}
+
+/// The safety preferences the app keeps in `settings.json` (03 §4.10, M4
+/// plan M4), sent at spawn and on every change. The engine enforces them:
+/// until the first one arrives, every server is observe-only.
+final class SetSafetyPolicy extends EngineRequest {
+  const SetSafetyPolicy(this.policy);
+
+  final SafetyPolicy policy;
+}
+
+/// Turns admin mode on or off for [serverId] (03 §8.2, SAF-02). Turning
+/// it on detects how to elevate and asks for the password only when that
+/// needs one; [AdminModeState] reports each step.
+final class SetAdminMode extends EngineRequest {
+  const SetAdminMode(this.serverId, {required this.enabled});
+
+  final String serverId;
+  final bool enabled;
+}
+
+/// Reads [serverId]'s device audit log (03 §8.10, SAF-11): up to [limit]
+/// records ended before [before] (newest first; all when null), answered
+/// by [AuditRecords].
+final class AuditQuery extends EngineRequest {
+  const AuditQuery(this.serverId, {this.before, this.limit = 100})
+    : assert(limit > 0, 'limit must be positive');
+
+  final String serverId;
+  final DateTime? before;
+  final int limit;
 }
 
 /// Answers an outstanding [Prompt] event (03 §10.1).
@@ -537,6 +606,7 @@ final class EngineReady extends EngineEvent {
     this.importStoreIssue,
     this.syncAccount,
     this.syncStoreIssues = const [],
+    this.auditInMemory = false,
   });
 
   final int protocolVersion;
@@ -553,6 +623,11 @@ final class EngineReady extends EngineEvent {
   /// What was wrong with each sync state file the engine opened at start
   /// (03 §4.10, D62), told once like [importStoreIssue].
   final List<SyncStoreIssue> syncStoreIssues;
+
+  /// The audit log lives in memory only: another instance may write the
+  /// support directory (03 §4.10), so this one writes no audit file. The
+  /// app says so once (M4 plan M12).
+  final bool auditInMemory;
 }
 
 /// The engine refused a request it does not serve (yet). The 03 §10.1 table
@@ -643,7 +718,12 @@ final class SyncStatus extends EngineEvent {
   final String? detail;
 }
 
-/// One endpoint's catalog record changed (03 §10.1).
+/// A sync changed the endpoint of the synced server [serverId], which was
+/// confirmed on this device (03 §4.7, SYN-08): its host, port or user,
+/// its jump route, or a jump host's endpoint. The engine closed its link,
+/// dials it no more and purged its cached profile; the [CatalogReplaced]
+/// that follows lists it with [EndpointConfirmation.changed] until the
+/// user confirms it again.
 final class EndpointChanged extends EngineEvent {
   const EndpointChanged(this.serverId);
 
@@ -661,7 +741,8 @@ final class LinkState extends EngineEvent {
 }
 
 /// A [Connect] to the fleet server [serverId] could not start, because the
-/// engine has no config to dial it with (03 §10.1, D61). Nothing about
+/// engine has no config to dial it with (03 §10.1, D61) or its endpoint
+/// is not confirmed on this device (03 §4.7). Nothing about
 /// the server's link changes; a later [CatalogReplaced] may give it one.
 /// A [Connect] for an id outside the fleet still gets [RequestRejected].
 final class ConnectRejected extends EngineEvent {
@@ -683,6 +764,11 @@ enum ConnectRejectedReason {
   /// server signs in and which jump hosts it needs are unknown until the
   /// next import.
   addressOnlyImport,
+
+  /// A synced server whose endpoint is not confirmed on this device, or
+  /// changed since it was ([FleetEntry.endpoint], 03 §4.7, SAF-09).
+  /// [ConfirmEndpoints] lets the engine dial it.
+  endpointNotConfirmed,
 }
 
 /// The last reachability probe of [serverId] (FL-04, 03 §5.12). A probe
@@ -961,17 +1047,260 @@ final class ActionProgress extends EngineEvent {
   final String? message;
 }
 
-/// A plan finished, one way or another (03 §10.1).
+/// A plan finished, one way or another (03 §10.1). A failed plan says
+/// why in typed facts the app words (D35): which step, its exit status or
+/// HTTP status, and what re-validation found.
 final class ActionFinished extends EngineEvent {
   const ActionFinished({
     required this.planId,
     required this.outcome,
-    this.error,
+    this.failure,
+    this.failedStep,
+    this.exitCode,
+    this.httpStatus,
+    this.revalidation,
   });
 
   final String planId;
   final ActionOutcome outcome;
-  final String? error;
+  final ActionFailure? failure;
+
+  /// The index of the step that failed, in the preview's steps.
+  final int? failedStep;
+
+  /// A failed shell step's exit status; null when the channel ended
+  /// without one.
+  final int? exitCode;
+
+  /// A failed API step's HTTP status.
+  final int? httpStatus;
+
+  /// What re-validation found, with [ActionFailure.revalidation].
+  final RevalidationFailure? revalidation;
+}
+
+/// Why a plan failed.
+enum ActionFailure {
+  /// The server's link is gone.
+  noLink,
+
+  /// The target changed since the preview (03 §8.5); nothing ran.
+  revalidation,
+
+  /// Elevation refused a step: admin mode ended or the password changed.
+  elevationRefused,
+
+  /// A step exited non-zero or answered an HTTP error; later steps did
+  /// not run.
+  stepFailed,
+
+  /// The link failed or timed out during a step.
+  transport,
+
+  /// The engine has no runner for an API step yet (M4 E15).
+  unsupportedStep,
+}
+
+/// What re-validation found changed (03 §8.5).
+enum RevalidationFailure {
+  /// The unit no longer loads.
+  unitMissing,
+
+  /// The process exited.
+  processGone,
+
+  /// The PID now names another process: its start time differs.
+  processReused,
+
+  /// The container id or the stack's configuration changed.
+  targetChanged,
+
+  /// The check could not read what it compares.
+  unreadable,
+}
+
+/// The engine will not plan [intent] or run plan [planId] (03 §8.5): the
+/// one carries the request it answers, so the app matches it to what it
+/// asked. Nothing ran.
+final class ActionRefused extends EngineEvent {
+  const ActionRefused(this.reason, {this.intent, this.planId})
+    : assert((intent == null) != (planId == null), 'one of intent, planId');
+
+  final ActionRefusalReason reason;
+
+  /// The refused [PlanAction]'s intent.
+  final ActionIntent? intent;
+
+  /// The refused [RunAction]'s plan.
+  final String? planId;
+}
+
+/// Why an [ActionRefused] refused; the app words each (D35).
+enum ActionRefusalReason {
+  /// The action's planner has not landed yet (M4 E14, E15).
+  notImplemented,
+
+  /// No previewed plan has the id, or it already ran.
+  unknownPlan,
+
+  /// The plan outlived its five minutes; plan again.
+  expiredPlan,
+
+  /// The server's link was re-established since the preview; plan again.
+  stalePlan,
+
+  /// The confirmation does not meet the plan's tier, or does not name
+  /// the target.
+  confirmationMismatch,
+
+  /// The server is observe-only: management is off for it (SAF-01).
+  observeOnly,
+
+  /// Read-only mode is on, for the server or for every server (SAF-06).
+  readOnly,
+
+  /// The plan needs admin mode, which is off for the server (03 §8.2).
+  adminRequired,
+}
+
+/// The answer to an [AuditQuery]: [records] newest first, and whether
+/// older ones remain.
+final class AuditRecords extends EngineEvent {
+  AuditRecords(
+    this.serverId,
+    Iterable<AuditRecord> records, {
+    this.more = false,
+  }) : records = List.unmodifiable(records);
+
+  final String serverId;
+  final List<AuditRecord> records;
+  final bool more;
+}
+
+/// One finished or refused run in the device audit log (03 §8.10): the
+/// plan's steps as the preview showed them with secrets redacted, the
+/// tier, and the result.
+@immutable
+final class AuditRecord {
+  AuditRecord({
+    required this.serverId,
+    required this.action,
+    required this.targetName,
+    required Iterable<String> steps,
+    required this.tier,
+    required this.outcome,
+    required this.startedAt,
+    required this.endedAt,
+    this.deviceId,
+    this.failure,
+    this.failedStep,
+    this.exitCode,
+    this.httpStatus,
+  }) : steps = List.unmodifiable(steps);
+
+  final String serverId;
+
+  /// The intent's kind, such as `UnitAction`.
+  final String action;
+  final String targetName;
+  final List<String> steps;
+  final ConfirmationTier tier;
+  final ActionOutcome outcome;
+  final DateTime startedAt, endedAt;
+
+  /// This device, when sync enrolled it (03 §4.3).
+  final String? deviceId;
+
+  final ActionFailure? failure;
+  final int? failedStep;
+  final int? exitCode;
+  final int? httpStatus;
+}
+
+/// Where admin mode stands on [serverId] (03 §8.2, M4 plan M5). The app
+/// shows the chip and its countdown from [expiresAt] while [phase] is
+/// [AdminModePhase.on]. No field ever holds the password.
+final class AdminModeState extends EngineEvent {
+  const AdminModeState(
+    this.serverId,
+    this.phase, {
+    this.expiresAt,
+    this.retry = false,
+    this.failure,
+    this.ended,
+  });
+
+  final String serverId;
+  final AdminModePhase phase;
+
+  /// When inactivity ends admin mode, while it is on.
+  final DateTime? expiresAt;
+
+  /// While awaiting the password: the previous one was wrong.
+  final bool retry;
+
+  /// Why turning it on failed, with [AdminModePhase.failed].
+  final AdminFailure? failure;
+
+  /// Why it ended, with [AdminModePhase.expired].
+  final AdminEnd? ended;
+}
+
+/// The admin-mode state machine's phases (M4 plan M5).
+enum AdminModePhase {
+  off,
+  detecting,
+  awaitingPassword,
+  validating,
+  on,
+  expired,
+  failed,
+}
+
+/// Why admin mode could not start; the app words each (D35).
+enum AdminFailure {
+  /// The server is observe-only (SAF-01).
+  observeOnly,
+
+  /// Read-only mode is on (SAF-06): admin mode is hidden.
+  readOnly,
+
+  /// The server has no link to elevate over.
+  noLink,
+
+  /// The host has not been probed yet, so how to elevate is unknown.
+  notProbed,
+
+  /// No elevation rung applies (03 §8.3).
+  unavailable,
+
+  /// Only a terminal could elevate: `requiretty`, or doas with a password
+  /// (rung 5, which spike S3 left for later).
+  ttyRequired,
+
+  /// The account may not elevate.
+  notInSudoers,
+
+  /// The password was refused three times.
+  wrongPassword,
+
+  /// The password prompt was cancelled or withdrawn.
+  cancelled,
+}
+
+/// Why admin mode ended (03 §8.2).
+enum AdminEnd {
+  /// No elevated action or read for the expiry period.
+  inactivity,
+
+  /// The app went to the background.
+  background,
+
+  /// The server's link dropped.
+  linkLost,
+
+  /// The server left the fleet or changed endpoint.
+  serverRemoved,
 }
 
 /// The engine needs the user to decide something: trust a host key,
@@ -1090,6 +1419,7 @@ final class FleetEntry {
     this.authKind,
     this.searchText,
     this.locatorConflict,
+    this.endpoint,
   });
 
   /// The id every per-server request carries: a synced record's bare
@@ -1139,6 +1469,11 @@ final class FleetEntry {
   /// [jumpRoute]). Pass an unmodifiable list.
   final List<String>? locatorConflict;
 
+  /// Whether this device confirmed a synced server's endpoint (03 §4.7);
+  /// null for an import, which counts as confirmed on the device that
+  /// imported it.
+  final EndpointConfirmation? endpoint;
+
   // By value: every CatalogReplaced copies its entries across the isolate
   // boundary, so identity would make an unchanged entry look changed.
   @override
@@ -1154,7 +1489,8 @@ final class FleetEntry {
       _sameItems(jumpRoute, other.jumpRoute) &&
       authKind == other.authKind &&
       searchText == other.searchText &&
-      _sameItems(locatorConflict, other.locatorConflict);
+      _sameItems(locatorConflict, other.locatorConflict) &&
+      endpoint == other.endpoint;
 
   @override
   int get hashCode => Object.hash(
@@ -1169,7 +1505,23 @@ final class FleetEntry {
     authKind,
     searchText,
     locatorConflict == null ? null : Object.hashAll(locatorConflict!),
+    endpoint,
   );
+}
+
+/// Where a synced server's endpoint stands on this device (03 §4.7,
+/// SAF-09). Only a [confirmed] one is dialed.
+enum EndpointConfirmation {
+  /// Its host, port, user and jump route match what this device
+  /// confirmed, and so does each jump host's.
+  confirmed,
+
+  /// Never confirmed on this device.
+  unconfirmed,
+
+  /// Confirmed once, but a sync has changed it or a jump host on its
+  /// route since: it waits to be confirmed again.
+  changed,
 }
 
 /// How the engine signs in to a [FleetEntry]'s server (03 §4.5).
@@ -1925,8 +2277,9 @@ final class ContainerListStats {
   final DateTime at;
 
   /// CPU % by the spec formula over the time since the previous read,
-  /// so null on a container's first one (one-shot `precpu_stats` is not
-  /// meaningful, 03 §5.6).
+  /// so null on a container's first one, on the first after a read of it
+  /// failed, and on the first after a [DockerListChanged.fullRelist]
+  /// (one-shot `precpu_stats` is not meaningful, 03 §5.6).
   final double? cpuPercent;
 
   /// Bytes in use less `inactive_file` (cgroup v2) or the cache (v1).
@@ -2241,21 +2594,169 @@ final class ContainerDetailsConfig {
   final Map<String, MaskedValue> labels;
 }
 
-/// What the user wants done (03 §10.1 `intent`). The action vocabulary lands
-/// with the actions milestone, so [action] is the intent's name until the
-/// typed catalog of 03 §7 exists; [parameters] carries its arguments.
+/// What the user wants done (03 §10.1 `intent`, M4 plan M3): one variant
+/// per MVP action. The engine validates every value again before it builds
+/// a plan from it.
 @immutable
-final class ActionIntent {
-  const ActionIntent({
-    required this.serverId,
-    required this.action,
-    this.parameters = const {},
-  });
+sealed class ActionIntent {
+  const ActionIntent(this.serverId);
 
   final String serverId;
-  final String action;
-  final Map<String, Object?> parameters;
 }
+
+/// Signals process [pid] (PRC-02), only while its start time still reads
+/// [startTicks], so a reused PID is never hit (03 §8.5).
+final class KillProcess extends ActionIntent {
+  const KillProcess(
+    super.serverId, {
+    required this.pid,
+    required this.startTicks,
+    this.signal = KillSignal.sigterm,
+  });
+
+  final int pid;
+  final int startTicks;
+  final KillSignal signal;
+}
+
+/// Starts, stops, restarts or reloads a system unit (SVC-03).
+final class UnitAction extends ActionIntent {
+  const UnitAction(super.serverId, {required this.unit, required this.verb});
+
+  final String unit;
+  final SystemctlVerb verb;
+}
+
+/// Runs a system timer's service now (JOB-08).
+final class StartTimer extends ActionIntent {
+  const StartTimer(super.serverId, {required this.timer});
+
+  final String timer;
+}
+
+/// What [ContainerAction] does to a container (CTR-02).
+enum ContainerVerb { start, stop, restart, pause, unpause, kill }
+
+/// Changes a container's state (CTR-02); [signal] only with
+/// [ContainerVerb.kill], whose default is the engine's (`SIGKILL`).
+final class ContainerAction extends ActionIntent {
+  const ContainerAction(
+    super.serverId, {
+    required this.containerId,
+    required this.verb,
+    this.signal,
+  });
+
+  final String containerId;
+  final ContainerVerb verb;
+  final KillSignal? signal;
+}
+
+/// Removes a container (CTR-05), its anonymous volumes with [volumes],
+/// a running one with [force].
+final class RemoveContainer extends ActionIntent {
+  const RemoveContainer(
+    super.serverId, {
+    required this.containerId,
+    this.volumes = false,
+    this.force = false,
+  });
+
+  final String containerId;
+  final bool volumes;
+  final bool force;
+}
+
+/// Removes an image by reference or id (IMG-02); one in use only with
+/// [force].
+final class RemoveImage extends ActionIntent {
+  const RemoveImage(super.serverId, {required this.image, this.force = false});
+
+  final String image;
+  final bool force;
+}
+
+/// What [StackAction] does to a Compose project (STK-03).
+enum StackVerb { start, stop, restart }
+
+/// Starts, stops or restarts a Compose project's containers (STK-03).
+/// [actAnyway] confirms acting on a stack another manager owns (03 §8.7).
+final class StackAction extends ActionIntent {
+  const StackAction(
+    super.serverId, {
+    required this.project,
+    required this.verb,
+    this.actAnyway = false,
+  });
+
+  final String project;
+  final StackVerb verb;
+  final bool actAnyway;
+}
+
+/// Pulls a verified, unmanaged stack's images and recreates it (STK-06),
+/// removing orphan containers with [removeOrphans].
+final class RedeployStack extends ActionIntent {
+  const RedeployStack(
+    super.serverId, {
+    required this.project,
+    this.removeOrphans = false,
+  });
+
+  final String project;
+  final bool removeOrphans;
+}
+
+/// The app's safety preferences (M4 plan M4, SAF-01, SAF-06): per server,
+/// whether management is on and whether it is read-only, plus the global
+/// read-only switch and admin mode's inactivity expiry.
+@immutable
+final class SafetyPolicy {
+  const SafetyPolicy({
+    this.globalReadOnly = false,
+    this.servers = const {},
+    this.adminExpiry = kDefaultAdminExpiry,
+  });
+
+  final bool globalReadOnly;
+
+  /// By server id; a server without an entry has the default: management
+  /// off.
+  final Map<String, ServerSafety> servers;
+
+  /// One of [kAdminExpiryChoices].
+  final Duration adminExpiry;
+}
+
+/// One server's safety preferences. Management is off by default
+/// (SAF-01): the server is observed, never changed.
+@immutable
+final class ServerSafety {
+  const ServerSafety({
+    this.management = false,
+    this.readOnly = false,
+    this.marks = const {},
+  });
+
+  final bool management;
+  final bool readOnly;
+
+  /// Targets the user marked protected on this device (SAF-22): unit,
+  /// container and stack names. They stay device-local until v1's `pref`
+  /// records (M4 plan Q1).
+  final Set<String> marks;
+}
+
+/// Admin mode's default inactivity expiry [E] (03 §8.2).
+const kDefaultAdminExpiry = Duration(minutes: 15);
+
+/// The expiries the Safety tab offers (M4 plan M5).
+const kAdminExpiryChoices = [
+  Duration(minutes: 5),
+  kDefaultAdminExpiry,
+  Duration(minutes: 30),
+  Duration(minutes: 60),
+];
 
 /// How far 03 §8.6's tiers make the user go before a plan runs.
 enum ConfirmationTier {
@@ -2280,23 +2781,50 @@ final class ActionConfirmation {
   final String? phrase;
 }
 
-/// What [PlanAction] previews before anything runs (03 §8.5): human-readable
-/// steps, warnings, and the tier [RunAction] must satisfy.
+/// What [PlanAction] previews before anything runs (03 §8.5, SAF-04):
+/// the exact steps the plan will run, the host writes they cause, who runs
+/// them, the typed risk facts the app words (D35), and the tier
+/// [RunAction] must satisfy. The engine's plan and this preview share the
+/// step list, so what the user confirms is what runs.
 @immutable
 final class ActionPreview {
   const ActionPreview({
-    required this.title,
-    this.steps = const [],
-    this.warnings = const [],
-    this.requiredTier = ConfirmationTier.acknowledge,
-    this.protectedTarget = false,
+    required this.intent,
+    required this.targetName,
+    required this.steps,
+    required this.requiredLevel,
+    required this.runner,
+    required this.requiredTier,
+    this.hostWrites = const [],
+    this.detached = false,
+    this.danger = const [],
+    this.impact,
+    this.ownership,
+    this.protected,
   });
 
-  final String title;
-  final List<String> steps;
-  final List<String> warnings;
+  final ActionIntent intent;
+
+  /// What a typed confirmation repeats.
+  final String targetName;
+
+  final List<PlanStep> steps;
+  final RequiredLevel requiredLevel;
+  final RunnerFacts runner;
   final ConfirmationTier requiredTier;
-  final bool protectedTarget;
+  final List<HostWriteRow> hostWrites;
+
+  /// The steps run as a detached operation (03 §7.17).
+  final bool detached;
+
+  /// What DangerLinter found in the shell steps.
+  final List<DangerFinding> danger;
+
+  final PlanImpact? impact;
+  final PlanOwnership? ownership;
+
+  /// Why the target is protected, or null when it is not.
+  final ProtectedReason? protected;
 }
 
 /// A running plan's end state (03 §10.1).

@@ -215,6 +215,12 @@ final class SamplerSession {
   /// The current state; [states] reports each change.
   SamplerState get state => _state;
 
+  /// The running sampler shell's PID and its parent's from the `SELF`
+  /// marker (E07), protected targets (03 §8.6), or null before READY and
+  /// after the process ended. The parent is 0 outside its PID namespace.
+  ({int pid, int parentPid})? get self => _self;
+  ({int pid, int parentPid})? _self;
+
   /// Every state change after the call that subscribes.
   Stream<SamplerState> get states => _states.stream;
 
@@ -343,9 +349,10 @@ final class SamplerSession {
 
   void _onEvent(_Attempt attempt, HwsTickEvent event) {
     switch (event) {
-      case HwsSessionReady():
+      case HwsSessionReady(:final pid, :final parentPid):
         attempt.readyTimer?.cancel();
         attempt.ready = true;
+        _self = (pid: pid, parentPid: parentPid);
         _setState(const SamplerReady());
 
       case HwsTick(:final seq):
@@ -421,6 +428,7 @@ final class SamplerSession {
   /// the channel, bounded), also when [SshLink.start] completes late.
   void _end(_Attempt attempt, SamplerGapReason reason) {
     attempt.ended = true;
+    _self = null;
     attempt.readyTimer?.cancel();
     unawaited(attempt.stdoutSub?.cancel());
     unawaited(attempt.stderrSub?.cancel());

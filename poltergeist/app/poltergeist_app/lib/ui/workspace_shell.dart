@@ -1493,6 +1493,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       final strip = PaneTabsController(
         paneId: paneId,
         lanes: lanes,
+        appStoragePath: widget.engineSession?.fallbackHome,
         newTabTarget: widget.newTabTarget,
         doubleClickAction: _doubleClickAction,
         directoryGrouping: _directoryGrouping,
@@ -2119,6 +2120,10 @@ class _WorkspaceShellState extends State<WorkspaceShell>
             ? null
             : onReviewLocalEdits,
         openRelease: (info) => unawaited(launchUrl(info.releasesUrl)),
+        installUpdate: widget.updateCheck == null
+            ? null
+            : () => unawaited(widget.updateCheck!.installUpdate()),
+        cancelUpdate: widget.updateCheck?.cancelUpdate,
       ),
       preview: preview,
       pdfRenderer: pdfPreviewBuilder,

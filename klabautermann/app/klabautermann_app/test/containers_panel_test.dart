@@ -244,6 +244,17 @@ Finder _heading(String project) =>
 /// 03 §10.4's Containers sub-tab (CTR-01, CTR-04, CST-01) over the
 /// container watch.
 void main() {
+  test('reads the uptime from Docker\'s and Podman\'s status words', () {
+    Duration? uptime(String status) =>
+        containerUptime(dockerContainer('c', status: status));
+    expect(uptime('Up 3 hours'), const Duration(hours: 3));
+    expect(uptime('Up 3 hours (healthy)'), const Duration(hours: 3));
+    // Podman's list says how long ago the container started.
+    expect(uptime('Up 2 minutes ago'), const Duration(minutes: 2));
+    expect(uptime('Up About an hour'), const Duration(hours: 1));
+    expect(uptime('Exited (0) 2 days ago'), isNull);
+  });
+
   setUpAll(() async {
     if (goldensCompareHere) await loadGoldenFonts();
   });

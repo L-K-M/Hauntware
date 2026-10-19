@@ -1,0 +1,20 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Opening a downloaded APK in the system installer. Android still
+         asks the user to allow installs from this app, then to confirm
+         the update itself. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+
+    <application>
+        <!-- A subclass, so the merged manifest never collides with another
+             plugin's androidx FileProvider entry. -->
+        <provider
+            android:name="ch.lkmc.ghost.apkupdate.ApkFileProvider"
+            android:authorities="${applicationId}.ghost_apk_update"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/ghost_apk_update_paths"/>
+        </provider>
+    </application>
+</manifest>

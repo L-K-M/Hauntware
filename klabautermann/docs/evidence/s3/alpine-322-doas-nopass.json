@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "case": "alpine-322-doas-nopass",
+  "description": "doas in mirror.gcr.io/library/alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8, rule: permit nopass klab as root",
+  "probe": {
+    "isRoot": false,
+    "sudoVersionLine": null,
+    "sudoIsRs": false,
+    "sudoNopasswd": false,
+    "doasPresent": true,
+    "doasNopasswd": true,
+    "printfIsBuiltin": true
+  },
+  "probeCalls": [
+    {
+      "command": "id -u",
+      "exit": 0,
+      "stdout": "1000\n",
+      "stderr": ""
+    },
+    {
+      "command": "sudo -V 2>/dev/null | head -n 1",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": "command -v doas",
+      "exit": 0,
+      "stdout": "/usr/bin/doas\n",
+      "stderr": ""
+    },
+    {
+      "command": "doas -n true",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": "command -V printf",
+      "exit": 0,
+      "stdout": "printf is a shell builtin\n",
+      "stderr": ""
+    }
+  ],
+  "outcomes": {
+    "rightPassword": {
+      "outcome": "ran",
+      "exit": 0,
+      "commands": 1,
+      "stdout": "0\n",
+      "stderr": "",
+      "calls": [
+        {
+          "command": "env LC_ALL=C doas -n -- 'id' '-u'",
+          "exit": 0,
+          "stdout": "0\n",
+          "stderr": ""
+        }
+      ]
+    },
+    "wrongPassword": {
+      "outcome": "ran",
+      "exit": 0,
+      "commands": 1,
+      "stdout": "0\n",
+      "stderr": "",
+      "calls": [
+        {
+          "command": "env LC_ALL=C doas -n -- 'id' '-u'",
+          "exit": 0,
+          "stdout": "0\n",
+          "stderr": ""
+        }
+      ]
+    },
+    "noPassword": {
+      "outcome": "ran",
+      "exit": 0,
+      "commands": 1,
+      "stdout": "0\n",
+      "stderr": "",
+      "calls": [
+        {
+          "command": "env LC_ALL=C doas -n -- 'id' '-u'",
+          "exit": 0,
+          "stdout": "0\n",
+          "stderr": ""
+        }
+      ]
+    },
+    "stdinAfterPassword": {
+      "outcome": "ran",
+      "exit": 0,
+      "commands": 1,
+      "stdout": "stdin-reaches-the-command\n",
+      "stderr": "",
+      "calls": [
+        {
+          "command": "env LC_ALL=C doas -n -- 'cat'",
+          "exit": 0,
+          "stdout": "stdin-reaches-the-command\n",
+          "stderr": ""
+        }
+      ]
+    }
+  },
+  "stdinPayloadEchoed": true,
+  "ranAsRoot": true,
+  "rawCalls": [
+    {
+      "command": "doas -n true",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": "doas true",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ]
+}

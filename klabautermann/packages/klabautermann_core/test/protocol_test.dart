@@ -115,6 +115,7 @@ void main() {
           queryId: 'q-1',
           query: DockerContainersQuery(),
         ),
+        const PlanAction(KillProcess('srv-1', pid: 42, startTicks: 9001)),
         const DockerWatch(
           serverId: 'srv-1',
           watchId: 'w-1',
@@ -126,7 +127,35 @@ void main() {
           choice: DockerEndpointCustom('/srv/engine.sock'),
         ),
         const PlanAction(
-          ActionIntent(serverId: 'srv-1', action: 'container.restart'),
+          UnitAction(
+            'srv-1',
+            unit: 'nginx.service',
+            verb: SystemctlVerb.restart,
+          ),
+        ),
+        const PlanAction(StartTimer('srv-1', timer: 'backup.timer')),
+        const PlanAction(
+          ContainerAction(
+            'srv-1',
+            containerId: 'abc123',
+            verb: ContainerVerb.kill,
+            signal: KillSignal.sighup,
+          ),
+        ),
+        const PlanAction(
+          RemoveContainer('srv-1', containerId: 'abc123', volumes: true),
+        ),
+        const PlanAction(RemoveImage('srv-1', image: 'busybox:1', force: true)),
+        const PlanAction(
+          StackAction(
+            'srv-1',
+            project: 'web',
+            verb: StackVerb.restart,
+            actAnyway: true,
+          ),
+        ),
+        const PlanAction(
+          RedeployStack('srv-1', project: 'web', removeOrphans: true),
         ),
         const RunAction(
           'plan-1',
@@ -135,6 +164,15 @@ void main() {
             phrase: 'web-1',
           ),
         ),
+        const SetSafetyPolicy(
+          SafetyPolicy(
+            globalReadOnly: true,
+            servers: {'srv-1': ServerSafety(management: true, readOnly: true)},
+            adminExpiry: Duration(minutes: 30),
+          ),
+        ),
+        const SetAdminMode('srv-1', enabled: true),
+        AuditQuery('srv-1', before: DateTime.utc(2026, 10, 18), limit: 20),
         const AnswerPrompt('prompt-1', PromptTrustAnswer(true)),
         const AnswerPrompt('prompt-2', PromptCancelAnswer()),
         const HandleAlert('alert-1', AlertAction.acknowledge),
@@ -217,11 +255,97 @@ void main() {
           payload: const DockerImagesPayload([]),
           at: DateTime.utc(2026, 10, 17),
         ),
-        const ActionPlanned('plan-1', ActionPreview(title: 'restart')),
+        ActionPlanned(
+          'plan-1',
+          ActionPreview(
+            intent: const ContainerAction(
+              'srv-1',
+              containerId: 'abc123',
+              verb: ContainerVerb.restart,
+            ),
+            targetName: 'web-1',
+            steps: [
+              ShellStep(['systemctl', 'restart', 'nginx.service']),
+              ApiStep(
+                method: 'POST',
+                path: '/v1.44/containers/abc123/restart',
+                query: {'t': '10'},
+              ),
+            ],
+            requiredLevel: RequiredLevel.admin,
+            runner: const RunnerFacts(
+              identity: 'root',
+              engine: 'docker',
+              credentials: RunnerCredentials.adminPassword,
+            ),
+            requiredTier: ConfirmationTier.typedPhrase,
+            hostWrites: const [HostWriteRow.engineState],
+            danger: const [
+              DangerFinding(
+                severity: DangerSeverity.warning,
+                pattern: 'systemctl restart',
+                explanation: 'restarts a service',
+                line: 1,
+              ),
+            ],
+            impact: const PlanImpact(ImpactKind.stopsContainers, count: 3),
+            ownership: const PlanOwnership('coolify'),
+            protected: ProtectedReason.userMarked,
+          ),
+        ),
+        const ActionRefused(
+          ActionRefusalReason.notImplemented,
+          intent: StartTimer('srv-1', timer: 'backup.timer'),
+        ),
+        const ActionRefused(ActionRefusalReason.stalePlan, planId: 'plan-1'),
+        AdminModeState(
+          'srv-1',
+          AdminModePhase.on,
+          expiresAt: DateTime.utc(2026, 10, 18, 12, 15),
+        ),
+        const AdminModeState(
+          'srv-1',
+          AdminModePhase.failed,
+          failure: AdminFailure.ttyRequired,
+        ),
+        const AdminModeState(
+          'srv-1',
+          AdminModePhase.expired,
+          ended: AdminEnd.linkLost,
+        ),
+        AuditRecords('srv-1', [
+          AuditRecord(
+            serverId: 'srv-1',
+            action: 'UnitAction',
+            targetName: 'nginx.service',
+            steps: const ['systemctl restart nginx.service'],
+            tier: ConfirmationTier.acknowledge,
+            outcome: ActionOutcome.failed,
+            startedAt: DateTime.utc(2026, 10, 18, 12),
+            endedAt: DateTime.utc(2026, 10, 18, 12, 0, 2),
+            deviceId: 'device-1',
+            failure: ActionFailure.stepFailed,
+            failedStep: 0,
+            exitCode: 5,
+          ),
+        ], more: true),
         const ActionProgress(planId: 'plan-1', stepIndex: 1, stepCount: 3),
         const ActionFinished(
           planId: 'plan-1',
           outcome: ActionOutcome.succeeded,
+        ),
+        const ActionFinished(
+          planId: 'plan-2',
+          outcome: ActionOutcome.failed,
+          failure: ActionFailure.revalidation,
+          revalidation: RevalidationFailure.processReused,
+        ),
+        const ActionFinished(
+          planId: 'plan-3',
+          outcome: ActionOutcome.failed,
+          failure: ActionFailure.stepFailed,
+          failedStep: 1,
+          httpStatus: 409,
         ),
         const Prompt(
           promptId: 'p-1',
@@ -310,6 +434,7 @@ void main() {
                 ),
               )
               as DockerQuery;
+      expect(query.serverId, 'srv-1');
       expect(query.queryId, 'q-7');
       expect((query.query as DockerContainerQuery).containerId, 'db');
 
@@ -1283,6 +1408,7 @@ void main() {
         FleetAuthKind? authKind = FleetAuthKind.agent,
         String? searchText = 'web-1 deploy@web-1.example:2222',
         List<String>? locatorConflict = const ['ssh-config:db-1'],
+        EndpointConfirmation? endpoint = EndpointConfirmation.confirmed,
       }) => FleetEntry(
         serverId: serverId,
         label: label,
@@ -1296,6 +1422,7 @@ void main() {
         authKind: authKind,
         searchText: searchText,
         locatorConflict: locatorConflict?.toList(),
+        endpoint: endpoint,
       );
 
       final web = entry();
@@ -1321,6 +1448,8 @@ void main() {
         entry(searchText: 'web-1'),
         entry(locatorConflict: null),
         entry(locatorConflict: const ['ssh-config:db-2']),
+        entry(endpoint: null),
+        entry(endpoint: EndpointConfirmation.changed),
       ]) {
         expect(web, isNot(other));
       }
@@ -1356,6 +1485,30 @@ void main() {
         expect(web.locatorConflict, isNull);
       },
     );
+
+    test('endpoint confirmation survives: every state on an entry, and '
+        'the ids it confirms', () async {
+      for (final endpoint in [null, ...EndpointConfirmation.values]) {
+        final entry = FleetEntry(
+          serverId: '0b9a6f3e-2d1c-4e5f-8a7b-6c5d4e3f2a1b',
+          label: 'db-1',
+          host: '10.0.0.4',
+          port: kSshDefaultPort,
+          origin: FleetEntryOrigin.synced,
+          endpoint: endpoint,
+        );
+        final event = await roundTrip(CatalogReplaced([entry]));
+        expect((event as CatalogReplaced).entries.single.endpoint, endpoint);
+      }
+
+      final request =
+          await roundTrip(const ConfirmEndpoints(['a', 'b']))
+              as ConfirmEndpoints;
+      expect(request.serverIds, ['a', 'b']);
+      final changed =
+          await roundTrip(const EndpointChanged('srv-1')) as EndpointChanged;
+      expect(changed.serverId, 'srv-1');
+    });
 
     test('every link status survives with its values (D46)', () async {
       final statuses = <LinkStatus>[
