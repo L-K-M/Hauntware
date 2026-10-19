@@ -130,16 +130,22 @@ final class DockerController {
     String containerId,
   ) {
     final server = _server(serverId);
+    // Details a view still shows from before the server left the fleet
+    // are taken back, so every view of the container shares one and each
+    // close pairs with an open; they are read again.
+    final kept = server.inspected.containsKey(containerId)
+        ? null
+        : _leftFleet.remove((serverId, containerId));
     final inspected = server.inspected.putIfAbsent(
       containerId,
-      () => _InspectedContainer(_summaryIn(server, containerId)),
+      () => kept ?? _InspectedContainer(_summaryIn(server, containerId)),
     );
     inspected.views++;
-    if (inspected.views > 1) return inspected.details;
+    if (inspected.views > 1 && kept == null) return inspected.details;
 
     if (!_listed(serverId)) {
-      inspected.details.value = const DockerContainerDetails(
-        failure: DockerQueryFailed(DockerQueryFailure.notInFleet),
+      inspected.details.value = inspected.details.value.copyWith(
+        failure: () => const DockerQueryFailed(DockerQueryFailure.notInFleet),
       );
     } else {
       _inspect(serverId, containerId, inspected);
