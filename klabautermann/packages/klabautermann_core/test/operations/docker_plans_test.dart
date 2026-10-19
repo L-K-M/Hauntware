@@ -142,9 +142,10 @@ Future<PlanAttempt> _plan(
   ActionIntent intent,
   _Engine engine, {
   ProtectionContext protection = const ProtectionContext(),
+  DockerEndpointRoute route = _route,
 }) => planDockerAction(intent, (
   client: _client(engine),
-  route: _route,
+  route: route,
   protection: protection,
   loginUser: 'ops',
 ));
@@ -188,6 +189,29 @@ void main() {
         (check.kind, check.target, check.id),
         (DockerTargetKind.container, 'web-1', webId()),
       );
+    });
+
+    test('over the sudo relay the steps run as root, in admin mode '
+        '(rank 3, E16)', () async {
+      final plan = _planned(
+        await _plan(
+          ContainerAction(
+            _server,
+            containerId: 'web-1',
+            verb: ContainerVerb.stop,
+          ),
+          engine,
+          route: const DockerEndpointRoute(
+            rank: DockerRank.sudoRelay,
+            socketPath: '/var/run/docker.sock',
+            runtime: EngineRuntime.docker,
+            rootEquivalence: DockerRootEquivalence.rootfulSocket,
+          ),
+        ),
+      );
+      expect(plan.requiredLevel, RequiredLevel.admin);
+      expect(plan.runner.identity, 'root');
+      expect(plan.runner.credentials, RunnerCredentials.adminPassword);
     });
 
     test(

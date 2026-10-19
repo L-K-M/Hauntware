@@ -6,6 +6,7 @@
 import 'package:klabautermann_docker/klabautermann_docker.dart';
 import 'package:meta/meta.dart';
 
+import '../../docker/docker_ladder.dart' show DockerRank;
 import '../../engine/protocol.dart';
 import '../confirmation.dart';
 import '../impact.dart';
@@ -96,7 +97,7 @@ Future<PlanAttempt> _planContainer(
           },
         ),
       ],
-      requiredLevel: RequiredLevel.login,
+      requiredLevel: _level(c),
       runner: _runner(c),
       hostWrites: const [HostWriteRow.engineState],
       impact: interrupts ? _containerImpact(protected) : null,
@@ -135,7 +136,7 @@ Future<PlanAttempt> _planRemoveContainer(
           },
         ),
       ],
-      requiredLevel: RequiredLevel.login,
+      requiredLevel: _level(c),
       runner: _runner(c),
       hostWrites: const [HostWriteRow.engineState],
       impact: containerRemovalImpact(volumes: intent.volumes),
@@ -183,7 +184,7 @@ Future<PlanAttempt> _planRemoveImage(
           query: {'force': intent.force ? '1' : '0', 'noprune': '0'},
         ),
       ],
-      requiredLevel: RequiredLevel.login,
+      requiredLevel: _level(c),
       runner: _runner(c),
       hostWrites: const [HostWriteRow.engineState],
       impact: imageRemovalImpact(usingContainers: inUse),
@@ -238,7 +239,7 @@ Future<PlanAttempt> _planStack(StackAction intent, DockerPlanContext c) async {
       kind: _stackKinds[intent.verb]!,
       targetName: intent.project,
       steps: steps,
-      requiredLevel: RequiredLevel.login,
+      requiredLevel: _level(c),
       runner: _runner(c),
       hostWrites: const [HostWriteRow.engineState],
       impact: intent.verb == StackVerb.start
@@ -401,9 +402,19 @@ PlanImpact _containerImpact(ProtectedReason? protected) =>
 String _path(DockerPlanContext c, String path) =>
     '/${c.client.apiVersion.pathSegment}$path';
 
+/// Over the sudo relay (rank 3, E16) every API step reaches the engine as
+/// root through an elevated relay, which exists only in admin mode.
+bool _overRelay(DockerPlanContext c) => c.route.rank == DockerRank.sudoRelay;
+
+RequiredLevel _level(DockerPlanContext c) =>
+    _overRelay(c) ? RequiredLevel.admin : RequiredLevel.login;
+
 RunnerFacts _runner(DockerPlanContext c) => RunnerFacts(
-  identity: c.loginUser,
+  identity: _overRelay(c) ? 'root' : c.loginUser,
   engine: '${c.route.runtime.name} ${c.route.socketPath}',
+  credentials: _overRelay(c)
+      ? RunnerCredentials.adminPassword
+      : RunnerCredentials.session,
 );
 
 PlanAttempt _planned(OperationPlan plan) => (plan: plan, refusal: null);

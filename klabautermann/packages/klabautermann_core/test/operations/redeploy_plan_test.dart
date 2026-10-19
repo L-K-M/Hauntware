@@ -143,6 +143,8 @@ Future<PlanAttempt> _plan({
   bool removeOrphans = false,
   HostProfile? profile,
   ProtectionContext protection = const ProtectionContext(),
+  DockerEndpointRoute route = _route,
+  bool adminMode = false,
 }) => planRedeploy(
   RedeployStack(_server, project: 'shop', removeOrphans: removeOrphans),
   (
@@ -150,10 +152,10 @@ Future<PlanAttempt> _plan({
       DockerHttpClient(() async => _engine.connect().client),
       apiVersion: ApiVersion.tryParse('1.52')!,
     ),
-    route: _route,
+    route: route,
     stacks: _host.sources(),
     profile: profile ?? _profile(),
-    adminMode: false,
+    adminMode: adminMode,
     protection: protection,
     loginUser: 'deploy',
   ),
@@ -266,6 +268,26 @@ void main() {
       );
       expect(plan.detachedRunner, DetachedRunner.loginSystemdUser);
       expect(plan.hostWrites, contains(HostWriteRow.transientUnit));
+    });
+
+    test('over the sudo relay it runs as root, so only in admin mode '
+        '(rank 3, E16)', () async {
+      const relay = DockerEndpointRoute(
+        rank: DockerRank.sudoRelay,
+        socketPath: _socket,
+        runtime: EngineRuntime.docker,
+        rootEquivalence: DockerRootEquivalence.rootfulSocket,
+      );
+      final plan = _planned(await _plan(route: relay, adminMode: true));
+      expect(plan.requiredLevel, RequiredLevel.admin);
+      expect(plan.detachedRunner, DetachedRunner.rootSetsid);
+      expect(plan.runner.identity, 'root');
+      expect(plan.runner.credentials, RunnerCredentials.adminPassword);
+
+      expect(
+        (await _plan(route: relay)).refusal,
+        ActionRefusalReason.adminRequired,
+      );
     });
 
     test('a setsid operation under KillUserProcesses warns', () async {
