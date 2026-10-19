@@ -189,6 +189,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuWindow => 'Window';
 
   @override
+  String get menuHelp => 'Help';
+
+  @override
+  String get aboutCommand => 'About Klabautermann';
+
+  @override
+  String aboutVersion(String version) {
+    return 'Version $version';
+  }
+
+  @override
+  String get aboutVersionUnknown => 'Version unknown';
+
+  @override
+  String get aboutLicence =>
+      'Klabautermann is free and unencumbered software released into the public domain under the Unlicense.';
+
+  @override
   String get statusConnected => 'Connected';
 
   @override
@@ -2572,6 +2590,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAnnounceNotChanged => 'The setting could not be changed.';
 
   @override
+  String get settingsAboutTitle => 'About';
+
+  @override
   String get settingsMonitorTitle => 'Monitoring';
 
   @override
@@ -3493,27 +3514,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get detachedOutputClose => 'Close output';
-
-  @override
-  String get menuHelp => 'Help';
-
-  @override
-  String get aboutCommand => 'About Klabautermann';
-
-  @override
-  String aboutVersion(String version) {
-    return 'Version $version';
-  }
-
-  @override
-  String get aboutVersionUnknown => 'Version unknown';
-
-  @override
-  String get aboutLicence =>
-      'Klabautermann is free and unencumbered software released into the public domain under the Unlicense.';
-
-  @override
-  String get settingsAboutTitle => 'About';
 
   @override
   String get dockerTransportWaiting => 'Engine API: waiting for the connection';

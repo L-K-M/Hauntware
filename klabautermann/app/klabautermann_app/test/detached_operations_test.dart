@@ -169,6 +169,17 @@ void main() {
     expect(find.text('Clear'), findsNWidgets(2), reason: 'failed and lost');
   });
 
+  testWidgets('a done run without an exit status reads as finished, not '
+      'failed', (tester) async {
+    await pump(tester);
+    await list(tester, [_op(state: DetachedOperationState.done)]);
+
+    await openSheet(tester);
+    final finished = find.text('Finished.');
+    final error = Theme.of(tester.element(finished)).colorScheme.error;
+    expect(tester.widget<Text>(finished).style?.color, isNot(error));
+  });
+
   testWidgets("the output follows the operation's log until it closes", (
     tester,
   ) async {

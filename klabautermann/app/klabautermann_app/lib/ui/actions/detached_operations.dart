@@ -174,7 +174,9 @@ class _OperationTile extends StatelessWidget {
     final acknowledge = onAcknowledge;
     final failed = switch (op) {
       DetachedOperation(state: DetachedOperationState.lost) => true,
-      DetachedOperation(state: DetachedOperationState.done, :final exitCode) =>
+      // A done run without an exit status is worded as finished, so it is
+      // not styled as a failure either.
+      DetachedOperation(state: DetachedOperationState.done, :final exitCode?) =>
         exitCode != 0,
       _ => false,
     };
