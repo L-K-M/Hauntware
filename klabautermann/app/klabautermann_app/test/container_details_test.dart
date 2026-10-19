@@ -386,6 +386,27 @@ void main() {
     await tester.pump();
     expect(_inDetails(find.text('hunter2')), findsNothing);
 
+    // Another container: masked.
+    await revealBoth();
+    await tester.tap(find.text('web-frontend').first);
+    await tester.pumpAndSettle();
+    expect(harness.inspection.value?.container.id, 'a1f3c2e4b5d6');
+    await harness.answer(
+      tester,
+      DockerContainerPayload(
+        dockerContainerDetails('a1f3c2e4b5d6', name: 'web-frontend'),
+      ),
+    );
+    expect(_inDetails(find.text('hunter2')), findsNothing);
+    expect(_inDetails(find.text('t0ken')), findsNothing);
+    await tester.tap(find.byTooltip('Close the container details'));
+    await tester.pumpAndSettle();
+    await _open(tester);
+    await harness.answer(
+      tester,
+      DockerContainerPayload(dockerContainerDetails(_id)),
+    );
+
     // Closed and opened again: masked.
     await revealBoth();
     await tester.tap(find.byTooltip('Close the container details'));
@@ -400,6 +421,61 @@ void main() {
     // The timers of a closed view fire into nothing.
     await tester.pump(kRevealDuration);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a reveal stays with the check selected when a read again '
+      'shifts the health log', (tester) async {
+    ContainerHealthCheck check(int minute, String secret) =>
+        ContainerHealthCheck(
+          start: DateTime(2026, 10, 15, 14, minute),
+          end: DateTime(2026, 10, 15, 14, minute, 1),
+          exitCode: 1,
+          output: MaskedValue.redacted(
+            'token ******** refused',
+            'token $secret refused',
+          ),
+        );
+    final harness = await _pump(tester);
+    await _open(tester);
+    await harness.answer(
+      tester,
+      DockerContainerPayload(
+        dockerContainerDetails(
+          _id,
+          healthLog: [check(28, 'first'), check(29, 'second')],
+        ),
+      ),
+    );
+    // The newest check shows first.
+    await tester.tap(_inDetails(find.text('token ******** refused')).first);
+    await tester.pumpAndSettle();
+    expect(_inDetails(find.text('token second refused')), findsOneWidget);
+
+    // The row changes and the details are read again: the oldest check
+    // left the log and a new one took the newest place.
+    await harness.emit(
+      tester,
+      dockerContainerList(_serverId, [
+        dockerContainer(
+          _id,
+          name: 'web-db',
+          project: 'web',
+          status: 'Up 4 hours (unhealthy)',
+          health: HealthStatus.unhealthy,
+        ),
+      ], at: _now),
+    );
+    await harness.answer(
+      tester,
+      DockerContainerPayload(
+        dockerContainerDetails(
+          _id,
+          healthLog: [check(29, 'second'), check(30, 'third')],
+        ),
+      ),
+    );
+    expect(_inDetails(find.text('token second refused')), findsOneWidget);
+    expect(_inDetails(find.text('token third refused')), findsNothing);
   });
 
   testWidgets('the raw JSON is drawn from the masked model, even with a '

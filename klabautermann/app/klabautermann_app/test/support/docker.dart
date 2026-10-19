@@ -134,7 +134,8 @@ DockerListChanged dockerListFailed(
 /// engine (03 §8.9): a running compose service with a secret in its
 /// environment, a label and its command line, an unhealthy check whose
 /// output holds a URL password, a volume and a bind mount, and a network.
-/// [labels] add to the compose labels, as an owning manager's would.
+/// [labels] add to the compose labels, as an owning manager's would, and
+/// [healthLog] replaces the two checks.
 /// Times are local, so nothing depends on the test machine's zone; the
 /// container never stopped, so its `FinishedAt` is the API's zero time.
 ContainerDetails dockerContainerDetails(
@@ -147,6 +148,7 @@ ContainerDetails dockerContainerDetails(
   HealthStatus health = HealthStatus.unhealthy,
   String restartPolicy = 'unless-stopped',
   DateTime? startedAt,
+  List<ContainerHealthCheck>? healthLog,
 }) => ContainerDetails(
   id: id,
   name: '/$name',
@@ -171,21 +173,23 @@ ContainerDetails dockerContainerDetails(
     health: ContainerDetailsHealth(
       status: health,
       failingStreak: health == HealthStatus.unhealthy ? 3 : 0,
-      log: [
-        ContainerHealthCheck(
-          end: DateTime(2026, 10, 15, 14, 29, 30),
-          exitCode: 0,
-          output: MaskedValue.plain('accepting connections'),
-        ),
-        ContainerHealthCheck(
-          end: DateTime(2026, 10, 15, 14, 30),
-          exitCode: 1,
-          output: MaskedValue.redacted(
-            'connect postgres://app:********@db:5432 failed',
-            'connect postgres://app:s3cret@db:5432 failed',
-          ),
-        ),
-      ],
+      log:
+          healthLog ??
+          [
+            ContainerHealthCheck(
+              end: DateTime(2026, 10, 15, 14, 29, 30),
+              exitCode: 0,
+              output: MaskedValue.plain('accepting connections'),
+            ),
+            ContainerHealthCheck(
+              end: DateTime(2026, 10, 15, 14, 30),
+              exitCode: 1,
+              output: MaskedValue.redacted(
+                'connect postgres://app:********@db:5432 failed',
+                'connect postgres://app:s3cret@db:5432 failed',
+              ),
+            ),
+          ],
     ),
   ),
   config: ContainerDetailsConfig(
