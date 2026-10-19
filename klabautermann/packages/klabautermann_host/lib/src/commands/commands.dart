@@ -290,10 +290,12 @@ abstract final class HostCommands {
     ];
   }
 
-  /// Prints process [pid]'s real uid and its `comm`, `<uid> <comm>`, for
-  /// planning a kill (03 §7.2): the uid decides whether it needs
-  /// elevation, the comm whether it is protected. It exits 3 when the
-  /// process is gone.
+  /// Prints the owner of process [pid]'s `/proc` entry and its `comm`,
+  /// `<uid> <comm>`, for planning a kill (03 §7.2): the uid decides
+  /// whether it needs elevation, the comm whether it is protected. The
+  /// owner is the effective uid, and root for a non-dumpable process, so
+  /// such a kill elevates even when it is the user's own: safe, if more
+  /// than needed. It exits 3 when the process is gone.
   static List<String> processFacts(int pid) {
     if (pid <= 0) {
       throw HostCommandError('pid must be positive', argument: '$pid');

@@ -24,6 +24,8 @@ import 'dart:async';
 import 'package:seance_core/seance_core.dart'
     show SshLink, SshLinkClosed, quoteShellWord;
 
+import '../admin/admin_mode.dart' show AdminSession;
+import '../admin/elevated_link.dart';
 import '../engine/protocol.dart';
 import '../links/channel_quota.dart';
 import 'log_follower.dart';
@@ -36,10 +38,22 @@ const kLogStreamsPerServerMax = 16;
 
 /// Builds the [LogService] of one link; tests pass a fake clock.
 typedef LogServiceOpener =
-    LogService Function(SshLink link, void Function(EngineEvent) emit);
+    LogService Function(
+      SshLink link,
+      void Function(EngineEvent) emit, {
+      SshLink? Function()? elevatedLink,
+    });
 
-LogService _defaultService(SshLink link, void Function(EngineEvent) emit) =>
-    LogService(link: link, quote: quoteShellWord, emit: emit);
+LogService _defaultService(
+  SshLink link,
+  void Function(EngineEvent) emit, {
+  SshLink? Function()? elevatedLink,
+}) => LogService(
+  link: link,
+  quote: quoteShellWord,
+  emit: emit,
+  elevatedLink: elevatedLink,
+);
 
 Duration Function() _monotonicClock() {
   final watch = Stopwatch()..start();
@@ -51,18 +65,32 @@ Duration Function() _monotonicClock() {
 /// [disconnect], [retain] for the fleet and [close].
 final class LogStreamRouter {
   /// [linkFor] gives a server's ready link, null while it has none.
-  /// [startTimer] and [elapsed], a monotonic clock, pace the follows'
-  /// batches; tests pass a fake clock.
+  /// [quotas] holds each server's channel slots, shared with the Docker
+  /// router (M9); without it the router counts alone. [startTimer] and
+  /// [elapsed], a monotonic clock, pace the follows' batches; tests pass
+  /// a fake clock.
   LogStreamRouter({
     required this._linkFor,
     required this._emit,
+    this._adminFor,
+    ChannelQuotas? quotas,
     this._openService = _defaultService,
     this._startTimer = Timer.new,
     Duration Function()? elapsed,
-  }) : _elapsed = elapsed ?? _monotonicClock();
+  }) : _quotas = quotas ?? ChannelQuotas(),
+       _elapsed = elapsed ?? _monotonicClock() {
+    // A slot another consumer of the server's link gave back may let a
+    // waiting read start.
+    _quotas.onFreed((serverId) => update(serverId));
+  }
 
   final SshLink? Function(String serverId) _linkFor;
   final void Function(EngineEvent event) _emit;
+
+  /// Each server's admin session, which an elevated file read runs
+  /// through (LOG-22); absent in an engine without admin mode.
+  final AdminSession? Function(String serverId)? _adminFor;
+  final ChannelQuotas _quotas;
   final LogServiceOpener _openService;
   final Timer Function(Duration duration, void Function() callback) _startTimer;
   final Duration Function() _elapsed;
@@ -103,7 +131,10 @@ final class LogStreamRouter {
       return null;
     }
 
-    final server = _servers.putIfAbsent(serverId, () => _Server(serverId));
+    final server = _servers.putIfAbsent(
+      serverId,
+      () => _Server(serverId, _quotas.of(serverId)),
+    );
     final stream = _Stream(streamId, spec, server);
     if (spec.follow) stream.follower = _follower(stream);
     _streams[streamId] = stream;
@@ -116,6 +147,27 @@ final class LogStreamRouter {
   /// logs, and returns false when an earlier open used it, so ids stay
   /// unique across every log stream (03 §10.1).
   bool claim(String streamId) => _usedIds.add(streamId);
+
+  /// Admin mode turned on or off for [serverId]. When it ends, the
+  /// server's elevated follows end denied, and its elevated reads still
+  /// waiting too; a window under way finishes, bounded as it is.
+  void adminChanged(String serverId) {
+    if (_adminFor?.call(serverId) != null) return;
+    final server = _servers[serverId];
+    if (server == null) return;
+    for (final stream in [...server.waiting, ...server.running.values]) {
+      if (!_elevated(stream.spec)) continue;
+      if (stream.follower case final follower?) {
+        follower.end(kAdminModeOff);
+        continue;
+      }
+      if (server.waiting.remove(stream)) {
+        _streams.remove(stream.id);
+        _emit(LogStreamState(stream.id, kAdminModeOff));
+      }
+    }
+    _pump(server);
+  }
 
   /// [CloseStream]: ends [streamId] as closed, stopping its read. Does
   /// nothing when the stream is not open.
@@ -230,7 +282,17 @@ final class LogStreamRouter {
       server.waiting.remove(stream);
       server.running[stream.id] = stream;
       if (stream.follower case final follower?) {
-        _status(stream, LogStreamRunning(continuity: follower.run(link)));
+        final session = _elevated(stream.spec)
+            ? _adminFor?.call(server.id)
+            : null;
+        if (_elevated(stream.spec) && session == null) {
+          follower.end(kAdminModeOff);
+          continue;
+        }
+        final reader = session == null
+            ? link
+            : ElevatedStartLink(link, session);
+        _status(stream, LogStreamRunning(continuity: follower.run(reader)));
         continue;
       }
       // The service sends the window's states from here.
@@ -250,9 +312,16 @@ final class LogStreamRouter {
     service = _openService(
       link,
       (event) => _onServiceEvent(server, service, event),
+      elevatedLink: () => switch (_adminFor?.call(server.id)) {
+        final session? => ElevatedStartLink(link, session),
+        null => null,
+      },
     );
     return service;
   }
+
+  static bool _elevated(LogStreamSpec spec) =>
+      spec.source is FileLogSource && (spec.source as FileLogSource).elevated;
 
   /// Passes [event] on; an end frees its read's slot for the next read.
   void _onServiceEvent(_Server server, LogService service, EngineEvent event) {
@@ -366,10 +435,12 @@ final class LogStreamRouter {
 
 /// One server's open streams and the service on its current link.
 final class _Server {
-  _Server(this.id);
+  _Server(this.id, this.quota);
 
   final String id;
-  final quota = ChannelQuota();
+
+  /// The server's slots, which the Docker session's channels share.
+  final ChannelQuota quota;
 
   /// Streams not running, oldest first.
   final List<_Stream> waiting = [];

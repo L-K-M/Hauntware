@@ -165,6 +165,10 @@ import '../operations/plan_types.dart';
 /// or [RunAction] the engine will not carry out. Admin mode and the safety
 /// policy joined next (03 §8.2, M4 E11): [SetSafetyPolicy], [SetAdminMode]
 /// and [AdminModeState].
+///
+/// Low-session mode then set [DockerEndpointState.lowSession] (03 §5.2,
+/// M9), which goes out again when a link learns a session limit; no
+/// message changed shape.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -966,8 +970,12 @@ final class DockerEndpointState extends EngineEvent {
   /// The API version every path uses (03 §5.8); set while ready.
   final ApiVersion? negotiatedApi;
 
-  /// Whether 03 §5.2's low-session mode holds. Always false until the
-  /// mode arrives (M3's D09).
+  /// Whether 03 §5.2's low-session mode holds: the server's link learned
+  /// a session limit (M9). On a relay the events stream gives way to
+  /// re-lists and the follows share one slot with the host's; on every
+  /// rank the host follows are held to one and stats are read one at a
+  /// time. The state goes out again when it changes, and a new link ends
+  /// it.
   final bool lowSession;
 
   /// Why the endpoint failed; set exactly while failed.
@@ -1904,7 +1912,11 @@ final class KernelLogSource extends LogSource {
 /// and `tail -F`, which follows the file by name across rotation, for a
 /// follow. No archives.
 final class FileLogSource extends LogSource {
-  const FileLogSource(this.path, {this.redacted = false});
+  const FileLogSource(
+    this.path, {
+    this.redacted = false,
+    this.elevated = false,
+  });
 
   /// The absolute path, typed or picked from the common paths; the engine
   /// validates it (03 §8.8) before it quotes it into the command.
@@ -1913,6 +1925,12 @@ final class FileLogSource extends LogSource {
   /// Each line passes the secret redactor before it crosses, as a
   /// detached operation's output does.
   final bool redacted;
+
+  /// The read runs through admin mode's elevation (LOG-22, M4 E16b), for
+  /// a file only root may read; the app asks for it after a read ended
+  /// [LogStreamEndReason.denied]. Without admin mode it ends denied, and
+  /// a follow ends so when admin mode does.
+  final bool elevated;
 }
 
 /// A detached operation's output (03 §7.17): the engine reads its
@@ -2174,7 +2192,7 @@ enum LogStreamEndReason {
   missing,
 
   /// The host refused the read, such as a file only `adm` or root may
-  /// read; admin mode (03 §8.2), which reads such files, arrives with M4.
+  /// read; with admin mode on, an elevated [FileLogSource] reads it.
   denied,
 
   /// The read failed otherwise.
@@ -2489,8 +2507,9 @@ final class ContainerListStats {
   final DateTime at;
 
   /// CPU % by the spec formula over the time since the previous read,
-  /// so null on a container's first one (one-shot `precpu_stats` is not
-  /// meaningful, 03 §5.6).
+  /// so null on a container's first one, on the first after a read of it
+  /// failed, and on the first after a [DockerListChanged.fullRelist]
+  /// (one-shot `precpu_stats` is not meaningful, 03 §5.6).
   final double? cpuPercent;
 
   /// Bytes in use less `inactive_file` (cgroup v2) or the cache (v1).

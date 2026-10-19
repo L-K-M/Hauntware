@@ -12,12 +12,14 @@ import 'app.dart';
 import 'controllers/admin_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/coverage_controller.dart';
+import 'controllers/docker_notice_controller.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitor_set.dart';
 import 'controllers/monitoring_controller.dart';
 import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
 import 'controllers/sync_controller.dart';
+import 'services/app_version.dart';
 import 'services/engine_keystore.dart';
 import 'services/instance_guard.dart';
 import 'services/macos_titlebar.dart';
@@ -214,12 +216,23 @@ Future<void> main(List<String> args) async {
         serverId,
   );
 
+  // SAF-08's notice heads the Docker tab until dismissed on this device,
+  // which settings.json keeps (03 §8.4).
+  final dockerNotice = DockerNoticeController(
+    dismissed: settings.rootEquivalenceNoticeDismissed,
+    saveDismissal: settings.dismissRootEquivalenceNotice,
+  );
+  // The About dialog's version (M16), read here once: the settings
+  // window's engine has no plugins and gets it over the link.
+  final appVersion = await readAppVersion();
+
   // Desktop only: the runners there host the settings window; phones keep
   // the settings route.
   final settingsWindow = settingsWindowHostFor(
     defaultTargetPlatform,
     appearance: appearance,
     announcements: announcements,
+    appVersion: appVersion,
     monitorSet: fleet.monitorSettings,
     safety: safety,
   );
@@ -235,6 +248,7 @@ Future<void> main(List<String> args) async {
       safety: safety,
       admin: admin,
       operations: operations,
+      dockerNotice: dockerNotice,
       sync: sync,
       settingsIssue: settings.issue,
       importStoreIssue: importStoreIssue,
@@ -242,6 +256,7 @@ Future<void> main(List<String> args) async {
       instanceLockIssue: instanceLockIssue,
       openSettingsWindow: settingsWindow?.open,
       toolbarBand: toolbarBand,
+      appVersion: appVersion,
     ),
   );
 }

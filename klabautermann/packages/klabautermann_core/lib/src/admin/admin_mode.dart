@@ -14,6 +14,7 @@ import 'package:klabautermann_host/klabautermann_host.dart' show HostProfile;
 import 'package:meta/meta.dart';
 import 'package:seance_core/seance_core.dart'
     show
+        ChannelOpenException,
         ElevatedExecutor,
         ElevationException,
         ElevationFailureKind,
@@ -24,7 +25,8 @@ import 'package:seance_core/seance_core.dart'
 import '../engine/protocol.dart';
 import '../links/prompt_broker.dart';
 
-/// How often a wrong password may be retried before admin mode fails.
+/// How many times the password is asked for before admin mode fails: a
+/// wrong one gets two retries.
 const kAdminPasswordAttempts = 3;
 
 /// Checks that [password] (null when no rung needs one) elevates on
@@ -236,6 +238,9 @@ final class AdminModeController {
         ElevationFailureKind.unavailable => AdminFailure.unavailable,
       };
     } on RemoteCommandException {
+      return AdminFailure.noLink;
+    } on ChannelOpenException {
+      // The link refused the channel, at its session limit or closing.
       return AdminFailure.noLink;
     }
   }

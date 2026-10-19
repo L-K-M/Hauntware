@@ -1,12 +1,15 @@
-/// In-memory test doubles for the [ByteDuplex] seam. Separate from the
-/// barrel so consumers never ship test helpers; used by this package's
-/// own tests and by `klabautermann_core`'s fakes later (03 §11.1
-/// fake-transport layer).
+/// In-memory test doubles for the [ByteDuplex] seam and the recorded
+/// API corpus. Separate from the barrel so consumers never ship test
+/// helpers; used by this package's own tests and by
+/// `klabautermann_core`'s fakes (03 §11.1 fake-transport layer).
 library;
 
 import 'dart:async';
 
 import 'klabautermann_docker.dart' show ByteDuplex;
+
+export 'src/testing/recorded_daemon.dart'
+    show RecordedChunking, RecordedCorpus, RecordedDaemon, RecordedExchange;
 
 /// An in-memory pair of connected [ByteDuplex] ends: [client] is given
 /// to the code under test, [server] is scripted by the test. Bytes

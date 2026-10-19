@@ -325,16 +325,16 @@ void main() {
       await h.settle();
     }
 
-    test('a link back within 60 s resumes the stream since the last event '
-        'and lists nothing again', () async {
+    test('a link back within 60 s resumes the stream since the last event, '
+        'and re-lists, though not as a fresh list', () async {
       final h = await watchedWithEvent();
       final listed = h.requests(_containersPath).length;
 
       await dropLink(h, const Duration(seconds: 60));
 
       expect(h.requests('/events').last, contains('since=1760702460'));
-      expect(h.requests(_containersPath), hasLength(listed));
-      expect(h.lists(), isEmpty);
+      expect(h.requests(_containersPath), hasLength(listed + 1));
+      expect(h.lists(), [_list(DockerWatchList.containers)]);
 
       // An event missed while away arrives again, and is read.
       h.daemon.emit(_event('abc', action: 'die', time: 1760702490));
@@ -358,7 +358,27 @@ void main() {
         ..router.update(_srv);
       await h.settle();
       expect(h.requests('/events').last, contains('since=1760702460'));
-      expect(h.lists(), [_list(DockerWatchList.images, fullRelist: true)]);
+      expect(h.lists(), [
+        _list(DockerWatchList.containers),
+        _list(DockerWatchList.images, fullRelist: true),
+      ]);
+    });
+
+    test('a daemon that restarted while the link was away replays no '
+        'event, and the re-list still shows the container it lost', () async {
+      final h = await watchedWithEvent();
+      h.daemon.routes[_containersPath] = jsonEncode([
+        _container('abc', state: 'exited'),
+      ]);
+
+      await dropLink(h, const Duration(seconds: 10));
+
+      final containers =
+          (h.lists().single.payload as DockerContainersPayload).containers;
+      expect(
+        [for (final c in containers) (c.id, c.state)],
+        [('abc', 'exited')],
+      );
     });
 
     test('a link back after more than 60 s re-lists in full', () async {
@@ -437,6 +457,34 @@ void main() {
       // (500 / 10000) * 2 CPUs * 100.
       expect(next.cpuPercent, 10.0);
       expect(next.memoryUsed, 450);
+    });
+
+    test('after more than 60 s away the first read has no CPU %, which '
+        'would span the outage', () async {
+      final h = _Harness();
+      h.daemon.routes['/v1.52/containers/abc/stats'] = jsonEncode(
+        _stats(cpu: 1000, system: 10000),
+      );
+      await h.start({DockerWatchList.stats}, statsFor: {'abc'});
+
+      h
+        ..link = null
+        ..router.update(_srv);
+      await h.settle();
+      await h.clock.elapse(const Duration(seconds: 61));
+      h.daemon.routes['/v1.52/containers/abc/stats'] = jsonEncode(
+        _stats(cpu: 90000, system: 900000),
+      );
+      h
+        ..link = (ForwardingLink()..daemons[_socket] = h.daemon)
+        ..router.update(_srv);
+      await h.settle();
+
+      final rows = [
+        for (final e in h.lists())
+          if (e.payload case DockerStatsPayload(:final stats)) ...stats,
+      ];
+      expect(rows.single.cpuPercent, isNull);
     });
 
     test('a new visible set is read from the next round on, and stopped '
@@ -524,6 +572,66 @@ void main() {
         hasLength(2),
       );
       expect(h.daemon.eventStreams, hasLength(1));
+    });
+  });
+
+  group('a failed endpoint (D06)', () {
+    test('an engine that does not answer is looked for again while a watch '
+        'holds, after 5 s, then 10 s, and the lists follow once it '
+        'answers', () async {
+      final h = _Harness();
+      h.daemon.failures['/_ping'] = (500, 'starting');
+      h.watch({DockerWatchList.containers});
+      h.router.probed(_srv, _profile());
+      await h.settle();
+      DockerEndpointState last() =>
+          h.events.whereType<DockerEndpointState>().last;
+      expect(last().failure, DockerEndpointFailure.unreachable);
+      int pings() => h.requests('_ping').length;
+      expect(pings(), 1);
+
+      await h.clock.elapse(const Duration(seconds: 5));
+      expect(pings(), 2);
+      expect(last().failure, DockerEndpointFailure.unreachable);
+      await h.clock.elapse(const Duration(seconds: 9));
+      expect(pings(), 2);
+
+      h.daemon.failures.clear();
+      await h.clock.elapse(const Duration(seconds: 1));
+      expect(last().phase, DockerEndpointPhase.ready);
+      expect(h.lists(), [_list(DockerWatchList.containers, fullRelist: true)]);
+    });
+
+    test('a new watch looks again at once, and its retries start at 5 s '
+        'again', () async {
+      final h = _Harness();
+      h.daemon.failures['/_ping'] = (500, 'starting');
+      h.watch({DockerWatchList.containers});
+      h.router.probed(_srv, _profile());
+      await h.settle();
+      int pings() => h.requests('_ping').length;
+      await h.clock.elapse(const Duration(seconds: 5));
+      await h.clock.elapse(const Duration(seconds: 10));
+      expect(pings(), 3);
+
+      h.router.unwatch(const DockerUnwatch(serverId: _srv, watchId: 'w-1'));
+      h.watch({DockerWatchList.containers});
+      await h.settle();
+      expect(pings(), 4);
+      await h.clock.elapse(const Duration(seconds: 5));
+      expect(pings(), 5);
+    });
+
+    test('without a watch a failure stands until asked again', () async {
+      final h = _Harness();
+      h.daemon.failures['/_ping'] = (500, 'starting');
+      h.watch({DockerWatchList.containers});
+      h.router
+        ..unwatch(const DockerUnwatch(serverId: _srv, watchId: 'w-1'))
+        ..probed(_srv, _profile());
+      await h.settle();
+      await h.clock.elapse(const Duration(minutes: 5));
+      expect(h.requests('_ping'), hasLength(1));
     });
   });
 

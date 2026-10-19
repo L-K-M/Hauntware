@@ -52,7 +52,8 @@ final class AuditLog {
   final DateTime Function() _now;
   final Map<String, List<AuditRecord>> _memory = {};
 
-  // Appends run one after another, so lines never interleave.
+  // File operations run one after another ([_inTurn]), so lines never
+  // interleave and a rewrite never drops an append.
   Future<void> _tail = Future.value();
 
   /// The record of [result], redacted, appended to its server's log.
@@ -86,7 +87,7 @@ final class AuditLog {
       (_memory[record.serverId] ??= []).add(record);
       return Future.value();
     }
-    final next = _tail.then((_) async {
+    return _inTurn(() async {
       await file.parent.create(recursive: true);
       await file.writeAsString(
         '${jsonEncode(_encode(record))}\n',
@@ -94,8 +95,6 @@ final class AuditLog {
         flush: true,
       );
     });
-    _tail = next.catchError((Object _) {});
-    return next;
   }
 
   /// [serverId]'s records that ended before [before], newest first, at
@@ -105,10 +104,10 @@ final class AuditLog {
     DateTime? before,
     int limit = 100,
   }) async {
-    await _tail;
     final file = _fileOf(serverId);
     final all = [
-      if (storage == AuditStorage.files && file != null) ...await _read(file),
+      if (storage == AuditStorage.files && file != null)
+        ...await _inTurn(() => _read(file)),
       ...?_memory[serverId],
     ];
     final matching = [
@@ -125,6 +124,10 @@ final class AuditLog {
   /// engine start. Memory starts empty, so it has nothing to prune.
   Future<void> prune() async {
     if (storage == AuditStorage.memory) return;
+    await _inTurn(_prune);
+  }
+
+  Future<void> _prune() async {
     if (!await _directory.exists()) return;
     final cutoff = _now().subtract(kAuditRetention);
     await for (final entity in _directory.list()) {
@@ -137,6 +140,15 @@ final class AuditLog {
       if (kept.length == records.length) continue;
       await _rewrite(entity, kept);
     }
+  }
+
+  /// Runs [operation] after every file operation asked for before it.
+  /// A read rewrites a damaged file and a prune rewrites old records
+  /// away, so neither may overlap an append whose line it would drop.
+  Future<T> _inTurn<T>(Future<T> Function() operation) {
+    final next = _tail.then((_) => operation());
+    _tail = next.then((_) {}, onError: (Object _) {});
+    return next;
   }
 
   /// [serverId]'s log file, or null when the id names no per-server

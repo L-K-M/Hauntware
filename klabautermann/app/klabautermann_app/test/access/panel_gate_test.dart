@@ -11,30 +11,28 @@ import 'profiles.dart';
 /// an empty body; one they cannot rule out yet shows itself.
 void main() {
   group('decidePanelGate', () {
-    test('shows every panel but Docker before the probe answers', () {
+    test('shows every panel before the probe answers', () {
       for (final panel in ServerPanel.values) {
         expect(
           decidePanelGate(panel, null).kind,
-          panel == ServerPanel.docker
-              ? PanelGateKind.awaitsDocker
-              : PanelGateKind.open,
+          PanelGateKind.open,
           reason: panel.name,
         );
       }
     });
 
-    test('keeps the Docker tab waiting for Docker support on any host', () {
+    test('leaves the Docker tab to its endpoint on any host', () {
+      // GatedPanel follows the Docker endpoint instead (03 §5.9).
       for (final profile in [debianHost(), alpineContainer()]) {
         expect(
           decidePanelGate(ServerPanel.docker, profile).kind,
-          PanelGateKind.awaitsDocker,
+          PanelGateKind.open,
         );
       }
     });
 
     test('shows every panel on a systemd host with its tools', () {
       for (final panel in ServerPanel.values) {
-        if (panel == ServerPanel.docker) continue;
         expect(
           decidePanelGate(panel, debianHost()).kind,
           PanelGateKind.open,

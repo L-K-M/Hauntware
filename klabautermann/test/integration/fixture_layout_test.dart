@@ -57,6 +57,7 @@ final _sshdServices = [
   _restrictVariant,
 ];
 const _dind = 'dind';
+const _registry = 'registry';
 
 /// The dind socket's directory, on the volume the Docker host shares.
 const _socketVolume = 'docker-run:/run/docker-fixture';
@@ -246,7 +247,7 @@ void main() {
   test('every sshd service mounts the common config and publishes on '
       'loopback only', () {
     final all = services();
-    expect(all.keys, unorderedEquals([..._sshdServices, _dind]));
+    expect(all.keys, unorderedEquals([..._sshdServices, _dind, _registry]));
     for (final name in _sshdServices) {
       final service = all[name]!;
       expect((service['build'] as Map)['context'], 'sshd', reason: name);
@@ -270,6 +271,27 @@ void main() {
     for (final MapEntry(:key, :value) in all.entries) {
       if (key != _dind) expect(value['privileged'], isNull, reason: key);
     }
+  });
+
+  test('the registry is pinned, publishes nothing, and is the one dind '
+      'trusts over plain HTTP (M4 E27)', () {
+    final all = services();
+    final registry = all[_registry]!;
+    expect(registry['image'], matches(_pinnedImage));
+    expect(registry['ports'], isNull);
+    expect(registry['expose'], isNull);
+    expect(registry['network_mode'], isNull);
+    final command = (all[_dind]!['command'] as YamlList).cast<String>();
+    expect(command.where((a) => a.startsWith('--insecure-registry')), [
+      '--insecure-registry=registry:5000',
+    ]);
+    final seed = read('klabautermann/test/integration/seed_docker.sh');
+    expect(seed, contains("app_image='registry:5000/klab/app:1'"));
+    expect(seed, contains(r'docker push --quiet "$app_image"'));
+    for (final stack in ['redeploy', 'orphans', 'managed']) {
+      expect(seed, contains('"\$stacks/$stack/compose.yaml"'), reason: stack);
+    }
+    expect(seed, contains('--name ssh-port --publish 22:22'));
   });
 
   test('dind listens on its Unix socket only, on the shared volume', () {

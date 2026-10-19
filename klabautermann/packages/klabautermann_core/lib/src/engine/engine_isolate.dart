@@ -27,6 +27,7 @@ import '../fleet/ssh_config_import_store.dart';
 import '../fleet/synced_fleet.dart';
 import '../links/credential_source.dart';
 import '../links/host_key_pins.dart';
+import '../links/channel_quota.dart';
 import '../links/link_connector.dart';
 import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
@@ -216,6 +217,11 @@ void engineMain(
   final profiles = <String, HostProfile>{};
   OperationRunner? runner;
 
+  // Each server's channel slots, one quota for both routers, so the host
+  // log reads and the Docker session's channels count against the same
+  // shares (M9).
+  final channelQuotas = ChannelQuotas();
+
   // FL-02's imported hosts, in D13's device-local store (03 §4.10),
   // opened before the first request is handled. Each import replaces the
   // last; the engine keeps them so its later fleet snapshots (sync rounds,
@@ -342,8 +348,13 @@ void engineMain(
       prompts: prompts,
       emit: (event) {
         uiPort.send(event);
+        if (event is! AdminModeState) return;
+        // A sudo relay and an elevated follow live only while admin mode
+        // does (plan M7, LOG-22).
+        docker?.adminChanged(event.serverId);
+        logs?.adminChanged(event.serverId);
         // A root result's cleanup waits for admin mode (03 §7.17).
-        if (event is AdminModeState && event.phase == AdminModePhase.on) {
+        if (event.phase == AdminModePhase.on) {
           unawaited(operations?.adminOn(event.serverId));
         }
       },
@@ -449,8 +460,18 @@ void engineMain(
       opsRead: (serverId, section) =>
           unawaited(operations?.listed(serverId, section)),
     );
-    logs = LogStreamRouter(linkFor: links.link, emit: uiPort.send);
-    docker = DockerRouter(linkFor: links.link, emit: uiPort.send);
+    logs = LogStreamRouter(
+      linkFor: links.link,
+      emit: uiPort.send,
+      adminFor: (serverId) => admin?.session(serverId),
+      quotas: channelQuotas,
+    );
+    docker = DockerRouter(
+      linkFor: links.link,
+      emit: uiPort.send,
+      adminFor: (serverId) => admin?.session(serverId),
+      quotas: channelQuotas,
+    );
   }
 
   // Probes the confirmed endpoints (FL-04, 03 §5.12); none while probes
@@ -527,6 +548,7 @@ void engineMain(
     scheduler?.retain(fleetIds);
     logs?.retain(fleetIds);
     operations?.retain(fleetIds);
+    channelQuotas.retain(fleetIds);
     links?.forget(before.difference(fleetIds));
     viewed.retainAll(fleetIds);
     // A monitored server that left the fleet or is no longer eligible (a
@@ -1101,6 +1123,11 @@ void engineMain(
           refuse(ActionRefusalReason.confirmationMismatch);
           return;
         }
+        final planRunner = runner;
+        if (planRunner == null) {
+          refuse(ActionRefusalReason.notImplemented);
+          return;
+        }
         final session = admin?.session(serverId);
         if (plan.requiredLevel == RequiredLevel.admin && session == null) {
           refuse(ActionRefusalReason.adminRequired);
@@ -1110,7 +1137,7 @@ void engineMain(
         // Not awaited, like the reads: a plan's steps take as long as
         // they take, and the queue keeps serving the app meanwhile.
         unawaited(
-          runner?.run(planId, plan, session: session).then((finished) {
+          planRunner.run(planId, plan, session: session).then((finished) {
             if (session != null) admin?.touch(serverId);
           }),
         );

@@ -8,9 +8,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_desktop/ghost_desktop.dart' show GhostSettingsLinkMethod;
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:klabautermann_app/app.dart';
+import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
+import 'package:klabautermann_app/controllers/docker_notice_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitor_set.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
@@ -34,6 +36,9 @@ const _control = MethodChannel('test/settings_window');
 const _appLink = MethodChannel('test/settings_link/app');
 const _windowLink = MethodChannel('test/settings_link/window');
 
+/// What the app's `readAppVersion` read, which the window cannot read.
+const _appVersion = '1.2.3';
+
 /// An app whose appearance refuses every change.
 final class _RefusingAppearance extends ChangeNotifier
     implements AppearanceSettings {
@@ -44,6 +49,12 @@ final class _RefusingAppearance extends ChangeNotifier
   @override
   Future<void> setMode(ThemeModePreference mode) async =>
       throw StateError('read-only appearance');
+
+  @override
+  Future<void> setAppearance(
+    ThemePalette palette,
+    ThemeModePreference mode,
+  ) async => throw StateError('read-only appearance');
 }
 
 /// The desktop settings window (03 §10.2, D32) over fake channels: the main
@@ -118,6 +129,7 @@ void main() {
     final host = SettingsWindowHost(
       appearance: appearance,
       announcements: announcements ?? AnnouncementController(),
+      appVersion: _appVersion,
       monitorSet: monitorSet ?? newFleet().monitorSettings,
       safety: safety ?? newSafety(),
       control: _control,
@@ -219,6 +231,7 @@ void main() {
             platform,
             appearance: appearance,
             announcements: announcements,
+            appVersion: _appVersion,
             monitorSet: newFleet().monitorSettings,
             safety: newSafety(),
           ),
@@ -235,6 +248,7 @@ void main() {
           platform,
           appearance: appearance,
           announcements: announcements,
+          appVersion: _appVersion,
           monitorSet: newFleet().monitorSettings,
           safety: newSafety(),
         );
@@ -356,11 +370,13 @@ void main() {
       final monitoring = MonitoringController(engine);
       final prompts = PromptController(engine);
       final coverage = CoverageController(firstRunCardDismissed: true);
+      final dockerNotice = DockerNoticeController();
       addTearDown(() async {
         fleet.dispose();
         monitoring.dispose();
         prompts.dispose();
         coverage.dispose();
+        dockerNotice.dispose();
         await engine.close();
       });
       final remote = await connectWindow(tester, tab);
@@ -376,6 +392,7 @@ void main() {
                 appearance: main,
                 coverage: coverage,
                 announcements: announcements,
+                dockerNotice: dockerNotice,
               ),
             ),
             Expanded(child: SettingsWindowApp(remote: remote)),
@@ -411,6 +428,18 @@ void main() {
       expect(find.byType(SegmentedButton<ThemeModePreference>), findsOneWidget);
     });
 
+    testWidgets('the General tab\'s about row shows the app\'s version, '
+        'which only the link can bring (M16)', (tester) async {
+      final remote = await pumpWindow(tester);
+      expect(remote.appVersion, _appVersion);
+
+      expect(find.text('Klabautermann $kPreviewLabel'), findsOneWidget);
+      await tester.tap(find.text('Version $_appVersion'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AboutDialog), findsOneWidget);
+    });
+
     testWidgets('an appearance change in the window applies to the main '
         'window through the link', (tester) async {
       final remote = await pumpBothWindows(tester, appearance);
@@ -427,6 +456,31 @@ void main() {
       expect(remote.appearance.value, appearance.value);
       expect(windowApp(tester).themeMode, ThemeMode.dark);
       expect(windowSwitch(tester), ThemeModePreference.dark);
+    });
+
+    testWidgets('a preset picked in the window re-themes the main window '
+        'through the link (M4 E25)', (tester) async {
+      final remote = await pumpBothWindows(tester, appearance);
+      final target = klabautermannThemePresets.all
+          .firstWhere(
+            (p) => p.name != appearance.value.palette.name && p.surface != null,
+          )
+          .name;
+
+      await tester.tap(find.text(target));
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+
+      expect(appearance.value.palette.name, target);
+      expect(remote.appearance.value, appearance.value);
+      expect(
+        mainApp(tester).theme?.colorScheme.surface,
+        appearance.value.palette.surface,
+      );
+      expect(
+        windowApp(tester).theme?.colorScheme.surface,
+        appearance.value.palette.surface,
+      );
     });
 
     testWidgets('a change in the window the app applies but cannot save '

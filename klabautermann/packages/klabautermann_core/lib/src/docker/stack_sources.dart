@@ -12,7 +12,8 @@
 ///          prints matches its containers' label, and one does
 ///          ─▶ verified, else unverified
 ///   stack file of a verified project ─▶ SFTP stat, read at most 1 MiB
-///     ─▶ masked spans (03 §8.9)
+///     ├─ denied, admin mode on ─▶ the same read as root (M4 E16b)
+///     └─▶ masked spans (03 §8.9)
 /// ```
 ///
 /// Nothing a file or `config` holds is kept: the hash run's output is
@@ -29,6 +30,8 @@ import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
 import 'package:seance_core/seance_core.dart'
     show
         ChannelOpenException,
+        ElevatedProcess,
+        ElevationException,
         RemoteCommandException,
         RemoteCommandResult,
         RemoteFileErrorKind,
@@ -38,6 +41,7 @@ import 'package:seance_core/seance_core.dart'
         RemoteTransferCancellation,
         quoteShellWord;
 
+import '../admin/admin_mode.dart' show AdminSession;
 import '../engine/protocol.dart';
 
 /// Runs one remote command in a short-action slot (M9).
@@ -54,6 +58,15 @@ const _commandTimeout = Duration(seconds: 30);
 
 /// The checks print short lines; `config --hash` one per service.
 const _commandMaxOutputBytes = 64 * 1024;
+
+/// The elevated read (STK-04 in admin mode): exit 4 for a missing path,
+/// 3 for anything but a regular file (a link included, as SFTP's stat
+/// without following refuses it), otherwise the size on one line and
+/// then at most `$2` bytes.
+const _elevatedReadScript =
+    r'[ -e "$1" ] || [ -L "$1" ] || exit 4; '
+    r'{ [ -f "$1" ] && [ ! -L "$1" ]; } || exit 3; '
+    r'wc -c < "$1" || exit 5; exec head -c "$2" "$1"';
 
 /// One line per file, the exit status of `test -f`.
 const _testScript = r'for f in "$@"; do test -f "$f"; echo "$?"; done';
@@ -83,11 +96,16 @@ final class StackSources {
     required this._socketPath,
     required this._run,
     required this._openFileSystem,
+    this._admin,
   });
 
   final String _socketPath;
   final StackCommandRunner _run;
   final Future<RemoteFileSystem> Function() _openFileSystem;
+
+  /// The server's admin session, through which a file SFTP may not read
+  /// is read as root (STK-04); null while admin mode is off.
+  final AdminSession? Function()? _admin;
 
   DockerComposeCli? _cli;
   Future<DockerComposeCli?>? _detecting;
@@ -448,6 +466,11 @@ final class StackSources {
         if (!sink.full) rethrow;
       }
     } on RemoteFileException catch (e) {
+      if (e.kind == RemoteFileErrorKind.permissionDenied) {
+        if (_admin?.call() case final session?) {
+          return _readElevated(project, path, kind, session);
+        }
+      }
       // `unsupported` also means SFTP itself is missing; the stat above
       // has told a non-regular file apart already.
       return DockerStackFileFailed(switch (e.kind) {
@@ -465,6 +488,82 @@ final class StackSources {
       path: path,
       text: maskStackFile(sink.text, kind),
       size: size,
+      truncated: sink.full,
+    );
+  }
+}
+
+extension on StackSources {
+  /// [path] read as root through [session], with the SFTP read's cap and
+  /// masking: only a regular file, its first [kStackFileMaxBytes] bytes
+  /// kept to the last complete line, its text neither cached nor logged.
+  Future<DockerPayload> _readElevated(
+    String project,
+    String path,
+    StackFileKind kind,
+    AdminSession session,
+  ) async {
+    const failed = DockerStackFileFailed(StackFileFailure.readFailed);
+    final ElevatedProcess process;
+    try {
+      process = await session.executor.start([
+        'sh',
+        '-c',
+        _elevatedReadScript,
+        'sh',
+        path,
+        '${kStackFileMaxBytes + 1}',
+      ], password: session.password);
+    } on ElevationException {
+      return const DockerStackFileFailed(StackFileFailure.permissionDenied);
+    } on RemoteCommandException {
+      return failed;
+    } on ChannelOpenException {
+      return failed;
+    }
+    unawaited(process.stdin.close());
+
+    // The size line, then the bytes; past the cap the process is let go.
+    final head = BytesBuilder();
+    int? size;
+    final sink = _BoundedSink(kStackFileMaxBytes, RemoteTransferCancellation());
+    await for (final chunk in process.stdout) {
+      if (size == null) {
+        head.add(chunk);
+        final bytes = head.toBytes();
+        final newline = bytes.indexOf(0x0A);
+        if (newline < 0) continue;
+        size = int.tryParse(ascii.decode(bytes.sublist(0, newline)).trim());
+        if (size == null) break;
+        sink.add(bytes.sublist(newline + 1));
+      } else {
+        sink.add(chunk);
+      }
+      if (sink.full) break;
+    }
+    if (sink.full) {
+      unawaited(process.close());
+    } else {
+      final exit = await process.exit;
+      if (await process.refusal != null) {
+        return const DockerStackFileFailed(StackFileFailure.permissionDenied);
+      }
+      switch (exit.exitCode) {
+        case 0 when size != null:
+          break;
+        case 4:
+          return const DockerStackFileFailed(StackFileFailure.notFound);
+        case 3:
+          return const DockerStackFileFailed(StackFileFailure.notRegularFile);
+        default:
+          return failed;
+      }
+    }
+    return DockerStackFilePayload(
+      project: project,
+      path: path,
+      text: maskStackFile(sink.text, kind),
+      size: size ?? 0,
       truncated: sink.full,
     );
   }

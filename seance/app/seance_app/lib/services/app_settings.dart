@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
@@ -231,6 +232,15 @@ class AppSettings {
   /// that is about to come back.
   Set<String> pinnedServerIds;
 
+  /// Host-key verdicts the pulled-pin check reads (catalog-library.md §7):
+  /// addresses (`host:port`) the user untrusted, which take no pulled pin,
+  /// and per address the pulled fingerprint the user chose to keep their own
+  /// pin over, so the same key is not raised again. Device-local, and here
+  /// rather than in the sync mirror so they outlive it. Nothing adds an
+  /// untrusted address yet: Séance has no "forget host" action.
+  Set<String> untrustedPinLocators;
+  Map<String, String> keptPinVerdicts;
+
   /// Whether the server list draws two-line rows or one-line ones.
   ServerListDensity serverListDensity;
 
@@ -313,6 +323,8 @@ class AppSettings {
     Map<String, IdentityFileBookmark>? identityFileBookmarks,
     Set<String>? collapsedServerGroups,
     Set<String>? pinnedServerIds,
+    Set<String>? untrustedPinLocators,
+    Map<String, String>? keptPinVerdicts,
     this.serverListDensity = ServerListDensity.comfortable,
     this.paneListWidth,
     this.paneUtilityWidth,
@@ -336,6 +348,8 @@ class AppSettings {
        identityFileBookmarks = identityFileBookmarks ?? {},
        collapsedServerGroups = collapsedServerGroups ?? {},
        pinnedServerIds = pinnedServerIds ?? {},
+       untrustedPinLocators = untrustedPinLocators ?? {},
+       keptPinVerdicts = keptPinVerdicts ?? {},
        unwrittenAssistantKeyRefs = unwrittenAssistantKeyRefs ?? {},
        heldAssistantKeyRefs = heldAssistantKeyRefs ?? {};
 
@@ -382,6 +396,8 @@ class AppSettings {
     // Sorted like the set above it, and for the same reason. The order here
     // is not the display order: pinned rows keep the list's own ordering.
     'pinnedServerIds': pinnedServerIds.toList()..sort(),
+    'untrustedPinLocators': untrustedPinLocators.toList()..sort(),
+    'keptPinVerdicts': SplayTreeMap<String, String>.of(keptPinVerdicts),
     'serverListDensity': serverListDensity.name,
     if (paneListWidth != null) 'paneListWidth': paneListWidth,
     if (paneUtilityWidth != null) 'paneUtilityWidth': paneUtilityWidth,
@@ -437,6 +453,8 @@ class AppSettings {
     identityFileBookmarks: _identityBookmarkMap(json['identityFileBookmarks']),
     collapsedServerGroups: _stringSet(json['collapsedServerGroups']),
     pinnedServerIds: _stringSet(json['pinnedServerIds']),
+    untrustedPinLocators: _stringSet(json['untrustedPinLocators']),
+    keptPinVerdicts: _stringMap(json['keptPinVerdicts']),
     serverListDensity: ServerListDensity.values.firstWhere(
       (d) => d.name == json['serverListDensity'],
       orElse: () => ServerListDensity.comfortable,
@@ -547,6 +565,16 @@ Map<String, IdentityFileBookmark> _identityBookmarkMap(Object? value) {
 Set<String> _stringSet(Object? value) {
   if (value is! List) return {};
   return value.whereType<String>().toSet();
+}
+
+/// A tolerant string-to-string map, like [_stringSet]: entries that are not
+/// both strings are dropped.
+Map<String, String> _stringMap(Object? value) {
+  if (value is! Map) return {};
+  return {
+    for (final MapEntry(:key, :value) in value.entries)
+      if (key is String && value is String) key: value,
+  };
 }
 
 /// A pane width from disk: only a finite positive number is usable — anything

@@ -22,6 +22,7 @@ SettingsWindowHost? settingsWindowHostFor(
   TargetPlatform platform, {
   required AppearanceSettings appearance,
   required AnnouncementSettings announcements,
+  required String? appVersion,
   required MonitorSetSettings monitorSet,
   required SafetySettings safety,
 }) => switch (platform) {
@@ -30,6 +31,7 @@ SettingsWindowHost? settingsWindowHostFor(
   TargetPlatform.windows => SettingsWindowHost(
     appearance: appearance,
     announcements: announcements,
+    appVersion: appVersion,
     monitorSet: monitorSet,
     safety: safety,
   ),
@@ -47,10 +49,12 @@ SettingsWindowHost? settingsWindowHostFor(
 /// starts an engine isolate (D18), a store or sync of its own.
 final class SettingsWindowHost {
   /// [requestAppExit] answers the window's quit question; by default the
-  /// app's own observers.
+  /// app's own observers. [appVersion] is the app's (`readAppVersion`),
+  /// which the window's about row shows.
   SettingsWindowHost({
     required AppearanceSettings appearance,
     required AnnouncementSettings announcements,
+    required this._appVersion,
     required MonitorSetSettings monitorSet,
     required SafetySettings safety,
     MethodChannel control = settingsWindowControlChannel,
@@ -76,6 +80,7 @@ final class SettingsWindowHost {
 
   final AppearanceSettings _appearance;
   final AnnouncementSettings _announcements;
+  final String? _appVersion;
   final MonitorSetSettings _monitorSet;
   final SafetySettings _safety;
   late final GhostSettingsWindowHost<SettingsTab> _engine;
@@ -97,6 +102,7 @@ final class SettingsWindowHost {
   Map<String, Object?> _snapshot() => {
     SettingsLinkKey.appearance.name: encodeAppearance(_appearance.value),
     SettingsLinkKey.announceThresholdBands.name: _announcements.value,
+    SettingsLinkKey.appVersion.name: _appVersion,
     SettingsLinkKey.monitorSet.name: encodeMonitorCandidates(_monitorSet.value),
     SettingsLinkKey.safety.name: encodeStoredSafety(_safety.value),
     SettingsLinkKey.labels.name: {
@@ -112,6 +118,11 @@ final class SettingsWindowHost {
         await _appearance.setMode(
           ThemeModePreference.values.byName(argument! as String),
         );
+      case SettingsLinkMethod.setAppearance:
+        final appearance = decodeAppearance(
+          (argument! as Map).cast<String, Object?>(),
+        );
+        await _appearance.setAppearance(appearance.palette, appearance.mode);
       case SettingsLinkMethod.setAnnounceThresholdBands:
         await _announcements.setAnnounceThresholdBands(argument! as bool);
       case SettingsLinkMethod.setMonitored:

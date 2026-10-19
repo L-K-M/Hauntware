@@ -63,9 +63,14 @@ final class LogService {
     this._maxOutputBytes = kLogReadMaxOutputBytes,
     this._deadline = kLogReadDeadline,
     this._startTimer = Timer.new,
+    this._elevatedLink,
   });
 
   final SshLink _link;
+
+  /// The link an elevated [FileLogSource] reads over: [_link] through
+  /// admin mode's elevation, or null while admin mode is off (LOG-22).
+  final SshLink? Function()? _elevatedLink;
 
   /// Quotes each word of a command for the login shell (03 §8.8); 03
   /// §6.2 names `seance_core`'s `quoteShellWord`.
@@ -122,7 +127,16 @@ final class LogService {
       return;
     }
 
-    final read = _Read(streamId, spec);
+    final link = switch (spec.source) {
+      FileLogSource(elevated: true) => _elevatedLink?.call(),
+      _ => _link,
+    };
+    if (link == null) {
+      _emit(LogStreamState(streamId, kAdminModeOff));
+      return;
+    }
+
+    final read = _Read(streamId, spec, link);
     _reads[streamId] = read;
     _emit(LogStreamState(streamId, const LogStreamRunning()));
     unawaited(_serve(read, argv));
@@ -321,7 +335,7 @@ final class LogService {
     final run = _Run(
       _Bytes(_maxOutputBytes, keep),
       Future.sync(
-        () => _link.start(HostCommands.commandLine(argv, quote: _quote)),
+        () => read.link.start(HostCommands.commandLine(argv, quote: _quote)),
       ),
     );
     read.run = run;
@@ -554,6 +568,12 @@ _Window _fileWindow(_Output out, int window, {required bool redacted}) {
 
 /// stderr naming a refusal: errno's EACCES and EPERM texts in the C
 /// locale the command runs in, and journalctl's notice.
+/// How an elevated read ends while admin mode is off (LOG-22).
+const kAdminModeOff = LogStreamEnded(
+  LogStreamEndReason.denied,
+  detail: 'admin mode is off',
+);
+
 final _deniedText = RegExp(
   'Permission denied|Operation not permitted|insufficient permissions',
 );
@@ -636,10 +656,13 @@ final class _Unfinished extends _Ran {
 
 /// One open read.
 final class _Read {
-  _Read(this.streamId, this.spec);
+  _Read(this.streamId, this.spec, this.link);
 
   final String streamId;
   final LogStreamSpec spec;
+
+  /// The service's link, or its elevated one for an elevated file.
+  final SshLink link;
 
   /// The command running, or the last one.
   _Run? run;

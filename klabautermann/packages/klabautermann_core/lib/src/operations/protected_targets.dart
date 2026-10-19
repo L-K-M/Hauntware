@@ -50,8 +50,15 @@ const kProtectedUnits = [
 ];
 
 /// Process names protected wherever they run: PID 1 is protected by its
-/// PID, these by their `comm`.
-const kProtectedComms = {'sshd', 'dockerd', 'containerd'};
+/// PID, these by their `comm`. OpenSSH 9.8 moved each connection into
+/// `sshd-session`, and 10.0 its pre-auth work into `sshd-auth`.
+const kProtectedComms = {
+  'sshd',
+  'sshd-session',
+  'sshd-auth',
+  'dockerd',
+  'containerd',
+};
 
 /// VPN ports a published container port must not carry [guess list]: a
 /// port and its protocol, null for either.

@@ -445,14 +445,16 @@ CronResult cronResult(CronSnapshot cron, HostProfile? profile, DateTime at) {
 
 /// Each of [jobs] with its command and line masked by 8.9's rules, each
 /// read as one command line, so a secret in a cron line reaches the app
-/// only as the mask. The line starts with its schedule, whose first field
-/// stands where a program would and is never read as an option. One
-/// budget covers the reading, as for a procs reading. There is no reveal
-/// for cron lines yet.
+/// only as the mask. The masker never reads the program's slot as a
+/// value, so an empty program stands in front: a command that starts
+/// with `NAME=secret` or `--password=…` is masked from its first word,
+/// and a line's schedule is read as ordinary words. One budget covers
+/// the reading, as for a procs reading. There is no reveal for cron
+/// lines yet.
 Map<CronJob, CronJob> maskedCronJobs(List<CronJob> jobs) {
   final budget = ArgumentMaskingBudget();
   String mask(String text) =>
-      maskCommandLine([text], budget: budget).single.display;
+      maskCommandLine(['', text], budget: budget)[1].display;
   return Map.identity()..addEntries([
     for (final job in jobs)
       MapEntry(

@@ -143,6 +143,32 @@ void main() {
     expect(fileOf(_server).readAsLinesSync(), hasLength(2));
   });
 
+  test('an append during a query that heals the file is kept', () async {
+    final audit = log();
+    await audit.append(record(now));
+    fileOf(_server).writeAsStringSync('{"v":1,"half\n', mode: FileMode.append);
+
+    // The query reads, finds the damage and rewrites; the append is
+    // asked for while it does.
+    final query = audit.query(_server);
+    final append = audit.append(record(now.add(const Duration(minutes: 1))));
+    await Future.wait([query, append]);
+
+    expect(fileOf(_server).readAsLinesSync(), hasLength(2));
+    expect((await audit.query(_server)).records, hasLength(2));
+  });
+
+  test('a prune waits for the appends asked for before it', () async {
+    final audit = log();
+    await audit.append(record(now.subtract(const Duration(days: 91))));
+    final append = audit.append(record(now));
+    final prune = audit.prune();
+    await Future.wait([append, prune]);
+
+    final kept = (await audit.query(_server)).records;
+    expect([for (final r in kept) r.endedAt], [now]);
+  });
+
   test('concurrent appends keep whole lines', () async {
     final audit = log();
     await Future.wait([

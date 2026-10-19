@@ -3,7 +3,7 @@ description: >-
   Monospace fonts bundled with every Ghost app (Planchette, Poltergeist,
   Seance and Klabautermann), with the names settings store and the family
   stack code text falls back through.
-version: 1.9.1
+version: 1.9.2
 publish_to: none
 
 environment:
