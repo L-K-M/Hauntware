@@ -13,6 +13,8 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         KillSignal,
         LoadAvg,
         NetRate,
+        OpDirectoryKind,
+        OpDirectoryListing,
         ProcsSelection,
         SystemdUnit,
         SystemctlVerb,
@@ -520,6 +522,18 @@ final class AuditQuery extends EngineRequest {
   final String serverId;
   final DateTime? before;
   final int limit;
+}
+
+/// Says the app has shown the result of [serverId]'s finished detached
+/// operation [id] (03 §7.17): the engine audits the result and deletes
+/// the operation's files, those in the root directory once admin mode is
+/// on. An [OperationsChanged] follows; an operation that is not listed
+/// as finished is a [RequestRejected].
+final class AcknowledgeOperation extends EngineRequest {
+  const AcknowledgeOperation(this.serverId, this.id);
+
+  final String serverId;
+  final String id;
 }
 
 /// Reads every user's crontab on [serverId] (JOB-03, 03 §7.7, M14): in
@@ -1035,9 +1049,13 @@ final class ActionFinished extends EngineEvent {
     this.exitCode,
     this.httpStatus,
     this.revalidation,
+    this.operationId,
   });
 
   final String planId;
+
+  /// For a detached plan, [ActionOutcome.succeeded] means its operation
+  /// started; it then runs on the host as [operationId] (03 §7.17).
   final ActionOutcome outcome;
   final ActionFailure? failure;
 
@@ -1053,6 +1071,10 @@ final class ActionFinished extends EngineEvent {
 
   /// What re-validation found, with [ActionFailure.revalidation].
   final RevalidationFailure? revalidation;
+
+  /// The detached operation a started plan runs as, which
+  /// [OperationsChanged] lists.
+  final String? operationId;
 }
 
 /// Why a plan failed.
@@ -1079,6 +1101,14 @@ enum ActionFailure {
   /// polkit refused a step run without elevation: admin mode would run
   /// it (03 §7.5).
   adminRequired,
+
+  /// A detached operation ended before it recorded a result (03 §7.17):
+  /// its wrapper was killed, at logout or by a reboot.
+  interrupted,
+
+  /// A detached operation did not start: its directory could not be
+  /// resolved, or `systemd-run` or `setsid` failed, with [exitCode].
+  launchFailed,
 }
 
 /// What re-validation found changed (03 §8.5).
@@ -1117,7 +1147,7 @@ final class ActionRefused extends EngineEvent {
 
 /// Why an [ActionRefused] refused; the app words each (D35).
 enum ActionRefusalReason {
-  /// The action's planner has not landed yet (M4 E14, E15).
+  /// The action has no planner in this engine.
   notImplemented,
 
   /// No previewed plan has the id, or it already ran.
@@ -1153,6 +1183,34 @@ enum ActionRefusalReason {
 
   /// The server has no ready link to plan over.
   noLink,
+
+  /// The server's Docker endpoint could not be reached (M4 E15).
+  engineUnavailable,
+
+  /// Containers use the image, and the removal did not ask to force it
+  /// (IMG-02).
+  imageInUse,
+
+  /// The stack's services depend on each other in a cycle, so there is no
+  /// order to act in (STK-03).
+  dependencyCycle,
+
+  /// A manager's labels mark the stack, and a redeploy offers no act
+  /// anyway (STK-06, 03 §8.7).
+  stackManaged,
+
+  /// The stack's files are not verified as its source (STK-01), so its
+  /// commands cannot be rebuilt from them (STK-06).
+  stackUnverified,
+
+  /// Only the legacy `docker-compose` is installed, which stays read-only
+  /// (STK-05).
+  legacyComposeOnly,
+
+  /// The detached operation needs root and the account's passwordless
+  /// sudo reaches only `docker`, which cannot start a root runner (03
+  /// §7.17).
+  sudoRightMissing,
 }
 
 /// Why [UserCrontabs] read no crontab.
@@ -1221,6 +1279,90 @@ final class UserCrontabs extends EngineEvent {
 
   /// Why nothing was read, or null.
   final UserCrontabsFailure? failure;
+}
+
+/// A detached operation's state as the engine sees it (03 §7.17).
+enum DetachedOperationState {
+  /// Its wrapper runs.
+  running,
+
+  /// Its wrapper recorded the command's exit status.
+  done,
+
+  /// Its record says running but its wrapper is gone, or its PID now
+  /// names another process: it was killed before it could record a
+  /// result (at logout, or by a reboot).
+  lost,
+
+  /// Its record says running and the engine could not check the wrapper.
+  unknown,
+}
+
+/// One detached operation of a server (03 §7.17), from its record and
+/// what this device remembers of it.
+@immutable
+final class DetachedOperation {
+  const DetachedOperation({
+    required this.id,
+    required this.directory,
+    required this.state,
+    this.unit,
+    this.startedAt,
+    this.endedAt,
+    this.exitCode,
+    this.action,
+    this.targetName,
+    this.acknowledged = false,
+  });
+
+  final String id;
+
+  /// The user directory for work that needs no root, the root one
+  /// otherwise.
+  final OpDirectoryKind directory;
+
+  final DetachedOperationState state;
+
+  /// `klabautermann-op-<id>.service` for a systemd runner.
+  final String? unit;
+
+  /// UTC; null where the host's `date` has no `%s`.
+  final DateTime? startedAt, endedAt;
+
+  /// The command's exit status, set when [state] is
+  /// [DetachedOperationState.done].
+  final int? exitCode;
+
+  /// The intent's kind and target, as the audit log names them, when this
+  /// device launched the operation; null for one another device launched.
+  final String? action, targetName;
+
+  /// The result was shown and acknowledged here, and the files wait for
+  /// admin mode to be deleted: the login user cannot unlink in the root
+  /// directory.
+  final bool acknowledged;
+}
+
+/// [serverId]'s detached operations (03 §7.17), sent after each `ops`
+/// read, each acknowledgement and each cleanup: the full list, so the app
+/// replaces what it had. [directories] says how far each directory was
+/// read; a directory that is denied or incomplete may hold operations
+/// the list lacks.
+final class OperationsChanged extends EngineEvent {
+  OperationsChanged(
+    this.serverId, {
+    Iterable<DetachedOperation> operations = const [],
+    Map<OpDirectoryKind, OpDirectoryListing> directories = const {},
+    this.unavailable,
+  }) : operations = List.unmodifiable(operations),
+       directories = Map.unmodifiable(directories);
+
+  final String serverId;
+  final List<DetachedOperation> operations;
+  final Map<OpDirectoryKind, OpDirectoryListing> directories;
+
+  /// Why the `ops` collector read nothing, or null.
+  final CollectorUnavailable? unavailable;
 }
 
 /// The answer to an [AuditQuery]: [records] newest first, and whether
@@ -1770,11 +1912,36 @@ final class KernelLogSource extends LogSource {
 /// and `tail -F`, which follows the file by name across rotation, for a
 /// follow. No archives.
 final class FileLogSource extends LogSource {
-  const FileLogSource(this.path);
+  const FileLogSource(
+    this.path, {
+    this.redacted = false,
+    this.elevated = false,
+  });
 
   /// The absolute path, typed or picked from the common paths; the engine
   /// validates it (03 §8.8) before it quotes it into the command.
   final String path;
+
+  /// Each line passes the secret redactor before it crosses, as a
+  /// detached operation's output does.
+  final bool redacted;
+
+  /// The read runs through admin mode's elevation (LOG-22, M4 E16b), for
+  /// a file only root may read; the app asks for it after a read ended
+  /// [LogStreamEndReason.denied]. Without admin mode it ends denied, and
+  /// a follow ends so when admin mode does.
+  final bool elevated;
+}
+
+/// A detached operation's output (03 §7.17): the engine reads its
+/// `<id>.log` in the directory the latest `ops` read listed it in, as a
+/// [FileLogSource] whose lines are redacted, so a follow keeps showing
+/// output across the operation's end. An operation the engine does not
+/// list ends the stream as [LogStreamEndReason.invalid].
+final class OperationLogSource extends LogSource {
+  const OperationLogSource(this.operationId);
+
+  final String operationId;
 }
 
 /// One container's logs through the Docker Engine API (CTX-01, 03 §5.6),
@@ -2025,7 +2192,7 @@ enum LogStreamEndReason {
   missing,
 
   /// The host refused the read, such as a file only `adm` or root may
-  /// read; admin mode (03 §8.2), which reads such files, arrives with M4.
+  /// read; with admin mode on, an elevated [FileLogSource] reads it.
   denied,
 
   /// The read failed otherwise.
@@ -2812,6 +2979,8 @@ final class ActionPreview {
     this.ownership,
     this.protected,
     this.followUnit,
+    this.orphans = const [],
+    this.warnings = const {},
   });
 
   final ActionIntent intent;
@@ -2840,6 +3009,12 @@ final class ActionPreview {
   /// The unit whose journal shows the run's effect, from the run's start:
   /// JOB-08's timer service (03 §7.7).
   final String? followUnit;
+
+  /// The stack's containers whose service its files no longer name,
+  /// which `--remove-orphans` would remove (STK-06).
+  final List<String> orphans;
+
+  final Set<PlanWarning> warnings;
 }
 
 /// A running plan's end state (03 §10.1).

@@ -1456,6 +1456,37 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 Docker action planners (E15): `PlanAction` plans container state
+  changes and removal, image removal and stack start, stop and restart
+  over the server's Docker endpoint. Steps address the full id and are
+  re-validated by inspect before they run. Removing volumes, forcing an
+  image in use, and a managed or protected target need the typed
+  confirmation. A stack acts in its services' dependency order and a
+  cycle refuses. The app's Docker actions arrive with E22.
+- M4 elevated reads (E16b): with admin mode on, the engine reads a
+  root-only log file the app asks to read elevated, and a stack file
+  SFTP may not read, through the admin session; a follow ends when admin
+  mode does.
+- M4 sudo relay (E16a): while admin mode is on, a Docker socket the
+  user cannot write is reached through rank 3, the engine CLI's
+  `dial-stdio` under `sudo -n` or the password prelude, one elevated exec
+  per connection. Admin mode ending drops the route.
+- M4 pull and redeploy (E18): `PlanAction` plans STK-06 for a verified,
+  unmanaged stack as one detached operation of `config -q`, `pull` and
+  `up -d` through the endpoint's `--host`, listing orphans and warning
+  about profile-gated services. The runner checks the config hashes
+  again before it launches. The app's redeploy arrives with E23b.
+- M4 operation output (E17c): the engine follows a detached
+  operation's output file like any log file, each line redacted.
+- M4 detached runner, second half (E17b): the engine reads each
+  server's detached operations on connect and while one runs, checks a
+  running one's wrapper, and sends the list. An acknowledged result is
+  audited and its files deleted, the root directory's once admin mode is
+  on; old files are pruned.
+- M4 detached runner, first half (E17a): the engine picks each
+  operation's runner from the host profile, the work's level and admin
+  mode, and launches it with a fresh id. Re-attach, results and cleanup
+  follow in E17b.
 - M4 activity log (E24): the server header's Safety menu opens
   Activity, the device audit log as a sortable table with each run's
   redacted steps in its details and older pages on request. Copy puts

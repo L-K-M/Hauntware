@@ -175,6 +175,60 @@ void main() {
       expect(pull.argv.last, 'pull');
     });
 
+    test('config lists services, every profile with --profile *', () {
+      final services = composeConfig(
+        socketPath: '/run/docker.sock',
+        project: 'web',
+        profiles: const ['*'],
+        services: true,
+      );
+      expect(services.argv.sublist(services.argv.length - 4), [
+        '--profile',
+        '*',
+        'config',
+        '--services',
+      ]);
+      expect(
+        () => composeConfig(
+          socketPath: '/run/docker.sock',
+          project: 'web',
+          profiles: const ['a b'],
+          services: true,
+        ),
+        throwsArgumentError,
+      );
+      expect(parseComposeServiceNames('web\ndb.replica\n\n'), {
+        'web',
+        'db.replica',
+      });
+      expect(parseComposeServiceNames('no such file\n'), isNull);
+    });
+
+    test('up and pull repeat each recorded env file', () {
+      for (final argv in [
+        composeUp(
+          socketPath: '/run/docker.sock',
+          project: 'web',
+          envFiles: const ['/opt/web/.env', '/opt/web/prod.env'],
+        ).argv,
+        composePull(
+          socketPath: '/run/docker.sock',
+          project: 'web',
+          envFiles: const ['/opt/web/.env', '/opt/web/prod.env'],
+        ).argv,
+      ]) {
+        expect(
+          argv,
+          containsAllInOrder([
+            '--env-file',
+            '/opt/web/.env',
+            '--env-file',
+            '/opt/web/prod.env',
+          ]),
+        );
+      }
+    });
+
     test('down never adds -v', () {
       final down = composeDown(socketPath: '/run/docker.sock', project: 'web');
       expect(down.argv, isNot(contains('-v')));

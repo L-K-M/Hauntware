@@ -29,9 +29,6 @@ typedef HostPlanContext = ({
   bool adminMode,
 });
 
-/// A plan, or why there is none.
-typedef PlanAttempt = ({OperationPlan? plan, ActionRefusalReason? refusal});
-
 /// The verbs SVC-03 offers in the MVP (03 §7.5); enable, disable and the
 /// rest are v1.
 const _unitVerbs = {
