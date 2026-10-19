@@ -105,8 +105,9 @@ final _healthMarker = RegExp(
 
 /// How long a container that is up has been, from its Status text: the
 /// list carries no start time, and its "Up 3 hours" is go-units'
-/// `HumanDuration`, which Docker and Podman both print. Null for a
-/// container that is not up, or a status in other words.
+/// `HumanDuration`, which Docker and Podman both print, Podman with
+/// " ago" after it. Null for a container that is not up, or a status in
+/// other words.
 Duration? containerUptime(ContainerSummary container) {
   final match = _upStatus.firstMatch(container.status ?? '');
   if (match == null) return null;
@@ -127,7 +128,7 @@ Duration? containerUptime(ContainerSummary container) {
   return unit.length * int.parse(counted.group(1)!);
 }
 
-final _upStatus = RegExp(r'^Up (.+?)(?: \(.*\))?$');
+final _upStatus = RegExp(r'^Up (.+?)(?: ago)?(?: \(.*\))?$');
 final _countedUnit = RegExp(
   r'^(\d+) (second|minute|hour|day|week|month|year)s?$',
 );
@@ -150,10 +151,12 @@ enum _UptimeUnit {
 
 /// [container]'s ports as `docker ps` shows them: a wildcard address
 /// left out, so IPv4's and IPv6's binding of one port read once.
-String containerPortsText(ContainerSummary container) {
-  final labels = <String>{for (final port in container.ports) _portLabel(port)};
-  return labels.join(', ');
-}
+String containerPortsText(ContainerSummary container) =>
+    containerPortLabels(container).join(', ');
+
+/// [container]'s ports one by one, as [containerPortsText] lists them.
+List<String> containerPortLabels(ContainerSummary container) =>
+    {for (final port in container.ports) _portLabel(port)}.toList();
 
 String _portLabel(ContainerPort port) => switch (port.ip) {
   '0.0.0.0' || '::' => ContainerPort(

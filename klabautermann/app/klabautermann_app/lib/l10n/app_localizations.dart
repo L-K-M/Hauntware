@@ -5241,6 +5241,336 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Low-session mode: the list is read again every 15 seconds instead of following engine events, and stats are read one container at a time.'**
   String get dockerContainersLowSessionRelay;
+
+  /// Tooltip of the button that closes a container's details in the desktop inspector (03 §10.2).
+  ///
+  /// In en, this message translates to:
+  /// **'Close the container details'**
+  String get dockerDetailsClose;
+
+  /// Container details: the inspect read (CTR-03) has not answered yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the container details…'**
+  String get dockerDetailsReading;
+
+  /// Container details: why the inspect read failed. reason is the engine's failure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server\'s capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} daemonError{The engine refused or failed to inspect the container.} connectionFailed{The connection to the engine failed while inspecting the container.} cancelled{The read stopped before it ran.} other{The container details could not be read.}}'**
+  String dockerDetailsFailed(String reason);
+
+  /// Container details: shown under a failure or a removal, above the details read before.
+  ///
+  /// In en, this message translates to:
+  /// **'The details below are the last ones read.'**
+  String get dockerDetailsKept;
+
+  /// Container details: the container is gone from the engine (its inspect found nothing, or the list no longer has it).
+  ///
+  /// In en, this message translates to:
+  /// **'This container was removed.'**
+  String get dockerDetailsRemoved;
+
+  /// Container details: the managed-by badge (DKE-10). manager is the product name of the tool that owns the container, such as Coolify or Portainer, never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'Managed by {manager}'**
+  String dockerDetailsManagedBy(String manager);
+
+  /// Container details: under the managed-by badge. manager is the owning tool's product name; label is the container label that marks the ownership, server data.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes made outside {manager} can be overwritten by it. The label {label} marks it.'**
+  String dockerDetailsManagedByNote(String manager, String label);
+
+  /// Container details: heading of the section with the container's state, health, restart policy, image and times.
+  ///
+  /// In en, this message translates to:
+  /// **'Overview'**
+  String get dockerDetailsOverview;
+
+  /// Container details: label of the container's short ID.
+  ///
+  /// In en, this message translates to:
+  /// **'ID'**
+  String get dockerDetailsId;
+
+  /// Container details: a stopped container's state with the exit code of its last run.
+  ///
+  /// In en, this message translates to:
+  /// **'{state}, exit code {code}'**
+  String dockerDetailsStateExited(String state, int code);
+
+  /// Container details: the kernel's out-of-memory killer stopped the container's process.
+  ///
+  /// In en, this message translates to:
+  /// **'Its last run was stopped for running out of memory.'**
+  String get dockerDetailsOomKilled;
+
+  /// Container details: the engine's State.Error is set; the engine's own text follows, untranslated.
+  ///
+  /// In en, this message translates to:
+  /// **'The engine reported an error for this container.'**
+  String get dockerDetailsStateError;
+
+  /// Container details: how many health checks failed in a row (CTR-04).
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 failed check in a row} other{{count} failed checks in a row}}'**
+  String dockerDetailsHealthStreak(int count);
+
+  /// Container details: label of the container's restart policy.
+  ///
+  /// In en, this message translates to:
+  /// **'Restart policy'**
+  String get dockerDetailsRestartPolicy;
+
+  /// Container details: a restart policy in words. policy is the policy's name.
+  ///
+  /// In en, this message translates to:
+  /// **'{policy, select, no{Never restart} always{Always restart} unlessStopped{Restart unless stopped} onFailure{Restart on failure} other{Unknown}}'**
+  String dockerDetailsRestartPolicyName(String policy);
+
+  /// Container details: the on-failure restart policy with its retry limit.
+  ///
+  /// In en, this message translates to:
+  /// **'{policy}, at most {count, plural, =1{once} other{{count} times}}'**
+  String dockerDetailsRestartPolicyRetries(String policy, int count);
+
+  /// Container details: label of how many times the engine restarted the container.
+  ///
+  /// In en, this message translates to:
+  /// **'Restarts'**
+  String get dockerDetailsRestarts;
+
+  /// Container details: label of the short ID of the image the container runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Image ID'**
+  String get dockerDetailsImageId;
+
+  /// Container details: label of when the container was created.
+  ///
+  /// In en, this message translates to:
+  /// **'Created'**
+  String get dockerDetailsCreated;
+
+  /// Container details: label of when the container last started.
+  ///
+  /// In en, this message translates to:
+  /// **'Started'**
+  String get dockerDetailsStarted;
+
+  /// Container details: label of when the container's last run ended.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped'**
+  String get dockerDetailsFinished;
+
+  /// Container details: a date and time in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'{time}'**
+  String dockerDetailsTime(DateTime time);
+
+  /// Container details: heading of the last health-check results (CTR-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Health checks'**
+  String get dockerDetailsHealthTitle;
+
+  /// Container details: the container has a health check but no results yet.
+  ///
+  /// In en, this message translates to:
+  /// **'No health check has run yet.'**
+  String get dockerDetailsHealthEmpty;
+
+  /// Container details: one health-check result: its exit code and when it ended.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit code {code}, {time}'**
+  String dockerDetailsHealthCheck(String code, DateTime time);
+
+  /// Container details: one health-check result whose end time is unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit code {code}'**
+  String dockerDetailsHealthCheckUntimed(String code);
+
+  /// Container details: a health check that printed nothing.
+  ///
+  /// In en, this message translates to:
+  /// **'No output'**
+  String get dockerDetailsHealthNoOutput;
+
+  /// Container details: shown when some values are masked secrets (SAF-07): a reveal is temporary and stays on this device.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a masked value to show it for {seconds} seconds.'**
+  String dockerDetailsRevealNote(int seconds);
+
+  /// What a screen reader says in place of a masked secret in a container's details (SAF-07).
+  ///
+  /// In en, this message translates to:
+  /// **'(masked)'**
+  String get dockerDetailsMasked;
+
+  /// Screen-reader hint of a masked value in a container's details, which shows it for a while when activated.
+  ///
+  /// In en, this message translates to:
+  /// **'Show the masked value'**
+  String get dockerDetailsRevealHint;
+
+  /// Screen-reader hint of a revealed value in a container's details, which masks it again when activated.
+  ///
+  /// In en, this message translates to:
+  /// **'Mask again'**
+  String get dockerDetailsHideHint;
+
+  /// Container details: what a screen reader says for one environment variable or label: its name, then its value or "(masked)".
+  ///
+  /// In en, this message translates to:
+  /// **'{name}: {value}'**
+  String dockerDetailsEntry(String name, String value);
+
+  /// Container details: heading of the container's entrypoint and command (Docker's ENTRYPOINT and CMD).
+  ///
+  /// In en, this message translates to:
+  /// **'Command'**
+  String get dockerDetailsCommandTitle;
+
+  /// Container details: label of the container's entrypoint (Docker's ENTRYPOINT).
+  ///
+  /// In en, this message translates to:
+  /// **'Entrypoint'**
+  String get dockerDetailsEntrypoint;
+
+  /// Container details: label of the command the entrypoint is given (Docker's CMD).
+  ///
+  /// In en, this message translates to:
+  /// **'Arguments'**
+  String get dockerDetailsCmd;
+
+  /// Container details: an entrypoint or argument list that is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get dockerDetailsNone;
+
+  /// Container details: heading of the container's environment variables.
+  ///
+  /// In en, this message translates to:
+  /// **'Environment'**
+  String get dockerDetailsEnvTitle;
+
+  /// Container details: the container has no environment variables.
+  ///
+  /// In en, this message translates to:
+  /// **'No environment variables.'**
+  String get dockerDetailsEnvEmpty;
+
+  /// Container details: heading of the container's labels.
+  ///
+  /// In en, this message translates to:
+  /// **'Labels'**
+  String get dockerDetailsLabelsTitle;
+
+  /// Container details: the container has no labels.
+  ///
+  /// In en, this message translates to:
+  /// **'No labels.'**
+  String get dockerDetailsLabelsEmpty;
+
+  /// Container details: heading of the container's mounts.
+  ///
+  /// In en, this message translates to:
+  /// **'Mounts'**
+  String get dockerDetailsMountsTitle;
+
+  /// Container details: the container has no mounts.
+  ///
+  /// In en, this message translates to:
+  /// **'No mounts.'**
+  String get dockerDetailsMountsEmpty;
+
+  /// Container details: a mount's type in words. type is the Engine API's mount type.
+  ///
+  /// In en, this message translates to:
+  /// **'{type, select, bind{Bind mount} volume{Volume} tmpfs{Memory (tmpfs)} npipe{Named pipe} cluster{Cluster volume} image{Image} other{Mount}}'**
+  String dockerDetailsMountKind(String type);
+
+  /// Container details: a mount the container cannot write to, after the mount's type.
+  ///
+  /// In en, this message translates to:
+  /// **'read-only'**
+  String get dockerDetailsMountReadOnly;
+
+  /// Container details: a mount the container can write to, after the mount's type.
+  ///
+  /// In en, this message translates to:
+  /// **'read-write'**
+  String get dockerDetailsMountReadWrite;
+
+  /// Container details: a mount's type and whether it is writable.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind}, {access}'**
+  String dockerDetailsMountSummary(String kind, String access);
+
+  /// Container details: the container lists no ports.
+  ///
+  /// In en, this message translates to:
+  /// **'No published or exposed ports.'**
+  String get dockerDetailsPortsEmpty;
+
+  /// Container details: heading of the networks the container is attached to.
+  ///
+  /// In en, this message translates to:
+  /// **'Networks'**
+  String get dockerDetailsNetworksTitle;
+
+  /// Container details: label of the container's network mode, such as bridge or host, as the engine names it.
+  ///
+  /// In en, this message translates to:
+  /// **'Network mode'**
+  String get dockerDetailsNetworkMode;
+
+  /// Container details: the container is attached to no network.
+  ///
+  /// In en, this message translates to:
+  /// **'Not attached to a network.'**
+  String get dockerDetailsNetworksEmpty;
+
+  /// Container details: label of the container's address on one network.
+  ///
+  /// In en, this message translates to:
+  /// **'IP address'**
+  String get dockerDetailsIpAddress;
+
+  /// Container details: label of a network's gateway address.
+  ///
+  /// In en, this message translates to:
+  /// **'Gateway'**
+  String get dockerDetailsGateway;
+
+  /// Container details: label of the container's names on one network.
+  ///
+  /// In en, this message translates to:
+  /// **'Aliases'**
+  String get dockerDetailsAliases;
+
+  /// Container details: title of the expandable inspect output in JSON (CTR-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Raw JSON'**
+  String get dockerDetailsRawTitle;
+
+  /// Container details: under the raw JSON's title; the JSON never shows a secret, even one revealed above (SAF-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Masked values stay masked here.'**
+  String get dockerDetailsRawNote;
 }
 
 class _AppLocalizationsDelegate
