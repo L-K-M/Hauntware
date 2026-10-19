@@ -9,8 +9,13 @@ import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/access/access_panel.dart' show AccessPanel;
+import 'package:klabautermann_app/ui/docker/container_details.dart';
+import 'package:klabautermann_app/ui/docker/container_logs.dart';
 import 'package:klabautermann_app/ui/docker/docker_endpoint.dart';
 import 'package:klabautermann_app/ui/docker/docker_panel.dart';
+import 'package:klabautermann_app/ui/inspector_pane.dart';
+import 'package:klabautermann_app/ui/server_coverage.dart'
+    show ServerCoverageDetails;
 import 'package:klabautermann_app/ui/server_header.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -169,6 +174,7 @@ void main() {
         DockerRank.streamlocal: 'Engine API via SSH socket forward',
         DockerRank.cliRelay:
             'Engine API via docker CLI relay (limited streams)',
+        DockerRank.sudoRelay: 'Engine API via sudo relay (root-equivalent)',
         DockerRank.socketRelay: 'Engine API via socat relay',
       });
       for (final (state, header, body) in _failures) {
@@ -317,6 +323,20 @@ void main() {
       );
       expect(
         _inHeader(find.text('Custom socket: root-equivalent')),
+        findsOneWidget,
+      );
+
+      await _emit(
+        tester,
+        harness,
+        dockerReady(
+          'srv-1',
+          rank: DockerRank.sudoRelay,
+          rootEquivalence: DockerRootEquivalence.sudoRelay,
+        ),
+      );
+      expect(
+        _inHeader(find.text('Sudo relay: root-equivalent')),
         findsOneWidget,
       );
 
@@ -516,6 +536,146 @@ void main() {
       await tester.pumpAndSettle();
       expect(unwatches(), hasLength(2));
       expect(unwatches().last.watchId, watches().last.watchId);
+    });
+
+    testWidgets('a container row opens its details in the inspector, until '
+        'closed or another server is selected (CTR-03)', (tester) async {
+      final harness = await _openWeb1(tester);
+      await _openDockerTab(tester);
+      await _emit(tester, harness, dockerReady('srv-1'));
+      await _emit(
+        tester,
+        harness,
+        dockerContainerList('srv-1', [
+          dockerContainer('b7e9d0c1a2f3', name: 'web-db'),
+        ], at: DateTime(2026, 10, 15, 14, 30)),
+      );
+      Finder inInspector(Finder finder) =>
+          find.descendant(of: find.byType(InspectorPane), matching: finder);
+      List<DockerQuery> inspects() => [
+        for (final query in _queries(harness))
+          if (query.query is DockerContainerQuery) query,
+      ];
+
+      await tester.tap(_inDocker(find.text('web-db')));
+      await tester.pumpAndSettle();
+      expect(inInspector(find.byType(ContainerDetailsView)), findsOneWidget);
+      expect(inInspector(find.text('web-db')), findsOneWidget);
+      expect(inspects(), hasLength(1));
+      await _emit(
+        tester,
+        harness,
+        dockerAnswer(
+          inspects().single,
+          DockerContainerPayload(dockerContainerDetails('b7e9d0c1a2f3')),
+        ),
+      );
+      expect(inInspector(find.text('Restart unless stopped')), findsOneWidget);
+
+      await tester.tap(
+        inInspector(find.byTooltip('Close the container details')),
+      );
+      await tester.pumpAndSettle();
+      expect(inInspector(find.byType(ContainerDetailsView)), findsNothing);
+      expect(inInspector(find.byType(ServerCoverageDetails)), findsOneWidget);
+
+      // Another server's selection lets the container go, also once the
+      // first is selected again.
+      await tester.tap(_inDocker(find.text('web-db')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('db-1'));
+      await tester.pumpAndSettle();
+      expect(inInspector(find.byType(ContainerDetailsView)), findsNothing);
+      expect(inInspector(find.byType(ServerCoverageDetails)), findsOneWidget);
+      await tester.tap(find.text('web-1'));
+      await tester.pumpAndSettle();
+      expect(inInspector(find.byType(ContainerDetailsView)), findsNothing);
+    });
+
+    testWidgets('the inspector opens a container\'s logs under the '
+        'sub-tabs, which follow only while the tab shows and close with '
+        'another server\'s selection (CTX-01)', (tester) async {
+      final harness = await _openWeb1(tester);
+      await _openDockerTab(tester);
+      await _emit(tester, harness, dockerReady('srv-1'));
+      await _emit(
+        tester,
+        harness,
+        dockerContainerList('srv-1', [
+          dockerContainer('b7e9d0c1a2f3', name: 'web-db'),
+        ], at: DateTime(2026, 10, 15, 14, 30)),
+      );
+      List<OpenLogStream> opens() =>
+          containerLogOpens(harness.engine.sent, 'b7e9d0c1a2f3');
+      List<String> closed() => [
+        for (final close
+            in harness.engine.sentOfType<CloseStream>().cast<CloseStream>())
+          close.streamId,
+      ];
+
+      await tester.tap(_inDocker(find.text('web-db')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(InspectorPane),
+          matching: find.byTooltip('Show logs'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(_inDocker(find.byType(ContainerLogsPane)), findsOneWidget);
+      expect(opens(), hasLength(1));
+      expect(opens().single.spec.serverId, 'srv-1');
+
+      await tester.tap(find.text('Overview'));
+      await tester.pumpAndSettle();
+      expect(closed(), [opens().single.streamId]);
+
+      // Shown from another tab, the logs bring the Docker tab back.
+      await tester.tap(
+        find.descendant(
+          of: find.byType(InspectorPane),
+          matching: find.byTooltip('Show logs'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(_inDocker(find.byType(ContainerLogsPane)), findsOneWidget);
+      expect(opens(), hasLength(2));
+
+      await tester.tap(find.text('db-1'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('web-1'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ContainerLogsPane), findsNothing);
+      expect(closed(), [for (final open in opens()) open.streamId]);
+    });
+
+    testWidgets('a phone pushes a container\'s details', (tester) async {
+      final harness = await _openWeb1(tester, size: _phone);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text('Docker'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _emit(tester, harness, dockerReady('srv-1'));
+      await _emit(
+        tester,
+        harness,
+        dockerContainerList('srv-1', [
+          dockerContainer('b7e9d0c1a2f3', name: 'web-db'),
+        ], at: DateTime(2026, 10, 15, 14, 30)),
+      );
+
+      await tester.tap(_inDocker(find.text('web-db')));
+      await tester.pumpAndSettle();
+      expect(find.byType(ContainerDetailsPage), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.byType(ContainerDetailsPage), findsNothing);
+      expect(find.byType(DockerPanel), findsOneWidget);
     });
 
     testWidgets('says when the engine details could not be read, and reads '

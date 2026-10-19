@@ -10,6 +10,7 @@ import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../inspector_pane.dart' show PlaceholderPaneBody;
 import '../server_header.dart' show HeaderedBody;
+import 'container_logs.dart';
 import 'containers_panel.dart';
 import 'docker_endpoint.dart';
 
@@ -48,6 +49,11 @@ enum DockerSubTab {
 /// [visible], the tab counts as a view of the server's Docker engine
 /// ([DockerController.openView]), so a ready endpoint's details are read,
 /// and the Containers sub-tab watches the containers while it shows.
+///
+/// On the desktop, a container's logs ([ContainerLogsScope]) show in a
+/// pane under the sub-tabs, which keeps the list and the inspector in
+/// sight, where 03 §10.2's bottom dock (v1) will hold them; the pane
+/// follows only while the tab shows.
 class DockerPanel extends StatefulWidget {
   const DockerPanel({
     super.key,
@@ -114,6 +120,11 @@ class _DockerPanelState extends State<DockerPanel> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final notice = DockerNoticeScope.maybeOf(context);
+    final logs = ContainerLogsScope.maybeOf(context);
+    final shownLogs = switch (logs?.value) {
+      final shown? when shown.serverId == widget.serverId => shown,
+      _ => null,
+    };
     return DefaultTabController(
       length: DockerSubTab.values.length,
       child: HeaderedBody(
@@ -162,6 +173,26 @@ class _DockerPanelState extends State<DockerPanel> {
                 },
               ),
             ),
+            if (shownLogs != null) ...[
+              const Divider(height: 1),
+              Expanded(
+                // Lines arrive up to 20 times a second; the list above
+                // need not repaint with them.
+                child: RepaintBoundary(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: ContainerLogsPane(
+                      // Another container's logs start with a new pane.
+                      key: ValueKey(shownLogs.container.id),
+                      monitoring: widget.monitoring,
+                      shown: shownLogs,
+                      visible: widget.visible,
+                      onClose: () => logs?.value = null,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

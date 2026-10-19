@@ -6,6 +6,8 @@
 ///   each ─▶ rank 1: open direct-streamlocal ─▶ route
 ///            └─ refused ─▶ one exec probe (test -S, test -w)
 ///                 ├─ missing ─▶ next candidate
+///                 ├─ denied, admin mode on ─▶ rank 3: sudo and the
+///                 │    engine CLI's dial-stdio ─▶ route
 ///                 ├─ denied ─▶ next candidate (sudo: needs admin mode)
 ///                 └─ reachable, so forwarding is off
 ///                      ├─ rank 2: the engine CLI's dial-stdio ─▶ route
@@ -14,7 +16,8 @@
 ///   none left ─▶ DockerRouteNone with the first reason in precedence
 /// ```
 ///
-/// Rank 3, the sudo relay, arrives with admin mode in M4. The ladder only
+/// Rank 3, the sudo relay (M4 E16, plan M7), is offered only while admin
+/// mode is on. The ladder only
 /// opens a rank 1 channel to see that it works and closes it again; it
 /// starts no relay, so a relay whose CLI cannot reach the daemon shows
 /// first when the client pings through it; the engine's Docker session
@@ -29,10 +32,14 @@ import 'package:seance_core/seance_core.dart'
     show
         ChannelOpenException,
         ChannelRefusal,
+        ElevationAttempt,
+        ElevationException,
+        ElevationFailureKind,
         RemoteCommandException,
         SshLink,
         quoteShellWord;
 
+import '../admin/admin_mode.dart' show AdminSession;
 import 'duplex_adapters.dart';
 
 /// A rung of 03 §5.9's ladder that M3 builds. Rank 3 (the sudo relay)
@@ -43,6 +50,11 @@ enum DockerRank {
 
   /// The engine CLI's `system dial-stdio`, one session per connection.
   cliRelay(2, DockerRouteLabel.cliRelay),
+
+  /// The same `dial-stdio` through admin mode's elevation: `sudo -n`
+  /// first, then the password prelude; one elevated exec per connection,
+  /// and only while admin mode is on (plan M7).
+  sudoRelay(3, DockerRouteLabel.sudoRelay),
 
   /// `socat STDIO UNIX-CONNECT:<path>` or `nc -U <path>`, one session
   /// per connection.
@@ -66,6 +78,9 @@ enum DockerRouteLabel {
   /// "via docker CLI relay (limited streams)".
   cliRelay,
 
+  /// "via sudo relay (root-equivalent)".
+  sudoRelay,
+
   /// "via socat relay", also for `nc -U`.
   socatRelay,
 
@@ -84,6 +99,10 @@ enum DockerRootEquivalence {
   /// A custom socket path whose engine the probe cannot classify; shown
   /// as root-equivalent until the engine tells otherwise.
   unclassified,
+
+  /// The sudo relay: root-equivalent whatever the engine, since it runs
+  /// as root (SAF-08's "sudo relay: root-equivalent" badge).
+  sudoRelay,
 }
 
 /// Why no rung reached an engine, in precedence order: when several
@@ -153,6 +172,7 @@ final class DockerRoute extends DockerRouteResult {
   DockerRouteLabel get label => rank.label;
 
   DockerRootEquivalence get rootEquivalence => switch (mode) {
+    _ when rank == DockerRank.sudoRelay => DockerRootEquivalence.sudoRelay,
     EngineMode.rootful => DockerRootEquivalence.rootfulSocket,
     EngineMode.rootless => DockerRootEquivalence.rootlessEngine,
     null => DockerRootEquivalence.unclassified,
@@ -198,10 +218,28 @@ final class DockerRouteNone extends DockerRouteResult {
 }
 
 /// Opens one duplex over [route] on [link]: a streamlocal channel, or a
-/// fresh relay process per connection (03 §5.9).
-Future<ByteDuplex> openDockerDuplex(SshLink link, DockerRoute route) async {
+/// fresh relay process per connection (03 §5.9). The sudo relay starts
+/// through [admin]'s elevation and fails without it, as when admin mode
+/// ended since the route was found.
+Future<ByteDuplex> openDockerDuplex(
+  SshLink link,
+  DockerRoute route, {
+  AdminSession? admin,
+}) async {
   if (route.rank == DockerRank.streamlocal) {
     return SshDuplexAdapter(await link.openUnixStream(route.socketPath));
+  }
+  if (route.rank == DockerRank.sudoRelay) {
+    if (admin == null) {
+      throw const ElevationException(ElevationFailureKind.unavailable, '');
+    }
+    return ProcessDuplex(
+      await admin.executor.start(
+        route.relayArgv,
+        password: admin.password,
+        attempt: ElevationAttempt.nopasswdFirst,
+      ),
+    );
   }
 
   final command = HostCommands.commandLine(
@@ -224,6 +262,9 @@ abstract final class DockerLadder {
   /// since a relay would reach the same socket, and an excluded relay
   /// gives way to the next relay of its path.
   ///
+  /// A socket the user cannot write is reached through the sudo relay
+  /// while [adminMode] is on (rank 3).
+  ///
   /// Throws an [ArgumentError] when [override] is not an absolute path
   /// free of NUL and line breaks.
   static Future<DockerRouteResult> resolve(
@@ -231,6 +272,7 @@ abstract final class DockerLadder {
     HostProfile profile, {
     String? override,
     Set<DockerRoute> excluding = const {},
+    bool adminMode = false,
   }) async {
     if (override != null) validateAbsolutePath(override);
 
@@ -246,7 +288,13 @@ abstract final class DockerLadder {
 
     var reason = DockerNoRouteReason.noSocket;
     for (final candidate in candidates) {
-      final outcome = await _try(link, profile, candidate, excluding);
+      final outcome = await _try(
+        link,
+        profile,
+        candidate,
+        excluding,
+        adminMode: adminMode,
+      );
       switch (outcome) {
         case DockerRoute():
           return outcome;
@@ -263,8 +311,9 @@ abstract final class DockerLadder {
     SshLink link,
     HostProfile profile,
     _Candidate candidate,
-    Set<DockerRoute> excluding,
-  ) async {
+    Set<DockerRoute> excluding, {
+    required bool adminMode,
+  }) async {
     final path = candidate.path;
     if (excluding.contains(candidate.route(DockerRank.streamlocal))) {
       return const DockerRouteNone._(DockerNoRouteReason.noSocket);
@@ -283,6 +332,9 @@ abstract final class DockerLadder {
         return const DockerRouteNone._(DockerNoRouteReason.probeFailed);
       case (access: _SocketAccess.missing, netcat: _):
         return const DockerRouteNone._(DockerNoRouteReason.noSocket);
+      case (access: _SocketAccess.denied, netcat: _)
+          when adminMode && _hasSudo(profile):
+        return _sudoRelay(profile, candidate, excluding);
       case (access: _SocketAccess.denied, netcat: _):
         return DockerRouteNone._(
           _hasSudo(profile)
@@ -328,6 +380,25 @@ abstract final class DockerLadder {
         candidate.route(DockerRank.socketRelay, relayArgv: ['nc', '-U', path]),
     ];
     for (final route in relays) {
+      if (!excluding.contains(route)) return route;
+    }
+    return const DockerRouteNone._(DockerNoRouteReason.noRelay);
+  }
+
+  /// Rank 3: a CLI the probe saw that reaches this engine, through
+  /// sudo. A host without one has no sudo relay.
+  static DockerRouteResult _sudoRelay(
+    HostProfile profile,
+    _Candidate candidate,
+    Set<DockerRoute> excluding,
+  ) {
+    final host = validateSocketPath(candidate.path);
+    for (final cli in _relayClis(candidate.runtime)) {
+      if (profile.toolPresent(cli.binary) != true) continue;
+      final route = candidate.route(
+        DockerRank.sudoRelay,
+        relayArgv: [cli.binary, cli.hostOption, host, 'system', 'dial-stdio'],
+      );
       if (!excluding.contains(route)) return route;
     }
     return const DockerRouteNone._(DockerNoRouteReason.noRelay);

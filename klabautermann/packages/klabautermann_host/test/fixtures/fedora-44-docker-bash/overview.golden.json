@@ -3,14 +3,14 @@
     "cpu": {
       "name": "cpu",
       "jiffies": [
-        2771519,
+        7573,
         0,
-        581951,
-        15239241,
-        130399,
+        5486,
+        92698,
+        5875,
         0,
-        123660,
-        178706,
+        855,
+        1603,
         0,
         0
       ]
@@ -20,22 +20,22 @@
     "meminfo": {
       "fields": {
         "MemTotal": 16479424,
-        "MemFree": 6064544,
-        "MemAvailable": 14584896,
-        "Buffers": 610492,
-        "Cached": 6526988,
+        "MemFree": 10326608,
+        "MemAvailable": 15761984,
+        "Buffers": 149064,
+        "Cached": 5354908,
         "SwapTotal": 0,
         "SwapFree": 0,
-        "Shmem": 14680,
-        "SReclaimable": 1735032
+        "Shmem": 14940,
+        "SReclaimable": 256648
       }
     },
     "loadavg": {
-      "load1": 1.08,
-      "load5": 1.55,
-      "load15": 1.24,
-      "running": 3,
-      "total": 174,
+      "load1": 1.22,
+      "load5": 0.63,
+      "load15": 0.26,
+      "running": 1,
+      "total": 159,
       "lastPid": 17
     },
     "netdev": [

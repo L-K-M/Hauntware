@@ -1490,6 +1490,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get logLevelDebug => 'Debug';
 
   @override
+  String logContainerStream(String stream) {
+    String _temp0 = intl.Intl.selectLogic(stream, {
+      'stderr': 'standard error',
+      'other': 'standard output',
+    });
+    return '$_temp0';
+  }
+
+  @override
   String logDroppedLines(int count) {
     final intl.NumberFormat countNumberFormat =
         intl.NumberFormat.decimalPattern(localeName);
@@ -3131,6 +3140,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'transport': 'the connection failed during the run.',
       'unsupportedStep': 'this version cannot run one of its steps.',
       'adminRequired': 'it needs admin mode.',
+      'launchFailed': 'its operation could not be started on the server.',
       'other': 'it failed.',
     });
     return '$target did not finish: $_temp0';
@@ -3160,6 +3170,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'invalidTarget': 'This target cannot be acted on.',
       'targetChanged': 'The target changed. Look again before acting.',
       'noLink': 'Connect to the server first.',
+      'engineUnavailable': 'The server\'s container engine cannot be reached.',
+      'imageInUse':
+          'Containers use this image. Remove them first, or force the removal.',
+      'dependencyCycle':
+          'The stack\'s services depend on each other in a loop, so there is no order to act in.',
+      'stackManaged': 'A manager deploys this stack. Redeploy it there.',
+      'stackUnverified':
+          'The stack\'s files are not verified as its source, so it cannot be redeployed from them.',
+      'legacyComposeOnly':
+          'Only the legacy docker-compose is installed, which Klabautermann does not run.',
+      'sudoRightMissing':
+          'This needs root, and your sudo rule allows only docker.',
       'other': 'The action was refused.',
     });
     return '$_temp0';
@@ -3336,6 +3358,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'transport': 'The connection failed during the run.',
       'unsupportedStep': 'This version could not run a step.',
       'adminRequired': 'It needed admin mode.',
+      'launchFailed': 'Its operation could not be started on the server.',
       'other': 'It failed.',
     });
     return '$_temp0';
@@ -3394,6 +3417,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Engine API via docker CLI relay (limited streams)';
 
   @override
+  String get dockerTransportSudoRelay =>
+      'Engine API via sudo relay (root-equivalent)';
+
+  @override
   String get dockerTransportSocatRelay => 'Engine API via socat relay';
 
   @override
@@ -3446,6 +3473,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dockerBadgeRootlessEngineLogin =>
       'Rootless engine: equals your login user';
+
+  @override
+  String get dockerBadgeSudoRelay => 'Sudo relay: root-equivalent';
 
   @override
   String get dockerBadgeCustomSocket => 'Custom socket: root-equivalent';
@@ -3902,4 +3932,276 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dockerContainersLowSessionRelay =>
       'Low-session mode: the list is read again every 15 seconds instead of following engine events, and stats are read one container at a time.';
+
+  @override
+  String get dockerDetailsClose => 'Close the container details';
+
+  @override
+  String get dockerDetailsReading => 'Reading the container details…';
+
+  @override
+  String dockerDetailsFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'notInFleet': 'This server is no longer in the fleet.',
+      'linkUnavailable': 'There is no connection to this server.',
+      'profileUnknown': 'The server\'s capability check has not answered yet.',
+      'endpointUnavailable': 'The Docker engine cannot be reached.',
+      'tooManyQueries':
+          'This server already has as many Docker reads waiting as Klabautermann allows.',
+      'daemonError': 'The engine refused or failed to inspect the container.',
+      'connectionFailed':
+          'The connection to the engine failed while inspecting the container.',
+      'cancelled': 'The read stopped before it ran.',
+      'other': 'The container details could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerDetailsKept => 'The details below are the last ones read.';
+
+  @override
+  String get dockerDetailsRemoved => 'This container was removed.';
+
+  @override
+  String dockerDetailsManagedBy(String manager) {
+    return 'Managed by $manager';
+  }
+
+  @override
+  String dockerDetailsManagedByNote(String manager, String label) {
+    return 'Changes made outside $manager can be overwritten by it. The label $label marks it.';
+  }
+
+  @override
+  String get dockerDetailsOverview => 'Overview';
+
+  @override
+  String get dockerDetailsId => 'ID';
+
+  @override
+  String dockerDetailsStateExited(String state, int code) {
+    return '$state, exit code $code';
+  }
+
+  @override
+  String get dockerDetailsOomKilled =>
+      'Its last run was stopped for running out of memory.';
+
+  @override
+  String get dockerDetailsStateError =>
+      'The engine reported an error for this container.';
+
+  @override
+  String dockerDetailsHealthStreak(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count failed checks in a row',
+      one: '1 failed check in a row',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerDetailsRestartPolicy => 'Restart policy';
+
+  @override
+  String dockerDetailsRestartPolicyName(String policy) {
+    String _temp0 = intl.Intl.selectLogic(policy, {
+      'no': 'Never restart',
+      'always': 'Always restart',
+      'unlessStopped': 'Restart unless stopped',
+      'onFailure': 'Restart on failure',
+      'other': 'Unknown',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerDetailsRestartPolicyRetries(String policy, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count times',
+      one: 'once',
+    );
+    return '$policy, at most $_temp0';
+  }
+
+  @override
+  String get dockerDetailsRestarts => 'Restarts';
+
+  @override
+  String get dockerDetailsImageId => 'Image ID';
+
+  @override
+  String get dockerDetailsCreated => 'Created';
+
+  @override
+  String get dockerDetailsStarted => 'Started';
+
+  @override
+  String get dockerDetailsFinished => 'Stopped';
+
+  @override
+  String dockerDetailsTime(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return '$timeString';
+  }
+
+  @override
+  String get dockerDetailsHealthTitle => 'Health checks';
+
+  @override
+  String get dockerDetailsHealthEmpty => 'No health check has run yet.';
+
+  @override
+  String dockerDetailsHealthCheck(String code, DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.MMMd(
+      localeName,
+    ).add_jms();
+    final String timeString = timeDateFormat.format(time);
+
+    return 'Exit code $code, $timeString';
+  }
+
+  @override
+  String dockerDetailsHealthCheckUntimed(String code) {
+    return 'Exit code $code';
+  }
+
+  @override
+  String get dockerDetailsHealthNoOutput => 'No output';
+
+  @override
+  String dockerDetailsRevealNote(int seconds) {
+    return 'Select a masked value to show it for $seconds seconds.';
+  }
+
+  @override
+  String get dockerDetailsMasked => '(masked)';
+
+  @override
+  String get dockerDetailsRevealHint => 'Show the masked value';
+
+  @override
+  String get dockerDetailsHideHint => 'Mask again';
+
+  @override
+  String dockerDetailsEntry(String name, String value) {
+    return '$name: $value';
+  }
+
+  @override
+  String get dockerDetailsCommandTitle => 'Command';
+
+  @override
+  String get dockerDetailsEntrypoint => 'Entrypoint';
+
+  @override
+  String get dockerDetailsCmd => 'Arguments';
+
+  @override
+  String get dockerDetailsNone => 'None';
+
+  @override
+  String get dockerDetailsEnvTitle => 'Environment';
+
+  @override
+  String get dockerDetailsEnvEmpty => 'No environment variables.';
+
+  @override
+  String get dockerDetailsLabelsTitle => 'Labels';
+
+  @override
+  String get dockerDetailsLabelsEmpty => 'No labels.';
+
+  @override
+  String get dockerDetailsMountsTitle => 'Mounts';
+
+  @override
+  String get dockerDetailsMountsEmpty => 'No mounts.';
+
+  @override
+  String dockerDetailsMountKind(String type) {
+    String _temp0 = intl.Intl.selectLogic(type, {
+      'bind': 'Bind mount',
+      'volume': 'Volume',
+      'tmpfs': 'Memory (tmpfs)',
+      'npipe': 'Named pipe',
+      'cluster': 'Cluster volume',
+      'image': 'Image',
+      'other': 'Mount',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerDetailsMountReadOnly => 'read-only';
+
+  @override
+  String get dockerDetailsMountReadWrite => 'read-write';
+
+  @override
+  String dockerDetailsMountSummary(String kind, String access) {
+    return '$kind, $access';
+  }
+
+  @override
+  String get dockerDetailsPortsEmpty => 'No published or exposed ports.';
+
+  @override
+  String get dockerDetailsNetworksTitle => 'Networks';
+
+  @override
+  String get dockerDetailsNetworkMode => 'Network mode';
+
+  @override
+  String get dockerDetailsNetworksEmpty => 'Not attached to a network.';
+
+  @override
+  String get dockerDetailsIpAddress => 'IP address';
+
+  @override
+  String get dockerDetailsGateway => 'Gateway';
+
+  @override
+  String get dockerDetailsAliases => 'Aliases';
+
+  @override
+  String get dockerDetailsRawTitle => 'Raw JSON';
+
+  @override
+  String get dockerDetailsRawNote => 'Masked values stay masked here.';
+
+  @override
+  String get dockerLogsShow => 'Show logs';
+
+  @override
+  String get dockerLogsTitle => 'Logs';
+
+  @override
+  String get dockerLogsClose => 'Close logs';
+
+  @override
+  String get dockerLogsEmpty => 'This container has no log lines.';
+
+  @override
+  String dockerLogsDriverUnreadable(String reason, String driver) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'none': 'This container keeps no logs: driver none.',
+      'podman':
+          'Podman cannot read this container\'s logs: driver $driver. Podman reads only the json-file, k8s-file and journald drivers.',
+      'cacheDisabled':
+          'Docker cannot read this container\'s logs: driver $driver, cache disabled. Docker reads another driver\'s logs only through its local cache.',
+      'other':
+          'Docker cannot read this container\'s logs: its logging driver keeps none it can read.',
+    });
+    return '$_temp0';
+  }
 }

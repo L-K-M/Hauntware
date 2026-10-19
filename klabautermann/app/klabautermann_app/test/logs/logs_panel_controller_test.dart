@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/log_streams.dart';
 import 'package:klabautermann_app/ui/logs/log_query.dart';
+import 'package:klabautermann_app/ui/logs/log_view_controller.dart';
 import 'package:klabautermann_app/ui/logs/logs_panel_controller.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -185,4 +186,130 @@ void main() {
       expect(lines(), isEmpty);
     },
   );
+
+  group('a container\'s logs (CTX-01)', () {
+    late LogsPanelController logs;
+
+    setUp(() {
+      logs = LogsPanelController.container(
+        streams: streams,
+        serverId: 'srv-1',
+        containerId: 'b7e9d0c1a2f3',
+      );
+    });
+
+    tearDown(() => logs.dispose());
+
+    ContainerRecord line(String text, {bool stderr = false, int? second}) =>
+        ContainerRecord(
+          stream: stderr
+              ? ContainerLogStream.stderr
+              : ContainerLogStream.stdout,
+          text: text,
+          at: second == null ? null : DateTime.utc(2026, 10, 15, 12, 0, second),
+        );
+
+    List<String> rows() => [
+      for (var i = 0; i < logs.logs.length; i++)
+        switch (logs.logs[i]) {
+          final LogLine line => switch (logs.logs.containerOf(line)) {
+            ContainerLine(:final stream, :final at) =>
+              '${stream.name} ${at?.second} ${line.text}',
+            null => line.text,
+          },
+          LogDroppedLines(:final count) => 'dropped $count',
+        },
+    ];
+
+    test(
+      'follows the container and keeps each line\'s stream and time',
+      () async {
+        expect(logs.ready, isTrue);
+        logs.setVisible(true);
+        final spec = opens().single.spec;
+        expect((spec.source as ContainerLogSource).containerId, 'b7e9d0c1a2f3');
+        expect(spec.follow, isTrue);
+        expect(spec.window, kLogsPanelWindow);
+
+        await emit(LogStreamState(lastId(), const LogStreamRunning()));
+        await emit(
+          LogBatch(
+            streamId: lastId(),
+            records: [line('a', second: 1), line('b', stderr: true)],
+            dropped: 2,
+          ),
+        );
+        expect(rows(), ['dropped 2', 'stdout 1 a', 'stderr null b']);
+
+        // No cursor: shown again, the follow starts over.
+        logs
+          ..setVisible(false)
+          ..setVisible(true);
+        expect(opens(), hasLength(2));
+        expect(opens().last.spec.afterCursor, isNull);
+        expect(rows(), isEmpty);
+      },
+    );
+
+    test('a window arrives oldest first and stays so', () async {
+      logs
+        ..setLive(false)
+        ..setVisible(true);
+      expect(opens().single.spec.follow, isFalse);
+      await emit(
+        LogBatch(
+          streamId: lastId(),
+          records: [line('old', second: 1), line('new', second: 2)],
+        ),
+      );
+      await emit(
+        LogStreamState(
+          lastId(),
+          const LogStreamEnded(LogStreamEndReason.windowFilled),
+        ),
+      );
+      expect(rows(), ['stdout 1 old', 'stdout 2 new']);
+    });
+  });
+
+  test('a container line\'s stream and time leave with its entry', () {
+    final view = LogViewController(buffer: LogBuffer(maxLines: 3));
+    addTearDown(view.dispose);
+    ContainerRecord line(String text, ContainerLogStream stream, int us) =>
+        ContainerRecord(
+          stream: stream,
+          text: text,
+          at: DateTime.fromMicrosecondsSinceEpoch(us, isUtc: true),
+        );
+    List<String> held() => [
+      for (var i = 0; i < view.length; i++)
+        switch (view[i]) {
+          final LogLine line => switch (view.containerOf(line)) {
+            ContainerLine(:final stream, :final at) =>
+              '${line.text} ${stream.name} ${at?.microsecondsSinceEpoch}',
+            null => line.text,
+          },
+          LogDroppedLines(:final count) => 'dropped $count',
+        },
+    ];
+
+    view.add(['plain']);
+    view.addContainer([line('a', ContainerLogStream.stdout, 1)]);
+    expect(held(), ['plain', 'a stdout 1']);
+
+    // A drop record and a batch larger than the room left evict the
+    // oldest entries, slots and all.
+    view.addContainer([
+      line('b', ContainerLogStream.stderr, -5),
+      line('c', ContainerLogStream.stdout, 1760000000123456),
+    ], dropped: 4);
+    expect(held(), ['dropped 4', 'b stderr -5', 'c stdout 1760000000123456']);
+
+    view.add(['d']);
+    expect(held(), ['b stderr -5', 'c stdout 1760000000123456', 'd']);
+
+    view.clear();
+    view.addContainer([line('e', ContainerLogStream.stdout, 7)]);
+    expect(held(), ['e stdout 7']);
+  });
 }

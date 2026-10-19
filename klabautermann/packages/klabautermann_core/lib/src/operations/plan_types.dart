@@ -27,16 +27,20 @@ final class ShellStep extends PlanStep {
   ShellStep(
     Iterable<String> argv, {
     this.elevated = false,
+    this.discardOutput = false,
     Map<int, RevalidationFailure> exitMeanings = const {},
   }) : argv = List.unmodifiable(argv),
        exitMeanings = Map.unmodifiable(exitMeanings),
-       commandLine = HostCommands.commandLine(
-         List.of(argv),
-         quote: quoteShellWord,
-       );
+       commandLine =
+           HostCommands.commandLine(List.of(argv), quote: quoteShellWord) +
+           (discardOutput ? _discarded : '');
 
   final List<String> argv;
   final String commandLine;
+
+  /// The step's output goes to `/dev/null`, so only its exit status is
+  /// read: `config -q`'s errors can quote interpolated secrets (STK-06).
+  final bool discardOutput;
 
   /// The step runs through the elevation prelude (8.3).
   final bool elevated;
@@ -49,6 +53,8 @@ final class ShellStep extends PlanStep {
   @override
   String get display => elevated ? 'sudo: $commandLine' : commandLine;
 }
+
+const _discarded = ' >/dev/null 2>&1';
 
 /// A Docker Engine API request: [method], the versioned [path] and its
 /// [query], as the HTTP pool sends it.
@@ -123,6 +129,22 @@ final class RunnerFacts {
   final String? engine;
 
   final RunnerCredentials credentials;
+}
+
+/// A fact the preview warns about; the app words it (D35).
+enum PlanWarning {
+  /// Running services are named only under a compose profile, which the
+  /// labels do not record, so the redeploy leaves them as they are
+  /// (STK-06) [U].
+  profileGatedServices,
+
+  /// The CLI could not list every profile's services, so an orphan may
+  /// be a profile-gated service (STK-06).
+  profilesUnknown,
+
+  /// A `setsid` operation, which logind ends at logout under
+  /// `KillUserProcesses=yes` (03 §7.17).
+  mayDieAtLogout,
 }
 
 /// The consequence a plan's impact line names (03 §8.6); the app words

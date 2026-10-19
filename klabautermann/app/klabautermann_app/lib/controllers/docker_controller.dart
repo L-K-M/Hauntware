@@ -27,11 +27,21 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 /// the views start and end it. The lists it delivers stay here
 /// ([containersFor]) after the views hide.
 ///
+/// A details view that shows a container ([openContainer]) has it
+/// inspected (03 §7.12 CTR-03, CTR-04): one [DockerContainerQuery] as the
+/// first view opens, and another whenever the container's row in a
+/// delivered list changes, or a read that waited on the endpoint can run
+/// once it is ready again. A list without the container, or an inspect
+/// the engine answers with [DockerQueryFailure.notFound], says it was
+/// removed. The details live here only while a view shows them: inspect
+/// output is never kept, synced or stored (03 §8.9).
+///
 /// Every query and watch id is minted here and never reused this run; at
-/// most one engine query per server is in flight. A server that leaves
-/// the fleet takes its state with it and comes back without it (SYN-08),
-/// as in `MonitoringController`; the engine ends its session, and with it
-/// the server's watches, too.
+/// most one engine query per server is in flight, and at most one inspect
+/// per container a view shows. A server that leaves the fleet takes its
+/// state with it and comes back without it (SYN-08), as in
+/// `MonitoringController`; the engine ends its session, and with it the
+/// server's watches, too.
 final class DockerController {
   DockerController(this._engine) {
     _events = _engine.events.listen(_onEvent, onDone: _onEngineDone);
@@ -43,6 +53,11 @@ final class DockerController {
   bool _stopped = false;
 
   final Map<String, _DockerServer> _servers = {};
+
+  /// Details still shown for servers that left the fleet (SYN-08), by
+  /// server and container id. Each says so and keeps what was read until
+  /// its last view closes, since a view holds its listenable that long.
+  final Map<(String, String), _InspectedContainer> _leftFleet = {};
 
   /// The fleet's ids from the last [CatalogReplaced] seen, as in
   /// `MonitoringController`: null until then, when every server counts
@@ -104,6 +119,176 @@ final class DockerController {
     if (setEquals(ids, server.statsFor)) return;
     server.statsFor = ids;
     _watch(serverId, server);
+  }
+
+  /// A details view shows the container [containerId] (its full id) on
+  /// [serverId]; [closeContainer] says it no longer does. The first view
+  /// has the container inspected; every view of it shares what the
+  /// returned listenable holds, which stays valid until the last closes.
+  ValueListenable<DockerContainerDetails> openContainer(
+    String serverId,
+    String containerId,
+  ) {
+    final server = _server(serverId);
+    // Details a view still shows from before the server left the fleet
+    // are taken back, so every view of the container shares one and each
+    // close pairs with an open; they are read again.
+    final kept = server.inspected.containsKey(containerId)
+        ? null
+        : _leftFleet.remove((serverId, containerId));
+    final inspected = server.inspected.putIfAbsent(
+      containerId,
+      () => kept ?? _InspectedContainer(_summaryIn(server, containerId)),
+    );
+    inspected.views++;
+    if (inspected.views > 1 && kept == null) return inspected.details;
+
+    if (!_listed(serverId)) {
+      inspected.details.value = inspected.details.value.copyWith(
+        failure: () => const DockerQueryFailed(DockerQueryFailure.notInFleet),
+      );
+    } else {
+      _inspect(serverId, containerId, inspected);
+    }
+    return inspected.details;
+  }
+
+  /// The last view to close lets the container's details go.
+  void closeContainer(String serverId, String containerId) {
+    final key = (serverId, containerId);
+    if (_leftFleet[key] case final inspected?) {
+      inspected.views--;
+      if (inspected.views > 0) return;
+
+      _leftFleet.remove(key);
+      inspected.dispose();
+      return;
+    }
+
+    final server = _servers[serverId];
+    final inspected = server?.inspected[containerId];
+    if (server == null || inspected == null) return;
+    inspected.views--;
+    if (inspected.views > 0) return;
+
+    server.inspected.remove(containerId);
+    inspected.dispose();
+  }
+
+  /// Inspects [containerId] on [serverId] again after a failure.
+  void retryContainer(String serverId, String containerId) {
+    final inspected = _servers[serverId]?.inspected[containerId];
+    if (inspected == null || !_listed(serverId)) return;
+    _inspect(serverId, containerId, inspected);
+  }
+
+  /// Sends one [DockerContainerQuery] for [containerId], or, while one is
+  /// in flight, sends another once it is answered: a change it may have
+  /// read too early.
+  void _inspect(
+    String serverId,
+    String containerId,
+    _InspectedContainer inspected,
+  ) {
+    if (inspected.queryId != null) {
+      inspected.readAgain = true;
+      return;
+    }
+    if (!_stopped) {
+      final queryId = 'container-${_count++}';
+      _send(
+        DockerQuery(
+          serverId: serverId,
+          queryId: queryId,
+          query: DockerContainerQuery(containerId),
+        ),
+      );
+      if (!_stopped) {
+        inspected.queryId = queryId;
+        return;
+      }
+    }
+    // A stopped engine answers nothing.
+    inspected.details.value = inspected.details.value.copyWith(
+      failure: () => const DockerQueryFailed(DockerQueryFailure.cancelled),
+    );
+  }
+
+  /// Takes [payload] into the details whose inspect [queryId] is; false
+  /// when no open details view asked for it.
+  bool _takeInspect(
+    String serverId,
+    _DockerServer server,
+    String queryId,
+    DockerPayload payload,
+  ) {
+    for (final MapEntry(key: containerId, value: inspected)
+        in server.inspected.entries) {
+      if (inspected.queryId != queryId) continue;
+
+      inspected.queryId = null;
+      final before = inspected.details.value;
+      inspected.details.value = switch (payload) {
+        DockerContainerPayload(:final container) => DockerContainerDetails(
+          container: container,
+        ),
+        DockerQueryFailed(failure: DockerQueryFailure.notFound) =>
+          before.copyWith(removed: true, failure: () => null),
+        final DockerQueryFailed failure => before.copyWith(
+          failure: () => failure,
+        ),
+        // No other payload answers an inspect.
+        _ => before,
+      };
+      if (inspected.readAgain) {
+        inspected.readAgain = false;
+        _inspect(serverId, containerId, inspected);
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /// Follows each inspected container through a delivered list: one
+  /// missing from it was removed, and one whose row changed is inspected
+  /// again.
+  void _followInspected(
+    String serverId,
+    _DockerServer server,
+    List<ContainerSummary> containers,
+  ) {
+    if (server.inspected.isEmpty) return;
+
+    final byId = {for (final container in containers) container.id: container};
+    for (final MapEntry(key: containerId, value: inspected)
+        in server.inspected.entries) {
+      final summary = byId[containerId];
+      final before = inspected.summary;
+      inspected.summary = summary;
+      if (summary == null) {
+        final details = inspected.details.value;
+        if (!details.removed) {
+          inspected.details.value = details.copyWith(removed: true);
+        }
+        continue;
+      }
+      if (inspected.details.value.removed ||
+          (before != null && _rowChanged(before, summary))) {
+        _inspect(serverId, containerId, inspected);
+      }
+    }
+  }
+
+  /// Inspects again each container whose last inspect failed, once
+  /// [serverId]'s endpoint is ready on a new route: the reads that waited
+  /// on it, or failed over the route before.
+  void _inspectAfterFailure(String serverId, _DockerServer server) {
+    for (final MapEntry(key: containerId, value: inspected)
+        in server.inspected.entries) {
+      final details = inspected.details.value;
+      if (details.failure == null || details.removed) continue;
+      _inspect(serverId, containerId, inspected);
+    }
   }
 
   /// Watches [serverId]'s containers anew after a failure: a watch under
@@ -221,11 +406,18 @@ final class DockerController {
           if (before?.phase == DockerEndpointPhase.ready) {
             server.engineQuery = null;
           }
+          if (event.phase == DockerEndpointPhase.ready) {
+            _inspectAfterFailure(serverId, server);
+          }
         }
         _readIfShown(serverId, server);
       case DockerResult(:final serverId, :final queryId, :final payload):
         final server = _servers[serverId];
-        if (server == null || server.engineQuery != queryId) return;
+        if (server == null) return;
+        if (server.engineQuery != queryId) {
+          _takeInspect(serverId, server, queryId, payload);
+          return;
+        }
         server.engineQuery = null;
         switch (payload) {
           // Nothing was read because no endpoint was ready: its state
@@ -255,11 +447,18 @@ final class DockerController {
           payload,
           at,
         );
+        if ((list, payload) case (
+          DockerWatchList.containers,
+          DockerContainersPayload(:final containers),
+        )) {
+          _followInspected(serverId, server, containers);
+        }
       case CatalogReplaced(:final entries):
         // SYN-08: a server leaving the fleet takes its endpoint with it.
         final ids = _fleetIds = {for (final entry in entries) entry.serverId};
         _servers.removeWhere((serverId, server) {
           if (ids.contains(serverId)) return false;
+          _keepShownDetails(serverId, server);
           server.dispose();
           return true;
         });
@@ -273,13 +472,46 @@ final class DockerController {
     _stopped = true;
     for (final server in _servers.values) {
       server.engineQuery = null;
+      for (final inspected in server.inspected.values) {
+        if (inspected.queryId == null) continue;
+        inspected.queryId = null;
+        inspected.readAgain = false;
+        inspected.details.value = inspected.details.value.copyWith(
+          failure: () => const DockerQueryFailed(DockerQueryFailure.cancelled),
+        );
+      }
     }
   }
 
   bool _listed(String serverId) => _fleetIds?.contains(serverId) ?? true;
 
+  /// [containerId]'s row in [server]'s latest list, if listed.
+  ContainerSummary? _summaryIn(_DockerServer server, String containerId) {
+    for (final container in server.containers.value.containers ?? const []) {
+      if (container.id == containerId) return container;
+    }
+    return null;
+  }
+
   _DockerServer _server(String serverId) =>
       _servers.putIfAbsent(serverId, _DockerServer.new);
+
+  /// Moves the details [server] still has shown into [_leftFleet], each
+  /// saying the server left the fleet, before the server goes; every one
+  /// it has is shown, as the last view to close removes it.
+  void _keepShownDetails(String serverId, _DockerServer server) {
+    for (final MapEntry(key: containerId, value: inspected)
+        in server.inspected.entries) {
+      inspected
+        ..queryId = null
+        ..readAgain = false
+        ..details.value = inspected.details.value.copyWith(
+          failure: () => const DockerQueryFailed(DockerQueryFailure.notInFleet),
+        );
+      _leftFleet[(serverId, containerId)] = inspected;
+    }
+    server.inspected.clear();
+  }
 
   void dispose() {
     unawaited(_events.cancel());
@@ -288,6 +520,10 @@ final class DockerController {
       server.dispose();
     }
     _servers.clear();
+    for (final inspected in _leftFleet.values) {
+      inspected.dispose();
+    }
+    _leftFleet.clear();
   }
 }
 
@@ -373,6 +609,70 @@ final class DockerContainerList {
   );
 }
 
+/// Whether a container's row changed in a way its inspect may show: its
+/// state, the engine's status text (a restart resets its uptime), its
+/// health or its image.
+bool _rowChanged(ContainerSummary before, ContainerSummary after) =>
+    before.state != after.state ||
+    before.status != after.status ||
+    before.health != after.health ||
+    before.imageId != after.imageId;
+
+/// What a container's details view shows (03 §7.12 CTR-03, CTR-04).
+@immutable
+final class DockerContainerDetails {
+  const DockerContainerDetails({
+    this.container,
+    this.failure,
+    this.removed = false,
+  });
+
+  /// The latest inspect read, masked by the engine (03 §8.9); null until
+  /// one was.
+  final ContainerDetails? container;
+
+  /// Why the latest inspect failed, while [container] keeps the one
+  /// before; null once one is read.
+  final DockerQueryFailed? failure;
+
+  /// Whether the container is gone: a list no longer had it, or its
+  /// inspect found nothing. [container] keeps what was read before.
+  final bool removed;
+
+  DockerContainerDetails copyWith({
+    DockerQueryFailed? Function()? failure,
+    bool? removed,
+  }) => DockerContainerDetails(
+    container: container,
+    failure: failure == null ? this.failure : failure(),
+    removed: removed ?? this.removed,
+  );
+}
+
+/// One container a details view shows.
+final class _InspectedContainer {
+  _InspectedContainer(this.summary);
+
+  final ValueNotifier<DockerContainerDetails> details = ValueNotifier(
+    const DockerContainerDetails(),
+  );
+
+  /// The container's row in the latest list, which a change in the next
+  /// one is measured against; null while unlisted.
+  ContainerSummary? summary;
+
+  /// How many details views show the container.
+  int views = 0;
+
+  /// The inspect in flight, whose answer [details] takes.
+  String? queryId;
+
+  /// Whether to inspect again once [queryId] is answered.
+  bool readAgain = false;
+
+  void dispose() => details.dispose();
+}
+
 /// Whether [after] is the ready endpoint [before] was: the same route
 /// and API version.
 bool _sameEndpoint(DockerEndpointState? before, DockerEndpointState after) {
@@ -417,9 +717,15 @@ final class _DockerServer {
   /// The containers whose stats the watch reads: the rows on screen.
   Set<String> statsFor = const {};
 
+  /// The containers details views show, by full id.
+  final Map<String, _InspectedContainer> inspected = {};
+
   void dispose() {
     endpoint.dispose();
     engine.dispose();
     containers.dispose();
+    for (final container in inspected.values) {
+      container.dispose();
+    }
   }
 }

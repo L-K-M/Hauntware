@@ -209,7 +209,8 @@ void main() {
       expect(link.started, isEmpty);
     });
 
-    test('denied with sudo needs admin mode; rank 3 is never tried', () async {
+    test('denied with sudo needs admin mode; without it rank 3 is not '
+        'tried', () async {
       for (final sudo in [SudoKind.sudo, SudoKind.sudoRs, SudoKind.unknown]) {
         final link = ForwardingLink()..probeAnswers[_rootful] = _denied;
 
@@ -570,7 +571,7 @@ void main() {
       final labels = [for (final r in DockerRank.values) r.label];
       expect(labels.toSet(), hasLength(DockerRank.values.length));
       expect({...labels, none.label}, DockerRouteLabel.values.toSet());
-      expect([for (final r in DockerRank.values) r.number], [1, 2, 4]);
+      expect([for (final r in DockerRank.values) r.number], [1, 2, 3, 4]);
     });
   });
 

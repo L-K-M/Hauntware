@@ -2,11 +2,12 @@
 // intent, built in the engine. Its preview and its execution read the same
 // steps, so what the user confirmed is what runs; the danger findings come
 // from the same steps' words.
+import 'package:klabautermann_host/klabautermann_host.dart' show DetachedRunner;
 import 'package:meta/meta.dart';
 import 'package:seance_core/seance_core.dart' show DangerFinding;
 
 import '../engine/protocol.dart'
-    show ActionIntent, ActionPreview, ConfirmationTier;
+    show ActionIntent, ActionPreview, ActionRefusalReason, ConfirmationTier;
 import 'confirmation.dart';
 import 'danger.dart';
 import 'plan_types.dart';
@@ -27,14 +28,18 @@ final class OperationPlan {
     required this.requiredLevel,
     required this.runner,
     Iterable<HostWriteRow> hostWrites = const [],
-    this.detached = false,
+    this.detachedRunner,
     this.impact,
     this.ownership,
     this.protected,
     this.followUnit,
+    Iterable<String> orphans = const [],
+    Iterable<PlanWarning> warnings = const [],
     Iterable<Revalidation> revalidate = const [],
   }) : steps = List.unmodifiable(steps),
        hostWrites = List.unmodifiable(hostWrites),
+       orphans = List.unmodifiable(orphans),
+       warnings = Set.unmodifiable(warnings),
        revalidate = List.unmodifiable(revalidate),
        danger = List.unmodifiable(lintSteps(steps)),
        tier = confirmationTier(
@@ -54,9 +59,12 @@ final class OperationPlan {
   final RunnerFacts runner;
   final List<HostWriteRow> hostWrites;
 
-  /// The steps run in a detached operation (03 §7.17), which outlives
-  /// the session.
-  final bool detached;
+  /// The runner row of a detached operation (03 §7.17), which runs the
+  /// steps on the host and outlives the session; null for a plan the
+  /// session runs step by step.
+  final DetachedRunner? detachedRunner;
+
+  bool get detached => detachedRunner != null;
 
   final PlanImpact? impact;
   final PlanOwnership? ownership;
@@ -64,6 +72,10 @@ final class OperationPlan {
 
   /// The unit whose journal the app follows after the run (JOB-08).
   final String? followUnit;
+
+  /// The stack containers `--remove-orphans` would remove (STK-06).
+  final List<String> orphans;
+  final Set<PlanWarning> warnings;
   final List<Revalidation> revalidate;
 
   /// What the linter found in the steps ([lintSteps]).
@@ -88,8 +100,13 @@ final class OperationPlan {
     protected: protected,
     requiredTier: tier,
     followUnit: followUnit,
+    orphans: orphans,
+    warnings: warnings,
   );
 }
+
+/// A plan, or why there is none.
+typedef PlanAttempt = ({OperationPlan? plan, ActionRefusalReason? refusal});
 
 /// What the runner checks again right before a plan's first step (03
 /// §8.5). Each holds what the preview saw.
@@ -112,15 +129,33 @@ final class ProcessStarted extends Revalidation {
   final int startTicks;
 }
 
-/// A Docker target is unchanged: the container still has [id], or the
-/// stack's configuration still hashes to it. The Docker planners check
-/// these through the engine's API (M4 E15).
-final class DockerTargetUnchanged extends Revalidation {
-  const DockerTargetUnchanged(this.target, this.id);
+/// What a [DockerTargetUnchanged] names.
+enum DockerTargetKind { container, image, stack }
 
-  /// The container name or the stack's project.
+/// A Docker target is unchanged: the container or image still has [id],
+/// or the stack still has the containers [id] fingerprints. The runner
+/// checks these through the engine's API (M4 E15).
+final class DockerTargetUnchanged extends Revalidation {
+  const DockerTargetUnchanged(this.kind, this.target, this.id);
+
+  final DockerTargetKind kind;
+
+  /// The container name, the image reference or the stack's project.
   final String target;
 
-  /// The container id or the configuration hash the preview saw.
+  /// The container or image id, or the stack's fingerprint
+  /// ([stackFingerprint]), as the preview saw it.
   final String id;
+}
+
+/// A stack's files still configure what the preview saw (STK-06): the
+/// `config --hash '*'` run of [hashArgv] prints [hashes] for every
+/// service, the hash each service's containers carry.
+final class StackConfigUnchanged extends Revalidation {
+  StackConfigUnchanged(Iterable<String> hashArgv, Map<String, String> hashes)
+    : hashArgv = List.unmodifiable(hashArgv),
+      hashes = Map.unmodifiable(hashes);
+
+  final List<String> hashArgv;
+  final Map<String, String> hashes;
 }

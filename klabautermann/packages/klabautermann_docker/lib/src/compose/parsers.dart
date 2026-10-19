@@ -240,6 +240,22 @@ Map<String, String>? parseComposeServiceHashes(String text) {
 
 final _serviceHashLine = RegExp(r'^([a-zA-Z0-9][a-zA-Z0-9._-]*) ([a-f0-9]+)$');
 
+/// The service names `docker compose config --services` prints, one per
+/// line (03 §7.16 STK-06). Null when a line is not a service name, as an
+/// error or another CLI's output would be.
+Set<String>? parseComposeServiceNames(String text) {
+  final names = <String>{};
+  for (final line in const LineSplitter().convert(text)) {
+    final name = line.trim();
+    if (name.isEmpty) continue;
+    if (!_serviceName.hasMatch(name)) return null;
+    names.add(name);
+  }
+  return names;
+}
+
+final _serviceName = RegExp(r'^[a-zA-Z0-9][a-zA-Z0-9._-]*$');
+
 /// `docker compose version --format json` (03 §7.16 STK-05).
 @immutable
 final class ComposeVersionInfo {
