@@ -238,6 +238,24 @@ void main() {
       }, skip: _mayKillPid1 ? 'this user may signal PID 1' : null);
     });
 
+    group('$name: re-validation reads', () {
+      test("start ticks print a live process's field 22", () async {
+        final sleeper = await _sleeper();
+        final result = await _run(shell, HostCommands.startTicks(sleeper.pid));
+        expect(result.exitCode, 0, reason: '${result.stderr}');
+        expect('${result.stdout}', '${_startTicks(sleeper.pid)}\n');
+      });
+
+      test('start ticks of a gone process exit 3, printing nothing', () async {
+        final sleeper = await _sleeper();
+        sleeper.kill(ProcessSignal.sigkill);
+        await sleeper.exitCode;
+        final result = await _run(shell, HostCommands.startTicks(sleeper.pid));
+        expect(result.exitCode, 3);
+        expect('${result.stdout}', isEmpty);
+      });
+    });
+
     group('$name: crontab spool', () {
       test('lists the first spool that exists, regular files only', () async {
         final root = await _tempDir('klab-spool-');
