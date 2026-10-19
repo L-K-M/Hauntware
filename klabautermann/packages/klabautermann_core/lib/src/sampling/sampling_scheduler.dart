@@ -9,7 +9,8 @@
 /// and their timers, and returning starts new ones:
 ///
 /// ```text
-///   link ready ─▶ slow: probe (once per link), then ticks
+///   link ready ─▶ slow: probe (once per link), `ops` (once per link,
+///              │        when the engine follows operations), then ticks
 ///              └▶ fast: ticks, once the probe settles or a profile is known
 /// ```
 library;
@@ -17,7 +18,7 @@ library;
 import 'dart:async';
 
 import 'package:klabautermann_host/klabautermann_host.dart'
-    show Collector, HostProfile, SamplerKind;
+    show Collector, HostProfile, HwsSection, SamplerKind;
 import 'package:seance_core/seance_core.dart' show SshLink, quoteShellWord;
 
 import '../engine/protocol.dart';
@@ -104,7 +105,8 @@ final class SamplingScheduler {
   /// [linkFor] gives a server's ready link, null while it has none.
   /// [deadPeerHint] and [clearDeadPeerHint] reach the link supervisor.
   /// [probed] hears every probe answer, changed or not, for the
-  /// capability cache (D59).
+  /// capability cache (D59). [opsRead] hears each `ops` section (03
+  /// §7.17); without it the scheduler never reads `ops`.
   /// [openSampler], [startTimer], [now] (the clock events carry) and
   /// [elapsed] (a monotonic clock, which due times follow so that a
   /// changed wall clock cannot stall sampling) are test seams.
@@ -115,6 +117,7 @@ final class SamplingScheduler {
     required this._deadPeerHint,
     required this._clearDeadPeerHint,
     this._probed = _ignoreProbe,
+    this._opsRead,
     this._openSampler = _defaultSamplerOpener,
     this._startTimer = Timer.new,
     this._now = _utcNow,
@@ -127,6 +130,7 @@ final class SamplingScheduler {
   final void Function(String serverId, SshLink link) _deadPeerHint;
   final void Function(String serverId, SshLink link) _clearDeadPeerHint;
   final void Function(String serverId, HostProfile profile) _probed;
+  final void Function(String serverId, HwsSection section)? _opsRead;
   final SamplerOpener _openSampler;
   final Timer Function(Duration duration, void Function() callback) _startTimer;
   final DateTime Function() _now;
@@ -194,6 +198,18 @@ final class SamplingScheduler {
     }
     _schedule(server, run, run.fast);
     _schedule(server, run, run.slow);
+  }
+
+  /// Reads [serverId]'s `ops` once more (03 §7.17): at once while the
+  /// server samples and its slow sampler is free, otherwise as soon as
+  /// it is. A server that does not sample reads them when it next does.
+  void readOps(String serverId) {
+    if (_opsRead == null) return;
+    final server = _servers[serverId];
+    if (server == null) return;
+
+    server.opsOwed = true;
+    if (server.run case final run?) _schedule(server, run, run.slow);
   }
 
   /// Re-reads [serverId]'s subscriptions and link, starting or stopping
@@ -307,6 +323,10 @@ final class SamplingScheduler {
       holdFast: server.pipeline.profile == null,
       probeAt: identical(server.probedOn, link) ? null : now,
     );
+    // `ops` is read once on each link, as `identity` is (03 §6.4).
+    if (_opsRead != null && !identical(server.opsReadOn, link)) {
+      server.opsOwed = true;
+    }
     // The slow sampler first: its first request is the probe (03 §6.1).
     run.slow = _open(server, run, SamplerKind.slow);
     run.fast = _open(server, run, SamplerKind.fast);
@@ -431,6 +451,39 @@ final class SamplingScheduler {
     _schedule(server, run, run.slow);
   }
 
+  /// Sends the `ops` read the server owes on [run]'s free slow sampler,
+  /// which counts as busy until it settles. A read that brings no `ops`
+  /// section stays owed and goes out again after [_owedReadRetry].
+  void _readOps(_Server server, _Run run) {
+    final sampler = run.slow;
+    sampler.busy = true;
+    unawaited(
+      sampler.session.onDemand(Collector.ops, const []).then((outcome) {
+        sampler.busy = false;
+        if (!identical(server.run, run)) return;
+
+        final section = outcome is SamplerReplied
+            ? outcome.reply.section(Collector.ops.wireName)
+            : null;
+        if (outcome
+            case SamplerReplied() ||
+                SamplerGap(reason: SamplerGapReason.lost)) {
+          _answered(server, run);
+        }
+        if (section == null) {
+          run.opsAt = _elapsed() + _owedReadRetry;
+        } else {
+          server.opsOwed = false;
+          server.opsReadOn = run.link;
+          run.opsAt = null;
+          _opsRead!(server.pipeline.serverId, section);
+        }
+        _schedule(server, run, sampler);
+      }),
+    );
+    _schedule(server, run, sampler);
+  }
+
   // -- ticks ----------------------------------------------------------
 
   /// Arms [sampler]'s timer for its earliest due stream that drives
@@ -463,10 +516,26 @@ final class SamplingScheduler {
       _probe(server, run);
       return;
     }
+    // `ops` follows the probe, so the first read already knows the host.
+    final opsAt =
+        sampler.kind == SamplerKind.slow &&
+            !sampler.busy &&
+            run.probeAt == null &&
+            server.opsOwed
+        ? run.opsAt ?? Duration.zero
+        : null;
+    if (opsAt != null && opsAt <= _elapsed()) {
+      _readOps(server, run);
+      return;
+    }
 
     final next = _next(run, sampler, (s) => !_held(run, sampler, s));
-    if (probeAt != null && (next == null || probeAt <= next)) {
-      _arm(sampler, probeAt, () => _schedule(server, run, sampler));
+    final wake = switch ((probeAt, opsAt)) {
+      (final p?, final o?) => p < o ? p : o,
+      (final p, final o) => p ?? o,
+    };
+    if (wake != null && (next == null || wake <= next)) {
+      _arm(sampler, wake, () => _schedule(server, run, sampler));
     } else if (next != null) {
       _arm(sampler, next, () => _tick(server, run, sampler));
     }
@@ -719,6 +788,11 @@ final class _Server {
   /// `identity` was last read on (03 §6.4: once per session).
   SshLink? probedOn;
   SshLink? identityReadOn;
+
+  /// An `ops` read is owed (03 §7.17), and the link the last one was
+  /// read on.
+  bool opsOwed = false;
+  SshLink? opsReadOn;
   _Run? run;
 }
 
@@ -754,6 +828,10 @@ final class _Run {
   /// owes one; null once one is answered.
   Duration? probeAt;
   bool probing = false;
+
+  /// When an owed `ops` read that brought no reply goes out again; null
+  /// to send it as soon as the slow sampler is free.
+  Duration? opsAt;
 
   /// How long the next probe that brings no reply delays the one after.
   Duration probeRetry = _owedReadRetry;

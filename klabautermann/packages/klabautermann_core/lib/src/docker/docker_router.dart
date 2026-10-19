@@ -51,6 +51,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
 import 'package:seance_core/seance_core.dart'
     show RemoteCommandResult, SshLink, SshLinkClosed;
 
+import '../admin/admin_mode.dart' show AdminSession;
 import '../engine/protocol.dart';
 import '../links/channel_quota.dart';
 import '../logs/log_stream_router.dart' show kLogStreamsPerServerMax;
@@ -71,6 +72,16 @@ const _answerTimeout = Duration(seconds: 10);
 /// How long a relay's pooled connection stays open without a query
 /// (M9 [E]): it holds a session channel.
 const _relayIdle = Duration(seconds: 30);
+
+/// Why [DockerRouter.useEndpoint] had no endpoint to run on.
+final class DockerEndpointUnavailable implements Exception {
+  const DockerEndpointUnavailable(this.failure);
+
+  final DockerQueryFailure failure;
+
+  @override
+  String toString() => 'DockerEndpointUnavailable(${failure.name})';
+}
 
 /// The pooled connections a relay holds (03 §5.2's one keep-alive duplex
 /// for short calls). A stack file read lists over the pool and then
@@ -103,6 +114,7 @@ final class DockerRouter {
   DockerRouter({
     required this._linkFor,
     required this._emit,
+    this._adminFor,
     ChannelQuotas? quotas,
     this._startTimer = Timer.new,
     this._now = DateTime.now,
@@ -117,6 +129,10 @@ final class DockerRouter {
 
   final SshLink? Function(String serverId) _linkFor;
   final void Function(EngineEvent event) _emit;
+
+  /// Each server's admin session, whose elevation the sudo relay (rank 3)
+  /// runs through; absent in an engine without admin mode.
+  final AdminSession? Function(String serverId)? _adminFor;
   final ChannelQuotas _quotas;
   final Timer Function(Duration duration, void Function() callback) _startTimer;
   final DateTime Function() _now;
@@ -148,6 +164,62 @@ final class DockerRouter {
     }
     session.waiting.add(request);
     _pump(session);
+  }
+
+  /// Runs [body] with [serverId]'s client and route once its endpoint is
+  /// ready, as a query would run (M4 E15: the Docker planners and the
+  /// runner's API steps). Throws [DockerEndpointUnavailable] when the
+  /// endpoint cannot be reached; a connection that drops under [body]
+  /// drops the endpoint, as a query's does, and the error propagates.
+  Future<T> useEndpoint<T>(
+    String serverId,
+    Future<T> Function(DockerClient client, DockerEndpointRoute route) body,
+  ) => _use(serverId, (endpoint) => body(endpoint.client, endpoint.route));
+
+  /// [useEndpoint] with the endpoint's [StackSources] too (M4 E18: the
+  /// redeploy planner and its re-validation).
+  Future<T> useStacks<T>(
+    String serverId,
+    Future<T> Function(
+      DockerClient client,
+      DockerEndpointRoute route,
+      StackSources stacks,
+    )
+    body,
+  ) => _use(
+    serverId,
+    (endpoint) => body(endpoint.client, endpoint.route, endpoint.stacks),
+  );
+
+  Future<T> _use<T>(
+    String serverId,
+    Future<T> Function(_Endpoint endpoint) body,
+  ) async {
+    if (!_fleet.contains(serverId)) {
+      throw const DockerEndpointUnavailable(DockerQueryFailure.notInFleet);
+    }
+    final session = _session(serverId);
+    final ready = Completer<_Endpoint>();
+    session.users.add(ready);
+    _pump(session);
+    final endpoint = await ready.future;
+
+    session.idle?.cancel();
+    session.idle = null;
+    endpoint.inFlight++;
+    try {
+      return await body(endpoint);
+    } on DockerException catch (e) {
+      if ((e is DockerTransportException || e is DockerProtocolException) &&
+          identical(session.endpoint, endpoint)) {
+        _drop(session);
+        _pump(session);
+      }
+      rethrow;
+    } finally {
+      endpoint.inFlight--;
+      if (identical(session.endpoint, endpoint)) _idleCheck(session, endpoint);
+    }
   }
 
   /// Takes [request], replacing the server's watch with its id. A new
@@ -294,6 +366,35 @@ final class DockerRouter {
     if (_sessions.remove(serverId) case final session?) _end(session);
   }
 
+  /// Admin mode turned on or off for [serverId] (plan M7). When it ends,
+  /// a sudo relay's connections close and the route is looked for again,
+  /// which now passes over rank 3; when it starts, a route that failed
+  /// is looked for again, which may now take it. A route being looked
+  /// for when it changes is looked for again either way.
+  void adminChanged(String serverId) {
+    final session = _sessions[serverId];
+    if (session == null) return;
+    final on = _adminFor?.call(serverId) != null;
+    if (session.endpoint case final endpoint?) {
+      if (on || endpoint.route.rank != DockerRank.sudoRelay) return;
+      _drop(session);
+      _pump(session);
+      return;
+    }
+    // A ladder under way chose with the admin mode before: a relay it
+    // found must not outlive admin mode, and one it lacked may be there
+    // now. Dropping discards its outcome and closes what it opened.
+    if (session.resolving) {
+      _drop(session);
+      _pump(session);
+      return;
+    }
+    if (on && session.failed) {
+      session.failed = false;
+      _pump(session);
+    }
+  }
+
   /// Ends the sessions of [serverIds] and forgets their probe answers:
   /// they left the fleet, or their endpoint now names another machine
   /// (SYN-08).
@@ -375,12 +476,18 @@ final class DockerRouter {
       for (final query in queries) {
         unawaited(_run(session, endpoint, query));
       }
+      final users = session.users.toList();
+      session.users.clear();
+      for (final user in users) {
+        user.complete(endpoint);
+      }
       return;
     }
 
     // A failure stands for its link and probe answer until a query asks
     // again.
-    if (session.resolving || (session.failed && session.waiting.isEmpty)) {
+    if (session.resolving ||
+        (session.failed && session.waiting.isEmpty && session.users.isEmpty)) {
       return;
     }
     unawaited(_resolve(session, link, profile));
@@ -399,7 +506,12 @@ final class DockerRouter {
     final epoch = session.epoch;
     _state(session, DockerEndpointPhase.resolving);
 
-    final outcome = await _connect(session.quota, link, profile);
+    final outcome = await _connect(
+      session.serverId,
+      session.quota,
+      link,
+      profile,
+    );
     if (epoch != session.epoch ||
         !identical(_sessions[session.serverId], session)) {
       if (outcome case _Ready(:final endpoint)) {
@@ -423,6 +535,7 @@ final class DockerRouter {
                 ),
               ),
           openFileSystem: link.openFileSystem,
+          admin: () => _adminFor?.call(session.serverId),
         );
         session
           ..endpoint = endpoint
@@ -487,15 +600,25 @@ final class DockerRouter {
   /// engine does not answer on is passed over and the ladder runs again;
   /// each pass excludes one more route, so the loop ends.
   Future<_Outcome> _connect(
+    String serverId,
     ChannelQuota quota,
     SshLink link,
     HostProfile profile,
   ) async {
     final excluded = <DockerRoute>{};
+    // Each connection asks for the session as it opens, so a relay opened
+    // after admin mode ended fails rather than elevate.
+    Future<ByteDuplex> open(DockerRoute route) =>
+        openDockerDuplex(link, route, admin: _adminFor?.call(serverId));
     while (true) {
       final DockerRouteResult found;
       try {
-        found = await DockerLadder.resolve(link, profile, excluding: excluded);
+        found = await DockerLadder.resolve(
+          link,
+          profile,
+          excluding: excluded,
+          adminMode: _adminFor?.call(serverId) != null,
+        );
       } on Object {
         // A link failure other than a forwarding refusal (D04). Anything
         // else thrown here would leave the session resolving for good.
@@ -512,7 +635,7 @@ final class DockerRouter {
           route = r;
       }
 
-      final http = _pool(quota, link, route);
+      final http = _pool(quota, link, route, open);
       final PingInfo ping;
       final DockerServerVersion version;
       try {
@@ -544,8 +667,8 @@ final class DockerRouter {
         );
         return _Ready(
           _Endpoint(
-            () => _pool(quota, link, route),
-            () => openDockerDuplex(link, route),
+            () => _pool(quota, link, route, open),
+            () => open(route),
             http,
             route: endpointRoute,
             version: version,
@@ -566,31 +689,33 @@ final class DockerRouter {
     }
   }
 
-  /// An HTTP pool over [route]. Streamlocal costs no session and gets
-  /// 03 §5.2's 16 connections. On a relay each connection is a session
-  /// channel (M9): the pool holds [_relayPoolConnections], each taking a
-  /// short-action slot of [quota] while open, so the idle close gives it
-  /// back.
+  /// An HTTP pool over [route], each connection made by [open]. Streamlocal
+  /// costs no session and gets 03 §5.2's 16 connections. On a relay, the
+  /// sudo relay included, each connection is a session channel (M9): the
+  /// pool holds [_relayPoolConnections], each taking a short-action slot
+  /// of [quota] while open, so the idle close gives it back.
   static DockerHttpClient _pool(
     ChannelQuota quota,
     SshLink link,
     DockerRoute route,
+    Future<ByteDuplex> Function(DockerRoute route) open,
   ) => route.rank == DockerRank.streamlocal
       ? DockerHttpClient(
-          () => openDockerDuplex(link, route),
+          () => open(route),
           maxConnections: defaultMaxConnections,
         )
       : DockerHttpClient(
-          () => _relayConnection(quota, link, route),
+          () => _relayConnection(quota, link, route, open),
           maxConnections: _relayPoolConnections,
         );
 
-  /// A relay connection once a short-action slot of [quota] is free; the
-  /// slot goes back when it closes.
+  /// A relay connection by [open] once a short-action slot of [quota] is
+  /// free; the slot goes back when it closes.
   static Future<ByteDuplex> _relayConnection(
     ChannelQuota quota,
     SshLink link,
     DockerRoute route,
+    Future<ByteDuplex> Function(DockerRoute route) open,
   ) async {
     await quota.acquire(
       ChannelShare.shortAction,
@@ -598,7 +723,7 @@ final class DockerRouter {
     );
     final ByteDuplex duplex;
     try {
-      duplex = await openDockerDuplex(link, route);
+      duplex = await open(route);
     } on Object {
       quota.give(ChannelShare.shortAction);
       rethrow;
@@ -882,6 +1007,11 @@ final class DockerRouter {
     for (final query in queries) {
       _answer(query, failure);
     }
+    final users = session.users.toList();
+    session.users.clear();
+    for (final user in users) {
+      user.completeError(DockerEndpointUnavailable(failure));
+    }
   }
 
   /// Sends [session]'s state; waiting goes out once while the mode
@@ -957,6 +1087,9 @@ final class _Session {
 
   /// Queries waiting for the endpoint, oldest first.
   final List<DockerQuery> waiting = [];
+
+  /// [DockerRouter.useEndpoint] calls waiting for the endpoint.
+  final List<Completer<_Endpoint>> users = [];
 
   /// The link [endpoint] and any resolution under way belong to.
   SshLink? link;

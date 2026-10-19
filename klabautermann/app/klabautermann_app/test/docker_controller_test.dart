@@ -613,4 +613,244 @@ void main() {
       expect(dfQueries(), hasLength(1));
     });
   });
+
+  group('container details (CTR-03, CTR-04)', () {
+    final at = DateTime(2026, 10, 15, 14, 30);
+
+    List<DockerQuery> inspects() => [
+      for (final query in queries())
+        if (query.query is DockerContainerQuery) query,
+    ];
+
+    String containerOf(DockerQuery query) =>
+        (query.query as DockerContainerQuery).containerId;
+
+    test('one inspect per container while any view shows it, shared by '
+        'its views', () async {
+      final details = docker.openContainer('srv-1', 'c-1');
+      expect(inspects(), hasLength(1));
+      expect(containerOf(inspects().single), 'c-1');
+      expect(details.value.container, isNull);
+      expect(details.value.failure, isNull);
+
+      expect(docker.openContainer('srv-1', 'c-1'), same(details));
+      expect(inspects(), hasLength(1), reason: 'the first view reads');
+
+      await emit(
+        dockerAnswer(
+          inspects().single,
+          DockerContainerPayload(dockerContainerDetails('c-1')),
+        ),
+      );
+      expect(details.value.container?.id, 'c-1');
+
+      // The last view to close lets them go; an answer after that, or
+      // for another query, changes nothing.
+      docker.closeContainer('srv-1', 'c-1');
+      docker.closeContainer('srv-1', 'c-1');
+      final again = docker.openContainer('srv-1', 'c-1');
+      expect(again, isNot(same(details)));
+      expect(inspects(), hasLength(2));
+      expect(
+        inspects().map((query) => query.queryId).toSet(),
+        hasLength(2),
+        reason: 'ids are never reused',
+      );
+      await emit(
+        dockerAnswer(
+          inspects().first,
+          DockerContainerPayload(dockerContainerDetails('c-1')),
+        ),
+      );
+      expect(again.value.container, isNull);
+    });
+
+    test('a container the engine cannot find was removed, and keeps what '
+        'was read', () async {
+      final details = docker.openContainer('srv-1', 'c-1');
+      await emit(
+        dockerAnswer(
+          inspects().single,
+          DockerContainerPayload(dockerContainerDetails('c-1')),
+        ),
+      );
+      docker.retryContainer('srv-1', 'c-1');
+      await emit(
+        dockerAnswer(
+          inspects().last,
+          const DockerQueryFailed(DockerQueryFailure.notFound),
+        ),
+      );
+      expect(details.value.removed, isTrue);
+      expect(details.value.failure, isNull);
+      expect(details.value.container?.id, 'c-1');
+    });
+
+    test('a failure is kept beside the last read and read again on '
+        'retry', () async {
+      final details = docker.openContainer('srv-1', 'c-1');
+      await emit(
+        dockerAnswer(
+          inspects().single,
+          const DockerQueryFailed(
+            DockerQueryFailure.daemonError,
+            detail: 'Error response from daemon',
+          ),
+        ),
+      );
+      expect(details.value.failure?.failure, DockerQueryFailure.daemonError);
+      expect(details.value.failure?.detail, 'Error response from daemon');
+
+      docker.retryContainer('srv-1', 'c-1');
+      expect(inspects(), hasLength(2));
+      await emit(
+        dockerAnswer(
+          inspects().last,
+          DockerContainerPayload(dockerContainerDetails('c-1')),
+        ),
+      );
+      expect(details.value.failure, isNull);
+      expect(details.value.container, isNotNull);
+    });
+
+    test('a read that failed on the endpoint runs again once it is ready '
+        'on a new route', () async {
+      await emit(dockerReady('srv-1'));
+      final details = docker.openContainer('srv-1', 'c-1');
+      await emit(
+        dockerAnswer(
+          inspects().single,
+          const DockerQueryFailed(DockerQueryFailure.cancelled),
+        ),
+      );
+      expect(details.value.failure?.failure, DockerQueryFailure.cancelled);
+
+      await emit(dockerReady('srv-1'));
+      expect(inspects(), hasLength(1), reason: 'the same route');
+
+      await emit(dockerReady('srv-1', rank: DockerRank.cliRelay));
+      expect(inspects(), hasLength(2));
+    });
+
+    test('follows the container through the lists: a changed row is read '
+        'again, once at a time, and a missing one was removed', () async {
+      docker.watchContainers('srv-1');
+      await emit(
+        dockerContainerList('srv-1', [
+          dockerContainer('c-1', status: 'Up 2 hours'),
+          dockerContainer('c-2'),
+        ], at: at),
+      );
+      final details = docker.openContainer('srv-1', 'c-1');
+      expect(inspects(), hasLength(1));
+
+      // Another container changed; this one did not.
+      await emit(
+        dockerContainerList('srv-1', [
+          dockerContainer('c-1', status: 'Up 2 hours'),
+          dockerContainer('c-2', state: 'exited'),
+        ], at: at),
+      );
+      expect(inspects(), hasLength(1));
+
+      // A restart while the first read is in flight reads once more after
+      // it, not twice at once.
+      await emit(
+        dockerContainerList('srv-1', [
+          dockerContainer('c-1', status: 'Up 1 second'),
+        ], at: at),
+      );
+      await emit(
+        dockerContainerList('srv-1', [
+          dockerContainer('c-1', status: 'Up 3 seconds'),
+        ], at: at),
+      );
+      expect(inspects(), hasLength(1));
+      await emit(
+        dockerAnswer(
+          inspects().single,
+          DockerContainerPayload(dockerContainerDetails('c-1')),
+        ),
+      );
+      expect(inspects(), hasLength(2));
+
+      await emit(dockerContainerList('srv-1', const [], at: at));
+      expect(details.value.removed, isTrue);
+      expect(inspects(), hasLength(2), reason: 'nothing to read');
+    });
+
+    test('details still shown when their server rejoins the fleet are '
+        'read again and shared with a new view, each close pairing with an '
+        'open (SYN-08)', () async {
+      const entry = FleetEntry(
+        serverId: 'srv-1',
+        label: 'web-1',
+        host: 'web-1.example.net',
+        port: kSshDefaultPort,
+        origin: FleetEntryOrigin.sshConfig,
+      );
+      await emit(CatalogReplaced([entry]));
+      final first = docker.openContainer('srv-1', 'c-1');
+      await emit(CatalogReplaced(const []));
+      expect(first.value.failure?.failure, DockerQueryFailure.notInFleet);
+
+      await emit(CatalogReplaced([entry]));
+      final second = docker.openContainer('srv-1', 'c-1');
+      expect(second, same(first));
+      expect(inspects(), hasLength(2), reason: 'read again on its return');
+
+      void listener() {}
+      docker.closeContainer('srv-1', 'c-1');
+      first.addListener(listener);
+      first.removeListener(listener);
+      docker.closeContainer('srv-1', 'c-1');
+      expect(() => first.addListener(listener), throwsFlutterError);
+    });
+
+    test('a server that leaves the fleet drops the details (SYN-08), and '
+        'a stopped engine answers nothing', () async {
+      final details = docker.openContainer('srv-1', 'c-1');
+      final inFlight = inspects().single;
+      await emit(CatalogReplaced(const []));
+      await emit(
+        dockerAnswer(
+          inFlight,
+          DockerContainerPayload(dockerContainerDetails('c-1')),
+        ),
+      );
+      expect(details.value.container, isNull);
+      // The view that still shows it keeps a working listenable that
+      // says why, until it closes.
+      expect(details.value.failure?.failure, DockerQueryFailure.notInFleet);
+      void listener() {}
+      details
+        ..addListener(listener)
+        ..removeListener(listener);
+      docker.closeContainer('srv-1', 'c-1');
+      expect(() => details.addListener(listener), throwsFlutterError);
+
+      final unlisted = docker.openContainer('srv-1', 'c-1');
+      expect(unlisted.value.failure?.failure, DockerQueryFailure.notInFleet);
+      expect(inspects(), hasLength(1));
+
+      await emit(
+        CatalogReplaced([
+          const FleetEntry(
+            serverId: 'srv-2',
+            label: 'web-2',
+            host: 'web-2.example.net',
+            port: kSshDefaultPort,
+            origin: FleetEntryOrigin.sshConfig,
+          ),
+        ]),
+      );
+      final pending = docker.openContainer('srv-2', 'c-9');
+      await engine.close();
+      await pumpEventQueue();
+      expect(pending.value.failure?.failure, DockerQueryFailure.cancelled);
+      final late = docker.openContainer('srv-2', 'c-8');
+      expect(late.value.failure?.failure, DockerQueryFailure.cancelled);
+      expect(inspects(), hasLength(2));
+    });
+  });
 }

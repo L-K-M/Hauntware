@@ -260,8 +260,30 @@ M2, the host read MVP, is the current milestone. What is on main:
   and 200 % text get two-line rows with a sort menu. Stats older than
   20 s turn grey beside a history icon and read "stale"; a failed read
   keeps the last list with why and a retry, and low-session mode is
-  named. No sizes (the watch never asks for `size=1`) and no details
-  (D14). Tested against the fake engine only.
+  named. No sizes (the watch never asks for `size=1`). Tested against
+  the fake engine only.
+- Container details in the app (M3, D14, 03 §7.12, §8.9, §10.2): a
+  container row (click, Enter or a screen reader's tap) opens its
+  details in the desktop inspector, which replaces the server's
+  coverage until closed (Escape or the close button, which takes focus
+  as it opens) or another server is selected, or on a phone's pushed
+  page. The Docker controller sends one `DockerContainerQuery` per
+  container a view shows, again when its row's state, status, health or
+  image changes in a delivered list (one at a time), and after a read
+  that failed once the endpoint is ready on a new route; a list without
+  it or a `notFound` answer says "container removed" over the last
+  read, and other failures say why with a retry. The details show the
+  managed-by badge (`detectOwnership` over the labels, now exported by
+  the core barrel), state with the exit code and an OOM kill, health
+  with the last checks' output, restart policy and count, image, times,
+  entrypoint and arguments, environment, labels, mounts, the row's
+  ports (the inspect model carries none), networks and a raw JSON view
+  drawn from the masked model. Masked values reveal for 30 s on
+  selection in the view's state only, mask again when the app turns
+  inactive or the view closes or changes container, and read as
+  "(masked)" to a screen reader. Logging driver options stay out of the
+  JSON: the model carries them unmasked. Tested against the fake engine
+  only.
 - Overview Docker summary (M3, D19, 03 §7.1, §10.1, §10.4, OV-02,
   OV-05): once a server's Docker endpoint is ready, the Overview holds
   a `DockerWatch` of the containers and images of its own while it
@@ -1224,7 +1246,12 @@ M2, the host read MVP, is the current milestone. What is on main:
 - Fedora 44 repin (M2, #259): `quay.io` no longer serves the Fedora 44
   digest `capture.sh` pinned, so `fedora-44` now pins the tag's current
   index digest, and the `fedora-44-docker-bash` fixture is recaptured
-  from it with its goldens (collector-set version 7).
+  from it with its goldens (collector-set version 7). Two days later
+  `quay.io` had dropped that digest too, since it retags `fedora:44`
+  daily, so `fedora-44` now pins Docker Hub's official `fedora:44`
+  through `mirror.gcr.io`, as the other official images are, and the
+  fixture is recaptured from it. Docker Hub has so far kept replaced
+  official digests pullable, but promises nothing.
 - Docker fixture and rank-1 smoke (M3, 03 §5.4, §11.3, D10): the
   fixture adds `dind` (Docker 29.9.1, privileged, unpublished, dockerd
   on one Unix socket with gid 990, on a named volume) and `docker-sshd`
@@ -1445,6 +1472,37 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 Docker action planners (E15): `PlanAction` plans container state
+  changes and removal, image removal and stack start, stop and restart
+  over the server's Docker endpoint. Steps address the full id and are
+  re-validated by inspect before they run. Removing volumes, forcing an
+  image in use, and a managed or protected target need the typed
+  confirmation. A stack acts in its services' dependency order and a
+  cycle refuses. The app's Docker actions arrive with E22.
+- M4 elevated reads (E16b): with admin mode on, the engine reads a
+  root-only log file the app asks to read elevated, and a stack file
+  SFTP may not read, through the admin session; a follow ends when admin
+  mode does.
+- M4 sudo relay (E16a): while admin mode is on, a Docker socket the
+  user cannot write is reached through rank 3, the engine CLI's
+  `dial-stdio` under `sudo -n` or the password prelude, one elevated exec
+  per connection. Admin mode ending drops the route.
+- M4 pull and redeploy (E18): `PlanAction` plans STK-06 for a verified,
+  unmanaged stack as one detached operation of `config -q`, `pull` and
+  `up -d` through the endpoint's `--host`, listing orphans and warning
+  about profile-gated services. The runner checks the config hashes
+  again before it launches. The app's redeploy arrives with E23b.
+- M4 operation output (E17c): the engine follows a detached
+  operation's output file like any log file, each line redacted.
+- M4 detached runner, second half (E17b): the engine reads each
+  server's detached operations on connect and while one runs, checks a
+  running one's wrapper, and sends the list. An acknowledged result is
+  audited and its files deleted, the root directory's once admin mode is
+  on; old files are pruned.
+- M4 detached runner, first half (E17a): the engine picks each
+  operation's runner from the host profile, the work's level and admin
+  mode, and launches it with a fresh id. Re-attach, results and cleanup
+  follow in E17b.
 - M4 activity log (E24): the server header's Safety menu opens
   Activity, the device audit log as a sortable table with each run's
   redacted steps in its details and older pages on request. Copy puts

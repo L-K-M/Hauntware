@@ -128,6 +128,29 @@ void main() {
       expect(ran.planId, 'plan-1');
     });
 
+    test('a Docker intent reaches its planner, which needs a link '
+        '(M4 E15)', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+      const intent = ContainerAction(
+        'srv-1',
+        containerId: 'web-1',
+        verb: ContainerVerb.restart,
+      );
+
+      client
+        ..send(
+          const SetSafetyPolicy(
+            SafetyPolicy(servers: {'srv-1': ServerSafety(management: true)}),
+          ),
+        )
+        ..send(const PlanAction(intent));
+
+      final planned = (await next(events)) as ActionRefused;
+      expect(planned.reason, ActionRefusalReason.noLink, reason: 'links off');
+      expect(planned.intent, isA<ContainerAction>());
+    });
+
     test('an audit query answers from the log, empty at first', () async {
       final client = await spawnEngine();
       final (:events, fleet: _) = await started(client);
@@ -195,6 +218,45 @@ void main() {
       final crontabs = (await next(events)) as UserCrontabs;
       expect(crontabs.requestId, 'r-1');
       expect(crontabs.failure, UserCrontabsFailure.noLink);
+
+      // A detached operation's result is acknowledged over a link.
+      client.send(
+        const AcknowledgeOperation('ssh-config:web', '0123456789abcdef'),
+      );
+      final refused = (await next(events)) as RequestRejected;
+      expect(refused.requestName, 'AcknowledgeOperation');
+      expect(refused.reason, 'links are off');
+    });
+
+    test('an operation log the engine does not list reads no file '
+        '(03 §7.17)', () async {
+      final client = await IsolateEngineClient.spawn(
+        supportDirectory: support.path,
+        linksEnabled: true,
+      );
+      addTearDown(client.shutdown);
+      final (:events, fleet: _) = await started(client);
+      client.send(const ImportSshConfig('Host web\n  HostName 192.0.2.10\n'));
+      expect(await next(events), isA<CatalogReplaced>());
+      expect(await next(events), isA<SshConfigImported>());
+
+      client.send(
+        OpenLogStream(
+          streamId: 'op-1',
+          spec: LogStreamSpec(
+            serverId: 'ssh-config:web',
+            source: const OperationLogSource('0123456789abcdef'),
+            window: 50,
+            follow: true,
+          ),
+        ),
+      );
+      final state = (await next(events)) as LogStreamState;
+      expect(state.streamId, 'op-1');
+      expect(
+        (state.status as LogStreamEnded).reason,
+        LogStreamEndReason.invalid,
+      );
     });
 
     test('links stay off unless spawn turns them on', () async {

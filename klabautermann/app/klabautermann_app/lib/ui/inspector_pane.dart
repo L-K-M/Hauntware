@@ -3,11 +3,15 @@ import 'package:flutter/material.dart';
 import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'docker/container_details.dart';
 import 'server_coverage.dart';
 
 /// The desktop inspector of 03 §10.2: Details, Alerts (v1), Operations,
 /// Coverage and Audit sections, empty until a server is selected. The
-/// selected server's coverage (03 §9.5 item 3) is the first to land.
+/// selected server's coverage (03 §9.5 item 3) is the first to land; a
+/// container its Containers sub-tab opens shows in its place until
+/// closed or another server is selected (03 §7.12 CTR-03,
+/// [ContainerInspectionScope]).
 class InspectorPane extends StatelessWidget {
   const InspectorPane({
     super.key,
@@ -24,6 +28,7 @@ class InspectorPane extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final inspection = ContainerInspectionScope.maybeOf(context);
     return ColoredBox(
       color: theme.colorScheme.surfaceContainerLow,
       child: Padding(
@@ -38,15 +43,26 @@ class InspectorPane extends StatelessWidget {
             Expanded(
               child: ListenableBuilder(
                 listenable: fleet,
-                builder: (context, _) => switch (fleet.selectedServer?.id) {
-                  final serverId? => ServerCoverageDetails(
-                    // A new server's details start at their top.
-                    key: ValueKey(serverId),
-                    monitoring: monitoring,
-                    serverId: serverId,
-                  ),
-                  null => const InspectorEmptyBody(),
-                },
+                builder: (context, _) =>
+                    switch ((fleet.selectedServer?.id, inspection?.value)) {
+                      // The shell lets another server's container go.
+                      (final serverId?, final inspected?)
+                          when inspected.serverId == serverId =>
+                        ContainerInspectorBody(
+                          // A new container's details start at their top.
+                          key: ValueKey(inspected.container.id),
+                          monitoring: monitoring,
+                          inspected: inspected,
+                          onClose: () => inspection?.value = null,
+                        ),
+                      (final serverId?, _) => ServerCoverageDetails(
+                        // A new server's details start at their top.
+                        key: ValueKey(serverId),
+                        monitoring: monitoring,
+                        serverId: serverId,
+                      ),
+                      (null, _) => const InspectorEmptyBody(),
+                    },
               ),
             ),
           ],

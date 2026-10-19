@@ -5,14 +5,17 @@ import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
 import '../controllers/sync_controller.dart';
 import 'coverage.dart';
+import 'docker/container_details.dart';
 import 'fleet_rail.dart';
 import 'inspector_pane.dart';
 import 'server_workspace.dart';
 import 'sidebar_kit.dart' show SidebarThemeTokens;
 
 /// The desktop three-pane shell of 03 §10.2, shown at widths of 960 px
-/// and up: fleet rail, server workspace, inspector.
-class DesktopShell extends StatelessWidget {
+/// and up: fleet rail, server workspace, inspector. It holds the
+/// container the inspector shows, which the workspace's Containers
+/// sub-tab opens ([ContainerInspectionScope]).
+class DesktopShell extends StatefulWidget {
   const DesktopShell({
     super.key,
     required this.fleet,
@@ -39,7 +42,48 @@ class DesktopShell extends StatelessWidget {
   static const double inspectorWidth = 300;
 
   @override
+  State<DesktopShell> createState() => _DesktopShellState();
+}
+
+class _DesktopShellState extends State<DesktopShell> {
+  /// The inspector's container, which belongs to the selected server: a
+  /// selection of another lets it go.
+  final _inspection = ValueNotifier<InspectedContainer?>(null);
+
+  @override
+  void initState() {
+    super.initState();
+    widget.fleet.addListener(_onFleetChanged);
+  }
+
+  @override
+  void didUpdateWidget(DesktopShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.fleet == oldWidget.fleet) return;
+    oldWidget.fleet.removeListener(_onFleetChanged);
+    widget.fleet.addListener(_onFleetChanged);
+    _onFleetChanged();
+  }
+
+  @override
+  void dispose() {
+    widget.fleet.removeListener(_onFleetChanged);
+    _inspection.dispose();
+    super.dispose();
+  }
+
+  void _onFleetChanged() {
+    final inspected = _inspection.value;
+    if (inspected == null) return;
+    if (widget.fleet.selectedServer?.id != inspected.serverId) {
+      _inspection.value = null;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final fleet = widget.fleet;
+    final monitoring = widget.monitoring;
     final colors = Theme.of(context).colorScheme;
     // The top inset: the macOS toolbar band the traffic lights sit in
     // (ReserveMacosToolbarBand), or a tablet's status bar. Each pane paints
@@ -58,47 +102,53 @@ class DesktopShell extends StatelessWidget {
           builder: (context) => MediaQuery.removePadding(
             context: context,
             removeTop: true,
-            child: Row(
-              children: [
-                SizedBox(
-                  width: railWidth,
-                  child: _BelowTopInset(
-                    inset: top,
-                    color: SidebarThemeTokens.of(context).sidebarBackground,
-                    child: FleetRail(
-                      fleet: fleet,
-                      monitoring: monitoring,
-                      onOpenSettings: onOpenSettings,
-                      onAddServer: onAddServer,
-                      sync: sync,
+            child: ContainerInspectionScope(
+              inspection: _inspection,
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: DesktopShell.railWidth,
+                    child: _BelowTopInset(
+                      inset: top,
+                      color: SidebarThemeTokens.of(context).sidebarBackground,
+                      child: FleetRail(
+                        fleet: fleet,
+                        monitoring: monitoring,
+                        onOpenSettings: widget.onOpenSettings,
+                        onAddServer: widget.onAddServer,
+                        sync: widget.sync,
+                      ),
                     ),
                   ),
-                ),
-                VerticalDivider(width: 1, color: colors.outlineVariant),
-                Expanded(
-                  child: _BelowTopInset(
-                    inset: top,
-                    child: CoverageHeader(
-                      placement: CoveragePlacement.desktopWorkspace,
-                      coverage: coverage,
-                      fleet: fleet,
-                      child: ServerWorkspace(
+                  VerticalDivider(width: 1, color: colors.outlineVariant),
+                  Expanded(
+                    child: _BelowTopInset(
+                      inset: top,
+                      child: CoverageHeader(
+                        placement: CoveragePlacement.desktopWorkspace,
+                        coverage: widget.coverage,
+                        fleet: fleet,
+                        child: ServerWorkspace(
+                          fleet: fleet,
+                          monitoring: monitoring,
+                        ),
+                      ),
+                    ),
+                  ),
+                  VerticalDivider(width: 1, color: colors.outlineVariant),
+                  SizedBox(
+                    width: DesktopShell.inspectorWidth,
+                    child: _BelowTopInset(
+                      inset: top,
+                      color: colors.surfaceContainerLow,
+                      child: InspectorPane(
                         fleet: fleet,
                         monitoring: monitoring,
                       ),
                     ),
                   ),
-                ),
-                VerticalDivider(width: 1, color: colors.outlineVariant),
-                SizedBox(
-                  width: inspectorWidth,
-                  child: _BelowTopInset(
-                    inset: top,
-                    color: colors.surfaceContainerLow,
-                    child: InspectorPane(fleet: fleet, monitoring: monitoring),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

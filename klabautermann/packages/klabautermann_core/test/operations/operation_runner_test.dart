@@ -181,7 +181,11 @@ void main() {
       ),
       (
         'a Docker target without the Docker checker',
-        const DockerTargetUnchanged('web-1', 'abc123'),
+        const DockerTargetUnchanged(
+          DockerTargetKind.container,
+          'web-1',
+          'abc123',
+        ),
         _ok,
         RevalidationFailure.unreadable,
       ),

@@ -217,6 +217,9 @@ final class LogFollower {
         after == null
             ? HostCommands.tail(path, lines: lines, follow: true)
             : throw const HostCommandError('a file has no cursor'),
+      OperationLogSource() => throw const HostCommandError(
+        'the engine reads an operation log as its file',
+      ),
       // The Docker router reads them over the API.
       ContainerLogSource() => throw const HostCommandError(
         'container logs come from the Docker endpoint',
@@ -394,10 +397,11 @@ final class LogFollower {
     var dropped = _dropped;
     for (final line in _ring) {
       final text = _text(line);
-      if (_spec.source is FileLogSource) {
+      if (_spec.source case FileLogSource(:final redacted)) {
         records.add(
-          FileRecord(
+          fileRecord(
             text.endsWith('\r') ? text.substring(0, text.length - 1) : text,
+            redacted: redacted,
           ),
         );
         continue;
