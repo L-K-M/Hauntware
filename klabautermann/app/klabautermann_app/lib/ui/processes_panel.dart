@@ -8,6 +8,8 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
+import 'actions/host_actions.dart';
 import 'freshness.dart';
 import 'processes_view.dart';
 import 'sortable_table.dart';
@@ -40,8 +42,9 @@ const Duration kRevealDuration = Duration(seconds: 30);
 /// the last good list while a reading fails, under one freshness line in
 /// 9.5 item 4's words; stale values turn grey. What the host did not
 /// report reads "unknown". The clock ticks only while [visible] and only
-/// the freshness line and the grey follow it. The table's row-action slot
-/// stays empty until PRC-02 (M4) adds kill and signal.
+/// the freshness line and the grey follow it. Where actions are allowed,
+/// the table's row-action slot and a process's details offer PRC-02's
+/// signals.
 class ProcessesPanel extends StatefulWidget {
   const ProcessesPanel({
     super.key,
@@ -195,6 +198,7 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
           context,
           row,
           columns,
+          serverId: widget.serverId,
           reading: reading,
           clock: widget.monitoring.clock,
           sampling: widget.monitoring.samplingFor(widget.serverId),
@@ -208,8 +212,12 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
                 sort: _sort,
                 onSort: (sort) => setState(() => _sort = sort),
                 onRowActivated: open,
-                // PRC-02 (M4) fills the slot with kill and signal.
-                rowActions: (_) => const [],
+                // PRC-02's signals, where actions are allowed (M4 E21).
+                rowActions: (row) => processActionEntries(
+                  context,
+                  serverId: widget.serverId,
+                  row: row,
+                ),
                 empty: Padding(padding: const EdgeInsets.all(16), child: empty),
               )
             : _list(rows, columns, empty, open);
@@ -572,6 +580,7 @@ void _showProcess(
   BuildContext context,
   ProcessRow row,
   List<SortableTableColumn<ProcessRow>> columns, {
+  required String serverId,
   required Sample reading,
   required ValueListenable<DateTime> clock,
   required ValueListenable<SamplingStatus?> sampling,
@@ -584,6 +593,7 @@ void _showProcess(
       isScrollControlled: true,
       showDragHandle: true,
       builder: (context) => _ProcessSheet(
+        serverId: serverId,
         row: row,
         reading: reading,
         clock: clock,
@@ -606,6 +616,7 @@ void _showProcess(
 /// a frame can still draw the mask before an app switcher's snapshot.
 class _ProcessSheet extends StatefulWidget {
   const _ProcessSheet({
+    required this.serverId,
     required this.row,
     required this.facts,
     required this.reading,
@@ -613,6 +624,7 @@ class _ProcessSheet extends StatefulWidget {
     required this.sampling,
   });
 
+  final String serverId;
   final ProcessRow row;
   final List<(String, String)> facts;
   final Sample reading;
@@ -681,6 +693,13 @@ class _ProcessSheetState extends State<_ProcessSheet> {
           style: theme.textTheme.titleMedium,
         ),
       ),
+      // Only where actions show, so the sheet keeps its layout otherwise.
+      if (actionsAllowedAt(
+        context,
+        widget.serverId,
+        ActionEntryPoint.processSignal,
+      ))
+        ProcessActionButtons(serverId: widget.serverId, row: row),
       ListenableBuilder(
         listenable: Listenable.merge([widget.clock, widget.sampling]),
         builder: (context, _) {

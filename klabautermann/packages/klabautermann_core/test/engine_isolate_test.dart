@@ -95,7 +95,7 @@ void main() {
       );
     });
 
-    test('plans are refused until their planners land, and no plan runs '
+    test('without a link a host plan is refused, and no plan runs '
         '(03 §8.5)', () async {
       final client = await spawnEngine();
       final (:events, fleet: _) = await started(client);
@@ -120,7 +120,7 @@ void main() {
         );
 
       final planned = (await next(events)) as ActionRefused;
-      expect(planned.reason, ActionRefusalReason.notImplemented);
+      expect(planned.reason, ActionRefusalReason.noLink, reason: 'links off');
       expect(planned.intent, isA<UnitAction>());
       expect((planned.intent! as UnitAction).unit, 'nginx.service');
       final ran = (await next(events)) as ActionRefused;
@@ -182,13 +182,19 @@ void main() {
           ),
         );
       expect(await refusal(), ActionRefusalReason.readOnly);
-      expect(await refusal(), ActionRefusalReason.notImplemented);
+      expect(await refusal(), ActionRefusalReason.noLink);
       final noLinks = (await next(events)) as AdminModeState;
       expect(noLinks.failure, AdminFailure.noLink, reason: 'links are off');
       expect(
         ((await next(events)) as RequestRejected).requestName,
         'SetSafetyPolicy',
       );
+
+      // JOB-03's read needs the link, then admin mode.
+      client.send(const ReadUserCrontabs('ssh-config:web', requestId: 'r-1'));
+      final crontabs = (await next(events)) as UserCrontabs;
+      expect(crontabs.requestId, 'r-1');
+      expect(crontabs.failure, UserCrontabsFailure.noLink);
     });
 
     test('links stay off unless spawn turns them on', () async {

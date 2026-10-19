@@ -15,6 +15,8 @@ import 'docker/docker_endpoint.dart';
 import 'fleet_rail.dart' show linkFailureText, linkStatusWord;
 import 'fleet_row_state.dart';
 import 'fleet_rows.dart' show fleetStatusIcon, fleetStatusStrings;
+import 'admin_mode_chip.dart';
+import 'server_safety.dart';
 
 /// The server header of 03 §10.2 and §10.5: the server's name, unless the
 /// phone's app bar carries it, its link state, the coverage chip, the
@@ -82,6 +84,11 @@ class ServerHeader extends StatelessWidget {
                 ),
               ),
             ServerLinkState(server: server, fleet: fleet),
+            ServerSafetyMenu(
+              serverId: server.id,
+              serverName: server.displayName,
+            ),
+            AdminModeChip(serverId: server.id),
           ],
         ),
         _EngineFacts(
@@ -91,7 +98,12 @@ class ServerHeader extends StatelessWidget {
           endpoint: monitoring.docker.endpointFor(server.id),
           leading: ServerCoverageChip(fleet: fleet),
         ),
-        for (final message in [?failure, ...limitations])
+        for (final message in [
+          ?failure,
+          ...serverSafetyNotices(context, server.id),
+          ...adminNotices(context, server.id),
+          ...limitations,
+        ])
           MergeSemantics(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
