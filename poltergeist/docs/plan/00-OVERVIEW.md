@@ -1066,9 +1066,11 @@ ownership
 - **D19 — Trust stance.** Open source, zero telemetry, no crash reporting
   in v1, no Poltergeist account — the only account ever involved is the
   user's own opt-in Séance sync account (D4) — link-only update check
-  (Séance's banner pattern) —
+  (Séance's banner pattern; on Android an Update the user chooses
+  fetches the release APK, D23's 2026-10-17 amendment) —
   the check is the app's only outbound call absent a user-initiated
-  connection or the opt-in Séance bookmark backup (D4), on by default and
+  connection, a user-initiated Android update, or the opt-in Séance
+  bookmark backup (D4), on by default and
   one setting away from off (01 §6); every
   shorter "zero telemetry" tagline elsewhere in this plan is shorthand
   for this same scoped claim, never a silent contradiction of it.
@@ -1130,6 +1132,21 @@ ownership
     `ScopedPathAccess` service fronts all local file access; sidebar
     bookmarks double as future sandbox grants) but v1 desktop builds
     are unsandboxed. Auto-update stays link-only.
+  - **Android in-app update (amendment 2026-10-17, owner-directed;
+    amends D19's link-only check for Android only).** The update alert
+    on Android offers Update beside the release it found. Only when the
+    user chooses it, the app downloads that release's
+    `poltergeist-android.apk` from the URL the release lists, discards
+    it unless its size and SHA-256 match the digest GitHub reports for
+    the asset, and opens the system installer. Android asks the user to
+    allow installs from Poltergeist, then to confirm, and installs only
+    over an APK signed with the same committed key. The launch check is
+    unchanged (one plain GET, compared locally, opt-out); the download
+    is a second, user-initiated request like a connection. Nothing
+    installs silently, desktop builds stay link-only, and the residual
+    above still holds: the digest proves the file is the release's, not
+    who built the release. The asset name is now a contract with every
+    installed build (`scripts/release-manifest.txt`).
 - **D20 — a11y and i18n from day one.** All user-facing strings in ARB via
   `gen-l10n` (English only at v1, but externalized); semantics hand-built
   for custom rows/tables (announced name–size–date, selection, sort state);

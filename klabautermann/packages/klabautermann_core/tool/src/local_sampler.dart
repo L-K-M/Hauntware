@@ -171,7 +171,7 @@ Future<int> clockTicksPerSecond() async {
 final class LocalSampler {
   LocalSampler._(this._process, String nonce, this._shDir)
     : _assembler = HwsTickAssembler(nonce: nonce),
-      _readyMarker = '\x1e$nonce READY' {
+      _firstMarker = '\x1e$nonce SELF ' {
     // The shell can exit, and fail [_ready], while [start] is still
     // writing the program and before any caller listens; without this
     // the failure would also surface as an uncaught error. Listeners
@@ -188,7 +188,7 @@ final class LocalSampler {
   /// Holds the `sh` link of a stdin launch until [close].
   final Directory? _shDir;
   final HwsTickAssembler _assembler;
-  final String _readyMarker;
+  final String _firstMarker;
   final _ready = Completer<void>();
   final _stderr = StringBuffer();
   final _rawPrefix = BytesBuilder(copy: false);
@@ -260,10 +260,11 @@ final class LocalSampler {
   /// Completes at READY; fails with [SamplerFailure].
   Future<void> get ready => _ready.future;
 
-  /// Output before the READY marker, from the start of stdout; null when
-  /// no READY marker arrived within the first MiB.
+  /// Output before the program's first marker, `SELF` just before READY,
+  /// from the start of stdout; null when no `SELF` marker arrived within
+  /// the first MiB.
   int? get bytesBeforeReady {
-    final at = latin1.decode(_rawPrefix.toBytes()).indexOf(_readyMarker);
+    final at = latin1.decode(_rawPrefix.toBytes()).indexOf(_firstMarker);
     return at < 0 ? null : at;
   }
 

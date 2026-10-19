@@ -77,6 +77,7 @@ final class AppHarness {
 /// already dismissed, so the card shows only in the tests that want it.
 /// [announcements] replaces an in-memory A11Y-15 switch that is on, and
 /// [dockerNotice] an in-memory SAF-08 notice not yet dismissed.
+/// [appVersion] stands in for what `readAppVersion` read.
 /// [linkGrace] defaults to zero, which disconnects a server as its last
 /// view closes: the tree unmounts at the end of every test, and the test
 /// binding fails a test that leaves a grace timer pending.
@@ -96,6 +97,7 @@ Future<AppHarness> pumpApp(
   List<SyncStoreIssue> syncStoreIssues = const [],
   OpenSettingsWindow? openSettingsWindow,
   ValueListenable<bool>? toolbarBand,
+  String? appVersion,
   Duration linkGrace = Duration.zero,
 }) async {
   tester.view.physicalSize = size;
@@ -135,6 +137,7 @@ Future<AppHarness> pumpApp(
       instanceLockIssue: instanceLockIssue,
       openSettingsWindow: openSettingsWindow,
       toolbarBand: toolbarBand,
+      appVersion: appVersion,
     ),
   );
   await tester.pumpAndSettle();

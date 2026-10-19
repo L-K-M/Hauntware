@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show TargetPlatform;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
+import 'package:klabautermann_app/controllers/monitor_set.dart';
 import 'package:klabautermann_app/services/ssh_config_source.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -110,6 +112,24 @@ void main() {
       expect(FleetServer.fromEntry(_entry('a')).locatorConflict, isNull);
     });
 
+    test('rows carry where the entry came from and its group (FL-06)', () {
+      const synced = FleetEntry(
+        serverId: 'srv-1',
+        label: 'web-1',
+        host: 'web-1.example',
+        port: kSshDefaultPort,
+        origin: FleetEntryOrigin.synced,
+        group: 'Production',
+      );
+
+      final server = FleetServer.fromEntry(synced);
+      expect(server.origin, FleetEntryOrigin.synced);
+      expect(server.group, 'Production');
+      final import = FleetServer.fromEntry(_entry('a'));
+      expect(import.origin, FleetEntryOrigin.sshConfig);
+      expect(import.group, isNull);
+    });
+
     test(
       'keeps a selection the new fleet lists and drops one it does not',
       () async {
@@ -158,6 +178,30 @@ void main() {
   });
 
   group('LinkState and Reachability (03 §10.1, D46)', () {
+    test('drop the probe answer of a server whose endpoint waits for '
+        'confirmation (03 §4.7, §5.12)', () async {
+      FleetEntry synced(EndpointConfirmation endpoint) => FleetEntry(
+        serverId: 'srv',
+        label: 'srv',
+        host: 'srv.example.com',
+        port: kSshDefaultPort,
+        origin: FleetEntryOrigin.synced,
+        endpoint: endpoint,
+      );
+      final fleet = controller();
+      engine
+        ..emit(CatalogReplaced([synced(EndpointConfirmation.confirmed)]))
+        ..emit(const Reachability('srv', ReachabilityStatus.online));
+      await settle();
+      expect(fleet.reachabilityFor('srv'), ReachabilityStatus.online);
+
+      engine
+        ..emit(const EndpointChanged('srv'))
+        ..emit(CatalogReplaced([synced(EndpointConfirmation.changed)]));
+      await settle();
+      expect(fleet.reachabilityFor('srv'), isNull);
+    });
+
     test('keep the last value per server and notify once per change', () async {
       final fleet = controller();
       engine.emit(CatalogReplaced([_entry('web-1')]));
@@ -229,6 +273,266 @@ void main() {
 
       expect(fleet.linkStatusFor('seed'), const LinkConnecting());
       expect(fleet.linkStatusFor('other'), const LinkIdle());
+    });
+  });
+
+  group('pins (03 §10.3)', () {
+    test('start from the restored set, apply at once and save', () async {
+      final saved = <Set<String>>[];
+      final fleet = FleetController(
+        engine,
+        pinnedServerIds: {'srv-1'},
+        savePins: (ids) async => saved.add(ids),
+      );
+      addTearDown(fleet.dispose);
+      var notified = 0;
+      fleet.addListener(() => notified++);
+
+      expect(fleet.pinnedServerIds, {'srv-1'});
+      await fleet.pin('srv-2');
+      expect(fleet.pinnedServerIds, {'srv-1', 'srv-2'});
+      await fleet.unpin('srv-1');
+      expect(fleet.pinnedServerIds, {'srv-2'});
+
+      expect(saved, [
+        {'srv-1', 'srv-2'},
+        {'srv-2'},
+      ]);
+      expect(notified, 2);
+      expect(
+        () => fleet.pinnedServerIds.add('srv-3'),
+        throwsUnsupportedError,
+        reason: 'changes go through pin and unpin',
+      );
+    });
+
+    test('a change that changes nothing saves nothing', () async {
+      var saves = 0;
+      final fleet = FleetController(
+        engine,
+        pinnedServerIds: {'srv-1'},
+        savePins: (_) async => saves++,
+      );
+      addTearDown(fleet.dispose);
+
+      await fleet.pin('srv-1');
+      await fleet.unpin('srv-2');
+
+      expect(saves, 0);
+    });
+
+    test('a save that fails rethrows and keeps the change', () async {
+      final fleet = FleetController(
+        engine,
+        savePins: (_) async => throw const FileSystemException('disk full'),
+      );
+      addTearDown(fleet.dispose);
+
+      await expectLater(
+        fleet.pin('srv-1'),
+        throwsA(isA<FileSystemException>()),
+      );
+      expect(fleet.pinnedServerIds, {'srv-1'});
+    });
+
+    test('outlast a sync that drops the server and brings it back', () async {
+      final fleet = controller();
+      await fleet.pin('srv-1');
+
+      engine.emit(CatalogReplaced(const []));
+      await settle();
+      expect(fleet.pinnedServerIds, {'srv-1'});
+    });
+  });
+
+  group('the monitor set (FL-21, 03 §4.3 step 4)', () {
+    /// An eligible import, a synced server not confirmed yet, one that
+    /// signs in with a password, and [count] more eligible imports.
+    List<FleetEntry> fleetOf({int count = 0}) => [
+      FleetEntry(
+        serverId: 'ssh-config:web',
+        label: 'web',
+        host: 'web',
+        port: kSshDefaultPort,
+        origin: FleetEntryOrigin.sshConfig,
+        authKind: FleetAuthKind.agent,
+      ),
+      const FleetEntry(
+        serverId: 'srv-new',
+        label: 'new',
+        host: 'new',
+        port: kSshDefaultPort,
+        origin: FleetEntryOrigin.synced,
+        authKind: FleetAuthKind.agent,
+        endpoint: EndpointConfirmation.unconfirmed,
+      ),
+      const FleetEntry(
+        serverId: 'srv-pw',
+        label: 'pw',
+        host: 'pw',
+        port: kSshDefaultPort,
+        origin: FleetEntryOrigin.synced,
+        authKind: FleetAuthKind.password,
+        endpoint: EndpointConfirmation.confirmed,
+      ),
+      for (var i = 1; i <= count; i++)
+        FleetEntry(
+          serverId: 'ssh-config:s$i',
+          label: 's$i',
+          host: 's$i',
+          port: kSshDefaultPort,
+          origin: FleetEntryOrigin.sshConfig,
+          authKind: FleetAuthKind.identityFile,
+        ),
+    ];
+
+    FleetController monitoring({
+      Set<String>? chosen,
+      MonitorSetDefault fallback = MonitorSetDefault.none,
+      Future<void> Function(Set<String> ids)? save,
+    }) {
+      final fleet = FleetController(
+        engine,
+        monitorSet: chosen,
+        monitorSetDefault: fallback,
+        saveMonitorSet: save,
+      );
+      addTearDown(fleet.dispose);
+      return fleet;
+    }
+
+    List<List<String>> sentSets() => [
+      for (final request in engine.sentOfType<SetMonitorSet>())
+        (request as SetMonitorSet).serverIds,
+    ];
+
+    test('the rows read eligibility by the engine\'s rule', () async {
+      final fleet = monitoring();
+      engine.emit(CatalogReplaced(fleetOf()));
+      await settle();
+
+      expect(
+        {
+          for (final candidate in fleet.monitorSettings.value)
+            candidate.serverId: candidate.eligibility,
+        },
+        {
+          'ssh-config:web': MonitorEligibility.eligible,
+          'srv-new': MonitorEligibility.endpointNotConfirmed,
+          'srv-pw': MonitorEligibility.interactiveCredentials,
+        },
+      );
+    });
+
+    test('desktops monitor the first ten eligible servers until the user '
+        'chooses, and tell the engine once it sent a fleet', () async {
+      final fleet = monitoring(fallback: MonitorSetDefault.allEligible);
+      expect(sentSets(), isEmpty, reason: 'no fleet yet');
+
+      engine.emit(CatalogReplaced(fleetOf(count: kMonitorSetLimit)));
+      await settle();
+
+      final expected = [
+        'ssh-config:web',
+        for (var i = 1; i < kMonitorSetLimit; i++) 'ssh-config:s$i',
+      ];
+      expect(fleet.monitoredServerIds, expected.toSet());
+      expect(sentSets().single, unorderedEquals(expected));
+
+      // The same fleet again changes nothing, so nothing more is sent.
+      engine.emit(CatalogReplaced(fleetOf(count: kMonitorSetLimit)));
+      await settle();
+      expect(sentSets(), hasLength(1));
+    });
+
+    test('phones monitor none until the user chooses', () async {
+      final fleet = monitoring(fallback: MonitorSetDefault.none);
+      engine.emit(CatalogReplaced(fleetOf(count: 2)));
+      await settle();
+
+      expect(fleet.monitoredServerIds, isEmpty);
+      expect(sentSets(), isEmpty, reason: 'the engine starts with none');
+      expect(
+        monitorSetDefaultFor(TargetPlatform.android),
+        MonitorSetDefault.none,
+      );
+      expect(monitorSetDefaultFor(TargetPlatform.iOS), MonitorSetDefault.none);
+      for (final platform in [
+        TargetPlatform.linux,
+        TargetPlatform.macOS,
+        TargetPlatform.windows,
+      ]) {
+        expect(monitorSetDefaultFor(platform), MonitorSetDefault.allEligible);
+      }
+    });
+
+    test('a restored choice holds only its eligible fleet servers, and a '
+        'change saves it without the rest', () async {
+      final saved = <Set<String>>[];
+      final fleet = monitoring(
+        chosen: {'ssh-config:web', 'srv-new', 'gone'},
+        fallback: MonitorSetDefault.allEligible,
+        save: (ids) async => saved.add(ids),
+      );
+      engine.emit(CatalogReplaced(fleetOf(count: 1)));
+      await settle();
+      expect(fleet.monitoredServerIds, {'ssh-config:web'});
+
+      await fleet.setMonitored('ssh-config:s1', monitored: true);
+      expect(saved.single, {'ssh-config:web', 'ssh-config:s1'});
+      expect(sentSets().last, unorderedEquals(saved.single));
+
+      await fleet.setMonitored('ssh-config:web', monitored: false);
+      expect(saved.last, {'ssh-config:s1'});
+      expect(fleet.monitorSettings.value.first.monitored, isFalse);
+    });
+
+    test('refuses an ineligible server and an eleventh', () async {
+      final fleet = monitoring();
+      engine.emit(CatalogReplaced(fleetOf(count: kMonitorSetLimit)));
+      await settle();
+
+      expect(
+        () => fleet.setMonitored('srv-pw', monitored: true),
+        throwsArgumentError,
+      );
+      for (var i = 1; i <= kMonitorSetLimit; i++) {
+        await fleet.setMonitored('ssh-config:s$i', monitored: true);
+      }
+      await expectLater(
+        fleet.setMonitored('ssh-config:web', monitored: true),
+        throwsA(isA<MonitorSetFullException>()),
+      );
+      expect(fleet.monitoredServerIds, hasLength(kMonitorSetLimit));
+    });
+
+    test('a save that fails rethrows and keeps the change', () async {
+      final fleet = monitoring(
+        save: (_) async => throw const FileSystemException('disk full'),
+      );
+      engine.emit(CatalogReplaced(fleetOf()));
+      await settle();
+
+      await expectLater(
+        fleet.setMonitored('ssh-config:web', monitored: true),
+        throwsA(isA<MonitorSetNotSavedException>()),
+      );
+      expect(fleet.monitoredServerIds, {'ssh-config:web'});
+    });
+
+    test('a server that stops being eligible leaves the set, and the '
+        'engine hears it', () async {
+      final fleet = monitoring(chosen: {'ssh-config:web'});
+      engine.emit(CatalogReplaced(fleetOf()));
+      await settle();
+      expect(sentSets(), [
+        ['ssh-config:web'],
+      ]);
+
+      engine.emit(CatalogReplaced(fleetOf().skip(1).toList()));
+      await settle();
+      expect(fleet.monitoredServerIds, isEmpty);
+      expect(sentSets().last, isEmpty);
     });
   });
 

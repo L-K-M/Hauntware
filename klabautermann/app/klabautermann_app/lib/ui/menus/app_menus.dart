@@ -24,8 +24,9 @@ GhostCommandSpec appCommandSpec(
 /// Commands sort by `(group, order)` within their menu, and each group is
 /// a divider-separated section. Menus with no rows are left out, except
 /// the macOS application, View and Window menus, which carry AppKit's own
-/// rows: About, Services, the hide trio and Quit; Enter Full Screen; and
-/// Minimize, Zoom and Bring All to Front.
+/// rows: Services, the hide trio and Quit; Enter Full Screen; and
+/// Minimize, Zoom and Bring All to Front. About is the app's own command,
+/// not AppKit's panel (04 §12.3).
 List<GhostMenu> buildAppMenus({
   required List<AppCommand> commands,
   required AppLocalizations l10n,
@@ -79,9 +80,11 @@ List<GhostMenu> buildAppMenus({
   return menus;
 }
 
-/// The macOS application menu in AppKit's order: About, the commands that
-/// declare [CommandMenuPlacement.appMenuOnMac] (Settings…), Services, the
-/// hide trio, and AppKit's own Quit (⌘Q).
+/// The macOS application menu in AppKit's order: the commands that declare
+/// [CommandMenuPlacement.appMenuOnMac] (About Klabautermann, then
+/// Settings…), Services, the hide trio, and AppKit's own Quit (⌘Q).
+/// AppKit's About row is left out: its panel shows `CFBundleName`, an
+/// identity, without the preview label (M16, 04 §12.3).
 GhostMenu _macAppMenu(
   AppLocalizations l10n,
   List<List<GhostMenuRow>> commandGroups,
@@ -89,7 +92,6 @@ GhostMenu _macAppMenu(
   id: AppMenuId.app,
   title: l10n.appTitle,
   groups: [
-    const [GhostProvidedRow(PlatformProvidedMenuItemType.about)],
     ...commandGroups,
     const [GhostProvidedRow(PlatformProvidedMenuItemType.servicesSubmenu)],
     const [
@@ -147,4 +149,5 @@ String _menuTitle(AppMenuId id, AppLocalizations l10n) => switch (id) {
   AppMenuId.file => l10n.menuFile,
   AppMenuId.view => l10n.menuView,
   AppMenuId.window => l10n.menuWindow,
+  AppMenuId.help => l10n.menuHelp,
 };

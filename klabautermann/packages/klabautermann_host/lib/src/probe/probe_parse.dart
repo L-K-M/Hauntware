@@ -112,6 +112,7 @@ final class _ProfileBuilder {
       doasPresent,
       doasNonInteractive,
       run0Present,
+      run0NonInteractive,
       printfBuiltin;
   Map<String, String?> tools = {};
   bool? psi, cgroupV2, cUtf8;
@@ -212,6 +213,7 @@ final class _ProfileBuilder {
     doasPresent = _present(kv['doas']);
     doasNonInteractive = _rcZero(kv['doas_noninteractive']);
     run0Present = _present(kv['run0']);
+    run0NonInteractive = _rcZero(kv['run0_noninteractive']);
     printfBuiltin = switch (kv['printf']) {
       'builtin' => true,
       'external' => false,
@@ -307,6 +309,7 @@ final class _ProfileBuilder {
     doasPresent: doasPresent,
     doasNonInteractive: doasNonInteractive,
     run0Present: run0Present,
+    run0NonInteractive: run0NonInteractive,
     printfBuiltin: printfBuiltin,
     tools: tools,
     psi: psi,

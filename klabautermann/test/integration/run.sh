@@ -6,8 +6,9 @@
 # SDK with the workspace resolved.
 #
 # It owns the whole run: client keys and an agent made for this run only
-# (never committed, D53), the safety check of the rendered Compose config,
-# readiness, the tests one at a time, and teardown on every exit. With
+# (never committed, D53), the safety checks of the rendered Compose
+# config, readiness, the Docker engine's seed, the tests one at a time,
+# and teardown on every exit. With
 # KLABAUTERMANN_EVIDENCE_DIR set, logs and test results go there. After
 # the fixture suites it runs the runner-VM leg (runner_vm.sh), which
 # skips itself anywhere but a GitHub-hosted runner, and then the soak
@@ -26,10 +27,22 @@ readonly compose_project='klabautermann-integration'
 # reads the rendered Compose JSON on stdin and rejects host networking and
 # ports published beyond loopback.
 readonly safety_checker="$klabautermann_dir/../poltergeist/test/integration/check_config.dart"
+# The Docker exposure rules (M3 decision M6), run after it on the same
+# rendered config.
+readonly docker_exposure_checker="$integration_dir/check_docker_exposure.dart"
+readonly seed_script="$integration_dir/seed_docker.sh"
+# The seeded containers' image, pulled by digest through Google's Docker
+# Hub mirror on the runner's own daemon and loaded into dind over SSH,
+# so dind needs no route to a registry. The tag only documents the pin.
+readonly seed_image='mirror.gcr.io/library/busybox:1.37@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e'
+readonly pull_attempts=3
 readonly dart_binary="${DART_BIN:-dart}"
 readonly evidence_dir="${KLABAUTERMANN_EVIDENCE_DIR:+$KLABAUTERMANN_EVIDENCE_DIR/fixture}"
 readonly fixture_user='klab'
-readonly services=(sshd jump)
+# Every sshd service, the Docker host's negative variants (M3 D11)
+# included, each of which run.sh waits for.
+readonly services=(sshd jump docker-sshd neg-nostreamlocal
+  neg-disableforwarding neg-notcp neg-permitopen neg-maxsessions2 neg-restrict)
 readonly ready_attempts=60
 # The project name and loopback ports are fixed, and a run starts by
 # removing what a killed run left, so two runs on one Docker host would
@@ -59,6 +72,8 @@ check_rendered_config() {
   profiles="$(compose config --profiles | paste -sd, -)"
   COMPOSE_PROFILES="$profiles" compose config --format json \
     | "$dart_binary" run "$safety_checker"
+  COMPOSE_PROFILES="$profiles" compose config --format json \
+    | "$dart_binary" run "$docker_exposure_checker"
 }
 
 # The service's published SSH port, refused unless it is on loopback.
@@ -89,6 +104,46 @@ wait_for_sshd() {
 
 fingerprint() {
   ssh-keygen -lf "$1" | cut -d ' ' -f 2
+}
+
+# Runs a command on the Docker host as the fixture user, with the key
+# file, against the host key read from the container (seed_docker_host).
+docker_host_ssh() {
+  ssh -F /dev/null -i "$runtime_dir/identity" -o IdentitiesOnly=yes \
+    -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 \
+    -o UserKnownHostsFile="$runtime_dir/known_hosts" \
+    -p "$docker_port" "$fixture_user@127.0.0.1" "$@"
+}
+
+# Loads the seed image into dind through the Docker host and runs
+# seed_docker.sh there as the fixture user (03 §11.3).
+seed_docker_host() {
+  local attempt host_key image_id
+  host_key="$(compose exec -T docker-sshd cat /etc/ssh/ssh_host_ed25519_key.pub)"
+  if [[ -z "$host_key" ]]; then
+    echo 'the Docker host has no ed25519 host key' >&2
+    return 1
+  fi
+  printf '[127.0.0.1]:%s %s\n' "$docker_port" "$(cut -d ' ' -f 1,2 <<<"$host_key")" \
+    >"$runtime_dir/known_hosts"
+
+  for ((attempt = 1; ; attempt++)); do
+    docker pull --quiet "$seed_image" >/dev/null && break
+    if ((attempt == pull_attempts)); then
+      echo "cannot pull $seed_image" >&2
+      return 1
+    fi
+    sleep $((attempt * 10))
+  done
+  # Saved by digest, the archive names no image, so the load reports
+  # only its ID, which the seed tags.
+  image_id="$(docker save "$seed_image" | docker_host_ssh docker load --quiet \
+    | sed -n 's/^Loaded image ID: //p')"
+  if [[ -z "$image_id" ]]; then
+    echo "dind did not report loading $seed_image" >&2
+    return 1
+  fi
+  docker_host_ssh sh -s -- "$image_id" <"$seed_script"
 }
 
 # Stops a backgrounded `dart test` run. package:test lets the running
@@ -159,7 +214,7 @@ if [[ ! "$soak_seconds" =~ ^[1-9][0-9]*$ ]]; then
   exit 64
 fi
 
-for tool in docker flock ssh-keygen ssh-keyscan ssh-agent ssh-add "$dart_binary"; do
+for tool in docker flock ssh ssh-keygen ssh-keyscan ssh-agent ssh-add "$dart_binary"; do
   if ! command -v "$tool" >/dev/null; then
     echo "run.sh needs $tool" >&2
     exit 1
@@ -193,6 +248,10 @@ ssh-keygen -q -t ed25519 -N '' -C 'klabautermann fixture agent' \
   -f "$runtime_dir/agent"
 cat "$runtime_dir/identity.pub" "$runtime_dir/agent.pub" \
   >"$runtime_dir/authorized_keys"
+# The same keys behind the `restrict` option for neg-restrict, whose sshd
+# allows forwarding: the key option alone refuses it.
+sed 's/^/restrict /' "$runtime_dir/authorized_keys" \
+  >"$runtime_dir/authorized_keys.restrict"
 # The agent outlives a killed run, so it must not inherit the lock.
 eval "$(ssh-agent -s 9>&-)" >/dev/null
 agent_started=1
@@ -204,15 +263,19 @@ for service in "${services[@]}"; do
   port="$(published_port "$service")"
   wait_for_sshd "$port"
 done
+docker_port="$(published_port docker-sshd)"
+seed_docker_host
 
 export KLABAUTERMANN_FIXTURE_COMPOSE_FILE="$compose_file"
 export KLABAUTERMANN_FIXTURE_COMPOSE_PROJECT="$compose_project"
 export KLABAUTERMANN_FIXTURE_HOST='127.0.0.1'
 KLABAUTERMANN_FIXTURE_PORT="$(published_port sshd)"
 KLABAUTERMANN_FIXTURE_JUMP_PORT="$(published_port jump)"
+KLABAUTERMANN_FIXTURE_DOCKER_PORT="$docker_port"
 KLABAUTERMANN_FIXTURE_IDENTITY_FINGERPRINT="$(fingerprint "$runtime_dir/identity.pub")"
 KLABAUTERMANN_FIXTURE_AGENT_FINGERPRINT="$(fingerprint "$runtime_dir/agent.pub")"
 export KLABAUTERMANN_FIXTURE_PORT KLABAUTERMANN_FIXTURE_JUMP_PORT \
+  KLABAUTERMANN_FIXTURE_DOCKER_PORT \
   KLABAUTERMANN_FIXTURE_IDENTITY_FINGERPRINT \
   KLABAUTERMANN_FIXTURE_AGENT_FINGERPRINT
 export KLABAUTERMANN_FIXTURE_USER="$fixture_user"

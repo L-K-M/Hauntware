@@ -272,14 +272,23 @@ int? effectiveMemoryUsage(MemoryStats m) {
 }
 
 /// The CPU percent of the Docker spec formula: `(cpuDelta / systemDelta)
-/// * onlineCpus * 100`, null when either delta is not positive or no
-/// previous sample exists (one-shot stats carry a meaningless
-/// `precpu_stats`; 03 §5.6).
+/// * onlineCpus * 100`, null when no previous sample exists (one-shot
+/// stats carry a meaningless `precpu_stats`; 03 §5.6), when the system
+/// counter did not advance, or when the container's counter went back
+/// (a restart), or when either sample lacks the container's or the
+/// system's counter. An idle container whose counter stood still is 0 %:
+/// the recorded Podman stream shows exactly that.
 double? cpuPercentDelta(CpuStats previous, CpuStats current) {
-  final cpuDelta = (current.totalUsage ?? 0) - (previous.totalUsage ?? 0);
-  final systemDelta =
-      (current.systemCpuUsage ?? 0) - (previous.systemCpuUsage ?? 0);
-  if (cpuDelta <= 0 || systemDelta <= 0) return null;
+  final (before, now) = (previous.totalUsage, current.totalUsage);
+  final (systemBefore, systemNow) = (
+    previous.systemCpuUsage,
+    current.systemCpuUsage,
+  );
+  if (before == null || now == null) return null;
+  if (systemBefore == null || systemNow == null) return null;
+  final cpuDelta = now - before;
+  final systemDelta = systemNow - systemBefore;
+  if (cpuDelta < 0 || systemDelta <= 0) return null;
   final cpus = current.onlineCpus ?? current.perCpuUsage.length;
   final effectiveCpus = cpus > 0 ? cpus : 1;
   return cpuDelta / systemDelta * effectiveCpus * 100.0;

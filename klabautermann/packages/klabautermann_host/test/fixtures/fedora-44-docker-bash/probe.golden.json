@@ -25,6 +25,7 @@
     "doasPresent": false,
     "doasNonInteractive": null,
     "run0Present": false,
+    "run0NonInteractive": null,
     "printfBuiltin": true,
     "tools": {
       "journalctl": null,
@@ -84,7 +85,7 @@
     "sshConnection": null,
     "sessionParentPid": 7,
     "sessionParentComm": "dart:capture_fi",
-    "epochSeconds": 1792220534,
+    "epochSeconds": 1792307502,
     "zoneOffset": "+0000",
     "timezone": null,
     "etcTimezone": null,

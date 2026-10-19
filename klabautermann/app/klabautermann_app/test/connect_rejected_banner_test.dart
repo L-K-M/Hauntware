@@ -15,6 +15,11 @@ const _noLoginName =
 const _addressOnly =
     "You can't connect to this server yet: it comes from an earlier import "
     'that kept only its address. Import your SSH config again to connect.';
+const _endpointNotConfirmed =
+    "You can't connect to this server yet: its address comes from your sync "
+    "account and isn't confirmed on this device, or it changed since you "
+    'confirmed it. Choose Review over the server list to check and confirm '
+    'it.';
 
 /// Opens web-1 on a surface of [size]: the desktop workspace or the
 /// phone's pushed screen, whose first view sends `Connect`.
@@ -34,6 +39,7 @@ void main() {
     for (final (reason, words) in [
       (ConnectRejectedReason.noLoginName, _noLoginName),
       (ConnectRejectedReason.addressOnlyImport, _addressOnly),
+      (ConnectRejectedReason.endpointNotConfirmed, _endpointNotConfirmed),
     ]) {
       testWidgets('the $name server view says why the engine rejected its '
           'Connect: ${reason.name}', (tester) async {

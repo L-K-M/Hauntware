@@ -455,10 +455,21 @@ final class GhostServerSectionLabels {
 }
 ServerSidebarSections groupServers(List<ServerConfig> servers,
     {Set<String> pinnedIds = const {}});
-List<ServerListRow> serverListRows({required ServerSidebarSections sections,
+// Added for Klabautermann's fleet rows (plan P3): the neutral input. The
+// sections and rows are generic over the row type, and the Server... names
+// are typedefs of their ServerConfig instantiations.
+final class GhostServerEntry {
+  const GhostServerEntry({required this.id, this.group});
+  final String id; final String? group;
+}
+GhostServerSections<T> groupServerEntries<T>(List<T> servers,
+    GhostServerEntry Function(T server) entryOf,
+    {Set<String> pinnedIds = const {}});
+List<GhostServerListRow<T>> serverListRows<T>(
+    {required GhostServerSections<T> sections,
     required Set<String> collapsed, ...,
     GhostServerSectionLabels labels = const GhostServerSectionLabels()});
-Set<String> sectionsHoldingLive(...);  int hiddenByHeader(...);
+Set<String> sectionsHoldingLive<T>(...);  int hiddenByHeader(...);
 
 // src/host_key_dialog.dart
 Future<bool> showGhostHostKeyDialog(BuildContext context,

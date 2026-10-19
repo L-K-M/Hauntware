@@ -95,6 +95,16 @@ void main() {
     expect(utf8.decode(reply.section('overview')!.payload), 'cpu 1 2 3');
   });
 
+  test('keeps the SELF PIDs while the process runs (03 §8.6)', () async {
+    open();
+    expect(session.self, isNull);
+    final p = await ready();
+    expect(session.self, (pid: 4242, parentPid: 4241));
+
+    p.end(const RemoteExit(exitCode: 1));
+    await _until(() => session.self == null);
+  });
+
   test('starts one process however often start() runs', () async {
     open()
       ..start()
@@ -109,6 +119,7 @@ void main() {
     await p.firstWrite;
     final bytes = latin1.encode(
       'Last login: today\r\n\x1e partial \x1e'
+      '\x1e${p.nonce} SELF 4242 4241\n'
       '\x1e${p.nonce} READY HWS/1 $kCollectorSetVersion\n',
     );
     for (final b in bytes) {
@@ -448,7 +459,7 @@ void main() {
     test('a slow request gets its guarded commands plus a margin', () {
       const d = SamplerDeadlines();
       expect(d.forRequest(SamplerKind.fast, [Collector.core]), _seconds(5));
-      expect(d.forRequest(SamplerKind.slow, [Collector.probe]), _seconds(165));
+      expect(d.forRequest(SamplerKind.slow, [Collector.probe]), _seconds(175));
       expect(
         d.forRequest(SamplerKind.slow, [Collector.fs, Collector.identity]),
         _seconds(45),

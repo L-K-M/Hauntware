@@ -212,8 +212,16 @@ final class DockerController {
         final server = _server(serverId);
         final before = server.endpoint.value;
         server.endpoint.value = event;
-        // The details describe the endpoint they were read over.
-        if (!_sameEndpoint(before, event)) server.engine.value = null;
+        // The details describe the endpoint they were read over. A read
+        // still owed by a replaced ready endpoint would answer with what
+        // that endpoint said, so its answer is dropped by id and the new
+        // one is read.
+        if (!_sameEndpoint(before, event)) {
+          server.engine.value = null;
+          if (before?.phase == DockerEndpointPhase.ready) {
+            server.engineQuery = null;
+          }
+        }
         _readIfShown(serverId, server);
       case DockerResult(:final serverId, :final queryId, :final payload):
         final server = _servers[serverId];
