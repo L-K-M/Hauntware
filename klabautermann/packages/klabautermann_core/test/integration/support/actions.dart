@@ -1,0 +1,96 @@
+// Actions through a fixture engine (M4 E28, E29): plan an intent, run
+// the plan with the confirmation its tier asks for, and read how it
+// ended, as the app's action preview does.
+import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:test/test.dart';
+
+import 'fixture.dart';
+
+/// Covers a plan's reads and a run's steps over the link, a systemctl
+/// job or a Docker request included.
+const actionWait = Duration(seconds: 60);
+
+/// Turns management on for [servers], so their plans may run; every other
+/// server stays observe-only (SAF-01).
+void manage(FixtureEngine engine, Iterable<String> servers) => engine.send(
+  SetSafetyPolicy(
+    SafetyPolicy(
+      servers: {
+        for (final server in servers)
+          server: const ServerSafety(management: true),
+      },
+    ),
+  ),
+);
+
+/// Plans [intent] and returns the engine's answer: an [ActionPlanned] or
+/// an [ActionRefused].
+Future<EngineEvent> planAnswer(
+  FixtureEngine engine,
+  ActionIntent intent,
+) async {
+  engine.send(PlanAction(intent));
+  return engine.until<EngineEvent>(
+    (e) => e is ActionPlanned || (e is ActionRefused && e.intent != null),
+    actionWait,
+  );
+}
+
+/// Plans [intent]; a refusal fails the test.
+Future<ActionPlanned> plan(FixtureEngine engine, ActionIntent intent) async {
+  final answer = await planAnswer(engine, intent);
+  if (answer case ActionRefused(:final reason)) fail('refused: $reason');
+  return answer as ActionPlanned;
+}
+
+/// The confirmation [preview]'s tier asks for, the target's name typed
+/// where it must be.
+ActionConfirmation confirmationFor(ActionPreview preview) => ActionConfirmation(
+  tier: preview.requiredTier,
+  phrase: preview.requiredTier == ConfirmationTier.typedPhrase
+      ? preview.targetName
+      : null,
+);
+
+/// Runs [planned] with [confirmation], by default the one its tier asks
+/// for, and returns how it finished or why it was refused.
+Future<EngineEvent> run(
+  FixtureEngine engine,
+  ActionPlanned planned, {
+  ActionConfirmation? confirmation,
+}) {
+  engine.send(
+    RunAction(planned.planId, confirmation ?? confirmationFor(planned.preview)),
+  );
+  return engine.until<EngineEvent>(
+    (e) => switch (e) {
+      ActionFinished(:final planId) ||
+      ActionRefused(:final planId?) => planId == planned.planId,
+      _ => false,
+    },
+    actionWait,
+  );
+}
+
+/// Plans [intent] and runs it with the confirmation its tier asks for,
+/// expecting it to succeed; returns how it finished.
+Future<ActionFinished> planAndRun(
+  FixtureEngine engine,
+  ActionIntent intent,
+) async {
+  final finished = await run(engine, await plan(engine, intent));
+  expectSucceeded(finished);
+  return finished as ActionFinished;
+}
+
+/// Expects [event] to be a plan that succeeded.
+void expectSucceeded(EngineEvent event) {
+  expect(
+    event,
+    isA<ActionFinished>().having(
+      (f) => (f.outcome, f.failure, f.exitCode, f.httpStatus),
+      'outcome',
+      (ActionOutcome.succeeded, null, null, null),
+    ),
+  );
+}

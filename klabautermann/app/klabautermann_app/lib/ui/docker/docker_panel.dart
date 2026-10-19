@@ -15,6 +15,7 @@ import 'container_logs.dart';
 import 'containers_panel.dart';
 import 'docker_endpoint.dart';
 import 'docker_endpoint_picker.dart';
+import 'images_panel.dart';
 
 /// Hands the Docker tab SAF-08's notice state on every route (M3's M12):
 /// a phone pushes the server screen as a route of its own, so it sits
@@ -46,11 +47,12 @@ enum DockerSubTab {
 
 /// The Docker tab once [serverId]'s endpoint is ready (03 §10.2): SAF-08's
 /// notice until it is dismissed on this device, the engine strip
-/// (DKE-01), and the sub-tabs: Containers ([ContainersPanel]), then
-/// Images and Stacks, whose bodies land with their panels. While
+/// (DKE-01), and the sub-tabs: Containers ([ContainersPanel]), Images
+/// ([ImagesPanel]), then Stacks, whose body lands with its panel. While
 /// [visible], the tab counts as a view of the server's Docker engine
 /// ([DockerController.openView]), so a ready endpoint's details are read,
-/// and the Containers sub-tab watches the containers while it shows.
+/// and the Containers and Images sub-tabs each watch their lists while
+/// they show.
 ///
 /// On the desktop, a container's logs ([ContainerLogsScope]) show in a
 /// pane under the sub-tabs, which keeps the list and the inspector in
@@ -170,7 +172,12 @@ class _DockerPanelState extends State<DockerPanel> {
                               visible:
                                   widget.visible && tabs.index == tab.index,
                             ),
-                            DockerSubTab.images ||
+                            DockerSubTab.images => ImagesPanel(
+                              monitoring: widget.monitoring,
+                              serverId: widget.serverId,
+                              visible:
+                                  widget.visible && tabs.index == tab.index,
+                            ),
                             DockerSubTab.stacks => const PlaceholderPaneBody(),
                           },
                       ],
