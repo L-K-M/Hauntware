@@ -1758,7 +1758,7 @@ M2, the host read MVP, is the current milestone. What is on main:
   without privilege. Under a NOPASSWD rule scoped to the docker CLI,
   `sudo -n -l` lists the rule without a password while `systemd-run`
   needs one; the engine does not read the rules yet, so such an account
-  still has its root operations launched and refused by sudo (E30).
+  still has its elevated launches refused by sudo (E30).
 - M4 theme editing (E25): Settings > Appearance edits the theme with
   ghost_theme's shared editor (presets, mode, colours, font, corners,
   copy, paste and reset), in the app and in the desktop settings window,

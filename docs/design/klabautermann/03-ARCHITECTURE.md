@@ -1198,12 +1198,15 @@ Proposals awaiting the owner close the section; they are not decisions.
     survived the session's end under both.
   - Under a NOPASSWD rule scoped to the docker CLI, `sudo -n -l` lists
     `(root) NOPASSWD: /usr/bin/docker` without asking for a password,
-    while `sudo -n true` and `sudo -n systemd-run` ask for one. With admin
-    mode on, the engine therefore lists the account's rules (`sudo -l`
-    through admin mode's elevation) before it places a root operation,
-    and runs a root row only when a rule allows every command (`ALL`) or
-    names the row's runner; otherwise the preview names the missing
-    right. A rule scoped this way still serves the rank 3 relay (5.9).
+    while `sudo -n true` and `sudo -n systemd-run` ask for one. Before it
+    elevates a runner, the engine therefore lists the account's rules
+    (`sudo -l`, with admin mode's password when it has one) and elevates
+    only when a rule lets root run every command (`ALL`) or the program
+    the row elevates, with any arguments: `systemd-run`, or `sh` for the
+    root `setsid` row. Otherwise a root operation's preview names the
+    missing right, and an operation that needs no root is placed as with
+    admin mode off. A rule scoped this way still serves the rank 3 relay
+    (5.9).
 
   *Rejected:*
   - a login-user wrapper that elevates each Docker step: it runs
