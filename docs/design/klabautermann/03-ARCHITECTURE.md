@@ -4067,7 +4067,8 @@ SAF-17 generates narrow, validated rules (v1.x): a blanket rule equals root
     expired or failed.
   - It reads the elevation facts from the probe's `HostProfile` and asks
     for the password through the prompt broker only for the prelude rung.
-    A wrong password is retried up to three times.
+    A password is asked for at most three times: a wrong one gets two
+    retries.
   - Validation runs `true` through `ElevatedExecutor`, so rung 4 and the
     refusal classifier apply. Password doas fails `ttyRequired` without a
     prompt. E04's validation, which ignores cached records (D65), replaces
