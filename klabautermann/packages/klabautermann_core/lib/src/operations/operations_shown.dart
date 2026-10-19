@@ -8,11 +8,15 @@ import 'dart:io';
 import 'package:klabautermann_host/klabautermann_host.dart'
     show OpDirectoryKind;
 import 'package:meta/meta.dart';
+import 'package:seance_core/seance_core.dart' show SecretRedactor;
 
 import '../catalog/sync_state_file.dart';
 import '../engine/protocol.dart' show ConfirmationTier;
+import 'operation_plan.dart';
 import '../settings/device_settings_store.dart' show writeFileAtomically;
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
+
+final _redactor = SecretRedactor();
 
 /// The file under the support directory (03 §4.10).
 const String operationsShownFileName = 'operations_shown.json';
@@ -28,6 +32,19 @@ final class OperationLaunch {
     required this.tier,
     required this.startedAt,
   }) : steps = List.unmodifiable(steps);
+
+  /// [plan]'s launch facts, its steps redacted as `AuditLog.recordRun`
+  /// redacts a run's: the record outlives the run and is audited later.
+  factory OperationLaunch.ofPlan(
+    OperationPlan plan, {
+    required DateTime startedAt,
+  }) => OperationLaunch(
+    action: '${plan.intent.runtimeType}',
+    targetName: plan.targetName,
+    steps: [for (final step in plan.steps) _redactor.redact(step.display)],
+    tier: plan.tier,
+    startedAt: startedAt,
+  );
 
   final String action;
   final String targetName;

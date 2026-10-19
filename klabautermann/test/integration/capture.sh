@@ -12,12 +12,18 @@
 #                                          fixtures and regenerate their
 #                                          goldens
 #   test/integration/capture.sh --list     print the evidence directory and
-#                                          the capture list; needs no Docker
+#                                          what the run would capture;
+#                                          needs no Docker
 #   test/integration/capture.sh --docker-api-only [--update]
 #                                          only the recorded Docker API
 #                                          corpora (below); the other modes
 #                                          also run them after the shell
 #                                          captures
+#   test/integration/capture.sh --elevation-only [--update]
+#                                          only spike S3's elevation
+#                                          matrix (capture_elevation.sh,
+#                                          sourced below), which no other
+#                                          mode runs
 #
 # Needs Linux on x86_64 (the pinned packages and the fixtures are amd64),
 # Docker, curl, sha256sum, realpath and the Dart SDK with the klabautermann
@@ -36,6 +42,8 @@
 #   docker-api/<corpus>/  the recorded Docker API corpora of
 #                     capture_docker_api.sh, sourced below, with their
 #                     logs as logs/docker-api-<corpus>*.log
+#   elevation/        spike S3's case files and printf record, with logs
+#                     as logs/elevation-<case>.log
 #
 # The tool only ever writes redacted, reviewed files; the unredacted
 # sections never leave the container. Only --update writes inside the
@@ -75,8 +83,10 @@ readonly pull_attempts=3
 readonly capture_hostname='capture-host'
 
 # Official images through Google's Docker Hub mirror (Docker Hub
-# rate-limits anonymous pulls), Fedora from quay.io and UBI from Red
-# Hat's registry. The tag only documents the pin; Docker pulls by digest.
+# rate-limits anonymous pulls) and UBI from Red Hat's registry. The tag
+# only documents the pin; Docker pulls by digest. Fedora comes from
+# Docker Hub too: quay.io retags `fedora:44` daily and soon stops serving
+# a replaced digest, which broke the pin twice.
 declare -rA images=(
   [debian-12]='mirror.gcr.io/library/debian:12@sha256:2c037a04925515fdd6ea85ea14a682d0e79931f5e9f5d07b6dbfc6ba12f9e858'
   [debian-13]='mirror.gcr.io/library/debian:13@sha256:913f6706df59a68922d1dd08f78c2476560a8d367897200a6005b00e5f67c2d5'
@@ -84,7 +94,7 @@ declare -rA images=(
   [ubuntu-2604]='mirror.gcr.io/library/ubuntu:26.04@sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7'
   [ubi-9]='registry.access.redhat.com/ubi9/ubi:9.8@sha256:16e9e43d99e181463513cc84a514859b1abb9460f1c4d9e208da4b4e51cd5cc3'
   [ubi-10]='registry.access.redhat.com/ubi10/ubi:10.2@sha256:a75ad754aa048d808dd3260243452f8c9a665831d0493b4c9d92f0c88fe2f8c3'
-  [fedora-44]='quay.io/fedora/fedora:44@sha256:4a78eff1423dcce55cf68b8fd66e7cdca61c85978283db3ecc3089a8419fbbc0'
+  [fedora-44]='mirror.gcr.io/library/fedora:44@sha256:43b29f65a41eb9c35e1cd5323e3bdf3b655c2357a9f4f1ff2f9c2798e5045d80'
   [arch]='mirror.gcr.io/library/archlinux:base-20261011.0.609700@sha256:3c64b538588416593f69a1aebd2f2ec0f2541b29159f32556fa7def2167147a0'
 )
 
@@ -134,9 +144,12 @@ readonly captures=(
 # The recorded Docker API corpora: their pins, targets and steps.
 # shellcheck source=capture_docker_api.sh
 source "$klab_dir/test/integration/capture_docker_api.sh"
+# Spike S3's elevation matrix: its pins, cases and steps.
+# shellcheck source=capture_elevation.sh
+source "$klab_dir/test/integration/capture_elevation.sh"
 
 usage() {
-  echo 'usage: capture.sh [--update | --list] [--docker-api-only]' >&2
+  echo 'usage: capture.sh [--update | --list] [--docker-api-only | --elevation-only]' >&2
   exit 2
 }
 
@@ -152,18 +165,24 @@ for arg in "$@"; do
     --update) [[ "$mode" == check ]] || usage; mode=update ;;
     --list) [[ "$mode" == check ]] || usage; mode=list ;;
     --docker-api-only) [[ "$scope" == all ]] || usage; scope=docker-api ;;
+    --elevation-only) [[ "$scope" == all ]] || usage; scope=elevation ;;
     *) usage ;;
   esac
 done
 readonly mode scope
 
 # The shell captures and images this run needs; --docker-api-only runs
-# none of the captures and needs only the image its tool runs in.
+# none of the captures and needs only the image its tool runs in, and
+# --elevation-only only the images its cases run in (Alpine's comes
+# from capture_elevation.sh).
 selected=("${captures[@]}")
 image_keys=("${!images[@]}")
 if [[ "$scope" == docker-api ]]; then
   selected=()
   image_keys=(debian-13)
+elif [[ "$scope" == elevation ]]; then
+  selected=()
+  image_keys=(debian-13 ubuntu-2604)
 fi
 readonly selected image_keys
 
@@ -185,7 +204,11 @@ if [[ "$mode" == list ]]; then
     read -r name image launch shell packages <<<"$entry"
     echo "capture $name ${images[$image]} $launch $shell${packages:+ $packages}"
   done
-  api_list
+  if [[ "$scope" == elevation ]]; then
+    elev_list
+  else
+    api_list
+  fi
   exit 0
 fi
 
@@ -239,8 +262,13 @@ if [[ "$scope" == all ]]; then
   )
 fi
 
-echo '== Compiling the Docker API capture tool, pulling its daemons'
-api_prepare
+if [[ "$scope" == elevation ]]; then
+  echo '== Compiling the elevation tool, fetching its packages'
+  elev_prepare
+else
+  echo '== Compiling the Docker API capture tool, pulling its daemons'
+  api_prepare
+fi
 
 if [[ "$scope" == all ]]; then
   echo '== Fetching the pinned Debian packages'
@@ -369,14 +397,21 @@ for entry in "${selected[@]}"; do
   fi
 done
 
-api_captures
-
-total=$((${#selected[@]} + ${#api_targets[@]}))
+if [[ "$scope" == elevation ]]; then
+  elev_captures
+  total=$((${#elev_cases[@]} + 1))
+else
+  api_captures
+  total=$((${#selected[@]} + ${#api_targets[@]}))
+fi
 if [[ "${#failed[@]}" -gt 0 ]]; then
   die "${#failed[@]} of $total captures failed or differ: ${failed[*]}"
 fi
 
-if [[ "$mode" == update ]]; then
+if [[ "$mode" == update && "$scope" == elevation ]]; then
+  echo '== Replacing the committed elevation evidence'
+  elev_update
+elif [[ "$mode" == update ]]; then
   echo '== Replacing the committed Docker API corpora'
   api_update
 fi

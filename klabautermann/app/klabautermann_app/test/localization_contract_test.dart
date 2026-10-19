@@ -124,6 +124,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The diagnostic of a sync answer the stopped engine never gave;
   // surfaces show ARB text for its failure kind (syncFailed).
   'lib/controllers/sync_controller.dart': {"'the engine stopped'"},
+  // A Docker query id the engine echoes in its answer (03 §10.1).
+  // The query and watch ids the engine keys Docker answers by (03 §10.1).
+  'lib/controllers/docker_controller.dart': {
+    r"'docker-${_count++}'",
+    r"'containers-${_count++}'",
+    r"'container-${_count++}'",
+  },
   'lib/controllers/log_streams.dart': {
     // A log stream id the engine keys a stream's events by (03 §10.1), and
     // the rejected request's class name, which RequestRejected carries.
@@ -237,6 +244,131 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // debugPrint of a dismissal that was not saved; the toast is ARB text.
   'lib/ui/coverage.dart': {r"'$error'"},
+  'lib/ui/docker/container_details.dart': {
+    // A mount's type as the Engine API names it, matched, never shown;
+    // the empty type a mount without one reads as; the separator between
+    // a network's aliases and the one an image id's algorithm ends with,
+    // machine data.
+    "'volume'",
+    "''",
+    "', '",
+    "':'",
+  },
+  'lib/ui/docker/container_details_view.dart': {
+    // The Engine API's restart policy names, matched, never shown; the
+    // empty one is the default.
+    "''",
+    "'no'",
+    "'always'",
+    "'unless-stopped'",
+    "'on-failure'",
+    // The raw view's JSON: the Engine API's inspect field names, as
+    // `docker inspect` prints them, its indent, and an environment
+    // variable in the API's KEY=value form, its value masked. Machine
+    // data, never translated (03 §10.10).
+    "'Aliases'",
+    "'Args'",
+    "'AutoRemove'",
+    "'Binds'",
+    "'Cmd'",
+    "'Config'",
+    "'Created'",
+    "'Dead'",
+    "'Destination'",
+    "'Driver'",
+    "'End'",
+    "'Entrypoint'",
+    "'Env'",
+    "'Error'",
+    "'ExitCode'",
+    "'FailingStreak'",
+    "'FinishedAt'",
+    "'Gateway'",
+    "'Health'",
+    "'HostConfig'",
+    "'Hostname'",
+    "'IPAddress'",
+    "'Id'",
+    "'Image'",
+    "'Labels'",
+    "'Log'",
+    "'LogConfig'",
+    "'MacAddress'",
+    "'MaximumRetryCount'",
+    "'Memory'",
+    "'Mode'",
+    "'Mounts'",
+    "'Name'",
+    "'NanoCpus'",
+    "'NetworkID'",
+    "'NetworkMode'",
+    "'NetworkSettings'",
+    "'Networks'",
+    "'OOMKilled'",
+    "'Output'",
+    "'Path'",
+    "'Paused'",
+    "'Pid'",
+    "'PidMode'",
+    "'Platform'",
+    "'Privileged'",
+    "'Propagation'",
+    "'RW'",
+    "'ReadonlyRootfs'",
+    "'RestartCount'",
+    "'RestartPolicy'",
+    "'Restarting'",
+    "'Running'",
+    "'Source'",
+    "'Start'",
+    "'StartedAt'",
+    "'State'",
+    "'Status'",
+    "'StopSignal'",
+    "'Tty'",
+    "'Type'",
+    "'User'",
+    "'WorkingDir'",
+    "'  '",
+    r"'${variable.name}=${variable.value.display}'",
+  },
+  'lib/ui/docker/containers_panel.dart': {
+    // The key tests find a phone row by, in the table rows' form, and the
+    // line break between its cells in its screen-reader label, each ARB
+    // text; a heading's row key; empty cells and no ports.
+    r"'${DockerWatchList.containers.name}.row.${_rowKey(entry)}'",
+    r"'\n'",
+    r"'group.${project ?? ''}'",
+    "''",
+  },
+  'lib/ui/docker/containers_view.dart': {
+    // The compose project label key (compose's pkg/api/labels.go).
+    "'com.docker.compose.project'",
+    // The search's term separator and the line break between the fields
+    // it searches; empty values.
+    r"r'\s+'",
+    r"'\n'",
+    "''",
+    // The engine's Status text as go-units prints it, matched, never
+    // shown: the health marker the health column replaces, the uptime's
+    // words, and the wildcard addresses `docker ps` leaves out.
+    r"r'\s*\((healthy|unhealthy|health: starting)\)'",
+    "'less than a second'",
+    "'about a minute'",
+    "'about an hour'",
+    r"r'^Up (.+?)(?: ago)?(?: \(.*\))?$'",
+    r"r'^(\d+) (second|minute|hour|day|week|month|year)s?$'",
+    "'0.0.0.0'",
+    "'::'",
+    // The separator `docker ps` prints between ports; machine data.
+    "', '",
+  },
+  'lib/ui/docker/docker_panel.dart': {
+    // An assert message; programmer diagnostic, never rendered.
+    "'new controllers come with a new tree (KlabautermannApp, D44)'",
+    // debugPrint of a dismissal that was not saved; the toast is ARB text.
+    r"'$error'",
+  },
   'lib/ui/fleet_row_state.dart': {
     // The root mount point whose use the pressure bar shows.
     "'/'",

@@ -146,9 +146,13 @@ void main() {
             'management': true,
             'marks': ['web-1', 3],
           },
+          'srv-4': {'management': true, 'readOnly': 'yes'},
         },
       });
-      expect(damaged.globalReadOnly, isFalse);
+      // A read-only switch that does not read as off never grants
+      // actions back: the file can only take them away.
+      expect(damaged.globalReadOnly, isTrue);
+      expect(damaged.servers['srv-4']?.management, isFalse);
       expect(damaged.adminExpiry, kDefaultAdminExpiry);
       expect(damaged.servers['srv-1']?.management, isFalse);
       expect(damaged.servers['srv-1']?.marks, isEmpty);

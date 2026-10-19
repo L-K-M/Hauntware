@@ -385,7 +385,6 @@
   "settingsTabDocker": "Docker",
   "settingsTabSafety": "Safety",
   "settingsTabAlerts": "Alerts",
-  "themeLabel": "Theme",
   "themeSystem": "System",
   "themeLight": "Light",
   "themeDark": "Dark",
@@ -1722,18 +1721,6 @@
   "accessRuntimeAlias": "Podman can also answer on Docker's socket path. Docker support will tell them apart.",
   "@accessRuntimeAlias": {
     "description": "Access tab and Docker tab: note under a socket at Docker's path, which a podman-docker install may serve."
-  },
-  "accessDockerPendingTitle": "Arrives with Docker support",
-  "@accessDockerPendingTitle": {
-    "description": "Docker tab: title shown instead of the Docker panels until the release with Docker support."
-  },
-  "accessDockerPendingBody": "Containers, images and stacks arrive with Docker support. Until then, this tab shows the runtime Klabautermann detected, read-only.",
-  "@accessDockerPendingBody": {
-    "description": "Docker tab: body under accessDockerPendingTitle."
-  },
-  "accessDetectedRuntime": "Detected runtime",
-  "@accessDetectedRuntime": {
-    "description": "Docker tab: heading over the container engines the probe found."
   },
   "accessPanelHiddenTitle": "{panel} is not available on this server",
   "@accessPanelHiddenTitle": {
@@ -4133,5 +4120,1022 @@
         "type": "String"
       }
     }
+  },
+  "dockerTransportWaiting": "Engine API: waiting for the connection",
+  "@dockerTransportWaiting": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) before the server is connected and its capability check has answered."
+  },
+  "dockerTransportResolving": "Engine API: looking for a route",
+  "@dockerTransportResolving": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) while Klabautermann tries the routes to the engine socket and agrees on an API version."
+  },
+  "dockerTransportSocketForward": "Engine API via SSH socket forward",
+  "@dockerTransportSocketForward": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) for rank 1: SSH forwards the engine socket. Keep the wording of 03 §5.9."
+  },
+  "dockerTransportCliRelay": "Engine API via docker CLI relay (limited streams)",
+  "@dockerTransportCliRelay": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) for rank 2: the engine CLI relays each connection over its own SSH session. \"docker\" is the command name; keep the wording of 03 §5.9."
+  },
+  "dockerTransportSudoRelay": "Engine API via sudo relay (root-equivalent)",
+  "@dockerTransportSudoRelay": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) for rank 3: in admin mode, sudo runs the engine CLI's relay as root because the account cannot use the socket. \"sudo\" is the command name; keep the wording of 03 §5.9."
+  },
+  "dockerTransportSocatRelay": "Engine API via socat relay",
+  "@dockerTransportSocatRelay": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) for rank 4: socat or nc relays each connection. \"socat\" is the command name; keep the wording of 03 §5.9."
+  },
+  "dockerTransportNoRelay": "No Engine API route: forwarding is off and there is no relay",
+  "@dockerTransportNoRelay": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when socket forwarding is refused and the server has no docker, podman, socat or nc to relay through."
+  },
+  "dockerTransportNeedsAdminMode": "No Engine API route: the socket needs admin mode",
+  "@dockerTransportNeedsAdminMode": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the account cannot use the engine socket but sudo exists; admin mode arrives later."
+  },
+  "dockerTransportSocketDenied": "No Engine API route: your account cannot use the socket",
+  "@dockerTransportSocketDenied": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the account cannot use the engine socket and the server has no sudo."
+  },
+  "dockerTransportProbeFailed": "No Engine API route: the socket check failed",
+  "@dockerTransportProbeFailed": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the command that checks the engine socket failed or answered something unreadable."
+  },
+  "dockerTransportNoSocket": "No Engine API route: no engine socket found",
+  "@dockerTransportNoSocket": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the server has no Docker or Podman socket."
+  },
+  "dockerTransportSocketsUnknown": "No Engine API route: the sockets were not checked",
+  "@dockerTransportSocketsUnknown": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the capability check has not reported the server's engine sockets."
+  },
+  "dockerTransportUnreachable": "Engine API: the engine did not answer",
+  "@dockerTransportUnreachable": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when routes to the engine socket opened but the engine answered over none of them."
+  },
+  "dockerTransportUnsupported": "Engine API: the engine's API version is not supported",
+  "@dockerTransportUnsupported": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the engine offers no API version this app can use."
+  },
+  "dockerTransportLinkError": "Engine API: the connection failed while looking for a route",
+  "@dockerTransportLinkError": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the SSH connection failed while the routes were tried."
+  },
+  "dockerLowSession": "Low-session mode",
+  "@dockerLowSession": {
+    "description": "Server header: the server allows few SSH sessions, so Docker shares them sparingly (03 §5.2)."
+  },
+  "dockerBadgeRootfulSocket": "Rootful socket: root-equivalent",
+  "@dockerBadgeRootfulSocket": {
+    "description": "Server header badge (SAF-08, 03 §8.4): the engine socket in use belongs to a rootful engine, so using it equals root on the server."
+  },
+  "dockerBadgeRootlessEngine": "Rootless engine: equals user {user}",
+  "@dockerBadgeRootlessEngine": {
+    "description": "Server header badge (SAF-08, 03 §8.4): the engine in use runs rootless, so using it equals the account that runs it.",
+    "placeholders": {
+      "user": {
+        "type": "String",
+        "example": "alice"
+      }
+    }
+  },
+  "dockerBadgeRootlessEngineLogin": "Rootless engine: equals your login user",
+  "@dockerBadgeRootlessEngineLogin": {
+    "description": "dockerBadgeRootlessEngine when the capability check did not name the login user."
+  },
+  "dockerBadgeSudoRelay": "Sudo relay: root-equivalent",
+  "@dockerBadgeSudoRelay": {
+    "description": "Server header badge (SAF-08, 03 §8.4): the engine is reached through the sudo relay, which runs as root, so using it equals root on the server."
+  },
+  "dockerBadgeCustomSocket": "Custom socket: root-equivalent",
+  "@dockerBadgeCustomSocket": {
+    "description": "Server header badge (SAF-08): a socket path Klabautermann cannot classify, treated as root-equivalent."
+  },
+  "dockerRuntimeDocker": "Docker",
+  "@dockerRuntimeDocker": {
+    "description": "The engine in use when its mode is unknown, as on a custom socket path."
+  },
+  "dockerRuntimePodman": "Podman",
+  "@dockerRuntimePodman": {
+    "description": "The engine in use when its mode is unknown, as on a custom socket path."
+  },
+  "dockerGateWaitingTitle": "Waiting for the connection",
+  "@dockerGateWaitingTitle": {
+    "description": "Docker tab, shown instead of its panels until the server is connected and its capability check has answered."
+  },
+  "dockerGateWaitingBody": "Klabautermann looks for the Docker engine once it is connected to this server and knows what the server offers.",
+  "@dockerGateWaitingBody": {
+    "description": "Body under dockerGateWaitingTitle."
+  },
+  "dockerGateResolvingTitle": "Looking for the Docker engine",
+  "@dockerGateResolvingTitle": {
+    "description": "Docker tab, shown instead of its panels while Klabautermann finds a route to the engine socket."
+  },
+  "dockerGateResolvingBody": "Klabautermann is finding a way to reach the engine socket and agreeing on an API version with the engine.",
+  "@dockerGateResolvingBody": {
+    "description": "Body under dockerGateResolvingTitle."
+  },
+  "dockerGateNoRelay": "Socket forwarding is off on this server, and it has nothing to relay through: no docker or podman command, no socat and no nc.",
+  "@dockerGateNoRelay": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: forwarding refused and no relay. Command names stay as they are."
+  },
+  "dockerGateNeedsAdminMode": "Your account cannot use the engine socket. Reaching it through sudo needs admin mode, which arrives in a later milestone.",
+  "@dockerGateNeedsAdminMode": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the account cannot use the socket, but sudo exists."
+  },
+  "dockerGateSocketDenied": "Your account cannot use the engine socket, and this server has no sudo. The Access tab shows how access is granted.",
+  "@dockerGateSocketDenied": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the account cannot use the socket and there is no sudo."
+  },
+  "dockerGateProbeFailed": "Checking the engine socket failed, so Klabautermann cannot tell how to reach it.",
+  "@dockerGateProbeFailed": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the socket check failed."
+  },
+  "dockerGateNoSocket": "No Docker or Podman socket was found on this server.",
+  "@dockerGateNoSocket": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: no engine socket."
+  },
+  "dockerGateSocketsUnknown": "The server's capability check has not reported its engine sockets.",
+  "@dockerGateSocketsUnknown": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the sockets were not checked."
+  },
+  "dockerGateUnreachable": "A route to the engine socket opened, but the engine did not answer over it.",
+  "@dockerGateUnreachable": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the engine did not answer."
+  },
+  "dockerGateBelowClientFloor": "The engine's newest API version is older than 1.41, the oldest Klabautermann supports.",
+  "@dockerGateBelowClientFloor": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the engine is too old. 1.41 is the Docker API version."
+  },
+  "dockerGateBelowServerMinimum": "The engine only accepts API versions newer than Klabautermann supports.",
+  "@dockerGateBelowServerMinimum": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the engine is too new for this app."
+  },
+  "dockerGateApiVersionUnknown": "The engine did not report an API version Klabautermann can read.",
+  "@dockerGateApiVersionUnknown": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: no readable API version."
+  },
+  "dockerGateLinkError": "The connection to this server failed while Klabautermann looked for the engine.",
+  "@dockerGateLinkError": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the SSH connection failed meanwhile."
+  },
+  "dockerRetry": "Try again",
+  "@dockerRetry": {
+    "description": "Docker tab: asks again for the Docker endpoint or the engine details after a failure."
+  },
+  "dockerTabContainers": "Containers",
+  "@dockerTabContainers": {
+    "description": "Docker tab: the sub-tab listing containers."
+  },
+  "dockerTabImages": "Images",
+  "@dockerTabImages": {
+    "description": "Docker tab: the sub-tab listing images."
+  },
+  "dockerTabStacks": "Stacks",
+  "@dockerTabStacks": {
+    "description": "Docker tab: the sub-tab listing compose stacks."
+  },
+  "dockerEngineHeading": "Engine",
+  "@dockerEngineHeading": {
+    "description": "Docker tab: heading of the strip with the engine's runtime, API version, version and operating system (DKE-01)."
+  },
+  "dockerEngineApi": "API {version}",
+  "@dockerEngineApi": {
+    "description": "Docker tab engine strip: the Docker API version the app negotiated with the engine.",
+    "placeholders": {
+      "version": {
+        "type": "String",
+        "example": "1.47"
+      }
+    }
+  },
+  "dockerEngineVersion": "{name} {version}",
+  "@dockerEngineVersion": {
+    "description": "Docker tab engine strip: the engine's product name and version.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Docker Engine - Community"
+      },
+      "version": {
+        "type": "String",
+        "example": "27.3.1"
+      }
+    }
+  },
+  "dockerEngineVersionUnknown": "{name}, version unknown",
+  "@dockerEngineVersionUnknown": {
+    "description": "Docker tab engine strip: the engine did not report its version.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Docker"
+      }
+    }
+  },
+  "dockerEngineOs": "{os} on {architecture}",
+  "@dockerEngineOs": {
+    "description": "Docker tab engine strip: the engine host's operating system and architecture.",
+    "placeholders": {
+      "os": {
+        "type": "String",
+        "example": "Ubuntu 24.04.1 LTS"
+      },
+      "architecture": {
+        "type": "String",
+        "example": "x86_64"
+      }
+    }
+  },
+  "dockerEngineOsUnknown": "Operating system unknown",
+  "@dockerEngineOsUnknown": {
+    "description": "Docker tab engine strip: the engine did not report its host's operating system."
+  },
+  "dockerEngineReading": "Reading the engine details…",
+  "@dockerEngineReading": {
+    "description": "Docker tab engine strip: while the engine's details are read."
+  },
+  "dockerEngineReadFailed": "The engine details could not be read.",
+  "@dockerEngineReadFailed": {
+    "description": "Docker tab engine strip: reading the engine's details failed."
+  },
+  "dockerNoticeDismiss": "Got it",
+  "@dockerNoticeDismiss": {
+    "description": "Docker tab: dismisses the root-equivalence notice on this device."
+  },
+  "dockerNoticeNotSaved": "Klabautermann could not save that you dismissed the root-equivalence note, so it shows again after a restart.",
+  "@dockerNoticeNotSaved": {
+    "description": "Toast: dismissing the Docker tab's root-equivalence notice could not be saved."
+  },
+  "appearanceThemeTitle": "Theme",
+  "@appearanceThemeTitle": {
+    "description": "Appearance tab: heading of the preset grid."
+  },
+  "appearanceThemeHelpTitle": "Themes",
+  "@appearanceThemeHelpTitle": {
+    "description": "Appearance tab: title of the theme help dialog."
+  },
+  "appearanceThemeHelp": "A theme is kept on this device only and never syncs. To use one elsewhere, copy it here and paste it into Klabautermann on the other device.",
+  "@appearanceThemeHelp": {
+    "description": "Appearance tab: body of the theme help dialog."
+  },
+  "appearanceThemeFootnote": "Picking a theme copies its colours here. It is a starting point, not a mode, so everything below stays yours to change.",
+  "@appearanceThemeFootnote": {
+    "description": "Appearance tab: small print under the preset grid."
+  },
+  "appearancePresetTooltip": "Use the {name} theme",
+  "@appearancePresetTooltip": {
+    "description": "Appearance tab: tooltip of a preset tile.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Paper"
+      }
+    }
+  },
+  "appearanceModeTitle": "Mode",
+  "@appearanceModeTitle": {
+    "description": "Appearance tab: heading of the light/dark mode section."
+  },
+  "appearanceModeLead": "Automatic colours follow",
+  "@appearanceModeLead": {
+    "description": "Appearance tab: line above the mode switch."
+  },
+  "appearanceOwnSurfaceDark": "This theme has its own surface, so it is always dark. Set Surface to Automatic to choose a mode.",
+  "@appearanceOwnSurfaceDark": {
+    "description": "Appearance tab: note when a dark palette sets its own surface."
+  },
+  "appearanceOwnSurfaceLight": "This theme has its own surface, so it is always light. Set Surface to Automatic to choose a mode.",
+  "@appearanceOwnSurfaceLight": {
+    "description": "Appearance tab: note when a light palette sets its own surface."
+  },
+  "appearanceColoursTitle": "Colours",
+  "@appearanceColoursTitle": {
+    "description": "Appearance tab: heading of the colour slots."
+  },
+  "appearanceColoursHelpTitle": "Automatic colours",
+  "@appearanceColoursHelpTitle": {
+    "description": "Appearance tab: title of the colours help dialog."
+  },
+  "appearanceColoursHelp": "Automatic colours are the light or dark neutrals Klabautermann ships with, as the mode picks them. Once you give the theme a surface of its own, they are mixed from that surface and the text instead. Lines and the selection may be translucent.",
+  "@appearanceColoursHelp": {
+    "description": "Appearance tab: body of the colours help dialog."
+  },
+  "appearanceAccent": "Accent",
+  "@appearanceAccent": {
+    "description": "Appearance tab: the accent colour row."
+  },
+  "appearanceSlotSurface": "Surface",
+  "@appearanceSlotSurface": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotSidebar": "Sidebar",
+  "@appearanceSlotSidebar": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotRaised": "Headers and bars",
+  "@appearanceSlotRaised": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotText": "Text",
+  "@appearanceSlotText": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotSecondaryText": "Secondary text",
+  "@appearanceSlotSecondaryText": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotHairline": "Lines",
+  "@appearanceSlotHairline": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotSelection": "Selection",
+  "@appearanceSlotSelection": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotOnline": "Online",
+  "@appearanceSlotOnline": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotOffline": "Offline",
+  "@appearanceSlotOffline": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotConnecting": "Connecting",
+  "@appearanceSlotConnecting": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotUnknown": "Unknown",
+  "@appearanceSlotUnknown": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceStatusTitle": "Status colours",
+  "@appearanceStatusTitle": {
+    "description": "Appearance tab: heading of the status colour slots."
+  },
+  "appearanceStatusFootnote": "Each status also keeps its own shape and its name, so these colours never have to say it alone.",
+  "@appearanceStatusFootnote": {
+    "description": "Appearance tab: small print under the status colours."
+  },
+  "appearanceAutomatic": "Automatic",
+  "@appearanceAutomatic": {
+    "description": "Appearance tab: checkbox beside a colour that follows the mode."
+  },
+  "appearanceAutomaticSemantics": "{label}: Automatic",
+  "@appearanceAutomaticSemantics": {
+    "description": "Appearance tab: screen reader label of a colour's Automatic checkbox.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Surface"
+      }
+    }
+  },
+  "appearanceChooseColour": "Choose the {label} colour",
+  "@appearanceChooseColour": {
+    "description": "Appearance tab: tooltip of a colour swatch.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Surface"
+      }
+    }
+  },
+  "appearanceChooseAutomaticColour": "Choose a {label} colour (now Automatic)",
+  "@appearanceChooseAutomaticColour": {
+    "description": "Appearance tab: tooltip of an Automatic colour's swatch.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Surface"
+      }
+    }
+  },
+  "appearanceShapeTitle": "Shape and type",
+  "@appearanceShapeTitle": {
+    "description": "Appearance tab: heading of the font and corner controls."
+  },
+  "appearanceInterfaceFont": "Interface font",
+  "@appearanceInterfaceFont": {
+    "description": "Appearance tab: label of the interface font field."
+  },
+  "appearanceInterfaceFontHint": "System default",
+  "@appearanceInterfaceFontHint": {
+    "description": "Appearance tab: hint of the empty interface font field."
+  },
+  "appearanceInterfaceFontHelper": "Logs and commands keep their monospace font.",
+  "@appearanceInterfaceFontHelper": {
+    "description": "Appearance tab: helper text under the interface font field."
+  },
+  "appearanceCorners": "Corners",
+  "@appearanceCorners": {
+    "description": "Appearance tab: label of the corner slider."
+  },
+  "appearanceCornersSquare": "Square",
+  "@appearanceCornersSquare": {
+    "description": "Appearance tab: corner slider value at no rounding."
+  },
+  "appearanceCornersPercent": "{percent}%",
+  "@appearanceCornersPercent": {
+    "description": "Appearance tab: corner slider value as a percentage.",
+    "placeholders": {
+      "percent": {
+        "type": "int",
+        "example": "65"
+      }
+    }
+  },
+  "appearanceCornersSemantics": "Corners {label}",
+  "@appearanceCornersSemantics": {
+    "description": "Appearance tab: screen reader value of the corner slider.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "65%"
+      }
+    }
+  },
+  "appearanceShareTitle": "Share",
+  "@appearanceShareTitle": {
+    "description": "Appearance tab: heading of copy and paste."
+  },
+  "appearanceCopyTheme": "Copy theme",
+  "@appearanceCopyTheme": {
+    "description": "Appearance tab: button that copies the theme as text."
+  },
+  "appearancePasteTheme": "Paste theme",
+  "@appearancePasteTheme": {
+    "description": "Appearance tab: button that pastes a theme."
+  },
+  "appearanceShareFootnote": "Copies the theme as text you can keep or send. Pasting reads what it can and leaves everything else at the default.",
+  "@appearanceShareFootnote": {
+    "description": "Appearance tab: small print under copy and paste."
+  },
+  "appearanceThemeCopied": "Theme copied.",
+  "@appearanceThemeCopied": {
+    "description": "Appearance tab: toast after Copy theme."
+  },
+  "appearancePasteNotATheme": "The clipboard does not hold a theme. Copy one with Copy theme first.",
+  "@appearancePasteNotATheme": {
+    "description": "Appearance tab: toast when the clipboard holds no theme."
+  },
+  "appearanceStartOverTitle": "Start over",
+  "@appearanceStartOverTitle": {
+    "description": "Appearance tab: heading of the reset control."
+  },
+  "appearanceResetButton": "Reset to {name}",
+  "@appearanceResetButton": {
+    "description": "Appearance tab: button that resets the theme to the initial preset.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Klabautermann"
+      }
+    }
+  },
+  "appearanceUsingOwnColours": "Using your own colours.",
+  "@appearanceUsingOwnColours": {
+    "description": "Appearance tab: status beside the reset button when no preset matches."
+  },
+  "appearanceUsingPreset": "Using {name}.",
+  "@appearanceUsingPreset": {
+    "description": "Appearance tab: status beside the reset button when a preset matches.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Paper"
+      }
+    }
+  },
+  "appearanceResetTitle": "Reset the theme?",
+  "@appearanceResetTitle": {
+    "description": "Appearance tab: title of the reset confirmation."
+  },
+  "appearanceResetBody": "Every colour, the font and the corners go back to the {name} theme. The mode stays as it is.",
+  "@appearanceResetBody": {
+    "description": "Appearance tab: body of the reset confirmation.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Klabautermann"
+      }
+    }
+  },
+  "appearanceCancel": "Cancel",
+  "@appearanceCancel": {
+    "description": "Appearance tab: cancels the reset."
+  },
+  "appearanceReset": "Reset",
+  "@appearanceReset": {
+    "description": "Appearance tab: confirms the reset."
+  },
+  "appearanceAbout": "About {title}",
+  "@appearanceAbout": {
+    "description": "Appearance tab: tooltip of a section's help button.",
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "Colours"
+      }
+    }
+  },
+  "appearanceClose": "Close",
+  "@appearanceClose": {
+    "description": "Appearance tab: closes a section's help dialog."
+  },
+  "dockerContainersColumnName": "Name",
+  "@dockerContainersColumnName": {
+    "description": "Containers table column: the container's name."
+  },
+  "dockerContainersColumnState": "State",
+  "@dockerContainersColumnState": {
+    "description": "Containers table column: the container's state, such as running or exited."
+  },
+  "dockerContainersColumnHealth": "Health",
+  "@dockerContainersColumnHealth": {
+    "description": "Containers table column: the container's health check status (CTR-04)."
+  },
+  "dockerContainersColumnStatus": "Status",
+  "@dockerContainersColumnStatus": {
+    "description": "Containers table column: the engine's own status text, such as \"Up 3 hours\" or \"Exited (0) 2 days ago\", which gives the uptime. Server data, never translated."
+  },
+  "dockerContainersColumnImage": "Image",
+  "@dockerContainersColumnImage": {
+    "description": "Containers table column: the image the container runs."
+  },
+  "dockerContainersColumnPorts": "Ports",
+  "@dockerContainersColumnPorts": {
+    "description": "Containers table column: the container's published and exposed ports."
+  },
+  "dockerContainersColumnStack": "Stack",
+  "@dockerContainersColumnStack": {
+    "description": "Containers table column: the compose project the container belongs to, or a Swarm task's service."
+  },
+  "dockerContainersColumnCpu": "CPU",
+  "@dockerContainersColumnCpu": {
+    "description": "Containers table column: the container's CPU share from its list stats (CST-01)."
+  },
+  "dockerContainersColumnMemory": "Memory",
+  "@dockerContainersColumnMemory": {
+    "description": "Containers table column: the memory the container uses, from its list stats (CST-01)."
+  },
+  "dockerContainerState": "{state, select, created{Created} running{Running} paused{Paused} restarting{Restarting} removing{Removing} exited{Exited} dead{Dead} other{Unknown}}",
+  "@dockerContainerState": {
+    "description": "A container's state in words. state is the Engine API's state name; a state outside this list shows as the engine gave it instead.",
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerContainerHealth": "{health, select, healthy{Healthy} unhealthy{Unhealthy} starting{Starting} other{No health check}}",
+  "@dockerContainerHealth": {
+    "description": "A container's health check status (CTR-04), beside an icon.",
+    "placeholders": {
+      "health": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerContainersCpu": "{share}",
+  "@dockerContainersCpu": {
+    "description": "A container's CPU share; share arrives as a fraction where 1 is one full CPU, so it can exceed 100%.",
+    "placeholders": {
+      "share": {
+        "type": "double",
+        "format": "decimalPercentPattern",
+        "optionalParameters": {
+          "decimalDigits": 1
+        }
+      }
+    }
+  },
+  "dockerContainersStale": "{value}, stale",
+  "@dockerContainersStale": {
+    "description": "What a screen reader hears for a container's CPU or memory figure whose stats are old; the screen shows it grey beside a history icon.",
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "12.5%"
+      }
+    }
+  },
+  "dockerContainersSwarmService": "{service} (Swarm)",
+  "@dockerContainersSwarmService": {
+    "description": "The Stack column for a Swarm task: the Swarm service its name belongs to.",
+    "placeholders": {
+      "service": {
+        "type": "String",
+        "example": "web"
+      }
+    }
+  },
+  "dockerContainersNoStack": "Not in a stack",
+  "@dockerContainersNoStack": {
+    "description": "Containers list: the heading of the containers that belong to no compose project."
+  },
+  "dockerContainersGroupSummary": "{count, plural, =1{1 container} other{{count} containers}}, {up} running",
+  "@dockerContainersGroupSummary": {
+    "description": "Containers list: a compose project heading's counts of the containers shown and of those running.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "up": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerContainersSearchHint": "Search by name, image or ID",
+  "@dockerContainersSearchHint": {
+    "description": "Containers list: the search field's hint."
+  },
+  "dockerContainersSearchClear": "Clear search",
+  "@dockerContainersSearchClear": {
+    "description": "Containers list: tooltip of the button that clears the search."
+  },
+  "dockerContainersRunningOnly": "Running only",
+  "@dockerContainersRunningOnly": {
+    "description": "Containers list: a toggle that hides stopped containers."
+  },
+  "dockerContainersSortBy": "Sort by",
+  "@dockerContainersSortBy": {
+    "description": "Containers list on a phone: the label before the sort menu."
+  },
+  "dockerContainersFact": "{label}: {value}",
+  "@dockerContainersFact": {
+    "description": "Containers list on a phone: one figure of a container, after its column's name.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Image"
+      },
+      "value": {
+        "type": "String",
+        "example": "nginx:1.27"
+      }
+    }
+  },
+  "dockerContainersReading": "Reading the containers…",
+  "@dockerContainersReading": {
+    "description": "Containers list: while the first list is read."
+  },
+  "dockerContainersEmpty": "This engine has no containers.",
+  "@dockerContainersEmpty": {
+    "description": "Containers list: the engine listed none."
+  },
+  "dockerContainersNoneRunning": "No container is running. Turn off Running only to see the stopped ones.",
+  "@dockerContainersNoneRunning": {
+    "description": "Containers list: Running only hides every container."
+  },
+  "dockerContainersNoMatch": "No container matches the search.",
+  "@dockerContainersNoMatch": {
+    "description": "Containers list: the search matches none."
+  },
+  "dockerContainersFailed": "{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} daemonError{The engine refused or failed to list the containers.} connectionFailed{The connection to the engine failed while listing the containers.} other{The containers could not be listed.}}",
+  "@dockerContainersFailed": {
+    "description": "Containers list: why the list could not be read. reason is the engine's failure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerContainersKept": "The list below is the last one read.",
+  "@dockerContainersKept": {
+    "description": "Containers list: under a failed read, the list it keeps is older."
+  },
+  "dockerContainersStatsFailed": "The CPU and memory figures could not be read, so the ones shown may be old.",
+  "@dockerContainersStatsFailed": {
+    "description": "Containers list: the latest stats round failed."
+  },
+  "dockerContainersLowSession": "Low-session mode: stats are read one container at a time, so they update more slowly.",
+  "@dockerContainersLowSession": {
+    "description": "Containers list: the server's link has a session limit (03 §5.2) on the SSH socket forward."
+  },
+  "dockerContainersLowSessionRelay": "Low-session mode: the list is read again every 15 seconds instead of following engine events, and stats are read one container at a time.",
+  "@dockerContainersLowSessionRelay": {
+    "description": "Containers list: the server's link has a session limit (03 §5.2) on a relay route."
+  },
+  "dockerDetailsClose": "Close the container details",
+  "@dockerDetailsClose": {
+    "description": "Tooltip of the button that closes a container's details in the desktop inspector (03 §10.2)."
+  },
+  "dockerDetailsReading": "Reading the container details…",
+  "@dockerDetailsReading": {
+    "description": "Container details: the inspect read (CTR-03) has not answered yet."
+  },
+  "dockerDetailsFailed": "{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server's capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} daemonError{The engine refused or failed to inspect the container.} connectionFailed{The connection to the engine failed while inspecting the container.} cancelled{The read stopped before it ran.} other{The container details could not be read.}}",
+  "@dockerDetailsFailed": {
+    "description": "Container details: why the inspect read failed. reason is the engine's failure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerDetailsKept": "The details below are the last ones read.",
+  "@dockerDetailsKept": {
+    "description": "Container details: shown under a failure or a removal, above the details read before."
+  },
+  "dockerDetailsRemoved": "This container was removed.",
+  "@dockerDetailsRemoved": {
+    "description": "Container details: the container is gone from the engine (its inspect found nothing, or the list no longer has it)."
+  },
+  "dockerDetailsManagedBy": "Managed by {manager}",
+  "@dockerDetailsManagedBy": {
+    "description": "Container details: the managed-by badge (DKE-10). manager is the product name of the tool that owns the container, such as Coolify or Portainer, never translated.",
+    "placeholders": {
+      "manager": {
+        "type": "String",
+        "example": "Coolify"
+      }
+    }
+  },
+  "dockerDetailsManagedByNote": "Changes made outside {manager} can be overwritten by it. The label {label} marks it.",
+  "@dockerDetailsManagedByNote": {
+    "description": "Container details: under the managed-by badge. manager is the owning tool's product name; label is the container label that marks the ownership, server data.",
+    "placeholders": {
+      "manager": {
+        "type": "String",
+        "example": "Coolify"
+      },
+      "label": {
+        "type": "String",
+        "example": "coolify.managed"
+      }
+    }
+  },
+  "dockerDetailsOverview": "Overview",
+  "@dockerDetailsOverview": {
+    "description": "Container details: heading of the section with the container's state, health, restart policy, image and times."
+  },
+  "dockerDetailsId": "ID",
+  "@dockerDetailsId": {
+    "description": "Container details: label of the container's short ID."
+  },
+  "dockerDetailsStateExited": "{state}, exit code {code}",
+  "@dockerDetailsStateExited": {
+    "description": "Container details: a stopped container's state with the exit code of its last run.",
+    "placeholders": {
+      "state": {
+        "type": "String",
+        "example": "Exited"
+      },
+      "code": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerDetailsOomKilled": "Its last run was stopped for running out of memory.",
+  "@dockerDetailsOomKilled": {
+    "description": "Container details: the kernel's out-of-memory killer stopped the container's process."
+  },
+  "dockerDetailsStateError": "The engine reported an error for this container.",
+  "@dockerDetailsStateError": {
+    "description": "Container details: the engine's State.Error is set; the engine's own text follows, untranslated."
+  },
+  "dockerDetailsHealthStreak": "{count, plural, =1{1 failed check in a row} other{{count} failed checks in a row}}",
+  "@dockerDetailsHealthStreak": {
+    "description": "Container details: how many health checks failed in a row (CTR-04).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerDetailsRestartPolicy": "Restart policy",
+  "@dockerDetailsRestartPolicy": {
+    "description": "Container details: label of the container's restart policy."
+  },
+  "dockerDetailsRestartPolicyName": "{policy, select, no{Never restart} always{Always restart} unlessStopped{Restart unless stopped} onFailure{Restart on failure} other{Unknown}}",
+  "@dockerDetailsRestartPolicyName": {
+    "description": "Container details: a restart policy in words. policy is the policy's name.",
+    "placeholders": {
+      "policy": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerDetailsRestartPolicyRetries": "{policy}, at most {count, plural, =1{once} other{{count} times}}",
+  "@dockerDetailsRestartPolicyRetries": {
+    "description": "Container details: the on-failure restart policy with its retry limit.",
+    "placeholders": {
+      "policy": {
+        "type": "String",
+        "example": "Restart on failure"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerDetailsRestarts": "Restarts",
+  "@dockerDetailsRestarts": {
+    "description": "Container details: label of how many times the engine restarted the container."
+  },
+  "dockerDetailsImageId": "Image ID",
+  "@dockerDetailsImageId": {
+    "description": "Container details: label of the short ID of the image the container runs."
+  },
+  "dockerDetailsCreated": "Created",
+  "@dockerDetailsCreated": {
+    "description": "Container details: label of when the container was created."
+  },
+  "dockerDetailsStarted": "Started",
+  "@dockerDetailsStarted": {
+    "description": "Container details: label of when the container last started."
+  },
+  "dockerDetailsFinished": "Stopped",
+  "@dockerDetailsFinished": {
+    "description": "Container details: label of when the container's last run ended."
+  },
+  "dockerDetailsTime": "{time}",
+  "@dockerDetailsTime": {
+    "description": "Container details: a date and time in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "dockerDetailsHealthTitle": "Health checks",
+  "@dockerDetailsHealthTitle": {
+    "description": "Container details: heading of the last health-check results (CTR-04)."
+  },
+  "dockerDetailsHealthEmpty": "No health check has run yet.",
+  "@dockerDetailsHealthEmpty": {
+    "description": "Container details: the container has a health check but no results yet."
+  },
+  "dockerDetailsHealthCheck": "Exit code {code}, {time}",
+  "@dockerDetailsHealthCheck": {
+    "description": "Container details: one health-check result: its exit code and when it ended.",
+    "placeholders": {
+      "code": {
+        "type": "String",
+        "example": "1"
+      },
+      "time": {
+        "type": "DateTime",
+        "format": "MMMd+jms"
+      }
+    }
+  },
+  "dockerDetailsHealthCheckUntimed": "Exit code {code}",
+  "@dockerDetailsHealthCheckUntimed": {
+    "description": "Container details: one health-check result whose end time is unknown.",
+    "placeholders": {
+      "code": {
+        "type": "String",
+        "example": "1"
+      }
+    }
+  },
+  "dockerDetailsHealthNoOutput": "No output",
+  "@dockerDetailsHealthNoOutput": {
+    "description": "Container details: a health check that printed nothing."
+  },
+  "dockerDetailsRevealNote": "Select a masked value to show it for {seconds} seconds.",
+  "@dockerDetailsRevealNote": {
+    "description": "Container details: shown when some values are masked secrets (SAF-07): a reveal is temporary and stays on this device.",
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerDetailsMasked": "(masked)",
+  "@dockerDetailsMasked": {
+    "description": "What a screen reader says in place of a masked secret in a container's details (SAF-07)."
+  },
+  "dockerDetailsRevealHint": "Show the masked value",
+  "@dockerDetailsRevealHint": {
+    "description": "Screen-reader hint of a masked value in a container's details, which shows it for a while when activated."
+  },
+  "dockerDetailsHideHint": "Mask again",
+  "@dockerDetailsHideHint": {
+    "description": "Screen-reader hint of a revealed value in a container's details, which masks it again when activated."
+  },
+  "dockerDetailsEntry": "{name}: {value}",
+  "@dockerDetailsEntry": {
+    "description": "Container details: what a screen reader says for one environment variable or label: its name, then its value or \"(masked)\".",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "POSTGRES_PASSWORD"
+      },
+      "value": {
+        "type": "String",
+        "example": "(masked)"
+      }
+    }
+  },
+  "dockerDetailsCommandTitle": "Command",
+  "@dockerDetailsCommandTitle": {
+    "description": "Container details: heading of the container's entrypoint and command (Docker's ENTRYPOINT and CMD)."
+  },
+  "dockerDetailsEntrypoint": "Entrypoint",
+  "@dockerDetailsEntrypoint": {
+    "description": "Container details: label of the container's entrypoint (Docker's ENTRYPOINT)."
+  },
+  "dockerDetailsCmd": "Arguments",
+  "@dockerDetailsCmd": {
+    "description": "Container details: label of the command the entrypoint is given (Docker's CMD)."
+  },
+  "dockerDetailsNone": "None",
+  "@dockerDetailsNone": {
+    "description": "Container details: an entrypoint or argument list that is empty."
+  },
+  "dockerDetailsEnvTitle": "Environment",
+  "@dockerDetailsEnvTitle": {
+    "description": "Container details: heading of the container's environment variables."
+  },
+  "dockerDetailsEnvEmpty": "No environment variables.",
+  "@dockerDetailsEnvEmpty": {
+    "description": "Container details: the container has no environment variables."
+  },
+  "dockerDetailsLabelsTitle": "Labels",
+  "@dockerDetailsLabelsTitle": {
+    "description": "Container details: heading of the container's labels."
+  },
+  "dockerDetailsLabelsEmpty": "No labels.",
+  "@dockerDetailsLabelsEmpty": {
+    "description": "Container details: the container has no labels."
+  },
+  "dockerDetailsMountsTitle": "Mounts",
+  "@dockerDetailsMountsTitle": {
+    "description": "Container details: heading of the container's mounts."
+  },
+  "dockerDetailsMountsEmpty": "No mounts.",
+  "@dockerDetailsMountsEmpty": {
+    "description": "Container details: the container has no mounts."
+  },
+  "dockerDetailsMountKind": "{type, select, bind{Bind mount} volume{Volume} tmpfs{Memory (tmpfs)} npipe{Named pipe} cluster{Cluster volume} image{Image} other{Mount}}",
+  "@dockerDetailsMountKind": {
+    "description": "Container details: a mount's type in words. type is the Engine API's mount type.",
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerDetailsMountReadOnly": "read-only",
+  "@dockerDetailsMountReadOnly": {
+    "description": "Container details: a mount the container cannot write to, after the mount's type."
+  },
+  "dockerDetailsMountReadWrite": "read-write",
+  "@dockerDetailsMountReadWrite": {
+    "description": "Container details: a mount the container can write to, after the mount's type."
+  },
+  "dockerDetailsMountSummary": "{kind}, {access}",
+  "@dockerDetailsMountSummary": {
+    "description": "Container details: a mount's type and whether it is writable.",
+    "placeholders": {
+      "kind": {
+        "type": "String",
+        "example": "Volume"
+      },
+      "access": {
+        "type": "String",
+        "example": "read-only"
+      }
+    }
+  },
+  "dockerDetailsPortsEmpty": "No published or exposed ports.",
+  "@dockerDetailsPortsEmpty": {
+    "description": "Container details: the container lists no ports."
+  },
+  "dockerDetailsNetworksTitle": "Networks",
+  "@dockerDetailsNetworksTitle": {
+    "description": "Container details: heading of the networks the container is attached to."
+  },
+  "dockerDetailsNetworkMode": "Network mode",
+  "@dockerDetailsNetworkMode": {
+    "description": "Container details: label of the container's network mode, such as bridge or host, as the engine names it."
+  },
+  "dockerDetailsNetworksEmpty": "Not attached to a network.",
+  "@dockerDetailsNetworksEmpty": {
+    "description": "Container details: the container is attached to no network."
+  },
+  "dockerDetailsIpAddress": "IP address",
+  "@dockerDetailsIpAddress": {
+    "description": "Container details: label of the container's address on one network."
+  },
+  "dockerDetailsGateway": "Gateway",
+  "@dockerDetailsGateway": {
+    "description": "Container details: label of a network's gateway address."
+  },
+  "dockerDetailsAliases": "Aliases",
+  "@dockerDetailsAliases": {
+    "description": "Container details: label of the container's names on one network."
+  },
+  "dockerDetailsRawTitle": "Raw JSON",
+  "@dockerDetailsRawTitle": {
+    "description": "Container details: title of the expandable inspect output in JSON (CTR-03)."
+  },
+  "dockerDetailsRawNote": "Masked values stay masked here.",
+  "@dockerDetailsRawNote": {
+    "description": "Container details: under the raw JSON's title; the JSON never shows a secret, even one revealed above (SAF-07)."
   }
 }

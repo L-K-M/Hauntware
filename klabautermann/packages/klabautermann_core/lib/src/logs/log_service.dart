@@ -433,8 +433,6 @@ typedef _Window = ({
   LogStreamEndReason end,
 });
 
-/// journalctl's line for an empty result, which some versions print in
-/// JSON mode too; never a record.
 /// A file's [line] as a [FileRecord], through the secret redactor when
 /// [redacted]. Shared with `LogFollower`.
 FileRecord fileRecord(String line, {required bool redacted}) =>
@@ -442,6 +440,8 @@ FileRecord fileRecord(String line, {required bool redacted}) =>
 
 final _redactor = SecretRedactor();
 
+/// journalctl's line for an empty result, which some versions print in
+/// JSON mode too; never a record.
 const _noEntries = '-- No entries --';
 
 const _newline = 0x0a;
@@ -566,14 +566,14 @@ _Window _fileWindow(_Output out, int window, {required bool redacted}) {
 
 // -- outcomes -----------------------------------------------------------
 
-/// stderr naming a refusal: errno's EACCES and EPERM texts in the C
-/// locale the command runs in, and journalctl's notice.
 /// How an elevated read ends while admin mode is off (LOG-22).
 const kAdminModeOff = LogStreamEnded(
   LogStreamEndReason.denied,
   detail: 'admin mode is off',
 );
 
+/// stderr naming a refusal: errno's EACCES and EPERM texts in the C
+/// locale the command runs in, and journalctl's notice.
 final _deniedText = RegExp(
   'Permission denied|Operation not permitted|insufficient permissions',
 );

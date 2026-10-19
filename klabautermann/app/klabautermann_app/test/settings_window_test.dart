@@ -12,6 +12,7 @@ import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
+import 'package:klabautermann_app/controllers/docker_notice_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitor_set.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
@@ -48,6 +49,12 @@ final class _RefusingAppearance extends ChangeNotifier
   @override
   Future<void> setMode(ThemeModePreference mode) async =>
       throw StateError('read-only appearance');
+
+  @override
+  Future<void> setAppearance(
+    ThemePalette palette,
+    ThemeModePreference mode,
+  ) async => throw StateError('read-only appearance');
 }
 
 /// The desktop settings window (03 §10.2, D32) over fake channels: the main
@@ -363,11 +370,13 @@ void main() {
       final monitoring = MonitoringController(engine);
       final prompts = PromptController(engine);
       final coverage = CoverageController(firstRunCardDismissed: true);
+      final dockerNotice = DockerNoticeController();
       addTearDown(() async {
         fleet.dispose();
         monitoring.dispose();
         prompts.dispose();
         coverage.dispose();
+        dockerNotice.dispose();
         await engine.close();
       });
       final remote = await connectWindow(tester, tab);
@@ -383,6 +392,7 @@ void main() {
                 appearance: main,
                 coverage: coverage,
                 announcements: announcements,
+                dockerNotice: dockerNotice,
               ),
             ),
             Expanded(child: SettingsWindowApp(remote: remote)),
@@ -446,6 +456,31 @@ void main() {
       expect(remote.appearance.value, appearance.value);
       expect(windowApp(tester).themeMode, ThemeMode.dark);
       expect(windowSwitch(tester), ThemeModePreference.dark);
+    });
+
+    testWidgets('a preset picked in the window re-themes the main window '
+        'through the link (M4 E25)', (tester) async {
+      final remote = await pumpBothWindows(tester, appearance);
+      final target = klabautermannThemePresets.all
+          .firstWhere(
+            (p) => p.name != appearance.value.palette.name && p.surface != null,
+          )
+          .name;
+
+      await tester.tap(find.text(target));
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+
+      expect(appearance.value.palette.name, target);
+      expect(remote.appearance.value, appearance.value);
+      expect(
+        mainApp(tester).theme?.colorScheme.surface,
+        appearance.value.palette.surface,
+      );
+      expect(
+        windowApp(tester).theme?.colorScheme.surface,
+        appearance.value.palette.surface,
+      );
     });
 
     testWidgets('a change in the window the app applies but cannot save '

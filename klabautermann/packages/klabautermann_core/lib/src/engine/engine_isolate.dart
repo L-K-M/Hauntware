@@ -27,6 +27,7 @@ import '../fleet/ssh_config_import_store.dart';
 import '../fleet/synced_fleet.dart';
 import '../links/credential_source.dart';
 import '../links/host_key_pins.dart';
+import '../links/channel_quota.dart';
 import '../links/link_connector.dart';
 import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
@@ -215,6 +216,11 @@ void engineMain(
   // login uid, the session's path and its SSH port.
   final profiles = <String, HostProfile>{};
   OperationRunner? runner;
+
+  // Each server's channel slots, one quota for both routers, so the host
+  // log reads and the Docker session's channels count against the same
+  // shares (M9).
+  final channelQuotas = ChannelQuotas();
 
   // FL-02's imported hosts, in D13's device-local store (03 §4.10),
   // opened before the first request is handled. Each import replaces the
@@ -417,11 +423,8 @@ void engineMain(
             directory: runner.runsAsRoot
                 ? OpDirectoryKind.root
                 : OpDirectoryKind.user,
-            launch: OperationLaunch(
-              action: '${plan.intent.runtimeType}',
-              targetName: plan.targetName,
-              steps: [for (final step in plan.steps) step.display],
-              tier: plan.tier,
+            launch: OperationLaunch.ofPlan(
+              plan,
               startedAt: DateTime.now().toUtc(),
             ),
           );
@@ -458,11 +461,13 @@ void engineMain(
       linkFor: links.link,
       emit: uiPort.send,
       adminFor: (serverId) => admin?.session(serverId),
+      quotas: channelQuotas,
     );
     docker = DockerRouter(
       linkFor: links.link,
       emit: uiPort.send,
       adminFor: (serverId) => admin?.session(serverId),
+      quotas: channelQuotas,
     );
   }
 
@@ -540,6 +545,7 @@ void engineMain(
     scheduler?.retain(fleetIds);
     logs?.retain(fleetIds);
     operations?.retain(fleetIds);
+    channelQuotas.retain(fleetIds);
     links?.forget(before.difference(fleetIds));
     viewed.retainAll(fleetIds);
     // A monitored server that left the fleet or is no longer eligible (a
@@ -1114,6 +1120,11 @@ void engineMain(
           refuse(ActionRefusalReason.confirmationMismatch);
           return;
         }
+        final planRunner = runner;
+        if (planRunner == null) {
+          refuse(ActionRefusalReason.notImplemented);
+          return;
+        }
         final session = admin?.session(serverId);
         if (plan.requiredLevel == RequiredLevel.admin && session == null) {
           refuse(ActionRefusalReason.adminRequired);
@@ -1123,7 +1134,7 @@ void engineMain(
         // Not awaited, like the reads: a plan's steps take as long as
         // they take, and the queue keeps serving the app meanwhile.
         unawaited(
-          runner?.run(planId, plan, session: session).then((finished) {
+          planRunner.run(planId, plan, session: session).then((finished) {
             if (session != null) admin?.touch(serverId);
           }),
         );

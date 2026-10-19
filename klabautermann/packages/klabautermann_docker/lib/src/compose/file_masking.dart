@@ -82,11 +82,14 @@ sealed class _Lines {
   void line(String line, _Spans out);
 }
 
-/// `KEY=value`, with an optional `export`; a quoted value may run over
-/// several lines until its closing quote.
+/// `KEY=value` or `KEY: value`, with an optional `export`; a quoted value
+/// may run over several lines until its closing quote. The key takes what
+/// compose's dotenv parser takes (letters of any script, digits, `_`, `.`,
+/// `-`, `[` and `]`), so no assignment compose applies goes unmasked.
 final class _EnvLines extends _Lines {
   static final _assignment = RegExp(
-    r'^(\s*(?:export\s+)?[A-Za-z_][A-Za-z0-9_.-]*\s*=\s*)(.*)$',
+    r'^(\s*(?:export\s+)?[\p{L}\p{N}_.\[\]-]+\s*[=:]\s*)(.*)$',
+    unicode: true,
   );
 
   /// The quote an open value waits for, or null.
@@ -111,18 +114,18 @@ final class _EnvLines extends _Lines {
       if (!_closes(value, quote, 1)) _open = quote;
     }
   }
+}
 
-  /// Whether [text] holds an unescaped [quote] at [from] or later.
-  static bool _closes(String text, String quote, int from) {
-    for (var i = from; i < text.length; i++) {
-      if (text[i] == r'\' && quote == '"') {
-        i++;
-      } else if (text[i] == quote) {
-        return true;
-      }
+/// Whether [text] holds an unescaped [quote] at [from] or later.
+bool _closes(String text, String quote, int from) {
+  for (var i = from; i < text.length; i++) {
+    if (text[i] == r'\' && quote == '"') {
+      i++;
+    } else if (text[i] == quote) {
+      return true;
     }
-    return false;
   }
+  return false;
 }
 
 /// A compose file's lines, with the indentation of an open block scalar
@@ -144,8 +147,18 @@ final class _ComposeLines extends _Lines {
   /// The indentation of the key whose block scalar is open, or null.
   int? _block;
 
+  /// The quote a secret value continued on the next lines waits for, or
+  /// null.
+  String? _open;
+
   @override
   void line(String line, _Spans out) {
+    if (_open case final quote?) {
+      out.secret(line);
+      if (_closes(line, quote, 0)) _open = null;
+      return;
+    }
+
     if (_block case final indent?) {
       final content = line.trimLeft();
       final own = line.length - content.length;
@@ -166,6 +179,7 @@ final class _ComposeLines extends _Lines {
         ..plain('${m[1]}$quote${m[3]}=')
         ..secret(closed ? value.substring(0, value.length - 1) : value)
         ..plain(closed ? quote : '');
+      if (quote.isNotEmpty && !closed) _open = quote;
       return;
     }
 
@@ -182,7 +196,12 @@ final class _ComposeLines extends _Lines {
           (quote == '"' || quote == "'") &&
           value.length > 1 &&
           value.endsWith(quote);
-      if (!quoted) return out.secret(value);
+      if (!quoted) {
+        if ((quote == '"' || quote == "'") && !_closes(value, quote, 1)) {
+          _open = quote;
+        }
+        return out.secret(value);
+      }
       out
         ..plain(quote)
         ..secret(value.substring(1, value.length - 1))

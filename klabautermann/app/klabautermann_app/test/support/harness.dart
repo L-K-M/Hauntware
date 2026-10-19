@@ -6,6 +6,7 @@ import 'package:klabautermann_app/controllers/admin_controller.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
+import 'package:klabautermann_app/controllers/docker_notice_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/controllers/operations_controller.dart';
@@ -35,6 +36,7 @@ final class AppHarness {
     required this.appearance,
     required this.coverage,
     required this.announcements,
+    required this.dockerNotice,
     required this.sync,
     this.admin,
     this.operations,
@@ -47,6 +49,7 @@ final class AppHarness {
   final AppearanceController appearance;
   final CoverageController coverage;
   final AnnouncementController announcements;
+  final DockerNoticeController dockerNotice;
   final SyncController sync;
   final AdminController? admin;
   final OperationsController? operations;
@@ -58,6 +61,7 @@ final class AppHarness {
     appearance.dispose();
     coverage.dispose();
     announcements.dispose();
+    dockerNotice.dispose();
     sync.dispose();
     admin?.dispose();
     operations?.dispose();
@@ -80,11 +84,12 @@ final class AppHarness {
 /// [syncStoreIssues] what it reported about its sync files. [coverage]
 /// replaces a controller whose first-run card was
 /// already dismissed, so the card shows only in the tests that want it.
-/// [announcements] replaces an in-memory A11Y-15 switch that is on.
-/// [safety], which the caller disposes, adds the safety preferences; none
-/// leaves the Safety menu and notices out. [admin] adds the admin mode
-/// controller over the fake engine, and [operations] the operations one.
-/// [appVersion] stands in for what `readAppVersion` read.
+/// [announcements] replaces an in-memory A11Y-15 switch that is on, and
+/// [dockerNotice] an in-memory SAF-08 notice not yet dismissed.
+/// [appVersion] stands in for what `readAppVersion` read. [safety], which
+/// the caller disposes, adds the safety preferences; none leaves the
+/// Safety menu and notices out. [admin] adds the admin mode controller
+/// over the fake engine, and [operations] the operations one.
 /// [linkGrace] defaults to zero, which disconnects a server as its last
 /// view closes: the tree unmounts at the end of every test, and the test
 /// binding fails a test that leaves a grace timer pending.
@@ -99,6 +104,7 @@ Future<AppHarness> pumpApp(
   SafetyController? safety,
   bool admin = false,
   bool operations = false,
+  DockerNoticeController? dockerNotice,
   DeviceSettingsIssue? settingsIssue,
   ImportStoreIssue? importStoreIssue,
   InstanceLockUnavailable? instanceLockIssue,
@@ -122,6 +128,7 @@ Future<AppHarness> pumpApp(
     appearance: appearance ?? AppearanceController(),
     coverage: coverage ?? CoverageController(firstRunCardDismissed: true),
     announcements: announcements ?? AnnouncementController(),
+    dockerNotice: dockerNotice ?? DockerNoticeController(),
     sync: SyncController(engine, account: syncAccount),
     admin: admin ? AdminController(engine) : null,
     operations: operations ? OperationsController(engine) : null,
@@ -142,6 +149,7 @@ Future<AppHarness> pumpApp(
       safety: safety,
       admin: harness.admin,
       operations: harness.operations,
+      dockerNotice: harness.dockerNotice,
       sync: harness.sync,
       settingsIssue: settingsIssue,
       importStoreIssue: importStoreIssue,

@@ -165,6 +165,10 @@ import '../operations/plan_types.dart';
 /// or [RunAction] the engine will not carry out. Admin mode and the safety
 /// policy joined next (03 §8.2, M4 E11): [SetSafetyPolicy], [SetAdminMode]
 /// and [AdminModeState].
+///
+/// Low-session mode then set [DockerEndpointState.lowSession] (03 §5.2,
+/// M9), which goes out again when a link learns a session limit; no
+/// message changed shape.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -966,8 +970,12 @@ final class DockerEndpointState extends EngineEvent {
   /// The API version every path uses (03 §5.8); set while ready.
   final ApiVersion? negotiatedApi;
 
-  /// Whether 03 §5.2's low-session mode holds. Always false until the
-  /// mode arrives (M3's D09).
+  /// Whether 03 §5.2's low-session mode holds: the server's link learned
+  /// a session limit (M9). On a relay the events stream gives way to
+  /// re-lists and the follows share one slot with the host's; on every
+  /// rank the host follows are held to one and stats are read one at a
+  /// time. The state goes out again when it changes, and a new link ends
+  /// it.
   final bool lowSession;
 
   /// Why the endpoint failed; set exactly while failed.
@@ -2499,8 +2507,9 @@ final class ContainerListStats {
   final DateTime at;
 
   /// CPU % by the spec formula over the time since the previous read,
-  /// so null on a container's first one (one-shot `precpu_stats` is not
-  /// meaningful, 03 §5.6).
+  /// so null on a container's first one, on the first after a read of it
+  /// failed, and on the first after a [DockerListChanged.fullRelist]
+  /// (one-shot `precpu_stats` is not meaningful, 03 §5.6).
   final double? cpuPercent;
 
   /// Bytes in use less `inactive_file` (cgroup v2) or the cache (v1).
