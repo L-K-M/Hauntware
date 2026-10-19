@@ -20,6 +20,12 @@ const behindServer = 'ssh-config:behind';
 /// ([FixtureEngine.startAliases]).
 String aliasServer(int i) => 'ssh-config:alias-$i';
 
+/// The fleet aliases of the Docker host's client config
+/// ([FixtureEngine.startDocker]): the fixture user, in its `docker`
+/// group, and `klab-nosock`, outside it.
+const dockerServer = 'ssh-config:docker';
+const noSocketServer = 'ssh-config:docker-nosock';
+
 /// The Compose services of klabautermann/test/integration.
 enum FixtureService {
   /// The sampled host, published on loopback and reached by the jump host
@@ -31,6 +37,10 @@ enum FixtureService {
 
   /// The Docker host, whose /var/run/docker.sock is dind's socket.
   dockerHost('docker-sshd'),
+
+  /// The Docker engine behind the Docker host, whose socket is
+  /// /run/docker-fixture/docker.sock in its container.
+  dind('dind'),
 
   /// The Docker host's negative variants (M3 D11), each refusing with one
   /// sshd setting or key option.
@@ -177,6 +187,24 @@ Host hop
   IdentityFile $identityFile
 ''';
 
+  /// The Docker host's client config: [dockerServer] as the fixture user
+  /// and [noSocketServer] as `klab-nosock` (`sshd/docker-setup.sh`), both
+  /// with the key file.
+  String get _dockerSshConfig =>
+      '''
+Host docker
+  HostName $_host
+  Port $_dockerPort
+  User $user
+  IdentityFile $identityFile
+
+Host docker-nosock
+  HostName $_host
+  Port $_dockerPort
+  User klab-nosock
+  IdentityFile $identityFile
+''';
+
   /// [count] aliases of the sampled host, `alias-0` on, each with the key
   /// file: separate fleet servers, each dialing a link of its own to the
   /// one sshd, as 03 §11.4's ten hosts do in the soak.
@@ -200,6 +228,23 @@ Host alias-$i
       behind: sshd,
       jumpHost: await hostKeyFingerprints(FixtureService.jump),
     };
+  }
+
+  /// The Docker host's endpoint with the fingerprints of its host keys,
+  /// for [FixtureEngine.connect].
+  Future<Map<Endpoint, Set<String>>> dockerHostKeys() async => {
+    dockerHost: await hostKeyFingerprints(FixtureService.dockerHost),
+  };
+
+  /// Writes [contents] to [name] in the evidence directory, when run.sh
+  /// collects evidence; true when it wrote.
+  Future<bool> writeEvidence(String name, String contents) async {
+    final directory = _evidenceDirectory;
+    if (directory == null) return false;
+    final file = File('$directory/$name');
+    await file.create(recursive: true);
+    await file.writeAsString(contents);
+    return true;
   }
 
   /// The SHA256 fingerprints of [service]'s host keys.
@@ -339,6 +384,18 @@ final class FixtureEngine {
     support: support,
     access: access,
   );
+
+  /// Starts an engine as [start] does that imports
+  /// [Fixture._dockerSshConfig] instead: [dockerServer] and
+  /// [noSocketServer].
+  static Future<FixtureEngine> startDocker(Fixture fixture, String name) =>
+      launch(
+        name: name,
+        runtimeDirectory: fixture._runtimeDirectory,
+        sshConfig: fixture._dockerSshConfig,
+        hosts: 2,
+        evidenceDirectory: fixture._evidenceDirectory,
+      );
 
   /// Starts an engine through [entryPoint], which wraps the engine's own
   /// (`link_meter.dart`), and imports [count] aliases of the sampled host
@@ -616,6 +673,27 @@ String _describe(EngineEvent event) => switch (event) {
     'LogStreamState $streamId ${_logStatus(status)}',
   LogBatch(:final streamId, :final records, :final dropped) =>
     'LogBatch $streamId ${records.length} records, $dropped dropped',
+  DockerEndpointState(
+    :final serverId,
+    :final phase,
+    :final route,
+    :final failure,
+    :final noRouteReason,
+  ) =>
+    'DockerEndpointState $serverId ${phase.name}'
+        '${route == null ? '' : ' rank ${route.rank.number} ${route.socketPath}'}'
+        '${failure == null ? '' : ' ${failure.name}'}'
+        '${noRouteReason == null ? '' : ' (${noRouteReason.name})'}',
+  DockerListChanged(
+    :final serverId,
+    :final list,
+    :final payload,
+    :final fullRelist,
+  ) =>
+    'DockerListChanged $serverId ${list.name}'
+        '${fullRelist ? ' full' : ''} ${payload.runtimeType}',
+  DockerResult(:final serverId, :final queryId, :final payload) =>
+    'DockerResult $serverId $queryId ${payload.runtimeType}',
   _ => '${event.runtimeType}',
 };
 

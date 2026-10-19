@@ -16,6 +16,7 @@ import 'container_details_view.dart';
 import 'container_logs.dart';
 import 'containers_panel.dart' show ContainerHealthBadge;
 import 'containers_view.dart';
+import 'images_view.dart' show shortImageId;
 
 /// The container the desktop inspector shows (03 §10.2): the row opened
 /// on [serverId], as listed then.
@@ -522,7 +523,7 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
             container.config?.image ?? row.image ?? unknown,
           ),
           if (container.image case final image?)
-            (l10n.dockerDetailsImageId, _shortImageId(image)),
+            (l10n.dockerDetailsImageId, shortImageId(image)),
           if (created != null) (l10n.dockerDetailsCreated, time(created)),
           if (started != null) (l10n.dockerDetailsStarted, time(started)),
           if (finished != null && !running)
@@ -763,13 +764,6 @@ String _restartText(AppLocalizations l10n, ContainerRestartPolicy policy) {
   final retries = policy.maximumRetryCount ?? 0;
   if (kind != RestartPolicyKind.onFailure || retries <= 0) return words;
   return l10n.dockerDetailsRestartPolicyRetries(words, retries);
-}
-
-/// An image id as `docker ps` shortens it: the digest without its
-/// algorithm, to 12 characters.
-String _shortImageId(String id) {
-  final colon = id.indexOf(':');
-  return shortContainerId(colon < 0 ? id : id.substring(colon + 1));
 }
 
 /// A heading over its [children], read as a heading.
