@@ -369,13 +369,22 @@ final class DockerRouter {
   /// Admin mode turned on or off for [serverId] (plan M7). When it ends,
   /// a sudo relay's connections close and the route is looked for again,
   /// which now passes over rank 3; when it starts, a route that failed
-  /// is looked for again, which may now take it.
+  /// is looked for again, which may now take it. A route being looked
+  /// for when it changes is looked for again either way.
   void adminChanged(String serverId) {
     final session = _sessions[serverId];
     if (session == null) return;
     final on = _adminFor?.call(serverId) != null;
     if (session.endpoint case final endpoint?) {
       if (on || endpoint.route.rank != DockerRank.sudoRelay) return;
+      _drop(session);
+      _pump(session);
+      return;
+    }
+    // A ladder under way chose with the admin mode before: a relay it
+    // found must not outlive admin mode, and one it lacked may be there
+    // now. Dropping discards its outcome and closes what it opened.
+    if (session.resolving) {
       _drop(session);
       _pump(session);
       return;

@@ -10,6 +10,7 @@ import 'package:klabautermann_core/src/docker/docker_ladder.dart';
 import 'package:klabautermann_core/src/docker/docker_router.dart';
 import 'package:klabautermann_docker/klabautermann_docker.dart'
     show ApiVersion, DockerClient, DockerHttpClient, DockerTransportException;
+import 'package:klabautermann_docker/testing.dart' show FakeDuplexPair;
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:seance_core/seance_core.dart'
     show ElevatedExecutor, ElevationProbe;
@@ -254,6 +255,31 @@ void main() {
       expect(after.noRouteReason, DockerNoRouteReason.needsAdminMode);
     });
 
+    test('admin mode ending while the endpoint resolves keeps no sudo '
+        'relay, and closes the connection it opened', () async {
+      final relay = _HeldDaemon(EngineDaemon());
+      link.relayDaemon = relay;
+      admin = _session(link);
+      await watch();
+      expect((await state()).phase, DockerEndpointPhase.resolving);
+
+      // The relay's connection is open and its ping unanswered when
+      // admin mode ends.
+      await relay.asked.future;
+      admin = null;
+      router.adminChanged(_srv);
+      relay.gate.complete();
+
+      DockerEndpointState settled;
+      do {
+        settled = await state();
+      } while (settled.phase == DockerEndpointPhase.resolving);
+      expect(settled.phase, DockerEndpointPhase.failed);
+      expect(settled.noRouteReason, DockerNoRouteReason.needsAdminMode);
+      await pumpEventQueue();
+      expect(relay.closed, relay.connections);
+    });
+
     test('a change that leaves admin mode on keeps the endpoint', () async {
       admin = _session(link);
       await watch();
@@ -266,4 +292,23 @@ void main() {
       expect(link.started, hasLength(opened));
     });
   });
+}
+
+/// [inner] behind a gate: requests wait until [gate] completes, and
+/// [asked] completes with the first.
+final class _HeldDaemon extends FakeDaemon {
+  _HeldDaemon(this.inner);
+
+  final FakeDaemon inner;
+  final gate = Completer<void>();
+  final asked = Completer<void>();
+
+  @override
+  String respond(String requestLine) => inner.respond(requestLine);
+
+  @override
+  void handle(String requestLine, FakeDuplexPair connection) {
+    if (!asked.isCompleted) asked.complete();
+    unawaited(gate.future.then((_) => inner.handle(requestLine, connection)));
+  }
 }
