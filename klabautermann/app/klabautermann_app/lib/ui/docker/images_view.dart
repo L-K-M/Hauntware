@@ -124,17 +124,19 @@ bool imageMatches(ImageSummary image, List<String> terms) {
 /// months, months (of 30 days) under two years, then years (of 365).
 enum ImageAgeUnit { lessThanMinute, minutes, hours, days, weeks, months, years }
 
-/// [age] as a count of its [ImageAgeUnit], rounded down; a negative age
-/// (a clock set back) reads as none.
+/// [age] as a count of its [ImageAgeUnit]; a negative age (a clock set
+/// back) reads as none. As in `HumanDuration`, minutes round down, hours
+/// round to the nearest and grade every unit up to months, and years
+/// round down from the age itself.
 (ImageAgeUnit, int) imageAge(Duration age) {
   if (age < const Duration(minutes: 1)) return (ImageAgeUnit.lessThanMinute, 0);
   if (age < const Duration(hours: 1)) {
     return (ImageAgeUnit.minutes, age.inMinutes);
   }
-  if (age < const Duration(hours: 48)) return (ImageAgeUnit.hours, age.inHours);
-  final days = age.inDays;
-  if (days < 14) return (ImageAgeUnit.days, days);
-  if (days < 60) return (ImageAgeUnit.weeks, days ~/ 7);
-  if (days < 730) return (ImageAgeUnit.months, days ~/ 30);
-  return (ImageAgeUnit.years, days ~/ 365);
+  final hours = (age.inMinutes + 30) ~/ 60;
+  if (hours < 48) return (ImageAgeUnit.hours, hours);
+  if (hours < 24 * 14) return (ImageAgeUnit.days, hours ~/ 24);
+  if (hours < 24 * 60) return (ImageAgeUnit.weeks, hours ~/ 24 ~/ 7);
+  if (hours < 24 * 730) return (ImageAgeUnit.months, hours ~/ 24 ~/ 30);
+  return (ImageAgeUnit.years, age.inDays ~/ 365);
 }
