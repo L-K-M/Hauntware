@@ -7,6 +7,8 @@ import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
 import 'package:meta/meta.dart';
 import 'package:seance_core/seance_core.dart' show quoteShellWord;
 
+import '../engine/protocol.dart' show RevalidationFailure;
+
 /// One step a plan runs: an exact shell command or an exact Docker API
 /// request. The preview renders these and the runner executes these; no
 /// second code path builds commands (03 §8.5).
@@ -22,22 +24,37 @@ sealed class PlanStep {
 /// the C locale, the line the login shell (or, when [elevated], the
 /// elevation prelude) runs.
 final class ShellStep extends PlanStep {
-  ShellStep(Iterable<String> argv, {this.elevated = false})
-    : argv = List.unmodifiable(argv),
-      commandLine = HostCommands.commandLine(
-        List.of(argv),
-        quote: quoteShellWord,
-      );
+  ShellStep(
+    Iterable<String> argv, {
+    this.elevated = false,
+    this.discardOutput = false,
+    Map<int, RevalidationFailure> exitMeanings = const {},
+  }) : argv = List.unmodifiable(argv),
+       exitMeanings = Map.unmodifiable(exitMeanings),
+       commandLine =
+           HostCommands.commandLine(List.of(argv), quote: quoteShellWord) +
+           (discardOutput ? _discarded : '');
 
   final List<String> argv;
   final String commandLine;
 
+  /// The step's output goes to `/dev/null`, so only its exit status is
+  /// read: `config -q`'s errors can quote interpolated secrets (STK-06).
+  final bool discardOutput;
+
   /// The step runs through the elevation prelude (8.3).
   final bool elevated;
+
+  /// Exit statuses by which the step itself reports that its target
+  /// changed, such as the guarded kill's 4 for a reused PID: the run then
+  /// fails as a re-validation, not as a failed step.
+  final Map<int, RevalidationFailure> exitMeanings;
 
   @override
   String get display => elevated ? 'sudo: $commandLine' : commandLine;
 }
+
+const _discarded = ' >/dev/null 2>&1';
 
 /// A Docker Engine API request: [method], the versioned [path] and its
 /// [query], as the HTTP pool sends it.
@@ -112,6 +129,22 @@ final class RunnerFacts {
   final String? engine;
 
   final RunnerCredentials credentials;
+}
+
+/// A fact the preview warns about; the app words it (D35).
+enum PlanWarning {
+  /// Running services are named only under a compose profile, which the
+  /// labels do not record, so the redeploy leaves them as they are
+  /// (STK-06) [U].
+  profileGatedServices,
+
+  /// The CLI could not list every profile's services, so an orphan may
+  /// be a profile-gated service (STK-06).
+  profilesUnknown,
+
+  /// A `setsid` operation, which logind ends at logout under
+  /// `KillUserProcesses=yes` (03 §7.17).
+  mayDieAtLogout,
 }
 
 /// The consequence a plan's impact line names (03 §8.6); the app words

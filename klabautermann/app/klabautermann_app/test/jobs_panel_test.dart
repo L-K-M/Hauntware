@@ -2,14 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart';
+import 'package:klabautermann_app/controllers/admin_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/controllers/operations_controller.dart';
+import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
+import 'package:klabautermann_app/ui/actions/action_entry.dart';
+import 'package:klabautermann_app/ui/admin_mode_chip.dart';
 import 'package:klabautermann_app/ui/jobs_panel.dart';
+import 'package:klabautermann_app/ui/server_safety.dart';
 import 'package:klabautermann_app/ui/sortable_table.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_host/klabautermann_host.dart'
-    show CronDirEntry, CronPeriod, MonotonicBase, OnCalendarElapse;
+    show
+        CronDirEntry,
+        CronPeriod,
+        MonotonicBase,
+        OnCalendarElapse,
+        mergeJobs,
+        parseUserCrontab;
 
 import 'support/charts.dart'
     show goldenFontFamily, goldensCompareHere, loadGoldenFonts;
@@ -28,6 +40,10 @@ final class _Panel {
 
   /// Whether the panel's tab shows.
   final ValueNotifier<bool> visible;
+
+  /// The server the panel shows, which a desktop selection changes in
+  /// place.
+  final server = ValueNotifier(_serverId);
 
   /// What the monitoring clock reads.
   DateTime now = jobsNow;
@@ -75,6 +91,7 @@ Future<void> _frame(
   required Size size,
   double textScale = 1,
   Brightness brightness = Brightness.light,
+  Widget Function(Widget child)? scopes,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -95,11 +112,14 @@ Future<void> _frame(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       // Above the Navigator, so a row's details sheet scales too.
-      builder: (context, navigator) => MediaQuery.withClampedTextScaling(
-        minScaleFactor: textScale,
-        maxScaleFactor: textScale,
-        child: navigator!,
-      ),
+      builder: (context, navigator) {
+        final scaled = MediaQuery.withClampedTextScaling(
+          minScaleFactor: textScale,
+          maxScaleFactor: textScale,
+          child: navigator!,
+        );
+        return scopes?.call(scaled) ?? scaled;
+      },
       home: Scaffold(
         body: RepaintBoundary(
           child: ColoredBox(color: theme.colorScheme.surface, child: child),
@@ -116,24 +136,46 @@ Future<_Panel> _pump(
   double textScale = 1,
   Brightness brightness = Brightness.light,
   bool visible = true,
+  SafetyPolicy? safety,
 }) async {
   final engine = FakeEngineClient();
+  final admin = AdminController(engine);
+  addTearDown(admin.dispose);
   final shown = ValueNotifier(visible);
   final panel = _Panel(engine, shown);
   final monitoring = MonitoringController(engine, now: () => panel.now);
   addTearDown(() async {
     shown.dispose();
+    panel.server.dispose();
     monitoring.dispose();
     await engine.close();
   });
+  final operations = OperationsController(engine);
+  addTearDown(operations.dispose);
+  final policy = safety == null
+      ? null
+      : SafetyController(initial: safety, apply: (_) {});
+  if (policy != null) addTearDown(policy.dispose);
   await _frame(
     tester,
+    scopes: policy == null
+        ? null
+        : (child) => SafetyScope(
+            safety: policy,
+            child: AdminScope(
+              admin: admin,
+              child: OperationsScope(operations: operations, child: child),
+            ),
+          ),
     ValueListenableBuilder(
       valueListenable: shown,
-      builder: (context, visible, _) => JobsPanel(
-        monitoring: monitoring,
-        serverId: _serverId,
-        visible: visible,
+      builder: (context, visible, _) => ValueListenableBuilder(
+        valueListenable: panel.server,
+        builder: (context, serverId, _) => JobsPanel(
+          monitoring: monitoring,
+          serverId: serverId,
+          visible: visible,
+        ),
       ),
     ),
     size: size,
@@ -891,5 +933,216 @@ void main() {
         }, skip: !goldensCompareHere);
       }
     }
+  });
+
+  group('run timer now (JOB-08, M4 E21)', () {
+    const managed = SafetyPolicy(
+      servers: {_serverId: ServerSafety(management: true)},
+    );
+
+    ActionPreview preview() => ActionPreview(
+      intent: const StartTimer(_serverId, timer: 'certbot.timer'),
+      targetName: 'certbot.timer',
+      steps: [
+        ShellStep([
+          'systemctl',
+          '--no-ask-password',
+          'start',
+          '--',
+          'certbot.service',
+        ]),
+      ],
+      requiredLevel: RequiredLevel.login,
+      runner: const RunnerFacts(identity: 'deploy'),
+      requiredTier: ConfirmationTier.acknowledge,
+      followUnit: 'certbot.service',
+    );
+
+    testWidgets('the row menu runs the timer and follows its service\'s '
+        'journal', (tester) async {
+      final panel = await _pump(tester, safety: managed);
+      await panel.all(tester);
+
+      await tester.tap(
+        find.byKey(const ValueKey('jobs.rowActions.timer|certbot.timer')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Run now'));
+      await tester.pumpAndSettle();
+      final intent =
+          (panel.engine.sentOfType<PlanAction>().single as PlanAction).intent;
+      expect((intent as StartTimer).timer, 'certbot.timer');
+
+      await panel.emit(tester, ActionPlanned('plan-1', preview()));
+      await tester.tap(find.text('Run'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Output of certbot.service'), findsOneWidget);
+      final follow = panel.engine
+          .sentOfType<OpenLogStream>()
+          .cast<OpenLogStream>()
+          .single
+          .spec;
+      expect(follow.follow, isTrue);
+      expect((follow.source as JournalLogSource).unit, 'certbot.service');
+
+      await tester.tap(find.byTooltip('Close output'));
+      await tester.pumpAndSettle();
+      expect(panel.engine.sentOfType<CloseStream>(), hasLength(1));
+    });
+
+    testWidgets('a timer\'s details run it too; cron rows offer nothing', (
+      tester,
+    ) async {
+      final panel = await _pump(tester, safety: managed);
+      await panel.all(tester);
+      expect(
+        find.byKey(const ValueKey('jobs.rowActions.cron|crontab|0')),
+        findsNothing,
+      );
+      await tester.tap(_row('timer|certbot.timer'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Run now'));
+      await tester.pumpAndSettle();
+      expect(panel.engine.sentOfType<PlanAction>(), hasLength(1));
+    });
+
+    testWidgets('observe-only offers none', (tester) async {
+      final panel = await _pump(tester, safety: const SafetyPolicy());
+      await panel.all(tester);
+      expect(
+        find.byKey(const ValueKey('jobs.rowActions.timer|certbot.timer')),
+        findsNothing,
+      );
+    });
+  });
+
+  group('other users\' crontabs (JOB-03, M4 E21)', () {
+    const managed = SafetyPolicy(
+      servers: {_serverId: ServerSafety(management: true)},
+    );
+
+    UserCrontabs others(String requestId) {
+      final lines = parseUserCrontab(
+        '0 3 * * * /usr/local/bin/backup --token=********\n',
+        user: 'alice',
+      ).value;
+      return UserCrontabs(
+        serverId: _serverId,
+        requestId: requestId,
+        directory: '/var/spool/cron/crontabs',
+        jobs: mergeJobs(
+          cron: CronSnapshot(jobs: lines),
+          nowUtc: jobsNow,
+          zone: jobsProfile.serverZone,
+        ),
+        unreadable: const ['carol'],
+      );
+    }
+
+    testWidgets('admin mode adds the switch, which reads them read-only', (
+      tester,
+    ) async {
+      final panel = await _pump(tester, safety: managed);
+      await panel.all(tester);
+      expect(find.text('Other users'), findsNothing);
+
+      await panel.emit(
+        tester,
+        const AdminModeState(_serverId, AdminModePhase.on),
+      );
+      await tester.tap(find.text('Other users'));
+      await tester.pumpAndSettle();
+      final request =
+          panel.engine.sentOfType<ReadUserCrontabs>().single
+              as ReadUserCrontabs;
+      expect(find.text("Reading other users' crontabs."), findsOneWidget);
+
+      await panel.emit(tester, others(request.requestId));
+      expect(find.text("alice's crontab"), findsOneWidget);
+      expect(find.text('Could not read the crontab of carol.'), findsOneWidget);
+      expect(
+        find.textContaining('/usr/local/bin/backup --token=********'),
+        findsWidgets,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('jobs.others.rowActions.cron|crontab -u alice|0'),
+        ),
+        findsNothing,
+        reason: 'read-only',
+      );
+
+      await tester.tap(find.text('Read again'));
+      await tester.pumpAndSettle();
+      expect(panel.engine.sentOfType<ReadUserCrontabs>(), hasLength(2));
+
+      // Admin mode that ends takes the view with it.
+      await panel.emit(
+        tester,
+        const AdminModeState(
+          _serverId,
+          AdminModePhase.expired,
+          ended: AdminEnd.inactivity,
+        ),
+      );
+      expect(find.text("alice's crontab"), findsNothing);
+      expect(find.text('Other users'), findsNothing);
+
+      // Back on, the tab starts from the streams' rows again.
+      await panel.emit(
+        tester,
+        const AdminModeState(_serverId, AdminModePhase.on),
+      );
+      expect(find.text("alice's crontab"), findsNothing);
+    });
+
+    testWidgets('another server shows none of the last one\'s crontabs', (
+      tester,
+    ) async {
+      final panel = await _pump(tester, safety: managed);
+      await panel.all(tester);
+      for (final id in [_serverId, 'srv-2']) {
+        await panel.emit(tester, AdminModeState(id, AdminModePhase.on));
+      }
+      await tester.tap(find.text('Other users'));
+      await tester.pumpAndSettle();
+      final first =
+          panel.engine.sentOfType<ReadUserCrontabs>().single
+              as ReadUserCrontabs;
+
+      // The desktop selection moves while the read is under way.
+      panel.server.value = 'srv-2';
+      await tester.pumpAndSettle();
+      await panel.emit(tester, others(first.requestId));
+      expect(find.text("alice's crontab"), findsNothing);
+      expect(find.text("Reading other users' crontabs."), findsNothing);
+    });
+
+    testWidgets('a failed read says why', (tester) async {
+      final panel = await _pump(tester, safety: managed);
+      await panel.all(tester);
+      await panel.emit(
+        tester,
+        const AdminModeState(_serverId, AdminModePhase.on),
+      );
+      await tester.tap(find.text('Other users'));
+      await tester.pumpAndSettle();
+      final request =
+          panel.engine.sentOfType<ReadUserCrontabs>().single
+              as ReadUserCrontabs;
+      await panel.emit(
+        tester,
+        UserCrontabs(
+          serverId: _serverId,
+          requestId: request.requestId,
+          failure: UserCrontabsFailure.spoolDenied,
+        ),
+      );
+      expect(
+        find.text('Even admin mode may not list the crontab spool.'),
+        findsOneWidget,
+      );
+    });
   });
 }

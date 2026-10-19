@@ -27,7 +27,7 @@ import 'dart:typed_data';
 
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:seance_core/seance_core.dart'
-    show RemoteExit, RemoteProcess, SshLink;
+    show RemoteExit, RemoteProcess, SecretRedactor, SshLink;
 
 import '../engine/protocol.dart';
 import 'journal_record.dart';
@@ -63,9 +63,14 @@ final class LogService {
     this._maxOutputBytes = kLogReadMaxOutputBytes,
     this._deadline = kLogReadDeadline,
     this._startTimer = Timer.new,
+    this._elevatedLink,
   });
 
   final SshLink _link;
+
+  /// The link an elevated [FileLogSource] reads over: [_link] through
+  /// admin mode's elevation, or null while admin mode is off (LOG-22).
+  final SshLink? Function()? _elevatedLink;
 
   /// Quotes each word of a command for the login shell (03 §8.8); 03
   /// §6.2 names `seance_core`'s `quoteShellWord`.
@@ -122,7 +127,16 @@ final class LogService {
       return;
     }
 
-    final read = _Read(streamId, spec);
+    final link = switch (spec.source) {
+      FileLogSource(elevated: true) => _elevatedLink?.call(),
+      _ => _link,
+    };
+    if (link == null) {
+      _emit(LogStreamState(streamId, kAdminModeOff));
+      return;
+    }
+
+    final read = _Read(streamId, spec, link);
     _reads[streamId] = read;
     _emit(LogStreamState(streamId, const LogStreamRunning()));
     unawaited(_serve(read, argv));
@@ -200,6 +214,9 @@ final class LogService {
         cursor == null
             ? HostCommands.tail(path, lines: spec.window)
             : throw const HostCommandError('a file has no cursor'),
+      OperationLogSource() => throw const HostCommandError(
+        'the engine reads an operation log as its file',
+      ),
       // The Docker router reads them over the API.
       ContainerLogSource() => throw const HostCommandError(
         'container logs come from the Docker endpoint',
@@ -219,8 +236,10 @@ final class LogService {
       case JournalLogSource(:final since):
         final after = spec.afterCursor == null ? null : since;
         _deliver(read, out, _journalWindow(out, spec.window, since: after));
-      case FileLogSource():
-        _deliver(read, out, _fileWindow(out, spec.window));
+      case FileLogSource(:final redacted):
+        _deliver(read, out, _fileWindow(out, spec.window, redacted: redacted));
+      // Refused on opening: its command throws.
+      case OperationLogSource():
       // Refused by accepts: the Docker router reads them.
       case ContainerLogSource():
         break;
@@ -316,7 +335,7 @@ final class LogService {
     final run = _Run(
       _Bytes(_maxOutputBytes, keep),
       Future.sync(
-        () => _link.start(HostCommands.commandLine(argv, quote: _quote)),
+        () => read.link.start(HostCommands.commandLine(argv, quote: _quote)),
       ),
     );
     read.run = run;
@@ -414,6 +433,13 @@ typedef _Window = ({
   LogStreamEndReason end,
 });
 
+/// A file's [line] as a [FileRecord], through the secret redactor when
+/// [redacted]. Shared with `LogFollower`.
+FileRecord fileRecord(String line, {required bool redacted}) =>
+    FileRecord(redacted ? _redactor.redact(line) : line);
+
+final _redactor = SecretRedactor();
+
 /// journalctl's line for an empty result, which some versions print in
 /// JSON mode too; never a record.
 const _noEntries = '-- No entries --';
@@ -507,7 +533,7 @@ _Window _dmesgWindow(_Output out, int window) {
 /// line break. A cut kept the newest bytes, so its first line, which
 /// starts before them, goes; when that leaves no line, the newest line
 /// was longer than the cap and counts as dropped.
-_Window _fileWindow(_Output out, int window) {
+_Window _fileWindow(_Output out, int window, {required bool redacted}) {
   final bytes = out.stdout;
   var start = 0;
   if (out.cut) {
@@ -526,8 +552,9 @@ _Window _fileWindow(_Output out, int window) {
   return (
     records: [
       for (final line in newest.reversed)
-        FileRecord(
+        fileRecord(
           line.endsWith('\r') ? line.substring(0, line.length - 1) : line,
+          redacted: redacted,
         ),
     ],
     dropped: out.cut && newest.isEmpty ? 1 : 0,
@@ -538,6 +565,12 @@ _Window _fileWindow(_Output out, int window) {
 }
 
 // -- outcomes -----------------------------------------------------------
+
+/// How an elevated read ends while admin mode is off (LOG-22).
+const kAdminModeOff = LogStreamEnded(
+  LogStreamEndReason.denied,
+  detail: 'admin mode is off',
+);
 
 /// stderr naming a refusal: errno's EACCES and EPERM texts in the C
 /// locale the command runs in, and journalctl's notice.
@@ -623,10 +656,13 @@ final class _Unfinished extends _Ran {
 
 /// One open read.
 final class _Read {
-  _Read(this.streamId, this.spec);
+  _Read(this.streamId, this.spec, this.link);
 
   final String streamId;
   final LogStreamSpec spec;
+
+  /// The service's link, or its elevated one for an elevated file.
+  final SshLink link;
 
   /// The command running, or the last one.
   _Run? run;

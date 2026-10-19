@@ -103,10 +103,15 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         TimerJobEntry,
         kCalendarIterationsSystemd,
         kCronHorizonDays,
-        kOwnCrontabSource;
+        kOwnCrontabSource,
+        userCrontabSource;
 
 export 'src/sampling/sample_results.dart' show kCronLinesEvaluated;
 
+// Detached operations (03 §7.17): which directory an operation records
+// in, and how far each directory's listing got.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show OpDirectoryKind, OpDirectoryListing, OpDirectoryState;
 // The Logs panel's LOG-04 notice: the access check's journal row (K04)
 // over the probe's HostProfile.
 export 'package:klabautermann_host/klabautermann_host.dart'

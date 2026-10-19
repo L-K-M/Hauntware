@@ -1265,7 +1265,12 @@ M2, the host read MVP, is the current milestone. What is on main:
 - Fedora 44 repin (M2, #259): `quay.io` no longer serves the Fedora 44
   digest `capture.sh` pinned, so `fedora-44` now pins the tag's current
   index digest, and the `fedora-44-docker-bash` fixture is recaptured
-  from it with its goldens (collector-set version 7).
+  from it with its goldens (collector-set version 7). Two days later
+  `quay.io` had dropped that digest too, since it retags `fedora:44`
+  daily, so `fedora-44` now pins Docker Hub's official `fedora:44`
+  through `mirror.gcr.io`, as the other official images are, and the
+  fixture is recaptured from it. Docker Hub has so far kept replaced
+  official digests pullable, but promises nothing.
 - Docker fixture and rank-1 smoke (M3, 03 §5.4, §11.3, D10): the
   fixture adds `dind` (Docker 29.9.1, privileged, unpublished, dockerd
   on one Unix socket with gid 990, on a named volume) and `docker-sshd`
@@ -1486,6 +1491,86 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 Docker action planners (E15): `PlanAction` plans container state
+  changes and removal, image removal and stack start, stop and restart
+  over the server's Docker endpoint. Steps address the full id and are
+  re-validated by inspect before they run. Removing volumes, forcing an
+  image in use, and a managed or protected target need the typed
+  confirmation. A stack acts in its services' dependency order and a
+  cycle refuses. The app's Docker actions arrive with E22.
+- M4 elevated reads (E16b): with admin mode on, the engine reads a
+  root-only log file the app asks to read elevated, and a stack file
+  SFTP may not read, through the admin session; a follow ends when admin
+  mode does.
+- M4 sudo relay (E16a): while admin mode is on, a Docker socket the
+  user cannot write is reached through rank 3, the engine CLI's
+  `dial-stdio` under `sudo -n` or the password prelude, one elevated exec
+  per connection. Admin mode ending drops the route.
+- M4 pull and redeploy (E18): `PlanAction` plans STK-06 for a verified,
+  unmanaged stack as one detached operation of `config -q`, `pull` and
+  `up -d` through the endpoint's `--host`, listing orphans and warning
+  about profile-gated services. The runner checks the config hashes
+  again before it launches. The app's redeploy arrives with E23b.
+- M4 operation output (E17c): the engine follows a detached
+  operation's output file like any log file, each line redacted.
+- M4 detached runner, second half (E17b): the engine reads each
+  server's detached operations on connect and while one runs, checks a
+  running one's wrapper, and sends the list. An acknowledged result is
+  audited and its files deleted, the root directory's once admin mode is
+  on; old files are pruned.
+- M4 detached runner, first half (E17a): the engine picks each
+  operation's runner from the host profile, the work's level and admin
+  mode, and launches it with a fresh id. Re-attach, results and cleanup
+  follow in E17b.
+- M4 activity log (E24): the server header's Safety menu opens
+  Activity, the device audit log as a sortable table with each run's
+  redacted steps in its details and older pages on request. Copy puts
+  the records on the clipboard as JSON lines; they never hold a secret.
+- M4 other users' crontabs in the app (E21c): in admin mode the Jobs
+  tab's source switch reads every other user's crontab and lists the
+  lines read-only, masked, saying which users could not be read.
+- M4 run timer now in the app (E21b): where actions are allowed, a
+  timer's row menu and details offer Run now through the action
+  preview, and a sheet then follows the started service's journal live.
+  Other users' crontabs follow in E21c.
+- M4 process and unit actions in the app (E21a): where actions are
+  allowed, the Processes table's row menu and a process's details send
+  Terminate, Kill or any other signal, and the Services table's row menu
+  and a unit's page offer Start, Stop, Restart and Reload, each through
+  the action preview. Run timer now and other users' crontabs follow in
+  E21b.
+- M4 action framework (E20): the app plans an action through the
+  engine, shows the preview (exact steps, root badges, danger findings,
+  impact, protection, ownership, runner and host writes) as a dialog or
+  a phone sheet, confirms by tier with typing for tier 2, runs the plan
+  and toasts its end. An entry registry hides every action entry point
+  unless actions are allowed and nothing is read-only. E21 and E22 add
+  the entry points.
+- M4 admin mode in the app (E19b): the server header's admin chip
+  turns admin mode on and off and follows the engine's states, tinted
+  while on with its end time, and the header says why it failed or
+  ended. The elevation prompt is a password dialog without a remember
+  option. Light and dark goldens cover the chip.
+- M4 safety settings (E19a): the app keeps the safety preferences in
+  `settings.json` and applies them to the engine at spawn and on every
+  change. Settings > Safety (also in the desktop settings window) holds
+  global read-only, admin expiry and the user's marks. The server
+  header has a Safety menu with Allow actions and Read-only, and says
+  when a server is observe-only or read-only (03 §4.3 step 5). The
+  admin chip and elevation prompt follow in E19b.
+- M4 other users' crontabs (E14b): in admin mode `ReadUserCrontabs`
+  lists the cron spool and reads each valid user's crontab through
+  elevation, as jobs rows with next runs. Every cron command now crosses
+  masked, the `cron` stream's included. The app's user switch arrives
+  with E21.
+- M4 host action planners (E14): `PlanAction` plans PRC-02's kill,
+  SVC-03's start, stop, restart and reload, and JOB-08's run timer now
+  over the server's link, using its probe and E10's protected targets.
+  A kill elevates only for another user's process and is refused when
+  the PID's start time changed. Unit actions elevate in admin mode and
+  otherwise try polkit, whose refusal reads as needing admin mode. The
+  Docker planners arrive with E15, and the app surfaces with E20 and
+  E21.
 - M4 spike S3 (E01): `capture.sh --elevation-only` drives the real
   elevation executor in containers. It covers sudo 1.9.16p2 under four
   timestamp and tty rules, sudo-rs 0.2.13 and Alpine's doas, as a

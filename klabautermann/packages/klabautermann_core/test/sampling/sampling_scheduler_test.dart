@@ -11,7 +11,8 @@ import 'package:klabautermann_core/src/sampling/sampler_session.dart';
 import 'package:klabautermann_core/src/sampling/sampler_timing.dart';
 import 'package:klabautermann_core/src/sampling/sampling_scheduler.dart';
 import 'package:klabautermann_core/src/sampling/subscriptions.dart';
-import 'package:klabautermann_host/klabautermann_host.dart' show SamplerKind;
+import 'package:klabautermann_host/klabautermann_host.dart'
+    show SamplerKind, SectionStatus;
 import 'package:seance_core/seance_core.dart' show SshLink, quoteShellWord;
 import 'package:test/test.dart';
 
@@ -46,6 +47,37 @@ void main() {
   late Duration restartDelay;
   late SamplingScheduler scheduler;
   late AnsweringLink link;
+  late List<(String, SectionStatus, String)> opsReads;
+
+  SamplingScheduler build({bool readsOps = false}) => SamplingScheduler(
+    subscriptions: subscriptions,
+    linkFor: (id) => links[id],
+    emit: events.add,
+    deadPeerHint: (id, l) => hints.add(('hint', id, l)),
+    clearDeadPeerHint: (id, l) => hints.add(('clear', id, l)),
+    probed: (id, profile) => probes.add(id),
+    opsRead: readsOps
+        ? (id, section) => opsReads.add((
+            id,
+            section.status,
+            String.fromCharCodes(section.payload),
+          ))
+        : null,
+    openSampler: (l, kind) {
+      final session = SamplerSession(
+        link: l,
+        kind: kind,
+        quote: quoteShellWord,
+        deadlines: deadlines,
+        restartDelay: (_) => restartDelay,
+      );
+      sessions.add(session);
+      return session;
+    },
+    startTimer: clock.startTimer,
+    now: () => clock.now,
+    elapsed: () => clock.elapsed,
+  );
 
   setUp(() {
     clock = FakeClock();
@@ -58,28 +90,8 @@ void main() {
     sessions = [];
     deadlines = const SamplerDeadlines();
     restartDelay = const Duration(milliseconds: 5);
-    scheduler = SamplingScheduler(
-      subscriptions: subscriptions,
-      linkFor: (id) => links[id],
-      emit: events.add,
-      deadPeerHint: (id, l) => hints.add(('hint', id, l)),
-      clearDeadPeerHint: (id, l) => hints.add(('clear', id, l)),
-      probed: (id, profile) => probes.add(id),
-      openSampler: (l, kind) {
-        final session = SamplerSession(
-          link: l,
-          kind: kind,
-          quote: quoteShellWord,
-          deadlines: deadlines,
-          restartDelay: (_) => restartDelay,
-        );
-        sessions.add(session);
-        return session;
-      },
-      startTimer: clock.startTimer,
-      now: () => clock.now,
-      elapsed: () => clock.elapsed,
-    );
+    opsReads = [];
+    scheduler = build();
   });
 
   tearDown(() => scheduler.close());
@@ -640,5 +652,70 @@ void main() {
     await clock.elapse(const Duration(minutes: 1));
     expect(next.running, isEmpty);
     expect(events, hasLength(seen));
+  });
+
+  group('ops (03 §7.17)', () {
+    setUp(() async {
+      await scheduler.close();
+      scheduler = build(readsOps: true);
+    });
+
+    test('a new link reads ops once, right after the probe, and hands '
+        'the section on', () async {
+      link.onDemandPayloads['ops'] = 'dir user absent 0 /h/ops';
+      subscribe({SampleStream.fs});
+      await settle();
+      expect(link.linesOf(_slow).take(3), [
+        'hw_o probe',
+        'hw_o ops',
+        'hw_t fs',
+      ]);
+      expect(opsReads, [(_s1, SectionStatus.ok, 'dir user absent 0 /h/ops')]);
+
+      await clock.elapse(const Duration(minutes: 2));
+      expect(link.linesOf(_slow).where((l) => l == 'hw_o ops'), hasLength(1));
+
+      final next = AnsweringLink();
+      setLink(next);
+      await settle();
+      expect(next.linesOf(_slow).take(2), ['hw_o probe', 'hw_o ops']);
+      expect(opsReads, hasLength(2));
+    });
+
+    test('readOps reads again once the slow sampler is free; a read '
+        'without a reply goes out again 15 s later', () async {
+      subscribe({SampleStream.fs});
+      await settle();
+      scheduler.readOps(_s1);
+      await settle();
+      expect(link.linesOf(_slow).where((l) => l == 'hw_o ops'), hasLength(2));
+
+      link.stalled.add(_slow);
+      scheduler.readOps(_s1);
+      await settle();
+      final stalled = link.running.singleWhere((p) => p.kind == _slow);
+      expect(stalled.held.single, endsWith(' ops'));
+      await stalled.close();
+      link.stalled.clear();
+      final slow = sessions.singleWhere((s) => s.kind == _slow);
+      await _until(() => slow.restarts == 1 && slow.state is SamplerReady);
+      await settle();
+      // The held read is the third; no other goes out at once.
+      expect(link.linesOf(_slow).where((l) => l == 'hw_o ops'), hasLength(3));
+
+      await clock.elapse(const Duration(seconds: 15));
+      expect(link.linesOf(_slow).where((l) => l == 'hw_o ops'), hasLength(4));
+      expect(opsReads, hasLength(3));
+    });
+
+    test('without a listener no ops read goes out', () async {
+      await scheduler.close();
+      scheduler = build();
+      subscribe({SampleStream.fs});
+      await settle();
+      scheduler.readOps(_s1);
+      await settle();
+      expect(link.linesOf(_slow), isNot(contains('hw_o ops')));
+    });
   });
 }
