@@ -169,6 +169,7 @@ void main() {
         DockerRank.streamlocal: 'Engine API via SSH socket forward',
         DockerRank.cliRelay:
             'Engine API via docker CLI relay (limited streams)',
+        DockerRank.sudoRelay: 'Engine API via sudo relay (root-equivalent)',
         DockerRank.socketRelay: 'Engine API via socat relay',
       });
       for (final (state, header, body) in _failures) {
@@ -317,6 +318,20 @@ void main() {
       );
       expect(
         _inHeader(find.text('Custom socket: root-equivalent')),
+        findsOneWidget,
+      );
+
+      await _emit(
+        tester,
+        harness,
+        dockerReady(
+          'srv-1',
+          rank: DockerRank.sudoRelay,
+          rootEquivalence: DockerRootEquivalence.sudoRelay,
+        ),
+      );
+      expect(
+        _inHeader(find.text('Sudo relay: root-equivalent')),
         findsOneWidget,
       );
 

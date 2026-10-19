@@ -17,6 +17,7 @@ String dockerTransportText(AppLocalizations l10n, DockerEndpointState? state) {
     DockerEndpointPhase.ready => switch (state!.label) {
       DockerRouteLabel.socketForward => l10n.dockerTransportSocketForward,
       DockerRouteLabel.cliRelay => l10n.dockerTransportCliRelay,
+      DockerRouteLabel.sudoRelay => l10n.dockerTransportSudoRelay,
       DockerRouteLabel.socatRelay => l10n.dockerTransportSocatRelay,
       // A ready endpoint always names its route.
       DockerRouteLabel.none => l10n.dockerTransportUnreachable,
@@ -97,6 +98,7 @@ class DockerRootBadge extends StatelessWidget {
     final text = switch (route.rootEquivalence) {
       DockerRootEquivalence.rootfulSocket => l10n.dockerBadgeRootfulSocket,
       DockerRootEquivalence.unclassified => l10n.dockerBadgeCustomSocket,
+      DockerRootEquivalence.sudoRelay => l10n.dockerBadgeSudoRelay,
       DockerRootEquivalence.rootlessEngine => switch (user) {
         final user? => l10n.dockerBadgeRootlessEngine(user),
         null => l10n.dockerBadgeRootlessEngineLogin,

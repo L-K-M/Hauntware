@@ -8,11 +8,9 @@ import 'dart:convert';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/operations/confirmation.dart';
 import 'package:klabautermann_core/src/operations/operation_plan.dart';
-import 'package:klabautermann_core/src/operations/plan_types.dart';
 import 'package:klabautermann_core/src/operations/plans/docker_plans.dart';
 import 'package:klabautermann_core/src/operations/protected_targets.dart';
 import 'package:klabautermann_docker/klabautermann_docker.dart';
-import 'package:klabautermann_host/klabautermann_host.dart' show KillSignal;
 import 'package:test/test.dart';
 
 import '../support/forwarding_link.dart';

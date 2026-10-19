@@ -3408,6 +3408,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Engine API via docker CLI relay (limited streams)';
 
   @override
+  String get dockerTransportSudoRelay =>
+      'Engine API via sudo relay (root-equivalent)';
+
+  @override
   String get dockerTransportSocatRelay => 'Engine API via socat relay';
 
   @override
@@ -3460,6 +3464,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dockerBadgeRootlessEngineLogin =>
       'Rootless engine: equals your login user';
+
+  @override
+  String get dockerBadgeSudoRelay => 'Sudo relay: root-equivalent';
 
   @override
   String get dockerBadgeCustomSocket => 'Custom socket: root-equivalent';

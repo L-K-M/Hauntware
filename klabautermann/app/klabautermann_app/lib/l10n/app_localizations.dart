@@ -4462,6 +4462,12 @@ abstract class AppLocalizations {
   /// **'Engine API via docker CLI relay (limited streams)'**
   String get dockerTransportCliRelay;
 
+  /// The server header's Docker transport label (03 §5.9, E4) for rank 3: in admin mode, sudo runs the engine CLI's relay as root because the account cannot use the socket. "sudo" is the command name; keep the wording of 03 §5.9.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API via sudo relay (root-equivalent)'**
+  String get dockerTransportSudoRelay;
+
   /// The server header's Docker transport label (03 §5.9, E4) for rank 4: socat or nc relays each connection. "socat" is the command name; keep the wording of 03 §5.9.
   ///
   /// In en, this message translates to:
@@ -4545,6 +4551,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Rootless engine: equals your login user'**
   String get dockerBadgeRootlessEngineLogin;
+
+  /// Server header badge (SAF-08, 03 §8.4): the engine is reached through the sudo relay, which runs as root, so using it equals root on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Sudo relay: root-equivalent'**
+  String get dockerBadgeSudoRelay;
 
   /// Server header badge (SAF-08): a socket path Klabautermann cannot classify, treated as root-equivalent.
   ///

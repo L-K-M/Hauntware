@@ -4137,6 +4137,10 @@
   "@dockerTransportCliRelay": {
     "description": "The server header's Docker transport label (03 §5.9, E4) for rank 2: the engine CLI relays each connection over its own SSH session. \"docker\" is the command name; keep the wording of 03 §5.9."
   },
+  "dockerTransportSudoRelay": "Engine API via sudo relay (root-equivalent)",
+  "@dockerTransportSudoRelay": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) for rank 3: in admin mode, sudo runs the engine CLI's relay as root because the account cannot use the socket. \"sudo\" is the command name; keep the wording of 03 §5.9."
+  },
   "dockerTransportSocatRelay": "Engine API via socat relay",
   "@dockerTransportSocatRelay": {
     "description": "The server header's Docker transport label (03 §5.9, E4) for rank 4: socat or nc relays each connection. \"socat\" is the command name; keep the wording of 03 §5.9."
@@ -4198,6 +4202,10 @@
   "dockerBadgeRootlessEngineLogin": "Rootless engine: equals your login user",
   "@dockerBadgeRootlessEngineLogin": {
     "description": "dockerBadgeRootlessEngine when the capability check did not name the login user."
+  },
+  "dockerBadgeSudoRelay": "Sudo relay: root-equivalent",
+  "@dockerBadgeSudoRelay": {
+    "description": "Server header badge (SAF-08, 03 §8.4): the engine is reached through the sudo relay, which runs as root, so using it equals root on the server."
   },
   "dockerBadgeCustomSocket": "Custom socket: root-equivalent",
   "@dockerBadgeCustomSocket": {
