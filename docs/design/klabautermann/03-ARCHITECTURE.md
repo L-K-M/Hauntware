@@ -2524,7 +2524,7 @@ limit of 2 and reports `SshLinkDegraded(sessionLimitLearned)`.
 | Stream | Endpoint | Framing | Cancel | Resume |
 |---|---|---|---|---|
 | Container logs | `GET /containers/{id}/logs?follow=1&tail=N&timestamps=1&stdout=1&stderr=1` | stdcopy 8-byte frames unless `Config.Tty` (from inspect; Docker sets `Content-Type: application/vnd.docker.multiplexed-stream` or `application/vnd.docker.raw-stream` from API 1.42; from 1.42 the header is used when present and cross-checked with `Config.Tty`; below 1.42 a current daemon labels every logs response raw-stream, and older daemons and Podman's compat layer omit it [R: moby `container_routes.go` `getContainersLogs`, reported by review; recorded from Docker 20.10 and Podman 5.8 in D01]); split on `\n` after demultiplexing | Close the duplex | `since=<unix seconds>.<9-digit nanoseconds>` converted from the last delivered line's RFC3339Nano timestamp (the API rejects RFC3339 with 400); `since` is inclusive, so drop re-sent lines up to and including the last delivered one [R: moby `getContainersLogs`, `loggerutils/logfile.go`, reported by review] |
-| Stats, list | `GET /containers/{id}/stats?stream=false&one-shot=true` | One JSON object | n/a | Deltas between polls client-side (one-shot `precpu_stats` is zeroed, with a zero `preread`, on every daemon of the recorded corpus) |
+| Stats, list | `GET /containers/{id}/stats?stream=false&one-shot=true` | One JSON object | n/a | Deltas between polls client-side (one-shot `precpu_stats` is zeroed, with a zero `preread`, on every daemon of the recorded corpus and on Docker 29.9 in D21, so not meaningful) |
 | Stats, detail | `GET /containers/{id}/stats?stream=1` | JSON lines | Close | n/a |
 | Events | `GET /events?since=&filters=` | JSON lines; `Type`, `Action`, `Actor` only (1.52 removed the legacy fields), legacy shape accepted below 1.52 | Close | `since=` last event time; full re-list after a gap over 60 s |
 | Pull progress | `POST /images/create?fromImage=&tag=` | JSON values keyed by layer `id`; `progressDetail`, `errorDetail` | Close, which cancels the pull on the daemon unless another client is pulling the same image [R: moby `image_routes.go` request context, `xfer/transfer.go` `release`, reported by review]; a pull that must outlive its view runs detached (7.14) | n/a |
@@ -3714,10 +3714,11 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   `.service`, `.oneoff`, `.depends_on`, `.image` [R: compose
   `pkg/api/labels.go`]. A file counts as the stack's source only if it exists
   and `docker compose -p <p> --project-directory <d> -f <files> config
-  --hash '*'` matches the containers' `config-hash` labels [U: flag form on
-  Compose v5]; otherwise the stack shows "unverified source", or "source not
-  on host (deployed by X)" when missing. Containerized managers record paths
-  inside their own container (Dockge's rule [R]).
+  --hash '*'` matches the containers' `config-hash` labels (Compose v5.6
+  prints a hash per service in that form; D21); otherwise the stack shows
+  "unverified source", or "source not on host (deployed by X)" when
+  missing. Containerized managers record paths inside their own container
+  (Dockge's rule [R]).
 - **Overview and files (STK-02, STK-04, MVP).** Services, containers, state,
   health, ports, images; compose and `.env` read over SFTP when the login
   user can read them, elevated `cat` in admin mode otherwise, shown in
@@ -6786,6 +6787,45 @@ five put their setting ahead of the common config's `Include`;
 run's keys behind `restrict` (`authorized_keys.restrict`, which `run.sh`
 writes). The claim above that the common config's `AllowTcpForwarding
 no` refuses streamlocal holds on OpenSSH 10.6 (5.3).
+
+As built in M3 (D21), `klabautermann_core/test/integration/
+docker_engine_test.dart` (tags `integration` and `docker`, so `run.sh`
+runs it with the fixture suites) drives the real engine in its isolate,
+links on, over an imported ssh_config naming the Docker host as `klab`
+and as `klab-nosock`. It checks rank 1 to `/var/run/docker.sock` with
+the socket-forward label, rootful and root-equivalent; negotiation
+against dind (Docker 29.9.1 offers API 1.56, so 1.55 is used); a
+`docker run` over SSH reaching the watched list within 2 s, as a
+targeted re-read and not a full re-list (about 0.2 s locally); after
+`compose stop` and `start` of `docker-sshd`, with a container started
+in dind meanwhile, the events stream resuming with `since`, which
+reports it without a full re-list; inspect, the stack's compose file
+and its `.env` with the seeded fake secrets masked; a log follow
+across `compose restart docker-sshd` with no line lost, repeated or
+dropped; list stats, the first read without CPU % and the next with
+it; images with a dangling one flagged; the stacks verified, source
+not on host and Coolify-managed; and `klab-nosock` failed with no
+route for `socketDenied` while the access check's socket row reads
+missing, not writable, with the group fix. Each test subscribes the
+server first and waits for its probe, since a query before the probe
+answers fails (5.4). The fixture gained `Subsystem sftp internal-sftp`
+on the Docker host, whose common config names none, for stack files,
+and `seed_docker.sh` a `vault` service in `demo` whose environment,
+label, command line and health output carry fake low-entropy secrets,
+one from the stack's `.env`, and a dangling image committed without a
+tag. Spike S1's follow, a container writing 1,000 numbered lines a
+second for 20 s over streamlocal, delivered every line with none
+dropped, at under 50 ms p95 and 81 ms worst from the daemon's
+timestamp to the test in three local runs; the test writes its
+numbers to the evidence directory (`fixture/docker-follow.json`).
+**D20 confirmed:** the pure-Dart HTTP client carried every stream here
+(queries, chunked lists, the `/events` NDJSON stream, multiplexed log
+follows, one-shot stats), so the `dart:io` `HttpClient` alternative is
+not re-run (M3 decision M1).
+The run settles two [U]s, Compose v5.6's `config --hash '*'` flag form
+(7.16) and one-shot `precpu_stats` being zero (5.6), and shows that
+dind 29.9's containerd image store lists a dangling image with no
+`RepoTags`, which `ImageSummary.isDangling` reads as dangling.
 
 As built in M4 (E27), a `registry` service (Distribution 3.0.0, pinned by
 digest) serves the Compose network only: it publishes and exposes

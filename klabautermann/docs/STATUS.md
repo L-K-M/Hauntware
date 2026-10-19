@@ -226,9 +226,9 @@ M2, the host read MVP, is the current milestone. What is on main:
   and falls back to "CLI could not hash" when the flag form fails.
   `DockerStackFileQuery` reads a verified stack's compose or `.env`
   file over SFTP, at most 1 MiB, masked in the engine. Tested over
-  fakes only, plus the `test -f` quoting in a real `sh`; the `--hash`
-  output shape comes from Compose's source and awaits D21's run, and
-  the app shows no stacks yet (D17, D18).
+  fakes only, plus the `test -f` quoting in a real `sh`; D21's run
+  confirms the `--hash` output shape on Compose v5.6, and the app
+  shows no stacks yet (D17, D18).
 - Low-session mode (M3, D09, 03 §5.2, M9): one `ChannelQuota` per server
   serves the host log reads and the Docker session, so on relay ranks
   the pooled connection (one, in a short-action slot until its 30 s idle
@@ -1314,6 +1314,23 @@ M2, the host read MVP, is the current milestone. What is on main:
   repeated line, and one-shot stats then a stream delta. An idle
   container's CPU now reads 0 % rather than unknown, and Go's zero time
   (a created container's `StartedAt`) reads as absent.
+- Docker engine end to end (M3, D21, 03 §11.3, exit E2):
+  `docker_engine_test.dart` (tags `integration`, `docker`) runs the
+  real engine, links on, over an imported ssh_config against the
+  Docker fixture: rank 1 and its label, negotiation against dind (API
+  1.56 offered, 1.55 used), a `docker run` over SSH in the watched list
+  within 2 s, the events stream resumed with `since` across a stop and
+  start of `docker-sshd`, inspect and stack-file masking of seeded fake
+  secrets, a log follow across `compose restart docker-sshd` with no
+  line lost or repeated, list stats, images with the dangling flag,
+  stacks verified, source not on host and Coolify-managed, and
+  `klab-nosock` denied with the access check's socket row. Spike S1's
+  1,000 lines/s follow delivered every line, none dropped, under 50 ms
+  p95 locally; its numbers go to `fixture/docker-follow.json` in the
+  evidence. The Docker host gained an SFTP subsystem and the seed a
+  `vault` service and a dangling image. D20's own HTTP client is
+  confirmed; `dart:io`'s is not re-run (M1). Locally the suite takes
+  about 46 s.
 - Desktop settings window (03 §10.2, D32): on macOS, Linux and Windows,
   Settings opens in a native window of its own through `ghost_desktop`'s
   `GhostSettingsWindowHost`; phones, and a desktop runner that cannot
