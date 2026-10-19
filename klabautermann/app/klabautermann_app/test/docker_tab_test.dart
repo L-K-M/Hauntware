@@ -174,6 +174,7 @@ void main() {
         DockerRank.streamlocal: 'Engine API via SSH socket forward',
         DockerRank.cliRelay:
             'Engine API via docker CLI relay (limited streams)',
+        DockerRank.sudoRelay: 'Engine API via sudo relay (root-equivalent)',
         DockerRank.socketRelay: 'Engine API via socat relay',
       });
       for (final (state, header, body) in _failures) {
@@ -322,6 +323,20 @@ void main() {
       );
       expect(
         _inHeader(find.text('Custom socket: root-equivalent')),
+        findsOneWidget,
+      );
+
+      await _emit(
+        tester,
+        harness,
+        dockerReady(
+          'srv-1',
+          rank: DockerRank.sudoRelay,
+          rootEquivalence: DockerRootEquivalence.sudoRelay,
+        ),
+      );
+      expect(
+        _inHeader(find.text('Sudo relay: root-equivalent')),
         findsOneWidget,
       );
 
@@ -706,7 +721,16 @@ void main() {
       await tester.tap(find.text('Overview'));
       await tester.pumpAndSettle();
       expect(closed(), [opens().single.streamId]);
-      await _openDockerTab(tester);
+
+      // Shown from another tab, the logs bring the Docker tab back.
+      await tester.tap(
+        find.descendant(
+          of: find.byType(InspectorPane),
+          matching: find.byTooltip('Show logs'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(_inDocker(find.byType(ContainerLogsPane)), findsOneWidget);
       expect(opens(), hasLength(2));
 
       await tester.tap(find.text('db-1'));

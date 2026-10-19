@@ -2,6 +2,8 @@
 # (sshd_config(5)), and the common config sets AllowTcpForwarding no,
 # which refuses streamlocal too (03 §5.3), so the local forwarding that
 # direct-streamlocal to the engine socket needs comes before the Include
-# (03 §11.3).
+# (03 §11.3). The common config names no SFTP subsystem, which a stack
+# file read uses (03 §7.16 STK-04), as a distribution's sshd_config does.
 AllowTcpForwarding local
+Subsystem sftp internal-sftp
 Include /etc/ssh/fixture/sshd_config.common

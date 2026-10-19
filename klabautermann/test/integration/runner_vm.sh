@@ -10,7 +10,13 @@
 # forced reconnect, unit logs, the kernel log, LOG-04 and journal paging;
 # and spike S4's detached runners (runner_vm_s4_test.dart, tag
 # runner-vm-s4): systemd-run system, --user and --uid, linger, logout,
-# --collect, root-run files, --host and sudo -n -l (03 §7.17, M4 E02).
+# --collect, root-run files, --host and sudo -n -l (03 §7.17, M4 E02);
+# and the engine's admin mode and host actions
+# (runner_vm_actions_test.dart, M4 E29): a wrong password and its retry,
+# rung 4 under timestamp_timeout=0, admin mode ending with the link, unit
+# start, stop, restart and reload, the protected ssh.service, run timer
+# now with its journal, other users' crontabs and a kill through
+# elevation.
 #
 # run.sh calls it after the fixture suites. It creates accounts and runs
 # a root sshd, so it runs only on a GitHub-hosted runner, the ephemeral
@@ -20,22 +26,26 @@
 # What it changes on the runner, all undone on every exit: the accounts
 # klab-vm (outside systemd-journal and adm, for LOG-04), klab-vm-journal
 # (in systemd-journal), klab-vm-sudo (password sudo), klab-vm-linger
-# (linger on) and klab-vm-docker (a NOPASSWD rule scoped to the docker
-# CLI) with their homes, sessions and linger; the sudoers drop-in with
-# those two rules; root's Docker CLI directory, whose default context it
+# (linger on), klab-vm-docker (a NOPASSWD rule scoped to the docker CLI)
+# and klab-vm-nocache (password sudo with timestamp_timeout=0, 8.3's
+# rung 4) with their homes, sessions, linger and crontabs (one each); the
+# sudoers drop-in with those rules; the test units in /etc/systemd/system
+# (a service that reloads, and a timer with its oneshot service, which
+# never fires on its own); root's Docker CLI directory, whose default context it
 # points at a socket nothing listens on, so only a step's own --host
 # reaches the engine (M4 plan M17); the sshd on 127.0.0.1:2243 with its
 # root-owned directory under /tmp; a transient system timer; the
 # operation units and the root operation directory the S4 suite leaves;
 # and its key and capture directories. klab-vm-sudo's password is made
-# at job start, kept in a 0600 file in the runner's own key directory,
-# and handed to chpasswd on stdin by a builtin printf: never in argv, the
-# environment, a log or the repository. Later legs reuse the accounts. The
-# system sshd, its config and port 22 stay as they are. Should
-# /usr/sbin/sshd be missing, it installs openssh-server with apt first,
-# with a policy-rc.d that refuses the package's start of the system
-# sshd; the package stays installed, its socket enabled for a boot that
-# never comes, as the runner is discarded with the job. Signing in
+# at job start, as is klab-vm-nocache's, each kept in a 0600 file in the
+# runner's own key directory and handed to chpasswd on stdin by a builtin
+# printf: never in argv, the environment, a log or the repository. Later
+# legs reuse the accounts. The system sshd, its config and port 22 stay
+# as they are. Should /usr/sbin/sshd or crontab be missing, it installs
+# openssh-server or cron with apt first, with a policy-rc.d that refuses
+# the package's start of the system sshd or cron daemon; the package
+# stays installed, enabled for a boot that never comes, as the runner is
+# discarded with the job. Signing in
 # leaves what any SSH login leaves: journal entries and logind sessions.
 #
 # With KLABAUTERMANN_EVIDENCE_DIR set, its logs, test results and the
@@ -64,6 +74,7 @@ readonly journal_user='klab-vm-journal'
 readonly sudo_user='klab-vm-sudo'
 readonly linger_user='klab-vm-linger'
 readonly docker_user='klab-vm-docker'
+readonly nocache_user='klab-vm-nocache'
 readonly sshd_host='127.0.0.1'
 # Beside the fixture's 2241 and 2242; never the system sshd's 22.
 readonly sshd_port=2243
@@ -101,6 +112,16 @@ readonly dead_socket='/run/klabautermann-runner-vm-dead.sock'
 readonly docker_socket='/var/run/docker.sock'
 # The S4 suite's transient units (klabautermann_host's kOpUnitPrefix).
 readonly op_units='klabautermann-op-*.service'
+# The actions suite's units (M4 E29), files of their own so that a stop
+# leaves them loaded, as a transient unit would not be. They run as
+# nobody and print what the suite looks for in the journal.
+readonly unit_dir='/etc/systemd/system'
+readonly test_service='klabautermann-vm-test.service'
+readonly job_service='klabautermann-vm-job.service'
+readonly job_timer='klabautermann-vm-job.timer'
+readonly reload_message='klabautermann-vm-test reloaded'
+readonly job_message='klabautermann-vm-job ran'
+readonly test_units=("$test_service" "$job_service" "$job_timer")
 
 skip() {
   echo "::notice::Runner-VM leg skipped: $*"
@@ -138,13 +159,14 @@ readonly docker_cli
 exec 8>"$lock_file"
 flock --nonblock 8 || die "another runner-VM leg holds $lock_file"
 
-for user in "$limited_user" "$journal_user" "$sudo_user" "$linger_user" \
-  "$docker_user"; do
+readonly users=("$limited_user" "$journal_user" "$sudo_user" "$linger_user"
+  "$docker_user" "$nocache_user")
+for user in "${users[@]}"; do
   if id "$user" >/dev/null 2>&1; then
     die "$user exists; this leg removes only accounts it created"
   fi
 done
-for path in "$sudoers_file" "$root_ops_parent"; do
+for path in "$sudoers_file" "$root_ops_parent" "${test_units[@]/#/$unit_dir/}"; do
   if sudo -n test -e "$path"; then
     die "$path exists; this leg removes only what it created"
   fi
@@ -163,7 +185,9 @@ sudoers_installed=0
 root_docker_created=0
 root_docker_saved=''
 suite_started=0
+units_installed=0
 created_users=()
+crontab_users=()
 
 # Runs "$@" in the background and waits for it: on a signal bash runs the
 # EXIT trap without waiting for a foreground child, and on_exit stops a
@@ -256,6 +280,12 @@ on_exit() {
     sudo -n systemctl reset-failed "$op_units" 2>/dev/null || true
     sudo -n rm -rf -- "$root_ops_parent" || cleanup=1
   fi
+  if ((units_installed)); then
+    sudo -n systemctl stop "${test_units[@]}" 2>/dev/null || true
+    sudo -n rm -f -- "${test_units[@]/#/$unit_dir/}" || cleanup=1
+    sudo -n systemctl daemon-reload || cleanup=1
+    sudo -n systemctl reset-failed "${test_units[@]}" 2>/dev/null || true
+  fi
   if ((root_docker_created)); then
     sudo -n rm -rf -- "$root_docker_dir" || cleanup=1
     if [[ -n "$root_docker_saved" ]]; then
@@ -273,6 +303,10 @@ on_exit() {
   if ((sudoers_installed)); then
     sudo -n rm -f -- "$sudoers_file" || cleanup=1
   fi
+  # userdel leaves the spool's crontab behind.
+  for user in "${crontab_users[@]}"; do
+    sudo -n crontab -u "$user" -r || cleanup=1
+  done
   for user in "${created_users[@]}"; do
     remove_user "$user" || cleanup=1
   done
@@ -319,21 +353,22 @@ wait_for_sshd() {
   die "sshd on $sshd_host:$sshd_port did not become ready"
 }
 
-# The package's maintainer scripts would start the system sshd; a
-# policy-rc.d that refuses every start, which invoke-rc.d(8) and
-# deb-systemd-invoke honour, holds it back for the install. They still
-# enable ssh.socket (systemctl preset), which takes effect at a boot.
-install_openssh_server() {
+# Installs package $1. Its maintainer scripts would start its daemon,
+# the system sshd or cron; a policy-rc.d that refuses every start, which
+# invoke-rc.d(8) and deb-systemd-invoke honour, holds it back for the
+# install. They still enable it (systemctl preset), which takes effect
+# at a boot.
+install_package() {
   local policy=/usr/sbin/policy-rc.d
   if sudo -n test -e "$policy"; then
-    die "$policy exists; not replacing it to install openssh-server"
+    die "$policy exists; not replacing it to install $1"
   fi
   policy_installed=1
   printf '#!/bin/sh\nexit 101\n' | sudo -n tee "$policy" >/dev/null
   sudo -n chmod 0755 "$policy"
   sudo -n apt-get update -qq
   sudo -n env DEBIAN_FRONTEND=noninteractive \
-    apt-get install -qq -y --no-install-recommends openssh-server
+    apt-get install -qq -y --no-install-recommends "$1"
   sudo -n rm -f -- "$policy"
   policy_installed=0
 }
@@ -353,26 +388,39 @@ create_user() {
     "$home/.ssh/authorized_keys"
 }
 
-# Gives klab-vm-sudo a password made now. It stays in this shell and a
-# 0600 file under the runner's own key directory, which the suite reads;
-# printf is a bash builtin, so the line chpasswd reads is in no process's
-# argv. Nothing prints it.
-set_sudo_password() {
-  local password
+# A password made now, in $password.
+new_password() {
   password="$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')"
   [[ "$password" =~ ^[0-9a-f]{48}$ ]] || die 'no password from /dev/urandom'
-  (umask 077 && printf '%s\n' "$password" >"$runtime_dir/sudo-password")
-  printf '%s:%s\n' "$sudo_user" "$password" | sudo -n chpasswd
 }
 
-# Password sudo for klab-vm-sudo, and for klab-vm-docker a NOPASSWD rule
-# scoped to the docker CLI, which the S4 suite reads with sudo -n -l and
-# which cannot start systemd-run (03 §7.17, Docker-scoped sudo rules).
+# Gives klab-vm-sudo and klab-vm-nocache a password each, made now. They
+# stay in this shell and in 0600 files under the runner's own key
+# directory, which the suites read; printf is a bash builtin, so the lines
+# chpasswd reads are in no process's argv. Nothing prints them.
+set_passwords() {
+  local password sudo_password
+  new_password
+  sudo_password="$password"
+  new_password
+  (umask 077 &&
+    printf '%s\n' "$sudo_password" >"$runtime_dir/sudo-password" &&
+    printf '%s\n' "$password" >"$runtime_dir/nocache-password")
+  printf '%s:%s\n%s:%s\n' "$sudo_user" "$sudo_password" \
+    "$nocache_user" "$password" | sudo -n chpasswd
+}
+
+# Password sudo for klab-vm-sudo, the same for klab-vm-nocache without a
+# cached credential (rung 4 of 03 §8.3), and for klab-vm-docker a NOPASSWD
+# rule scoped to the docker CLI, which the S4 suite reads with sudo -n -l
+# and which cannot start systemd-run (03 §7.17, Docker-scoped sudo rules).
 # Checked before it is installed: a broken drop-in disables sudo for the
 # rest of the job.
 install_sudoers() {
   printf '%s\n' \
     "$sudo_user ALL=(ALL) ALL" \
+    "$nocache_user ALL=(ALL) ALL" \
+    "Defaults:$nocache_user timestamp_timeout=0" \
     "$docker_user ALL=(root) NOPASSWD: $docker_cli" >"$runtime_dir/sudoers"
   sudo -n visudo -cf "$runtime_dir/sudoers" >/dev/null
   sudoers_installed=1
@@ -396,6 +444,43 @@ use_dead_docker_context() {
     --docker "host=unix://$dead_socket" >/dev/null
   sudo -n docker --config "$root_docker_dir" context use "$dead_context" \
     >/dev/null
+}
+
+# The actions suite's units: the service it starts, stops, restarts and
+# reloads, which runs until stopped, and the timer whose service it runs
+# now, which fires on its own only on 1 January. The service starts here
+# and the timer waits.
+install_test_units() {
+  printf '%s\n' '[Unit]' 'Description=Klabautermann runner-VM leg test service' \
+    '[Service]' 'User=nobody' 'ExecStart=/bin/sleep infinity' \
+    "ExecReload=/bin/echo $reload_message" >"$runtime_dir/$test_service"
+  printf '%s\n' '[Unit]' 'Description=Klabautermann runner-VM leg test job' \
+    '[Service]' 'Type=oneshot' 'User=nobody' \
+    "ExecStart=/bin/echo $job_message" >"$runtime_dir/$job_service"
+  printf '%s\n' '[Unit]' 'Description=Klabautermann runner-VM leg test timer' \
+    '[Timer]' 'OnCalendar=*-01-01 04:05:06' "Unit=$job_service" \
+    >"$runtime_dir/$job_timer"
+  units_installed=1
+  local unit
+  for unit in "${test_units[@]}"; do
+    sudo -n install -m 0644 -o root -g root "$runtime_dir/$unit" \
+      "$unit_dir/$unit"
+  done
+  sudo -n systemctl daemon-reload
+  sudo -n systemctl start "$test_service" "$job_timer"
+}
+
+# One crontab for each account, which the actions suite reads through
+# elevation, masked. The lines name a credential the reading must not
+# show, and run only on 1 January, which cron (held back from starting
+# when installed here) would never reach meanwhile.
+install_crontabs() {
+  local user
+  for user in "${users[@]}"; do
+    crontab_users+=("$user")
+    printf '5 4 1 1 * curl -s https://ops:secret-%s@example.invalid/ping\n' \
+      "$user" | sudo -n crontab -u "$user" -
+  done
 }
 
 os_release() {
@@ -454,7 +539,12 @@ fi
 sshd_preinstalled=yes
 if [[ ! -x "$sshd_binary" ]]; then
   sshd_preinstalled=no
-  install_openssh_server
+  install_package openssh-server
+fi
+cron_preinstalled=yes
+if ! command -v crontab >/dev/null; then
+  cron_preinstalled=no
+  install_package cron
 fi
 systemd_version="$(systemctl --version | sed -n '1s/^systemd \([0-9]*\).*/\1/p')"
 [[ -n "$systemd_version" ]] || die 'no systemd version from systemctl --version'
@@ -485,7 +575,8 @@ create_user "$journal_user" --groups systemd-journal
 create_user "$sudo_user"
 create_user "$linger_user"
 create_user "$docker_user"
-set_sudo_password
+create_user "$nocache_user"
+set_passwords
 install_sudoers
 
 # Root's own directory: sshd refuses a host key or config that others
@@ -501,7 +592,7 @@ cat >"$runtime_dir/sshd_config" <<EOF
 ListenAddress $sshd_host:$sshd_port
 HostKey $sshd_dir/ssh_host_ed25519_key
 PidFile $sshd_dir/sshd.pid
-AllowUsers $limited_user $journal_user $sudo_user $linger_user $docker_user
+AllowUsers ${users[*]}
 AuthenticationMethods publickey
 PubkeyAuthentication yes
 PasswordAuthentication no
@@ -545,6 +636,7 @@ if [[ -n "$evidence_dir" ]]; then
     systemctl --version | sed -n 1p
     echo "sh $sh_target"
     echo "openssh-server $(dpkg-query -W -f '${Version}' openssh-server 2>/dev/null || echo unknown), preinstalled: $sshd_preinstalled"
+    echo "cron $(dpkg-query -W -f '${Version}' cron 2>/dev/null || echo unknown), preinstalled: $cron_preinstalled"
     echo "journal storage $journal_storage"
     echo "kernel.dmesg_restrict $(cat /proc/sys/kernel/dmesg_restrict)"
   } >"$evidence_dir/host.txt"
@@ -559,10 +651,12 @@ else
   echo '::notice::No KLABAUTERMANN_EVIDENCE_DIR: the runner-VM capture is skipped'
 fi
 
-# After the capture, so the captured units list is the image's: linger
-# starts a user manager.
+# After the capture, so the captured units, timers and crontab are the
+# image's: linger starts a user manager.
 sudo -n loginctl enable-linger "$linger_user"
 use_dead_docker_context
+install_test_units
+install_crontabs
 
 timer_started=1
 sudo -n systemd-run --quiet --unit="$timer_unit" --on-calendar="$calendar" \
@@ -576,6 +670,14 @@ export KLABAUTERMANN_RUNNER_VM_SUDO_USER="$sudo_user"
 export KLABAUTERMANN_RUNNER_VM_SUDO_PASSWORD_FILE="$runtime_dir/sudo-password"
 export KLABAUTERMANN_RUNNER_VM_LINGER_USER="$linger_user"
 export KLABAUTERMANN_RUNNER_VM_DOCKER_USER="$docker_user"
+export KLABAUTERMANN_RUNNER_VM_NOCACHE_USER="$nocache_user"
+export KLABAUTERMANN_RUNNER_VM_NOCACHE_PASSWORD_FILE="$runtime_dir/nocache-password"
+export KLABAUTERMANN_RUNNER_VM_CRONTAB_USERS="${users[*]}"
+export KLABAUTERMANN_RUNNER_VM_TEST_SERVICE="$test_service"
+export KLABAUTERMANN_RUNNER_VM_RELOAD_MESSAGE="$reload_message"
+export KLABAUTERMANN_RUNNER_VM_JOB_TIMER="$job_timer"
+export KLABAUTERMANN_RUNNER_VM_JOB_SERVICE="$job_service"
+export KLABAUTERMANN_RUNNER_VM_JOB_MESSAGE="$job_message"
 export KLABAUTERMANN_RUNNER_VM_DOCKER_CLI="$docker_cli"
 export KLABAUTERMANN_RUNNER_VM_DOCKER_SOCKET="$docker_socket"
 export KLABAUTERMANN_RUNNER_VM_DEAD_DOCKER_CONTEXT="$dead_context"

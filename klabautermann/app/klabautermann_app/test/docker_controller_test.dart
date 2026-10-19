@@ -968,6 +968,34 @@ void main() {
       expect(inspects(), hasLength(2), reason: 'nothing to read');
     });
 
+    test('details still shown when their server rejoins the fleet are '
+        'read again and shared with a new view, each close pairing with an '
+        'open (SYN-08)', () async {
+      const entry = FleetEntry(
+        serverId: 'srv-1',
+        label: 'web-1',
+        host: 'web-1.example.net',
+        port: kSshDefaultPort,
+        origin: FleetEntryOrigin.sshConfig,
+      );
+      await emit(CatalogReplaced([entry]));
+      final first = docker.openContainer('srv-1', 'c-1');
+      await emit(CatalogReplaced(const []));
+      expect(first.value.failure?.failure, DockerQueryFailure.notInFleet);
+
+      await emit(CatalogReplaced([entry]));
+      final second = docker.openContainer('srv-1', 'c-1');
+      expect(second, same(first));
+      expect(inspects(), hasLength(2), reason: 'read again on its return');
+
+      void listener() {}
+      docker.closeContainer('srv-1', 'c-1');
+      first.addListener(listener);
+      first.removeListener(listener);
+      docker.closeContainer('srv-1', 'c-1');
+      expect(() => first.addListener(listener), throwsFlutterError);
+    });
+
     test('a server that leaves the fleet drops the details (SYN-08), and '
         'a stopped engine answers nothing', () async {
       final details = docker.openContainer('srv-1', 'c-1');
@@ -980,7 +1008,15 @@ void main() {
         ),
       );
       expect(details.value.container, isNull);
+      // The view that still shows it keeps a working listenable that
+      // says why, until it closes.
+      expect(details.value.failure?.failure, DockerQueryFailure.notInFleet);
+      void listener() {}
+      details
+        ..addListener(listener)
+        ..removeListener(listener);
       docker.closeContainer('srv-1', 'c-1');
+      expect(() => details.addListener(listener), throwsFlutterError);
 
       final unlisted = docker.openContainer('srv-1', 'c-1');
       expect(unlisted.value.failure?.failure, DockerQueryFailure.notInFleet);

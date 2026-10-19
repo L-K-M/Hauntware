@@ -386,6 +386,27 @@ void main() {
     await tester.pump();
     expect(_inDetails(find.text('hunter2')), findsNothing);
 
+    // Another container: masked.
+    await revealBoth();
+    await tester.tap(find.text('web-frontend').first);
+    await tester.pumpAndSettle();
+    expect(harness.inspection.value?.container.id, 'a1f3c2e4b5d6');
+    await harness.answer(
+      tester,
+      DockerContainerPayload(
+        dockerContainerDetails('a1f3c2e4b5d6', name: 'web-frontend'),
+      ),
+    );
+    expect(_inDetails(find.text('hunter2')), findsNothing);
+    expect(_inDetails(find.text('t0ken')), findsNothing);
+    await tester.tap(find.byTooltip('Close the container details'));
+    await tester.pumpAndSettle();
+    await _open(tester);
+    await harness.answer(
+      tester,
+      DockerContainerPayload(dockerContainerDetails(_id)),
+    );
+
     // Closed and opened again: masked.
     await revealBoth();
     await tester.tap(find.byTooltip('Close the container details'));
@@ -400,6 +421,61 @@ void main() {
     // The timers of a closed view fire into nothing.
     await tester.pump(kRevealDuration);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a reveal stays with the check selected when a read again '
+      'shifts the health log', (tester) async {
+    ContainerHealthCheck check(int minute, String secret) =>
+        ContainerHealthCheck(
+          start: DateTime(2026, 10, 15, 14, minute),
+          end: DateTime(2026, 10, 15, 14, minute, 1),
+          exitCode: 1,
+          output: MaskedValue.redacted(
+            'token ******** refused',
+            'token $secret refused',
+          ),
+        );
+    final harness = await _pump(tester);
+    await _open(tester);
+    await harness.answer(
+      tester,
+      DockerContainerPayload(
+        dockerContainerDetails(
+          _id,
+          healthLog: [check(28, 'first'), check(29, 'second')],
+        ),
+      ),
+    );
+    // The newest check shows first.
+    await tester.tap(_inDetails(find.text('token ******** refused')).first);
+    await tester.pumpAndSettle();
+    expect(_inDetails(find.text('token second refused')), findsOneWidget);
+
+    // The row changes and the details are read again: the oldest check
+    // left the log and a new one took the newest place.
+    await harness.emit(
+      tester,
+      dockerContainerList(_serverId, [
+        dockerContainer(
+          _id,
+          name: 'web-db',
+          project: 'web',
+          status: 'Up 4 hours (unhealthy)',
+          health: HealthStatus.unhealthy,
+        ),
+      ], at: _now),
+    );
+    await harness.answer(
+      tester,
+      DockerContainerPayload(
+        dockerContainerDetails(
+          _id,
+          healthLog: [check(29, 'second'), check(30, 'third')],
+        ),
+      ),
+    );
+    expect(_inDetails(find.text('token second refused')), findsOneWidget);
+    expect(_inDetails(find.text('token third refused')), findsNothing);
   });
 
   testWidgets('the raw JSON is drawn from the masked model, even with a '
@@ -505,6 +581,47 @@ void main() {
       findsNothing,
     );
   });
+
+  for (final phone in [false, true]) {
+    testWidgets('details open on a server that leaves the fleet say so, '
+        'keep what was read and close cleanly (SYN-08, '
+        '${phone ? 'phone page' : 'inspector'})', (tester) async {
+      final harness = await _pump(
+        tester,
+        size: phone ? _phone : _desktop,
+        phone: phone,
+      );
+      await _open(tester);
+      await harness.answer(
+        tester,
+        DockerContainerPayload(dockerContainerDetails(_id)),
+      );
+
+      await harness.emit(tester, CatalogReplaced(const []));
+      expect(tester.takeException(), isNull);
+      expect(
+        _inDetails(find.text('This server is no longer in the fleet.')),
+        findsOne,
+      );
+
+      // The view still draws and reveals what was read.
+      final masked = _inDetails(find.text('POSTGRES_PASSWORD'));
+      await tester.ensureVisible(masked);
+      await tester.tap(masked);
+      await tester.pumpAndSettle();
+      expect(_inDetails(find.text('hunter2')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      if (phone) {
+        await tester.pageBack();
+      } else {
+        harness.inspection.value = null;
+      }
+      await tester.pumpAndSettle();
+      expect(find.byType(ContainerDetailsView), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('says why the details could not be read, keeps the last ones '
       'and reads again', (tester) async {

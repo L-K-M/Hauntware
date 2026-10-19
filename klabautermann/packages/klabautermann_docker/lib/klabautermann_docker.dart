@@ -61,6 +61,7 @@ export 'src/compose/parsers.dart'
         parseComposePsEntries,
         parseComposePsJson,
         parseComposeServiceHashes,
+        parseComposeServiceNames,
         parseComposeVersion;
 export 'src/docker_client.dart' show DockerClient, negotiateDockerClient;
 export 'src/docker_parse_result.dart' show DockerParseResult;

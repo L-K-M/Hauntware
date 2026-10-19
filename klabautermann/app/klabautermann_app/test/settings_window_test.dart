@@ -17,6 +17,7 @@ import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitor_set.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/controllers/prompt_controller.dart';
+import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/services/settings_window/remote_settings.dart';
 import 'package:klabautermann_app/services/settings_window/settings_window_host.dart';
 import 'package:klabautermann_app/services/settings_window/settings_window_link.dart';
@@ -24,7 +25,7 @@ import 'package:klabautermann_app/settings_window_app.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/settings_page.dart';
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show MonitorEligibility;
+    show MonitorEligibility, SafetyPolicy, ServerSafety;
 
 import 'support/fake_engine.dart';
 import 'support/harness.dart';
@@ -112,16 +113,25 @@ void main() {
     return fleet;
   }
 
+  /// A safety controller applying to nothing, disposed after the test.
+  SafetyController newSafety([SafetyPolicy initial = const SafetyPolicy()]) {
+    final safety = SafetyController(initial: initial, apply: (_) {});
+    addTearDown(safety.dispose);
+    return safety;
+  }
+
   SettingsWindowHost newHost(
     AppearanceSettings appearance, [
     AnnouncementSettings? announcements,
     MonitorSetSettings? monitorSet,
+    SafetySettings? safety,
   ]) {
     final host = SettingsWindowHost(
       appearance: appearance,
       announcements: announcements ?? AnnouncementController(),
       appVersion: _appVersion,
       monitorSet: monitorSet ?? newFleet().monitorSettings,
+      safety: safety ?? newSafety(),
       control: _control,
       link: _appLink,
       requestAppExit: () async => AppExitResponse.exit,
@@ -223,6 +233,7 @@ void main() {
             announcements: announcements,
             appVersion: _appVersion,
             monitorSet: newFleet().monitorSettings,
+            safety: newSafety(),
           ),
           isNull,
           reason: '$platform',
@@ -239,6 +250,7 @@ void main() {
           announcements: announcements,
           appVersion: _appVersion,
           monitorSet: newFleet().monitorSettings,
+          safety: newSafety(),
         );
         expect(host, isNotNull, reason: '$platform');
         host!.dispose();
@@ -262,6 +274,8 @@ void main() {
     late AppearanceController appearance;
     late AnnouncementController announcements;
     late FleetController fleet;
+    late SafetyController safety;
+    late List<SafetyPolicy> applied;
     late SettingsWindowHost host;
 
     setUp(() {
@@ -276,7 +290,18 @@ void main() {
           monitorEligibility: MonitorEligibility.endpointNotConfirmed,
         ),
       ]);
-      host = newHost(appearance, announcements, fleet.monitorSettings);
+      applied = [];
+      safety = SafetyController(
+        initial: const SafetyPolicy(
+          servers: {
+            'srv-1': ServerSafety(management: true, marks: {'nginx.service'}),
+          },
+        ),
+        apply: applied.add,
+        labelOf: (id) => id == 'srv-1' ? 'alpha' : id,
+      );
+      addTearDown(safety.dispose);
+      host = newHost(appearance, announcements, fleet.monitorSettings, safety);
     });
 
     tearDown(() {
@@ -561,6 +586,38 @@ void main() {
       expect(remote.monitorSet.value.first.monitored, isTrue);
       expect(switchOf('alpha').value, isTrue);
       expect(find.text('1 of 10 servers monitored'), findsOneWidget);
+    });
+
+    testWidgets('the Safety tab changes the app\'s policy through the link, '
+        'which applies it to the engine (M4 plan M4)', (tester) async {
+      final remote = await pumpWindow(tester, SettingsTab.safety);
+      expect(find.text('nginx.service on alpha'), findsOneWidget);
+
+      await tester.tap(find.text('Read-only everywhere'));
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+      expect(safety.value.globalReadOnly, isTrue);
+      expect(applied.last.globalReadOnly, isTrue);
+      expect(remote.safety.value.globalReadOnly, isTrue);
+
+      await tester.tap(find.text('30 min'));
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+      expect(safety.value.adminExpiry, const Duration(minutes: 30));
+
+      await tester.tap(find.byTooltip('Remove the mark on nginx.service'));
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+      expect(safety.value.servers['srv-1']?.marks, isEmpty);
+      expect(
+        safety.value.servers['srv-1']?.management,
+        isTrue,
+        reason: 'removing a mark keeps the rest of the server\'s entry',
+      );
+      expect(
+        find.text('You have not marked anything protected.'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('a theme change in the app re-themes the showing window', (

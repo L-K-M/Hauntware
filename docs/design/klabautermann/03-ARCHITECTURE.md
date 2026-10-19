@@ -1866,7 +1866,32 @@ stays disabled until the assertion is ticked, so `EnrollSync` is sent
 only then. Once signed in, the control runs a round; it opens the sheet
 again while no record has confirmed the passphrase or after the server
 refused the session. Step 4 is built outside the sheet (K30, below);
-step 5 is not built yet.
+step 5 is built in M4 (E19a, below).
+
+As built in M4 (E19a), step 5 is a notice in the server header while
+management is off for that server: it says Klabautermann only reads
+the server and points to the header's Safety menu, whose Allow actions
+switch turns management on and whose Read-only switch hides the
+server's actions. A second notice says when actions are hidden, by the
+server's switch or by global read-only. Settings > Safety holds global
+read-only, admin mode's expiry and the user's marks, each with a button
+that removes it. The app applies the policy to the engine at spawn and
+before it saves each change, so the engine never enforces less than
+the screen shows.
+
+As built in M4 (E19b), a server whose actions are allowed shows an
+admin mode chip beside the Safety menu (8.2). Tapping it sends
+`SetAdminMode`; the chip then follows the engine's `AdminModeState`:
+"Turning on admin mode" while the engine detects, waits for the
+password or checks it, and "Admin mode until <time>" while it is on,
+tinted with the error container color, with a header notice that
+confirmed actions run as root. Tapping again turns it off, which also
+cancels a start. The header words why it failed or ended (D35), the
+app going to the background on a phone included. Read-only disables
+the chip. The engine's elevation prompt is a password dialog with the
+retry line and no "remember" (v1.x). The chip shows when admin mode
+ends rather than a ticking countdown, since the expiry moves with
+every elevated action.
 
 As built in M2 (K41, D64), step 3 is a notice atop the fleet rows of the
 rail and the phone's list, scrolling with them, that counts the synced
@@ -2198,12 +2223,13 @@ platform identities in 04, section 12.3):
 | `sync_enrollment.json` [E] | Enrollment state (M2, K49a, D62): the push hold, the raised notices and the enrolled account (server URL, user name, mode); never the token or vault key, which stay in the keystore (4.5), and not the device id, which stays in `settings.json`. Kept like the verdict files; a damaged file reads as not enrolled | `klabautermann_core` [E] | MVP |
 | `endpoint_pins.json` | Confirmed endpoints. As built in M2 (K41), written by the engine through the catalog library's `FileEndpointPinStore` only with exclusive access; otherwise pins last for the engine's run (4.7) | catalog library | MVP |
 | `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config`, replaced whole by each import; never pushed (D14). Schema 3 (M2) holds each host's alias, host, port, user, `IdentityFile` and `ProxyJump` with the values ssh would use (10.1): the effective host (`%h` expanded, lowercased unless an address) and port, the first `IdentityFile` that is not `none`, and the `ProxyJump` as written; under `hops` it holds the same for each other name a stored route gives. An older file holds addresses only: schema 1 (M1) kept no `IdentityFile` or `ProxyJump` and kept `HostName` as written, `%h` included, and schema 2 read each host's values from its first block alone. Its hosts are listed as stored, with no `jumpRoute`, `authKind` or `locatorConflict`, and get no connect config until the next import rewrites the file. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
-| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), whether threshold-band changes are announced (`klabautermann.accessibility.announceThresholdBands`, M2, D60; anything but `false` announces), whether the Docker tab's root-equivalence notice was dismissed (`klabautermann.docker.rootEquivalenceNoticeDismissed`, M3, 8.4; anything but `true` shows it again), the servers pinned to the top of the fleet list (`klabautermann.fleet.pinnedServerIds`, M2, 10.3; a sorted list of server ids, anything else reading as none), FL-21's monitor set as the user chose it (`klabautermann.monitorSet`, M2, K30, 4.3 step 4; a sorted list of server ids, anything else reading as never chosen, so the platform's default applies), per-server device preferences | app | MVP |
+| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), whether threshold-band changes are announced (`klabautermann.accessibility.announceThresholdBands`, M2, D60; anything but `false` announces), whether the Docker tab's root-equivalence notice was dismissed (`klabautermann.docker.rootEquivalenceNoticeDismissed`, M3, 8.4; anything but `true` shows it again), the servers pinned to the top of the fleet list (`klabautermann.fleet.pinnedServerIds`, M2, 10.3; a sorted list of server ids, anything else reading as none), FL-21's monitor set as the user chose it (`klabautermann.monitorSet`, M2, K30, 4.3 step 4; a sorted list of server ids, anything else reading as never chosen, so the platform's default applies), the safety preferences the engine enforces (`klabautermann.safety`, M4, E19a: global read-only, admin expiry in minutes, and per server management, read-only and the user's marks; anything unreadable reads as management off, so a damaged file only takes actions away), per-server device preferences | app | MVP |
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
 | `instance.lock` [E] | Empty. One desktop instance per support directory (built in M2): the composition root takes an exclusive, non-blocking advisory lock on it after the settings window's branch and before `settings.json` and `window_state.json` open and the engine isolate starts, so one process mints the device id and writes these files, and holds it for the life of the process; the file is never deleted. A second instance opens no other file and only says it is already running, until the user quits it. A lock that fails for another reason (no write access, no lock support) lets the app run unguarded and says so at startup. Phones run one process per app and take none | app, through `klabautermann_core`'s `InstanceLock` | MVP |
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
 | `capabilities/<name>.json` | Cached probe results, 24 h TTL; named, written only by a process that holds the directory alone, and purged as D59 decides | `klabautermann_core` | MVP |
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
+| `operations_shown.json` [E] | Detached operations this device remembers (M4, E17b, 7.17): per server and operation id, the operation's directory, whether its result was shown and audited here, and, for one this device launched, the audit record's facts (action, target, redacted steps, tier, start). An entry goes once the operation's files are gone. Kept like the sync state files: written only with exclusive access, a damaged file set aside; losing it costs a result's launch facts and the reminder of a root cleanup, which the 7-day prune covers. Never synced | `klabautermann_core` | MVP |
 | `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample) | `klabautermann_core` | v1 |
 | `alerts.jsonl` | In-app alert history, 30 days [E]; from v1.x also host alerts fetched from the inbox or read from a host spool, with source tier, server item ids and status (D42) | `klabautermann_core` | v1 |
 | `alert_inbox.json` | Inbox cursor, sender metadata (app id, allowed server), per-sender failure counts, pending item deletions; keys stay in `vault.json` | `klabautermann_core` | v1.x |
@@ -2498,7 +2524,7 @@ limit of 2 and reports `SshLinkDegraded(sessionLimitLearned)`.
 | Stream | Endpoint | Framing | Cancel | Resume |
 |---|---|---|---|---|
 | Container logs | `GET /containers/{id}/logs?follow=1&tail=N&timestamps=1&stdout=1&stderr=1` | stdcopy 8-byte frames unless `Config.Tty` (from inspect; Docker sets `Content-Type: application/vnd.docker.multiplexed-stream` or `application/vnd.docker.raw-stream` from API 1.42; from 1.42 the header is used when present and cross-checked with `Config.Tty`; below 1.42 a current daemon labels every logs response raw-stream, and older daemons and Podman's compat layer omit it [R: moby `container_routes.go` `getContainersLogs`, reported by review; recorded from Docker 20.10 and Podman 5.8 in D01]); split on `\n` after demultiplexing | Close the duplex | `since=<unix seconds>.<9-digit nanoseconds>` converted from the last delivered line's RFC3339Nano timestamp (the API rejects RFC3339 with 400); `since` is inclusive, so drop re-sent lines up to and including the last delivered one [R: moby `getContainersLogs`, `loggerutils/logfile.go`, reported by review] |
-| Stats, list | `GET /containers/{id}/stats?stream=false&one-shot=true` | One JSON object | n/a | Deltas between polls client-side (one-shot `precpu_stats` is zeroed, with a zero `preread`, on every daemon of the recorded corpus) |
+| Stats, list | `GET /containers/{id}/stats?stream=false&one-shot=true` | One JSON object | n/a | Deltas between polls client-side (one-shot `precpu_stats` is zeroed, with a zero `preread`, on every daemon of the recorded corpus and on Docker 29.9 in D21, so not meaningful) |
 | Stats, detail | `GET /containers/{id}/stats?stream=1` | JSON lines | Close | n/a |
 | Events | `GET /events?since=&filters=` | JSON lines; `Type`, `Action`, `Actor` only (1.52 removed the legacy fields), legacy shape accepted below 1.52 | Close | `since=` last event time; full re-list after a gap over 60 s |
 | Pull progress | `POST /images/create?fromImage=&tag=` | JSON values keyed by layer `id`; `progressDetail`, `errorDetail` | Close, which cancels the pull on the daemon unless another client is pulling the same image [R: moby `image_routes.go` request context, `xfer/transfer.go` `release`, reported by review]; a pull that must outlive its view runs detached (7.14) | n/a |
@@ -2552,6 +2578,25 @@ the consumer falls behind, the subscription pauses and the view shows
 TCP 2375 and 2376 are never offered. A Dropbear host older than 2024.84
 has no Unix stream forwarding and uses rank 2; 2024.84 to 2025.88 get a
 CVE-2025-14282 warning [R: r5 §1.1].
+
+As built in M4 (E16, plan M7), rank 3 is `DockerRank.sudoRelay`: a
+socket the exec probe finds the user cannot write, on a host with sudo,
+takes it while admin mode is on, with the engine CLI the probe saw
+(`docker --host` or `podman --url`, as rank 2). Each pooled connection
+starts through `ElevatedExecutor.start` with `nopasswdFirst`: `sudo -n
+--` first, which a NOPASSWD rule scoped to `docker` allows, and the
+password prelude after a refusal that wants a password. A connection
+asks for the admin session as it opens, so one opened after admin mode
+ended fails. Admin mode ending drops a sudo relay endpoint, which
+resolves again and reads `needsAdminMode`; admin mode starting resolves
+a failed endpoint again. The route's root equivalence is `sudoRelay`,
+whatever the engine. Without admin mode the ladder never offers it; a
+host with no engine CLI has no sudo relay (`noRelay`). The app's server
+header names it with SAF-08's badge ("Sudo relay: root-equivalent"). An
+admin mode change while the route is being looked for drops that attempt
+and looks again, so a relay never outlives admin mode. Over the relay a
+Docker action needs admin: its plan names root, and a redeploy's CLI
+steps go to a root runner row, since the socket refuses the login user.
 
 ### 5.10 dartssh2 defects and mitigations (D23)
 
@@ -3064,6 +3109,25 @@ after its last `) ` (a comm holding a newline), 6 when `kill` fails
 and 7 when it refuses a parameter (`GuardedKillOutcome`). The codes
 avoid 1 and 2, which sudo and the shell use, and 126 and 127.
 
+As built in M4 (E14,
+`klabautermann_core/lib/src/operations/plans/host_plans.dart`),
+planning a kill reads the process over the link first: its start
+ticks, which must still match the intent's, then
+`HostCommands.processFacts`, the owner of its `/proc` entry and its
+`comm`. The plan elevates only when the owner differs from the probe's
+login uid (a non-dumpable process, such as `ssh-agent`, is owned by
+root there, so killing one's own elevates too), names the target
+by its `comm` for a typed confirmation, and drops the session when the
+PID is on its path. The runner reads the guarded kill's exits 3 and 4
+as re-validation failures (process gone, PID reused), not as a failed
+step.
+
+As built in M4 (E21a), where actions are allowed the Processes table's
+row menu offers Terminate and Kill, then every other signal under Send
+signal, and a process's details offer the same as buttons, which phones
+reach by tapping a row. A row without its start time offers none, since
+the guarded kill needs it.
+
 ### 7.3 Disks and storage (DSK)
 
 - **MVP.** Usage per mount from `df -PT -B1` with pseudo filesystems filtered
@@ -3154,6 +3218,18 @@ no longer holds that value.
   version; a read the engine can no longer answer, because it stopped,
   says so and asks for a restart of the app.
 
+As built in M4 (E14), SVC-03 offers start, stop, restart and reload; the
+other verbs are refused as invalid targets. In admin mode the step runs
+through the elevation executor. Outside it the step runs unelevated, and
+a polkit refusal (`Interactive authentication required` or
+`Access denied` on stderr) ends the run as needing admin mode rather
+than as a failed step. Every unit action re-validates that the unit
+still loads, and only start reports no impact.
+
+As built in M4 (E21a), where actions are allowed the Services table's
+row menu and a unit's page offer Start, Stop, Restart and Reload; the
+table keeps no action slot otherwise, so its layout does not change.
+
 ### 7.6 Logs (LOG)
 
 - **MVP.** Journal viewer (LOG-01): `journalctl -o json --no-pager` with
@@ -3174,7 +3250,14 @@ no longer holds that value.
   `id -nG` drives a notice with the least-privileged fix. Text search
   (LOG-05) over the loaded window with `planchette_core`'s search functions.
   File tail (LOG-22): `tail -n N -F -- '<path>'` with a validated, quoted
-  path; admin mode for files that need `adm` or root.
+  path; admin mode for files that need `adm` or root. As built in M4
+  (E16b), the app asks for that with `FileLogSource(elevated: true)`
+  after a read ended denied: the same command line runs through the
+  admin session's `ElevatedExecutor.start` under `sh -c`, a window on the
+  service's link and a follow on its follower slot. Without admin mode
+  it ends denied with the detail "admin mode is off"; when admin mode
+  ends, an elevated follow and an elevated read still waiting end so
+  too, while a window under way finishes.
 - **v1.** Regex search with server-side `journalctl -g`; highlighting (SGR
   colours only); `/var/log` browser with rotated archives through `zcat`;
   boot picker; export redacted by default.
@@ -3409,6 +3492,36 @@ when the directory cannot be listed, so an unreadable spool never reads
 as empty. `parseCrontabSpool` keeps only names that pass the user-name
 check for `crontab -l -u`.
 
+As built in M4 (E14), run timer now reads the timer's `Unit=` with
+`HostCommands.timerActivates`, refuses a timer with none or one that
+activates a timer, and plans `timerStart` on that unit with SVC-03's
+elevation rule and re-validation. The preview names the unit as
+`followUnit`, whose journal the app follows from the run's start.
+
+As built in M4 (E21b), where actions are allowed a timer's row menu and
+its details offer Run now. Once the run is confirmed, a sheet follows
+the started service's journal live through the Logs panel's reading,
+from the last 15 minutes so the run's start is in it, and closing the
+sheet closes the follow.
+
+As built in M4 (E14b,
+`klabautermann_core/lib/src/admin/user_crontabs.dart`),
+`ReadUserCrontabs` runs JOB-03 in admin mode only: the spool listing, then `crontab -l -u` for at most 64 [E] of its
+valid names, each through the elevation executor. `parseUserCrontab`
+reads each as a user table whose jobs name their user, with the source
+`crontab -u <user>`. A crontab removed since the listing ("no crontab
+for") is left out, any other failure names the user as unreadable, and
+the jobs rows carry next runs as the `cron` stream's do. Nothing is
+cached.
+
+As built in M4 (E21c), the Jobs tab shows a source switch while admin
+mode is on: "Yours and the system's" lists the streams' rows, and
+"Other users" reads every other user's crontab through
+`ReadUserCrontabs` and lists their lines read-only, each named as that
+user's crontab, with any unreadable user, the users past the read's
+limit and the masking said above the table, and a button that reads
+them again. Admin mode that ends returns the tab to the streams' rows.
+
 ### 7.8 Packages and updates (PKG)
 
 - **v1 (read-only).** `apt-get -s upgrade` (`Inst` lines; not `apt`, whose
@@ -3485,6 +3598,28 @@ check for `crontab -l -u`.
   stats (CST-01): one-shot stats for visible rows, at most 4 in flight, CPU
   % from the spec formula, memory as usage minus `inactive_file` on cgroup v2
   (minus `cache` on v1) [R: r5 §1.7]. Managed-by badges (DKE-10): 8.7.
+- **As built (M4 E15).** `operations/plans/docker_plans.dart` plans
+  CTR-02's verbs, CTR-06's removal, IMG-02 and STK-03 (7.14, 7.16) over
+  the server's Docker endpoint (`DockerRouter.useEndpoint`).
+  - Every step is an API request addressed by the full id the planner
+    read, and the runner re-validates the target by inspect first: a
+    container or image by its name or reference, a stack by the ids of
+    its containers.
+  - A managed target raises the tier to the typed act-anyway step naming
+    its owner (8.7), and a container publishing the session's SSH or a
+    VPN port is protected.
+  - Removing with `v=1` needs the typed confirmation.
+  - An image in use is refused unless forced, and forcing it needs the
+    typed confirmation. The count is the image list's from API 1.51, and
+    the container list's before.
+  - A stack acts on its containers service by service in
+    `com.docker.compose.depends_on` order (dependencies first; stop
+    reverses it), leaves one-off containers alone, and a cycle refuses
+    the plan.
+  - Docker's 304 for an already started or stopped container counts as
+    done.
+  - The event watch (5.7) refreshes the lists afterwards. Rank 3 relays
+    and their elevation arrive with E16.
 - **v1.** Events timeline with gap markers; disk usage on demand; prune
   with preview (list what the same filters match, with sizes and exemption
   labels, then call `/prune`; typed confirmation for volumes and `-a`);
@@ -3579,15 +3714,23 @@ check for `crontab -l -u`.
   `.service`, `.oneoff`, `.depends_on`, `.image` [R: compose
   `pkg/api/labels.go`]. A file counts as the stack's source only if it exists
   and `docker compose -p <p> --project-directory <d> -f <files> config
-  --hash '*'` matches the containers' `config-hash` labels [U: flag form on
-  Compose v5]; otherwise the stack shows "unverified source", or "source not
-  on host (deployed by X)" when missing. Containerized managers record paths
-  inside their own container (Dockge's rule [R]).
+  --hash '*'` matches the containers' `config-hash` labels (Compose v5.6
+  prints a hash per service in that form; D21); otherwise the stack shows
+  "unverified source", or "source not on host (deployed by X)" when
+  missing. Containerized managers record paths inside their own container
+  (Dockge's rule [R]).
 - **Overview and files (STK-02, STK-04, MVP).** Services, containers, state,
   health, ports, images; compose and `.env` read over SFTP when the login
   user can read them, elevated `cat` in admin mode otherwise, shown in
   `planchette_editor` with editing locked (an existing shared package,
-  `EditorController.setEditingLocked` [R]); `.env` values masked.
+  `EditorController.setEditingLocked` [R]); `.env` values masked. As
+  built in M4 (E16b), a read SFTP refuses for permissions runs as root
+  through the admin session while admin mode is on: one elevated exec
+  checks the path is a regular file and not a link (exit 3, as the SFTP
+  stat without following refuses it; exit 4 when missing), prints its
+  size, then at most the cap plus one byte with `head -c`; the same 1 MiB
+  cap, complete-line cut and masking apply, and the process is let go
+  past the cap.
 - **Start, stop, restart (STK-03, MVP).** Per-container API calls on
   existing containers in `depends_on` order (reverse for stop), one-off
   containers skipped.
@@ -3605,6 +3748,31 @@ check for `crontab -l -u`.
   is never logged, cached or synced. The operation runs detached (7.17),
   as the login user unless it needs root, against the selected engine, and
   uses the registry credentials of the identity it runs as (7.17).
+- **As built (M4 E18).** `operations/plans/redeploy_plan.dart` plans
+  `RedeployStack` over the endpoint (`DockerRouter.useStacks`).
+  - A project without containers is no target; a manager's labels
+    refuse it (`stackManaged`, no act anyway); a verdict other than
+    verified refuses it (`stackUnverified`), and the standalone
+    `docker-compose` alone `legacyComposeOnly`.
+  - `config --services` and `--profile '*' config --services` list the
+    services; both print names only. A running service only the second
+    names is left as it is, with the `profileGatedServices` warning. A
+    container whose service neither names is an orphan, listed in the
+    preview. Without the second list an orphan may be such a service,
+    and the preview warns `profilesUnknown`.
+  - The steps are `config -q` with its output on `/dev/null`, `pull`
+    and `up -d` (`--remove-orphans` only on request, typed), each with
+    `--host` and every recorded `-f` and `--env-file`. The runner row
+    comes from 7.17's table at planning (the login user's, or root's
+    over the sudo relay, rank 3), with its host writes and the `setsid`
+    logout warning.
+  - Right before the launch the runner re-validates the containers' ids
+    and runs `config --hash '*'` again, which must print the hash each
+    named service's containers carry. Then it launches one operation,
+    `/bin/sh -c '<step> && <step> && <step>'`, and answers
+    `ActionFinished` with the operation's id; a failed launch is
+    `launchFailed` with the launcher's status. The result is audited
+    once the app has shown it (E17b), not at the launch.
 - **Ownership (STK-10, MVP).** 8.7.
 - **v1.** Edit compose and `.env` (STK-07) through the edit pipeline (8.5):
   `planchette_editor`, `boundedUnifiedDiff`, `validateText` YAML checks plus
@@ -3767,6 +3935,78 @@ running, and null times where `date` has no `%s`. The parser rejects,
 never reads as an operation, a record cut at 4 KiB, one of another
 version, a malformed one, and a forged one: its `id` differs from its
 file name or its `unit` names another unit. Re-attach itself is E17's.
+
+As built in M4 (E17a, `klabautermann_core/lib/src/operations/
+detached_runner.dart`), the engine picks and launches a runner; nothing
+calls it before E17b. Decisions:
+
+- `selectDetachedRunner` applies the table to the host profile, the
+  plan's `requiredLevel` and admin mode. Unknown probe facts enable no
+  row: an unknown systemd directory reads as none and an unknown linger
+  as off. The `--user` row also needs `XDG_RUNTIME_DIR`, without which
+  the user manager cannot be reached. A root login never gets
+  `systemd-run --uid=0` and takes the `setsid` row. Under a sudo rule
+  that does not cover the runners, work that needs root is refused with
+  the missing right named, and other work is placed as with admin mode
+  off; the selection takes that fact, but nothing derives it from the
+  probe yet, so every sudo rule counts as covering them (follow-up).
+  `mayDieAtLogout` is the preview's warning for the `setsid` row
+  under `KillUserProcesses=yes`.
+- Operation ids are 16 lowercase hex digits from a secure random
+  source.
+- On the login rows, the launch first resolves the user directory in the
+  login shell with `OperationCommands.userOpsDir`, the same rule as the
+  `ops` collector, since a transient unit has no `XDG_STATE_HOME`. A
+  relative or missing answer refuses the launch. The root rows record in
+  `/var/lib/klabautermann/ops` and run through the admin session's
+  elevation executor; without a session nothing runs.
+- A launch reports started once the launcher returns 0, with the
+  wrapper's PID from the `setsid` rows. The wrapper runs in the
+  background or in the unit, so its exit 125 never reaches the launcher.
+  A refused wrapper therefore shows as a launched id with no record,
+  which re-attach reports (E17b).
+
+As built in M4 (E17b, `klabautermann_core/lib/src/operations/
+operation_tracker.dart` and `operations_shown.dart`), the engine follows
+each server's operations. Decisions:
+
+- The slow sampler reads `ops` once on each link, right after the probe,
+  and again when the engine asks: after a launch, and every 15 s [E]
+  while an operation runs. Each read becomes an `OperationsChanged` with
+  the server's full list and how far each directory was read, or the
+  collector's failure.
+- A running record is checked by its wrapper's PID and start ticks with
+  the re-validation reader of 8.5, for every runner: a unit's wrapper
+  runs inside it, so no `systemctl` query is needed, and the system and
+  user managers need not be told apart. A PID that is gone or shows other
+  start ticks is `lost`: the wrapper was killed before it recorded a
+  result. A record without start ticks runs while its PID exists. A
+  check the link failed is `unknown`.
+- `AcknowledgeOperation` takes a `done` or `lost` result. The engine
+  appends its audit record (8.10): the launch's action, target, steps and
+  tier when this device launched it, otherwise the action
+  `DetachedOperation` with the id as target. A `lost` result fails as
+  `interrupted`. It then deletes the files: the user directory's over
+  the link, the root directory's through the admin session. Without one
+  the operation stays listed as acknowledged until admin mode turns on,
+  which also prunes the root directory once per admin session. A cleanup
+  that fails is retried by the next listing.
+- The user directory is pruned once per link. E18's redeploy plan is
+  the first caller of the launch and of the tracker's `launched`, which
+  keeps the launch facts, their steps redacted as the audit log stores
+  them.
+- [U] A record older than 7 days is pruned even while its operation
+  runs; the operation then drops from the list.
+
+As built in M4 (E17c), the app follows an operation's output with an
+`OpenLogStream` whose source is `OperationLogSource(<id>)`. The engine
+reads it as a `FileLogSource` of `<id>.log` in the directory the latest
+`ops` read listed the operation in, marked `redacted`, so each line passes
+the secret redactor before it crosses. Root's files are owned by the
+login user, so no elevation is needed. The follow is the file follow of
+7.6 (`tail -n <window> -F` on a follower slot) rather than `tail -n +1`:
+the window bounds what the first batch holds, as for any file. An
+operation the engine does not list ends the stream as `invalid`.
 
 ### 7.18 Backups (BAK)
 
@@ -4010,7 +4250,8 @@ SAF-17 generates narrow, validated rules (v1.x): a blanket rule equals root
     expired or failed.
   - It reads the elevation facts from the probe's `HostProfile` and asks
     for the password through the prompt broker only for the prelude rung.
-    A wrong password is retried up to three times.
+    A password is asked for at most three times: a wrong one gets two
+    retries.
   - Validation runs `true` through `ElevatedExecutor`, so rung 4 and the
     refusal classifier apply. Password doas fails `ttyRequired` without a
     prompt. E04's validation, which ignores cached records (D65), replaces
@@ -4152,9 +4393,9 @@ OperationPlan {
     host writes, required level, runner (identity, Docker route,
     credentials), danger findings, impact, ownership, protection reason
     and tier.
-  - Until the planners land (E14 host, E15 Docker), the engine answers
-    `PlanAction` with `ActionRefused(notImplemented)` and `RunAction`
-    with `unknownPlan`.
+  - Until a planner lands (E14 host, E15 Docker, E18 redeploy), the
+    engine answers its `PlanAction` with `ActionRefused(notImplemented)`
+    and `RunAction` with `unknownPlan`.
   - The admin-mode, audit, crontab and detached-operation messages of
     M4 join v3 with the PRs that implement them (E11, E12, E14, E17),
     rather than all at once here.
@@ -4192,6 +4433,23 @@ OperationPlan {
   SFTP `posix-rename`; root-owned files through the prelude with
   `chown --reference`, `chmod --reference`, `restorecon` when SELinux
   enforces [U: ACL and label details, spike S6]).
+
+As built in M4 (E20, `app/klabautermann_app/lib/ui/actions/`), the app
+asks for one preview at a time through `OperationsController`: the
+engine's answer to `PlanAction` carries no request id, and planning
+reads the host, so answers can come out of order; the preview is modal,
+so the app never needs two. The preview is a dialog on wide windows and
+a bottom sheet below 600 dp. It shows the target, each step's exact
+command line or API request in the monospace stack with a root badge on
+elevated steps (SAF-03), the danger findings, protection, impact and
+ownership, who runs it with which credentials, and what it leaves on
+the server, all worded from the engine's typed facts (D35). Tier 1
+names the target; tier 2 enables Run and Enter only once the target's
+name is typed exactly; Escape and Cancel close it. A toast says when a
+run starts and how it ended. `ActionEntry` wraps every action control
+by its `ActionEntryPoint`, hiding it unless the server's actions are
+allowed and nothing is read-only, which one test checks for every
+point.
 
 ### 8.6 Confirmation tiers and protected targets (SAF-05, SAF-22)
 
@@ -4295,7 +4553,11 @@ CI.
   M3 (D05) the engine masks an inspected container's `Path` and `Args`,
   and its `Entrypoint` and `Cmd`, by the same rules, each pair read as
   one command line, and each health check's output as one argument;
-  the container list drops its command line.
+  the container list drops its command line. From M4 (E14b) every cron
+  line's command and raw text cross masked by the same rules, each read
+  as one command line, both the `cron` stream's and JOB-03's; the jobs
+  merge reads `run-parts` lines from the real commands first. Cron lines
+  have no reveal yet.
 - Reveal (M2, the Processes tab): a tap on a masked argument in a
   process's details shows it there for 30 s, and it is masked again
   sooner when the details close or the app turns inactive, as it loses
@@ -4343,6 +4605,16 @@ CI.
     `AuditRecords(records, more)`.
   - The log stores redacted steps only, so E24's export has nothing
     secret to include.
+
+As built in M4 (E24), the server header's Safety menu opens Activity: a
+sortable table of each record's time, target, action, confirmation and
+result, newest first, whose rows open the run's redacted steps and how
+it ended; Show older reads the next page. The table has no device
+column, since the log is this device's own (D28). Copy puts the records
+on the clipboard as JSON lines, as stored; the include-secrets toggle
+of SAF-07 is not offered, because the log holds no secret to include,
+and saving to a file waits for a file plugin. When the engine keeps the
+log in memory, the page says it lasts only for this run.
 
 ### 8.11 Host write inventory (D27)
 
@@ -5494,6 +5766,20 @@ the engine in `engine_isolate.dart` beside it):
   (5.2), and closes it after 30 s without a query or a watch's read
   [E], so a watch keeps it open. The
   endpoint override is not in the protocol yet.
+- **Monitor set (M2, K30).** `SetMonitorSet(ids)` replaces FL-21's set
+  without a shape change. The engine keeps only the fleet servers that
+  `monitorEligibilityOf` allows (4.3 step 4) and it can dial, subscribes
+  each one's `overview` under a subscription id of its own
+  (`engine:monitorSet`, which the app's surface ids never take) and asks
+  the link supervisor for an unattended connect, so the scheduler samples
+  it while the app is in the foreground (6.4) and 5.12's cap and jitter
+  apply. A server that leaves the set loses that subscription, and its
+  link unless a view holds one (a `Connect` without its `Disconnect`); a
+  view's `Disconnect` leaves a monitored server's ready link open, and
+  of one with no link yet it gives up the view's attempt, with any
+  prompt, and dials unattended again. A server that leaves the fleet or
+  stops being eligible (a sync changed its endpoint) leaves the set, and
+  the app's next set follows the fleet it hears.
 - **Version 3 (M3 Docker watches).** Watches joined version 3 the same
   way (D06), and the opaque `DockerEvent` row is gone. `DockerWatch`
   names the lists a view shows (containers, images, stacks, stats) and,
@@ -5598,7 +5884,10 @@ the engine in `engine_isolate.dart` beside it):
   compose -p <p> --project-directory <d> -f <f>... --env-file <e>...
   config --hash '*'` prints a hash per service, each compared with the
   label of that service's containers, one-off containers aside: equal
-  is verified; a different or missing service is `hashMismatch`; a
+  is verified; a different hash, or no service printed at all, is
+  `hashMismatch`; a service the run does not print (one the files no
+  longer name, or one only a profile enables) says nothing about the
+  files, and STK-06 lists it (M4 E18); a
   refused flag or other output is `cliCouldNotHash`; another failure is
   `configFailed`, its error text dropped unread. The docker CLI checks
   a Podman engine too, through `--host`. Each exec takes a short-action
@@ -5619,20 +5908,6 @@ the engine in `engine_isolate.dart` beside it):
   such a key, and URL credentials in both; a secret plain scalar
   continued on later lines and flow mappings are not masked. The text
   is neither cached nor logged.
-- **Monitor set (M2, K30).** `SetMonitorSet(ids)` replaces FL-21's set
-  without a shape change. The engine keeps only the fleet servers that
-  `monitorEligibilityOf` allows (4.3 step 4) and it can dial, subscribes
-  each one's `overview` under a subscription id of its own
-  (`engine:monitorSet`, which the app's surface ids never take) and asks
-  the link supervisor for an unattended connect, so the scheduler samples
-  it while the app is in the foreground (6.4) and 5.12's cap and jitter
-  apply. A server that leaves the set loses that subscription, and its
-  link unless a view holds one (a `Connect` without its `Disconnect`); a
-  view's `Disconnect` leaves a monitored server's ready link open, and
-  of one with no link yet it gives up the view's attempt, with any
-  prompt, and dials unattended again. A server that leaves the fleet or
-  stops being eligible (a sync changed its endpoint) leaves the set, and
-  the app's next set follows the fleet it hears.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period
@@ -6532,6 +6807,45 @@ five put their setting ahead of the common config's `Include`;
 run's keys behind `restrict` (`authorized_keys.restrict`, which `run.sh`
 writes). The claim above that the common config's `AllowTcpForwarding
 no` refuses streamlocal holds on OpenSSH 10.6 (5.3).
+
+As built in M3 (D21), `klabautermann_core/test/integration/
+docker_engine_test.dart` (tags `integration` and `docker`, so `run.sh`
+runs it with the fixture suites) drives the real engine in its isolate,
+links on, over an imported ssh_config naming the Docker host as `klab`
+and as `klab-nosock`. It checks rank 1 to `/var/run/docker.sock` with
+the socket-forward label, rootful and root-equivalent; negotiation
+against dind (Docker 29.9.1 offers API 1.56, so 1.55 is used); a
+`docker run` over SSH reaching the watched list within 2 s, as a
+targeted re-read and not a full re-list (about 0.2 s locally); after
+`compose stop` and `start` of `docker-sshd`, with a container started
+in dind meanwhile, the events stream resuming with `since`, which
+reports it without a full re-list; inspect, the stack's compose file
+and its `.env` with the seeded fake secrets masked; a log follow
+across `compose restart docker-sshd` with no line lost, repeated or
+dropped; list stats, the first read without CPU % and the next with
+it; images with a dangling one flagged; the stacks verified, source
+not on host and Coolify-managed; and `klab-nosock` failed with no
+route for `socketDenied` while the access check's socket row reads
+missing, not writable, with the group fix. Each test subscribes the
+server first and waits for its probe, since a query before the probe
+answers fails (5.4). The fixture gained `Subsystem sftp internal-sftp`
+on the Docker host, whose common config names none, for stack files,
+and `seed_docker.sh` a `vault` service in `demo` whose environment,
+label, command line and health output carry fake low-entropy secrets,
+one from the stack's `.env`, and a dangling image committed without a
+tag. Spike S1's follow, a container writing 1,000 numbered lines a
+second for 20 s over streamlocal, delivered every line with none
+dropped, at under 50 ms p95 and 81 ms worst from the daemon's
+timestamp to the test in three local runs; the test writes its
+numbers to the evidence directory (`fixture/docker-follow.json`).
+**D20 confirmed:** the pure-Dart HTTP client carried every stream here
+(queries, chunked lists, the `/events` NDJSON stream, multiplexed log
+follows, one-shot stats), so the `dart:io` `HttpClient` alternative is
+not re-run (M3 decision M1).
+The run settles two [U]s, Compose v5.6's `config --hash '*'` flag form
+(7.16) and one-shot `precpu_stats` being zero (5.6), and shows that
+dind 29.9's containerd image store lists a dangling image with no
+`RepoTags`, which `ImageSummary.isDangling` reads as dangling.
 
 As built in M4 (E27), a `registry` service (Distribution 3.0.0, pinned by
 digest) serves the Compose network only: it publishes and exposes

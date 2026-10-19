@@ -449,10 +449,10 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
         title: l10n.dockerDetailsEnvTitle,
         children: [
           if (env.isEmpty) _Muted(l10n.dockerDetailsEnvEmpty),
-          for (final (index, variable) in env.indexed)
+          for (final variable in env)
             _value(
               context,
-              (_Field.env, index),
+              (_Field.env, variable.name),
               variable.value,
               name: variable.name,
             ),
@@ -567,7 +567,14 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
         if (output == null || output.display.trim().isEmpty)
           _Muted(l10n.dockerDetailsHealthNoOutput)
         else
-          _value(context, (_Field.health, index), output, mono: true),
+          // Keyed by the check's time where it has one: a read again
+          // shifts the log, and a reveal stays with what was selected.
+          _value(
+            context,
+            (_Field.health, check.start ?? check.end ?? index),
+            output,
+            mono: true,
+          ),
       ],
     );
   }
@@ -718,7 +725,9 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
 /// Where a masked value shows in the details, which keeps its reveal.
 enum _Field { env, label, entrypoint, cmd, health }
 
-/// One masked value's place: its field, and its index or label key there.
+/// One masked value's place: its field, and there the variable's name,
+/// the label's key, the argument's index or the check's time (its index
+/// when it has none).
 typedef _Shown = (_Field, Object);
 
 /// The app's monospace stack, `ghost_fonts`' bundled family first, for a

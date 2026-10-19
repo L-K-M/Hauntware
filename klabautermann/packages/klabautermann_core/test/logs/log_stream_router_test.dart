@@ -60,7 +60,7 @@ void main() {
     router = LogStreamRouter(
       linkFor: (serverId) => links[serverId],
       emit: events.add,
-      openService: (link, emit) {
+      openService: (link, emit, {elevatedLink}) {
         final service = LogService(
           link: link,
           quote: quoteShellWord,

@@ -359,20 +359,17 @@ void main() {
       expect(_answers(harness.engine), isEmpty);
     });
 
-    testWidgets('credential and elevation prompts are dismissed without a '
-        'dialog', (tester) async {
+    testWidgets('credential prompts are dismissed without a dialog', (
+      tester,
+    ) async {
       final harness = await pumpApp(tester, servers: twoServers);
 
       harness.engine
         ..emit(_prompt('p-1', const CredentialPromptRequest(user: 'me')))
-        ..emit(_prompt('p-2', const ElevationPromptRequest(user: 'me')))
         ..emit(_prompt('p-3', _hostKey));
       await tester.pumpAndSettle();
 
-      expect(_answers(harness.engine), [
-        'p-1: secret null',
-        'p-2: secret null',
-      ]);
+      expect(_answers(harness.engine), ['p-1: secret null']);
       expect(_hostKeyTitle, findsOneWidget);
     });
 
@@ -435,6 +432,85 @@ void main() {
       expect(prompts.current, isNull);
       expect(prompts.answer('p-1', const PromptTrustAnswer(true)), isFalse);
       expect(engine.sent, isEmpty);
+    });
+  });
+
+  group('the admin mode password prompt (SAF-02)', () {
+    final title = find.text('Admin password for web-1.example');
+    final password = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(TextField),
+    );
+
+    testWidgets('sends the password, and no "remember" is offered', (
+      tester,
+    ) async {
+      final harness = await pumpApp(tester, servers: twoServers);
+      harness.engine.emit(
+        _prompt('p-1', const ElevationPromptRequest(user: 'deploy')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(title, findsOneWidget);
+      expect(find.textContaining('as deploy'), findsOneWidget);
+      expect(find.text('That password did not work. Try again.'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.byType(Checkbox),
+        ),
+        findsNothing,
+      );
+      final turnOn = find.widgetWithText(FilledButton, 'Turn on');
+      expect(tester.widget<FilledButton>(turnOn).onPressed, isNull);
+
+      await tester.enterText(password, 'hunter2');
+      await tester.pump();
+      final field = tester.widget<TextField>(password);
+      expect(field.obscureText, isTrue);
+      expect(field.enableSuggestions, isFalse);
+      await tester.tap(turnOn);
+      await tester.pumpAndSettle();
+
+      expect(_answers(harness.engine), ['p-1: secret hunter2']);
+      expect(title, findsNothing);
+    });
+
+    testWidgets('says when the last password was refused, and Cancel '
+        'answers none', (tester) async {
+      final harness = await pumpApp(tester, servers: twoServers);
+      harness.engine.emit(
+        _prompt(
+          'p-1',
+          const ElevationPromptRequest(user: 'deploy', retry: true),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('That password did not work. Try again.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(_answers(harness.engine), ['p-1: secret null']);
+    });
+
+    testWidgets('a withdrawn prompt closes the dialog unanswered', (
+      tester,
+    ) async {
+      final harness = await pumpApp(tester, servers: twoServers);
+      harness.engine.emit(
+        _prompt('p-1', const ElevationPromptRequest(user: 'deploy')),
+      );
+      await tester.pumpAndSettle();
+      harness.engine.emit(
+        const PromptWithdrawn('p-1', PromptWithdrawnReason.expired),
+      );
+      await tester.pumpAndSettle();
+
+      expect(title, findsNothing);
+      expect(_answers(harness.engine), isEmpty);
     });
   });
 }

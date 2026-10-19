@@ -12,6 +12,7 @@ const _rootNoticeKey = 'klabautermann.docker.rootEquivalenceNoticeDismissed';
 const _announceBandsKey = 'klabautermann.accessibility.announceThresholdBands';
 const _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
 const _monitorSetKey = 'klabautermann.monitorSet';
+const _safetyKey = 'klabautermann.safety';
 
 final _uuidV4 = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
@@ -395,6 +396,32 @@ void main() {
 
       final reopened = await DeviceSettingsStore.open(file);
       expect(reopened.appearance, {'mode': 'dark'});
+    });
+
+    test('keeps the safety preferences across reloads; a value that is '
+        'not an object reads as none', () async {
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.safety, isNull, reason: 'every server observe-only');
+      final servers = <String, Object?>{
+        'srv-a': {'management': true},
+      };
+      final saved = store.setSafety({
+        'globalReadOnly': false,
+        'servers': servers,
+      });
+      servers['srv-b'] = {'management': true};
+      await saved;
+
+      final reopened = await DeviceSettingsStore.open(file);
+      expect(reopened.safety, {
+        'globalReadOnly': false,
+        'servers': {
+          'srv-a': {'management': true},
+        },
+      });
+
+      writeDocument({...document(), _safetyKey: 'on'});
+      expect((await DeviceSettingsStore.open(file)).safety, isNull);
     });
 
     test('saves the appearance as it was passed', () async {

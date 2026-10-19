@@ -8,6 +8,8 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../controllers/log_reads.dart';
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
+import 'actions/host_actions.dart';
 import 'failed_units_summary.dart';
 import 'logs/log_level.dart';
 import 'logs/log_view.dart';
@@ -328,6 +330,20 @@ class _ServicesPanelState extends State<ServicesPanel> {
         sort: _sort,
         onSort: (sort) => setState(() => _sort = sort),
         onRowActivated: _openUnit,
+        // SVC-03's verbs where actions are allowed (M4 E21). Without them
+        // the table keeps no slot, as before.
+        rowActions:
+            actionsAllowedAt(
+              context,
+              widget.serverId,
+              ActionEntryPoint.unitVerb,
+            )
+            ? (unit) => unitActionEntries(
+                context,
+                serverId: widget.serverId,
+                unit: unit.unit,
+              )
+            : null,
         empty: Padding(
           padding: const EdgeInsets.all(16),
           child: Text(l10n.servicesEmpty),
@@ -476,6 +492,9 @@ class _UnitPage extends StatelessWidget {
         ],
       ),
       if (description != null) Text(description),
+      // Only where actions show, so the page keeps its layout otherwise.
+      if (actionsAllowedAt(context, serverId, ActionEntryPoint.unitVerb))
+        UnitActionButtons(serverId: serverId, unit: name),
       Wrap(
         spacing: 24,
         runSpacing: 4,

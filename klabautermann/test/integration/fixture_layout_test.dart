@@ -146,15 +146,18 @@ void main() {
     );
   });
 
-  test('the Docker host forwards ahead of the common config', () {
+  test('the Docker host forwards ahead of the common config and serves '
+      'SFTP', () {
     // The common config's AllowTcpForwarding no refuses streamlocal too
-    // (03 §5.3), and the first value sshd reads wins.
+    // (03 §5.3), and the first value sshd reads wins. Stack files are
+    // read over SFTP (03 §7.16 STK-04), which the common config lacks.
     expect(
       directives(
         read('klabautermann/test/integration/sshd/sshd_config.docker'),
       ),
       [
         'AllowTcpForwarding local',
+        'Subsystem sftp internal-sftp',
         'Include /etc/ssh/fixture/sshd_config.common',
       ],
     );
