@@ -227,23 +227,23 @@ M2, the host read MVP, is the current milestone. What is on main:
   fakes only, plus the `test -f` quoting in a real `sh`; the `--hash`
   output shape comes from Compose's source and awaits D21's run, and
   the app shows no stacks yet (D17, D18).
-- Low-session mode (M3, D09, 03 §5.2, M9): one `ChannelQuota` per
-  server serves the host log reads and the Docker session, so on relay
-  ranks the pooled connection (one, in a short-action slot until its
-  30 s idle close), the events stream and container log follows
-  (follower slots), and the stack checks count against the same shares
-  as journal reads. Without a follower slot the events stream gives way
-  to a full re-list every 15 s. A learned session limit holds
-  followers to one (none below 4) and the shares together to what the
-  two samplers leave (at 4, one follower and one short action), keeps a
-  relay's events stream
-  closed in favour of the re-lists, reads stats one at a time and sets
-  `DockerEndpointState.lowSession`, on streamlocal too; a new link ends
-  it. A failed endpoint (unreachable, link error) is looked for again
-  while a watch holds, after 5 s doubling to 2 min, from 5 s again after
-  a new link or watch. Tested over fakes
-  only at learned limits of 2 to 4; D22 checks `MaxSessions 2` on a
-  real sshd, and the server header shows the mode (D12).
+- Low-session mode (M3, D09, 03 §5.2, M9): one `ChannelQuota` per server
+  serves the host log reads and the Docker session, so on relay ranks
+  the pooled connection (one, in a short-action slot until its 30 s idle
+  close), the events stream and container log follows (follower slots),
+  and the stack checks count against the same shares as journal reads.
+  Without a follower slot the events stream gives way to a full re-list
+  every 15 s. A learned session limit holds followers to one (none below
+  4) and the shares together to what the two samplers leave (at 4, one
+  follower and one short action), keeps a relay's events stream closed
+  in favour of the re-lists (streamlocal keeps its stream), reads stats
+  one at a time and sets `DockerEndpointState.lowSession`, on
+  streamlocal too; a new link ends it. A failed endpoint (unreachable,
+  link error) is looked for again while a watch holds, after 5 s
+  doubling to 2 min, from 5 s again after a new link or watch. Tested
+  over fakes only at learned limits of 2 to 4; D22 checks
+  `MaxSessions 2` on a real sshd, and the server header shows the mode
+  (D12).
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and

@@ -2402,10 +2402,11 @@ Docker events stream on a relay is not opened (and one already open
 closes) in favour of the 15 s re-lists while a watch holds, stats are
 read one at a time on every rank, and `DockerEndpointState.lowSession`
 names the mode, on streamlocal too. Below 4 the samplers leave less
-than the short-action share, which keeps its two slots and queues on
-the link. A new link has learned
-nothing, so reconnecting ends the mode. Stack logs merged through one
-`docker compose logs -f` are not built yet.
+than the short-action share, so the cap there is that share's two
+slots: short actions keep them, and what the link cannot open yet
+queues on it. A new link has learned nothing, so reconnecting ends the
+mode. Stack logs merged through one `docker compose logs -f` are not
+built yet.
 
 ### 5.3 Failure classification
 
@@ -5509,8 +5510,9 @@ the engine in `engine_isolate.dart` beside it):
   watch's first read, or one after the stream was lost for over 60 s
   or could not resume. As built, the engine opens one `/events` stream
   per server while any watch holds, on a connection of its own (on a
-  relay in a follower slot; without one, or in low-session mode, a
-  full re-list marked `fullRelist` every 15 s [E] instead), filtered to
+  relay in a follower slot; on a relay without one, or in low-session
+  mode, a full re-list marked `fullRelist` every 15 s [E] instead,
+  while streamlocal always opens it), filtered to
   container, image, volume and network events, and lists only once its
   head has arrived. Container actions that change no list (`exec_*`,
   `attach`, `resize`, `top`, archive and export) are skipped. Each
