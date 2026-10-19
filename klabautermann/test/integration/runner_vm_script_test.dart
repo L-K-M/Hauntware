@@ -17,14 +17,21 @@ const _journalUser = 'klab-vm-journal';
 const _sudoUser = 'klab-vm-sudo';
 const _lingerUser = 'klab-vm-linger';
 const _dockerUser = 'klab-vm-docker';
+const _nocacheUser = 'klab-vm-nocache';
 const _users = [
   _limitedUser,
   _journalUser,
   _sudoUser,
   _lingerUser,
   _dockerUser,
+  _nocacheUser,
 ];
 const _timer = 'klabautermann-runner-vm.timer';
+const _testUnits = [
+  'klabautermann-vm-test.service',
+  'klabautermann-vm-job.service',
+  'klabautermann-vm-job.timer',
+];
 
 /// The lines of runner_vm.sh that name the machine's paths, which the
 /// copy points into its sandbox.
@@ -39,6 +46,7 @@ const _sudoersLine =
     "readonly sudoers_file='/etc/sudoers.d/klabautermann-runner-vm'";
 const _rootOpsLine = "readonly root_ops_parent='/var/lib/klabautermann'";
 const _rootDockerLine = "readonly root_docker_dir='/root/.docker'";
+const _unitDirLine = "readonly unit_dir='/etc/systemd/system'";
 
 /// Bodies of the stand-ins, which log to `$STUB_LOG` and keep the
 /// accounts `useradd` made in `$STUB_STATE/users`. sudo runs what only
@@ -46,7 +54,9 @@ const _rootDockerLine = "readonly root_docker_dir='/root/.docker'";
 /// of the stand-in sshd) and logs everything else without running it;
 /// it refuses a changing command on a path outside the sandbox, so a
 /// path line the copy failed to point there cannot touch the machine.
-/// It keeps what chpasswd would read in `$STUB_STATE/chpasswd`.
+/// It keeps what chpasswd would read in `$STUB_STATE/chpasswd`, and each
+/// crontab it installs in `$STUB_STATE/crontab.<user>` until removed, and
+/// in `$STUB_STATE/crontabs` for good.
 /// The suite keeps its PID in `$STUB_SUITE_PID` while it runs, exits
 /// with `$STUB_SUITE_EXIT` when set, and otherwise stops as package:test
 /// does: a first SIGTERM drains, a second stops it. `userdel` takes
@@ -67,6 +77,13 @@ case "${1:-}" in
 esac
 case "${1:-}" in
   chpasswd) cat >"$STUB_STATE/chpasswd" ;;
+  crontab)
+    if [[ "${4:-}" == - ]]; then
+      tee -a "$STUB_STATE/crontabs" >"$STUB_STATE/crontab.$3"
+    else
+      rm -- "$STUB_STATE/crontab.$3"
+    fi
+    ;;
   true | mktemp | cat | rm | rmdir | kill | test | tee | chmod) exec "$@" ;;
   install)
     args=()
@@ -125,6 +142,8 @@ mkdir -p "$STUB_STATE/home/$2"
 echo "$2:x:4242:4242::$STUB_STATE/home/$2:/bin/sh"
 ''',
   'pgrep': 'exit 1\n',
+  // Found on PATH, so the copy installs no cron; sudo runs it.
+  'crontab': 'exit 99\n',
   'docker':
       r'echo "docker $*" >>"$STUB_LOG"'
       '\n',
@@ -201,7 +220,10 @@ void main() {
         'create_user "\$journal_user" --groups systemd-journal',
         'sudo -n systemd-run --quiet --unit="\$timer_unit" '
             '--on-calendar="\$calendar" \\',
-        '  install_openssh_server',
+        '  install_package openssh-server',
+        '  install_package cron',
+        'install_test_units',
+        'install_crontabs',
       ]) {
         expect(at(change), greaterThan(trap), reason: change);
       }
@@ -233,7 +255,7 @@ void main() {
     });
 
     test('puts only the second account in a journal group (LOG-04), and '
-        'adds the S4 accounts', () {
+        'adds the S4 and actions accounts', () {
       final creates = [
         for (final line in lines(script))
           if (line.startsWith('create_user ')) line,
@@ -244,6 +266,7 @@ void main() {
         'create_user "\$sudo_user"',
         'create_user "\$linger_user"',
         'create_user "\$docker_user"',
+        'create_user "\$nocache_user"',
       ]);
       expect(script, contains("readonly limited_user='$_limitedUser'"));
       expect(script, contains("readonly journal_user='$_journalUser'"));
@@ -329,6 +352,7 @@ void main() {
         _sudoersLine,
         _rootOpsLine,
         _rootDockerLine,
+        _unitDirLine,
       ]) {
         expect(script, contains(line));
       }
@@ -339,6 +363,7 @@ void main() {
       Directory('${sandbox.path}/tmp').createSync();
       Directory('${sandbox.path}/systemd').createSync();
       Directory('${sandbox.path}/sudoers.d').createSync();
+      Directory('${sandbox.path}/units').createSync();
       log = File('${sandbox.path}/stub.log');
       suitePid = File('${sandbox.path}/suite.pid');
       addTearDown(() async {
@@ -403,6 +428,10 @@ void main() {
               .replaceFirst(
                 _rootDockerLine,
                 "readonly root_docker_dir='${sandbox.path}/root-docker'",
+              )
+              .replaceFirst(
+                _unitDirLine,
+                "readonly unit_dir='${sandbox.path}/units'",
               ),
         );
       final chmod = await Process.run('chmod', [
@@ -458,11 +487,24 @@ void main() {
         lines,
         containsAll([
           'sudo systemctl stop $_timer',
+          'sudo systemctl stop ${_testUnits.join(' ')}',
+          'sudo systemctl daemon-reload',
           'sshd stopped',
+          for (final user in _users) 'sudo crontab -u $user -r',
           for (final user in _users) 'sudo userdel --remove $user',
           'sudo rm -f -- ${sandbox.path}/sudoers.d/leg',
         ]),
         reason: lines.join('\n'),
+      );
+      expect(
+        Directory('${sandbox.path}/units').listSync(),
+        isEmpty,
+        reason: 'a test unit is left',
+      );
+      expect(
+        state.listSync().where((e) => e.path.contains('crontab.')),
+        isEmpty,
+        reason: 'a crontab is left',
       );
       expect(
         Directory('${state.path}/users').listSync(),
@@ -537,6 +579,17 @@ void main() {
           startsWith('sudo useradd '),
           'sudo install -d -m 0755 -o root -g root ${sandbox.path}/privsep',
           'sshd started',
+          for (final unit in _testUnits)
+            matches(
+              RegExp(
+                '^sudo install -m 0644 -o root -g root '
+                '${RegExp.escape(sandbox.path)}/klabautermann-runner-vm\\.\\w+/'
+                '${RegExp.escape(unit)} '
+                '${RegExp.escape('${sandbox.path}/units/$unit')}\$',
+              ),
+            ),
+          'sudo systemctl daemon-reload',
+          'sudo systemctl start ${_testUnits.first} ${_testUnits.last}',
           startsWith(
             'sudo systemd-run --quiet --unit=klabautermann-runner-vm ',
           ),
@@ -564,10 +617,26 @@ void main() {
       final exported = File('${state.path}/suite.env').readAsStringSync();
       expect(exported, contains('KLABAUTERMANN_RUNNER_VM_SSHD_PID='));
       expect(exported, contains('KLABAUTERMANN_RUNNER_VM_TIMER=$_timer\n'));
+      expect(
+        exported,
+        contains('KLABAUTERMANN_RUNNER_VM_CRONTAB_USERS=${_users.join(' ')}\n'),
+      );
+      // One crontab each, installed before the suite and never run.
+      expect(
+        lines,
+        containsAllInOrder([
+          for (final user in _users) 'sudo crontab -u $user -',
+          startsWith('suite started '),
+        ]),
+      );
+      expect(File('${state.path}/crontabs').readAsLinesSync(), [
+        for (final user in _users)
+          '5 4 1 1 * curl -s https://ops:secret-$user@example.invalid/ping',
+      ]);
       expectTornDown();
     });
 
-    test('gives the sudo account a fresh password that no argv, log or '
+    test('gives the sudo accounts fresh passwords that no argv, log or '
         'variable carries, and checks the drop-in first', () async {
       final (process: _, :exitCode, :output) = await start({
         ...onRunner,
@@ -576,10 +645,12 @@ void main() {
 
       expect(await exitCode, 0, reason: '$output');
       final fed = File('${state.path}/chpasswd').readAsStringSync();
-      final password = RegExp(
-        '^$_sudoUser:([0-9a-f]{48})\n\$',
-      ).firstMatch(fed)?[1];
-      expect(password, isNotNull, reason: 'chpasswd read "$fed"');
+      final match = RegExp(
+        '^$_sudoUser:([0-9a-f]{48})\n$_nocacheUser:([0-9a-f]{48})\n\$',
+      ).firstMatch(fed);
+      expect(match, isNotNull, reason: 'chpasswd read "$fed"');
+      final passwords = [match![1]!, match[2]!];
+      expect(passwords.toSet(), hasLength(2), reason: 'one each');
       final lines = logged();
       final exported = File('${state.path}/suite.env').readAsStringSync();
       for (final (name, text) in [
@@ -587,9 +658,15 @@ void main() {
         ('the output', '$output'),
         ('the exported variables', exported),
       ]) {
-        expect(text, isNot(contains(password)), reason: name);
+        for (final password in passwords) {
+          expect(text, isNot(contains(password)), reason: name);
+        }
       }
       expect(exported, contains('KLABAUTERMANN_RUNNER_VM_SUDO_PASSWORD_FILE='));
+      expect(
+        exported,
+        contains('KLABAUTERMANN_RUNNER_VM_NOCACHE_PASSWORD_FILE='),
+      );
 
       final drop = '${sandbox.path}/sudoers.d/leg';
       expect(

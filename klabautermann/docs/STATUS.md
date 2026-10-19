@@ -1492,6 +1492,16 @@ M2, the host read MVP, is the current milestone. What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 runner-VM actions suite (E29): on the GitHub-hosted runner, as
+  throwaway accounts, the engine turns admin mode on after a wrong
+  password is asked again, and under `timestamp_timeout=0` (rung 4);
+  admin mode ends when the link drops. It stops, starts, restarts and
+  reloads a unit as root, and polkit refuses the same run without admin
+  mode. The protected `ssh.service` runs only with its typed name. A
+  timer runs now with its service's journal followed. Other users'
+  crontabs are read masked, and another account's process is killed
+  only through elevation. Admin mode's inactivity expiry stays with the
+  unit tests' fake clock, since the shortest choice is five minutes.
 - M4 Docker action planners (E15): `PlanAction` plans container state
   changes and removal, image removal and stack start, stop and restart
   over the server's Docker endpoint. Steps address the full id and are
