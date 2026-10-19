@@ -197,7 +197,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   one-shot list stats for the ids on screen every 5 s (4 at once on
   streamlocal, one at a time on a relay), all as `DockerListChanged`.
   Tested over fakes only; the app watches the containers and their
-  stats since D13 (below), and no other list yet (D16, D17).
+  stats since D13, the images since D16 and the stacks since D17
+  (below).
 - Container logs (M3, D07, 03 §5.6, §10.1): `ContainerLogSource`
   streams a container's logs through `OpenLogStream` as
   `ContainerRecord`s over the server's Docker endpoint: framing by
@@ -216,8 +217,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   tab waits, looks or says why no route works (with the Access link and
   a retry), then shows SAF-08's notice until it is dismissed on the
   device (`settings.json`), the engine strip (DKE-01) and the
-  Containers, Images and Stacks sub-tabs, the last still empty (D17).
-  Tested against the fake engine only.
+  Containers, Images and Stacks sub-tabs. Tested against the fake
+  engine only.
 - Stack sources (M3, D08, 03 §7.16, §10.1): the stacks list carries a
   verdict per compose project (verified, unverified with a reason, or
   source not on host naming the marked manager) and the compose CLIs
@@ -229,7 +230,7 @@ M2, the host read MVP, is the current milestone. What is on main:
   file over SFTP, at most 1 MiB, masked in the engine. Tested over
   fakes only, plus the `test -f` quoting in a real `sh`; D21's run
   confirms the `--hash` output shape on Compose v5.6, and the app
-  shows no stacks yet (D17, D18).
+  shows the stacks since D17 and their files since D18 (below).
 - Low-session mode (M3, D09, 03 §5.2, M9): one `ChannelQuota` per server
   serves the host log reads and the Docker session, so on relay ranks
   the pooled connection (one, in a short-action slot until its 30 s idle
@@ -316,6 +317,47 @@ M2, the host read MVP, is the current milestone. What is on main:
   failed container list leaves the use unknown and says so. A failed
   read keeps the last list with why and a retry, and low-session mode is
   named on a relay, where the list polls. Tested against the fake
+  engine only.
+- Stacks in the app (M3, D17, 03 §7.16, §10.4): the Stacks sub-tab
+  holds one `DockerWatch` of the stacks alone per server while it
+  shows and sends `DockerUnwatch` once hidden, since asking for the
+  stacks runs the engine's compose checks on the host and a new watch
+  runs them again; nothing else asks. Each compose project shows its
+  verdict chip ("Checking source…" until the engine re-sends the
+  list, "Verified source", "Unverified source:" with each of the nine
+  reasons, or "Source not on host (deployed by X)"), a "Managed by X:
+  read-only" badge for an owned stack (STK-10), and its service, running
+  and unhealthy counts; the Compose CLI line names the plugin's version
+  and the standalone `docker-compose`, read-only and marked as Compose
+  v1 when it is, or that neither was found. Beside the list (from a
+  640 px panel, so a 1280 px window), or on a pushed page on phones and
+  at large text, the overview says what the verdict means, names the
+  owning label, lists the working directory, compose and environment
+  files and Compose version as the labels record them, and each
+  service's image, one-off mark and containers with state, health,
+  status and ports; a container opens its details in the inspector or
+  on a page. The stacks' container list also keeps open details current.
+  A failed read keeps the last list with why and a retry, and
+  low-session mode is named on a relay. Tested against the fake engine
+  only.
+- Stack files in the app (M3, D18, 03 §7.16, §8.9, §10.4): a verified
+  stack's overview offers "View files", which opens a dialog on the
+  desktop and a page on phones; any other stack says its files show
+  only once its source is verified. A picker lists the compose files,
+  the recorded environment files and the working directory's `.env`,
+  each once, as the engine's rule names them; the file picked is read
+  with one `DockerStackFileQuery` (the controller keeps no answer) and
+  shown in `planchette_editor`, now an app dependency, with editing
+  locked and its English strings. The engine's masks show as
+  asterisks; "Reveal values" shows them for 30 s in the view's state
+  only, masked again when the app turns inactive, on "Hide values" or
+  another file. A file over 1 MiB says its size and that only its
+  complete lines within 1 MiB show; each `StackFileFailure` has its
+  wording, a denied read saying that the sudo read needs admin mode,
+  which arrives later, and a read that could not run or failed offers
+  a retry. Nothing else is read: the engine never captures `config`
+  output. The editor's text field reads a mask as its asterisks; the
+  count of masked values is said beside it. Tested against the fake
   engine only.
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`

@@ -6196,7 +6196,20 @@ tab:
   list whenever one was read, at any API version, because a container
   event re-lists the containers but not the images, so the image
   list's `Containers` count (1.51) lags a container created or removed
-  and stands in only until the containers arrive.
+  and stands in only until the containers arrive. As built in D17
+  (`ui/docker/stacks_panel.dart`), the Stacks sub-tab holds one watch
+  of the stacks alone per server while it shows, as asking for them
+  runs 7.16's compose checks on the host; each project shows its
+  verdict chip, a "managed by X: read-only" badge (8.7) and its counts,
+  with the CLI line of STK-05, and the selected project's overview
+  (STK-02) beside the list from a 640 px panel, or on a pushed page.
+  As built in D18 (`ui/docker/stack_file_view.dart`), a verified
+  stack's overview opens its files (STK-04) in a dialog on the desktop
+  or on a pushed page: a picker of its compose files, environment files
+  and working directory's `.env`, each read by one `DockerStackFileQuery`
+  into `planchette_editor` with editing locked, the engine's masks shown
+  until 8.9's 30 s "Reveal values", and the 1 MiB cut and each refusal
+  in words; no other stack offers them.
 
 As built in M2 (`app/klabautermann_app/lib/ui/system_panel.dart`), the
 System tab shows SYS-01's identity, BOOT-01's uptime and boot time,
