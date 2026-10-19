@@ -740,6 +740,262 @@ void main() {
     });
   });
 
+  group('the stack watch (STK-01, STK-05)', () {
+    final at = DateTime(2026, 10, 15, 14, 30);
+
+    List<DockerWatch> watches() => engine.sentOfType<DockerWatch>().cast();
+    List<DockerUnwatch> unwatches() =>
+        engine.sentOfType<DockerUnwatch>().cast();
+
+    ComposeProject web() => dockerStack('web', [
+      dockerService('app', [dockerContainer('c-1', project: 'web')]),
+    ]);
+
+    test('one watch of the stacks alone per server while any view shows, '
+        'apart from the other watches', () async {
+      docker.watchContainers('srv-1');
+      docker.watchImages('srv-1');
+      docker.watchStacks('srv-1');
+      expect(watches(), hasLength(3));
+      final stacks = watches().last;
+      expect(stacks.serverId, 'srv-1');
+      expect(stacks.lists, {DockerWatchList.stacks});
+      expect(stacks.statsFor, isEmpty);
+      expect({for (final watch in watches()) watch.watchId}, hasLength(3));
+
+      // A second view shares it: asking again would run the checks again.
+      docker.watchStacks('srv-1');
+      expect(watches(), hasLength(3));
+      docker.unwatchStacks('srv-1');
+      expect(unwatches(), isEmpty, reason: 'a view still shows');
+      docker.unwatchStacks('srv-1');
+      expect(unwatches().single.watchId, stacks.watchId);
+      docker.unwatchStacks('srv-1');
+      expect(unwatches(), hasLength(1));
+
+      docker.watchStacks('srv-1');
+      expect(watches().last.watchId, isNot(stacks.watchId));
+    });
+
+    test('keeps the latest stacks as their verdicts arrive, and a failed '
+        'read beside the last list', () async {
+      docker.watchStacks('srv-1');
+      final list = docker.stacksFor('srv-1');
+      expect(list.value.stacks, isNull);
+
+      await emit(dockerStackList('srv-1', [web()], at: at));
+      expect(list.value.stacks?.grouping.projects.single.name, 'web');
+      expect(list.value.stacks?.verdicts, isEmpty);
+      expect(list.value.at, at);
+
+      // The engine sends the list again once it checked the project.
+      await emit(
+        dockerStackList(
+          'srv-1',
+          [web()],
+          at: at,
+          verdicts: const {'web': StackVerified()},
+          cli: const DockerComposeCli(pluginVersion: '2.29.7'),
+        ),
+      );
+      expect(list.value.stacks?.verdicts['web'], isA<StackVerified>());
+      expect(list.value.stacks?.composeCli?.pluginVersion, '2.29.7');
+
+      await emit(
+        dockerListFailed(
+          'srv-1',
+          DockerWatchList.stacks,
+          DockerQueryFailure.connectionFailed,
+          at: at.add(const Duration(minutes: 1)),
+        ),
+      );
+      expect(list.value.failure?.failure, DockerQueryFailure.connectionFailed);
+      expect(list.value.stacks?.grouping.projects, hasLength(1));
+      expect(list.value.at, at, reason: 'when the kept list was read');
+
+      // Other lists and servers leave it be.
+      await emit(dockerImageList('srv-1', const [], at: at));
+      await emit(dockerStackList('srv-2', const [], at: at));
+      expect(list.value.stacks?.grouping.projects, hasLength(1));
+      expect(docker.containersFor('srv-1').value.containers, isNull);
+
+      await emit(dockerStackList('srv-1', const [], at: at));
+      expect(list.value.stacks?.grouping.projects, isEmpty);
+      expect(list.value.failure, isNull);
+    });
+
+    test('details views follow the containers the stacks carry', () async {
+      docker.watchStacks('srv-1');
+      await emit(dockerStackList('srv-1', [web()], at: at));
+      final details = docker.openContainer('srv-1', 'c-1');
+      final inspect = queries().last;
+      await emit(
+        dockerAnswer(
+          inspect,
+          DockerContainerPayload(dockerContainerDetails('c-1')),
+        ),
+      );
+      expect(details.value.removed, isFalse);
+
+      await emit(dockerStackList('srv-1', const [], at: at));
+      expect(details.value.removed, isTrue);
+      docker.closeContainer('srv-1', 'c-1');
+    });
+
+    test('a retry watches anew under a new id', () async {
+      docker.watchStacks('srv-1');
+      final before = watches().single;
+      docker.retryStacks('srv-2');
+      expect(unwatches(), isEmpty, reason: 'nothing watched there');
+
+      docker.retryStacks('srv-1');
+      expect(unwatches().single.watchId, before.watchId);
+      expect(watches().last.watchId, isNot(before.watchId));
+      expect(watches().last.lists, before.lists);
+    });
+
+    test('a server that leaves the fleet drops its watch and stacks '
+        '(SYN-08)', () async {
+      docker.watchStacks('srv-1');
+      await emit(dockerStackList('srv-1', [web()], at: at));
+      final before = docker.stacksFor('srv-1');
+
+      await emit(CatalogReplaced(const []));
+      expect(docker.stacksFor('srv-1'), isNot(same(before)));
+      expect(docker.stacksFor('srv-1').value.stacks, isNull);
+
+      docker.unwatchStacks('srv-1');
+      docker.watchStacks('srv-1');
+      expect(unwatches(), isEmpty);
+      expect(watches(), hasLength(1), reason: 'not in the fleet');
+    });
+
+    test('sends nothing once the engine stopped', () async {
+      await engine.close();
+      await pumpEventQueue();
+      docker
+        ..watchStacks('srv-1')
+        ..retryStacks('srv-1')
+        ..unwatchStacks('srv-1');
+      expect(watches(), isEmpty);
+      expect(unwatches(), isEmpty);
+    });
+  });
+
+  group('stack file reads (STK-04)', () {
+    test(
+      'one query per read, answered to the reader and kept nowhere',
+      () async {
+        final read = docker.readStackFile(
+          'srv-1',
+          project: 'web',
+          path: '/srv/web/compose.yaml',
+        );
+        final query = queries().single;
+        expect(query.serverId, 'srv-1');
+        expect(
+          query.query,
+          isA<DockerStackFileQuery>()
+              .having((q) => q.project, 'project', 'web')
+              .having((q) => q.path, 'path', '/srv/web/compose.yaml'),
+        );
+
+        // Another reader's answer, and one for no read, leave it waiting.
+        final other = docker.readStackFile(
+          'srv-1',
+          project: 'web',
+          path: '/srv/web/.env',
+        );
+        await emit(
+          dockerAnswer(
+            queries().last,
+            const DockerStackFileFailed(StackFileFailure.notFound),
+          ),
+        );
+        expect(
+          await other,
+          isA<DockerStackFileFailed>().having(
+            (f) => f.failure,
+            'failure',
+            StackFileFailure.notFound,
+          ),
+        );
+
+        final file = DockerStackFilePayload(
+          project: 'web',
+          path: '/srv/web/compose.yaml',
+          size: 9,
+          text: [MaskedValue.plain('services:')],
+        );
+        await emit(dockerAnswer(query, file));
+        expect(await read, same(file));
+        expect(queries().last.queryId, isNot(query.queryId));
+      },
+    );
+
+    test('a read the engine will not answer ends with why', () async {
+      final leaving = docker.readStackFile(
+        'srv-1',
+        project: 'web',
+        path: '/srv/web/compose.yaml',
+      );
+      final staying = docker.readStackFile(
+        'srv-2',
+        project: 'web',
+        path: '/srv/web/compose.yaml',
+      );
+      await emit(
+        CatalogReplaced([
+          const FleetEntry(
+            serverId: 'srv-2',
+            label: 'web-2',
+            host: 'web-2.example.net',
+            port: kSshDefaultPort,
+            origin: FleetEntryOrigin.sshConfig,
+          ),
+        ]),
+      );
+      expect(
+        await leaving,
+        isA<DockerQueryFailed>().having(
+          (f) => f.failure,
+          'failure',
+          DockerQueryFailure.notInFleet,
+        ),
+      );
+      final unlisted = await docker.readStackFile(
+        'srv-1',
+        project: 'web',
+        path: '/srv/web/compose.yaml',
+      );
+      expect(
+        (unlisted as DockerQueryFailed).failure,
+        DockerQueryFailure.notInFleet,
+      );
+      expect(queries(), hasLength(2), reason: 'not sent for a server gone');
+
+      await engine.close();
+      await pumpEventQueue();
+      expect(
+        await staying,
+        isA<DockerQueryFailed>().having(
+          (f) => f.failure,
+          'failure',
+          DockerQueryFailure.cancelled,
+        ),
+      );
+      final stopped = await docker.readStackFile(
+        'srv-2',
+        project: 'web',
+        path: '/srv/web/compose.yaml',
+      );
+      expect(
+        (stopped as DockerQueryFailed).failure,
+        DockerQueryFailure.cancelled,
+      );
+    });
+  });
+
   group('container details (CTR-03, CTR-04)', () {
     final at = DateTime(2026, 10, 15, 14, 30);
 

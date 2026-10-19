@@ -319,3 +319,58 @@ LogBatch containerLogBatch(
   List<ContainerRecord> records, {
   int dropped = 0,
 }) => LogBatch(streamId: streamId, records: records, dropped: dropped);
+
+/// One compose service of [containers] (STK-02), created from [image]
+/// unless told otherwise.
+ComposeService dockerService(
+  String name,
+  List<ContainerSummary> containers, {
+  String? image,
+  bool oneOff = false,
+}) => ComposeService(
+  name: name,
+  containers: containers,
+  image: image ?? containers.firstOrNull?.image,
+  oneOff: oneOff,
+);
+
+/// A compose project as the engine groups it (STK-01), deployed from
+/// `/srv/[name]/compose.yaml` by Compose 2.29.7 unless told otherwise.
+ComposeProject dockerStack(
+  String name,
+  List<ComposeService> services, {
+  Ownership ownership = Ownership.none,
+  String? workingDir,
+  List<String>? configFiles,
+  List<String> environmentFiles = const [],
+  String? version = '2.29.7',
+}) => ComposeProject(
+  name: name,
+  services: services,
+  ownership: ownership,
+  workingDir: workingDir ?? '/srv/$name',
+  configFiles: configFiles ?? ['/srv/$name/compose.yaml'],
+  environmentFiles: environmentFiles,
+  version: version,
+);
+
+/// [projects] on [serverId], as a watch of the stacks delivers them, with
+/// each one's [verdicts] (unchecked when left out) and the compose [cli]
+/// found, if the engine looked.
+DockerListChanged dockerStackList(
+  String serverId,
+  List<ComposeProject> projects, {
+  required DateTime at,
+  Map<String, StackVerdict> verdicts = const {},
+  DockerComposeCli? cli,
+  List<ContainerSummary> unmanaged = const [],
+}) => DockerListChanged(
+  serverId: serverId,
+  list: DockerWatchList.stacks,
+  payload: DockerStacksPayload(
+    ComposeGrouping(projects: projects, unmanaged: unmanaged),
+    verdicts: verdicts,
+    composeCli: cli,
+  ),
+  at: at,
+);

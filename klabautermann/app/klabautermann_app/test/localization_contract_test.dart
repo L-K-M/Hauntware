@@ -133,6 +133,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'df-${_count++}'",
     r"'container-${_count++}'",
     r"'images-${_count++}'",
+    r"'stacks-${_count++}'",
+    r"'stack-file-${_count++}'",
   },
   'lib/controllers/log_streams.dart': {
     // A log stream id the engine keys a stream's events by (03 §10.1), and
@@ -388,6 +390,19 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "':'",
     r"'\n'",
     "', '",
+  },
+  'lib/ui/docker/stacks_panel.dart': {
+    // The key tests find a stack's row by.
+    r"'stacks.row.${project.name}'",
+  },
+  'lib/ui/docker/stacks_view.dart': {
+    // The name compose reads a working directory's environment file by,
+    // the path separator, and the file's path joined from them, as the
+    // engine joins it; machine data.
+    "'.env'",
+    "'/'",
+    r"'$directory$_dotEnv'",
+    r"'$directory/$_dotEnv'",
   },
   'lib/ui/docker/docker_panel.dart': {
     // An assert message; programmer diagnostic, never rendered.

@@ -2434,6 +2434,25 @@ queues on it. A new link has learned nothing, so reconnecting ends the
 mode. Stack logs merged through one `docker compose logs -f` are not
 built yet.
 
+As built in M3 (D22), a real `MaxSessions 2` (the fixture's
+`neg-maxsessions2`, 11.3) settles how the mode behaves on streamlocal.
+The two samplers fit; the first exec beyond them, a stack check, is
+refused, the link learns 2 and `lowSession` goes out with rank 1 kept.
+The events stream and a container follow cost no session and carry on
+(a `docker run` reached the list in about 0.5 s, not by polling); a
+host follow waits for a channel. The samplers hold both sessions for as
+long as the host is sampled, so no exec runs meanwhile: the stack
+checks wait at the learned limit until the link's 15 s open timeout
+and read "check failed". A short action sshd refuses at its
+`MaxSessions` now runs again while the refusal tightens the learned
+limit, since the link queues at that limit but fails the open that
+taught it; `seance_core` counts the opens in flight when it learns, so
+two refused together can first teach it one too many. A host whose
+limit leaves room beyond the samplers (3 or more) thus verifies its
+stacks instead of failing the check that found the limit. Whether
+low-session mode should pause the slow sampler for an exec, or tell a
+check waiting for a channel from a failed one, is open for M4.
+
 ### 5.3 Failure classification
 
 | Symptom | Classification | UI |
@@ -2578,6 +2597,24 @@ the consumer falls behind, the subscription pauses and the view shows
 TCP 2375 and 2376 are never offered. A Dropbear host older than 2024.84
 has no Unix stream forwarding and uses rank 2; 2024.84 to 2025.88 get a
 CVE-2025-14282 warning [R: r5 §1.1].
+
+As built in M3 (D22, `klabautermann_core/test/integration/
+docker_fallback_test.dart`), every fixture variant that refuses
+streamlocal (5.3) lands on rank 2 with `DockerRouteLabel.cliRelay`,
+the "via docker CLI relay (limited streams)" label (E4), rootful and
+root-equivalent, negotiated as on rank 1. Over the relay the container
+list, a log follow with no line lost, list stats with CPU % from the
+second round and the events stream (a `docker run` listed in about
+0.1 s) all work; no variant left rank 2. An account in the `docker`
+group with no CLI, socat or `nc -U` on its `PATH` lands on none with
+`noRelay`. The exec probe now takes `nc` only when the usage `nc -h`
+prints lists `-U`: BusyBox's `nc`, the one an Alpine host has, and
+netcat-traditional's have none, and the ladder used to offer `nc -U`
+through them, which failed at the first request, left the endpoint
+"unreachable" and was looked for again while a watch held. OpenBSD's
+`nc` and
+ncat list it. Rank 4 itself stays [U] on a real host: the fixture has
+no socat and no `nc` with `-U`.
 
 As built in M4 (E16, plan M7), rank 3 is `DockerRank.sudoRelay`: a
 socket the exec probe finds the user cannot write, on a host with sudo,
@@ -6170,7 +6207,20 @@ tab:
   list whenever one was read, at any API version, because a container
   event re-lists the containers but not the images, so the image
   list's `Containers` count (1.51) lags a container created or removed
-  and stands in only until the containers arrive.
+  and stands in only until the containers arrive. As built in D17
+  (`ui/docker/stacks_panel.dart`), the Stacks sub-tab holds one watch
+  of the stacks alone per server while it shows, as asking for them
+  runs 7.16's compose checks on the host; each project shows its
+  verdict chip, a "managed by X: read-only" badge (8.7) and its counts,
+  with the CLI line of STK-05, and the selected project's overview
+  (STK-02) beside the list from a 640 px panel, or on a pushed page.
+  As built in D18 (`ui/docker/stack_file_view.dart`), a verified
+  stack's overview opens its files (STK-04) in a dialog on the desktop
+  or on a pushed page: a picker of its compose files, environment files
+  and working directory's `.env`, each read by one `DockerStackFileQuery`
+  into `planchette_editor` with editing locked, the engine's masks shown
+  until 8.9's 30 s "Reveal values", and the 1 MiB cut and each refusal
+  in words; no other stack offers them.
 
 As built in M2 (`app/klabautermann_app/lib/ui/system_panel.dart`), the
 System tab shows SYS-01's identity, BOOT-01's uptime and boot time,
@@ -6868,6 +6918,21 @@ The run settles two [U]s, Compose v5.6's `config --hash '*'` flag form
 (7.16) and one-shot `precpu_stats` being zero (5.6), and shows that
 dind 29.9's containerd image store lists a dangling image with no
 `RepoTags`, which `ImageSummary.isDangling` reads as dangling.
+
+As built in M3 (D22), `klabautermann_core/test/integration/
+docker_fallback_test.dart` (tags `integration` and `docker`) runs the
+real engine on one negative variant at a time, as the fixture user,
+over an imported ssh_config: rank 2 and its label on the five
+forwarding variants, with the lists, a log follow, stats and an event;
+low-session mode on `neg-maxsessions2`; and none with `noRelay` for
+`klab-nocli` on `neg-nostreamlocal`. That account, which every Docker
+host now has, is in the `docker` group but signs in to a login shell
+(`sshd/nocli-shell.sh`) whose `PATH` leaves out `/usr/local/bin`,
+where the CLI is; BusyBox's `nc`, without `-U`, stays on it. Each test
+writes its route, label and timings to the evidence directory
+(`fixture/fallback/`). Locally the suite takes about 55 s, 15 s of it
+the stack checks waiting out the link's open timeout on
+`neg-maxsessions2` (5.2).
 
 As built in M4 (E27), a `registry` service (Distribution 3.0.0, pinned by
 digest) serves the Compose network only: it publishes and exposes

@@ -109,7 +109,8 @@ enum DockerRootEquivalence {
 /// candidates fail, the route names the first of their reasons here.
 enum DockerNoRouteReason {
   /// The socket is reachable but forwarding is off, and the host has no
-  /// relay: no engine CLI the probe saw, no usable socat, no `nc`.
+  /// relay: no engine CLI the probe saw, no usable socat, no `nc` with
+  /// `-U`.
   noRelay,
 
   /// The user cannot write the socket and sudo exists: the sudo relay of
@@ -347,8 +348,8 @@ abstract final class DockerLadder {
 
   /// Rank 2 when the probe saw a CLI that reaches this engine, else rank
   /// 4: socat when the probe saw it and the path is safe in a socat
-  /// address, else `nc -U` when the exec probe found `nc`. The first of
-  /// these not in [excluding] wins.
+  /// address, else `nc -U` when the exec probe found an `nc` with `-U`.
+  /// The first of these not in [excluding] wins.
   static DockerRouteResult _relay(
     HostProfile profile,
     _Candidate candidate,
@@ -404,10 +405,11 @@ abstract final class DockerLadder {
   }
 
   /// The one exec probe of a refused path: whether it is a socket,
-  /// whether the user may write it, and whether `nc` is on the exec
-  /// `PATH` (the capability probe lists socat but not nc). The path is a
-  /// positional parameter of a constant script, so it is never parsed as
-  /// shell text. Null when the probe fails or answers something else.
+  /// whether the user may write it, and whether the `nc` on the exec
+  /// `PATH` has `-U` (the capability probe lists socat but not nc). The
+  /// path is a positional parameter of a constant script, so it is never
+  /// parsed as shell text. Null when the probe fails or answers something
+  /// else.
   static Future<_Probe?> _probe(SshLink link, String path) async {
     final command = HostCommands.commandLine([
       'sh',
@@ -487,12 +489,19 @@ abstract final class DockerLadder {
 }
 
 /// The exec probe's script; `$1` is the socket path. Each line is an exit
-/// status: `test -S`, `test -w`, `command -v nc`.
+/// status: `test -S`, `test -w`, and whether `nc`'s usage names `-U`.
+///
+/// Not every `nc` has `-U`: BusyBox's, the one an Alpine host has, and
+/// netcat-traditional's do not, and only print their usage for it, so a
+/// relay through them would fail at its first request and leave the
+/// endpoint unreachable instead of naming no relay (M3 D22). OpenBSD's
+/// and ncat list `-U` in the usage `-h` prints; the others print theirs,
+/// without it, for `-h` too. A missing `nc` prints nothing grep matches.
 const _probeScript =
     r'test -S "$1"; echo $?; test -w "$1"; echo $?; '
-    r'command -v nc >/dev/null 2>&1; echo $?';
+    r'nc -h </dev/null 2>&1 | grep -q -e -U; echo $?';
 
-/// The exec probe's bound [E]: three builtins and a `PATH` lookup.
+/// The exec probe's bound [E]: two builtins and `nc`'s usage.
 const _probeTimeout = Duration(seconds: 10);
 
 /// The probe prints three short lines; more is not its answer.
