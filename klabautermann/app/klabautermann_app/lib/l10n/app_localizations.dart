@@ -4467,6 +4467,186 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Close'**
   String get appearanceClose;
+
+  /// Containers table column: the container's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get dockerContainersColumnName;
+
+  /// Containers table column: the container's state, such as running or exited.
+  ///
+  /// In en, this message translates to:
+  /// **'State'**
+  String get dockerContainersColumnState;
+
+  /// Containers table column: the container's health check status (CTR-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Health'**
+  String get dockerContainersColumnHealth;
+
+  /// Containers table column: the engine's own status text, such as "Up 3 hours" or "Exited (0) 2 days ago", which gives the uptime. Server data, never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get dockerContainersColumnStatus;
+
+  /// Containers table column: the image the container runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get dockerContainersColumnImage;
+
+  /// Containers table column: the container's published and exposed ports.
+  ///
+  /// In en, this message translates to:
+  /// **'Ports'**
+  String get dockerContainersColumnPorts;
+
+  /// Containers table column: the compose project the container belongs to, or a Swarm task's service.
+  ///
+  /// In en, this message translates to:
+  /// **'Stack'**
+  String get dockerContainersColumnStack;
+
+  /// Containers table column: the container's CPU share from its list stats (CST-01).
+  ///
+  /// In en, this message translates to:
+  /// **'CPU'**
+  String get dockerContainersColumnCpu;
+
+  /// Containers table column: the memory the container uses, from its list stats (CST-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get dockerContainersColumnMemory;
+
+  /// A container's state in words. state is the Engine API's state name; a state outside this list shows as the engine gave it instead.
+  ///
+  /// In en, this message translates to:
+  /// **'{state, select, created{Created} running{Running} paused{Paused} restarting{Restarting} removing{Removing} exited{Exited} dead{Dead} other{Unknown}}'**
+  String dockerContainerState(String state);
+
+  /// A container's health check status (CTR-04), beside an icon.
+  ///
+  /// In en, this message translates to:
+  /// **'{health, select, healthy{Healthy} unhealthy{Unhealthy} starting{Starting} other{No health check}}'**
+  String dockerContainerHealth(String health);
+
+  /// A container's CPU share; share arrives as a fraction where 1 is one full CPU, so it can exceed 100%.
+  ///
+  /// In en, this message translates to:
+  /// **'{share}'**
+  String dockerContainersCpu(double share);
+
+  /// What a screen reader hears for a container's CPU or memory figure whose stats are old; the screen shows it grey beside a history icon.
+  ///
+  /// In en, this message translates to:
+  /// **'{value}, stale'**
+  String dockerContainersStale(String value);
+
+  /// The Stack column for a Swarm task: the Swarm service its name belongs to.
+  ///
+  /// In en, this message translates to:
+  /// **'{service} (Swarm)'**
+  String dockerContainersSwarmService(String service);
+
+  /// Containers list: the heading of the containers that belong to no compose project.
+  ///
+  /// In en, this message translates to:
+  /// **'Not in a stack'**
+  String get dockerContainersNoStack;
+
+  /// Containers list: a compose project heading's counts of the containers shown and of those running.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 container} other{{count} containers}}, {up} running'**
+  String dockerContainersGroupSummary(int count, int up);
+
+  /// Containers list: the search field's hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search by name, image or ID'**
+  String get dockerContainersSearchHint;
+
+  /// Containers list: tooltip of the button that clears the search.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear search'**
+  String get dockerContainersSearchClear;
+
+  /// Containers list: a toggle that hides stopped containers.
+  ///
+  /// In en, this message translates to:
+  /// **'Running only'**
+  String get dockerContainersRunningOnly;
+
+  /// Containers list on a phone: the label before the sort menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort by'**
+  String get dockerContainersSortBy;
+
+  /// Containers list on a phone: one figure of a container, after its column's name.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: {value}'**
+  String dockerContainersFact(String label, String value);
+
+  /// Containers list: while the first list is read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the containers…'**
+  String get dockerContainersReading;
+
+  /// Containers list: the engine listed none.
+  ///
+  /// In en, this message translates to:
+  /// **'This engine has no containers.'**
+  String get dockerContainersEmpty;
+
+  /// Containers list: Running only hides every container.
+  ///
+  /// In en, this message translates to:
+  /// **'No container is running. Turn off Running only to see the stopped ones.'**
+  String get dockerContainersNoneRunning;
+
+  /// Containers list: the search matches none.
+  ///
+  /// In en, this message translates to:
+  /// **'No container matches the search.'**
+  String get dockerContainersNoMatch;
+
+  /// Containers list: why the list could not be read. reason is the engine's failure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} daemonError{The engine refused or failed to list the containers.} connectionFailed{The connection to the engine failed while listing the containers.} other{The containers could not be listed.}}'**
+  String dockerContainersFailed(String reason);
+
+  /// Containers list: under a failed read, the list it keeps is older.
+  ///
+  /// In en, this message translates to:
+  /// **'The list below is the last one read.'**
+  String get dockerContainersKept;
+
+  /// Containers list: the latest stats round failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The CPU and memory figures could not be read, so the ones shown may be old.'**
+  String get dockerContainersStatsFailed;
+
+  /// Containers list: the server's link has a session limit (03 §5.2) on the SSH socket forward.
+  ///
+  /// In en, this message translates to:
+  /// **'Low-session mode: stats are read one container at a time, so they update more slowly.'**
+  String get dockerContainersLowSession;
+
+  /// Containers list: the server's link has a session limit (03 §5.2) on a relay route.
+  ///
+  /// In en, this message translates to:
+  /// **'Low-session mode: the list is read again every 15 seconds instead of following engine events, and stats are read one container at a time.'**
+  String get dockerContainersLowSessionRelay;
 }
 
 class _AppLocalizationsDelegate

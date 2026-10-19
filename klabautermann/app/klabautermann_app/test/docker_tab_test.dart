@@ -439,7 +439,7 @@ void main() {
         'Containers',
         'Images',
         'Stacks',
-        'Available in a later milestone.',
+        'Reading the containers…',
       ]) {
         expect(_inDocker(find.text(text)), findsOneWidget, reason: text);
       }
@@ -468,6 +468,54 @@ void main() {
       expect(_queries(harness), hasLength(2));
       await _openDockerTab(tester);
       expect(_queries(harness), hasLength(3));
+    });
+
+    testWidgets('the Containers sub-tab watches the containers while it '
+        'shows (CTR-01)', (tester) async {
+      final harness = await _openWeb1(tester);
+      await _openDockerTab(tester);
+      List<DockerWatch> watches() =>
+          harness.engine.sentOfType<DockerWatch>().cast();
+      List<DockerUnwatch> unwatches() =>
+          harness.engine.sentOfType<DockerUnwatch>().cast();
+      expect(watches(), isEmpty, reason: 'no endpoint yet');
+
+      await _emit(tester, harness, dockerReady('srv-1'));
+      expect(watches(), hasLength(1));
+      expect(watches().single.serverId, 'srv-1');
+      await _emit(
+        tester,
+        harness,
+        dockerContainerList('srv-1', [
+          dockerContainer('a1f3c2e4b5d6', name: 'web-frontend'),
+        ], at: DateTime(2026, 10, 15, 14, 30)),
+      );
+      expect(_inDocker(find.text('web-frontend')), findsOneWidget);
+
+      // Another sub-tab hides it; coming back watches anew.
+      await tester.tap(_inDocker(find.text('Images')));
+      await tester.pumpAndSettle();
+      expect(unwatches().single.watchId, watches().single.watchId);
+      expect(
+        _inDocker(find.text('Available in a later milestone.')),
+        findsOneWidget,
+      );
+      await tester.tap(_inDocker(find.text('Containers')));
+      await tester.pumpAndSettle();
+      expect(watches(), hasLength(2));
+
+      // So does another server tab.
+      await tester.tap(
+        find
+            .descendant(
+              of: find.byType(TabBar),
+              matching: find.text('Overview'),
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
+      expect(unwatches(), hasLength(2));
+      expect(unwatches().last.watchId, watches().last.watchId);
     });
 
     testWidgets('says when the engine details could not be read, and reads '

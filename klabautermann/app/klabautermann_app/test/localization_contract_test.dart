@@ -112,7 +112,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // surfaces show ARB text for its failure kind (syncFailed).
   'lib/controllers/sync_controller.dart': {"'the engine stopped'"},
   // A Docker query id the engine echoes in its answer (03 §10.1).
-  'lib/controllers/docker_controller.dart': {r"'docker-${_count++}'"},
+  // The query and watch ids the engine keys Docker answers by (03 §10.1).
+  'lib/controllers/docker_controller.dart': {
+    r"'docker-${_count++}'",
+    r"'containers-${_count++}'",
+  },
   'lib/controllers/log_streams.dart': {
     // A log stream id the engine keys a stream's events by (03 §10.1), and
     // the rejected request's class name, which RequestRejected carries.
@@ -226,6 +230,37 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // debugPrint of a dismissal that was not saved; the toast is ARB text.
   'lib/ui/coverage.dart': {r"'$error'"},
+  'lib/ui/docker/containers_panel.dart': {
+    // The key tests find a phone row by, in the table rows' form, and the
+    // line break between its cells in its screen-reader label, each ARB
+    // text; a heading's row key; empty cells and no ports.
+    r"'${DockerWatchList.containers.name}.row.${_rowKey(entry)}'",
+    r"'\n'",
+    r"'group.${project ?? ''}'",
+    "''",
+  },
+  'lib/ui/docker/containers_view.dart': {
+    // The compose project label key (compose's pkg/api/labels.go).
+    "'com.docker.compose.project'",
+    // The search's term separator and the line break between the fields
+    // it searches; empty values.
+    r"r'\s+'",
+    r"'\n'",
+    "''",
+    // The engine's Status text as go-units prints it, matched, never
+    // shown: the health marker the health column replaces, the uptime's
+    // words, and the wildcard addresses `docker ps` leaves out.
+    r"r'\s*\((healthy|unhealthy|health: starting)\)'",
+    "'less than a second'",
+    "'about a minute'",
+    "'about an hour'",
+    r"r'^Up (.+?)(?: \(.*\))?$'",
+    r"r'^(\d+) (second|minute|hour|day|week|month|year)s?$'",
+    "'0.0.0.0'",
+    "'::'",
+    // The separator `docker ps` prints between ports; machine data.
+    "', '",
+  },
   'lib/ui/docker/docker_panel.dart': {
     // An assert message; programmer diagnostic, never rendered.
     "'new controllers come with a new tree (KlabautermannApp, D44)'",

@@ -4025,5 +4025,179 @@
   "appearanceClose": "Close",
   "@appearanceClose": {
     "description": "Appearance tab: closes a section's help dialog."
+  },
+  "dockerContainersColumnName": "Name",
+  "@dockerContainersColumnName": {
+    "description": "Containers table column: the container's name."
+  },
+  "dockerContainersColumnState": "State",
+  "@dockerContainersColumnState": {
+    "description": "Containers table column: the container's state, such as running or exited."
+  },
+  "dockerContainersColumnHealth": "Health",
+  "@dockerContainersColumnHealth": {
+    "description": "Containers table column: the container's health check status (CTR-04)."
+  },
+  "dockerContainersColumnStatus": "Status",
+  "@dockerContainersColumnStatus": {
+    "description": "Containers table column: the engine's own status text, such as \"Up 3 hours\" or \"Exited (0) 2 days ago\", which gives the uptime. Server data, never translated."
+  },
+  "dockerContainersColumnImage": "Image",
+  "@dockerContainersColumnImage": {
+    "description": "Containers table column: the image the container runs."
+  },
+  "dockerContainersColumnPorts": "Ports",
+  "@dockerContainersColumnPorts": {
+    "description": "Containers table column: the container's published and exposed ports."
+  },
+  "dockerContainersColumnStack": "Stack",
+  "@dockerContainersColumnStack": {
+    "description": "Containers table column: the compose project the container belongs to, or a Swarm task's service."
+  },
+  "dockerContainersColumnCpu": "CPU",
+  "@dockerContainersColumnCpu": {
+    "description": "Containers table column: the container's CPU share from its list stats (CST-01)."
+  },
+  "dockerContainersColumnMemory": "Memory",
+  "@dockerContainersColumnMemory": {
+    "description": "Containers table column: the memory the container uses, from its list stats (CST-01)."
+  },
+  "dockerContainerState": "{state, select, created{Created} running{Running} paused{Paused} restarting{Restarting} removing{Removing} exited{Exited} dead{Dead} other{Unknown}}",
+  "@dockerContainerState": {
+    "description": "A container's state in words. state is the Engine API's state name; a state outside this list shows as the engine gave it instead.",
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerContainerHealth": "{health, select, healthy{Healthy} unhealthy{Unhealthy} starting{Starting} other{No health check}}",
+  "@dockerContainerHealth": {
+    "description": "A container's health check status (CTR-04), beside an icon.",
+    "placeholders": {
+      "health": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerContainersCpu": "{share}",
+  "@dockerContainersCpu": {
+    "description": "A container's CPU share; share arrives as a fraction where 1 is one full CPU, so it can exceed 100%.",
+    "placeholders": {
+      "share": {
+        "type": "double",
+        "format": "decimalPercentPattern",
+        "optionalParameters": {
+          "decimalDigits": 1
+        }
+      }
+    }
+  },
+  "dockerContainersStale": "{value}, stale",
+  "@dockerContainersStale": {
+    "description": "What a screen reader hears for a container's CPU or memory figure whose stats are old; the screen shows it grey beside a history icon.",
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "12.5%"
+      }
+    }
+  },
+  "dockerContainersSwarmService": "{service} (Swarm)",
+  "@dockerContainersSwarmService": {
+    "description": "The Stack column for a Swarm task: the Swarm service its name belongs to.",
+    "placeholders": {
+      "service": {
+        "type": "String",
+        "example": "web"
+      }
+    }
+  },
+  "dockerContainersNoStack": "Not in a stack",
+  "@dockerContainersNoStack": {
+    "description": "Containers list: the heading of the containers that belong to no compose project."
+  },
+  "dockerContainersGroupSummary": "{count, plural, =1{1 container} other{{count} containers}}, {up} running",
+  "@dockerContainersGroupSummary": {
+    "description": "Containers list: a compose project heading's counts of the containers shown and of those running.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "up": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerContainersSearchHint": "Search by name, image or ID",
+  "@dockerContainersSearchHint": {
+    "description": "Containers list: the search field's hint."
+  },
+  "dockerContainersSearchClear": "Clear search",
+  "@dockerContainersSearchClear": {
+    "description": "Containers list: tooltip of the button that clears the search."
+  },
+  "dockerContainersRunningOnly": "Running only",
+  "@dockerContainersRunningOnly": {
+    "description": "Containers list: a toggle that hides stopped containers."
+  },
+  "dockerContainersSortBy": "Sort by",
+  "@dockerContainersSortBy": {
+    "description": "Containers list on a phone: the label before the sort menu."
+  },
+  "dockerContainersFact": "{label}: {value}",
+  "@dockerContainersFact": {
+    "description": "Containers list on a phone: one figure of a container, after its column's name.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Image"
+      },
+      "value": {
+        "type": "String",
+        "example": "nginx:1.27"
+      }
+    }
+  },
+  "dockerContainersReading": "Reading the containers…",
+  "@dockerContainersReading": {
+    "description": "Containers list: while the first list is read."
+  },
+  "dockerContainersEmpty": "This engine has no containers.",
+  "@dockerContainersEmpty": {
+    "description": "Containers list: the engine listed none."
+  },
+  "dockerContainersNoneRunning": "No container is running. Turn off Running only to see the stopped ones.",
+  "@dockerContainersNoneRunning": {
+    "description": "Containers list: Running only hides every container."
+  },
+  "dockerContainersNoMatch": "No container matches the search.",
+  "@dockerContainersNoMatch": {
+    "description": "Containers list: the search matches none."
+  },
+  "dockerContainersFailed": "{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} daemonError{The engine refused or failed to list the containers.} connectionFailed{The connection to the engine failed while listing the containers.} other{The containers could not be listed.}}",
+  "@dockerContainersFailed": {
+    "description": "Containers list: why the list could not be read. reason is the engine's failure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerContainersKept": "The list below is the last one read.",
+  "@dockerContainersKept": {
+    "description": "Containers list: under a failed read, the list it keeps is older."
+  },
+  "dockerContainersStatsFailed": "The CPU and memory figures could not be read, so the ones shown may be old.",
+  "@dockerContainersStatsFailed": {
+    "description": "Containers list: the latest stats round failed."
+  },
+  "dockerContainersLowSession": "Low-session mode: stats are read one container at a time, so they update more slowly.",
+  "@dockerContainersLowSession": {
+    "description": "Containers list: the server's link has a session limit (03 §5.2) on the SSH socket forward."
+  },
+  "dockerContainersLowSessionRelay": "Low-session mode: the list is read again every 15 seconds instead of following engine events, and stats are read one container at a time.",
+  "@dockerContainersLowSessionRelay": {
+    "description": "Containers list: the server's link has a session limit (03 §5.2) on a relay route."
   }
 }

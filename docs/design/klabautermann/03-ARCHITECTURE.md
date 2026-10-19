@@ -5857,7 +5857,14 @@ tab:
   engine as the API names it, the negotiated API version, the product
   and version, and the host's OS and architecture, read while the tab
   shows), over the Containers, Images and Stacks sub-tabs, whose bodies
-  land with their panels.
+  land with their panels. As built in D13
+  (`ui/docker/containers_panel.dart`), the Containers sub-tab holds one
+  container and stats watch per server while it shows, replaced under
+  its id as the running rows on screen change (CST-01) and ended when
+  it hides; it groups by the compose project label rather than the
+  stacks list, whose source checks would run compose on the host, and
+  greys stats older than 20 s. The list carries no sizes until a query
+  asks for `size=1`.
 
 As built in M2 (`app/klabautermann_app/lib/ui/system_panel.dart`), the
 System tab shows SYS-01's identity, BOOT-01's uptime and boot time,
