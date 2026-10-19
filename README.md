@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 > LLM disclosure: This codebase was written with substantial help from large language models: AI coding agents working from the [`AGENTS.md`](AGENTS.md) brief in this repo.
 
-**Current version:** v<!-- version -->1.9.0<!-- /version --> · [Releases](https://github.com/L-K-M/Hauntware/releases)
+**Current version:** v<!-- version -->1.9.2<!-- /version --> · [Releases](https://github.com/L-K-M/Hauntware/releases)
 
 Desktop apps are ad-hoc signed and not notarized. After moving one to
 Applications, clear its quarantine flag, for example:
@@ -18,15 +18,16 @@ One repository, one version and one release cadence:
 
 | Product | Purpose | Clients |
 | --- | --- | --- |
-| [Planchette](planchette/README.md) | Text editor and shared editor/UI packages | Linux, macOS, Windows |
+| [Planchette](planchette/README.md) | Text editor and shared editor/UI packages | Android, Linux, macOS, Windows |
 | [Séance](seance/README.md) | SSH client and optional local terminal | Android, iOS, Linux, macOS, Windows |
 | [Poltergeist](poltergeist/README.md) | File transfer and folder synchronization | Android, iOS, Linux, macOS, Windows |
 | [Klabautermann](klabautermann/README.md) | Server management and Docker | Android, iOS, Linux, macOS, Windows |
 
 Séance also supplies the shared encrypted sync server. Product names,
 application IDs, storage locations and keystore namespaces stay distinct.
-Klabautermann is in development: CI builds its five clients on every pull
-request, and suite releases include them from its preview milestone.
+Klabautermann is in preview: suite releases ship its five clients under
+asset names that carry the preview label until v1, except the .deb,
+which keeps Debian's versioned name.
 
 ## Develop
 
@@ -62,9 +63,9 @@ scripts/release.sh --check
 scripts/release.sh 1.2.0 --push  # Explicit future release, not part of migration
 ```
 
-One `vX.Y.Z` tag drives all 13 released client targets (Klabautermann's five
-join with its preview), sync-server binaries and its container image. One
-publish point follows every required test/build and artifact/checksum check.
+One `vX.Y.Z` tag drives all 19 released client targets, sync-server binaries
+and its container image. One publish point follows every required test/build
+and artifact/checksum check.
 Android keeps the existing committed sideload signing keys; desktop bundles
 remain unsigned/ad-hoc and iOS bundles unsigned.
 Vendored package versions and historical benchmark measurements stay intact.

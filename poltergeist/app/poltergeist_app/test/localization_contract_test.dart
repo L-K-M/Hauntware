@@ -1845,6 +1845,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'update:${info.latestVersion}'",
     r"'dragout:${notice.id}'",
   },
+  // The release asset an Android build updates from: the release
+  // manifest's file name, never rendered.
+  'lib/services/update_check_controller.dart': {"'poltergeist-android.apk'"},
   // Path grammar and route text: both path separators, the
   // endpoint:path composition, the empty-string seed, and the `→` route
   // arrow — technical formatting and machine data, reviewed per file.

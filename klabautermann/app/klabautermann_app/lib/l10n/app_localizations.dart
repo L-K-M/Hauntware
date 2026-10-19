@@ -94,10 +94,10 @@ abstract class AppLocalizations {
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[Locale('en')];
 
-  /// No description provided for @appTitle.
+  /// The app's title, with the preview label until v1 (04 §12.3): the task switcher, the About dialog and the about row on the General settings tab. Klabautermann is the display name, an identity: never translated.
   ///
   /// In en, this message translates to:
-  /// **'Klabautermann'**
+  /// **'Klabautermann (preview)'**
   String get appTitle;
 
   /// No description provided for @fleetTitle.
@@ -111,6 +111,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Servers'**
   String get fleetSectionServers;
+
+  /// Fleet list section header over the synced servers pinned to the top on this device (03 §10.3); drawn in caps.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned'**
+  String get fleetSectionPinned;
+
+  /// Fleet list section header over the servers imported from this device's SSH config (FL-02), listed apart from the synced servers and their groups; drawn in caps.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported'**
+  String get fleetSectionImported;
+
+  /// A synced fleet row's menu verb that lists the server under the Pinned section on this device.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin to top'**
+  String get fleetRowPin;
+
+  /// A pinned fleet row's menu verb that returns the server to its section.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin'**
+  String get fleetRowUnpin;
+
+  /// Top toast when pinning or unpinning a server could not be written to the device's settings file; the change holds for this session.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save your pinned servers, so the change lasts only until it quits.'**
+  String get fleetPinNotSaved;
+
+  /// A fleet row's menu verb that adds the server to this device's monitor set (FL-21): Klabautermann then reads it continuously while open and its row shows CPU, memory and disk. Disabled for a server that cannot be monitored.
+  ///
+  /// In en, this message translates to:
+  /// **'Monitor'**
+  String get fleetRowMonitor;
+
+  /// A monitored fleet row's menu verb that takes the server out of this device's monitor set (FL-21); it is then read only while a view has it open.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop monitoring'**
+  String get fleetRowStopMonitoring;
+
+  /// Top toast when the user asks to monitor a server while the monitor set (FL-21) is full; limit is the most servers it holds.
+  ///
+  /// In en, this message translates to:
+  /// **'You can monitor up to {limit} servers on this device. Stop monitoring one first.'**
+  String monitorSetFull(int limit);
+
+  /// Top toast when a monitor set change applied but could not be written to the device's settings file; the change holds for this session.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save your monitored servers, so the change lasts only until it quits.'**
+  String get monitorSetNotSaved;
+
+  /// Top toast when the app did not take a monitor set change, such as one from the settings window that the app refused.
+  ///
+  /// In en, this message translates to:
+  /// **'The monitored servers could not be changed.'**
+  String get monitorSetNotChanged;
+
+  /// Why a synced server cannot join the monitor set (FL-21): this device has not confirmed its endpoint, or a sync changed it since (SAF-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm this server\'s endpoint to monitor it.'**
+  String get monitorIneligibleEndpoint;
+
+  /// Why a server cannot join the monitor set (FL-21): its sign-in needs the user's answer, and continuous reading never asks.
+  ///
+  /// In en, this message translates to:
+  /// **'Signs in with a password or a stored key, which asks you first, so it is read only while you have it open.'**
+  String get monitorIneligibleCredentials;
+
+  /// Why an imported server cannot join the monitor set (FL-21): it came from an older import, whose sign-in Klabautermann does not know until the next import.
+  ///
+  /// In en, this message translates to:
+  /// **'Import your ssh_config again to monitor this server.'**
+  String get monitorIneligibleUnknown;
 
   /// No description provided for @fleetEmptyTitle.
   ///
@@ -279,6 +357,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Window'**
   String get menuWindow;
+
+  /// Title of the Help menu (Linux and Windows, where it holds About Klabautermann).
+  ///
+  /// In en, this message translates to:
+  /// **'Help'**
+  String get menuHelp;
+
+  /// The menu command that opens the About dialog: first in the macOS application menu, in the Help menu on Linux and Windows. Klabautermann is the display name: never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'About Klabautermann'**
+  String get aboutCommand;
+
+  /// The running build's version in the About dialog and the about row on the General settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version}'**
+  String aboutVersion(String version);
+
+  /// In place of aboutVersion when the platform could not tell the app's version.
+  ///
+  /// In en, this message translates to:
+  /// **'Version unknown'**
+  String get aboutVersionUnknown;
+
+  /// The app's licence line in the About dialog. Klabautermann and Unlicense are names: never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann is free and unencumbered software released into the public domain under the Unlicense.'**
+  String get aboutLicence;
 
   /// No description provided for @statusConnected.
   ///
@@ -567,12 +675,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Alerts'**
   String get settingsTabAlerts;
-
-  /// No description provided for @themeLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Theme'**
-  String get themeLabel;
 
   /// No description provided for @themeSystem.
   ///
@@ -2032,24 +2134,6 @@ abstract class AppLocalizations {
   /// **'Podman can also answer on Docker\'s socket path. Docker support will tell them apart.'**
   String get accessRuntimeAlias;
 
-  /// Docker tab: title shown instead of the Docker panels until the release with Docker support.
-  ///
-  /// In en, this message translates to:
-  /// **'Arrives with Docker support'**
-  String get accessDockerPendingTitle;
-
-  /// Docker tab: body under accessDockerPendingTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Containers, images and stacks arrive with Docker support. Until then, this tab shows the runtime Klabautermann detected, read-only.'**
-  String get accessDockerPendingBody;
-
-  /// Docker tab: heading over the container engines the probe found.
-  ///
-  /// In en, this message translates to:
-  /// **'Detected runtime'**
-  String get accessDetectedRuntime;
-
   /// Shown instead of a server panel that cannot work with this server or account; panel is the panel's tab name.
   ///
   /// In en, this message translates to:
@@ -3286,6 +3370,102 @@ abstract class AppLocalizations {
   /// **'You can\'t connect to this server yet: it comes from an earlier import that kept only its address. Import your SSH config again to connect.'**
   String get connectRejectedAddressOnly;
 
+  /// Banner on a server's workspace or screen when the engine will not connect a synced server because its endpoint (host, port, user, jump route) is not confirmed on this device or changed since (03 §4.7, SAF-09). The user confirms it from the notice over the fleet list, whose button is endpointsReview.
+  ///
+  /// In en, this message translates to:
+  /// **'You can\'t connect to this server yet: its address comes from your sync account and isn\'t confirmed on this device, or it changed since you confirmed it. Choose Review over the server list to check and confirm it.'**
+  String get connectRejectedEndpointNotConfirmed;
+
+  /// Notice over the fleet list while synced servers wait for endpoint confirmation on this device (03 §4.3 step 3, SAF-09): new from the sync account, or changed since they were confirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} synced server waits for you to confirm its address.} other{{count} synced servers wait for you to confirm their addresses.}}'**
+  String endpointsPendingNotice(int count);
+
+  /// Button on endpointsPendingNotice that opens the endpoint confirmation list.
+  ///
+  /// In en, this message translates to:
+  /// **'Review'**
+  String get endpointsReview;
+
+  /// Title of the endpoint confirmation list (03 §4.3 step 3).
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm server addresses'**
+  String get endpointsTitle;
+
+  /// Explanation at the top of the endpoint confirmation list (SAF-09): any device on the account can rewrite a server's address, and a background connect would then hand a credential to the new host.
+  ///
+  /// In en, this message translates to:
+  /// **'These servers come from your sync account. Klabautermann connects only to addresses you confirm on this device, so an address changed on another device cannot receive your sign-in unnoticed. Check each host, port, user and jump route before you confirm it.'**
+  String get endpointsBody;
+
+  /// Label of the search field of the endpoint confirmation list; it matches names, users and addresses.
+  ///
+  /// In en, this message translates to:
+  /// **'Search servers'**
+  String get endpointsSearch;
+
+  /// Line of an endpoint confirmation row naming the jump hosts the server is reached through, first hop first.
+  ///
+  /// In en, this message translates to:
+  /// **'via {route}'**
+  String endpointsRoute(String route);
+
+  /// Between the jump hosts in endpointsRoute, from the first hop towards the server.
+  ///
+  /// In en, this message translates to:
+  /// **' → '**
+  String get endpointsRouteSeparator;
+
+  /// Line of an endpoint confirmation row whose server, or a jump host it goes through, was changed by a sync after this device confirmed it (03 §4.7).
+  ///
+  /// In en, this message translates to:
+  /// **'Changed since you confirmed it'**
+  String get endpointsChanged;
+
+  /// Shown in place of the rows when the search of the endpoint confirmation list matches no server.
+  ///
+  /// In en, this message translates to:
+  /// **'No servers match your search.'**
+  String get endpointsNoMatch;
+
+  /// Shown in place of the rows when no synced server waits for confirmation any more.
+  ///
+  /// In en, this message translates to:
+  /// **'Every synced server\'s address is confirmed on this device.'**
+  String get endpointsNoneLeft;
+
+  /// Button of the endpoint confirmation list that confirms every row the search shows, whatever its toggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm all shown'**
+  String get endpointsConfirmAllShown;
+
+  /// Main button of the endpoint confirmation list: confirms the rows whose toggles are on; disabled while none is.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Confirm selected} one{Confirm {count} server} other{Confirm {count} servers}}'**
+  String endpointsConfirmSelected(int count);
+
+  /// Toast after the confirmed servers left the list; Klabautermann may now connect to them.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Confirmed {count} server address.} other{Confirmed {count} server addresses.}}'**
+  String endpointsConfirmed(int count);
+
+  /// Under the endpoint confirmation list when a confirmed server stays listed because a jump host on its route changed and needs its own confirmation (D64).
+  ///
+  /// In en, this message translates to:
+  /// **'Some servers still need confirming: confirm the jump hosts they go through too.'**
+  String get endpointsStillPending;
+
+  /// Under the endpoint confirmation list when the engine could not save the confirmation or stopped before answering.
+  ///
+  /// In en, this message translates to:
+  /// **'The confirmation could not be saved on this device, so these servers stay unconfirmed. Try again.'**
+  String get endpointsFailed;
+
   /// Heading of the accessibility settings on the General settings tab.
   ///
   /// In en, this message translates to:
@@ -3315,6 +3495,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The setting could not be changed.'**
   String get settingsAnnounceNotChanged;
+
+  /// Heading of the about row on the General settings tab, which shows the app's title and version and opens the About dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get settingsAboutTitle;
+
+  /// Heading of the monitor set's switches (FL-21) on the Servers settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Monitoring'**
+  String get settingsMonitorTitle;
+
+  /// Explanation above the monitor set's switches on the Servers settings tab (FL-21); limit is the most servers the set holds.
+  ///
+  /// In en, this message translates to:
+  /// **'Monitored servers are read continuously while Klabautermann is open, and their rows show CPU, memory and disk. A server can be monitored once its endpoint is confirmed and it signs in with an SSH agent or a key file, without asking you. Up to {limit} servers.'**
+  String settingsMonitorDetail(int limit);
+
+  /// How many servers the monitor set holds (FL-21) out of the most it can, above its switches on the Servers settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'{monitored} of {limit} servers monitored'**
+  String settingsMonitorCount(int monitored, int limit);
+
+  /// The Servers settings tab's monitor set section while the fleet has no servers.
+  ///
+  /// In en, this message translates to:
+  /// **'No servers yet. Servers you sync or import show here.'**
+  String get settingsMonitorEmpty;
 
   /// Screen-reader announcement (A11Y-15) when a value on a server's Overview has crossed into the warning or critical band, or back below the warning level; metric names the value (CPU, Memory, Disk /var), value is its percentage.
   ///
@@ -3633,6 +3843,630 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The sync file {fileName} was saved by a newer version of Klabautermann. Sync changes will not be kept after a restart.'**
   String syncFileNewer(String fileName);
+
+  /// The server header's Docker transport label (03 §5.9, E4) before the server is connected and its capability check has answered.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API: waiting for the connection'**
+  String get dockerTransportWaiting;
+
+  /// The server header's Docker transport label (03 §5.9, E4) while Klabautermann tries the routes to the engine socket and agrees on an API version.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API: looking for a route'**
+  String get dockerTransportResolving;
+
+  /// The server header's Docker transport label (03 §5.9, E4) for rank 1: SSH forwards the engine socket. Keep the wording of 03 §5.9.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API via SSH socket forward'**
+  String get dockerTransportSocketForward;
+
+  /// The server header's Docker transport label (03 §5.9, E4) for rank 2: the engine CLI relays each connection over its own SSH session. "docker" is the command name; keep the wording of 03 §5.9.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API via docker CLI relay (limited streams)'**
+  String get dockerTransportCliRelay;
+
+  /// The server header's Docker transport label (03 §5.9, E4) for rank 4: socat or nc relays each connection. "socat" is the command name; keep the wording of 03 §5.9.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API via socat relay'**
+  String get dockerTransportSocatRelay;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when socket forwarding is refused and the server has no docker, podman, socat or nc to relay through.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: forwarding is off and there is no relay'**
+  String get dockerTransportNoRelay;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when the account cannot use the engine socket but sudo exists; admin mode arrives later.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: the socket needs admin mode'**
+  String get dockerTransportNeedsAdminMode;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when the account cannot use the engine socket and the server has no sudo.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: your account cannot use the socket'**
+  String get dockerTransportSocketDenied;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when the command that checks the engine socket failed or answered something unreadable.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: the socket check failed'**
+  String get dockerTransportProbeFailed;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when the server has no Docker or Podman socket.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: no engine socket found'**
+  String get dockerTransportNoSocket;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when the capability check has not reported the server's engine sockets.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: the sockets were not checked'**
+  String get dockerTransportSocketsUnknown;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when routes to the engine socket opened but the engine answered over none of them.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API: the engine did not answer'**
+  String get dockerTransportUnreachable;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when the engine offers no API version this app can use.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API: the engine\'s API version is not supported'**
+  String get dockerTransportUnsupported;
+
+  /// The server header's Docker transport label (03 §5.9, E4) when the SSH connection failed while the routes were tried.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine API: the connection failed while looking for a route'**
+  String get dockerTransportLinkError;
+
+  /// Server header: the server allows few SSH sessions, so Docker shares them sparingly (03 §5.2).
+  ///
+  /// In en, this message translates to:
+  /// **'Low-session mode'**
+  String get dockerLowSession;
+
+  /// Server header badge (SAF-08, 03 §8.4): the engine socket in use belongs to a rootful engine, so using it equals root on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Rootful socket: root-equivalent'**
+  String get dockerBadgeRootfulSocket;
+
+  /// Server header badge (SAF-08, 03 §8.4): the engine in use runs rootless, so using it equals the account that runs it.
+  ///
+  /// In en, this message translates to:
+  /// **'Rootless engine: equals user {user}'**
+  String dockerBadgeRootlessEngine(String user);
+
+  /// dockerBadgeRootlessEngine when the capability check did not name the login user.
+  ///
+  /// In en, this message translates to:
+  /// **'Rootless engine: equals your login user'**
+  String get dockerBadgeRootlessEngineLogin;
+
+  /// Server header badge (SAF-08): a socket path Klabautermann cannot classify, treated as root-equivalent.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom socket: root-equivalent'**
+  String get dockerBadgeCustomSocket;
+
+  /// The engine in use when its mode is unknown, as on a custom socket path.
+  ///
+  /// In en, this message translates to:
+  /// **'Docker'**
+  String get dockerRuntimeDocker;
+
+  /// The engine in use when its mode is unknown, as on a custom socket path.
+  ///
+  /// In en, this message translates to:
+  /// **'Podman'**
+  String get dockerRuntimePodman;
+
+  /// Docker tab, shown instead of its panels until the server is connected and its capability check has answered.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the connection'**
+  String get dockerGateWaitingTitle;
+
+  /// Body under dockerGateWaitingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann looks for the Docker engine once it is connected to this server and knows what the server offers.'**
+  String get dockerGateWaitingBody;
+
+  /// Docker tab, shown instead of its panels while Klabautermann finds a route to the engine socket.
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for the Docker engine'**
+  String get dockerGateResolvingTitle;
+
+  /// Body under dockerGateResolvingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann is finding a way to reach the engine socket and agreeing on an API version with the engine.'**
+  String get dockerGateResolvingBody;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: forwarding refused and no relay. Command names stay as they are.
+  ///
+  /// In en, this message translates to:
+  /// **'Socket forwarding is off on this server, and it has nothing to relay through: no docker or podman command, no socat and no nc.'**
+  String get dockerGateNoRelay;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the account cannot use the socket, but sudo exists.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account cannot use the engine socket. Reaching it through sudo needs admin mode, which arrives in a later milestone.'**
+  String get dockerGateNeedsAdminMode;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the account cannot use the socket and there is no sudo.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account cannot use the engine socket, and this server has no sudo. The Access tab shows how access is granted.'**
+  String get dockerGateSocketDenied;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the socket check failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the engine socket failed, so Klabautermann cannot tell how to reach it.'**
+  String get dockerGateProbeFailed;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: no engine socket.
+  ///
+  /// In en, this message translates to:
+  /// **'No Docker or Podman socket was found on this server.'**
+  String get dockerGateNoSocket;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the sockets were not checked.
+  ///
+  /// In en, this message translates to:
+  /// **'The server\'s capability check has not reported its engine sockets.'**
+  String get dockerGateSocketsUnknown;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the engine did not answer.
+  ///
+  /// In en, this message translates to:
+  /// **'A route to the engine socket opened, but the engine did not answer over it.'**
+  String get dockerGateUnreachable;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the engine is too old. 1.41 is the Docker API version.
+  ///
+  /// In en, this message translates to:
+  /// **'The engine\'s newest API version is older than 1.41, the oldest Klabautermann supports.'**
+  String get dockerGateBelowClientFloor;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the engine is too new for this app.
+  ///
+  /// In en, this message translates to:
+  /// **'The engine only accepts API versions newer than Klabautermann supports.'**
+  String get dockerGateBelowServerMinimum;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: no readable API version.
+  ///
+  /// In en, this message translates to:
+  /// **'The engine did not report an API version Klabautermann can read.'**
+  String get dockerGateApiVersionUnknown;
+
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the SSH connection failed meanwhile.
+  ///
+  /// In en, this message translates to:
+  /// **'The connection to this server failed while Klabautermann looked for the engine.'**
+  String get dockerGateLinkError;
+
+  /// Docker tab: asks again for the Docker endpoint or the engine details after a failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get dockerRetry;
+
+  /// Docker tab: the sub-tab listing containers.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers'**
+  String get dockerTabContainers;
+
+  /// Docker tab: the sub-tab listing images.
+  ///
+  /// In en, this message translates to:
+  /// **'Images'**
+  String get dockerTabImages;
+
+  /// Docker tab: the sub-tab listing compose stacks.
+  ///
+  /// In en, this message translates to:
+  /// **'Stacks'**
+  String get dockerTabStacks;
+
+  /// Docker tab: heading of the strip with the engine's runtime, API version, version and operating system (DKE-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Engine'**
+  String get dockerEngineHeading;
+
+  /// Docker tab engine strip: the Docker API version the app negotiated with the engine.
+  ///
+  /// In en, this message translates to:
+  /// **'API {version}'**
+  String dockerEngineApi(String version);
+
+  /// Docker tab engine strip: the engine's product name and version.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} {version}'**
+  String dockerEngineVersion(String name, String version);
+
+  /// Docker tab engine strip: the engine did not report its version.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}, version unknown'**
+  String dockerEngineVersionUnknown(String name);
+
+  /// Docker tab engine strip: the engine host's operating system and architecture.
+  ///
+  /// In en, this message translates to:
+  /// **'{os} on {architecture}'**
+  String dockerEngineOs(String os, String architecture);
+
+  /// Docker tab engine strip: the engine did not report its host's operating system.
+  ///
+  /// In en, this message translates to:
+  /// **'Operating system unknown'**
+  String get dockerEngineOsUnknown;
+
+  /// Docker tab engine strip: while the engine's details are read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the engine details…'**
+  String get dockerEngineReading;
+
+  /// Docker tab engine strip: reading the engine's details failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The engine details could not be read.'**
+  String get dockerEngineReadFailed;
+
+  /// Docker tab: dismisses the root-equivalence notice on this device.
+  ///
+  /// In en, this message translates to:
+  /// **'Got it'**
+  String get dockerNoticeDismiss;
+
+  /// Toast: dismissing the Docker tab's root-equivalence notice could not be saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save that you dismissed the root-equivalence note, so it shows again after a restart.'**
+  String get dockerNoticeNotSaved;
+
+  /// Appearance tab: heading of the preset grid.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get appearanceThemeTitle;
+
+  /// Appearance tab: title of the theme help dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Themes'**
+  String get appearanceThemeHelpTitle;
+
+  /// Appearance tab: body of the theme help dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'A theme is kept on this device only and never syncs. To use one elsewhere, copy it here and paste it into Klabautermann on the other device.'**
+  String get appearanceThemeHelp;
+
+  /// Appearance tab: small print under the preset grid.
+  ///
+  /// In en, this message translates to:
+  /// **'Picking a theme copies its colours here. It is a starting point, not a mode, so everything below stays yours to change.'**
+  String get appearanceThemeFootnote;
+
+  /// Appearance tab: tooltip of a preset tile.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the {name} theme'**
+  String appearancePresetTooltip(String name);
+
+  /// Appearance tab: heading of the light/dark mode section.
+  ///
+  /// In en, this message translates to:
+  /// **'Mode'**
+  String get appearanceModeTitle;
+
+  /// Appearance tab: line above the mode switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic colours follow'**
+  String get appearanceModeLead;
+
+  /// Appearance tab: note when a dark palette sets its own surface.
+  ///
+  /// In en, this message translates to:
+  /// **'This theme has its own surface, so it is always dark. Set Surface to Automatic to choose a mode.'**
+  String get appearanceOwnSurfaceDark;
+
+  /// Appearance tab: note when a light palette sets its own surface.
+  ///
+  /// In en, this message translates to:
+  /// **'This theme has its own surface, so it is always light. Set Surface to Automatic to choose a mode.'**
+  String get appearanceOwnSurfaceLight;
+
+  /// Appearance tab: heading of the colour slots.
+  ///
+  /// In en, this message translates to:
+  /// **'Colours'**
+  String get appearanceColoursTitle;
+
+  /// Appearance tab: title of the colours help dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic colours'**
+  String get appearanceColoursHelpTitle;
+
+  /// Appearance tab: body of the colours help dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic colours are the light or dark neutrals Klabautermann ships with, as the mode picks them. Once you give the theme a surface of its own, they are mixed from that surface and the text instead. Lines and the selection may be translucent.'**
+  String get appearanceColoursHelp;
+
+  /// Appearance tab: the accent colour row.
+  ///
+  /// In en, this message translates to:
+  /// **'Accent'**
+  String get appearanceAccent;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Surface'**
+  String get appearanceSlotSurface;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Sidebar'**
+  String get appearanceSlotSidebar;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Headers and bars'**
+  String get appearanceSlotRaised;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Text'**
+  String get appearanceSlotText;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Secondary text'**
+  String get appearanceSlotSecondaryText;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Lines'**
+  String get appearanceSlotHairline;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Selection'**
+  String get appearanceSlotSelection;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Online'**
+  String get appearanceSlotOnline;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline'**
+  String get appearanceSlotOffline;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting'**
+  String get appearanceSlotConnecting;
+
+  /// Appearance tab: name of a colour slot.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get appearanceSlotUnknown;
+
+  /// Appearance tab: heading of the status colour slots.
+  ///
+  /// In en, this message translates to:
+  /// **'Status colours'**
+  String get appearanceStatusTitle;
+
+  /// Appearance tab: small print under the status colours.
+  ///
+  /// In en, this message translates to:
+  /// **'Each status also keeps its own shape and its name, so these colours never have to say it alone.'**
+  String get appearanceStatusFootnote;
+
+  /// Appearance tab: checkbox beside a colour that follows the mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic'**
+  String get appearanceAutomatic;
+
+  /// Appearance tab: screen reader label of a colour's Automatic checkbox.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: Automatic'**
+  String appearanceAutomaticSemantics(String label);
+
+  /// Appearance tab: tooltip of a colour swatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the {label} colour'**
+  String appearanceChooseColour(String label);
+
+  /// Appearance tab: tooltip of an Automatic colour's swatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a {label} colour (now Automatic)'**
+  String appearanceChooseAutomaticColour(String label);
+
+  /// Appearance tab: heading of the font and corner controls.
+  ///
+  /// In en, this message translates to:
+  /// **'Shape and type'**
+  String get appearanceShapeTitle;
+
+  /// Appearance tab: label of the interface font field.
+  ///
+  /// In en, this message translates to:
+  /// **'Interface font'**
+  String get appearanceInterfaceFont;
+
+  /// Appearance tab: hint of the empty interface font field.
+  ///
+  /// In en, this message translates to:
+  /// **'System default'**
+  String get appearanceInterfaceFontHint;
+
+  /// Appearance tab: helper text under the interface font field.
+  ///
+  /// In en, this message translates to:
+  /// **'Logs and commands keep their monospace font.'**
+  String get appearanceInterfaceFontHelper;
+
+  /// Appearance tab: label of the corner slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Corners'**
+  String get appearanceCorners;
+
+  /// Appearance tab: corner slider value at no rounding.
+  ///
+  /// In en, this message translates to:
+  /// **'Square'**
+  String get appearanceCornersSquare;
+
+  /// Appearance tab: corner slider value as a percentage.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}%'**
+  String appearanceCornersPercent(int percent);
+
+  /// Appearance tab: screen reader value of the corner slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Corners {label}'**
+  String appearanceCornersSemantics(String label);
+
+  /// Appearance tab: heading of copy and paste.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get appearanceShareTitle;
+
+  /// Appearance tab: button that copies the theme as text.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy theme'**
+  String get appearanceCopyTheme;
+
+  /// Appearance tab: button that pastes a theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste theme'**
+  String get appearancePasteTheme;
+
+  /// Appearance tab: small print under copy and paste.
+  ///
+  /// In en, this message translates to:
+  /// **'Copies the theme as text you can keep or send. Pasting reads what it can and leaves everything else at the default.'**
+  String get appearanceShareFootnote;
+
+  /// Appearance tab: toast after Copy theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme copied.'**
+  String get appearanceThemeCopied;
+
+  /// Appearance tab: toast when the clipboard holds no theme.
+  ///
+  /// In en, this message translates to:
+  /// **'The clipboard does not hold a theme. Copy one with Copy theme first.'**
+  String get appearancePasteNotATheme;
+
+  /// Appearance tab: heading of the reset control.
+  ///
+  /// In en, this message translates to:
+  /// **'Start over'**
+  String get appearanceStartOverTitle;
+
+  /// Appearance tab: button that resets the theme to the initial preset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to {name}'**
+  String appearanceResetButton(String name);
+
+  /// Appearance tab: status beside the reset button when no preset matches.
+  ///
+  /// In en, this message translates to:
+  /// **'Using your own colours.'**
+  String get appearanceUsingOwnColours;
+
+  /// Appearance tab: status beside the reset button when a preset matches.
+  ///
+  /// In en, this message translates to:
+  /// **'Using {name}.'**
+  String appearanceUsingPreset(String name);
+
+  /// Appearance tab: title of the reset confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset the theme?'**
+  String get appearanceResetTitle;
+
+  /// Appearance tab: body of the reset confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Every colour, the font and the corners go back to the {name} theme. The mode stays as it is.'**
+  String appearanceResetBody(String name);
+
+  /// Appearance tab: cancels the reset.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get appearanceCancel;
+
+  /// Appearance tab: confirms the reset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get appearanceReset;
+
+  /// Appearance tab: tooltip of a section's help button.
+  ///
+  /// In en, this message translates to:
+  /// **'About {title}'**
+  String appearanceAbout(String title);
+
+  /// Appearance tab: closes a section's help dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get appearanceClose;
 }
 
 class _AppLocalizationsDelegate

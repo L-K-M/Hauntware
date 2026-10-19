@@ -22,11 +22,13 @@ const _lockLine = "readonly lock_file='/tmp/klabautermann-fixture.lock'";
 /// `$STUB_SOAK_NO_EVIDENCE` is set, or with `$STUB_SOAK_HOLD` set it runs.
 /// A run stops as package:test does: a first SIGTERM lets the running test
 /// finish, here 30 s after the start, and a second one stops it at once.
-/// `compose down` takes `$STUB_DOWN_SECONDS` when it is set.
+/// `compose down` takes `$STUB_DOWN_SECONDS` when it is set. `ssh` plays
+/// the Docker host, where `docker load` reports an image.
 const _stubs = {
   'docker': r'''
 echo "docker $*" >>"$STUB_LOG"
 if [[ "$*" == *' port '* ]]; then echo '127.0.0.1:49152'; fi
+if [[ "$*" == *' exec '* ]]; then echo 'ssh-ed25519 AAAAstub root@stub'; fi
 if [[ "$*" == *' down '* ]]; then sleep "${STUB_DOWN_SECONDS:-0}"; fi
 ''',
   'ssh-keygen': r'''
@@ -42,6 +44,11 @@ echo "ssh-agent $*" >>"$STUB_LOG"
 if [[ "$1" == -s ]]; then echo 'SSH_AGENT_PID=0; export SSH_AGENT_PID;'; fi
 ''',
   'ssh-add': '',
+  'ssh': r'''
+echo "ssh $*" >>"$STUB_LOG"
+cat >/dev/null
+if [[ "$*" == *' docker load '* ]]; then echo 'Loaded image ID: sha256:stub'; fi
+''',
   'dart': r'''
 if [[ "$1" == run ]]; then cat >/dev/null; exit 0; fi
 run=suites
@@ -127,6 +134,8 @@ void main() {
     }
     final runnerVm = File('${integration.path}/runner_vm.sh')
       ..writeAsStringSync('#!/usr/bin/env bash\n$_runnerVm');
+    // What run.sh pipes to the Docker host, which the stand-in ignores.
+    File('${integration.path}/seed_docker.sh').writeAsStringSync('exit 0\n');
     final chmod = await Process.run('chmod', [
       '+x',
       for (final name in _stubs.keys) '${bin.path}/$name',
@@ -339,6 +348,41 @@ void main() {
         'suites started',
         'runner-vm started',
         'soak started',
+      ]),
+    );
+  });
+
+  test('run.sh seeds the Docker host before the suites, with the image '
+      'it loaded', () async {
+    final (process: _, :exitCode, :output) = await startRun(suitesExit: '0');
+
+    expect(
+      await exitCode.timeout(const Duration(seconds: 20)),
+      0,
+      reason: '$output',
+    );
+    // `docker save` and the `docker load` it pipes into start together,
+    // so their stubs log in either order.
+    expect(
+      fixtureLifetime(),
+      containsAllInOrder([
+        startsWith('docker pull --quiet mirror.gcr.io/library/busybox:'),
+        startsWith('docker save '),
+      ]),
+    );
+    expect(
+      fixtureLifetime(),
+      containsAllInOrder([
+        startsWith('docker pull --quiet mirror.gcr.io/library/busybox:'),
+        allOf(
+          startsWith('ssh '),
+          endsWith(' klab@127.0.0.1 docker load --quiet'),
+        ),
+        allOf(
+          startsWith('ssh '),
+          endsWith(' klab@127.0.0.1 sh -s -- sha256:stub'),
+        ),
+        'suites started',
       ]),
     );
   });

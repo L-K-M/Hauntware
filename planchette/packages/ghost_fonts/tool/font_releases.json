@@ -1,0 +1,474 @@
+[
+  {
+    "url": "https://github.com/microsoft/cascadia-code/releases/download/v2407.24/CascadiaCode-2407.24.zip",
+    "sha256": "e67a68ee3386db63f48b9054bd196ea752bc6a4ebb4df35adce6733da50c8474",
+    "license": {
+      "source": "https://raw.githubusercontent.com/microsoft/cascadia-code/refs/tags/v2407.24/LICENSE",
+      "sha256": "51882cd3cdba4e16f220f44ddb08a635c38c44ea6e0975db2574f4be6f958238"
+    },
+    "families": [
+      {
+        "name": "Cascadia Code",
+        "files": [
+          {
+            "member": "ttf/static/CascadiaCode-Regular.ttf",
+            "path": "fonts/CascadiaCode/CascadiaCode-Regular.ttf",
+            "sha256": "c33ef522cdfeff99907fb54f3e97152bb18bfb9b56ec2fef4d4ceec51c8974a4"
+          },
+          {
+            "member": "ttf/static/CascadiaCode-Bold.ttf",
+            "path": "fonts/CascadiaCode/CascadiaCode-Bold.ttf",
+            "sha256": "58197c5c3ba2967d4780b0ef8aee72d0cbbfa42885ddede9ec96fa7a1df5aead"
+          },
+          {
+            "member": "ttf/static/CascadiaCode-Italic.ttf",
+            "path": "fonts/CascadiaCode/CascadiaCode-Italic.ttf",
+            "sha256": "1f0676937792fe550effeafb7f4622080c2a5d62715d1245d471258fa1a23b8c"
+          },
+          {
+            "member": "ttf/static/CascadiaCode-BoldItalic.ttf",
+            "path": "fonts/CascadiaCode/CascadiaCode-BoldItalic.ttf",
+            "sha256": "aff1984cbbdd990137691ae9567b87e7b1190f6a4e146017c6a0893ca4b000e7"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "url": "https://github.com/rubjo/victor-mono/archive/refs/tags/v1.5.6.zip",
+    "sha256": "e7502e2aeaaf579ea9c790bee4088454e86d8a3bd1d6757145fb18a33ae90608",
+    "license": {
+      "source": "victor-mono-1.5.6/LICENSE",
+      "sha256": "09a2b8de67102a99a94a583510967e67b0e3848784ff8e818ab3a7a95c329767"
+    },
+    "families": [
+      {
+        "name": "Victor Mono",
+        "files": [
+          {
+            "member": "TTF/VictorMono-Regular.ttf",
+            "path": "fonts/VictorMono/VictorMono-Regular.ttf",
+            "sha256": "1af31bba86bd438a7aa5cd072db4e8ec9c36d20e2ed3f34e664b6a2bf37b3633"
+          },
+          {
+            "member": "TTF/VictorMono-Bold.ttf",
+            "path": "fonts/VictorMono/VictorMono-Bold.ttf",
+            "sha256": "4efe29edefdf765d14e9ccdb045918911613f2a33e26949194fa77d52db2f5cc"
+          },
+          {
+            "member": "TTF/VictorMono-Italic.ttf",
+            "path": "fonts/VictorMono/VictorMono-Italic.ttf",
+            "sha256": "39a2d5cbb5396b9f88878d482b442f24e4fbad59f09973ba9a91179d87a16b18"
+          },
+          {
+            "member": "TTF/VictorMono-BoldItalic.ttf",
+            "path": "fonts/VictorMono/VictorMono-BoldItalic.ttf",
+            "sha256": "b424d02260bd70bc858024f5e1f425dc6cf2fb1dba285bf9f74d727b1d83b5d9"
+          }
+        ]
+      }
+    ],
+    "nested_archive": "victor-mono-1.5.6/public/VictorMonoAll.zip"
+  },
+  {
+    "url": "https://github.com/mishamyrt/Lilex/releases/download/2.630/Lilex.zip",
+    "sha256": "c946bf022f22895799eb69bcc5f2318ed4089e4e34b90054dfd78ed5316728e0",
+    "license": {
+      "source": "https://raw.githubusercontent.com/mishamyrt/Lilex/refs/tags/2.630/OFL.txt",
+      "sha256": "cc3bd94cf51f40137e353fc9ca0859d54ec07e59c2092270b64a0723f4b34011"
+    },
+    "families": [
+      {
+        "name": "Lilex",
+        "files": [
+          {
+            "member": "ttf/Lilex-Regular.ttf",
+            "path": "fonts/Lilex/Lilex-Regular.ttf",
+            "sha256": "511e5093b256b1cd1a02b8b6175d93a899e0ac3d3ca7af957ae798894097cb5c"
+          },
+          {
+            "member": "ttf/Lilex-Bold.ttf",
+            "path": "fonts/Lilex/Lilex-Bold.ttf",
+            "sha256": "c67d3ea85f9777c3fdc0bd891c242c35da98c075023bfc2534b91e4a8cd01d99"
+          },
+          {
+            "member": "ttf/Lilex-Italic.ttf",
+            "path": "fonts/Lilex/Lilex-Italic.ttf",
+            "sha256": "1bc0d459304f0a839da4fde9b50e38e8d49419d8ebd0d5d67b48d0838e66f5f4"
+          },
+          {
+            "member": "ttf/Lilex-BoldItalic.ttf",
+            "path": "fonts/Lilex/Lilex-BoldItalic.ttf",
+            "sha256": "4cbd1e66fa9c229dcc6887698045511ff90d06bbe7aaceddb61f87a8cff93f82"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "url": "https://github.com/0xType/0xProto/releases/download/2.502/0xProto_2_502.zip",
+    "sha256": "402d046b6056111ae5b974892fe2d6d921c66a64681980ec81db051de05851e7",
+    "license": {
+      "source": "LICENSE",
+      "sha256": "8841e59e78081f4cb6ec51ad5bc698751b85ae14ee24f0f16bc9f9de07e4b90e"
+    },
+    "families": [
+      {
+        "name": "0xProto",
+        "files": [
+          {
+            "member": "fonts/0xProto-Regular.ttf",
+            "path": "fonts/0xProto/0xProto-Regular.ttf",
+            "sha256": "f19d091ceed51ae6a7fa42d239f22b92bc9c98191fecf431bdaca7b8974e4799"
+          },
+          {
+            "member": "fonts/0xProto-Bold.ttf",
+            "path": "fonts/0xProto/0xProto-Bold.ttf",
+            "sha256": "d1cbed9791ee048af2f58477a50205649c067a42eeec6982ae8a9619bd71f039"
+          },
+          {
+            "member": "fonts/0xProto-Italic.ttf",
+            "path": "fonts/0xProto/0xProto-Italic.ttf",
+            "sha256": "e0832e53534bb08115a5a901d07b1e642abd19f2e11286bd9f015f9ea53ae404"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "url": "https://github.com/githubnext/monaspace/releases/download/v1.400/monaspace-static-v1.400.zip",
+    "sha256": "ab66d71be751495f679727332a3345597943bd4d7beebca03f5cde04bf994de7",
+    "license": {
+      "source": "https://raw.githubusercontent.com/githubnext/monaspace/refs/tags/v1.400/LICENSE",
+      "sha256": "0e84e5f7dd6f05e74a00f2fb828ca43e489d954f5509ff0fa439ea18c0d35fe9"
+    },
+    "families": [
+      {
+        "name": "Monaspace Neon",
+        "files": [
+          {
+            "member": "Static Fonts/Monaspace Neon/MonaspaceNeon-Regular.otf",
+            "path": "fonts/MonaspaceNeon/MonaspaceNeon-Regular.otf",
+            "sha256": "0daf2cd6cbd780b1a9426cb25c17e80f22844051f988a5133ad54b2751b0b8af"
+          },
+          {
+            "member": "Static Fonts/Monaspace Neon/MonaspaceNeon-Bold.otf",
+            "path": "fonts/MonaspaceNeon/MonaspaceNeon-Bold.otf",
+            "sha256": "9ff6e131e139c73fe67d1cc045a8a536078fa56cd2c69ee33f0475238a8a9609"
+          },
+          {
+            "member": "Static Fonts/Monaspace Neon/MonaspaceNeon-Italic.otf",
+            "path": "fonts/MonaspaceNeon/MonaspaceNeon-Italic.otf",
+            "sha256": "8bf31d46a42df399444d2a5a16095cc706cbf20bc6637af4a251b5958b02cdbc"
+          },
+          {
+            "member": "Static Fonts/Monaspace Neon/MonaspaceNeon-BoldItalic.otf",
+            "path": "fonts/MonaspaceNeon/MonaspaceNeon-BoldItalic.otf",
+            "sha256": "6a6bc24aefa327ec73991ca4f93d764cfc19209a3f34252fa6c2ffb5da41a4e8"
+          }
+        ]
+      },
+      {
+        "name": "Monaspace Argon",
+        "files": [
+          {
+            "member": "Static Fonts/Monaspace Argon/MonaspaceArgon-Regular.otf",
+            "path": "fonts/MonaspaceArgon/MonaspaceArgon-Regular.otf",
+            "sha256": "a7e654dc999fc368bf9721f9c1369606503b3ce278874b1aa161e6ee6c1706ad"
+          },
+          {
+            "member": "Static Fonts/Monaspace Argon/MonaspaceArgon-Bold.otf",
+            "path": "fonts/MonaspaceArgon/MonaspaceArgon-Bold.otf",
+            "sha256": "62346369af981fc7ebc7e6b26dbb7e5d5d3f5ad59aebf845a6912078576b1c5b"
+          },
+          {
+            "member": "Static Fonts/Monaspace Argon/MonaspaceArgon-Italic.otf",
+            "path": "fonts/MonaspaceArgon/MonaspaceArgon-Italic.otf",
+            "sha256": "9f4627d78cbeb800e683e898b006e1dfb658bf07d72778cc084746e53f4ce5b1"
+          },
+          {
+            "member": "Static Fonts/Monaspace Argon/MonaspaceArgon-BoldItalic.otf",
+            "path": "fonts/MonaspaceArgon/MonaspaceArgon-BoldItalic.otf",
+            "sha256": "33b4a80454343bca56a6cd687be8d282e72bdf53eb7c62b8ee06bd70d72f10f5"
+          }
+        ]
+      },
+      {
+        "name": "Monaspace Xenon",
+        "files": [
+          {
+            "member": "Static Fonts/Monaspace Xenon/MonaspaceXenon-Regular.otf",
+            "path": "fonts/MonaspaceXenon/MonaspaceXenon-Regular.otf",
+            "sha256": "59535a868f21a992ff2c86daea6927ed255d1dbf77aac022491fa77d63732345"
+          },
+          {
+            "member": "Static Fonts/Monaspace Xenon/MonaspaceXenon-Bold.otf",
+            "path": "fonts/MonaspaceXenon/MonaspaceXenon-Bold.otf",
+            "sha256": "c56778a7136b41f79797259529a810b89e82b44d43c5cfbfde6719e163b05935"
+          },
+          {
+            "member": "Static Fonts/Monaspace Xenon/MonaspaceXenon-Italic.otf",
+            "path": "fonts/MonaspaceXenon/MonaspaceXenon-Italic.otf",
+            "sha256": "ad5eac846f825a79319c6ac101834403c6bfc7de1b21f753c126a2c8fcae3826"
+          },
+          {
+            "member": "Static Fonts/Monaspace Xenon/MonaspaceXenon-BoldItalic.otf",
+            "path": "fonts/MonaspaceXenon/MonaspaceXenon-BoldItalic.otf",
+            "sha256": "bc70252c22f2e2128b90113a6e49a2dcfc1486ced6b661603ae14170bc69edde"
+          }
+        ]
+      },
+      {
+        "name": "Monaspace Radon",
+        "files": [
+          {
+            "member": "Static Fonts/Monaspace Radon/MonaspaceRadon-Regular.otf",
+            "path": "fonts/MonaspaceRadon/MonaspaceRadon-Regular.otf",
+            "sha256": "08f34b2865c89fb04900bfa6573513493359270dc5a9497769be6fc447d5d0b8"
+          },
+          {
+            "member": "Static Fonts/Monaspace Radon/MonaspaceRadon-Bold.otf",
+            "path": "fonts/MonaspaceRadon/MonaspaceRadon-Bold.otf",
+            "sha256": "22b144cf8308b1ad78cd3c56d9a5d3aa939d51efe293b65898c18504a527c87e"
+          },
+          {
+            "member": "Static Fonts/Monaspace Radon/MonaspaceRadon-Italic.otf",
+            "path": "fonts/MonaspaceRadon/MonaspaceRadon-Italic.otf",
+            "sha256": "badc7671caab45646fae5665c307c99fe87efc5e99a5e5b54246de0cdb27b30f"
+          },
+          {
+            "member": "Static Fonts/Monaspace Radon/MonaspaceRadon-BoldItalic.otf",
+            "path": "fonts/MonaspaceRadon/MonaspaceRadon-BoldItalic.otf",
+            "sha256": "261faf6549a5a0a6eebcc84dda4dfe1b0e4ebf6349b6ffa642a90e0b7e42c43b"
+          }
+        ]
+      },
+      {
+        "name": "Monaspace Krypton",
+        "files": [
+          {
+            "member": "Static Fonts/Monaspace Krypton/MonaspaceKrypton-Regular.otf",
+            "path": "fonts/MonaspaceKrypton/MonaspaceKrypton-Regular.otf",
+            "sha256": "eb8fcc2eb3fef3a8c1f5428e52379fc9badede6eb1f08c4f6d152fc496965e92"
+          },
+          {
+            "member": "Static Fonts/Monaspace Krypton/MonaspaceKrypton-Bold.otf",
+            "path": "fonts/MonaspaceKrypton/MonaspaceKrypton-Bold.otf",
+            "sha256": "e5003e900643f1661fac362e71fd8be6ad04c0ff22af6ccf73a85c56235cf463"
+          },
+          {
+            "member": "Static Fonts/Monaspace Krypton/MonaspaceKrypton-Italic.otf",
+            "path": "fonts/MonaspaceKrypton/MonaspaceKrypton-Italic.otf",
+            "sha256": "6e8a69b9efeb8f90ae2c35e89e6ef92e9de5562bd17b12ea546718741846db1d"
+          },
+          {
+            "member": "Static Fonts/Monaspace Krypton/MonaspaceKrypton-BoldItalic.otf",
+            "path": "fonts/MonaspaceKrypton/MonaspaceKrypton-BoldItalic.otf",
+            "sha256": "681b86d42b4a25bee554b91417f384ee9e2b75807d70816eefd249d32318b6e1"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "url": "https://github.com/evilmartians/mono/releases/download/v1.1.0/martian-mono-1.1.0-ttf.zip",
+    "sha256": "483aa2d201a6c44610c0bdcf65eaf425b467d61e9ab606213eacef3e216c2a12",
+    "license": {
+      "source": "https://raw.githubusercontent.com/evilmartians/mono/refs/tags/v1.1.0/OFL.txt",
+      "sha256": "ddafd2c3f37ef1d83ef284ca63e159befd3820850c5e9eded14ca52eee92c256"
+    },
+    "families": [
+      {
+        "name": "Martian Mono",
+        "files": [
+          {
+            "member": "MartianMono-StdRg.ttf",
+            "path": "fonts/MartianMono/MartianMono-StdRg.ttf",
+            "sha256": "7ccf33cd01e123d9bf0e0da695440351550c70e572951455a84d22cf55e1d9b4"
+          },
+          {
+            "member": "MartianMono-StdBd.ttf",
+            "path": "fonts/MartianMono/MartianMono-StdBd.ttf",
+            "sha256": "a18cae80b9f4659c8d75e5568e3f0fec7dcca7a3877eba3e87d290701beeb7b1"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "url": "https://github.com/vercel/geist-font/releases/download/v1.8.1/geist-font-v1.8.1.zip",
+    "sha256": "70f42c1452fb6df12ea183e20a65999157354f91d11dac18b4c713e383808ec2",
+    "license": {
+      "source": "geist-font/OFL.txt",
+      "sha256": "c683bfbcc7e087f5d37a54ef628f10387c451a83ddc459b151403a164ac46c90"
+    },
+    "families": [
+      {
+        "name": "Geist Mono",
+        "files": [
+          {
+            "member": "geist-font/GeistMono/ttf/GeistMono-Regular.ttf",
+            "path": "fonts/GeistMono/GeistMono-Regular.ttf",
+            "sha256": "90f1ada2b0e62e15e4268fd00636c6fb8665ba51556becfead428839f433d454"
+          },
+          {
+            "member": "geist-font/GeistMono/ttf/GeistMono-Bold.ttf",
+            "path": "fonts/GeistMono/GeistMono-Bold.ttf",
+            "sha256": "4492b804b69f24209daaa0d4674d7645df69c81452cdc1833263a7e2625e30a9"
+          },
+          {
+            "member": "geist-font/GeistMono/ttf/GeistMono-Italic.ttf",
+            "path": "fonts/GeistMono/GeistMono-Italic.ttf",
+            "sha256": "a95c45f12fba02588f66007702f08d1c8b636664026d540d812523cf8b172a6a"
+          },
+          {
+            "member": "geist-font/GeistMono/ttf/GeistMono-BoldItalic.ttf",
+            "path": "fonts/GeistMono/GeistMono-BoldItalic.ttf",
+            "sha256": "abf0daf2140c4c1d8654844b3db35ab6c9ff00c4e6e67763fc114bb5dd633df2"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "url": "https://github.com/intel/intel-one-mono/releases/download/V1.4.0/ttf.zip",
+    "sha256": "54863552d25dcb9c3f5360b296fc980d6e1fbfd02e0d214224e8b78f0a2bccf0",
+    "license": {
+      "source": "ttf/OFL.txt",
+      "sha256": "1b2e40cca73713395e95e3a1fce0c742550ff07f3c65cc2c4fc75404bfb45c22"
+    },
+    "families": [
+      {
+        "name": "Intel One Mono",
+        "files": [
+          {
+            "member": "ttf/IntelOneMono-Regular.ttf",
+            "path": "fonts/IntelOneMono/IntelOneMono-Regular.ttf",
+            "sha256": "131ab6a8f6e8b9160bc526353262828bc24caab8fcdcfd7a9edc7a044e974230"
+          },
+          {
+            "member": "ttf/IntelOneMono-Bold.ttf",
+            "path": "fonts/IntelOneMono/IntelOneMono-Bold.ttf",
+            "sha256": "511623927c22f8c5e70af85598e01eaed06bf9eb875aa77452ce0f379a52826a"
+          },
+          {
+            "member": "ttf/IntelOneMono-Italic.ttf",
+            "path": "fonts/IntelOneMono/IntelOneMono-Italic.ttf",
+            "sha256": "124e14d8448447608f5e9d65645ec77f3d274ba729049c9f7931ccf30b4647ea"
+          },
+          {
+            "member": "ttf/IntelOneMono-BoldItalic.ttf",
+            "path": "fonts/IntelOneMono/IntelOneMono-BoldItalic.ttf",
+            "sha256": "88aa389ce50467cc189b1176bdde8a1d1f8bd8adea879b5eed595f46b8ead0e8"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "url": "https://github.com/weiweihuanghuang/fragment-mono/releases/download/1.21/fragment-mono-1.21.zip",
+    "sha256": "1d3b711facfb0621638dc650708f8a26dbe83b1efb4382a2438ac5eadb716658",
+    "license": {
+      "source": "fragment-mono-1.21/OFL.txt",
+      "sha256": "26ddc9e68d9b59f546bf9cbb8b217954752771620590aa9a137b54fa4baf0218"
+    },
+    "families": [
+      {
+        "name": "Fragment Mono",
+        "files": [
+          {
+            "member": "fragment-mono-1.21/fonts/ttf/FragmentMono-Regular.ttf",
+            "path": "fonts/FragmentMono/FragmentMono-Regular.ttf",
+            "sha256": "e8beb5248b1d38bc24962c6d04bc49204248af5f6e1b3492fda17179a70f1d2d"
+          },
+          {
+            "member": "fragment-mono-1.21/fonts/ttf/FragmentMono-Italic.ttf",
+            "path": "fonts/FragmentMono/FragmentMono-Italic.ttf",
+            "sha256": "571b60b07c5f4bd33ecfc8ca874cdc29be6c58e231621d2acb2beea9855dd61c"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "url": "https://github.com/googlefonts/googlesans-code/releases/download/v7.001/GoogleSansCode-v7.001.zip",
+    "sha256": "eebba2a438882396e8530cad6d6cb80182b0afb6e9e0ad07b7340359a53ba2e9",
+    "license": {
+      "source": "OFL.txt",
+      "sha256": "ff8f4fbc4f1a71c7d4c6481c48dc2b21c43f8dc15872536667fee45c15d20928"
+    },
+    "families": [
+      {
+        "name": "Google Sans Code",
+        "files": [
+          {
+            "member": "GoogleSansCode[MONO,wght].ttf",
+            "path": "fonts/GoogleSansCode/GoogleSansCode-Regular.ttf",
+            "sha256": "74642762fae66d5883077794a763e1086394b8cb72f2623e456e06359dc5c64b"
+          },
+          {
+            "member": "GoogleSansCode-Italic[MONO,wght].ttf",
+            "path": "fonts/GoogleSansCode/GoogleSansCode-Italic.ttf",
+            "sha256": "57d0d5fb5868b33a5802fed8a36197197f95014dd775836e176045cf81e60dfe"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "url": "https://github.com/eigilnikolajsen/commit-mono/releases/download/v1.143/CommitMono-1.143.zip",
+    "sha256": "f7d1f26a7c7554800a996f76f5d706bf0648b936ca2a66b5bc4d46e3a2c49ed0",
+    "license": {
+      "source": "CommitMono-1.143/license.txt",
+      "sha256": "2e2dc937707819086e7631d02e6183fbe52316a89da0a611d9b09d3be7d4bd72"
+    },
+    "families": [
+      {
+        "name": "Commit Mono",
+        "files": [
+          {
+            "member": "CommitMono-1.143/ttfautohint/CommitMono-400-Regular.ttf",
+            "path": "fonts/CommitMono/CommitMono-400-Regular.ttf",
+            "sha256": "7430751f8621b4027df29dbc54d466fca9d75eb4e7a99c7f227625249ad4fb76"
+          },
+          {
+            "member": "CommitMono-1.143/ttfautohint/CommitMono-700-Regular.ttf",
+            "path": "fonts/CommitMono/CommitMono-700-Regular.ttf",
+            "sha256": "c299efc092cf4d25a4fd1ee3283eb2539324a3a67757216b543e586f727bb8a3"
+          },
+          {
+            "member": "CommitMono-1.143/ttfautohint/CommitMono-400-Italic.ttf",
+            "path": "fonts/CommitMono/CommitMono-400-Italic.ttf",
+            "sha256": "10f37afc91cfdc6fd92c98010504df0a32e996633fa9e5bbdbd20843ba5f1659"
+          },
+          {
+            "member": "CommitMono-1.143/ttfautohint/CommitMono-700-Italic.ttf",
+            "path": "fonts/CommitMono/CommitMono-700-Italic.ttf",
+            "sha256": "41d65996e306639dc02e5db31d2fb2b416c754f87ffc066c531dcc96a7c61c0d"
+          }
+        ],
+        "copyright": "Copyright 2023 Commit Mono authors (https://github.com/eigilnikolajsen/commit-mono)"
+      }
+    ]
+  },
+  {
+    "url": "https://github.com/rektdeckard/departure-mono/releases/download/v1.500/DepartureMono-1.500.zip",
+    "sha256": "bf3e48059aeef4617ec585bdea81dcc3491c576b3e7a472f52faf40e09ee5c3a",
+    "license": {
+      "source": "DepartureMono-1.500/LICENSE",
+      "sha256": "b65e42750f3cb65437a97f4dfd781c58f199259949db2341012be60e32500e83"
+    },
+    "families": [
+      {
+        "name": "Departure Mono",
+        "files": [
+          {
+            "member": "DepartureMono-1.500/DepartureMono-Regular.otf",
+            "path": "fonts/DepartureMono/DepartureMono-Regular.otf",
+            "sha256": "4d53f663155cf8bf7ffc8e688776e719625f7bbb80a8d90073438b249261a2e0"
+          }
+        ]
+      }
+    ]
+  }
+]

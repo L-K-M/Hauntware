@@ -5,6 +5,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../ui/charts/series_ring.dart';
 import '../ui/charts/time_series.dart';
+import 'docker_controller.dart';
 import 'log_reads.dart';
 import 'log_streams.dart';
 
@@ -144,6 +145,7 @@ final class MonitoringController extends ChangeNotifier {
   }) : _clock = _FreshnessClock(now) {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
     logs = LogStreams(_engine);
+    docker = DockerController(_engine);
   }
 
   /// The log streams panels open, and each server's journal access for
@@ -152,6 +154,11 @@ final class MonitoringController extends ChangeNotifier {
   /// sends every [OpenLogStream] the app sends, [openLogRead]'s included,
   /// since a rejection names no stream.
   late final LogStreams logs;
+
+  /// Each server's Docker endpoint, which the server header names, and
+  /// the engine details the Docker tab shows (03 §5.9, §10.2): a concern
+  /// of its own for this engine run, listening beside [logs].
+  late final DockerController docker;
 
   final EngineClient _engine;
   final Duration _linkGrace;
@@ -253,7 +260,8 @@ final class MonitoringController extends ChangeNotifier {
 
   /// Why the engine could not connect each server whose last [Connect] it
   /// rejected with [ConnectRejected] (D61): it has no config to dial with
-  /// until the user imports their SSH config again. Only servers a view
+  /// until the user imports their SSH config again, or a synced server's
+  /// endpoint waits for confirmation (03 §4.7). Only servers a view
   /// holds are kept. A server's entry goes when this controller sends its
   /// next [Connect], which the next fleet does for each one it still
   /// lists, since that fleet may give it a config.
@@ -536,6 +544,11 @@ final class MonitoringController extends ChangeNotifier {
             _connect(serverId);
           }
         }
+      case EndpointChanged(:final serverId):
+        // The engine closed the link and dials the server no more until
+        // the user confirms it again; a view still open connects again so
+        // its rejection says why.
+        if (_openViews.containsKey(serverId)) _connect(serverId);
       case ConnectRejected(:final serverId, :final reason):
         // Only for a server a view still holds: one whose views all left
         // has nothing to show it on. One answered after its server left
@@ -627,6 +640,7 @@ final class MonitoringController extends ChangeNotifier {
   void dispose() {
     unawaited(_events.cancel());
     logs.dispose();
+    docker.dispose();
     _onEngineDone();
     for (final refresh in _refreshes.toList()) {
       refresh.finish();

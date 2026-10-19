@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- A host key pulled through sync no longer replaces a different key
+  this device already trusts for the same address. Sync keeps your key,
+  and Settings ▸ Sync shows both fingerprints with **Keep this device's
+  key** and **Trust the new key**. Keeping yours stops that key being
+  raised again; a different one is still raised. Before, the pulled key
+  replaced yours silently, so a forged sync record could change which
+  key every device trusted (#56).
+- Terminal and editor font pickers now offer 20 bundled families with
+  search and larger previews. The terminal sample uses the session's
+  colours and text size. Ligatures default to on, including Monaspace,
+  Geist Mono and Intel One Mono's coding features, and can be disabled.
+- The terminal's text size, font, ligatures and Colors choice moved from
+  Settings ▸ General to Settings ▸ Appearance, beside the terminal
+  colours. The preview there now draws in the terminal's own font, size
+  and ligatures, and shows whichever colours the terminal uses. Before,
+  it used the code font and appeared only with the theme's terminal
+  colours on.
+- On Android, the update banner offers Update instead of View release,
+  with the download size. Séance downloads the release APK, shows its
+  progress with Cancel, discards it unless its size and SHA-256 match
+  the release, and opens Android's installer. If you back out of the
+  installer, Install reopens it without downloading again. Nothing
+  downloads until you tap Update.
 - On Android and iOS, selecting terminal text with a long-press or a
   double-tap shows Copy, Paste and Select all above the selection.
   Before, touch selections could not be copied.

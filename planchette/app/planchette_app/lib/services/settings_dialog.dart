@@ -103,14 +103,12 @@ class _SettingsDialogState extends State<SettingsDialog> {
               ),
               const SizedBox(height: 16),
               _section(theme, 'Indentation for new documents'),
-              Row(
+              OverflowBar(
+                alignment: MainAxisAlignment.spaceBetween,
+                spacing: 16,
+                overflowSpacing: 8,
                 children: [
-                  Expanded(
-                    child: Text(
-                      'Indent with',
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                  ),
+                  Text('Indent with', style: theme.textTheme.bodyMedium),
                   SegmentedButton<IndentStyle>(
                     segments: const [
                       ButtonSegment(
@@ -226,22 +224,11 @@ class _SettingsDialogState extends State<SettingsDialog> {
     ),
   );
 
-  /// The included fonts, each drawn in its own face, with the editor's
-  /// default marked. A family a hand-edited settings file names leads the
-  /// list, so opening it changes nothing.
   Widget _fontMenu(ThemeData theme) {
-    // The menu's value for the editor's default: storing no family keeps
-    // the document on the default should it ever change.
-    const standard = '';
     final stored = _value.fontFamily;
     final bundled = stored == null
         ? editorDefaultFont
         : BundledMonoFont.named(stored);
-    final selected = switch (bundled) {
-      null => stored!,
-      editorDefaultFont => standard,
-      final font => font.displayName,
-    };
     return Row(
       children: [
         SizedBox(
@@ -249,37 +236,41 @@ class _SettingsDialogState extends State<SettingsDialog> {
           child: Text('Font', style: theme.textTheme.bodyMedium),
         ),
         Expanded(
-          child: DropdownButton<String>(
+          child: OutlinedButton.icon(
             key: const ValueKey('settings.font'),
-            isExpanded: true,
-            value: selected,
-            items: [
-              if (bundled == null)
-                DropdownMenuItem(value: stored, child: Text(stored!)),
-              for (final font in BundledMonoFont.values)
-                DropdownMenuItem(
-                  value: font == editorDefaultFont
-                      ? standard
-                      : font.displayName,
-                  child: Text(
-                    font == editorDefaultFont
-                        ? '${font.displayName} (default)'
-                        : font.displayName,
-                    style: TextStyle(fontFamily: font.family),
-                  ),
-                ),
-            ],
-            onChanged: (family) {
-              if (family == null) return;
-              _apply(
-                _value.copyWith(
-                  fontFamily: () => family == standard ? null : family,
-                ),
-              );
-            },
+            icon: const Icon(Icons.font_download_outlined),
+            label: Text(
+              bundled == editorDefaultFont
+                  ? '${editorDefaultFont.displayName} (default)'
+                  : bundled?.displayName ?? stored!,
+              overflow: TextOverflow.ellipsis,
+            ),
+            onPressed: _pickFont,
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _pickFont() async {
+    final chosen = await showMonoFontPicker(
+      context,
+      current: _value.fontFamily ?? '',
+      defaultFont: editorDefaultFont,
+      fontSize: _value.fontSize.toDouble(),
+      ligatures: _value.ligatures == EditorLigatures.on
+          ? MonoLigatures.on
+          : MonoLigatures.off,
+    );
+    if (chosen == null || !mounted) return;
+
+    _apply(
+      _value.copyWith(
+        fontFamily: () => chosen.family.isEmpty ? null : chosen.family,
+        ligatures: chosen.ligatures == MonoLigatures.on
+            ? EditorLigatures.on
+            : EditorLigatures.off,
+      ),
     );
   }
 

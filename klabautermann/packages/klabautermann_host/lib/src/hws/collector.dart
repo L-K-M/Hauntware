@@ -32,7 +32,7 @@ typedef ArgValidator = String? Function(String value);
 enum Collector {
   /// The capability probe (03 §6.1). Emits one section per probe area on
   /// the slow sampler; the client requests it once after connect.
-  probe(SamplerKind.slow, [], guardedCommands: 16),
+  probe(SamplerKind.slow, [], guardedCommands: 17),
 
   /// Fleet-row metrics: total cpu line, the meminfo subset, loadavg and
   /// the interface counters D48 keeps (03 §6.4, fast sampler).
@@ -75,7 +75,12 @@ enum Collector {
     [ArgValidators.timerUnit],
     guardedCommands: 1,
     wireName: 'timer_detail',
-  );
+  ),
+
+  /// Detached-operation records for re-attach: both operation directories
+  /// of 03 §7.17, at most `kOpsRecordCap` records each, each cut at
+  /// `kOpsRecordBytes` (slow sampler, one guarded listing per directory).
+  ops(SamplerKind.slow, [], guardedCommands: 2);
 
   const Collector(
     this.sampler,

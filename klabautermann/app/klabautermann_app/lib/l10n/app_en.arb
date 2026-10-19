@@ -1,8 +1,68 @@
 {
   "@@locale": "en",
-  "appTitle": "Klabautermann",
+  "appTitle": "Klabautermann (preview)",
+  "@appTitle": {
+    "description": "The app's title, with the preview label until v1 (04 §12.3): the task switcher, the About dialog and the about row on the General settings tab. Klabautermann is the display name, an identity: never translated."
+  },
   "fleetTitle": "Fleet",
   "fleetSectionServers": "Servers",
+  "fleetSectionPinned": "Pinned",
+  "@fleetSectionPinned": {
+    "description": "Fleet list section header over the synced servers pinned to the top on this device (03 §10.3); drawn in caps."
+  },
+  "fleetSectionImported": "Imported",
+  "@fleetSectionImported": {
+    "description": "Fleet list section header over the servers imported from this device's SSH config (FL-02), listed apart from the synced servers and their groups; drawn in caps."
+  },
+  "fleetRowPin": "Pin to top",
+  "@fleetRowPin": {
+    "description": "A synced fleet row's menu verb that lists the server under the Pinned section on this device."
+  },
+  "fleetRowUnpin": "Unpin",
+  "@fleetRowUnpin": {
+    "description": "A pinned fleet row's menu verb that returns the server to its section."
+  },
+  "fleetPinNotSaved": "Klabautermann could not save your pinned servers, so the change lasts only until it quits.",
+  "@fleetPinNotSaved": {
+    "description": "Top toast when pinning or unpinning a server could not be written to the device's settings file; the change holds for this session."
+  },
+  "fleetRowMonitor": "Monitor",
+  "@fleetRowMonitor": {
+    "description": "A fleet row's menu verb that adds the server to this device's monitor set (FL-21): Klabautermann then reads it continuously while open and its row shows CPU, memory and disk. Disabled for a server that cannot be monitored."
+  },
+  "fleetRowStopMonitoring": "Stop monitoring",
+  "@fleetRowStopMonitoring": {
+    "description": "A monitored fleet row's menu verb that takes the server out of this device's monitor set (FL-21); it is then read only while a view has it open."
+  },
+  "monitorSetFull": "You can monitor up to {limit} servers on this device. Stop monitoring one first.",
+  "@monitorSetFull": {
+    "description": "Top toast when the user asks to monitor a server while the monitor set (FL-21) is full; limit is the most servers it holds.",
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "monitorSetNotSaved": "Klabautermann could not save your monitored servers, so the change lasts only until it quits.",
+  "@monitorSetNotSaved": {
+    "description": "Top toast when a monitor set change applied but could not be written to the device's settings file; the change holds for this session."
+  },
+  "monitorSetNotChanged": "The monitored servers could not be changed.",
+  "@monitorSetNotChanged": {
+    "description": "Top toast when the app did not take a monitor set change, such as one from the settings window that the app refused."
+  },
+  "monitorIneligibleEndpoint": "Confirm this server's endpoint to monitor it.",
+  "@monitorIneligibleEndpoint": {
+    "description": "Why a synced server cannot join the monitor set (FL-21): this device has not confirmed its endpoint, or a sync changed it since (SAF-09)."
+  },
+  "monitorIneligibleCredentials": "Signs in with a password or a stored key, which asks you first, so it is read only while you have it open.",
+  "@monitorIneligibleCredentials": {
+    "description": "Why a server cannot join the monitor set (FL-21): its sign-in needs the user's answer, and continuous reading never asks."
+  },
+  "monitorIneligibleUnknown": "Import your ssh_config again to monitor this server.",
+  "@monitorIneligibleUnknown": {
+    "description": "Why an imported server cannot join the monitor set (FL-21): it came from an older import, whose sign-in Klabautermann does not know until the next import."
+  },
   "fleetEmptyTitle": "No servers yet",
   "fleetEmptyBody": "Add a server to start monitoring your fleet.",
   "serversCount": "{count, plural, =0{no servers} =1{1 server} other{{count} servers}}",
@@ -88,6 +148,32 @@
   "menuWindow": "Window",
   "@menuWindow": {
     "description": "Title of the Window menu (macOS, where it holds Minimize, Zoom and Bring All to Front)."
+  },
+  "menuHelp": "Help",
+  "@menuHelp": {
+    "description": "Title of the Help menu (Linux and Windows, where it holds About Klabautermann)."
+  },
+  "aboutCommand": "About Klabautermann",
+  "@aboutCommand": {
+    "description": "The menu command that opens the About dialog: first in the macOS application menu, in the Help menu on Linux and Windows. Klabautermann is the display name: never translated."
+  },
+  "aboutVersion": "Version {version}",
+  "@aboutVersion": {
+    "description": "The running build's version in the About dialog and the about row on the General settings tab.",
+    "placeholders": {
+      "version": {
+        "type": "String",
+        "example": "1.9.1"
+      }
+    }
+  },
+  "aboutVersionUnknown": "Version unknown",
+  "@aboutVersionUnknown": {
+    "description": "In place of aboutVersion when the platform could not tell the app's version."
+  },
+  "aboutLicence": "Klabautermann is free and unencumbered software released into the public domain under the Unlicense.",
+  "@aboutLicence": {
+    "description": "The app's licence line in the About dialog. Klabautermann and Unlicense are names: never translated."
   },
   "statusConnected": "Connected",
   "statusConnecting": "Connecting",
@@ -299,7 +385,6 @@
   "settingsTabDocker": "Docker",
   "settingsTabSafety": "Safety",
   "settingsTabAlerts": "Alerts",
-  "themeLabel": "Theme",
   "themeSystem": "System",
   "themeLight": "Light",
   "themeDark": "Dark",
@@ -1636,18 +1721,6 @@
   "accessRuntimeAlias": "Podman can also answer on Docker's socket path. Docker support will tell them apart.",
   "@accessRuntimeAlias": {
     "description": "Access tab and Docker tab: note under a socket at Docker's path, which a podman-docker install may serve."
-  },
-  "accessDockerPendingTitle": "Arrives with Docker support",
-  "@accessDockerPendingTitle": {
-    "description": "Docker tab: title shown instead of the Docker panels until the release with Docker support."
-  },
-  "accessDockerPendingBody": "Containers, images and stacks arrive with Docker support. Until then, this tab shows the runtime Klabautermann detected, read-only.",
-  "@accessDockerPendingBody": {
-    "description": "Docker tab: body under accessDockerPendingTitle."
-  },
-  "accessDetectedRuntime": "Detected runtime",
-  "@accessDetectedRuntime": {
-    "description": "Docker tab: heading over the container engines the probe found."
   },
   "accessPanelHiddenTitle": "{panel} is not available on this server",
   "@accessPanelHiddenTitle": {
@@ -2986,6 +3059,94 @@
   "@connectRejectedAddressOnly": {
     "description": "Banner on a server's workspace or screen when the engine cannot connect it because the saved import predates the format that keeps sign-in and jump-host details (03 §4.10, schema 1 or 2; D61). A new import of the SSH config fixes it."
   },
+  "connectRejectedEndpointNotConfirmed": "You can't connect to this server yet: its address comes from your sync account and isn't confirmed on this device, or it changed since you confirmed it. Choose Review over the server list to check and confirm it.",
+  "@connectRejectedEndpointNotConfirmed": {
+    "description": "Banner on a server's workspace or screen when the engine will not connect a synced server because its endpoint (host, port, user, jump route) is not confirmed on this device or changed since (03 §4.7, SAF-09). The user confirms it from the notice over the fleet list, whose button is endpointsReview."
+  },
+  "endpointsPendingNotice": "{count, plural, one{{count} synced server waits for you to confirm its address.} other{{count} synced servers wait for you to confirm their addresses.}}",
+  "@endpointsPendingNotice": {
+    "description": "Notice over the fleet list while synced servers wait for endpoint confirmation on this device (03 §4.3 step 3, SAF-09): new from the sync account, or changed since they were confirmed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "endpointsReview": "Review",
+  "@endpointsReview": {
+    "description": "Button on endpointsPendingNotice that opens the endpoint confirmation list."
+  },
+  "endpointsTitle": "Confirm server addresses",
+  "@endpointsTitle": {
+    "description": "Title of the endpoint confirmation list (03 §4.3 step 3)."
+  },
+  "endpointsBody": "These servers come from your sync account. Klabautermann connects only to addresses you confirm on this device, so an address changed on another device cannot receive your sign-in unnoticed. Check each host, port, user and jump route before you confirm it.",
+  "@endpointsBody": {
+    "description": "Explanation at the top of the endpoint confirmation list (SAF-09): any device on the account can rewrite a server's address, and a background connect would then hand a credential to the new host."
+  },
+  "endpointsSearch": "Search servers",
+  "@endpointsSearch": {
+    "description": "Label of the search field of the endpoint confirmation list; it matches names, users and addresses."
+  },
+  "endpointsRoute": "via {route}",
+  "@endpointsRoute": {
+    "description": "Line of an endpoint confirmation row naming the jump hosts the server is reached through, first hop first.",
+    "placeholders": {
+      "route": {
+        "type": "String",
+        "example": "bastion → inner"
+      }
+    }
+  },
+  "endpointsRouteSeparator": " → ",
+  "@endpointsRouteSeparator": {
+    "description": "Between the jump hosts in endpointsRoute, from the first hop towards the server."
+  },
+  "endpointsChanged": "Changed since you confirmed it",
+  "@endpointsChanged": {
+    "description": "Line of an endpoint confirmation row whose server, or a jump host it goes through, was changed by a sync after this device confirmed it (03 §4.7)."
+  },
+  "endpointsNoMatch": "No servers match your search.",
+  "@endpointsNoMatch": {
+    "description": "Shown in place of the rows when the search of the endpoint confirmation list matches no server."
+  },
+  "endpointsNoneLeft": "Every synced server's address is confirmed on this device.",
+  "@endpointsNoneLeft": {
+    "description": "Shown in place of the rows when no synced server waits for confirmation any more."
+  },
+  "endpointsConfirmAllShown": "Confirm all shown",
+  "@endpointsConfirmAllShown": {
+    "description": "Button of the endpoint confirmation list that confirms every row the search shows, whatever its toggle."
+  },
+  "endpointsConfirmSelected": "{count, plural, =0{Confirm selected} one{Confirm {count} server} other{Confirm {count} servers}}",
+  "@endpointsConfirmSelected": {
+    "description": "Main button of the endpoint confirmation list: confirms the rows whose toggles are on; disabled while none is.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "endpointsConfirmed": "{count, plural, one{Confirmed {count} server address.} other{Confirmed {count} server addresses.}}",
+  "@endpointsConfirmed": {
+    "description": "Toast after the confirmed servers left the list; Klabautermann may now connect to them.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "endpointsStillPending": "Some servers still need confirming: confirm the jump hosts they go through too.",
+  "@endpointsStillPending": {
+    "description": "Under the endpoint confirmation list when a confirmed server stays listed because a jump host on its route changed and needs its own confirmation (D64)."
+  },
+  "endpointsFailed": "The confirmation could not be saved on this device, so these servers stay unconfirmed. Try again.",
+  "@endpointsFailed": {
+    "description": "Under the endpoint confirmation list when the engine could not save the confirmation or stopped before answering."
+  },
   "settingsAccessibilityTitle": "Accessibility",
   "@settingsAccessibilityTitle": {
     "description": "Heading of the accessibility settings on the General settings tab."
@@ -3005,6 +3166,39 @@
   "settingsAnnounceNotChanged": "The setting could not be changed.",
   "@settingsAnnounceNotChanged": {
     "description": "Toast when the app did not take a change of the threshold announcement switch."
+  },
+  "settingsAboutTitle": "About",
+  "@settingsAboutTitle": {
+    "description": "Heading of the about row on the General settings tab, which shows the app's title and version and opens the About dialog."
+  },
+  "settingsMonitorTitle": "Monitoring",
+  "@settingsMonitorTitle": {
+    "description": "Heading of the monitor set's switches (FL-21) on the Servers settings tab."
+  },
+  "settingsMonitorDetail": "Monitored servers are read continuously while Klabautermann is open, and their rows show CPU, memory and disk. A server can be monitored once its endpoint is confirmed and it signs in with an SSH agent or a key file, without asking you. Up to {limit} servers.",
+  "@settingsMonitorDetail": {
+    "description": "Explanation above the monitor set's switches on the Servers settings tab (FL-21); limit is the most servers the set holds.",
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsMonitorCount": "{monitored} of {limit} servers monitored",
+  "@settingsMonitorCount": {
+    "description": "How many servers the monitor set holds (FL-21) out of the most it can, above its switches on the Servers settings tab.",
+    "placeholders": {
+      "monitored": {
+        "type": "int"
+      },
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsMonitorEmpty": "No servers yet. Servers you sync or import show here.",
+  "@settingsMonitorEmpty": {
+    "description": "The Servers settings tab's monitor set section while the fleet has no servers."
   },
   "overviewBandAnnouncement": "{metric} {value}: {band, select, warning{warning level} critical{critical level} other{back to normal}}",
   "@overviewBandAnnouncement": {
@@ -3317,5 +3511,519 @@
         "example": "sync_enrollment.json"
       }
     }
+  },
+  "dockerTransportWaiting": "Engine API: waiting for the connection",
+  "@dockerTransportWaiting": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) before the server is connected and its capability check has answered."
+  },
+  "dockerTransportResolving": "Engine API: looking for a route",
+  "@dockerTransportResolving": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) while Klabautermann tries the routes to the engine socket and agrees on an API version."
+  },
+  "dockerTransportSocketForward": "Engine API via SSH socket forward",
+  "@dockerTransportSocketForward": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) for rank 1: SSH forwards the engine socket. Keep the wording of 03 §5.9."
+  },
+  "dockerTransportCliRelay": "Engine API via docker CLI relay (limited streams)",
+  "@dockerTransportCliRelay": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) for rank 2: the engine CLI relays each connection over its own SSH session. \"docker\" is the command name; keep the wording of 03 §5.9."
+  },
+  "dockerTransportSocatRelay": "Engine API via socat relay",
+  "@dockerTransportSocatRelay": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) for rank 4: socat or nc relays each connection. \"socat\" is the command name; keep the wording of 03 §5.9."
+  },
+  "dockerTransportNoRelay": "No Engine API route: forwarding is off and there is no relay",
+  "@dockerTransportNoRelay": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when socket forwarding is refused and the server has no docker, podman, socat or nc to relay through."
+  },
+  "dockerTransportNeedsAdminMode": "No Engine API route: the socket needs admin mode",
+  "@dockerTransportNeedsAdminMode": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the account cannot use the engine socket but sudo exists; admin mode arrives later."
+  },
+  "dockerTransportSocketDenied": "No Engine API route: your account cannot use the socket",
+  "@dockerTransportSocketDenied": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the account cannot use the engine socket and the server has no sudo."
+  },
+  "dockerTransportProbeFailed": "No Engine API route: the socket check failed",
+  "@dockerTransportProbeFailed": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the command that checks the engine socket failed or answered something unreadable."
+  },
+  "dockerTransportNoSocket": "No Engine API route: no engine socket found",
+  "@dockerTransportNoSocket": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the server has no Docker or Podman socket."
+  },
+  "dockerTransportSocketsUnknown": "No Engine API route: the sockets were not checked",
+  "@dockerTransportSocketsUnknown": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the capability check has not reported the server's engine sockets."
+  },
+  "dockerTransportUnreachable": "Engine API: the engine did not answer",
+  "@dockerTransportUnreachable": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when routes to the engine socket opened but the engine answered over none of them."
+  },
+  "dockerTransportUnsupported": "Engine API: the engine's API version is not supported",
+  "@dockerTransportUnsupported": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the engine offers no API version this app can use."
+  },
+  "dockerTransportLinkError": "Engine API: the connection failed while looking for a route",
+  "@dockerTransportLinkError": {
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the SSH connection failed while the routes were tried."
+  },
+  "dockerLowSession": "Low-session mode",
+  "@dockerLowSession": {
+    "description": "Server header: the server allows few SSH sessions, so Docker shares them sparingly (03 §5.2)."
+  },
+  "dockerBadgeRootfulSocket": "Rootful socket: root-equivalent",
+  "@dockerBadgeRootfulSocket": {
+    "description": "Server header badge (SAF-08, 03 §8.4): the engine socket in use belongs to a rootful engine, so using it equals root on the server."
+  },
+  "dockerBadgeRootlessEngine": "Rootless engine: equals user {user}",
+  "@dockerBadgeRootlessEngine": {
+    "description": "Server header badge (SAF-08, 03 §8.4): the engine in use runs rootless, so using it equals the account that runs it.",
+    "placeholders": {
+      "user": {
+        "type": "String",
+        "example": "alice"
+      }
+    }
+  },
+  "dockerBadgeRootlessEngineLogin": "Rootless engine: equals your login user",
+  "@dockerBadgeRootlessEngineLogin": {
+    "description": "dockerBadgeRootlessEngine when the capability check did not name the login user."
+  },
+  "dockerBadgeCustomSocket": "Custom socket: root-equivalent",
+  "@dockerBadgeCustomSocket": {
+    "description": "Server header badge (SAF-08): a socket path Klabautermann cannot classify, treated as root-equivalent."
+  },
+  "dockerRuntimeDocker": "Docker",
+  "@dockerRuntimeDocker": {
+    "description": "The engine in use when its mode is unknown, as on a custom socket path."
+  },
+  "dockerRuntimePodman": "Podman",
+  "@dockerRuntimePodman": {
+    "description": "The engine in use when its mode is unknown, as on a custom socket path."
+  },
+  "dockerGateWaitingTitle": "Waiting for the connection",
+  "@dockerGateWaitingTitle": {
+    "description": "Docker tab, shown instead of its panels until the server is connected and its capability check has answered."
+  },
+  "dockerGateWaitingBody": "Klabautermann looks for the Docker engine once it is connected to this server and knows what the server offers.",
+  "@dockerGateWaitingBody": {
+    "description": "Body under dockerGateWaitingTitle."
+  },
+  "dockerGateResolvingTitle": "Looking for the Docker engine",
+  "@dockerGateResolvingTitle": {
+    "description": "Docker tab, shown instead of its panels while Klabautermann finds a route to the engine socket."
+  },
+  "dockerGateResolvingBody": "Klabautermann is finding a way to reach the engine socket and agreeing on an API version with the engine.",
+  "@dockerGateResolvingBody": {
+    "description": "Body under dockerGateResolvingTitle."
+  },
+  "dockerGateNoRelay": "Socket forwarding is off on this server, and it has nothing to relay through: no docker or podman command, no socat and no nc.",
+  "@dockerGateNoRelay": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: forwarding refused and no relay. Command names stay as they are."
+  },
+  "dockerGateNeedsAdminMode": "Your account cannot use the engine socket. Reaching it through sudo needs admin mode, which arrives in a later milestone.",
+  "@dockerGateNeedsAdminMode": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the account cannot use the socket, but sudo exists."
+  },
+  "dockerGateSocketDenied": "Your account cannot use the engine socket, and this server has no sudo. The Access tab shows how access is granted.",
+  "@dockerGateSocketDenied": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the account cannot use the socket and there is no sudo."
+  },
+  "dockerGateProbeFailed": "Checking the engine socket failed, so Klabautermann cannot tell how to reach it.",
+  "@dockerGateProbeFailed": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the socket check failed."
+  },
+  "dockerGateNoSocket": "No Docker or Podman socket was found on this server.",
+  "@dockerGateNoSocket": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: no engine socket."
+  },
+  "dockerGateSocketsUnknown": "The server's capability check has not reported its engine sockets.",
+  "@dockerGateSocketsUnknown": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the sockets were not checked."
+  },
+  "dockerGateUnreachable": "A route to the engine socket opened, but the engine did not answer over it.",
+  "@dockerGateUnreachable": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the engine did not answer."
+  },
+  "dockerGateBelowClientFloor": "The engine's newest API version is older than 1.41, the oldest Klabautermann supports.",
+  "@dockerGateBelowClientFloor": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the engine is too old. 1.41 is the Docker API version."
+  },
+  "dockerGateBelowServerMinimum": "The engine only accepts API versions newer than Klabautermann supports.",
+  "@dockerGateBelowServerMinimum": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the engine is too new for this app."
+  },
+  "dockerGateApiVersionUnknown": "The engine did not report an API version Klabautermann can read.",
+  "@dockerGateApiVersionUnknown": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: no readable API version."
+  },
+  "dockerGateLinkError": "The connection to this server failed while Klabautermann looked for the engine.",
+  "@dockerGateLinkError": {
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the SSH connection failed meanwhile."
+  },
+  "dockerRetry": "Try again",
+  "@dockerRetry": {
+    "description": "Docker tab: asks again for the Docker endpoint or the engine details after a failure."
+  },
+  "dockerTabContainers": "Containers",
+  "@dockerTabContainers": {
+    "description": "Docker tab: the sub-tab listing containers."
+  },
+  "dockerTabImages": "Images",
+  "@dockerTabImages": {
+    "description": "Docker tab: the sub-tab listing images."
+  },
+  "dockerTabStacks": "Stacks",
+  "@dockerTabStacks": {
+    "description": "Docker tab: the sub-tab listing compose stacks."
+  },
+  "dockerEngineHeading": "Engine",
+  "@dockerEngineHeading": {
+    "description": "Docker tab: heading of the strip with the engine's runtime, API version, version and operating system (DKE-01)."
+  },
+  "dockerEngineApi": "API {version}",
+  "@dockerEngineApi": {
+    "description": "Docker tab engine strip: the Docker API version the app negotiated with the engine.",
+    "placeholders": {
+      "version": {
+        "type": "String",
+        "example": "1.47"
+      }
+    }
+  },
+  "dockerEngineVersion": "{name} {version}",
+  "@dockerEngineVersion": {
+    "description": "Docker tab engine strip: the engine's product name and version.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Docker Engine - Community"
+      },
+      "version": {
+        "type": "String",
+        "example": "27.3.1"
+      }
+    }
+  },
+  "dockerEngineVersionUnknown": "{name}, version unknown",
+  "@dockerEngineVersionUnknown": {
+    "description": "Docker tab engine strip: the engine did not report its version.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Docker"
+      }
+    }
+  },
+  "dockerEngineOs": "{os} on {architecture}",
+  "@dockerEngineOs": {
+    "description": "Docker tab engine strip: the engine host's operating system and architecture.",
+    "placeholders": {
+      "os": {
+        "type": "String",
+        "example": "Ubuntu 24.04.1 LTS"
+      },
+      "architecture": {
+        "type": "String",
+        "example": "x86_64"
+      }
+    }
+  },
+  "dockerEngineOsUnknown": "Operating system unknown",
+  "@dockerEngineOsUnknown": {
+    "description": "Docker tab engine strip: the engine did not report its host's operating system."
+  },
+  "dockerEngineReading": "Reading the engine details…",
+  "@dockerEngineReading": {
+    "description": "Docker tab engine strip: while the engine's details are read."
+  },
+  "dockerEngineReadFailed": "The engine details could not be read.",
+  "@dockerEngineReadFailed": {
+    "description": "Docker tab engine strip: reading the engine's details failed."
+  },
+  "dockerNoticeDismiss": "Got it",
+  "@dockerNoticeDismiss": {
+    "description": "Docker tab: dismisses the root-equivalence notice on this device."
+  },
+  "dockerNoticeNotSaved": "Klabautermann could not save that you dismissed the root-equivalence note, so it shows again after a restart.",
+  "@dockerNoticeNotSaved": {
+    "description": "Toast: dismissing the Docker tab's root-equivalence notice could not be saved."
+  },
+  "appearanceThemeTitle": "Theme",
+  "@appearanceThemeTitle": {
+    "description": "Appearance tab: heading of the preset grid."
+  },
+  "appearanceThemeHelpTitle": "Themes",
+  "@appearanceThemeHelpTitle": {
+    "description": "Appearance tab: title of the theme help dialog."
+  },
+  "appearanceThemeHelp": "A theme is kept on this device only and never syncs. To use one elsewhere, copy it here and paste it into Klabautermann on the other device.",
+  "@appearanceThemeHelp": {
+    "description": "Appearance tab: body of the theme help dialog."
+  },
+  "appearanceThemeFootnote": "Picking a theme copies its colours here. It is a starting point, not a mode, so everything below stays yours to change.",
+  "@appearanceThemeFootnote": {
+    "description": "Appearance tab: small print under the preset grid."
+  },
+  "appearancePresetTooltip": "Use the {name} theme",
+  "@appearancePresetTooltip": {
+    "description": "Appearance tab: tooltip of a preset tile.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Paper"
+      }
+    }
+  },
+  "appearanceModeTitle": "Mode",
+  "@appearanceModeTitle": {
+    "description": "Appearance tab: heading of the light/dark mode section."
+  },
+  "appearanceModeLead": "Automatic colours follow",
+  "@appearanceModeLead": {
+    "description": "Appearance tab: line above the mode switch."
+  },
+  "appearanceOwnSurfaceDark": "This theme has its own surface, so it is always dark. Set Surface to Automatic to choose a mode.",
+  "@appearanceOwnSurfaceDark": {
+    "description": "Appearance tab: note when a dark palette sets its own surface."
+  },
+  "appearanceOwnSurfaceLight": "This theme has its own surface, so it is always light. Set Surface to Automatic to choose a mode.",
+  "@appearanceOwnSurfaceLight": {
+    "description": "Appearance tab: note when a light palette sets its own surface."
+  },
+  "appearanceColoursTitle": "Colours",
+  "@appearanceColoursTitle": {
+    "description": "Appearance tab: heading of the colour slots."
+  },
+  "appearanceColoursHelpTitle": "Automatic colours",
+  "@appearanceColoursHelpTitle": {
+    "description": "Appearance tab: title of the colours help dialog."
+  },
+  "appearanceColoursHelp": "Automatic colours are the light or dark neutrals Klabautermann ships with, as the mode picks them. Once you give the theme a surface of its own, they are mixed from that surface and the text instead. Lines and the selection may be translucent.",
+  "@appearanceColoursHelp": {
+    "description": "Appearance tab: body of the colours help dialog."
+  },
+  "appearanceAccent": "Accent",
+  "@appearanceAccent": {
+    "description": "Appearance tab: the accent colour row."
+  },
+  "appearanceSlotSurface": "Surface",
+  "@appearanceSlotSurface": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotSidebar": "Sidebar",
+  "@appearanceSlotSidebar": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotRaised": "Headers and bars",
+  "@appearanceSlotRaised": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotText": "Text",
+  "@appearanceSlotText": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotSecondaryText": "Secondary text",
+  "@appearanceSlotSecondaryText": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotHairline": "Lines",
+  "@appearanceSlotHairline": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotSelection": "Selection",
+  "@appearanceSlotSelection": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotOnline": "Online",
+  "@appearanceSlotOnline": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotOffline": "Offline",
+  "@appearanceSlotOffline": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotConnecting": "Connecting",
+  "@appearanceSlotConnecting": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceSlotUnknown": "Unknown",
+  "@appearanceSlotUnknown": {
+    "description": "Appearance tab: name of a colour slot."
+  },
+  "appearanceStatusTitle": "Status colours",
+  "@appearanceStatusTitle": {
+    "description": "Appearance tab: heading of the status colour slots."
+  },
+  "appearanceStatusFootnote": "Each status also keeps its own shape and its name, so these colours never have to say it alone.",
+  "@appearanceStatusFootnote": {
+    "description": "Appearance tab: small print under the status colours."
+  },
+  "appearanceAutomatic": "Automatic",
+  "@appearanceAutomatic": {
+    "description": "Appearance tab: checkbox beside a colour that follows the mode."
+  },
+  "appearanceAutomaticSemantics": "{label}: Automatic",
+  "@appearanceAutomaticSemantics": {
+    "description": "Appearance tab: screen reader label of a colour's Automatic checkbox.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Surface"
+      }
+    }
+  },
+  "appearanceChooseColour": "Choose the {label} colour",
+  "@appearanceChooseColour": {
+    "description": "Appearance tab: tooltip of a colour swatch.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Surface"
+      }
+    }
+  },
+  "appearanceChooseAutomaticColour": "Choose a {label} colour (now Automatic)",
+  "@appearanceChooseAutomaticColour": {
+    "description": "Appearance tab: tooltip of an Automatic colour's swatch.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Surface"
+      }
+    }
+  },
+  "appearanceShapeTitle": "Shape and type",
+  "@appearanceShapeTitle": {
+    "description": "Appearance tab: heading of the font and corner controls."
+  },
+  "appearanceInterfaceFont": "Interface font",
+  "@appearanceInterfaceFont": {
+    "description": "Appearance tab: label of the interface font field."
+  },
+  "appearanceInterfaceFontHint": "System default",
+  "@appearanceInterfaceFontHint": {
+    "description": "Appearance tab: hint of the empty interface font field."
+  },
+  "appearanceInterfaceFontHelper": "Logs and commands keep their monospace font.",
+  "@appearanceInterfaceFontHelper": {
+    "description": "Appearance tab: helper text under the interface font field."
+  },
+  "appearanceCorners": "Corners",
+  "@appearanceCorners": {
+    "description": "Appearance tab: label of the corner slider."
+  },
+  "appearanceCornersSquare": "Square",
+  "@appearanceCornersSquare": {
+    "description": "Appearance tab: corner slider value at no rounding."
+  },
+  "appearanceCornersPercent": "{percent}%",
+  "@appearanceCornersPercent": {
+    "description": "Appearance tab: corner slider value as a percentage.",
+    "placeholders": {
+      "percent": {
+        "type": "int",
+        "example": "65"
+      }
+    }
+  },
+  "appearanceCornersSemantics": "Corners {label}",
+  "@appearanceCornersSemantics": {
+    "description": "Appearance tab: screen reader value of the corner slider.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "65%"
+      }
+    }
+  },
+  "appearanceShareTitle": "Share",
+  "@appearanceShareTitle": {
+    "description": "Appearance tab: heading of copy and paste."
+  },
+  "appearanceCopyTheme": "Copy theme",
+  "@appearanceCopyTheme": {
+    "description": "Appearance tab: button that copies the theme as text."
+  },
+  "appearancePasteTheme": "Paste theme",
+  "@appearancePasteTheme": {
+    "description": "Appearance tab: button that pastes a theme."
+  },
+  "appearanceShareFootnote": "Copies the theme as text you can keep or send. Pasting reads what it can and leaves everything else at the default.",
+  "@appearanceShareFootnote": {
+    "description": "Appearance tab: small print under copy and paste."
+  },
+  "appearanceThemeCopied": "Theme copied.",
+  "@appearanceThemeCopied": {
+    "description": "Appearance tab: toast after Copy theme."
+  },
+  "appearancePasteNotATheme": "The clipboard does not hold a theme. Copy one with Copy theme first.",
+  "@appearancePasteNotATheme": {
+    "description": "Appearance tab: toast when the clipboard holds no theme."
+  },
+  "appearanceStartOverTitle": "Start over",
+  "@appearanceStartOverTitle": {
+    "description": "Appearance tab: heading of the reset control."
+  },
+  "appearanceResetButton": "Reset to {name}",
+  "@appearanceResetButton": {
+    "description": "Appearance tab: button that resets the theme to the initial preset.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Klabautermann"
+      }
+    }
+  },
+  "appearanceUsingOwnColours": "Using your own colours.",
+  "@appearanceUsingOwnColours": {
+    "description": "Appearance tab: status beside the reset button when no preset matches."
+  },
+  "appearanceUsingPreset": "Using {name}.",
+  "@appearanceUsingPreset": {
+    "description": "Appearance tab: status beside the reset button when a preset matches.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Paper"
+      }
+    }
+  },
+  "appearanceResetTitle": "Reset the theme?",
+  "@appearanceResetTitle": {
+    "description": "Appearance tab: title of the reset confirmation."
+  },
+  "appearanceResetBody": "Every colour, the font and the corners go back to the {name} theme. The mode stays as it is.",
+  "@appearanceResetBody": {
+    "description": "Appearance tab: body of the reset confirmation.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Klabautermann"
+      }
+    }
+  },
+  "appearanceCancel": "Cancel",
+  "@appearanceCancel": {
+    "description": "Appearance tab: cancels the reset."
+  },
+  "appearanceReset": "Reset",
+  "@appearanceReset": {
+    "description": "Appearance tab: confirms the reset."
+  },
+  "appearanceAbout": "About {title}",
+  "@appearanceAbout": {
+    "description": "Appearance tab: tooltip of a section's help button.",
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "Colours"
+      }
+    }
+  },
+  "appearanceClose": "Close",
+  "@appearanceClose": {
+    "description": "Appearance tab: closes a section's help dialog."
   }
 }

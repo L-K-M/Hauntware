@@ -9,13 +9,60 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'Klabautermann';
+  String get appTitle => 'Klabautermann (preview)';
 
   @override
   String get fleetTitle => 'Fleet';
 
   @override
   String get fleetSectionServers => 'Servers';
+
+  @override
+  String get fleetSectionPinned => 'Pinned';
+
+  @override
+  String get fleetSectionImported => 'Imported';
+
+  @override
+  String get fleetRowPin => 'Pin to top';
+
+  @override
+  String get fleetRowUnpin => 'Unpin';
+
+  @override
+  String get fleetPinNotSaved =>
+      'Klabautermann could not save your pinned servers, so the change lasts only until it quits.';
+
+  @override
+  String get fleetRowMonitor => 'Monitor';
+
+  @override
+  String get fleetRowStopMonitoring => 'Stop monitoring';
+
+  @override
+  String monitorSetFull(int limit) {
+    return 'You can monitor up to $limit servers on this device. Stop monitoring one first.';
+  }
+
+  @override
+  String get monitorSetNotSaved =>
+      'Klabautermann could not save your monitored servers, so the change lasts only until it quits.';
+
+  @override
+  String get monitorSetNotChanged =>
+      'The monitored servers could not be changed.';
+
+  @override
+  String get monitorIneligibleEndpoint =>
+      'Confirm this server\'s endpoint to monitor it.';
+
+  @override
+  String get monitorIneligibleCredentials =>
+      'Signs in with a password or a stored key, which asks you first, so it is read only while you have it open.';
+
+  @override
+  String get monitorIneligibleUnknown =>
+      'Import your ssh_config again to monitor this server.';
 
   @override
   String get fleetEmptyTitle => 'No servers yet';
@@ -140,6 +187,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get menuWindow => 'Window';
+
+  @override
+  String get menuHelp => 'Help';
+
+  @override
+  String get aboutCommand => 'About Klabautermann';
+
+  @override
+  String aboutVersion(String version) {
+    return 'Version $version';
+  }
+
+  @override
+  String get aboutVersionUnknown => 'Version unknown';
+
+  @override
+  String get aboutLicence =>
+      'Klabautermann is free and unencumbered software released into the public domain under the Unlicense.';
 
   @override
   String get statusConnected => 'Connected';
@@ -315,9 +380,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsTabAlerts => 'Alerts';
-
-  @override
-  String get themeLabel => 'Theme';
 
   @override
   String get themeSystem => 'System';
@@ -1368,16 +1430,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get accessRuntimeAlias =>
       'Podman can also answer on Docker\'s socket path. Docker support will tell them apart.';
-
-  @override
-  String get accessDockerPendingTitle => 'Arrives with Docker support';
-
-  @override
-  String get accessDockerPendingBody =>
-      'Containers, images and stacks arrive with Docker support. Until then, this tab shows the runtime Klabautermann detected, read-only.';
-
-  @override
-  String get accessDetectedRuntime => 'Detected runtime';
 
   @override
   String accessPanelHiddenTitle(String panel) {
@@ -2441,6 +2493,86 @@ class AppLocalizationsEn extends AppLocalizations {
       'You can\'t connect to this server yet: it comes from an earlier import that kept only its address. Import your SSH config again to connect.';
 
   @override
+  String get connectRejectedEndpointNotConfirmed =>
+      'You can\'t connect to this server yet: its address comes from your sync account and isn\'t confirmed on this device, or it changed since you confirmed it. Choose Review over the server list to check and confirm it.';
+
+  @override
+  String endpointsPendingNotice(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count synced servers wait for you to confirm their addresses.',
+      one: '$count synced server waits for you to confirm its address.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get endpointsReview => 'Review';
+
+  @override
+  String get endpointsTitle => 'Confirm server addresses';
+
+  @override
+  String get endpointsBody =>
+      'These servers come from your sync account. Klabautermann connects only to addresses you confirm on this device, so an address changed on another device cannot receive your sign-in unnoticed. Check each host, port, user and jump route before you confirm it.';
+
+  @override
+  String get endpointsSearch => 'Search servers';
+
+  @override
+  String endpointsRoute(String route) {
+    return 'via $route';
+  }
+
+  @override
+  String get endpointsRouteSeparator => ' → ';
+
+  @override
+  String get endpointsChanged => 'Changed since you confirmed it';
+
+  @override
+  String get endpointsNoMatch => 'No servers match your search.';
+
+  @override
+  String get endpointsNoneLeft =>
+      'Every synced server\'s address is confirmed on this device.';
+
+  @override
+  String get endpointsConfirmAllShown => 'Confirm all shown';
+
+  @override
+  String endpointsConfirmSelected(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Confirm $count servers',
+      one: 'Confirm $count server',
+      zero: 'Confirm selected',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String endpointsConfirmed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Confirmed $count server addresses.',
+      one: 'Confirmed $count server address.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get endpointsStillPending =>
+      'Some servers still need confirming: confirm the jump hosts they go through too.';
+
+  @override
+  String get endpointsFailed =>
+      'The confirmation could not be saved on this device, so these servers stay unconfirmed. Try again.';
+
+  @override
   String get settingsAccessibilityTitle => 'Accessibility';
 
   @override
@@ -2456,6 +2588,26 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsAnnounceNotChanged => 'The setting could not be changed.';
+
+  @override
+  String get settingsAboutTitle => 'About';
+
+  @override
+  String get settingsMonitorTitle => 'Monitoring';
+
+  @override
+  String settingsMonitorDetail(int limit) {
+    return 'Monitored servers are read continuously while Klabautermann is open, and their rows show CPU, memory and disk. A server can be monitored once its endpoint is confirmed and it signs in with an SSH agent or a key file, without asking you. Up to $limit servers.';
+  }
+
+  @override
+  String settingsMonitorCount(int monitored, int limit) {
+    return '$monitored of $limit servers monitored';
+  }
+
+  @override
+  String get settingsMonitorEmpty =>
+      'No servers yet. Servers you sync or import show here.';
 
   @override
   String overviewBandAnnouncement(String metric, String value, String band) {
@@ -2701,4 +2853,381 @@ class AppLocalizationsEn extends AppLocalizations {
   String syncFileNewer(String fileName) {
     return 'The sync file $fileName was saved by a newer version of Klabautermann. Sync changes will not be kept after a restart.';
   }
+
+  @override
+  String get dockerTransportWaiting => 'Engine API: waiting for the connection';
+
+  @override
+  String get dockerTransportResolving => 'Engine API: looking for a route';
+
+  @override
+  String get dockerTransportSocketForward =>
+      'Engine API via SSH socket forward';
+
+  @override
+  String get dockerTransportCliRelay =>
+      'Engine API via docker CLI relay (limited streams)';
+
+  @override
+  String get dockerTransportSocatRelay => 'Engine API via socat relay';
+
+  @override
+  String get dockerTransportNoRelay =>
+      'No Engine API route: forwarding is off and there is no relay';
+
+  @override
+  String get dockerTransportNeedsAdminMode =>
+      'No Engine API route: the socket needs admin mode';
+
+  @override
+  String get dockerTransportSocketDenied =>
+      'No Engine API route: your account cannot use the socket';
+
+  @override
+  String get dockerTransportProbeFailed =>
+      'No Engine API route: the socket check failed';
+
+  @override
+  String get dockerTransportNoSocket =>
+      'No Engine API route: no engine socket found';
+
+  @override
+  String get dockerTransportSocketsUnknown =>
+      'No Engine API route: the sockets were not checked';
+
+  @override
+  String get dockerTransportUnreachable =>
+      'Engine API: the engine did not answer';
+
+  @override
+  String get dockerTransportUnsupported =>
+      'Engine API: the engine\'s API version is not supported';
+
+  @override
+  String get dockerTransportLinkError =>
+      'Engine API: the connection failed while looking for a route';
+
+  @override
+  String get dockerLowSession => 'Low-session mode';
+
+  @override
+  String get dockerBadgeRootfulSocket => 'Rootful socket: root-equivalent';
+
+  @override
+  String dockerBadgeRootlessEngine(String user) {
+    return 'Rootless engine: equals user $user';
+  }
+
+  @override
+  String get dockerBadgeRootlessEngineLogin =>
+      'Rootless engine: equals your login user';
+
+  @override
+  String get dockerBadgeCustomSocket => 'Custom socket: root-equivalent';
+
+  @override
+  String get dockerRuntimeDocker => 'Docker';
+
+  @override
+  String get dockerRuntimePodman => 'Podman';
+
+  @override
+  String get dockerGateWaitingTitle => 'Waiting for the connection';
+
+  @override
+  String get dockerGateWaitingBody =>
+      'Klabautermann looks for the Docker engine once it is connected to this server and knows what the server offers.';
+
+  @override
+  String get dockerGateResolvingTitle => 'Looking for the Docker engine';
+
+  @override
+  String get dockerGateResolvingBody =>
+      'Klabautermann is finding a way to reach the engine socket and agreeing on an API version with the engine.';
+
+  @override
+  String get dockerGateNoRelay =>
+      'Socket forwarding is off on this server, and it has nothing to relay through: no docker or podman command, no socat and no nc.';
+
+  @override
+  String get dockerGateNeedsAdminMode =>
+      'Your account cannot use the engine socket. Reaching it through sudo needs admin mode, which arrives in a later milestone.';
+
+  @override
+  String get dockerGateSocketDenied =>
+      'Your account cannot use the engine socket, and this server has no sudo. The Access tab shows how access is granted.';
+
+  @override
+  String get dockerGateProbeFailed =>
+      'Checking the engine socket failed, so Klabautermann cannot tell how to reach it.';
+
+  @override
+  String get dockerGateNoSocket =>
+      'No Docker or Podman socket was found on this server.';
+
+  @override
+  String get dockerGateSocketsUnknown =>
+      'The server\'s capability check has not reported its engine sockets.';
+
+  @override
+  String get dockerGateUnreachable =>
+      'A route to the engine socket opened, but the engine did not answer over it.';
+
+  @override
+  String get dockerGateBelowClientFloor =>
+      'The engine\'s newest API version is older than 1.41, the oldest Klabautermann supports.';
+
+  @override
+  String get dockerGateBelowServerMinimum =>
+      'The engine only accepts API versions newer than Klabautermann supports.';
+
+  @override
+  String get dockerGateApiVersionUnknown =>
+      'The engine did not report an API version Klabautermann can read.';
+
+  @override
+  String get dockerGateLinkError =>
+      'The connection to this server failed while Klabautermann looked for the engine.';
+
+  @override
+  String get dockerRetry => 'Try again';
+
+  @override
+  String get dockerTabContainers => 'Containers';
+
+  @override
+  String get dockerTabImages => 'Images';
+
+  @override
+  String get dockerTabStacks => 'Stacks';
+
+  @override
+  String get dockerEngineHeading => 'Engine';
+
+  @override
+  String dockerEngineApi(String version) {
+    return 'API $version';
+  }
+
+  @override
+  String dockerEngineVersion(String name, String version) {
+    return '$name $version';
+  }
+
+  @override
+  String dockerEngineVersionUnknown(String name) {
+    return '$name, version unknown';
+  }
+
+  @override
+  String dockerEngineOs(String os, String architecture) {
+    return '$os on $architecture';
+  }
+
+  @override
+  String get dockerEngineOsUnknown => 'Operating system unknown';
+
+  @override
+  String get dockerEngineReading => 'Reading the engine details…';
+
+  @override
+  String get dockerEngineReadFailed => 'The engine details could not be read.';
+
+  @override
+  String get dockerNoticeDismiss => 'Got it';
+
+  @override
+  String get dockerNoticeNotSaved =>
+      'Klabautermann could not save that you dismissed the root-equivalence note, so it shows again after a restart.';
+
+  @override
+  String get appearanceThemeTitle => 'Theme';
+
+  @override
+  String get appearanceThemeHelpTitle => 'Themes';
+
+  @override
+  String get appearanceThemeHelp =>
+      'A theme is kept on this device only and never syncs. To use one elsewhere, copy it here and paste it into Klabautermann on the other device.';
+
+  @override
+  String get appearanceThemeFootnote =>
+      'Picking a theme copies its colours here. It is a starting point, not a mode, so everything below stays yours to change.';
+
+  @override
+  String appearancePresetTooltip(String name) {
+    return 'Use the $name theme';
+  }
+
+  @override
+  String get appearanceModeTitle => 'Mode';
+
+  @override
+  String get appearanceModeLead => 'Automatic colours follow';
+
+  @override
+  String get appearanceOwnSurfaceDark =>
+      'This theme has its own surface, so it is always dark. Set Surface to Automatic to choose a mode.';
+
+  @override
+  String get appearanceOwnSurfaceLight =>
+      'This theme has its own surface, so it is always light. Set Surface to Automatic to choose a mode.';
+
+  @override
+  String get appearanceColoursTitle => 'Colours';
+
+  @override
+  String get appearanceColoursHelpTitle => 'Automatic colours';
+
+  @override
+  String get appearanceColoursHelp =>
+      'Automatic colours are the light or dark neutrals Klabautermann ships with, as the mode picks them. Once you give the theme a surface of its own, they are mixed from that surface and the text instead. Lines and the selection may be translucent.';
+
+  @override
+  String get appearanceAccent => 'Accent';
+
+  @override
+  String get appearanceSlotSurface => 'Surface';
+
+  @override
+  String get appearanceSlotSidebar => 'Sidebar';
+
+  @override
+  String get appearanceSlotRaised => 'Headers and bars';
+
+  @override
+  String get appearanceSlotText => 'Text';
+
+  @override
+  String get appearanceSlotSecondaryText => 'Secondary text';
+
+  @override
+  String get appearanceSlotHairline => 'Lines';
+
+  @override
+  String get appearanceSlotSelection => 'Selection';
+
+  @override
+  String get appearanceSlotOnline => 'Online';
+
+  @override
+  String get appearanceSlotOffline => 'Offline';
+
+  @override
+  String get appearanceSlotConnecting => 'Connecting';
+
+  @override
+  String get appearanceSlotUnknown => 'Unknown';
+
+  @override
+  String get appearanceStatusTitle => 'Status colours';
+
+  @override
+  String get appearanceStatusFootnote =>
+      'Each status also keeps its own shape and its name, so these colours never have to say it alone.';
+
+  @override
+  String get appearanceAutomatic => 'Automatic';
+
+  @override
+  String appearanceAutomaticSemantics(String label) {
+    return '$label: Automatic';
+  }
+
+  @override
+  String appearanceChooseColour(String label) {
+    return 'Choose the $label colour';
+  }
+
+  @override
+  String appearanceChooseAutomaticColour(String label) {
+    return 'Choose a $label colour (now Automatic)';
+  }
+
+  @override
+  String get appearanceShapeTitle => 'Shape and type';
+
+  @override
+  String get appearanceInterfaceFont => 'Interface font';
+
+  @override
+  String get appearanceInterfaceFontHint => 'System default';
+
+  @override
+  String get appearanceInterfaceFontHelper =>
+      'Logs and commands keep their monospace font.';
+
+  @override
+  String get appearanceCorners => 'Corners';
+
+  @override
+  String get appearanceCornersSquare => 'Square';
+
+  @override
+  String appearanceCornersPercent(int percent) {
+    return '$percent%';
+  }
+
+  @override
+  String appearanceCornersSemantics(String label) {
+    return 'Corners $label';
+  }
+
+  @override
+  String get appearanceShareTitle => 'Share';
+
+  @override
+  String get appearanceCopyTheme => 'Copy theme';
+
+  @override
+  String get appearancePasteTheme => 'Paste theme';
+
+  @override
+  String get appearanceShareFootnote =>
+      'Copies the theme as text you can keep or send. Pasting reads what it can and leaves everything else at the default.';
+
+  @override
+  String get appearanceThemeCopied => 'Theme copied.';
+
+  @override
+  String get appearancePasteNotATheme =>
+      'The clipboard does not hold a theme. Copy one with Copy theme first.';
+
+  @override
+  String get appearanceStartOverTitle => 'Start over';
+
+  @override
+  String appearanceResetButton(String name) {
+    return 'Reset to $name';
+  }
+
+  @override
+  String get appearanceUsingOwnColours => 'Using your own colours.';
+
+  @override
+  String appearanceUsingPreset(String name) {
+    return 'Using $name.';
+  }
+
+  @override
+  String get appearanceResetTitle => 'Reset the theme?';
+
+  @override
+  String appearanceResetBody(String name) {
+    return 'Every colour, the font and the corners go back to the $name theme. The mode stays as it is.';
+  }
+
+  @override
+  String get appearanceCancel => 'Cancel';
+
+  @override
+  String get appearanceReset => 'Reset';
+
+  @override
+  String appearanceAbout(String title) {
+    return 'About $title';
+  }
+
+  @override
+  String get appearanceClose => 'Close';
 }

@@ -116,9 +116,12 @@ ReplaySection _probeSection(String chunk) {
   );
 }
 
-/// The READY marker a replayed session starts with (03 §6.3).
-Uint8List readyFrame() =>
-    _marker('READY HWS/1 $kCollectorSetVersion').toBytes();
+/// The SELF and READY markers a replayed session starts with (03 §6.2,
+/// §6.3). A replayed host has no processes, so SELF names PID 2 and its
+/// parent PID 1.
+Uint8List readyFrame() => (_marker(
+  'SELF 2 1',
+)..add(_marker('READY HWS/1 $kCollectorSetVersion').toBytes())).toBytes();
 
 /// Reply [seq] with [sections], framed as the sampler prints it (03
 /// §6.2): its `B` marker carries [uptime], or nothing when it is null.
