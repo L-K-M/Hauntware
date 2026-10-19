@@ -1816,12 +1816,13 @@ final class ImportStoreIssue {
 /// A window ([follow] false) reads the newest [window] records, older than
 /// [afterCursor] when it is set, and ends. They arrive newest first, so
 /// the last one's cursor reads on to older records (LOG-01's "load
-/// older"; SVC-04's unit logs are one window). A follow delivers up to
-/// [window] earlier records oldest first, then each new record as the
-/// host writes it, until [CloseStream]. With [afterCursor] it resumes
-/// after a record the app already holds instead (LOG-02): it delivers
-/// every record after that one, so a reconnect leaves no gap, and
-/// [window] does not apply.
+/// older"; SVC-04's unit logs are one window), except a container's,
+/// which arrive oldest first as Docker's `tail` sends them. A follow
+/// delivers up to [window] earlier records oldest first, then each new
+/// record as the host writes it, until [CloseStream]. With [afterCursor]
+/// it resumes after a record the app already holds instead (LOG-02): it
+/// delivers every record after that one, so a reconnect leaves no gap,
+/// and [window] does not apply.
 @immutable
 final class LogStreamSpec {
   LogStreamSpec({

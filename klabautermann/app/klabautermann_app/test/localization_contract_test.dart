@@ -334,6 +334,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'  '",
     r"'${variable.name}=${variable.value.display}'",
   },
+  'lib/ui/docker/container_logs.dart': {
+    // The logging driver Docker names `none`, matched, never shown, and
+    // the driver an unnamed one fills the ARB text's slot with, which its
+    // wording then leaves out.
+    "'none'",
+    "''",
+  },
   'lib/ui/docker/containers_panel.dart': {
     // The key tests find a phone row by, in the table rows' form, and the
     // line break between its cells in its screen-reader label, each ARB
@@ -442,6 +449,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'\n'",
     r"'\u23ce\u2028'",
     "' '",
+    // A container row's time in ISO 8601 order with a space for the T,
+    // machine data, then its stream as the Engine API names it (CTX-01),
+    // whose spoken name is ARB text (logContainerStream).
+    r"'${iso.substring(0, 10)} ${iso.substring(11, _containerTimeWidth)}'",
+    r"'${_containerTime(container.at)} ${container.stream.name} '",
   },
   'lib/ui/logs/log_view.dart': {
     // A FocusNode debug label.

@@ -7,6 +7,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:planchette_core/planchette_core.dart' show TextMatch;
 
 import 'log_level.dart';
+import 'log_view_controller.dart' show ContainerLine;
 
 /// The contrast every span of log text keeps on its background: WCAG's
 /// 4.5:1 for body text (A11Y-04). SGR colours can ask for text that matches
@@ -130,9 +131,18 @@ final class LogPalette {
     fontStyle: FontStyle.italic,
   );
 
-  /// The style of a journal row's unit and PID.
+  /// The style of a journal row's unit and PID, and of a container
+  /// row's time and `stdout` mark.
   late final TextStyle sourceStyle = TextStyle(
     color: _legible(_secondary, background),
+  );
+
+  /// The style of a container row's `stderr` mark (CTX-01): the error
+  /// colour, beside the mark's own word, so the stream never shows by
+  /// colour alone. The line itself keeps its level's colour, since a
+  /// program may write anything to stderr.
+  late final TextStyle stderrStyle = TextStyle(
+    color: _legible(_error, background),
   );
 
   /// [style] inside a search match (LOG-05): the match background, with
@@ -246,10 +256,39 @@ final class LogPalette {
 /// lines follow.
 const String _messageNewline = '\u23ce\u2028';
 
+/// How many characters a container row's time takes: `2026-10-17
+/// 14:30:05`, in the device's zone.
+const int _containerTimeWidth = 19;
+
+/// A container row's time (CTX-01) in the device's zone, to the second,
+/// or as many spaces when the line carried none, so the marks line up.
+String _containerTime(DateTime? at) {
+  if (at == null) return ' ' * _containerTimeWidth;
+
+  final iso = at.toLocal().toIso8601String();
+  return '${iso.substring(0, 10)} ${iso.substring(11, _containerTimeWidth)}';
+}
+
+/// How many characters a [container] row's time and stream mark take
+/// before its text, the gaps included.
+int logContainerSourceLength(ContainerLine container) =>
+    _containerTimeWidth + container.stream.name.length + 2;
+
 /// The text of [line]'s row before styling: a journal line's unit and PID
-/// (LOG-01), then what `parseSgr` leaves of its text, with a MESSAGE's
-/// newlines shown instead of dropped.
-({String source, SgrText body}) _rowParts(LogLine line) {
+/// (LOG-01) or a [container] line's time and stream (CTX-01), then what
+/// `parseSgr` leaves of its text, with a MESSAGE's newlines shown instead
+/// of dropped.
+({String source, SgrText body}) _rowParts(
+  LogLine line,
+  ContainerLine? container,
+) {
+  if (container != null) {
+    return (
+      source: '${_containerTime(container.at)} ${container.stream.name} ',
+      body: parseSgr(line.text),
+    );
+  }
+
   final journal = line.journal;
   if (journal == null) return (source: '', body: parseSgr(line.text));
 
@@ -262,29 +301,56 @@ const String _messageNewline = '\u23ce\u2028';
 }
 
 /// The visible text of [line]'s row without its note: what a search reads
-/// and the width the view measures.
-String logRowText(LogLine line) {
-  final (:source, :body) = _rowParts(line);
+/// and the width the view measures. A [container] line's row starts with
+/// its time and stream.
+String logRowText(LogLine line, {ContainerLine? container}) {
+  final (:source, :body) = _rowParts(line, container);
   return source + body.text;
 }
 
-/// [line] as a log view draws it: a journal line's unit and PID, its
-/// visible text styled by [palette], then [note] (a cut line's, or a
-/// journal MESSAGE's that was not sent). [matches] are search matches in
-/// [logRowText], in order; the one at [currentMatch] is the current one.
+/// [line] as a log view draws it: a journal line's unit and PID, or a
+/// [container] line's time and stream mark, its visible text styled by
+/// [palette], then [note] (a cut line's, or a journal MESSAGE's that was
+/// not sent). A screen reader hears [streamLabel] for the stream mark.
+/// [matches] are search matches in [logRowText], in order; the one at
+/// [currentMatch] is the current one.
 TextSpan logLineSpan(
   LogLine line, {
   required LogPalette palette,
   required TextStyle base,
   LogLevel? level,
   String? note,
+  ContainerLine? container,
+  String? streamLabel,
   List<TextMatch> matches = const [],
   int? currentMatch,
 }) {
-  final (:source, :body) = _rowParts(line);
+  final (:source, :body) = _rowParts(line, container);
   final text = source + body.text;
-  final runs = <(int, int, TextStyle)>[
-    if (source.isNotEmpty) (0, source.length, palette.sourceStyle),
+  // A container row's stream mark sits between its time and the gap
+  // before the text.
+  final mark = container == null
+      ? null
+      : (
+          start: _containerTimeWidth + 1,
+          end: _containerTimeWidth + 1 + container.stream.name.length,
+        );
+  // Each run: its range, its style, and what a screen reader hears for
+  // it instead of its text.
+  final runs = <(int, int, TextStyle, String?)>[
+    if (mark != null) ...[
+      (0, mark.start, palette.sourceStyle, null),
+      (
+        mark.start,
+        mark.end,
+        container!.stream == ContainerLogStream.stderr
+            ? palette.stderrStyle
+            : palette.sourceStyle,
+        streamLabel,
+      ),
+      (mark.end, source.length, palette.sourceStyle, null),
+    ] else if (source.isNotEmpty)
+      (0, source.length, palette.sourceStyle, null),
   ];
   void run(int start, int end, SgrStyle style) {
     if (start == end) return;
@@ -292,6 +358,7 @@ TextSpan logLineSpan(
       source.length + start,
       source.length + end,
       palette.styleFor(style, level),
+      null,
     ));
   }
 
@@ -306,21 +373,37 @@ TextSpan logLineSpan(
   // Each run is split where a match starts or ends inside it.
   final children = <InlineSpan>[];
   var next = 0;
-  for (final (start, end, style) in runs) {
+  for (final (start, end, style, label) in runs) {
     var from = start;
+    // A run a match splits speaks its label once, from its first piece.
+    String? spoken() {
+      if (label == null) return null;
+      return from == start ? label : '';
+    }
+
     while (from < end) {
       while (next < matches.length && matches[next].end <= from) {
         next++;
       }
       final match = next < matches.length ? matches[next] : null;
       if (match == null || match.start >= end) {
-        children.add(TextSpan(text: text.substring(from, end), style: style));
+        children.add(
+          TextSpan(
+            text: text.substring(from, end),
+            style: style,
+            semanticsLabel: spoken(),
+          ),
+        );
         break;
       }
 
       if (match.start > from) {
         children.add(
-          TextSpan(text: text.substring(from, match.start), style: style),
+          TextSpan(
+            text: text.substring(from, match.start),
+            style: style,
+            semanticsLabel: spoken(),
+          ),
         );
         from = match.start;
       }
@@ -329,6 +412,7 @@ TextSpan logLineSpan(
         TextSpan(
           text: text.substring(from, stop),
           style: palette.matchStyle(style, current: next == currentMatch),
+          semanticsLabel: spoken(),
         ),
       );
       from = stop;

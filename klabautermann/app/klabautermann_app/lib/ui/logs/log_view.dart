@@ -82,6 +82,10 @@ final _rowBreaks = RegExp('[\u2028\u2029]');
 /// highlighted, and each step to a match pauses following and scrolls the
 /// match's row into sight (LOG-05). Without wrap a match after the row's
 /// first line or past its ellipsis stays out of sight.
+///
+/// A container line's row (CTX-01) starts with its time and its stream,
+/// `stdout` or `stderr` ([LogViewController.containerOf]), the latter in
+/// the error colour; a screen reader hears the stream's name.
 class LogView extends StatefulWidget {
   const LogView({
     super.key,
@@ -413,7 +417,10 @@ class _LogViewState extends State<LogView> {
       return bound <= width;
     }
 
-    var rows = _note(entry) == null && fits(logRowText(entry), width)
+    final container = widget.controller.containerOf(entry);
+    var rows =
+        _note(entry) == null &&
+            fits(logRowText(entry, container: container), width)
         ? 1
         : _layoutRows(_lineSpan(entry, text), width, text);
     final fieldWidth = width - text.fieldIndent;
@@ -458,19 +465,28 @@ class _LogViewState extends State<LogView> {
 
     final text = _text!;
     final width = _textWidth(crossAxisExtent, text);
-    final units = entry.text.length + (entry.journal?.source?.length ?? 0);
+    final container = widget.controller.containerOf(entry);
+    final units =
+        entry.text.length +
+        (entry.journal?.source?.length ?? 0) +
+        (container == null ? 0 : logContainerSourceLength(container));
     if (width <= 0 || units == 0) return 1 + fields;
     return (units * text.advance / width).ceil().clamp(1, units) + fields;
   }
 
   TextSpan _lineSpan(LogLine line, _TextLayout text) {
     final search = widget.search;
+    final container = widget.controller.containerOf(line);
     return logLineSpan(
       line,
       palette: text.palette,
       base: text.base,
       level: widget.levelOf?.call(line),
       note: _note(line),
+      container: container,
+      streamLabel: container == null
+          ? null
+          : _l10n.logContainerStream(container.stream.name),
       matches: search?.matchesIn(line) ?? const [],
       currentMatch: search?.currentIndexIn(line),
     );
