@@ -6287,9 +6287,10 @@ the unhealthy containers after the failed units, in the failed units
 summary's shape (a count, then up to five names with the engine's
 status text, and "and N more"), as plain text: the Docker tab has no
 route to one container yet. The Docker card follows the Host card
-(in its column when wide) with `dockerSummary`'s running, paused,
-stopped and unhealthy containers, as `docker info` splits them, and
-the images, those in use and the dangling ones; the reclaimable space
+(in its column when wide) with `dockerSummary`'s running, paused and
+stopped containers, as `docker info` splits them, the unhealthy ones
+from the container list's health, and the images, those in use and
+the dangling ones; the reclaimable space
 reads "not measured" until the reader asks for `/system/df`, which
 shows its progress, the time of the last measurement, or why it
 failed above the one before, and is dropped when the endpoint's socket

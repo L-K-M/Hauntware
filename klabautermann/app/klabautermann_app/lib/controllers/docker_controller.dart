@@ -804,7 +804,6 @@ final class DockerDiskUse {
 
   /// This measurement with [payload], the answer that arrived at [now],
   /// taken in.
-
   DockerDiskUse took(DockerPayload payload, DateTime now) => switch (payload) {
     DockerSystemDfPayload(:final df) => DockerDiskUse(
       df: df,
