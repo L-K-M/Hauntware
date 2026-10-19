@@ -258,8 +258,30 @@ M2, the host read MVP, is the current milestone. What is on main:
   and 200 % text get two-line rows with a sort menu. Stats older than
   20 s turn grey beside a history icon and read "stale"; a failed read
   keeps the last list with why and a retry, and low-session mode is
-  named. No sizes (the watch never asks for `size=1`) and no details
-  (D14). Tested against the fake engine only.
+  named. No sizes (the watch never asks for `size=1`). Tested against
+  the fake engine only.
+- Container details in the app (M3, D14, 03 §7.12, §8.9, §10.2): a
+  container row (click, Enter or a screen reader's tap) opens its
+  details in the desktop inspector, which replaces the server's
+  coverage until closed (Escape or the close button, which takes focus
+  as it opens) or another server is selected, or on a phone's pushed
+  page. The Docker controller sends one `DockerContainerQuery` per
+  container a view shows, again when its row's state, status, health or
+  image changes in a delivered list (one at a time), and after a read
+  that failed once the endpoint is ready on a new route; a list without
+  it or a `notFound` answer says "container removed" over the last
+  read, and other failures say why with a retry. The details show the
+  managed-by badge (`detectOwnership` over the labels, now exported by
+  the core barrel), state with the exit code and an OOM kill, health
+  with the last checks' output, restart policy and count, image, times,
+  entrypoint and arguments, environment, labels, mounts, the row's
+  ports (the inspect model carries none), networks and a raw JSON view
+  drawn from the masked model. Masked values reveal for 30 s on
+  selection in the view's state only, mask again when the app turns
+  inactive or the view closes or changes container, and read as
+  "(masked)" to a screen reader. Logging driver options stay out of the
+  JSON: the model carries them unmasked. Tested against the fake engine
+  only.
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and
@@ -1211,8 +1233,9 @@ M2, the host read MVP, is the current milestone. What is on main:
   from it with its goldens (collector-set version 7). Two days later
   `quay.io` had dropped that digest too, since it retags `fedora:44`
   daily, so `fedora-44` now pins Docker Hub's official `fedora:44`
-  through `mirror.gcr.io`, whose digests stay pullable, and the fixture
-  is recaptured from it.
+  through `mirror.gcr.io`, as the other official images are, and the
+  fixture is recaptured from it. Docker Hub has so far kept replaced
+  official digests pullable, but promises nothing.
 - Docker fixture and rank-1 smoke (M3, 03 §5.4, §11.3, D10): the
   fixture adds `dind` (Docker 29.9.1, privileged, unpublished, dockerd
   on one Unix socket with gid 990, on a named volume) and `docker-sshd`

@@ -4816,5 +4816,326 @@
   "dockerContainersLowSessionRelay": "Low-session mode: the list is read again every 15 seconds instead of following engine events, and stats are read one container at a time.",
   "@dockerContainersLowSessionRelay": {
     "description": "Containers list: the server's link has a session limit (03 §5.2) on a relay route."
+  },
+  "dockerDetailsClose": "Close the container details",
+  "@dockerDetailsClose": {
+    "description": "Tooltip of the button that closes a container's details in the desktop inspector (03 §10.2)."
+  },
+  "dockerDetailsReading": "Reading the container details…",
+  "@dockerDetailsReading": {
+    "description": "Container details: the inspect read (CTR-03) has not answered yet."
+  },
+  "dockerDetailsFailed": "{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server's capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} daemonError{The engine refused or failed to inspect the container.} connectionFailed{The connection to the engine failed while inspecting the container.} cancelled{The read stopped before it ran.} other{The container details could not be read.}}",
+  "@dockerDetailsFailed": {
+    "description": "Container details: why the inspect read failed. reason is the engine's failure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerDetailsKept": "The details below are the last ones read.",
+  "@dockerDetailsKept": {
+    "description": "Container details: shown under a failure or a removal, above the details read before."
+  },
+  "dockerDetailsRemoved": "This container was removed.",
+  "@dockerDetailsRemoved": {
+    "description": "Container details: the container is gone from the engine (its inspect found nothing, or the list no longer has it)."
+  },
+  "dockerDetailsManagedBy": "Managed by {manager}",
+  "@dockerDetailsManagedBy": {
+    "description": "Container details: the managed-by badge (DKE-10). manager is the product name of the tool that owns the container, such as Coolify or Portainer, never translated.",
+    "placeholders": {
+      "manager": {
+        "type": "String",
+        "example": "Coolify"
+      }
+    }
+  },
+  "dockerDetailsManagedByNote": "Changes made outside {manager} can be overwritten by it. The label {label} marks it.",
+  "@dockerDetailsManagedByNote": {
+    "description": "Container details: under the managed-by badge. manager is the owning tool's product name; label is the container label that marks the ownership, server data.",
+    "placeholders": {
+      "manager": {
+        "type": "String",
+        "example": "Coolify"
+      },
+      "label": {
+        "type": "String",
+        "example": "coolify.managed"
+      }
+    }
+  },
+  "dockerDetailsOverview": "Overview",
+  "@dockerDetailsOverview": {
+    "description": "Container details: heading of the section with the container's state, health, restart policy, image and times."
+  },
+  "dockerDetailsId": "ID",
+  "@dockerDetailsId": {
+    "description": "Container details: label of the container's short ID."
+  },
+  "dockerDetailsStateExited": "{state}, exit code {code}",
+  "@dockerDetailsStateExited": {
+    "description": "Container details: a stopped container's state with the exit code of its last run.",
+    "placeholders": {
+      "state": {
+        "type": "String",
+        "example": "Exited"
+      },
+      "code": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerDetailsOomKilled": "Its last run was stopped for running out of memory.",
+  "@dockerDetailsOomKilled": {
+    "description": "Container details: the kernel's out-of-memory killer stopped the container's process."
+  },
+  "dockerDetailsStateError": "The engine reported an error for this container.",
+  "@dockerDetailsStateError": {
+    "description": "Container details: the engine's State.Error is set; the engine's own text follows, untranslated."
+  },
+  "dockerDetailsHealthStreak": "{count, plural, =1{1 failed check in a row} other{{count} failed checks in a row}}",
+  "@dockerDetailsHealthStreak": {
+    "description": "Container details: how many health checks failed in a row (CTR-04).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerDetailsRestartPolicy": "Restart policy",
+  "@dockerDetailsRestartPolicy": {
+    "description": "Container details: label of the container's restart policy."
+  },
+  "dockerDetailsRestartPolicyName": "{policy, select, no{Never restart} always{Always restart} unlessStopped{Restart unless stopped} onFailure{Restart on failure} other{Unknown}}",
+  "@dockerDetailsRestartPolicyName": {
+    "description": "Container details: a restart policy in words. policy is the policy's name.",
+    "placeholders": {
+      "policy": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerDetailsRestartPolicyRetries": "{policy}, at most {count, plural, =1{once} other{{count} times}}",
+  "@dockerDetailsRestartPolicyRetries": {
+    "description": "Container details: the on-failure restart policy with its retry limit.",
+    "placeholders": {
+      "policy": {
+        "type": "String",
+        "example": "Restart on failure"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerDetailsRestarts": "Restarts",
+  "@dockerDetailsRestarts": {
+    "description": "Container details: label of how many times the engine restarted the container."
+  },
+  "dockerDetailsImageId": "Image ID",
+  "@dockerDetailsImageId": {
+    "description": "Container details: label of the short ID of the image the container runs."
+  },
+  "dockerDetailsCreated": "Created",
+  "@dockerDetailsCreated": {
+    "description": "Container details: label of when the container was created."
+  },
+  "dockerDetailsStarted": "Started",
+  "@dockerDetailsStarted": {
+    "description": "Container details: label of when the container last started."
+  },
+  "dockerDetailsFinished": "Stopped",
+  "@dockerDetailsFinished": {
+    "description": "Container details: label of when the container's last run ended."
+  },
+  "dockerDetailsTime": "{time}",
+  "@dockerDetailsTime": {
+    "description": "Container details: a date and time in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "dockerDetailsHealthTitle": "Health checks",
+  "@dockerDetailsHealthTitle": {
+    "description": "Container details: heading of the last health-check results (CTR-04)."
+  },
+  "dockerDetailsHealthEmpty": "No health check has run yet.",
+  "@dockerDetailsHealthEmpty": {
+    "description": "Container details: the container has a health check but no results yet."
+  },
+  "dockerDetailsHealthCheck": "Exit code {code}, {time}",
+  "@dockerDetailsHealthCheck": {
+    "description": "Container details: one health-check result: its exit code and when it ended.",
+    "placeholders": {
+      "code": {
+        "type": "String",
+        "example": "1"
+      },
+      "time": {
+        "type": "DateTime",
+        "format": "MMMd+jms"
+      }
+    }
+  },
+  "dockerDetailsHealthCheckUntimed": "Exit code {code}",
+  "@dockerDetailsHealthCheckUntimed": {
+    "description": "Container details: one health-check result whose end time is unknown.",
+    "placeholders": {
+      "code": {
+        "type": "String",
+        "example": "1"
+      }
+    }
+  },
+  "dockerDetailsHealthNoOutput": "No output",
+  "@dockerDetailsHealthNoOutput": {
+    "description": "Container details: a health check that printed nothing."
+  },
+  "dockerDetailsRevealNote": "Select a masked value to show it for {seconds} seconds.",
+  "@dockerDetailsRevealNote": {
+    "description": "Container details: shown when some values are masked secrets (SAF-07): a reveal is temporary and stays on this device.",
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerDetailsMasked": "(masked)",
+  "@dockerDetailsMasked": {
+    "description": "What a screen reader says in place of a masked secret in a container's details (SAF-07)."
+  },
+  "dockerDetailsRevealHint": "Show the masked value",
+  "@dockerDetailsRevealHint": {
+    "description": "Screen-reader hint of a masked value in a container's details, which shows it for a while when activated."
+  },
+  "dockerDetailsHideHint": "Mask again",
+  "@dockerDetailsHideHint": {
+    "description": "Screen-reader hint of a revealed value in a container's details, which masks it again when activated."
+  },
+  "dockerDetailsEntry": "{name}: {value}",
+  "@dockerDetailsEntry": {
+    "description": "Container details: what a screen reader says for one environment variable or label: its name, then its value or \"(masked)\".",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "POSTGRES_PASSWORD"
+      },
+      "value": {
+        "type": "String",
+        "example": "(masked)"
+      }
+    }
+  },
+  "dockerDetailsCommandTitle": "Command",
+  "@dockerDetailsCommandTitle": {
+    "description": "Container details: heading of the container's entrypoint and command (Docker's ENTRYPOINT and CMD)."
+  },
+  "dockerDetailsEntrypoint": "Entrypoint",
+  "@dockerDetailsEntrypoint": {
+    "description": "Container details: label of the container's entrypoint (Docker's ENTRYPOINT)."
+  },
+  "dockerDetailsCmd": "Arguments",
+  "@dockerDetailsCmd": {
+    "description": "Container details: label of the command the entrypoint is given (Docker's CMD)."
+  },
+  "dockerDetailsNone": "None",
+  "@dockerDetailsNone": {
+    "description": "Container details: an entrypoint or argument list that is empty."
+  },
+  "dockerDetailsEnvTitle": "Environment",
+  "@dockerDetailsEnvTitle": {
+    "description": "Container details: heading of the container's environment variables."
+  },
+  "dockerDetailsEnvEmpty": "No environment variables.",
+  "@dockerDetailsEnvEmpty": {
+    "description": "Container details: the container has no environment variables."
+  },
+  "dockerDetailsLabelsTitle": "Labels",
+  "@dockerDetailsLabelsTitle": {
+    "description": "Container details: heading of the container's labels."
+  },
+  "dockerDetailsLabelsEmpty": "No labels.",
+  "@dockerDetailsLabelsEmpty": {
+    "description": "Container details: the container has no labels."
+  },
+  "dockerDetailsMountsTitle": "Mounts",
+  "@dockerDetailsMountsTitle": {
+    "description": "Container details: heading of the container's mounts."
+  },
+  "dockerDetailsMountsEmpty": "No mounts.",
+  "@dockerDetailsMountsEmpty": {
+    "description": "Container details: the container has no mounts."
+  },
+  "dockerDetailsMountKind": "{type, select, bind{Bind mount} volume{Volume} tmpfs{Memory (tmpfs)} npipe{Named pipe} cluster{Cluster volume} image{Image} other{Mount}}",
+  "@dockerDetailsMountKind": {
+    "description": "Container details: a mount's type in words. type is the Engine API's mount type.",
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerDetailsMountReadOnly": "read-only",
+  "@dockerDetailsMountReadOnly": {
+    "description": "Container details: a mount the container cannot write to, after the mount's type."
+  },
+  "dockerDetailsMountReadWrite": "read-write",
+  "@dockerDetailsMountReadWrite": {
+    "description": "Container details: a mount the container can write to, after the mount's type."
+  },
+  "dockerDetailsMountSummary": "{kind}, {access}",
+  "@dockerDetailsMountSummary": {
+    "description": "Container details: a mount's type and whether it is writable.",
+    "placeholders": {
+      "kind": {
+        "type": "String",
+        "example": "Volume"
+      },
+      "access": {
+        "type": "String",
+        "example": "read-only"
+      }
+    }
+  },
+  "dockerDetailsPortsEmpty": "No published or exposed ports.",
+  "@dockerDetailsPortsEmpty": {
+    "description": "Container details: the container lists no ports."
+  },
+  "dockerDetailsNetworksTitle": "Networks",
+  "@dockerDetailsNetworksTitle": {
+    "description": "Container details: heading of the networks the container is attached to."
+  },
+  "dockerDetailsNetworkMode": "Network mode",
+  "@dockerDetailsNetworkMode": {
+    "description": "Container details: label of the container's network mode, such as bridge or host, as the engine names it."
+  },
+  "dockerDetailsNetworksEmpty": "Not attached to a network.",
+  "@dockerDetailsNetworksEmpty": {
+    "description": "Container details: the container is attached to no network."
+  },
+  "dockerDetailsIpAddress": "IP address",
+  "@dockerDetailsIpAddress": {
+    "description": "Container details: label of the container's address on one network."
+  },
+  "dockerDetailsGateway": "Gateway",
+  "@dockerDetailsGateway": {
+    "description": "Container details: label of a network's gateway address."
+  },
+  "dockerDetailsAliases": "Aliases",
+  "@dockerDetailsAliases": {
+    "description": "Container details: label of the container's names on one network."
+  },
+  "dockerDetailsRawTitle": "Raw JSON",
+  "@dockerDetailsRawTitle": {
+    "description": "Container details: title of the expandable inspect output in JSON (CTR-03)."
+  },
+  "dockerDetailsRawNote": "Masked values stay masked here.",
+  "@dockerDetailsRawNote": {
+    "description": "Container details: under the raw JSON's title; the JSON never shows a secret, even one revealed above (SAF-07)."
   }
 }
