@@ -135,8 +135,18 @@ final class OperationRunner {
                   )
                 : await link.run(step.commandLine, stdin: const []);
             if (result.exitCode != 0) {
+              if (step.exitMeanings[result.exitCode] case final changed?) {
+                return failed(
+                  ActionFailure.revalidation,
+                  step: i,
+                  exitCode: result.exitCode,
+                  revalidation: changed,
+                );
+              }
               return failed(
-                ActionFailure.stepFailed,
+                !step.elevated && _polkitRefused.hasMatch(result.stderr)
+                    ? ActionFailure.adminRequired
+                    : ActionFailure.stepFailed,
                 step: i,
                 exitCode: result.exitCode,
               );
@@ -200,6 +210,12 @@ final class OperationRunner {
         stdin: const [],
       );
 }
+
+/// polkit's refusal of `systemctl --no-ask-password` without an agent
+/// (03 §7.5) [R].
+final _polkitRefused = RegExp(
+  r'Interactive authentication required|Access denied',
+);
 
 /// `klab_ticks`'s status for a process that is gone (proc_stat.dart).
 const _kTicksGone = 3;

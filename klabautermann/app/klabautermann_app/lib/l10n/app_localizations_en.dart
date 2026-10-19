@@ -2864,6 +2864,531 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get settingsSafetyReadOnly => 'Read-only everywhere';
+
+  @override
+  String get settingsSafetyReadOnlyDetail =>
+      'While this is on, no server takes an action and every action is hidden. Monitoring, logs and other reads work as before, so it is safe for screen sharing.';
+
+  @override
+  String get settingsSafetyAdminExpiry => 'Admin mode ends after';
+
+  @override
+  String settingsSafetyAdminExpiryMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String get settingsSafetyAdminExpiryDetail =>
+      'Admin mode turns off after this long without an action. It also turns off when the link drops, and on a phone when Klabautermann goes to the background.';
+
+  @override
+  String get settingsSafetyMarksTitle => 'Marked protected';
+
+  @override
+  String get settingsSafetyMarksDetail =>
+      'An action on a target you marked protected asks you to type its name first. Marks stay on this device.';
+
+  @override
+  String get settingsSafetyMarksEmpty =>
+      'You have not marked anything protected.';
+
+  @override
+  String settingsSafetyMark(String target, String server) {
+    return '$target on $server';
+  }
+
+  @override
+  String settingsSafetyMarkRemove(String target) {
+    return 'Remove the mark on $target';
+  }
+
+  @override
+  String get settingsSafetyNotSaved =>
+      'The setting changed, but it could not be saved, so it will not be kept after a restart.';
+
+  @override
+  String get settingsSafetyNotChanged => 'The setting could not be changed.';
+
+  @override
+  String get serverSafetyMenu => 'Safety';
+
+  @override
+  String get serverAllowActions => 'Allow actions';
+
+  @override
+  String get serverReadOnly => 'Read-only';
+
+  @override
+  String get serverObserveOnly =>
+      'Observe only: Klabautermann reads this server and changes nothing. To act on it, turn on Allow actions in the Safety menu.';
+
+  @override
+  String get serverReadOnlyNotice =>
+      'Read-only: actions on this server are hidden.';
+
+  @override
+  String elevationTitle(String host) {
+    return 'Admin password for $host';
+  }
+
+  @override
+  String elevationDetail(String user) {
+    return 'Klabautermann asks sudo for root as $user with this password. It is kept in memory only while admin mode is on, and never saved.';
+  }
+
+  @override
+  String get elevationRetry => 'That password did not work. Try again.';
+
+  @override
+  String get elevationPassword => 'Password';
+
+  @override
+  String get elevationCancel => 'Cancel';
+
+  @override
+  String get elevationTurnOn => 'Turn on';
+
+  @override
+  String get adminChipOff => 'Admin mode';
+
+  @override
+  String get adminChipStarting => 'Turning on admin mode';
+
+  @override
+  String adminChipOn(String time) {
+    return 'Admin mode until $time';
+  }
+
+  @override
+  String get adminChipReadOnly =>
+      'Admin mode is not available while the server is read-only.';
+
+  @override
+  String get adminOnNotice =>
+      'Admin mode is on: actions you confirm here run as root.';
+
+  @override
+  String adminFailure(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'observeOnly':
+          'Admin mode needs Allow actions turned on for this server.',
+      'readOnly': 'Admin mode is not available while this server is read-only.',
+      'noLink': 'Admin mode needs a connection to this server.',
+      'notProbed':
+          'Klabautermann has not checked this server yet. Try admin mode again in a moment.',
+      'unavailable':
+          'This server offers no way to become root that Klabautermann can use.',
+      'ttyRequired':
+          'This server lets you become root only from a terminal, so admin mode is not available.',
+      'notInSudoers': 'Your account on this server may not use sudo.',
+      'wrongPassword':
+          'The password was refused three times, so admin mode stayed off.',
+      'cancelled': 'Admin mode stayed off because no password was given.',
+      'other': 'Admin mode could not be turned on.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String adminEnded(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'inactivity': 'Admin mode ended after a while without an action.',
+      'background':
+          'Admin mode ended when Klabautermann went to the background.',
+      'linkLost': 'Admin mode ended when the connection dropped.',
+      'serverRemoved': 'Admin mode ended because the server changed.',
+      'other': 'Admin mode ended.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get actionPreviewTitle => 'Review before it runs';
+
+  @override
+  String actionPreviewTarget(String target) {
+    return 'Target: $target';
+  }
+
+  @override
+  String get actionPreviewSteps => 'What will run';
+
+  @override
+  String get actionPreviewRoot => 'root';
+
+  @override
+  String get actionPreviewRootDetail =>
+      'This step runs as root through admin mode.';
+
+  @override
+  String actionPreviewRunner(String identity) {
+    return 'Runs as $identity';
+  }
+
+  @override
+  String actionPreviewRunnerEngine(String identity, String engine) {
+    return 'Runs as $identity through $engine';
+  }
+
+  @override
+  String actionPreviewCredentials(String credentials) {
+    String _temp0 = intl.Intl.selectLogic(credentials, {
+      'session': 'Signs in with this connection\'s own sign-in.',
+      'adminPassword': 'Uses the admin mode password.',
+      'passwordless': 'Needs no password.',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get actionPreviewHostWrites => 'What it leaves on the server';
+
+  @override
+  String actionPreviewHostWrite(String row) {
+    String _temp0 = intl.Intl.selectLogic(row, {
+      'userOperationRecords': 'An operation record in your home directory',
+      'rootOperationRecords':
+          'An operation record under /var/lib/klabautermann',
+      'transientUnit': 'A transient systemd unit, gone when it ends',
+      'engineState': 'The container engine\'s own state',
+      'loginRecords': 'Login records, as every SSH command leaves',
+      'other': 'A change on the server',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String actionPreviewImpact(String kind, int count) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'dropsSession': 'This can drop your connection to the server.',
+      'stopsContainers': 'This stops $count running containers.',
+      'removesVolumes':
+          'This deletes the container\'s volumes and the data in them.',
+      'forcesImageInUse': '$count containers still use this image.',
+      'interruptsTarget': 'This interrupts what the target is doing.',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String actionPreviewProtected(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'builtIn': 'Protected: Klabautermann always protects this target.',
+      'sessionPath':
+          'Protected: your connection to the server runs through it.',
+      'publishesSessionPort':
+          'Protected: it publishes the SSH port or a VPN port.',
+      'userMarked': 'Protected: you marked it protected.',
+      'other': 'Protected.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String actionPreviewOwnership(String manager) {
+    return 'Managed by $manager. Acting on it here can conflict with $manager.';
+  }
+
+  @override
+  String get actionPreviewDanger => 'Warnings';
+
+  @override
+  String actionPreviewFinding(String severity, String explanation) {
+    String _temp0 = intl.Intl.selectLogic(severity, {
+      'critical': 'Critical',
+      'other': 'Warning',
+    });
+    return '$_temp0: $explanation';
+  }
+
+  @override
+  String actionConfirmNames(String target) {
+    return 'This acts on $target.';
+  }
+
+  @override
+  String actionConfirmType(String target) {
+    return 'Type $target to confirm';
+  }
+
+  @override
+  String get actionConfirmRun => 'Run';
+
+  @override
+  String get actionConfirmCancel => 'Cancel';
+
+  @override
+  String actionRunning(String target) {
+    return 'Running on $target';
+  }
+
+  @override
+  String actionSucceeded(String target) {
+    return 'Done: $target';
+  }
+
+  @override
+  String actionFailed(String target, String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'there is no connection to the server.',
+      'revalidation': 'the target changed since the preview.',
+      'elevationRefused': 'admin mode refused the step.',
+      'stepFailed': 'a step failed.',
+      'transport': 'the connection failed during the run.',
+      'unsupportedStep': 'this version cannot run one of its steps.',
+      'adminRequired': 'it needs admin mode.',
+      'other': 'it failed.',
+    });
+    return '$target did not finish: $_temp0';
+  }
+
+  @override
+  String actionFailedPlain(String target) {
+    return '$target did not finish.';
+  }
+
+  @override
+  String actionCancelled(String target) {
+    return '$target was cancelled.';
+  }
+
+  @override
+  String actionRefused(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'notImplemented': 'This action is not available yet.',
+      'unknownPlan': 'The preview is out of date. Open it again.',
+      'expiredPlan': 'The preview is out of date. Open it again.',
+      'stalePlan': 'The connection changed since the preview. Open it again.',
+      'confirmationMismatch': 'The confirmation did not match.',
+      'observeOnly': 'Turn on Allow actions for this server first.',
+      'readOnly': 'The server is read-only.',
+      'adminRequired': 'Turn on admin mode first.',
+      'invalidTarget': 'This target cannot be acted on.',
+      'targetChanged': 'The target changed. Look again before acting.',
+      'noLink': 'Connect to the server first.',
+      'other': 'The action was refused.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get processTerminate => 'Terminate';
+
+  @override
+  String get processKill => 'Kill';
+
+  @override
+  String get processSendSignal => 'Send signal';
+
+  @override
+  String processSignalName(String name) {
+    return 'SIG$name';
+  }
+
+  @override
+  String get unitStart => 'Start';
+
+  @override
+  String get unitStop => 'Stop';
+
+  @override
+  String get unitRestart => 'Restart';
+
+  @override
+  String get unitReload => 'Reload';
+
+  @override
+  String get jobsRunNow => 'Run now';
+
+  @override
+  String jobsRunOutputTitle(String unit) {
+    return 'Output of $unit';
+  }
+
+  @override
+  String get jobsRunOutputClose => 'Close output';
+
+  @override
+  String jobsSourceUserCrontab(String user) {
+    return '$user\'s crontab';
+  }
+
+  @override
+  String get jobsSourceMine => 'Yours and the system\'s';
+
+  @override
+  String get jobsSourceOtherUsers => 'Other users';
+
+  @override
+  String get jobsOtherUsersReading => 'Reading other users\' crontabs.';
+
+  @override
+  String get jobsOtherUsersRefresh => 'Read again';
+
+  @override
+  String get jobsOtherUsersEmpty => 'No other user has a crontab.';
+
+  @override
+  String jobsOtherUsersFailure(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Other users\' crontabs need a connection to the server.',
+      'adminRequired': 'Other users\' crontabs need admin mode.',
+      'elevationRefused': 'Admin mode could not read the crontabs.',
+      'noSpool': 'This server keeps no crontab spool.',
+      'spoolDenied': 'Even admin mode may not list the crontab spool.',
+      'unreadable': 'The crontab spool could not be read.',
+      'transport': 'The connection failed while reading.',
+      'other': 'Other users\' crontabs could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String jobsOtherUsersUnreadable(String users) {
+    return 'Could not read the crontab of $users.';
+  }
+
+  @override
+  String jobsOtherUsersNotRead(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count more users\' crontabs were not read.',
+      one: '1 more user\'s crontab was not read.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get jobsOtherUsersMasked =>
+      'Commands are masked where they look like they hold secrets.';
+
+  @override
+  String get activityMenu => 'Activity';
+
+  @override
+  String activityTitle(String server) {
+    return 'Activity on $server';
+  }
+
+  @override
+  String get activityDetail =>
+      'Every action this device ran on the server, newest first. Records are kept for 90 days and never synced. Commands are stored with secrets removed.';
+
+  @override
+  String get activityInMemory =>
+      'Another Klabautermann window has the settings folder, so this log lasts only until this window closes.';
+
+  @override
+  String get activityColumnTime => 'Time';
+
+  @override
+  String get activityColumnTarget => 'Target';
+
+  @override
+  String get activityColumnAction => 'Action';
+
+  @override
+  String get activityColumnTier => 'Confirmation';
+
+  @override
+  String get activityColumnResult => 'Result';
+
+  @override
+  String activityAction(String action) {
+    String _temp0 = intl.Intl.selectLogic(action, {
+      'KillProcess': 'Signal',
+      'UnitAction': 'Unit action',
+      'StartTimer': 'Run timer now',
+      'ContainerAction': 'Container action',
+      'RemoveContainer': 'Remove container',
+      'RemoveImage': 'Remove image',
+      'StackAction': 'Stack action',
+      'RedeployStack': 'Redeploy stack',
+      'other': 'Action',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String activityTier(String tier) {
+    String _temp0 = intl.Intl.selectLogic(tier, {
+      'none': 'None',
+      'acknowledge': 'Confirmed',
+      'typedPhrase': 'Name typed',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String activityResult(String outcome) {
+    String _temp0 = intl.Intl.selectLogic(outcome, {
+      'succeeded': 'Done',
+      'failed': 'Failed',
+      'cancelled': 'Cancelled',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String activityFailure(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'No connection to the server.',
+      'revalidation': 'The target changed since the preview.',
+      'elevationRefused': 'Admin mode refused the step.',
+      'stepFailed': 'A step failed.',
+      'transport': 'The connection failed during the run.',
+      'unsupportedStep': 'This version could not run a step.',
+      'adminRequired': 'It needed admin mode.',
+      'other': 'It failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String activityExitCode(int code) {
+    return 'Exit status $code';
+  }
+
+  @override
+  String activityHttpStatus(int status) {
+    return 'Engine answered HTTP $status';
+  }
+
+  @override
+  String get activitySteps => 'What ran';
+
+  @override
+  String get activityReading => 'Reading the log.';
+
+  @override
+  String get activityEmpty =>
+      'Nothing has run on this server from this device.';
+
+  @override
+  String get activityOlder => 'Show older';
+
+  @override
+  String get activityCopy => 'Copy the log';
+
+  @override
+  String get activityCopied =>
+      'The log is on the clipboard, with secrets removed.';
+
+  @override
+  String get activityNotCopied => 'Not copied. Try again.';
+
+  @override
+  String activityTime(String date, String time) {
+    return '$date $time';
+  }
+
+  @override
   String get dockerTransportWaiting => 'Engine API: waiting for the connection';
 
   @override

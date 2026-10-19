@@ -7,6 +7,8 @@ import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
 import 'package:meta/meta.dart';
 import 'package:seance_core/seance_core.dart' show quoteShellWord;
 
+import '../engine/protocol.dart' show RevalidationFailure;
+
 /// One step a plan runs: an exact shell command or an exact Docker API
 /// request. The preview renders these and the runner executes these; no
 /// second code path builds commands (03 §8.5).
@@ -22,18 +24,27 @@ sealed class PlanStep {
 /// the C locale, the line the login shell (or, when [elevated], the
 /// elevation prelude) runs.
 final class ShellStep extends PlanStep {
-  ShellStep(Iterable<String> argv, {this.elevated = false})
-    : argv = List.unmodifiable(argv),
-      commandLine = HostCommands.commandLine(
-        List.of(argv),
-        quote: quoteShellWord,
-      );
+  ShellStep(
+    Iterable<String> argv, {
+    this.elevated = false,
+    Map<int, RevalidationFailure> exitMeanings = const {},
+  }) : argv = List.unmodifiable(argv),
+       exitMeanings = Map.unmodifiable(exitMeanings),
+       commandLine = HostCommands.commandLine(
+         List.of(argv),
+         quote: quoteShellWord,
+       );
 
   final List<String> argv;
   final String commandLine;
 
   /// The step runs through the elevation prelude (8.3).
   final bool elevated;
+
+  /// Exit statuses by which the step itself reports that its target
+  /// changed, such as the guarded kill's 4 for a reused PID: the run then
+  /// fails as a re-validation, not as a failed step.
+  final Map<int, RevalidationFailure> exitMeanings;
 
   @override
   String get display => elevated ? 'sudo: $commandLine' : commandLine;

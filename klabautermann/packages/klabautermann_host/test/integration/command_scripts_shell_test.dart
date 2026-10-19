@@ -246,6 +246,16 @@ void main() {
         expect('${result.stdout}', '${_startTicks(sleeper.pid)}\n');
       });
 
+      test("process facts print a live process's uid and comm", () async {
+        final sleeper = await _sleeper();
+        final result = await _run(
+          shell,
+          HostCommands.processFacts(sleeper.pid),
+        );
+        expect(result.exitCode, 0, reason: '${result.stderr}');
+        expect('${result.stdout}', '$_uid sleep\n');
+      });
+
       test('start ticks of a gone process exit 3, printing nothing', () async {
         final sleeper = await _sleeper();
         sleeper.kill(ProcessSignal.sigkill);
@@ -253,6 +263,9 @@ void main() {
         final result = await _run(shell, HostCommands.startTicks(sleeper.pid));
         expect(result.exitCode, 3);
         expect('${result.stdout}', isEmpty);
+        final facts = await _run(shell, HostCommands.processFacts(sleeper.pid));
+        expect(facts.exitCode, 3);
+        expect('${facts.stdout}', isEmpty);
       });
     });
 

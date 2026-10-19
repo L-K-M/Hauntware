@@ -73,6 +73,19 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/announcement_controller.dart': {
     r"'The announcement setting was not saved: $error'",
   },
+  // The not-saved diagnostic; the Safety tab and the header's Safety menu
+  // print it and show their own ARB text (settingsSafetyNotSaved).
+  'lib/controllers/safety_controller.dart': {
+    r"'The safety settings were not saved: $error'",
+  },
+  // A caller error's diagnostic: the preview is modal, so no screen ever
+  // shows it.
+  'lib/controllers/operations_controller.dart': {
+    "'a preview is already pending'",
+  },
+  // The Activity table's key prefix, never shown, and the copied log's
+  // line break between JSON records.
+  'lib/ui/actions/activity_page.dart': {"'activity'", r"'\n'"},
   'lib/controllers/fleet_controller.dart': {
     // The row subtitle's address: host or user@host, with :port when the
     // port is not 22 and an IPv6 host then bracketed before it. Machine
@@ -393,7 +406,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The probe's tool name for crontab, looked up in its answer; never
   // rendered.
-  'lib/ui/jobs_panel.dart': {"'crontab'"},
+  'lib/ui/jobs_panel.dart': {
+    "'crontab'",
+    // The other users' table's key prefix, never shown.
+    r"'${ServerPanel.jobs.name}.others'",
+  },
   'lib/ui/logs/log_query.dart': {
     // The path rule's separators and dot parts (03 §8.8), and the empty
     // defaults of the text filters.

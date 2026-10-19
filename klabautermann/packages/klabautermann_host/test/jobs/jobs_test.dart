@@ -588,4 +588,30 @@ Normalized form: *-*-* 06,18:00:00
       });
     });
   });
+
+  test('rows carry the shown line, but run-parts reads the real one', () {
+    final cron = _cron(
+      etc: '17 * * * * root run-parts /etc/cron.hourly\n',
+      dirs: 'hourly logrotate',
+    );
+    final jobs = mergeJobs(
+      cron: cron,
+      nowUtc: _now,
+      zone: _fixed(0, 'Etc/UTC'),
+      shownJob: (job) => CronJob(
+        source: job.source,
+        schedule: job.schedule,
+        command: 'shown',
+        raw: 'shown',
+        expression: job.expression,
+        user: job.user,
+      ),
+    );
+    final line = _only(jobs);
+    expect(line.job.command, 'shown');
+    expect(line.nextRuns, isNotEmpty);
+    final script = jobs.whereType<PeriodicJobEntry>().single;
+    expect(script.driverIds, [line.id]);
+    expect(script.nextRuns, isNotEmpty);
+  });
 }

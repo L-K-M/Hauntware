@@ -26,6 +26,7 @@ const String _rootEquivalenceNoticeKey =
     'klabautermann.docker.rootEquivalenceNoticeDismissed';
 const String _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
 const String _monitorSetKey = 'klabautermann.monitorSet';
+const String _safetyKey = 'klabautermann.safety';
 
 /// Replaces a file's contents. [DeviceSettingsStore] writes the settings
 /// document and the copy of a damaged file through it.
@@ -316,6 +317,24 @@ final class DeviceSettingsStore {
   /// memory either way.
   Future<void> setMonitorSet(Set<String> ids) async {
     _values[_monitorSetKey] = ids.toList()..sort();
+    await _save();
+  }
+
+  /// The safety preferences as the app stored them (M4 plan M4): an
+  /// opaque JSON object the app encodes and decodes, or null when there
+  /// is none (or the stored value is not an object, which reads as none,
+  /// every server observe-only, rather than failing the file).
+  Map<String, Object?>? get safety => switch (_values[_safetyKey]) {
+    final Map<String, Object?> json => Map.unmodifiable(json),
+    _ => null,
+  };
+
+  /// Stores a deep copy of [safety] and writes the document, as
+  /// [setAppearance] does. Throws when the write fails or this session is
+  /// read-only; the value stays in memory either way.
+  Future<void> setSafety(Map<String, Object?> safety) async {
+    _values[_safetyKey] =
+        jsonDecode(jsonEncode(safety)) as Map<String, Object?>;
     await _save();
   }
 
