@@ -5542,6 +5542,49 @@ the engine in `engine_isolate.dart` beside it):
   host's, up to 16 per server, and ids stay unique across both. The
   background does not pause them yet. CloseStream, Disconnect, fleet
   removal and an endpoint change end them.
+- **Version 3 (M3 stack sources).** Stack verification and files joined
+  version 3 the same way (D08; 7.16, M11). `DockerStacksPayload` gained
+  `verdicts`, a `StackVerdict` per project: `StackVerifying`,
+  `StackVerified`, `StackUnverified(reason)` or
+  `StackSourceNotOnHost(deployedBy?)`, `deployedBy` being the manager
+  the project's labels mark (8.7), since a manager running compose in
+  its own container records paths inside it. It also gained
+  `composeCli`, the plugin's and the standalone binary's versions, the
+  standalone v1 read-only. `DockerStackFileQuery(project, path)` reads
+  a config file, a recorded environment file or the working
+  directory's `.env`, answered by `DockerStackFilePayload(project,
+  path, text, size, truncated)`, whose `text` is `MaskedValue` spans,
+  or `DockerStackFileFailed(failure)`. As built, a project's labels
+  decide at once when they name no config files, an unsafe name or
+  path (8.8), or a service container without `config-hash`; otherwise
+  one exec runs `test -f` on every config file, and a missing one reads
+  source not on host. Then the endpoint looks once for `docker compose
+  version` and `docker-compose version` in one exec; without the plugin
+  the project is unverified (no compose CLI, or the standalone binary
+  only, which does not verify). Then `docker --host unix://<socket>
+  compose -p <p> --project-directory <d> -f <f>... --env-file <e>...
+  config --hash '*'` prints a hash per service, each compared with the
+  label of that service's containers, one-off containers aside: equal
+  is verified; a different or missing service is `hashMismatch`; a
+  refused flag or other output is `cliCouldNotHash`; another failure is
+  `configFailed`, its error text dropped unread. The docker CLI checks
+  a Podman engine too, through `--host`. Each exec takes a short-action
+  slot of the Docker session's quota on every rank, so two run at once,
+  each within 30 s [E]. A verdict holds while the project's labels stay the
+  same, until a watch asks for the stacks again; the stacks list goes
+  out with `StackVerifying` for the rest and again once they are
+  checked. A file read lists the project's containers, so the verdict
+  is current, and refuses an unknown stack, a path that is none of its
+  files and an unverified stack before SFTP; then it stats the path
+  without following links (a link or other non-regular file is
+  refused, as the download is) and reads at most 1 MiB [E], cancelling
+  the transfer past it and keeping the complete lines before it, with
+  `truncated` set. Masking (8.9) covers every environment file value
+  (a quoted value to its closing quote), compose `KEY: value` and `-
+  KEY=value` lines whose key matches the pattern, a block scalar under
+  such a key, and URL credentials in both; a secret plain scalar
+  continued on later lines and flow mappings are not masked. The text
+  is neither cached nor logged.
 - **Monitor set (M2, K30).** `SetMonitorSet(ids)` replaces FL-21's set
   without a shape change. The engine keeps only the fleet servers that
   `monitorEligibilityOf` allows (4.3 step 4) and it can dial, subscribes

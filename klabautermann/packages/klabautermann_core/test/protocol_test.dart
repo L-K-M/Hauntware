@@ -523,6 +523,95 @@ void main() {
       expect(row.memoryLimit, 4096);
     });
 
+    test('stack verdicts and stack files survive with their masked '
+        'spans (03 §7.16)', () async {
+      final stacks =
+          await roundTrip(
+                DockerListChanged(
+                  serverId: 'srv-1',
+                  list: DockerWatchList.stacks,
+                  payload: DockerStacksPayload(
+                    groupComposeProjects(const []),
+                    verdicts: const {
+                      'a': StackVerified(),
+                      'b': StackUnverified(StackUnverifiedReason.hashMismatch),
+                      'c': StackSourceNotOnHost(
+                        deployedBy: ExternalManager.dockge,
+                      ),
+                      'd': StackVerifying(),
+                    },
+                    composeCli: const DockerComposeCli(
+                      pluginVersion: '2.29.7',
+                      standaloneVersion: '1.29.2',
+                    ),
+                  ),
+                  at: DateTime.utc(2026, 10, 17),
+                ),
+              )
+              as DockerListChanged;
+      final payload = stacks.payload as DockerStacksPayload;
+      expect(payload.verdicts['a'], isA<StackVerified>());
+      expect(
+        (payload.verdicts['b']! as StackUnverified).reason,
+        StackUnverifiedReason.hashMismatch,
+      );
+      expect(
+        (payload.verdicts['c']! as StackSourceNotOnHost).deployedBy,
+        ExternalManager.dockge,
+      );
+      expect(payload.composeCli!.standaloneLegacy, isTrue);
+
+      final query =
+          await roundTrip(
+                const DockerQuery(
+                  serverId: 'srv-1',
+                  queryId: 'q-1',
+                  query: DockerStackFileQuery(
+                    project: 'demo',
+                    path: '/srv/demo/.env',
+                  ),
+                ),
+              )
+              as DockerQuery;
+      expect((query.query as DockerStackFileQuery).path, '/srv/demo/.env');
+
+      final file =
+          await roundTrip(
+                DockerResult(
+                  serverId: 'srv-1',
+                  queryId: 'q-1',
+                  payload: DockerStackFilePayload(
+                    project: 'demo',
+                    path: '/srv/demo/.env',
+                    text: [
+                      MaskedValue.plain('DB_PASSWORD='),
+                      MaskedValue.secret('hunter2'),
+                      MaskedValue.plain('\n'),
+                    ],
+                    size: 20,
+                  ),
+                ),
+              )
+              as DockerResult;
+      final spans = (file.payload as DockerStackFilePayload).text;
+      expect(spans.map((s) => s.display).join(), 'DB_PASSWORD=********\n');
+      expect(spans[1].reveal(), 'hunter2');
+
+      final failed =
+          await roundTrip(
+                const DockerResult(
+                  serverId: 'srv-1',
+                  queryId: 'q-2',
+                  payload: DockerStackFileFailed(StackFileFailure.notVerified),
+                ),
+              )
+              as DockerResult;
+      expect(
+        (failed.payload as DockerStackFileFailed).failure,
+        StackFileFailure.notVerified,
+      );
+    });
+
     test('sampling requests survive with their ids, streams and '
         'profile (D45)', () async {
       final subscribe =
