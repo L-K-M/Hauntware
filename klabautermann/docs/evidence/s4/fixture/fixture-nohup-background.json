@@ -1,0 +1,55 @@
+{
+  "case": "fixture-nohup-background",
+  "recordedAt": "2026-10-19T19:32:05.913629Z",
+  "host": "docker-sshd",
+  "user": "klab",
+  "busybox": "BusyBox v1.38.0 (2026-07-24 11:50:59 UTC) multi-call binary.",
+  "setsid": "/bin/busybox",
+  "launcher": "nohupBackground",
+  "launch": {
+    "exit": 0,
+    "stdout": "557\n",
+    "stderr": ""
+  },
+  "launchMilliseconds": 43,
+  "printed": "557",
+  "runningRecord": {
+    "v": 1,
+    "id": "5ce19339f7ae953a",
+    "state": "running",
+    "pid": 557,
+    "startTicks": 12540,
+    "unit": null,
+    "exit": null,
+    "startedAt": 1792438317,
+    "endedAt": null
+  },
+  "beforeSessionEnd": {
+    "state": "S",
+    "ppid": 1,
+    "pgrp": 556,
+    "session": 556,
+    "uid": 1000
+  },
+  "afterSessionEnd": {
+    "state": "S",
+    "ppid": 1,
+    "pgrp": 556,
+    "session": 556,
+    "uid": 1000
+  },
+  "survived": true,
+  "newSession": false,
+  "doneRecord": {
+    "v": 1,
+    "id": "5ce19339f7ae953a",
+    "state": "done",
+    "pid": 557,
+    "startTicks": 12540,
+    "unit": null,
+    "exit": 0,
+    "startedAt": 1792438317,
+    "endedAt": 1792438325
+  },
+  "log": "s4-done\n"
+}

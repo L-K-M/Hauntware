@@ -1,0 +1,20 @@
+{
+  "case": "vm-kill-user-processes",
+  "recordedAt": "2026-10-19T19:38:31.187273Z",
+  "user": "klab-vm",
+  "busctl": {
+    "exit": 0,
+    "stdout": "b false\n",
+    "stderr": ""
+  },
+  "loginctlLinger": {
+    "exit": 0,
+    "stdout": "Linger=no\n",
+    "stderr": ""
+  },
+  "logindConf": {
+    "exit": 0,
+    "stdout": "#KillUserProcesses=no\n",
+    "stderr": ""
+  }
+}

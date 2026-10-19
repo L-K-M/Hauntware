@@ -1,0 +1,29 @@
+{
+  "case": "vm-sudo-docker-scoped",
+  "recordedAt": "2026-10-19T19:38:31.590796Z",
+  "user": "klab-vm-docker",
+  "dockerCli": "/usr/bin/docker",
+  "sudoList": {
+    "exit": 0,
+    "stdout": "Matching Defaults entries for klab-vm-docker on runnervmxehtw:\n    env_reset, mail_badpass, secure_path=/usr/local/sbin\\:/usr/local/bin\\:/usr/sbin\\:/usr/bin\\:/sbin\\:/bin\\:/snap/bin, use_pty\n\nUser klab-vm-docker may run the following commands on runnervmxehtw:\n    (root) NOPASSWD: /usr/bin/docker\n",
+    "stderr": ""
+  },
+  "sudoTrue": {
+    "exit": 1,
+    "stdout": "sudo: a password is required\n",
+    "stderr": ""
+  },
+  "sudoSystemdRun": {
+    "exit": 1,
+    "stdout": "sudo: a password is required\n",
+    "stderr": ""
+  },
+  "sudoDocker": {
+    "exit": 0,
+    "stdout": "28.0.4\n",
+    "stderr": ""
+  },
+  "probe": {
+    "sudoNopasswd": false
+  }
+}
