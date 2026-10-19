@@ -487,27 +487,31 @@ void main() {
     expect(stops, ['copy', 'copy', 'side', 'side', 'side']);
   });
 
-  testWidgets('gates the Docker tab and shows the detected runtime '
-      'read-only', (tester) async {
+  testWidgets('gates the Docker tab on its endpoint, not on the probe', (
+    tester,
+  ) async {
     final harness = await _openWeb1(tester, _desktop);
     await _openTab(tester, 'Docker');
-
-    expect(find.text('Arrives with Docker support'), findsOneWidget);
-    expect(find.text('Detected runtime'), findsOneWidget);
-    expect(find.text(_notChecked), findsOneWidget);
+    expect(find.text('Waiting for the connection'), findsOneWidget);
 
     harness.engine.emit(HostProfileChanged('srv-1', alpineContainer()));
     await tester.pumpAndSettle();
-    expect(find.text(_notChecked), findsNothing);
-    expect(
-      find.text('Podman, rootless at /run/user/0/podman/podman.sock'),
-      findsOneWidget,
-    );
-    expect(
-      find.text('Your account can use it, which equals the user that runs it.'),
-      findsOneWidget,
-    );
+    expect(find.text('Waiting for the connection'), findsOneWidget);
     expect(find.text('Copy command'), findsNothing);
+
+    harness.engine.emit(
+      const DockerEndpointState(
+        serverId: 'srv-1',
+        phase: DockerEndpointPhase.failed,
+        failure: DockerEndpointFailure.noRoute,
+        noRouteReason: DockerNoRouteReason.socketDenied,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Docker is not available on this server'), findsOneWidget);
+    await tester.tap(find.text('Open Access'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AccessPanel), findsOneWidget);
   });
 
   testWidgets('a phone gates Docker and pushes Access from a hidden '
@@ -520,7 +524,7 @@ void main() {
 
     await tester.tap(find.text('Docker'));
     await tester.pumpAndSettle();
-    expect(find.text('Arrives with Docker support'), findsOneWidget);
+    expect(find.text('Waiting for the connection'), findsOneWidget);
 
     await tester.tap(find.text('Logs'));
     await tester.pumpAndSettle();

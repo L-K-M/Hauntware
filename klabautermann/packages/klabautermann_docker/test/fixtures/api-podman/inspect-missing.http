@@ -1,0 +1,10 @@
+HTTP/1.1 404 Not Found
+Api-Version: 1.44
+Content-Type: application/json
+Libpod-Api-Version: 5.8.7
+Server: Libpod/5.8.7 (linux)
+X-Reference-Id: 0x16fa71e84000
+Date: Sat, 17 Oct 2026 16:14:44 GMT
+Content-Length: 128
+
+{"cause":"no such container","message":"no container with name or ID \"klab-missing\" found: no such container","response":404}

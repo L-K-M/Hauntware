@@ -20,6 +20,7 @@ import 'package:seance_app/theme/theme_palette.dart';
 import 'package:seance_app/theme/theme_presets.dart';
 import 'package:seance_app/ui/settings_screen.dart';
 import 'package:seance_app/ui/terminal_appearance.dart';
+import 'package:seance_core/catalog.dart' show HostKeyConflict;
 import 'package:seance_core/seance_core.dart';
 
 /// Records what the screen asks for and answers with what the test says.
@@ -148,6 +149,18 @@ class _FakeBackend extends ChangeNotifier implements SettingsBackend {
 
   @override
   Future<SyncCounts> syncNow() async => const SyncCounts(pulled: 0, pushed: 0);
+
+  final pinResolutions = <(String locator, bool keepLocal)>[];
+  PulledPinResolution pinResolution = PulledPinResolution.resolved;
+
+  @override
+  Future<PulledPinResolution> resolvePinConflict(
+    HostKeyConflict conflict, {
+    required bool keepLocal,
+  }) async {
+    pinResolutions.add((conflict.locator, keepLocal));
+    return pinResolution;
+  }
 
   InboxAppsView inbox = const InboxAppsView(
     syncConfigured: true,
@@ -601,6 +614,80 @@ void main() {
     expect(find.text('Last sync failed: server down'), findsOneWidget);
   });
 
+  group('a pulled host key that disagrees (Séance #56)', () {
+    const conflict = HostKeyConflict(
+      locator: 'alpha.example.com:22',
+      local: HostKey(
+        host: 'alpha.example.com',
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:local',
+        pinnedAt: 10,
+      ),
+      pulled: HostKey(
+        host: 'alpha.example.com',
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:pulled',
+        pinnedAt: 20,
+      ),
+    );
+
+    Future<void> pumpConflict(WidgetTester tester) async {
+      await pumpScreen(tester, tab: SettingsTab.sync);
+      tester.view.physicalSize = const Size(1000, 4200);
+      backend
+        ..syncStatus = const SyncStatus(pinConflicts: [conflict])
+        ..notifyListeners();
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('shows both fingerprints and keeps the local key', (
+      tester,
+    ) async {
+      await pumpConflict(tester);
+      expect(find.textContaining('alpha.example.com:22'), findsOneWidget);
+      expect(find.text('SHA256:local'), findsOneWidget);
+      expect(find.text('SHA256:pulled'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('sync.pin.keep.alpha.example.com:22')),
+      );
+      await tester.pumpAndSettle();
+      expect(backend.pinResolutions, [('alpha.example.com:22', true)]);
+      expect(
+        find.text("Kept this device's key for alpha.example.com:22."),
+        findsOneWidget,
+      );
+      await tester.pump(const Duration(seconds: 10));
+    });
+
+    testWidgets('trusting the new key that changed meanwhile says so', (
+      tester,
+    ) async {
+      backend.pinResolution = PulledPinResolution.stale;
+      await pumpConflict(tester);
+      await tester.tap(
+        find.byKey(const ValueKey('sync.pin.accept.alpha.example.com:22')),
+      );
+      await tester.pumpAndSettle();
+      expect(backend.pinResolutions, [('alpha.example.com:22', false)]);
+      expect(find.textContaining('so nothing was changed'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 10));
+    });
+
+    test('crosses the settings window as JSON', () {
+      final status = SyncStatus.fromJson(
+        jsonDecode(
+              jsonEncode(const SyncStatus(pinConflicts: [conflict]).toJson()),
+            )
+            as Map<String, dynamic>,
+      );
+      final back = status.pinConflicts.single;
+      expect(back.locator, conflict.locator);
+      expect(back.local.fingerprintSha256, 'SHA256:local');
+      expect(back.pulled.fingerprintSha256, 'SHA256:pulled');
+    });
+  });
+
   group('Appearance', () {
     /// Tall enough that the whole tab is built at once.
     Future<void> pumpAppearance(WidgetTester tester) async {
@@ -901,6 +988,30 @@ void main() {
       );
       expect(backend.calls, [
         'setTerminalAppearance(${kDefaultTerminalFontSize.toDouble()}, , '
+            '${TerminalPalette.followApp}, ${TerminalLigatures.off})',
+      ]);
+    });
+
+    testWidgets('the picker confirms font and ligatures together', (tester) async {
+      await pumpAppearance(tester);
+      await tester.tap(find.byTooltip('Choose a font'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('font.search')), 'Geist Mono');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('font.choice.Geist Mono')));
+      await tester.pumpAndSettle();
+      expect(backend.calls, isEmpty);
+
+      final samples = tester.widgetList<Text>(preview);
+      expect(samples.last.textSpan!.style!.fontFamily, BundledMonoFont.geistMono.family);
+      expect(samples.last.textSpan!.style!.fontFeatures, contains(const FontFeature('ss11')));
+      await tester.tap(find.byKey(const ValueKey('font.ligatures')));
+      await tester.tap(find.byKey(const ValueKey('font.apply')));
+      await tester.pumpAndSettle();
+
+      expect(previewStyle(tester).fontFeatures, contains(const FontFeature.disable('ss11')));
+      expect(backend.calls, [
+        'setTerminalAppearance(${kDefaultTerminalFontSize.toDouble()}, Geist Mono, '
             '${TerminalPalette.followApp}, ${TerminalLigatures.off})',
       ]);
     });

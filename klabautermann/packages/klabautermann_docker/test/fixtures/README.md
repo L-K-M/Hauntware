@@ -1,10 +1,62 @@
-# Hand-written fixtures
+# Fixtures
 
-Every file in this directory was written by hand from the Docker Engine
-API documentation and the version notes in `docs/design/klabautermann/03`
-section 5.8. None of them were captured from a real daemon; spike S1's
-capture tooling (`klabautermann/tool/capture_fixtures.dart`, 03 section
-11.3) replaces them with recordings from real daemons in CI.
+The flat files in this directory were written by hand from the Docker
+Engine API documentation and the version notes in
+`docs/design/klabautermann/03` section 5.8; they stay as unit fixtures.
+The `api-*/` directories are recordings from real daemons (below).
+
+## Recorded API corpora (`api-*/`)
+
+Spike S1's recorded-API corpus (03 sections 11.1 and 5.8, D21): one
+directory per daemon, each at its native API maximum, recorded by
+`klabautermann_docker/tool/capture_api.dart` through
+`klabautermann/test/integration/capture.sh` (its
+`capture_docker_api.sh` holds the daemon pins).
+
+| Directory | Daemon |
+|---|---|
+| `api-1.41/` | Docker 20.10.24 |
+| `api-1.44/` | Docker 25.0.5 |
+| `api-1.52/` | Docker 29.0.4 |
+| `api-1.55/` | Docker 29.7.2 |
+| `api-podman/` | Podman 5.8.7, Docker-compatible API 1.44 |
+
+Each directory holds:
+
+- `<exchange>.http`: the response bytes exactly as the daemon sent them,
+  status line, headers and body with its chunked framing, so replaying
+  them also exercises the HTTP parser. `.gitattributes` keeps them
+  byte-exact. `stats-stream.http` ends at the chunk that completes its
+  second line.
+- `MANIFEST.json`: the daemon's version, API range, OS, kernel, cgroup
+  and storage facts; the seed image's digest and id; the ids of
+  everything the tool seeded; and the exchanges in order, each with its
+  request, status, content type and framing.
+- `SOURCE.md`: provenance, what was seeded, and the request table.
+
+Every directory records the same exchanges: `_ping` (HEAD and GET),
+`/version`, `/info`, the container list with and without sizes, inspect
+of each seeded container and of a missing one (404), one-shot and
+streamed stats, logs (tail for a TTY and a non-TTY container, a follow
+until the container exits, `since`), images, image inspect, networks,
+volumes, `/system/df`, a finite `since`/`until` events window, and
+`/info` under versions one below the daemon's minimum, one above its
+maximum and at the client floor 1.41.
+
+`RecordedDaemon` and `RecordedCorpus` in `lib/testing.dart` serve a
+directory to the real HTTP client (03 section 11.1's fake transport);
+`recorded_api_test.dart` replays each one, and `harness.dart`'s
+`recordedCorpus` loads it. A request matches by method, path and
+normalized query; a path at another version inside the daemon's range
+gets the native recording, and anything unrecorded gets a 404 that the
+tests treat as a failure.
+
+The seeded secrets are fake and low entropy (`fixture-password`).
+`capture.sh --docker-api-only` checks a fresh capture against these
+directories by structure, never by value; `--update` replaces them.
+Review the diff, and run gitleaks over it, before committing.
+
+## Hand-written fixtures
 
 Version claims follow the plan, not live daemons: Docker 29.0 to 29.2
 rejected clients below API 1.44, 29.3 lowered the floor to 1.40, and

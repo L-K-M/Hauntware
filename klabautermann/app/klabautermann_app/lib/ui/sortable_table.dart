@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:flutter/services.dart';
@@ -22,6 +23,16 @@ enum TableSortDirection { ascending, descending }
 /// Where a column's header and cells sit: text reads from the start edge,
 /// figures line up on the end edge.
 enum CellAlignment { start, end }
+
+/// Who orders a [SortableTable]'s rows.
+enum TableRowOrder {
+  /// The table orders them by its [TableSort] ([sortTableRows]).
+  bySort,
+
+  /// The caller passes them in order, as a grouped list does that sorts
+  /// within each group; the headers still show and change the sort.
+  asGiven,
+}
 
 /// How a column claims horizontal space in a [SortableTable].
 sealed class ColumnExtent {
@@ -201,6 +212,9 @@ class SortableTable<R> extends StatefulWidget {
     this.onRowActivated,
     this.rowActions,
     this.empty,
+    this.rowOrder = TableRowOrder.bySort,
+    this.spanningRow,
+    this.onShownRowsChanged,
   });
 
   /// Prefixes the keys of the header cells (`<tableId>.column.<id>`),
@@ -235,6 +249,18 @@ class SortableTable<R> extends StatefulWidget {
 
   /// Shown under the header when [rows] is empty.
   final Widget? empty;
+
+  final TableRowOrder rowOrder;
+
+  /// A row drawn across the table's width in place of its cells, such as
+  /// a group's heading; null for a row of cells. The widget carries the
+  /// row's semantics label, which its cells would otherwise give.
+  final Widget? Function(BuildContext context, R row)? spanningRow;
+
+  /// Called after a frame or a scroll changes which rows the body shows,
+  /// with those rows in order: what a view reads live figures for
+  /// (CST-01).
+  final ValueChanged<List<R>>? onShownRowsChanged;
 
   @override
   State<SortableTable<R>> createState() => _SortableTableState<R>();
@@ -365,9 +391,13 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
   double _rowExtent = 0;
   List<SidebarMenuEntry> _menuEntries = const [];
 
+  /// The keys of the rows [SortableTable.onShownRowsChanged] last heard.
+  List<Object>? _shownKeys;
+
   @override
   void initState() {
     super.initState();
+    _scroll.addListener(_reportShown);
     _resort();
   }
 
@@ -386,7 +416,14 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
   }
 
   void _resort() {
-    _sorted = sortTableRows(widget.rows, widget.columns, widget.sort);
+    _sorted = switch (widget.rowOrder) {
+      TableRowOrder.bySort => sortTableRows(
+        widget.rows,
+        widget.columns,
+        widget.sort,
+      ),
+      TableRowOrder.asGiven => widget.rows,
+    };
     final key = _activeKey;
     if (key == null) {
       // Rows arriving while the body has focus need an active row.
@@ -402,6 +439,31 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
     } else {
       _setActive(math.min(_activeIndex ?? 0, _sorted.length - 1));
     }
+  }
+
+  /// Tells [SortableTable.onShownRowsChanged] which rows the body shows,
+  /// when they changed: the fixed extent makes them exact without
+  /// building them.
+  void _reportShown() {
+    final report = widget.onShownRowsChanged;
+    if (report == null || !mounted) return;
+
+    var shown = <R>[];
+    if (_scroll.hasClients && _scroll.position.hasContentDimensions) {
+      final position = _scroll.position;
+      final first = (position.pixels / _rowExtent).floor();
+      final end = ((position.pixels + _shownHeight()) / _rowExtent).ceil();
+      shown = _sorted.sublist(
+        first.clamp(0, _sorted.length),
+        end.clamp(0, _sorted.length),
+      );
+    }
+    final keys = [for (final row in shown) widget.rowKey(row)];
+    final before = _shownKeys;
+    if (before != null && listEquals(before, keys)) return;
+
+    _shownKeys = keys;
+    report(shown);
   }
 
   void _setActive(int index) {
@@ -564,6 +626,10 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
   Widget build(BuildContext context) {
     final scaler = MediaQuery.textScalerOf(context);
     _rowExtent = scaledGhostFileRowExtent(context);
+    // New rows, a new extent or a new viewport may show other rows.
+    if (widget.onShownRowsChanged != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _reportShown());
+    }
     var minWidth = widget.rowActions == null ? 0.0 : _rowExtent;
     final flexes = <int>[];
     for (final column in widget.columns) {
@@ -815,9 +881,12 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
                   ),
                 )
               : null,
-          child: _laidOut(context, [
-            for (final column in widget.columns) _cell(context, column, row),
-          ], slot: slot),
+          child:
+              widget.spanningRow?.call(context, row) ??
+              _laidOut(context, [
+                for (final column in widget.columns)
+                  _cell(context, column, row),
+              ], slot: slot),
         ),
       ),
     );

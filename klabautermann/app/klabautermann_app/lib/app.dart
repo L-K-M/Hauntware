@@ -10,21 +10,30 @@ import 'package:klabautermann_core/klabautermann_core.dart'
         InstanceLockUnavailable,
         SyncStoreIssue;
 
+import 'controllers/admin_controller.dart';
 import 'controllers/announcement_controller.dart';
+import 'controllers/safety_controller.dart';
 import 'controllers/appearance_controller.dart';
 import 'controllers/coverage_controller.dart';
+import 'controllers/docker_notice_controller.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitoring_controller.dart';
+import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
 import 'controllers/sync_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'theme/app_theme.dart';
+import 'ui/actions/action_entry.dart' show OperationsScope;
+import 'ui/actions/action_preview.dart' show ActionResultToasts;
 import 'ui/adaptive_shell.dart';
+import 'ui/admin_mode_chip.dart' show AdminScope;
+import 'ui/docker/docker_panel.dart' show DockerNoticeScope;
 import 'ui/macos_toolbar_band.dart';
 import 'ui/menus/app_commands.dart';
 import 'ui/menus/app_menu_host.dart';
 import 'ui/prompts/prompt_host.dart';
+import 'ui/server_safety.dart' show SafetyScope;
 import 'ui/server_surfaces.dart' show AppActivityReporter;
 import 'ui/settings_page.dart';
 import 'ui/startup_issue_notice.dart';
@@ -46,6 +55,10 @@ class KlabautermannApp extends StatelessWidget {
     required this.appearance,
     required this.coverage,
     required this.announcements,
+    this.safety,
+    this.admin,
+    this.operations,
+    required this.dockerNotice,
     this.sync,
     this.settingsIssue,
     this.importStoreIssue,
@@ -53,6 +66,7 @@ class KlabautermannApp extends StatelessWidget {
     this.instanceLockIssue,
     this.openSettingsWindow,
     this.toolbarBand,
+    this.appVersion,
   });
 
   final FleetController fleet;
@@ -69,6 +83,24 @@ class KlabautermannApp extends StatelessWidget {
   /// Whether threshold-band changes are announced (A11Y-15, D60); like
   /// [appearance], it outlives an engine run.
   final AnnouncementController announcements;
+
+  /// The safety preferences the engine enforces (M4 plan M4); like
+  /// [appearance], they outlive an engine run. Null in tests that leave
+  /// safety out: Settings then shows its placeholder and the server header
+  /// neither the Safety menu nor its notices.
+  final SafetyController? safety;
+
+  /// Admin mode per server (03 §8.2), one engine run's like [fleet]. Null
+  /// in tests that leave it out, where the header shows no admin chip.
+  final AdminController? admin;
+
+  /// Previews and runs of actions (03 §8.5), one engine run's like
+  /// [fleet]. Null in tests that leave it out, where no action can run.
+  final OperationsController? operations;
+
+  /// Whether the Docker tab still shows SAF-08's notice on this device
+  /// (03 §8.4); like [appearance], it outlives an engine run.
+  final DockerNoticeController dockerNotice;
 
   /// The sync account (03 §4.3), one engine run's like [fleet]; null in
   /// tests that leave sync out, which shows the sync control idle.
@@ -98,6 +130,11 @@ class KlabautermannApp extends StatelessWidget {
   /// and then no surface reserves a band.
   final ValueListenable<bool>? toolbarBand;
 
+  /// The running build's version for the About dialog and Settings >
+  /// General (`readAppVersion`); null when the platform could not tell,
+  /// and in tests that leave it out.
+  final String? appVersion;
+
   /// The settings window where there is one, otherwise the route. A window
   /// that cannot open falls back to the route, so Settings stays reachable,
   /// whatever it fails with (an error too, as Séance's fallback does).
@@ -119,6 +156,16 @@ class KlabautermannApp extends StatelessWidget {
     if (!context.mounted) return;
     unawaited(Navigator.of(context).pushNamed(kSettingsRoute));
   }
+
+  /// [child] under the run results' toasts, which need the navigator's
+  /// overlay above them; as it is without operations.
+  Widget _withResultToasts(Widget child) => switch (operations) {
+    final operations? => ActionResultToasts(
+      operations: operations,
+      child: child,
+    ),
+    null => child,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -155,13 +202,33 @@ class KlabautermannApp extends StatelessWidget {
           themeMode: themes.themeMode,
           // The band is reserved above every route, so nothing
           // interactive lands under the traffic lights. The Overview reads
-          // the announcement switch on every route, the phone's pushed
-          // server screen included.
-          builder: (context, child) => AnnouncementScope(
-            announce: announcements,
-            openSettings: (context) => unawaited(_openSettings(context)),
-            child: withMacosToolbarBand(toolbarBand, child: child!),
-          ),
+          // the announcement switch, and the Docker tab its notice, on
+          // every route, the phone's pushed server screen included.
+          builder: (context, child) {
+            final scoped = DockerNoticeScope(
+              notice: dockerNotice,
+              child: AnnouncementScope(
+                announce: announcements,
+                openSettings: (context) => unawaited(_openSettings(context)),
+                child: withMacosToolbarBand(toolbarBand, child: child!),
+              ),
+            );
+            final withOperations = switch (operations) {
+              final operations? => OperationsScope(
+                operations: operations,
+                child: scoped,
+              ),
+              null => scoped,
+            };
+            final withAdmin = switch (admin) {
+              final admin? => AdminScope(admin: admin, child: withOperations),
+              null => withOperations,
+            };
+            return switch (safety) {
+              final safety? => SafetyScope(safety: safety, child: withAdmin),
+              null => withAdmin,
+            };
+          },
           // The shell's settings callback and the menus' commands need a
           // context under the MaterialApp's Navigator; the
           // ListenableBuilder's own context sits above it.
@@ -174,27 +241,30 @@ class KlabautermannApp extends StatelessWidget {
             // its dialogs come up over Settings too.
             child: PromptHost(
               prompts: prompts,
-              child: Builder(
-                builder: (context) {
-                  void openSettings() => unawaited(_openSettings(context));
-                  // The desktop menus and their shortcuts (03 §10.2),
-                  // from the one command registry.
-                  return AppMenuHost(
-                    listenable: fleet,
-                    commands: buildAppCommands(
-                      platform: Theme.of(context).platform,
-                      fleet: fleet,
-                      onOpenSettings: openSettings,
-                    ),
-                    child: AdaptiveShell(
-                      fleet: fleet,
-                      monitoring: monitoring,
-                      coverage: coverage,
-                      onOpenSettings: openSettings,
-                      sync: sync,
-                    ),
-                  );
-                },
+              child: _withResultToasts(
+                Builder(
+                  builder: (context) {
+                    void openSettings() => unawaited(_openSettings(context));
+                    // The desktop menus and their shortcuts (03 §10.2),
+                    // from the one command registry.
+                    return AppMenuHost(
+                      listenable: fleet,
+                      commands: buildAppCommands(
+                        platform: Theme.of(context).platform,
+                        fleet: fleet,
+                        onOpenSettings: openSettings,
+                        appVersion: appVersion,
+                      ),
+                      child: AdaptiveShell(
+                        fleet: fleet,
+                        monitoring: monitoring,
+                        coverage: coverage,
+                        onOpenSettings: openSettings,
+                        sync: sync,
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -202,6 +272,9 @@ class KlabautermannApp extends StatelessWidget {
             kSettingsRoute: (_) => SettingsPage(
               appearance: appearance,
               announcements: announcements,
+              appVersion: appVersion,
+              monitorSet: fleet.monitorSettings,
+              safety: safety,
             ),
           },
         );

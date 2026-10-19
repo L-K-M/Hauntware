@@ -9,8 +9,8 @@
 # convention, hence the glob.
 #
 # Asset names are product-prefixed, so Planchette, Séance (app and
-# sync server), and Poltergeist files can never collide on the single
-# shared release. scripts/check-workflows.sh verifies that every
+# sync server), Poltergeist and Klabautermann files can never collide on
+# the single shared release. scripts/check-workflows.sh verifies that every
 # asset glob the release legs attach is represented here — keep the
 # manifest and the workflow's `files:` lists in step.
 #
@@ -24,7 +24,8 @@
 # re-signed to sideload. There is no linux-arm64 client: Flutter
 # publishes no linux-arm64 host artifacts.
 
-# --- Planchette desktop clients (3 targets, 4 assets)
+# --- Planchette clients (4 targets, 7 assets)
+planchette-android.apk
 planchette-linux-x64.tar.gz
 planchette_*.deb
 planchette-linux-x64.AppImage
@@ -57,3 +58,14 @@ poltergeist-linux-x64.flatpak
 poltergeist-macos-universal.zip
 poltergeist-ios-unsigned.ipa
 poltergeist-windows-x64.zip
+
+# --- Klabautermann preview clients (5 targets, 8 assets). Until v1 the
+# names carry the preview label; the .deb keeps Debian's package name.
+klabautermann-preview-android.apk
+klabautermann-preview-linux-x64.tar.gz
+klabautermann_*.deb
+klabautermann-preview-linux-x64.AppImage
+klabautermann-preview-linux-x64.flatpak
+klabautermann-preview-macos-universal.zip
+klabautermann-preview-ios-unsigned.ipa
+klabautermann-preview-windows-x64.zip

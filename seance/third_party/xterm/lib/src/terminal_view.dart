@@ -26,6 +26,8 @@ import 'package:xterm/src/ui/terminal_text_style.dart';
 import 'package:xterm/src/ui/terminal_theme.dart';
 import 'package:xterm/src/ui/themes.dart';
 
+enum _SelectionHandle { start, end }
+
 class TerminalView extends StatefulWidget {
   const TerminalView(
     this.terminal, {
@@ -174,6 +176,13 @@ class TerminalViewState extends State<TerminalView> {
 
   final _viewportKey = GlobalKey();
 
+  final _selectionStartLink = LayerLink();
+  final _selectionEndLink = LayerLink();
+  SelectionOverlay? _selectionOverlay;
+  _SelectionHandle? _draggingHandle;
+  CellAnchor? _handleDragAnchor;
+  Offset? _handleDragPosition;
+
   String? _composingText;
 
   int _tapCount = 0;
@@ -200,6 +209,9 @@ class TerminalViewState extends State<TerminalView> {
     widget.terminal.addListener(_invalidateLinkHover);
     _scrollController.addListener(_invalidateLinkHover);
     _controller.addListener(_invalidateLinkHover);
+    _controller.addListener(_updateSelectionHandles);
+    widget.terminal.addListener(_updateSelectionHandles);
+    _focusNode.addListener(_onSelectionFocusChange);
     _shortcutManager = ShortcutManager(
       shortcuts: widget.shortcuts ?? defaultTerminalShortcuts,
     );
@@ -209,18 +221,24 @@ class TerminalViewState extends State<TerminalView> {
   @override
   void didUpdateWidget(TerminalView oldWidget) {
     if (oldWidget.focusNode != widget.focusNode) {
+      _hideSelectionHandles();
+      _focusNode.removeListener(_onSelectionFocusChange);
       if (oldWidget.focusNode == null) {
         _focusNode.dispose();
       }
       _focusNode = widget.focusNode ?? FocusNode();
+      _focusNode.addListener(_onSelectionFocusChange);
     }
     if (oldWidget.controller != widget.controller) {
+      _hideSelectionHandles();
       _controller.removeListener(_invalidateLinkHover);
+      _controller.removeListener(_updateSelectionHandles);
       if (oldWidget.controller == null) {
         _controller.dispose();
       }
       _controller = widget.controller ?? TerminalController();
       _controller.addListener(_invalidateLinkHover);
+      _controller.addListener(_updateSelectionHandles);
     }
     if (oldWidget.scrollController != widget.scrollController) {
       _scrollController.removeListener(_invalidateLinkHover);
@@ -231,8 +249,11 @@ class TerminalViewState extends State<TerminalView> {
       _scrollController.addListener(_invalidateLinkHover);
     }
     if (oldWidget.terminal != widget.terminal) {
+      _hideSelectionHandles();
       oldWidget.terminal.removeListener(_invalidateLinkHover);
+      oldWidget.terminal.removeListener(_updateSelectionHandles);
       widget.terminal.addListener(_invalidateLinkHover);
+      widget.terminal.addListener(_updateSelectionHandles);
       // [seance fork] The recorded click belongs to the old terminal's
       // buffer; resolving it against the new one would mix coordinate
       // spaces (and can throw — the new buffer may be far shorter).
@@ -245,10 +266,20 @@ class TerminalViewState extends State<TerminalView> {
   }
 
   @override
+  void deactivate() {
+    _hideSelectionHandles();
+    super.deactivate();
+  }
+
+  @override
   void dispose() {
+    _hideSelectionHandles();
     widget.terminal.removeListener(_invalidateLinkHover);
+    widget.terminal.removeListener(_updateSelectionHandles);
     _scrollController.removeListener(_invalidateLinkHover);
     _controller.removeListener(_invalidateLinkHover);
+    _controller.removeListener(_updateSelectionHandles);
+    _focusNode.removeListener(_onSelectionFocusChange);
     if (widget.focusNode == null) {
       _focusNode.dispose();
     }
@@ -265,6 +296,11 @@ class TerminalViewState extends State<TerminalView> {
 
   @override
   Widget build(BuildContext context) {
+    if (_selectionOverlay != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _updateSelectionHandles();
+      });
+    }
     Widget child = Scrollable(
       key: _scrollableKey,
       controller: _scrollController,
@@ -284,6 +320,8 @@ class TerminalViewState extends State<TerminalView> {
           alwaysShowCursor: widget.alwaysShowCursor,
           onEditableRect: _onEditableRect,
           composingText: _composingText,
+          selectionStartLink: _selectionStartLink,
+          selectionEndLink: _selectionEndLink,
         );
       },
     );
@@ -460,7 +498,127 @@ class TerminalViewState extends State<TerminalView> {
 
   void _onTouchSelectionEnd() {
     if (_controller.selection == null) return;
+    _focusNode.requestFocus();
+    _showSelectionHandles();
     widget.onTouchSelectionEnd?.call();
+  }
+
+  void _showSelectionHandles() {
+    final selection = _controller.selection?.normalized;
+    if (selection == null || selection.begin == selection.end) return;
+    final render = renderTerminal;
+    _selectionOverlay ??= SelectionOverlay(
+      context: context,
+      startHandleType: TextSelectionHandleType.left,
+      endHandleType: TextSelectionHandleType.right,
+      lineHeightAtStart: render.lineHeight,
+      lineHeightAtEnd: render.lineHeight,
+      selectionEndpoints: const [],
+      selectionControls: switch (Theme.of(context).platform) {
+        TargetPlatform.iOS ||
+        TargetPlatform.macOS =>
+          cupertinoTextSelectionControls,
+        _ => materialTextSelectionControls,
+      },
+      selectionDelegate: null,
+      clipboardStatus: null,
+      startHandleLayerLink: _selectionStartLink,
+      endHandleLayerLink: _selectionEndLink,
+      toolbarLayerLink: _selectionStartLink,
+      dragStartBehavior: DragStartBehavior.down,
+      onStartHandleDragStart: (_) => _startHandleDrag(_SelectionHandle.start),
+      onEndHandleDragStart: (_) => _startHandleDrag(_SelectionHandle.end),
+      onStartHandleDragUpdate: (details) =>
+          _updateHandleDrag(_SelectionHandle.start, details),
+      onEndHandleDragUpdate: (details) =>
+          _updateHandleDrag(_SelectionHandle.end, details),
+      onStartHandleDragEnd: (_) => _endHandleDrag(_SelectionHandle.start),
+      onEndHandleDragEnd: (_) => _endHandleDrag(_SelectionHandle.end),
+      onSelectionHandleTapped: () => widget.onTouchSelectionEnd?.call(),
+    );
+    _selectionOverlay!.showHandles();
+  }
+
+  void _updateSelectionHandles() {
+    final overlay = _selectionOverlay;
+    if (overlay == null) return;
+    final selection = _controller.selection;
+    final base = _controller.selectionBaseAnchor;
+    if (selection == null ||
+        selection.begin == selection.end ||
+        base == null ||
+        !widget.terminal.buffer.ownsAnchor(base)) {
+      _hideSelectionHandles();
+      return;
+    }
+    overlay
+      ..lineHeightAtStart = renderTerminal.lineHeight
+      ..lineHeightAtEnd = renderTerminal.lineHeight;
+  }
+
+  void _onSelectionFocusChange() {
+    if (!_focusNode.hasFocus) _hideSelectionHandles();
+  }
+
+  void _hideSelectionHandles() {
+    _selectionOverlay?.dispose();
+    _selectionOverlay = null;
+    _draggingHandle = null;
+    _handleDragAnchor?.dispose();
+    _handleDragAnchor = null;
+    _handleDragPosition = null;
+  }
+
+  void _startHandleDrag(_SelectionHandle handle) {
+    // Flutter permits concurrent handles and repeats pen starts. Keep one
+    // drag's anchor and accumulated movement until that gesture ends.
+    if (_draggingHandle != null) return;
+    final selection = _controller.selection?.normalized;
+    if (selection == null) return;
+    _draggingHandle = handle;
+    ContextMenuController.removeAny();
+    _handleDragAnchor?.dispose();
+    final start = handle == _SelectionHandle.start;
+    _handleDragAnchor = widget.terminal.buffer.createAnchorFromOffset(
+      start ? selection.end : selection.begin,
+    );
+    final render = renderTerminal;
+    // Keep the finger's grab offset: handles sit below the selected row.
+    _handleDragPosition = render.localToGlobal(
+      render.getOffset(start ? selection.begin : selection.end) +
+          Offset(0, render.lineHeight / 2),
+    );
+  }
+
+  void _updateHandleDrag(_SelectionHandle handle, DragUpdateDetails details) {
+    if (_draggingHandle != handle) return;
+    final fixed = _handleDragAnchor;
+    final position = _handleDragPosition;
+    final buffer = widget.terminal.buffer;
+    if (fixed == null || position == null || !buffer.ownsAnchor(fixed)) return;
+    _handleDragPosition = position + details.delta;
+    final moving = renderTerminal.createSelectionBoundaryAnchorAt(
+      renderTerminal.globalToLocal(_handleDragPosition!),
+    );
+    final start = handle == _SelectionHandle.start;
+    // Keep a nonempty range and the opposite endpoint pinned to its text.
+    if (start
+        ? !moving.offset.isBefore(fixed.offset)
+        : !moving.offset.isAfter(fixed.offset)) {
+      moving.dispose();
+      return;
+    }
+    final anchor = buffer.createAnchorFromOffset(fixed.offset);
+    _controller.setSelection(start ? moving : anchor, start ? anchor : moving);
+  }
+
+  void _endHandleDrag(_SelectionHandle handle) {
+    if (_draggingHandle != handle) return;
+    _draggingHandle = null;
+    _handleDragAnchor?.dispose();
+    _handleDragAnchor = null;
+    _handleDragPosition = null;
+    _onTouchSelectionEnd();
   }
 
   /// [seance fork] Where a selection toolbar points, in global coordinates:
@@ -488,6 +646,7 @@ class TerminalViewState extends State<TerminalView> {
   }
 
   void _onTapDown(TapDownDetails details, int tapCount) {
+    if (details.kind == PointerDeviceKind.mouse) _hideSelectionHandles();
     _tapCount = tapCount;
     // [seance fork] Shift-click extends instead of clearing: from the live
     // selection's base if one exists, else from the last plain click.
@@ -670,6 +829,8 @@ class _TerminalView extends LeafRenderObjectWidget {
     required this.alwaysShowCursor,
     this.onEditableRect,
     this.composingText,
+    required this.selectionStartLink,
+    required this.selectionEndLink,
   });
 
   final Terminal terminal;
@@ -698,6 +859,9 @@ class _TerminalView extends LeafRenderObjectWidget {
 
   final String? composingText;
 
+  final LayerLink selectionStartLink;
+  final LayerLink selectionEndLink;
+
   @override
   RenderTerminal createRenderObject(BuildContext context) {
     return RenderTerminal(
@@ -714,6 +878,8 @@ class _TerminalView extends LeafRenderObjectWidget {
       alwaysShowCursor: alwaysShowCursor,
       onEditableRect: onEditableRect,
       composingText: composingText,
+      selectionStartLink: selectionStartLink,
+      selectionEndLink: selectionEndLink,
     );
   }
 

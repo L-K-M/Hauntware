@@ -33,6 +33,18 @@ Future<void> mount(
 void main() {
   final bundled = BundledMonoFont.jetBrainsMono.family;
 
+  test('font-specific coding ligatures follow the editor switch', () {
+    final style = TextStyle(fontFamily: BundledMonoFont.geistMono.family);
+    expect(
+      EditorLigatures.on.applyTo(style).fontFeatures,
+      contains(const FontFeature('ss11')),
+    );
+    expect(
+      EditorLigatures.off.applyTo(style).fontFeatures,
+      contains(const FontFeature.disable('ss11')),
+    );
+  });
+
   // Each platform's first own face behind the bundled family.
   const platformFace = {
     TargetPlatform.macOS: 'Menlo',

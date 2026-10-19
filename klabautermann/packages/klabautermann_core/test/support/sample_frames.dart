@@ -21,6 +21,7 @@ TestSection ok(String collector, String payload) =>
 SamplerReplied reply(int seq, double? uptime, List<TestSection> sections) {
   List<int> marker(String body) => utf8.encode('\x1e$_nonce $body\n');
   final bytes = [
+    ...marker('SELF 4242 4241'),
     ...marker('READY HWS/1 $kCollectorSetVersion'),
     ...marker('B $seq ${uptime?.toStringAsFixed(2) ?? ''}'),
     for (final (name, status, payload) in sections) ...[

@@ -57,6 +57,49 @@ void main() {
     expect(findDockerExposureErrors(_config()), isEmpty);
   });
 
+  test("the Docker host's negative variants pass", () {
+    // Same image and socket volume as the Docker host, ports 2245 to 2250
+    // on loopback, neg-restrict's keys bound from the run's directory.
+    final variant = {
+      'image': 'klabautermann-docker-sshd:fixture',
+      'volumes': [
+        {
+          'type': 'bind',
+          'source': '/tmp/klabautermann-fixture.x/authorized_keys.restrict',
+          'target': '/run/fixture/authorized_keys',
+        },
+        {
+          'type': 'volume',
+          'source': 'docker-run',
+          'target': '/run/docker-fixture',
+        },
+      ],
+    };
+    expect(
+      findDockerExposureErrors(
+        _config(
+          extra: {
+            for (final (name, port) in [
+              ('neg-nostreamlocal', 2245),
+              ('neg-disableforwarding', 2246),
+              ('neg-notcp', 2247),
+              ('neg-permitopen', 2248),
+              ('neg-maxsessions2', 2249),
+              ('neg-restrict', 2250),
+            ])
+              name: {
+                ...variant,
+                'ports': [
+                  {'target': 22, 'host_ip': '127.0.0.1', 'published': '$port'},
+                ],
+              },
+          },
+        ),
+      ),
+      isEmpty,
+    );
+  });
+
   test('a config without services fails', () {
     expect(findDockerExposureErrors({}), [
       'rendered config has no services map',
@@ -252,6 +295,22 @@ void main() {
       });
     }
 
+    test('trusts only the fixture registry over plain HTTP', () {
+      List<String> errors(List<String> flags) => findDockerExposureErrors(
+        _config(
+          dind: {
+            'command': ['dockerd', '--host=$_socket', ...flags],
+          },
+        ),
+      );
+      expect(errors(['--insecure-registry=registry:5000']), isEmpty);
+      expect(errors(['--insecure-registry', 'registry:5000']), isEmpty);
+      expect(errors(['--insecure-registry=0.0.0.0/0']), [
+        'dind trusts 0.0.0.0/0 over plain HTTP, not only registry:5000',
+      ]);
+      expect(errors(['--insecure-registry', 'docker.io']), hasLength(1));
+    });
+
     test('applies to a dind image under another service name', () {
       final config = _config(
         extra: {
@@ -261,6 +320,71 @@ void main() {
       expect(findDockerExposureErrors(config), [
         'engine does not name dockerd as its command, so the dind '
             'entrypoint adds a TCP listener',
+      ]);
+    });
+  });
+
+  group('the registry', () {
+    const registry = {'image': 'mirror.gcr.io/library/registry:3.0.0@sha256:0'};
+
+    test('passes on the Compose network alone', () {
+      expect(
+        findDockerExposureErrors(
+          _config(
+            extra: {
+              'registry': {
+                ...registry,
+                'networks': {'default': null},
+              },
+            },
+          ),
+        ),
+        isEmpty,
+      );
+    });
+
+    test('rejects a published port, on loopback too', () {
+      final errors = findDockerExposureErrors(
+        _config(
+          extra: {
+            'registry': {
+              ...registry,
+              'ports': [
+                {'target': 5000, 'host_ip': '127.0.0.1', 'published': '5000'},
+              ],
+            },
+          },
+        ),
+      );
+      expect(errors, hasLength(1));
+      expect(errors.single, contains('registry publishes a port'));
+    });
+
+    test('rejects host networking under another service name', () {
+      final errors = findDockerExposureErrors(
+        _config(
+          extra: {
+            'images': {...registry, 'network_mode': 'host'},
+          },
+        ),
+      );
+      expect(errors.single, contains('images sets network_mode'));
+    });
+
+    test('rejects a network beyond the default one, under a bare image', () {
+      final errors = findDockerExposureErrors(
+        _config(
+          extra: {
+            'images': {
+              'image': 'registry:3.0.0@sha256:0',
+              'networks': {'default': null, 'shared': null},
+            },
+          },
+        ),
+      );
+      expect(errors, [
+        'images joins shared; the fixture registry stays on '
+            'the default Compose network',
       ]);
     });
   });

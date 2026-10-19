@@ -10,8 +10,8 @@ const String deviceSettingsFileName = 'settings.json';
 
 /// The schema this build reads and writes. A file with a higher version
 /// came from a newer build and is never rewritten by this one
-/// ([DeviceSettingsIssueKind.newerVersion]); the monitor set and the
-/// per-server device preferences join the schema under new keys.
+/// ([DeviceSettingsIssueKind.newerVersion]); the per-server device
+/// preferences join the schema under new keys, as the monitor set did.
 const int deviceSettingsSchemaVersion = 1;
 
 // The keys sit under the `klabautermann.` prefix like every settings key
@@ -22,7 +22,11 @@ const String _appearanceKey = 'klabautermann.appearance';
 const String _firstRunCardKey = 'klabautermann.coverage.firstRunCardDismissed';
 const String _announceBandsKey =
     'klabautermann.accessibility.announceThresholdBands';
+const String _rootEquivalenceNoticeKey =
+    'klabautermann.docker.rootEquivalenceNoticeDismissed';
 const String _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
+const String _monitorSetKey = 'klabautermann.monitorSet';
+const String _safetyKey = 'klabautermann.safety';
 
 /// Replaces a file's contents. [DeviceSettingsStore] writes the settings
 /// document and the copy of a damaged file through it.
@@ -98,8 +102,9 @@ final class DeviceSettingsReadOnlyException implements Exception {
 
 /// This device's `settings.json` (03 §4.10): the device id, the appearance,
 /// whether the first-run coverage card was dismissed, whether screen
-/// readers hear threshold-band changes (D60), the servers pinned to the
-/// top of the fleet list (03 §10.3) and, later, the monitor set and
+/// readers hear threshold-band changes (D60), whether the Docker tab's
+/// root-equivalence notice was dismissed (SAF-08), the servers pinned to
+/// the top of the fleet list (03 §10.3), FL-21's monitor set and, later,
 /// per-server device preferences.
 ///
 /// The app's isolate owns it: the composition root opens it once and the
@@ -264,6 +269,20 @@ final class DeviceSettingsStore {
     await _save();
   }
 
+  /// Whether the user dismissed the Docker tab's root-equivalence notice
+  /// (SAF-08, 03 §8.4). As for the coverage card, anything but `true`
+  /// reads as not dismissed, so a damaged value shows the notice again.
+  bool get rootEquivalenceNoticeDismissed =>
+      _values[_rootEquivalenceNoticeKey] == true;
+
+  /// Records the notice's dismissal and writes the document. Throws when
+  /// the write fails or this session is read-only; the dismissal stays in
+  /// memory either way.
+  Future<void> dismissRootEquivalenceNotice() async {
+    _values[_rootEquivalenceNoticeKey] = true;
+    await _save();
+  }
+
   /// The ids of the servers pinned to the top of this device's fleet list
   /// (03 §10.3). Device-local, as Séance keeps its pins: they are never
   /// synced. A value that is not a list reads as none and items that are
@@ -278,6 +297,44 @@ final class DeviceSettingsStore {
   /// is read-only; the value stays in memory either way.
   Future<void> setPinnedServerIds(Set<String> ids) async {
     _values[_pinnedServersKey] = ids.toList()..sort();
+    await _save();
+  }
+
+  /// The ids of FL-21's monitor set as the user chose it on this device
+  /// (03 §4.3 step 4), or null when the user never chose one and the
+  /// platform's default applies. Device-local: never synced (03 §4.9). A
+  /// value that is not a list reads as never chosen and items that are
+  /// not strings are skipped, rather than failing the file; the app drops
+  /// ids that are no longer eligible when it next saves.
+  Set<String>? get monitorSet => switch (_values[_monitorSetKey]) {
+    final List<Object?> ids => Set.unmodifiable(ids.whereType<String>()),
+    _ => null,
+  };
+
+  /// Stores [ids] as the user's monitor set, sorted so the document does
+  /// not churn with toggle order, and writes the document. Throws when
+  /// the write fails or this session is read-only; the value stays in
+  /// memory either way.
+  Future<void> setMonitorSet(Set<String> ids) async {
+    _values[_monitorSetKey] = ids.toList()..sort();
+    await _save();
+  }
+
+  /// The safety preferences as the app stored them (M4 plan M4): an
+  /// opaque JSON object the app encodes and decodes, or null when there
+  /// is none (or the stored value is not an object, which reads as none,
+  /// every server observe-only, rather than failing the file).
+  Map<String, Object?>? get safety => switch (_values[_safetyKey]) {
+    final Map<String, Object?> json => Map.unmodifiable(json),
+    _ => null,
+  };
+
+  /// Stores a deep copy of [safety] and writes the document, as
+  /// [setAppearance] does. Throws when the write fails or this session is
+  /// read-only; the value stays in memory either way.
+  Future<void> setSafety(Map<String, Object?> safety) async {
+    _values[_safetyKey] =
+        jsonDecode(jsonEncode(safety)) as Map<String, Object?>;
     await _save();
   }
 

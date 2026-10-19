@@ -336,6 +336,9 @@ String jobTitle(JobEntry job) => switch (job) {
 String sourceText(AppLocalizations l10n, JobEntry job) => switch (job) {
   CronJobEntry(:final job) => switch ((job.source, job.user)) {
     (kOwnCrontabSource, _) => l10n.jobsSourceOwnCrontab,
+    // Another user's crontab, which JOB-03 read in admin mode.
+    (final source, final user?) when source == userCrontabSource(user) =>
+      l10n.jobsSourceUserCrontab(user),
     (final source, final user?) => l10n.jobsSourceAsUser(source, user),
     (final source, null) => source,
   },

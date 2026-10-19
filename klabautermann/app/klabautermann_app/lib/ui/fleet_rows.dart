@@ -18,6 +18,7 @@ import 'chart_strings.dart';
 import 'charts/charts.dart';
 import 'fleet_rail.dart' show FleetEmptyState, linkFailureText, linkStatusWord;
 import 'fleet_row_state.dart';
+import 'monitor_set_feedback.dart';
 import 'sidebar_kit.dart';
 
 /// `ghost_servers`' words for a row whose link is [link] (03 §10.10's
@@ -205,25 +206,36 @@ class _FleetServerListState extends State<FleetServerList> {
     ];
   }
 
-  /// A synced row's verbs: pin it to the top, or take it off. An import
-  /// has none: it is never pinned.
-  List<SidebarMenuEntry> Function()? _menuFor(FleetServer server) {
-    if (server.origin != FleetEntryOrigin.synced) return null;
-
-    return () {
-      final l10n = AppLocalizations.of(context);
-      final fleet = widget.fleet;
-      final pinned = fleet.pinnedServerIds.contains(server.id);
-      return [
+  /// A row's verbs: a synced row pins to the top or comes off (an import
+  /// is never pinned), and every row joins FL-21's monitor set or leaves
+  /// it. Monitor is disabled for a server that cannot join; Settings >
+  /// Servers says why.
+  List<SidebarMenuEntry> Function() _menuFor(FleetServer server) => () {
+    final l10n = AppLocalizations.of(context);
+    final fleet = widget.fleet;
+    final pinned = fleet.pinnedServerIds.contains(server.id);
+    final monitored = fleet.monitoredServerIds.contains(server.id);
+    return [
+      if (server.origin == FleetEntryOrigin.synced)
         SidebarMenuAction(
           label: pinned ? l10n.fleetRowUnpin : l10n.fleetRowPin,
           onSelected: () => unawaited(
             _savingPins(pinned ? fleet.unpin(server.id) : fleet.pin(server.id)),
           ),
         ),
-      ];
-    };
-  }
+      SidebarMenuAction(
+        label: monitored ? l10n.fleetRowStopMonitoring : l10n.fleetRowMonitor,
+        onSelected: server.monitorEligibility == MonitorEligibility.eligible
+            ? () => unawaited(
+                changeMonitorSetWithFeedback(
+                  context,
+                  () => fleet.setMonitored(server.id, monitored: !monitored),
+                ),
+              )
+            : null,
+      ),
+    ];
+  };
 
   /// Waits for a pin change to save, and says so when it could not: the
   /// change lasts until the app quits.
@@ -397,10 +409,10 @@ const Key kFleetRowAgeKey = ValueKey('fleetRowAge');
 /// warning (03 §4.6) and a monitored server's pressure bar (FL-07) over
 /// the reading's age.
 ///
-/// A server is monitored while the app holds an `overview` or `core`
+/// A server shows the bar while the app holds an `overview` or `core`
 /// reading for it ([fleetRowReading]). Rows subscribe nothing themselves:
-/// FL-21 samples the fleet only for the monitor set, which does not exist
-/// yet, so readings come from the surfaces that show a server's panels.
+/// the engine samples `overview` for FL-21's monitor set, and the
+/// surfaces that show a server's panels read the rest.
 ///
 /// The row is one screen-reader node whose label says everything it
 /// shows; its values refresh with every sample, so it is no live region

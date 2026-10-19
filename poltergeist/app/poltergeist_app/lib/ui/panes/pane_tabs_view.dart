@@ -14,7 +14,6 @@ import '../../services/checkout_session.dart';
 import '../../services/drag_out_controller.dart';
 import '../../services/pane_controller.dart';
 import '../../services/pane_drop.dart';
-import '../../services/pane_location.dart';
 import '../../services/pane_tabs_controller.dart';
 import '../../services/preview_session.dart';
 import '../../services/registered_command.dart';
@@ -30,16 +29,15 @@ import 'pane_drop_area.dart';
 import 'pane_view.dart';
 import 'quick_connect_view.dart';
 
-/// A tab's display title (02 §3): the bound folder's last segment — the
-/// `Folder name` default of the title setting, whose other modes land
-/// with it. A remote tab mid-connect has no path yet, so its bookmark
-/// label stands in; an unbound tab names the launcher surface.
+/// A tab's display title (02 §3): app storage's friendly label or the
+/// folder's last segment. A remote tab mid-connect uses its bookmark
+/// label; an unbound tab names the launcher surface.
 String paneTabTitle(PaneTab tab, AppLocalizations l10n) {
   final session = tab.syncSession;
   if (session != null) return l10n.syncTabTitle(session.pair.name);
   final controller = tab.controller;
   final location = controller.location;
-  if (location != null) return paneLastSegment(location.path);
+  if (location != null) return controller.pathLabel(location.path, l10n);
   final bookmark = controller.remoteBookmark;
   if (bookmark != null) return bookmark.label;
   return l10n.tabLauncherTitle;

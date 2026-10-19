@@ -1,0 +1,423 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:klabautermann_app/controllers/docker_controller.dart';
+import 'package:klabautermann_core/klabautermann_core.dart';
+
+import 'support/docker.dart';
+import 'support/fake_engine.dart';
+
+/// 03 §5.9, §10.1: the app asks for each server's Docker endpoint as its
+/// link comes up, keeps what the engine reports, and reads the engine's
+/// details for a Docker tab that shows a ready endpoint.
+void main() {
+  late FakeEngineClient engine;
+  late DockerController docker;
+
+  setUp(() {
+    engine = FakeEngineClient();
+    docker = DockerController(engine);
+  });
+
+  tearDown(() async {
+    docker.dispose();
+    await engine.close();
+  });
+
+  List<DockerQuery> queries() => engine.sentOfType<DockerQuery>().cast();
+
+  Future<void> emit(EngineEvent event) async {
+    engine.emit(event);
+    await pumpEventQueue();
+  }
+
+  test('asks for the endpoint each time a link comes up', () async {
+    await emit(const LinkState('srv-1', LinkConnecting()));
+    expect(queries(), isEmpty, reason: 'no link yet');
+
+    await emit(const LinkState('srv-1', LinkReady()));
+    expect(queries(), hasLength(1));
+    expect(queries().single.serverId, 'srv-1');
+    expect(queries().single.query, isA<DockerEngineQuery>());
+
+    // The engine follows the link from here; the query is still in flight
+    // anyway.
+    await emit(const LinkState('srv-1', LinkReady()));
+    await emit(
+      dockerAnswer(
+        queries().last,
+        const DockerQueryFailed(DockerQueryFailure.profileUnknown),
+      ),
+    );
+    await emit(const LinkState('srv-1', LinkReady()));
+    expect(queries(), hasLength(1), reason: 'the link stayed up');
+
+    // The app let the link go, which ended the session in the engine.
+    await emit(const LinkState('srv-1', LinkIdle()));
+    await emit(const LinkState('srv-1', LinkReady()));
+    expect(queries(), hasLength(2));
+    expect(
+      queries().map((query) => query.queryId).toSet(),
+      hasLength(2),
+      reason: 'ids are never reused',
+    );
+  });
+
+  test('keeps each server\'s endpoint state', () async {
+    final endpoint = docker.endpointFor('srv-1');
+    expect(endpoint.value, isNull);
+
+    await emit(dockerReady('srv-1', rank: DockerRank.cliRelay));
+    expect(endpoint.value?.label, DockerRouteLabel.cliRelay);
+    expect(docker.endpointFor('srv-2').value, isNull);
+
+    await emit(
+      const DockerEndpointState(
+        serverId: 'srv-1',
+        phase: DockerEndpointPhase.failed,
+        failure: DockerEndpointFailure.noRoute,
+        noRouteReason: DockerNoRouteReason.noRelay,
+      ),
+    );
+    expect(endpoint.value?.phase, DockerEndpointPhase.failed);
+    expect(endpoint.value?.label, DockerRouteLabel.none);
+  });
+
+  test('reads the engine details once a shown tab\'s endpoint is ready, '
+      'and again after the route changes', () async {
+    docker.openView('srv-1');
+    expect(queries(), isEmpty, reason: 'no endpoint yet');
+
+    await emit(dockerReady('srv-1'));
+    expect(queries(), hasLength(1));
+    await emit(dockerReady('srv-1'));
+    expect(queries(), hasLength(1), reason: 'one in flight at a time');
+
+    await emit(dockerAnswer(queries().last, dockerEngine()));
+    expect(docker.engineFor('srv-1').value, isA<DockerEnginePayload>());
+
+    // The same endpoint again reads nothing.
+    await emit(dockerReady('srv-1'));
+    docker
+      ..closeView('srv-1')
+      ..openView('srv-1');
+    expect(queries(), hasLength(1));
+
+    // A new route clears what the old one read.
+    await emit(dockerReady('srv-1', rank: DockerRank.socketRelay));
+    expect(docker.engineFor('srv-1').value, isNull);
+    expect(queries(), hasLength(2));
+  });
+
+  test('details read over a replaced endpoint are dropped, and the new '
+      'one is read', () async {
+    docker.openView('srv-1');
+    await emit(dockerReady('srv-1'));
+    expect(queries(), hasLength(1));
+
+    // The route changes while the old endpoint's read is in flight; the
+    // engine still answers that read with what the old endpoint said.
+    await emit(dockerReady('srv-1', rank: DockerRank.socketRelay));
+    expect(queries(), hasLength(2), reason: 'the new endpoint is read');
+    await emit(dockerAnswer(queries().first, dockerEngine()));
+    expect(docker.engineFor('srv-1').value, isNull);
+
+    await emit(dockerAnswer(queries().last, dockerEngine()));
+    expect(docker.engineFor('srv-1').value, isA<DockerEnginePayload>());
+  });
+
+  test('a hidden tab reads nothing until it shows', () async {
+    await emit(dockerReady('srv-1'));
+    expect(queries(), isEmpty);
+
+    docker.openView('srv-1');
+    expect(queries(), hasLength(1));
+
+    docker.closeView('srv-1');
+    await emit(dockerReady('srv-1', rank: DockerRank.cliRelay));
+    await emit(dockerAnswer(queries().last, dockerEngine()));
+    expect(queries(), hasLength(1));
+  });
+
+  test('a failed read is kept and read again on retry or when the tab '
+      'shows again', () async {
+    docker.openView('srv-1');
+    await emit(dockerReady('srv-1'));
+    await emit(
+      dockerAnswer(
+        queries().last,
+        const DockerQueryFailed(DockerQueryFailure.daemonError),
+      ),
+    );
+    expect(docker.engineFor('srv-1').value, isA<DockerQueryFailed>());
+
+    docker.retry('srv-1');
+    expect(queries(), hasLength(2));
+    await emit(
+      dockerAnswer(
+        queries().last,
+        const DockerQueryFailed(DockerQueryFailure.connectionFailed),
+      ),
+    );
+
+    docker
+      ..closeView('srv-1')
+      ..openView('srv-1');
+    expect(queries(), hasLength(3));
+  });
+
+  test('an answer for no ready endpoint leaves the details to the endpoint '
+      'state', () async {
+    await emit(const LinkState('srv-1', LinkReady()));
+    for (final failure in [
+      DockerQueryFailure.linkUnavailable,
+      DockerQueryFailure.profileUnknown,
+      DockerQueryFailure.endpointUnavailable,
+      DockerQueryFailure.cancelled,
+    ]) {
+      docker.retry('srv-1');
+      await emit(dockerAnswer(queries().last, DockerQueryFailed(failure)));
+      expect(docker.engineFor('srv-1').value, isNull, reason: failure.name);
+    }
+  });
+
+  test('a failed endpoint is asked again on retry', () async {
+    await emit(
+      const DockerEndpointState(
+        serverId: 'srv-1',
+        phase: DockerEndpointPhase.failed,
+        failure: DockerEndpointFailure.unreachable,
+      ),
+    );
+    docker.openView('srv-1');
+    expect(queries(), isEmpty, reason: 'a failure stands until asked');
+
+    docker.retry('srv-1');
+    expect(queries(), hasLength(1));
+  });
+
+  test('ignores answers it did not ask for', () async {
+    docker.openView('srv-1');
+    await emit(dockerReady('srv-1'));
+    await emit(
+      DockerResult(
+        serverId: 'srv-1',
+        queryId: 'someone-else',
+        payload: dockerEngine(),
+      ),
+    );
+    expect(docker.engineFor('srv-1').value, isNull);
+  });
+
+  test('a server that leaves the fleet takes its state with it '
+      '(SYN-08)', () async {
+    docker.openView('srv-1');
+    await emit(dockerReady('srv-1'));
+    final inFlight = queries().last;
+    final before = docker.endpointFor('srv-1');
+
+    await emit(CatalogReplaced(const []));
+    expect(docker.endpointFor('srv-1'), isNot(same(before)));
+    expect(docker.endpointFor('srv-1').value, isNull);
+
+    // Late news of it stays out.
+    await emit(dockerAnswer(inFlight, dockerEngine()));
+    await emit(dockerReady('srv-1'));
+    await emit(const LinkState('srv-1', LinkReady()));
+    expect(docker.engineFor('srv-1').value, isNull);
+    expect(docker.endpointFor('srv-1').value, isNull);
+    expect(queries(), hasLength(1));
+  });
+
+  test('sends nothing once the engine stopped', () async {
+    await emit(dockerReady('srv-1'));
+    await engine.close();
+    await pumpEventQueue();
+    docker
+      ..openView('srv-1')
+      ..retry('srv-1');
+    expect(queries(), isEmpty);
+  });
+
+  group('the container watch (CTR-01, CST-01)', () {
+    final at = DateTime(2026, 10, 15, 14, 30);
+
+    List<DockerWatch> watches() => engine.sentOfType<DockerWatch>().cast();
+    List<DockerUnwatch> unwatches() =>
+        engine.sentOfType<DockerUnwatch>().cast();
+
+    ContainerListStats stats(String id, double cpu) => ContainerListStats(
+      containerId: id,
+      at: at,
+      cpuPercent: cpu,
+      memoryUsed: 64 << 20,
+    );
+
+    test('one watch per server while any view shows, replaced as the rows '
+        'on screen change', () async {
+      docker.watchContainers('srv-1');
+      expect(watches(), hasLength(1));
+      final first = watches().single;
+      expect(first.serverId, 'srv-1');
+      expect(first.lists, {DockerWatchList.containers, DockerWatchList.stats});
+      expect(first.statsFor, isEmpty);
+
+      // A second view shares it.
+      docker.watchContainers('srv-1', statsFor: ['c-9']);
+      expect(watches(), hasLength(1));
+
+      docker.showStatsFor('srv-1', ['c-1', 'c-2']);
+      expect(watches(), hasLength(2));
+      expect(watches().last.watchId, first.watchId, reason: 'replaces it');
+      expect(watches().last.statsFor, {'c-1', 'c-2'});
+
+      docker.showStatsFor('srv-1', ['c-2', 'c-1']);
+      expect(watches(), hasLength(2), reason: 'the same rows');
+
+      // No more than the engine reads.
+      docker.showStatsFor('srv-1', [for (var i = 0; i < 80; i++) 'c-$i']);
+      expect(watches().last.statsFor, hasLength(kDockerStatsForMax));
+      expect(watches().last.statsFor, contains('c-0'));
+      expect(watches().last.statsFor, isNot(contains('c-79')));
+
+      docker.unwatchContainers('srv-1');
+      expect(unwatches(), isEmpty, reason: 'a view still shows');
+      docker.unwatchContainers('srv-1');
+      expect(unwatches().single.watchId, first.watchId);
+      expect(unwatches().single.serverId, 'srv-1');
+      docker.unwatchContainers('srv-1');
+      expect(unwatches(), hasLength(1));
+
+      // Hidden, rows on screen change nothing; a new view watches anew
+      // with the rows it shows.
+      docker.showStatsFor('srv-1', ['c-3']);
+      final sent = watches().length;
+      docker.watchContainers('srv-1', statsFor: ['c-3']);
+      expect(watches(), hasLength(sent + 1));
+      expect(watches().last.watchId, isNot(first.watchId));
+      expect(watches().last.statsFor, {'c-3'});
+    });
+
+    test('keeps the latest containers and stats, and a failed read beside '
+        'the last list', () async {
+      docker.watchContainers('srv-1');
+      final list = docker.containersFor('srv-1');
+      expect(list.value.containers, isNull);
+
+      await emit(
+        dockerContainerList('srv-1', [
+          dockerContainer('c-1'),
+          dockerContainer('c-2'),
+        ], at: at),
+      );
+      expect(list.value.containers, hasLength(2));
+      expect(list.value.at, at);
+
+      await emit(
+        dockerStatsRound('srv-1', [stats('c-1', 5), stats('c-2', 7)], at: at),
+      );
+      await emit(dockerStatsRound('srv-1', [stats('c-1', 9)], at: at));
+      expect(list.value.stats['c-1']?.cpuPercent, 9);
+      expect(
+        list.value.stats['c-2']?.cpuPercent,
+        7,
+        reason: 'a row off screen keeps its last stats',
+      );
+
+      await emit(
+        dockerListFailed(
+          'srv-1',
+          DockerWatchList.stats,
+          DockerQueryFailure.connectionFailed,
+          at: at,
+        ),
+      );
+      expect(
+        list.value.statsFailure?.failure,
+        DockerQueryFailure.connectionFailed,
+      );
+      expect(list.value.stats, hasLength(2));
+
+      await emit(
+        dockerListFailed(
+          'srv-1',
+          DockerWatchList.containers,
+          DockerQueryFailure.daemonError,
+          at: at,
+          detail: 'Error response from daemon',
+        ),
+      );
+      expect(list.value.failure?.failure, DockerQueryFailure.daemonError);
+      expect(list.value.failure?.detail, 'Error response from daemon');
+      expect(list.value.containers, hasLength(2));
+
+      // A container that went takes its stats along.
+      await emit(
+        dockerContainerList('srv-1', [dockerContainer('c-1')], at: at),
+      );
+      expect(list.value.failure, isNull);
+      expect(list.value.stats.keys, ['c-1']);
+      await emit(dockerStatsRound('srv-1', [stats('c-1', 1)], at: at));
+      expect(list.value.statsFailure, isNull);
+
+      // Other lists and servers leave it be.
+      await emit(
+        DockerListChanged(
+          serverId: 'srv-1',
+          list: DockerWatchList.images,
+          payload: const DockerImagesPayload([]),
+          at: at,
+        ),
+      );
+      await emit(dockerContainerList('srv-2', const [], at: at));
+      expect(list.value.containers, hasLength(1));
+    });
+
+    test('a retry watches anew under a new id', () async {
+      docker.watchContainers('srv-1');
+      docker.showStatsFor('srv-1', ['c-1']);
+      final before = watches().last;
+      await emit(
+        dockerListFailed(
+          'srv-1',
+          DockerWatchList.containers,
+          DockerQueryFailure.tooManyQueries,
+          at: at,
+        ),
+      );
+
+      docker.retryContainers('srv-1');
+      expect(unwatches().single.watchId, before.watchId);
+      expect(watches().last.watchId, isNot(before.watchId));
+      expect(watches().last.statsFor, {'c-1'});
+    });
+
+    test('a server that leaves the fleet drops its watch and lists '
+        '(SYN-08)', () async {
+      docker.watchContainers('srv-1');
+      await emit(
+        dockerContainerList('srv-1', [dockerContainer('c-1')], at: at),
+      );
+      final before = docker.containersFor('srv-1');
+
+      await emit(CatalogReplaced(const []));
+      expect(docker.containersFor('srv-1'), isNot(same(before)));
+      expect(docker.containersFor('srv-1').value.containers, isNull);
+
+      // The engine ended the watch with the session: nothing to end.
+      docker.unwatchContainers('srv-1');
+      docker.watchContainers('srv-1');
+      expect(unwatches(), isEmpty);
+      expect(watches(), hasLength(1), reason: 'not in the fleet');
+    });
+
+    test('sends nothing once the engine stopped', () async {
+      await engine.close();
+      await pumpEventQueue();
+      docker
+        ..watchContainers('srv-1')
+        ..showStatsFor('srv-1', ['c-1'])
+        ..unwatchContainers('srv-1');
+      expect(watches(), isEmpty);
+      expect(unwatches(), isEmpty);
+    });
+  });
+}

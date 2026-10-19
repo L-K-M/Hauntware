@@ -7,7 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
-- Settings › Text › Font picks the document's font from the four that
+- Settings › Text › Font opens a searchable catalog of 20 bundled fonts.
+  Preview code, ambiguous glyphs, bold and italics before applying a
+  choice. Ligatures default to on and can be turned off in the picker.
+- Settings › Text › Font picks the document's font from the fonts that
   ship with Planchette, each shown in its own face, and Ligatures turns
   joined symbols such as `->` and `!=` off. A font named in a
   hand-edited settings file stays selected.

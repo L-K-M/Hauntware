@@ -580,9 +580,9 @@ Proposals awaiting the owner close the section; they are not decisions.
   own READY deadline [E], and a fast request keeps 5 s [E]. A slow
   request's deadline is derived from the guarded commands its collectors
   can run, each bounded by `timeout 10` (6.2), plus a margin [E], instead
-  of a fixed 30 s: the probe alone can run 16 guarded commands
+  of a fixed 30 s: the probe alone can run 17 guarded commands
   (`Collector.guardedCommands` declares each collector's count, and a test
-  ties it to the fragment text), up to 160 s when each runs into its
+  ties it to the fragment text), up to 170 s when each runs into its
   timeout, and a fixed deadline would keep restarting a slow but working
   sampler. Without `timeout` on the host (6.3) the commands run unguarded,
   and the derived deadline still bounds the request. Supersedes the slow
@@ -1130,6 +1130,44 @@ Proposals awaiting the owner close the section; they are not decisions.
   device-local storage only. *Rejected:* a `secret:` record (Séance would adopt
   an unreferenced secret into its vault as an orphan, c1 §2.4); device-only
   storage (the earlier recommendation).
+- **D65. Spike S3 confirms the ladder; admin validation ignores cached
+  credentials (M4 E01).** The spike drove seance_core's
+  `ElevatedExecutor` as a non-root account with no tty against three
+  tools: sudo 1.9.16p2 (Debian 13), sudo-rs 0.2.13 (Ubuntu 26.04) and
+  OpenDoas 6.8.2 (Alpine 3.22), in containers (`capture.sh
+  --elevation-only`; evidence and table in
+  `klabautermann/docs/evidence/s3/`).
+
+  Rungs 2 to 4 hold as 8.3 states them:
+  - blanket doas `permit nopass` runs the command in one call;
+  - the prelude shares sudo's record under `timestamp_type` `tty` and
+    `ppid`;
+  - under `timestamp_timeout=0` the rung-4 retry runs the command, with
+    sudo and with sudo-rs, and the stdin after the password line reaches
+    it.
+
+  Rung 5 is needed: `requiretty` ("sorry, you must have a tty to run
+  sudo") and password doas ("doas: a tty is required" on a pipe) both
+  refuse, and both classify as `ttyRequired`. sudo-rs's texts are
+  recorded and match the classifier. mksh's `printf` is not a builtin, so
+  the prelude stays unavailable under mksh.
+
+  The amendment: under `timestamp_type=global`, a record left by any
+  session of the account satisfies `sudo -v` without reading the
+  password, so a wrong password runs the command while the record lasts.
+  This grants nothing, since `sudo -n` works then anyway. But it means a
+  validation by the prelude cannot reject a wrong password. Admin mode's
+  validation (8.2, E11) therefore runs `sudo -k -S -p '' -v`, which
+  ignores cached records [L: sudo 1.9.16p2 refuses the wrong password
+  and records the right one]. Commands keep the prelude unchanged.
+  sudo-rs checks the password under `-k` too, but records nothing, so its
+  first command after validation takes rung 4.
+
+  *Rejected:*
+  - `sudo -k` in the prelude itself: every sudo-rs command would cost a
+    second round trip, to guard a case that grants no privilege;
+  - `sudo -K` before validation: it removes the account's records in
+    every session, the user's own terminal included.
 
 ### Persistence, alerts and tiers
 
@@ -1827,7 +1865,33 @@ holds the fleet assertion and the two MVP disclosures, and its "Sign in"
 stays disabled until the assertion is ticked, so `EnrollSync` is sent
 only then. Once signed in, the control runs a round; it opens the sheet
 again while no record has confirmed the passphrase or after the server
-refused the session. Steps 4 and 5 come with K30.
+refused the session. Step 4 is built outside the sheet (K30, below);
+step 5 is built in M4 (E19a, below).
+
+As built in M4 (E19a), step 5 is a notice in the server header while
+management is off for that server: it says Klabautermann only reads
+the server and points to the header's Safety menu, whose Allow actions
+switch turns management on and whose Read-only switch hides the
+server's actions. A second notice says when actions are hidden, by the
+server's switch or by global read-only. Settings > Safety holds global
+read-only, admin mode's expiry and the user's marks, each with a button
+that removes it. The app applies the policy to the engine at spawn and
+before it saves each change, so the engine never enforces less than
+the screen shows.
+
+As built in M4 (E19b), a server whose actions are allowed shows an
+admin mode chip beside the Safety menu (8.2). Tapping it sends
+`SetAdminMode`; the chip then follows the engine's `AdminModeState`:
+"Turning on admin mode" while the engine detects, waits for the
+password or checks it, and "Admin mode until <time>" while it is on,
+tinted with the error container color, with a header notice that
+confirmed actions run as root. Tapping again turns it off, which also
+cancels a start. The header words why it failed or ended (D35), the
+app going to the background on a phone included. Read-only disables
+the chip. The engine's elevation prompt is a password dialog with the
+retry line and no "remember" (v1.x). The chip shows when admin mode
+ends rather than a ticking countdown, since the expiry moves with
+every elevated action.
 
 As built in M2 (K41, D64), step 3 is a notice atop the fleet rows of the
 rail and the phone's list, scrolling with them, that counts the synced
@@ -1848,6 +1912,30 @@ are device-local and count as confirmed on the device that imported
 them, so endpoint pins apply to synced servers only, and an answer the
 other way would list imports here too. Unconfirmed servers stay
 listed in the fleet; opening one shows why it does not connect.
+
+As built in M2 (K30), step 4 is a choice the user can change at any
+time rather than a sheet step: every fleet row's menu offers "Monitor"
+or "Stop monitoring", and Settings > Servers lists the fleet with a
+switch per server, a server that cannot join saying why, and the count
+out of the limit of 10. A server is eligible when its endpoint is
+confirmed (imports count as confirmed on the device that imported them)
+and the engine signs in to it with an agent or a key file
+(`monitorEligibilityOf` in `klabautermann_core`, one rule for both
+sides); a password or a key held in the vault asks the user while the
+vault does not exist (F3b), and an import from an older store has no
+known credentials until the next import. Until the user chooses, the
+set is the first 10 eligible servers in fleet order on desktops and
+none on phones, worked out from each fleet as it arrives; the first
+change saves the set in force as `klabautermann.monitorSet` (4.10), and
+each save drops ids that left the fleet or stopped being eligible. An
+eleventh server is refused with a message naming the limit. The fleet
+controller sends `SetMonitorSet` once the engine has sent a fleet and
+whenever the set in force changes; the engine checks the same rule and
+the limit again (10.1). The desktop settings window reaches the set
+through the `setMonitored` link method. Jump hosts' credentials are not
+checked: an unattended connect never prompts, so a hop that needs the
+user fails and waits for the user. An encrypted key file counts as
+eligible and fails the same way until K45's passphrase flow.
 
 ### 4.4 The catalog library
 
@@ -2135,7 +2223,7 @@ platform identities in 04, section 12.3):
 | `sync_enrollment.json` [E] | Enrollment state (M2, K49a, D62): the push hold, the raised notices and the enrolled account (server URL, user name, mode); never the token or vault key, which stay in the keystore (4.5), and not the device id, which stays in `settings.json`. Kept like the verdict files; a damaged file reads as not enrolled | `klabautermann_core` [E] | MVP |
 | `endpoint_pins.json` | Confirmed endpoints. As built in M2 (K41), written by the engine through the catalog library's `FileEndpointPinStore` only with exclusive access; otherwise pins last for the engine's run (4.7) | catalog library | MVP |
 | `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config`, replaced whole by each import; never pushed (D14). Schema 3 (M2) holds each host's alias, host, port, user, `IdentityFile` and `ProxyJump` with the values ssh would use (10.1): the effective host (`%h` expanded, lowercased unless an address) and port, the first `IdentityFile` that is not `none`, and the `ProxyJump` as written; under `hops` it holds the same for each other name a stored route gives. An older file holds addresses only: schema 1 (M1) kept no `IdentityFile` or `ProxyJump` and kept `HostName` as written, `%h` included, and schema 2 read each host's values from its first block alone. Its hosts are listed as stored, with no `jumpRoute`, `authKind` or `locatorConflict`, and get no connect config until the next import rewrites the file. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
-| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), whether threshold-band changes are announced (`klabautermann.accessibility.announceThresholdBands`, M2, D60; anything but `false` announces), the servers pinned to the top of the fleet list (`klabautermann.fleet.pinnedServerIds`, M2, 10.3; a sorted list of server ids, anything else reading as none), monitor set, per-server device preferences | app | MVP |
+| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), whether threshold-band changes are announced (`klabautermann.accessibility.announceThresholdBands`, M2, D60; anything but `false` announces), whether the Docker tab's root-equivalence notice was dismissed (`klabautermann.docker.rootEquivalenceNoticeDismissed`, M3, 8.4; anything but `true` shows it again), the servers pinned to the top of the fleet list (`klabautermann.fleet.pinnedServerIds`, M2, 10.3; a sorted list of server ids, anything else reading as none), FL-21's monitor set as the user chose it (`klabautermann.monitorSet`, M2, K30, 4.3 step 4; a sorted list of server ids, anything else reading as never chosen, so the platform's default applies), the safety preferences the engine enforces (`klabautermann.safety`, M4, E19a: global read-only, admin expiry in minutes, and per server management, read-only and the user's marks; anything unreadable reads as management off, so a damaged file only takes actions away), per-server device preferences | app | MVP |
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
 | `instance.lock` [E] | Empty. One desktop instance per support directory (built in M2): the composition root takes an exclusive, non-blocking advisory lock on it after the settings window's branch and before `settings.json` and `window_state.json` open and the engine isolate starts, so one process mints the device id and writes these files, and holds it for the life of the process; the file is never deleted. A second instance opens no other file and only says it is already running, until the user quits it. A lock that fails for another reason (no write access, no lock support) lets the app run unguarded and says so at startup. Phones run one process per app and take none | app, through `klabautermann_core`'s `InstanceLock` | MVP |
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
@@ -2332,13 +2420,18 @@ relay with no learned limit, a journal follow and a container follow
 fill the follower share, and the events stream then gives way to a full
 re-list every 15 s [E], trying for a slot again each time. Any learned
 session limit is low-session mode: followers are held to one at 4 or
-more and none below, the Docker events stream on a relay is not opened
-(and one already open closes) in favour of the 15 s re-lists while a
-watch holds, stats are read one at a time on every rank, and
-`DockerEndpointState.lowSession` names the mode, on streamlocal too,
-where it holds back the host follows only. A new link has learned
-nothing, so reconnecting ends the mode. Stack logs merged through one
-`docker compose logs -f` are not built yet.
+more and none below, short actions and followers together hold no more
+than the two samplers leave (at 4, one of each; on a relay the pooled
+connection is that short action while a watch keeps it open), the
+Docker events stream on a relay is not opened (and one already open
+closes) in favour of the 15 s re-lists while a watch holds, stats are
+read one at a time on every rank, and `DockerEndpointState.lowSession`
+names the mode, on streamlocal too. Below 4 the samplers leave less
+than the short-action share, so the cap there is that share's two
+slots: short actions keep them, and what the link cannot open yet
+queues on it. A new link has learned nothing, so reconnecting ends the
+mode. Stack logs merged through one `docker compose logs -f` are not
+built yet.
 
 ### 5.3 Failure classification
 
@@ -2352,6 +2445,25 @@ nothing, so reconnecting ends the mode. Stack logs merged through one
 | Exit 127 or "command not found" | Tool missing | Panel hidden with the reason |
 | `nologin` shell or `ForceCommand` | Restricted account | Read-only reachability; explanation |
 | Link ping timeout | Dead peer | Backoff; stale values turn grey |
+
+As built in M3 (D11,
+`klabautermann_core/test/integration/docker_refusal_test.dart`), the
+fixture's negative Docker hosts (11.3) confirm the streamlocal row on
+the base's OpenSSH 10.6. `AllowStreamLocalForwarding no`,
+`DisableForwarding yes`, `AllowTcpForwarding no`, `PermitOpen
+127.0.0.1:1` and an `authorized_keys` `restrict` key each refuse
+`direct-streamlocal` to a socket the account may write with reason 2
+(`SSH2_OPEN_CONNECT_FAILED`) and "open failed", the same answer the
+socket's `EACCES` gets, so only the exec probe tells them apart, and
+`seance_core` classifies every one as `ChannelRefusal.forwardDisabled`.
+`AllowTcpForwarding no` and `PermitOpen` refuse it through the local TCP
+permissions sshd applies to socket paths (sshd logs "Received request to
+connect to path ..., but the request was denied"), the other three
+through its streamlocal check ("refused streamlocal port forward"); no
+variant still forwards. `direct-tcpip` refusals carry reason 1
+(`SSH2_OPEN_ADMINISTRATIVELY_PROHIBITED`). `MaxSessions 2` refuses the
+third session with reason 2 and "open failed", and the link learns a
+limit of 2 and reports `SshLinkDegraded(sessionLimitLearned)`.
 
 ### 5.4 Docker Engine API over the forwarded socket
 
@@ -2410,8 +2522,8 @@ nothing, so reconnecting ends the mode. Stack logs merged through one
 
 | Stream | Endpoint | Framing | Cancel | Resume |
 |---|---|---|---|---|
-| Container logs | `GET /containers/{id}/logs?follow=1&tail=N&timestamps=1&stdout=1&stderr=1` | stdcopy 8-byte frames unless `Config.Tty` (from inspect; Docker sets `Content-Type: application/vnd.docker.multiplexed-stream` or `application/vnd.docker.raw-stream` from API 1.42; from 1.42 the header is used when present and cross-checked with `Config.Tty`; below 1.42 a current daemon labels every logs response raw-stream, and older daemons and possibly Podman's compat layer omit it [R: moby `container_routes.go` `getContainersLogs`, reported by review]); split on `\n` after demultiplexing | Close the duplex | `since=<unix seconds>.<9-digit nanoseconds>` converted from the last delivered line's RFC3339Nano timestamp (the API rejects RFC3339 with 400); `since` is inclusive, so drop re-sent lines up to and including the last delivered one [R: moby `getContainersLogs`, `loggerutils/logfile.go`, reported by review] |
-| Stats, list | `GET /containers/{id}/stats?stream=false&one-shot=true` | One JSON object | n/a | Deltas between polls client-side (one-shot `precpu_stats` is zero on Docker 29.9, so not meaningful; D21) |
+| Container logs | `GET /containers/{id}/logs?follow=1&tail=N&timestamps=1&stdout=1&stderr=1` | stdcopy 8-byte frames unless `Config.Tty` (from inspect; Docker sets `Content-Type: application/vnd.docker.multiplexed-stream` or `application/vnd.docker.raw-stream` from API 1.42; from 1.42 the header is used when present and cross-checked with `Config.Tty`; below 1.42 a current daemon labels every logs response raw-stream, and older daemons and Podman's compat layer omit it [R: moby `container_routes.go` `getContainersLogs`, reported by review; recorded from Docker 20.10 and Podman 5.8 in D01]); split on `\n` after demultiplexing | Close the duplex | `since=<unix seconds>.<9-digit nanoseconds>` converted from the last delivered line's RFC3339Nano timestamp (the API rejects RFC3339 with 400); `since` is inclusive, so drop re-sent lines up to and including the last delivered one [R: moby `getContainersLogs`, `loggerutils/logfile.go`, reported by review] |
+| Stats, list | `GET /containers/{id}/stats?stream=false&one-shot=true` | One JSON object | n/a | Deltas between polls client-side (one-shot `precpu_stats` is zeroed, with a zero `preread`, on every daemon of the recorded corpus and on Docker 29.9 in D21, so not meaningful) |
 | Stats, detail | `GET /containers/{id}/stats?stream=1` | JSON lines | Close | n/a |
 | Events | `GET /events?since=&filters=` | JSON lines; `Type`, `Action`, `Actor` only (1.52 removed the legacy fields), legacy shape accepted below 1.52 | Close | `since=` last event time; full re-list after a gap over 60 s |
 | Pull progress | `POST /images/create?fromImage=&tag=` | JSON values keyed by layer `id`; `progressDetail`, `errorDetail` | Close, which cancels the pull on the daemon unless another client is pulling the same image [R: moby `image_routes.go` request context, `xfer/transfer.go` `release`, reported by review]; a pull that must outlive its view runs detached (7.14) | n/a |
@@ -2507,6 +2619,21 @@ slot until `SshLink.connect` returns. Reachability probes reuse
 `ProbeService` (`SC/src/probe/probe_service.dart:64`, 45 s jittered
 sweeps, at most 6 concurrent [V]) and run only for confirmed endpoints.
 
+As built in M2 (K20, `klabautermann_core` `fleet/reachability_service.dart`):
+the engine probes the fleet entries that have a connect config and a
+confirmed endpoint, imports included under O6's default (4.3), and so
+never an unconfirmed or changed synced server (4.7). A server routed
+through a jump host is not probed and is reported `unknown`, and one
+holding a link is answered online without a probe, as `ProbeService`
+does. Probing starts once `Hello` has had its fleet; a new or moved
+target sweeps at once, a removed one is dropped before the fleet or
+`EndpointChanged` that removes it goes out, and every sweep reports
+every target, always on a later event-loop turn than the fleet that
+lists it. `SetAppActivity` pauses the sweeps in the background, dropping
+answers in flight, and the foreground sweeps at once.
+`EngineStart.probesEnabled` gates probing apart from links; it is off
+unless given, and `main.dart` turns it on (the contract test holds it).
+
 ---
 
 ## 6. Host data collection
@@ -2559,7 +2686,14 @@ shown as unknown, never as zero.
   `/proc/<pid>/cmdline`. The program is a constant assembled in
   `klabautermann_host` from collector fragments and contains no user-supplied
   text. It ends by printing a READY marker. The client sends nothing else until
-  it has read READY.
+  it has read READY. As built in M4 (E07, collector-set version 8), the
+  line before READY is `\036<nonce> SELF <pid> <ppid>`, the sampler
+  shell's `$$` and `$PPID`: the start command execs `env`, which execs
+  `sh -s`, so these are the channel's process and the sshd process
+  serving the session, two of 8.6's protected targets. A READY of this
+  version without SELF before it ends the session; one of another
+  version is a version mismatch first, as an older program prints no
+  SELF.
 - **Requests.** Each request is one shell command line:
   `hw_t <seq> <collector>...` for a tick, `hw_o <seq> <collector> <arg>...`
   for an on-demand read (for example one unit's `systemctl show`). Collector
@@ -2675,6 +2809,7 @@ source for every runner, including the T1 scripts (9.3).
 | `units` | slow | `systemctl list-units --all --output=json` (systemd 246+), else `--plain --no-legend`; `systemctl --failed` | 15 s while visible; 60 s for the health card | same | same |
 | `timers`, `cron` | slow | `systemctl list-timers --all --output=json`; `crontab -l`; `/etc/crontab`; `/etc/cron.d/*`; `cron.{hourly,...}` | 60 s while visible | same | on demand |
 | `timer_detail` | slow | `systemctl show -p TimersCalendar -p TimersMonotonic -p RandomizedDelayUSec -- <timer>` (D57) | on demand | same | same |
+| `ops` | slow | the `<id>.json` records of both operation directories of 7.17, at most 50 per directory, each cut at 4 KiB [E] | on connect (E17) | same | same |
 | `identity` | slow | `/etc/os-release`, `uname`, `hostnamectl --json=short` (systemd 249+) | once per session | same | same |
 | `temps`, `gpu`, `smart` (v1) | slow | hwmon and thermal sysfs, `nvidia-smi --query-gpu=...`, `smartctl -n standby -j` | 10 s, 30 s, 10 min | same | on demand |
 | `packages` (v1) | slow | `apt-get -s upgrade`, `dnf check-update`, ... (7.8) | on demand, 60 min | on demand | on demand |
@@ -2737,13 +2872,13 @@ the probe (6.1), until one is answered on that link: a probe that brings
 no reply goes out again after 15 s [E], as an owed read does, each
 later one after twice the last wait, up to 15 min [E], and on a later
 run on the same link. A probe that hangs holds the slow sampler for its
-whole deadline, so the cap bounds the readings it loses to about 15 %
+whole deadline, so the cap bounds the readings it loses to about 16 %
 of the time. Until it settles the slow sampler sends
 nothing else and, for a server whose profile the engine does not know
 yet, the fast sampler waits too, so the first readings already withhold
 what a container host's `/proc` would supply (D50); a slow sampler that
 fails to start releases the fast one, and probes once it is ready. That
-wait lasts at most the probe's deadline, 165 s for its 16 guarded
+wait lasts at most the probe's deadline, 175 s for its 17 guarded
 commands (6.2, D47), and holds only while the engine knows no profile
 for the server. There D50, which never shows the host's figures as the
 container's, takes precedence over 6.2's rule that a hung slow collector
@@ -2944,6 +3079,35 @@ unless the user enables admin mode for that panel.
   and container attribution from `/proc/<pid>/cgroup`, state highlighting.
 - **v1.x.** Renice and ionice, per-process I/O (sudo).
 
+As built in M4 (E08, `klabautermann_host/lib/src/commands/commands.dart`),
+`HostCommands.guardedKill(pid, startTicks, KillSignal)` is that `sh -c`:
+a constant script that takes the PID, ticks and signal as positional
+parameters and checks them again. It exits 0 once signalled, 3 when
+`/proc/<pid>` is gone, 4 when the ticks differ (the PID was reused, and
+nothing is signalled), 5 when the stat line has fewer than 20 fields
+after its last `) ` (a comm holding a newline), 6 when `kill` fails
+and 7 when it refuses a parameter (`GuardedKillOutcome`). The codes
+avoid 1 and 2, which sudo and the shell use, and 126 and 127.
+
+As built in M4 (E14,
+`klabautermann_core/lib/src/operations/plans/host_plans.dart`),
+planning a kill reads the process over the link first: its start
+ticks, which must still match the intent's, then
+`HostCommands.processFacts`, the owner of its `/proc` entry and its
+`comm`. The plan elevates only when the owner differs from the probe's
+login uid (a non-dumpable process, such as `ssh-agent`, is owned by
+root there, so killing one's own elevates too), names the target
+by its `comm` for a typed confirmation, and drops the session when the
+PID is on its path. The runner reads the guarded kill's exits 3 and 4
+as re-validation failures (process gone, PID reused), not as a failed
+step.
+
+As built in M4 (E21a), where actions are allowed the Processes table's
+row menu offers Terminate and Kill, then every other signal under Send
+signal, and a process's details offer the same as buttons, which phones
+reach by tapping a row. A row without its start time offers none, since
+the guarded kill needs it.
+
 ### 7.3 Disks and storage (DSK)
 
 - **MVP.** Usage per mount from `df -PT -B1` with pseudo filesystems filtered
@@ -3033,6 +3197,18 @@ no longer holds that value.
   rejects every one, the page says unit logs are not available in this
   version; a read the engine can no longer answer, because it stopped,
   says so and asks for a restart of the app.
+
+As built in M4 (E14), SVC-03 offers start, stop, restart and reload; the
+other verbs are refused as invalid targets. In admin mode the step runs
+through the elevation executor. Outside it the step runs unelevated, and
+a polkit refusal (`Interactive authentication required` or
+`Access denied` on stderr) ends the run as needing admin mode rather
+than as a failed step. Every unit action re-validates that the unit
+still loads, and only start reports no impact.
+
+As built in M4 (E21a), where actions are allowed the Services table's
+row menu and a unit's page offer Start, Stop, Restart and Reload; the
+table keeps no action slot otherwise, so its layout does not change.
 
 ### 7.6 Logs (LOG)
 
@@ -3276,6 +3452,48 @@ each row's source and the user its line names:
   probe finds systemd not running, the tab says the server has no timers
   instead of a failed timers reading. The phone reaches the tab
   through More (10.5).
+
+As built in M4 (E08, the same `commands.dart`), `HostCommands.timerStart`
+starts a timer's `Unit=` (any unit but a timer) with SVC-03's
+`systemctl --no-ask-password start --`, and JOB-08's follow uses the
+existing `journalctl` builder with `unit`, `since` and a follow.
+`HostCommands.crontabSpoolList()` is JOB-03's elevated listing: a
+constant script over `/var/spool/cron/crontabs`, then `/var/spool/cron`,
+that prints the first existing directory and then each regular,
+non-symlink file name in it. It exits 0, 3 when neither exists, and 4
+when the directory cannot be listed, so an unreadable spool never reads
+as empty. `parseCrontabSpool` keeps only names that pass the user-name
+check for `crontab -l -u`.
+
+As built in M4 (E14), run timer now reads the timer's `Unit=` with
+`HostCommands.timerActivates`, refuses a timer with none or one that
+activates a timer, and plans `timerStart` on that unit with SVC-03's
+elevation rule and re-validation. The preview names the unit as
+`followUnit`, whose journal the app follows from the run's start.
+
+As built in M4 (E21b), where actions are allowed a timer's row menu and
+its details offer Run now. Once the run is confirmed, a sheet follows
+the started service's journal live through the Logs panel's reading,
+from the last 15 minutes so the run's start is in it, and closing the
+sheet closes the follow.
+
+As built in M4 (E14b,
+`klabautermann_core/lib/src/admin/user_crontabs.dart`),
+`ReadUserCrontabs` runs JOB-03 in admin mode only: the spool listing, then `crontab -l -u` for at most 64 [E] of its
+valid names, each through the elevation executor. `parseUserCrontab`
+reads each as a user table whose jobs name their user, with the source
+`crontab -u <user>`. A crontab removed since the listing ("no crontab
+for") is left out, any other failure names the user as unreadable, and
+the jobs rows carry next runs as the `cron` stream's do. Nothing is
+cached.
+
+As built in M4 (E21c), the Jobs tab shows a source switch while admin
+mode is on: "Yours and the system's" lists the streams' rows, and
+"Other users" reads every other user's crontab through
+`ReadUserCrontabs` and lists their lines read-only, each named as that
+user's crontab, with any unreadable user, the users past the read's
+limit and the masking said above the table, and a button that reads
+them again. Admin mode that ends returns the tab to the streams' rows.
 
 ### 7.8 Packages and updates (PKG)
 
@@ -3582,6 +3800,61 @@ matching row applies:
   by the next root-run wrapper or in admin mode. Never `/tmp`. Both
   directories are rows in the host write inventory (8.11).
 
+As built in M4 (E08, `klabautermann_host/lib/src/commands/operations.dart`),
+`OperationCommands.detachedLaunch` builds each `DetachedRunner` row's
+argv; nothing runs it before E17. Decisions:
+
+- The wrapper takes one more parameter than the table shows:
+  `klabautermann-op <dir> <id> <uid> <unit|-> -- <cmd...>`, the unit
+  `klabautermann-op-<id>.service` on the systemd rows (also passed as
+  `--unit=`), so the record names it.
+- Both `setsid` rows use one launcher, `setsid "$@" </dev/null
+  >/dev/null 2>&1 &`, then print `$!`. A background child of a
+  non-interactive shell leads no process group, so util-linux and
+  BusyBox `setsid` both call setsid(2) in place, and `$!` is the
+  record's PID. Spike S4 still has to confirm that it survives logout.
+- The wrapper checks its parameters again. As root it writes only to
+  `/var/lib/klabautermann/ops` (parents 0755) and `chown`s each file to
+  the uid; otherwise it writes only as that uid (0700). It refuses a
+  symlinked directory or one it does not own. As root it prunes first.
+  It creates `<id>.log` exclusively, writes each record to `.<id>.tmp`
+  and `mv`s it over `<id>.json`, and runs the command from `/` with
+  `command`, stdin on `/dev/null`. It exits with the command's status,
+  or 125 when it refused to start, which leaves no record.
+- A record is one JSON line holding every key, `null` where a value is
+  unknown: `v` (1), `id`, `state` (`running` or `done`), `pid` (the
+  wrapper's `$$`), `startTicks` (field 22 of its stat), `unit`, `exit`,
+  `startedAt` and `endedAt` (epoch seconds from `date +%s`).
+- `opCleanup(dir, ids)` removes the record, the log and any temp file.
+  `opPrune(dir, days)` removes the operation files older than `days`
+  whole days, matched by name (`find -mtime +<days-1>`). Both validate
+  the directory: an absolute path ending in `/klabautermann/ops`, never
+  under `/tmp`, and the root directory only on the root rows.
+
+Real-shell tests run under dash and bash. The root path and its
+`chown` were checked by hand only (E30 covers them on the runner VM).
+
+As built in M4 (E07, `klabautermann_host/lib/src/parse/ops.dart`), the
+slow `ops` collector lists
+`${XDG_STATE_HOME:-$HOME/.local/state}/klabautermann/ops` (a relative
+`XDG_STATE_HOME` is ignored) and `/var/lib/klabautermann/ops`, each as
+one guarded `sh -c` of a constant
+listing script. It reads regular files named `<16 hex>.json`, not
+symlinks, temp files or logs, at most 50 per directory through
+`head -c 4097`, and frames each as `rec <kind> <id> <status> <bytes>`
+plus exactly that many bytes, so record text cannot forge another; a
+`dir <kind> ok|absent|denied <count> <path>` line ends each listing and
+reports the resolved path and the full count. A record is the one-line
+JSON object E08's wrapper writes, every key present:
+`{"v":1,"id","state":"running"|"done","pid","startTicks","unit","exit",
+"startedAt","endedAt"}`, with `pid` the wrapper's `$$`, `startTicks`
+field 22 of its `/proc/<pid>/stat`, `unit`
+`klabautermann-op-<id>.service` or null, `exit` and `endedAt` null while
+running, and null times where `date` has no `%s`. The parser rejects,
+never reads as an operation, a record cut at 4 KiB, one of another
+version, a malformed one, and a forged one: its `id` differs from its
+file name or its `unit` names another unit. Re-attach itself is E17's.
+
 ### 7.18 Backups (BAK)
 
 - **v1.x.** One-shot database dumps from a container using its own
@@ -3817,6 +4090,33 @@ SAF-17 generates narrow, validated rules (v1.x): a blanket rule equals root
   the prompt: admin mode still starts explicitly, shows its chip and
   expires as above. A remembered password that sudo rejects is not
   retried; the prompt returns and offers to replace it.
+- **As built (M4 E11).** `KC/lib/src/admin/` holds admin mode and the
+  safety policy.
+  - `AdminModeController` runs the M5 state machine per server: off,
+    detecting, awaiting password, validating, on (with `expiresAt`), then
+    expired or failed.
+  - It reads the elevation facts from the probe's `HostProfile` and asks
+    for the password through the prompt broker only for the prelude rung.
+    A password is asked for at most three times: a wrong one gets two
+    retries.
+  - Validation runs `true` through `ElevatedExecutor`, so rung 4 and the
+    refusal classifier apply. Password doas fails `ttyRequired` without a
+    prompt. E04's validation, which ignores cached records (D65), replaces
+    this check.
+  - Admin mode ends:
+    - after the expiry (5, 15, 30 or 60 minutes) without elevated work,
+      which resets the clock;
+    - when the app goes to the background;
+    - when the link leaves ready or degraded;
+    - when the server leaves the fleet or changes endpoint;
+    - on `SetAdminMode(enabled: false)`.
+  - The password is held only in the controller's session and never in
+    an event, argv or `toString`.
+  - The engine keeps the app's `SetSafetyPolicy` and, until the first
+    one, treats every server as observe-only. It refuses `PlanAction`
+    and `SetAdminMode` with `observeOnly` or `readOnly` for a server it
+    may not change. A new policy that forbids a server ends that server's
+    admin mode.
 
 ### 8.3 The elevation prelude (D24)
 
@@ -3835,10 +4135,11 @@ exit $?
   client writes the password line, then HTTP bytes), a privileged `tee`.
 - Both sudo invocations are children of the same shell. With no terminal,
   sudo's default `timestamp_type` (tty) falls back to per-parent-PID records
-  [R: sudoers(5), per review], so `exec sudo -n` (whose parent becomes the
-  shell's parent) and a validation in another exec channel both miss the
-  cached credential. The trailing `exit $?` is load-bearing: bash execs the
-  last command of a `-c` string implicitly, which has the same effect.
+  [R: sudoers(5), per review; spike S3], so `exec sudo -n` (whose parent
+  becomes the shell's parent) and a validation in another exec channel both
+  miss the cached credential. The trailing `exit $?` is load-bearing:
+  bash execs the last command of a `-c` string implicitly, which has the
+  same effect.
 - **Verified locally [L]** (04, Appendix A, E6 and E8), sudo 1.9.15p5
   without a tty: the prelude works under dash and bash and passes the
   remaining stdin to the command; the `exec` variant fails with "sudo: a
@@ -3849,10 +4150,12 @@ exit $?
   stderr.
 - sudo's stderr is kept (never `2>/dev/null`) and classified: wrong
   password, not in sudoers, "a password is required" after a successful
-  validation, "you must have a tty" [R], sudo-rs texts [U: spike S3].
+  validation, "you must have a tty" [R], sudo-rs texts (recorded by spike
+  S3, D65).
 - `printf` must be a shell builtin so the password never appears in a
-  process argument list (dash, bash and BusyBox ash provide one [R]); the
-  probe's `command -V printf` checks it. Here-documents are not used (older
+  process argument list (dash, bash, BusyBox ash and zsh provide one; mksh's
+  is a tracked alias for `/usr/bin/printf`, spike S3); the probe's
+  `command -V printf` checks it. Here-documents are not used (older
   bash versions write them to temporary files).
 
 Fallback ladder:
@@ -3872,10 +4175,11 @@ Fallback ladder:
    (for example `timestamp_timeout=0`, verified [L]): retry once with
    `sudo -S -p '' -- <cmd>` and the password as the first stdin line; sudo
    1.9.15p5 reads exactly one line and passes the rest to the command [L];
-   sudo-rs behaviour [U: spike S3].
+   so do sudo 1.9.16p2 and sudo-rs 0.2.13 (spike S3, D65).
 5. "you must have a tty" (`requiretty`) or doas with a password: a PTY
-   channel with prompt detection, after spike S3 shows it is safe; until
-   then the access check explains the limitation.
+   channel with prompt detection, once it is shown to be safe; until then
+   the access check explains the limitation. Spike S3 recorded both
+   refusals (D65).
 6. run0: only when the probe shows it works without a password (it cannot
    read a password from a pipe [U]).
 7. polkit-granted `systemctl` verbs: no elevation, `--no-ask-password`.
@@ -3908,6 +4212,58 @@ OperationPlan {
 
 - The preview (SAF-04) renders `steps` and `hostWrites`; execution runs the
   same `steps`. No second code path builds commands.
+- **As built (M4 E09).** `KC/lib/src/operations/` holds the model.
+  - `OperationPlan` is immutable, and its `preview` hands `ActionPlanned`
+    the same step, host-write and finding lists, never copies.
+  - Steps are `ShellStep` (an argv quoted under the C locale into its
+    exact command line, `elevated` through 8.3) and `ApiStep` (method,
+    versioned path and query). `HostWriteRow` names 8.11's MVP rows.
+  - `DangerLinter` reads each shell step's argv words: the exact line
+    quotes every word behind its locale wrapper, which the linter's
+    patterns cannot see through.
+  - `confirmationTier` is 8.6's table as a pure function, raised to typed
+    for a protected target, an owned one (8.7's act-anyway) or a
+    fleet-wide action.
+  - `PlanRegistry` holds a previewed plan for 5 minutes [E] with the
+    server's link generation. A plan runs once; an expired or stale one
+    is refused.
+  - `ActionIntent` is sealed, one variant per MVP action:
+    - `KillProcess` (pid, start ticks, signal);
+    - `UnitAction`;
+    - `StartTimer`;
+    - `ContainerAction`;
+    - `RemoveContainer`;
+    - `RemoveImage`;
+    - `StackAction` (act anyway);
+    - `RedeployStack` (remove orphans).
+  - `ActionPreview` carries the typed facts the app words (D35): steps,
+    host writes, required level, runner (identity, Docker route,
+    credentials), danger findings, impact, ownership, protection reason
+    and tier.
+  - Until the planners land (E14 host, E15 Docker), the engine answers
+    `PlanAction` with `ActionRefused(notImplemented)` and `RunAction`
+    with `unknownPlan`.
+  - The admin-mode, audit, crontab and detached-operation messages of
+    M4 join v3 with the PRs that implement them (E11, E12, E14, E17),
+    rather than all at once here.
+- **As built (M4 E12a).** `operation_runner.dart` runs a confirmed plan.
+  - `RunAction` takes the plan from the registry once. The engine then
+    checks the safety policy, the confirmation (a typed phrase must equal
+    the target name) and, for an admin plan, admin mode, each a typed
+    `ActionRefused`. A refused run needs a new preview.
+  - The runner re-validates each `Revalidation` the planner listed:
+    `UnitLoaded` reads `systemctl show --property=LoadState`;
+    `ProcessStarted` reads field 22 of `/proc/<pid>/stat`;
+    `DockerTargetUnchanged` goes to the Docker planners' checker (E15).
+  - It runs the plan's own steps in order: shell steps over the link, or
+    through the admin session's executor when `elevated`, and API steps
+    through the Docker runner (E15). It stops at the first failure.
+  - It reports `ActionProgress` per step, then one `ActionFinished` with
+    typed facts: the failure, the step, its exit or HTTP status, and what
+    re-validation found.
+  - Each server's link generation counts the times its link became
+    ready, so a plan previewed before a reconnect is stale. An admin run
+    resets the inactivity clock before and after.
 - Re-validation immediately before execution: the unit still exists, the
   container ID is unchanged, the PID start time matches, the file hash
   matches (compare-and-swap for edits), the stack's config hash still
@@ -3925,6 +4281,23 @@ OperationPlan {
   `chown --reference`, `chmod --reference`, `restorecon` when SELinux
   enforces [U: ACL and label details, spike S6]).
 
+As built in M4 (E20, `app/klabautermann_app/lib/ui/actions/`), the app
+asks for one preview at a time through `OperationsController`: the
+engine's answer to `PlanAction` carries no request id, and planning
+reads the host, so answers can come out of order; the preview is modal,
+so the app never needs two. The preview is a dialog on wide windows and
+a bottom sheet below 600 dp. It shows the target, each step's exact
+command line or API request in the monospace stack with a root badge on
+elevated steps (SAF-03), the danger findings, protection, impact and
+ownership, who runs it with which credentials, and what it leaves on
+the server, all worded from the engine's typed facts (D35). Tier 1
+names the target; tier 2 enables Run and Enter only once the target's
+name is typed exactly; Escape and Cancel close it. A toast says when a
+run starts and how it ended. `ActionEntry` wraps every action control
+by its `ActionEntryPoint`, hiding it unless the server's actions are
+allowed and nothing is read-only, which one test checks for every
+point.
+
 ### 8.6 Confirmation tiers and protected targets (SAF-05, SAF-22)
 
 | Tier | Examples | Confirmation |
@@ -3940,6 +4313,31 @@ the session's own path (from `$SSH_CONNECTION` and the sshd parent of the
 session), containers publishing the SSH port or a VPN port, and user-marked
 targets (synced in `pref`, sealed removal). The impact line names the
 consequence ("drops your session", "stops 23 running containers").
+
+As built in M4 (E10, `KC/lib/src/operations/`):
+
+- `protected_targets.dart` holds the built-in unit list (with `*` globs
+  such as `wg-quick@*.service`), PID 1 and `sshd` (with OpenSSH 9.8's
+  `sshd-session` and 10.0's `sshd-auth`), `dockerd` and `containerd` by
+  `comm`. It reads the session's path from three PIDs:
+  - the sampler shells and their sshd parents, from E07's `SELF`,
+    which `SamplerSession.self` keeps and the scheduler's `samplerPids`
+    reads;
+  - the probe's `sessionParentPid`;
+  - and the SSH port from `$SSH_CONNECTION`.
+- A container is protected when it publishes that port, port 22, or a
+  VPN port (51820/udp, 1194, 41641/udp [guess list]).
+- User marks are `ServerSafety.marks` in `SetSafetyPolicy`, which stay on
+  the device until v1's `pref` records (M4 plan Q1).
+- Any protection reason raises the tier to typed. A target another
+  manager owns does the same: `ownership.dart` reads 8.7's markers
+  through `detectOwnership`.
+- `danger.dart` lints each shell step's words, and each API step as the
+  Docker CLI command that does the same, so `DELETE /volumes/x` is
+  flagged like `docker volume rm x`.
+- `impact.dart` gives the typed impact facts the app words:
+  `dropsSession`, `stopsContainers(n)`, `removesVolumes`,
+  `forcesImageInUse(n)` and `interruptsTarget`.
 
 ### 8.7 Ownership markers of other managers (DKE-10, STK-10, JOB-09)
 
@@ -4002,7 +4400,11 @@ CI.
   M3 (D05) the engine masks an inspected container's `Path` and `Args`,
   and its `Entrypoint` and `Cmd`, by the same rules, each pair read as
   one command line, and each health check's output as one argument;
-  the container list drops its command line.
+  the container list drops its command line. From M4 (E14b) every cron
+  line's command and raw text cross masked by the same rules, each read
+  as one command line, both the `cron` stream's and JOB-03's; the jobs
+  merge reads `run-parts` lines from the real commands first. Cron lines
+  have no reveal yet.
 - Reveal (M2, the Processes tab): a tap on a masked argument in a
   process's details shows it there for 30 s, and it is masked again
   sooner when the details close or the app turns inactive, as it loses
@@ -4030,6 +4432,36 @@ CI.
   events and sudo logs corroborate it, and every device and admin sees the
   same trail on the host.
 - **Not synced** (D28).
+- **As built (M4 E12b).** `KC/lib/src/audit/audit_log.dart` appends one
+  JSON line per finished run to `audit/<stem>.jsonl`. The fields:
+  - the device id, the server, the intent's kind and the target;
+  - the steps as the preview showed them, through `SecretRedactor`;
+  - the tier and the outcome, with the typed failure, the step and its
+    exit or HTTP status;
+  - the start and end times.
+
+  The file name follows 4.10's rule, now shared with the capability cache
+  as `serverFileStem`. An id that names no file keeps its records in
+  memory.
+  - Records older than 90 days [E] are pruned at engine start.
+  - A line that does not decode marks the file damaged: it is copied
+    aside as `.corrupt-<time>` and rewritten with the lines that do.
+  - Without exclusive access to the support directory the log lives in
+    memory, and `EngineReady.auditInMemory` tells the app.
+  - `AuditQuery(serverId, before, limit)` answers newest first with
+    `AuditRecords(records, more)`.
+  - The log stores redacted steps only, so E24's export has nothing
+    secret to include.
+
+As built in M4 (E24), the server header's Safety menu opens Activity: a
+sortable table of each record's time, target, action, confirmation and
+result, newest first, whose rows open the run's redacted steps and how
+it ended; Show older reads the next page. The table has no device
+column, since the log is this device's own (D28). Copy puts the records
+on the clipboard as JSON lines, as stored; the include-secrets toggle
+of SAF-07 is not offered, because the log holds no secret to include,
+and saving to a file waits for a file plugin. When the engine keeps the
+log in memory, the page says it lasts only for this run.
 
 ### 8.11 Host write inventory (D27)
 
@@ -4604,13 +5036,16 @@ shows there.
 | `EnrollSync(baseUrl, username, password, encryptionPassphrase)`, `RunSyncRound` | `CatalogReplaced(entries)`, `SyncStatus(phase, operation, account, failure, passphraseUnverified)` |
 | `AnswerKeystore(requestId, result)` (D62) | `KeystoreRequest(requestId, operation)`: the engine asks the app for the OS keystore |
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
-| `ConfirmEndpoints(ids)` (K41, 4.7), `SetMonitorSet(ids)` | `CatalogReplaced(entries)` with each synced entry's `endpoint`, after `RequestRejected` when a pin could not be saved; `EndpointChanged(serverId)` when a sync changes a confirmed endpoint |
+| `ConfirmEndpoints(ids)` (K41, 4.7) | `CatalogReplaced(entries)` with each synced entry's `endpoint`, after `RequestRejected` when a pin could not be saved; `EndpointChanged(serverId)` when a sync changes a confirmed endpoint |
+| `SetMonitorSet(ids)` (FL-21, K30) | no event: it changes what samples; `RequestRejected` naming the ids it skipped (outside the fleet or not eligible), or for more than 10 ids, which leaves the last set |
 | `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status), `ConnectRejected(serverId, reason)` (no config to dial with, D61, or an endpoint not confirmed, 4.7) |
 | `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `RefreshSubscription(serverId, subscriptionId)` (a phone's pull to refresh, PLT-02), `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
 | `DockerQuery(serverId, queryId, query)`, `DockerWatch(serverId, watchId, lists, statsFor)`, `DockerUnwatch(serverId, watchId)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason)`, `DockerListChanged(serverId, list, payload, at, fullRelist)` |
-| `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(preview)`, `ActionProgress`, `ActionFinished` |
+| `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(planId, preview)`, `ActionProgress`, `ActionFinished`, `ActionRefused(reason, intent or planId)` |
+| `AuditQuery(serverId, before, limit)` (8.10, M4) | `AuditRecords(serverId, records, more)` |
+| `SetSafetyPolicy(policy)`, `SetAdminMode(serverId, enabled)` (8.2, M4) | `AdminModeState(serverId, phase, expiresAt, retry, failure, ended)`; a refused plan's `ActionRefused` names `observeOnly` or `readOnly` |
 | `AnswerPrompt(promptId, answer)` (trust, responses or cancel, secret) | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
 | `SetAppActivity(activity)` (foreground or background; D34, D45) | no event: it changes what runs |
 | none: the engine's probe sweeps (5.12) | `Reachability(serverId, status)` (FL-04) |
@@ -5148,9 +5583,10 @@ the engine in `engine_isolate.dart` beside it):
   carries a sealed payload of `klabautermann_docker`'s plain-data
   models instead of decoded JSON: the list drops each container's
   command line, and one container crosses as `ContainerDetails`, whose
-  `Path` and `Args`, `Entrypoint` and `Cmd` (each pair read as one
-  command line) and health-check output the engine masks with the
-  process-argument rules of 8.9. A query that reads nothing is answered
+  `Args` (read as the words after the program `Path`, which crosses as
+  it is), `Entrypoint` and `Cmd` (read as one command line) and
+  health-check output the engine masks with the process-argument rules
+  of 8.9. A query that reads nothing is answered
   with a typed failure (not in the fleet, no link, no probe answer yet,
   endpoint failed, too many waiting, no container named, gone, daemon
   error, connection failed, cancelled), so every query gets one result;
@@ -5174,7 +5610,8 @@ the engine in `engine_isolate.dart` beside it):
   while a watch holds and the engine did not answer or the link failed
   under the ladder, until a retry after 5 s doubling to 2 min [E]. On
   relay ranks the pool holds one connection, in a short-action slot
-  (5.2), and closes it after 30 s without a query [E]. The
+  (5.2), and closes it after 30 s without a query or a watch's read
+  [E], so a watch keeps it open. The
   endpoint override is not in the protocol yet.
 - **Version 3 (M3 Docker watches).** Watches joined version 3 the same
   way (D06), and the opaque `DockerEvent` row is gone. `DockerWatch`
@@ -5192,8 +5629,9 @@ the engine in `engine_isolate.dart` beside it):
   watch's first read, or one after the stream was lost for over 60 s
   or could not resume. As built, the engine opens one `/events` stream
   per server while any watch holds, on a connection of its own (on a
-  relay in a follower slot; without one, or in low-session mode, a
-  full re-list marked `fullRelist` every 15 s [E] instead), filtered to
+  relay in a follower slot; on a relay without one, or in low-session
+  mode, a full re-list marked `fullRelist` every 15 s [E] instead,
+  while streamlocal always opens it), filtered to
   container, image, volume and network events, and lists only once its
   head has arrived. Container actions that change no list (`exec_*`,
   `attach`, `resize`, `top`, archive and export) are skipped. Each
@@ -5205,12 +5643,15 @@ the engine in `engine_isolate.dart` beside it):
   endpoint after 1 s, doubling to 30 s [E]; one whose endpoint drops
   resumes over the next. Either resumes with `since` at the last
   event's second when the stream was lost 60 s ago or less on the same
-  socket, and re-lists in full otherwise. Stats are one-shot reads of
-  the ids on screen that the list does not know as stopped, every 5 s
-  [E] after the last round, at most 4 at once on streamlocal and one
-  at a time on a relay or in low-session mode, the CPU % taken against
-  the previous read, so
-  a container's first read has none. The last unwatch, Disconnect,
+  socket, and re-lists in full otherwise. A resumed stream re-lists
+  too, though not as a fresh list: the daemon replays from memory,
+  which a daemon restarted meanwhile has lost along with the
+  containers it stopped. Stats are one-shot reads of the ids on screen
+  that the list does not know as stopped, every 5 s [E] after the last
+  round, at most 4 at once on streamlocal and one at a time on a
+  relay or in low-session mode, the CPU % taken against the previous
+  read, so a container's first read has none, nor the first after a
+  failed read or a gap over 60 s. The last unwatch, Disconnect,
   fleet removal and an endpoint change end it all.
 - **Version 3 (M3 container logs).** Container logs joined version 3
   the same way (D07), as a log source rather than Docker rows (M7):
@@ -5297,6 +5738,20 @@ the engine in `engine_isolate.dart` beside it):
   such a key, and URL credentials in both; a secret plain scalar
   continued on later lines and flow mappings are not masked. The text
   is neither cached nor logged.
+- **Monitor set (M2, K30).** `SetMonitorSet(ids)` replaces FL-21's set
+  without a shape change. The engine keeps only the fleet servers that
+  `monitorEligibilityOf` allows (4.3 step 4) and it can dial, subscribes
+  each one's `overview` under a subscription id of its own
+  (`engine:monitorSet`, which the app's surface ids never take) and asks
+  the link supervisor for an unattended connect, so the scheduler samples
+  it while the app is in the foreground (6.4) and 5.12's cap and jitter
+  apply. A server that leaves the set loses that subscription, and its
+  link unless a view holds one (a `Connect` without its `Disconnect`); a
+  view's `Disconnect` leaves a monitored server's ready link open, and
+  of one with no link yet it gives up the view's attempt, with any
+  prompt, and dials unattended again. A server that leaves the fleet or
+  stops being eligible (a sync changed its endpoint) leaves the set, and
+  the app's next set follows the fleet it hears.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period
@@ -5392,6 +5847,18 @@ the engine in `engine_isolate.dart` beside it):
   General, Appearance, Sync, Servers, Docker, Safety, Alerts), a route on
   mobile. The three native settings-window runners are copied and renamed
   with a ledger entry (D32).
+- As built in M4 (E26, owner question Q3): About Klabautermann is a
+  registry command on every desktop, first in the macOS application menu
+  in place of AppKit's About panel, which shows `CFBundleName` (an
+  identity, 04 §12.3), and in a Help menu on Linux and Windows. It opens
+  Material's About dialog with the title "Klabautermann (preview)", the
+  version and the Unlicense line; Settings > General has an about row
+  that opens it on every platform. The version comes from
+  `package_info_plus`, read once in `main`; the settings window's engine
+  has no plugins, so the link's snapshot carries it. Tests tie the title
+  and the `.deb` description to `kPreviewLabel`
+  (`app/klabautermann_app/lib/app_identity.dart`), and M7 drops the label
+  in one change (11.7).
 
 ### 10.3 Fleet view
 
@@ -5419,10 +5886,12 @@ link's word is announced once, connecting, authenticating and waiting to
 reconnect counting as one attempt; samples and probe answers are not.
 Where the platform takes no announcements (Android), the latest change is
 the label of a live region around the list, as in Flutter's date picker.
-Until the monitor set (FL-21) exists, a server counts as monitored
-while the app holds an `overview` or `core` reading for it in this engine
-run, and rows subscribe nothing themselves; with links off, rows show
-reachability only. The bar reads CPU busy, used out of total memory, and
+A row shows the bar while the app holds an `overview` or `core`
+reading for its server in this engine run, and rows subscribe nothing
+themselves: as built in M2 (K30), the engine samples `overview` for the
+monitor set (FL-21, 4.3 step 4), so a monitored server's row fills
+without a view, and a server a view has open shows its readings too
+until they go stale. With links off, rows show reachability only. The bar reads CPU busy, used out of total memory, and
 the root file system's `df` capacity, warns at 80 % and turns critical at
 90 % until OV-11's thresholds, and is stale once the link is down or the
 reading is older than twice its stream's slowest 6.4 cadence (60 s for
@@ -5494,8 +5963,27 @@ tab:
   notice heads the tab whatever the rows say; docker-group advice adds
   its own warning naming the rootless alternative, and 8.4's admin-mode
   alternative joins it once admin mode exists.
-- The Docker tab reads "arrives with Docker support" over the detected
-  runtime (D54), read-only, on every host until M3.
+- The Docker tab follows its server's Docker endpoint instead of the
+  probe (as built in M3, D12, `app/klabautermann_app/lib/ui/docker/`):
+  "waiting for the connection" or "looking for the Docker engine" while
+  the endpoint waits or resolves, 5.9's exact reason with the Access
+  link and a retry once it failed, and the tab itself once it is ready.
+  The engine reports an endpoint only after a `DockerQuery` names the
+  server, so the app's Docker controller sends one engine query each
+  time a server's link comes up; the engine follows the link from
+  there. The tab heads with 8.4's notice until it is dismissed once on
+  the device (`settings.json`), then the engine strip (DKE-01: the
+  engine as the API names it, the negotiated API version, the product
+  and version, and the host's OS and architecture, read while the tab
+  shows), over the Containers, Images and Stacks sub-tabs, whose bodies
+  land with their panels. As built in D13
+  (`ui/docker/containers_panel.dart`), the Containers sub-tab holds one
+  container and stats watch per server while it shows, replaced under
+  its id as the running rows on screen change (CST-01) and ended when
+  it hides; it groups by the compose project label rather than the
+  stacks list, whose source checks would run compose on the host, and
+  greys stats older than 20 s. The list carries no sizes until a query
+  asks for `size=1`.
 
 As built in M2 (`app/klabautermann_app/lib/ui/system_panel.dart`), the
 System tab shows SYS-01's identity, BOOT-01's uptime and boot time,
@@ -5529,15 +6017,22 @@ the link state, the coverage chip, the detected runtime and, under
 them, why a closed link failed when the engine classified it: each
 failure kind of 10.1 in a sentence that says what to do, 5.3's client
 limitations in their own words, and PLT-04's background line on an iOS
-or Android phone's screen (10.5). The transport label, privilege
-badges, admin mode and the read-only and low-session indicators come
-with their subsystems.
+or Android phone's screen (10.5). As built in M3 (D12), it also names
+the Docker transport in every mode (5.9, E4): waiting, looking for a
+route, the rank's label once ready, or no route with its reason; it
+carries 8.4's badge for the engine the route reaches (a socket the
+probe cannot classify reads as root-equivalent) and the low-session
+indicator while the endpoint reports it. Once a route is found, the
+runtime is the engine the API names there (M13), without the Docker
+path caveat. Admin mode, the sudo relay's badge and the read-only
+indicator come with their subsystems.
 The state resolves through `ghost_servers`' indicator under the rail
 rule, as the server's row does, as a dot, an icon and a word, with
 the link's own word where the indicator shows none; the kit keeps its
 dot painter private, so the header draws the indicator's dot itself.
-The chip reads "T0: sampled only while open" until FL-21's monitor set
-exists, and opens the coverage sheet; it avoids "read only", which the
+The chip reads "T0: sampled only while open", and opens the coverage
+sheet; K30's monitor set left it as it is, since a monitored server too
+is read only while the app is open, though not only while its view is; it avoids "read only", which the
 header's read-only indicator means. The runtime is the access
 check's engines over the probe's profile, as the Access tab lists
 them, with its caveat that Podman can also answer on Docker's socket
@@ -5895,6 +6390,22 @@ the shared theme extensions and provides theme editing (the editable
 palette) and presets in the preview. v1: paste from Séance and Poltergeist
 (same JSON keys).
 
+As built in M4 (E25), the Appearance tab hosts `ghost_theme`'s
+`GhostAppearanceSection` (F4b PR 3, E05) with Klabautermann's style and
+an ARB adapter (`KlabautermannAppearanceStrings`): presets, the mode,
+every colour slot, the interface font, the corners, copy and paste of the
+theme JSON, and reset. It shows no terminal section and no installed-font
+picker. Each edit goes through `AppearanceSettings.setAppearance`: the
+app's controller applies it, repaints and saves the palette and mode
+under `klabautermann.appearance` (the M1 shape, which already held the
+whole palette, so nothing new needs reading). The desktop settings window
+sends the same edit as the `setAppearance` link method, and the snapshot
+that comes back re-themes the window. A change the app does not take
+puts the editor back on the app's appearance; one it takes but cannot
+save stays and says so. The theme mode switch remains `setMode` for any
+caller outside the editor. Pasting a sibling's theme keeps the shared
+codec's lenient reading; v1 adds nothing beyond it.
+
 ### 10.10 Localization and accessibility
 
 - ARB and `gen-l10n` from the first commit with the shared contract scanner
@@ -5943,6 +6454,38 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
 | Helper and alert delivery (v1.x, D42) | Rust unit tests of `klabautermann-inbox` and `klabautermann-notify` (format v1 validation, credential-file mode refusal, exit statuses per HTTP answer); cross-language vectors: blobs sealed in Rust open with the Dart sealing under the alert domain and vice versa, and never under `seance/v1/inbox/`; app-side fetch, validation, replay filter, an item fetched again behind a stopped cursor left on the server, two devices merging one status record, wrong-server rejection, acknowledgement and deletion against a fake inbox; end to end on the fixture host: install with hash check, a real deposit to a sync server, fetch, acknowledge, delete, revoke (exit status 2), spool fallback, uninstall leaving nothing | `klabautermann/rust` tests, `klabautermann_host/test`, `klabautermann_core/test`, integration, CI Rust job |
 | Companion parity (M9) | The shared fixture corpus through the Dart parsers and rule evaluator and through the Rust companion; identical parsed results and rule verdicts required (9.4) | `klabautermann_host/test/fixtures`, `klabautermann/rust` companion tests, CI Rust job |
 | Manual checklist | iOS background disclosure and return banner; Android battery and data use; macOS keychain prompts; RHEL 8, Ubuntu 26.04 (sudo-rs) and a Synology host | `klabautermann/docs/` |
+
+As built in M3 (D01), `klabautermann_docker/tool/capture_api.dart`,
+run by `test/integration/capture.sh` through `capture_docker_api.sh`,
+records the Docker API corpus from rootful daemons in privileged,
+digest-pinned containers: Docker 20.10.24 (API 1.41), 25.0.5 (1.44),
+29.0.4 (1.52) and 29.7.2 (1.55, the newest release at that maximum;
+29.8 serves 1.56), and Podman 5.8.7's compat service (1.44). It seeds
+each daemon through the API, then keeps every response's raw bytes,
+chunked framing included, with a manifest and provenance, in
+`api-1.41/`, `api-1.44/`, `api-1.52/`, `api-1.55/` and `api-podman/`.
+CI's capture step records them again and fails on a structural
+difference (exchanges, statuses, content types, header names, JSON key
+paths). The recordings settle three notes: Docker 20.10 and Podman send
+logs without a `Content-Type` (5.6), a one-shot `precpu_stats` is zeroed
+(5.6), and Podman answers versioned paths outside its range instead of
+refusing them, so the client-side refusal of 5.8 is the only one there.
+Capturing also showed that Podman 5.8's log follow sometimes sends one
+line as two stdcopy frames, each with its own `timestamps=1` prefix,
+and that it returned no lines for a `since` equal to the last lines'
+timestamp, where Docker's `since` is inclusive (5.6). Rootless daemons
+and real hosts are not recorded.
+
+As built in M3 (D02), `RecordedDaemon` in `klabautermann_docker`'s
+`testing.dart` replays a corpus to the real HTTP client, whole or one
+byte at a time, and `recorded_api_test.dart` runs every directory
+through negotiation, refusals, the typed endpoints and the 5.8 gates.
+Replay showed three more daemon facts. Podman's 1.44 compat layer
+sends the pre-1.52 legacy event fields as Docker 1.44 does. Podman's
+`/system/df` lists an image once per name (tag and digest reference),
+so its image count can exceed `/images/json`'s; the summary counts
+images from the list. And an idle container's CPU counter can stand
+still between two samples, which now reads as 0 % instead of unknown.
 
 ### 11.2 Cross-app regression tests added by this plan
 
@@ -6066,6 +6609,16 @@ GHCR package starts private (06), and `fixture-images.yml` stays as it
 is. The Docker services start with the others rather than under a
 `docker` profile.
 
+As built in M3 (D11), six negative variants of the Docker host,
+`neg-nostreamlocal`, `neg-disableforwarding`, `neg-notcp`,
+`neg-permitopen`, `neg-maxsessions2` and `neg-restrict` on 127.0.0.1
+ports 2245 to 2250, share its image, accounts and socket. The first
+five put their setting ahead of the common config's `Include`;
+`neg-restrict` runs the Docker host's own config and signs in with the
+run's keys behind `restrict` (`authorized_keys.restrict`, which `run.sh`
+writes). The claim above that the common config's `AllowTcpForwarding
+no` refuses streamlocal holds on OpenSSH 10.6 (5.3).
+
 As built in M3 (D21), `klabautermann_core/test/integration/
 docker_engine_test.dart` (tags `integration` and `docker`, so `run.sh`
 runs it with the fixture suites) drives the real engine in its isolate,
@@ -6104,6 +6657,17 @@ The run settles two [U]s, Compose v5.6's `config --hash '*'` flag form
 (7.16) and one-shot `precpu_stats` being zero (5.6), and shows that
 dind 29.9's containerd image store lists a dangling image with no
 `RepoTags`, which `ImageSummary.isDangling` reads as dangling.
+
+As built in M4 (E27), a `registry` service (Distribution 3.0.0, pinned by
+digest) serves the Compose network only: it publishes and exposes
+nothing, and dind trusts it, and only it, over plain HTTP
+(`--insecure-registry=registry:5000`). `check_docker_exposure.dart`
+rejects a registry that publishes a port or leaves the Compose network,
+and any other insecure registry. `seed_docker.sh` pushes the busybox
+image as `registry:5000/klab/app:1` and seeds the mutation suites'
+targets: the stacks `redeploy`, `orphans` (whose `old` service leaves
+its file after it starts) and `managed` (`coolify.managed=true`), and a
+container `ssh-port` publishing port 22 inside dind, a protected target.
 
 ### 11.4 Performance budgets (gated from M2)
 

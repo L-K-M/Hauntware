@@ -2,12 +2,16 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/app.dart';
+import 'package:klabautermann_app/controllers/admin_controller.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
+import 'package:klabautermann_app/controllers/docker_notice_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/controllers/operations_controller.dart';
 import 'package:klabautermann_app/controllers/prompt_controller.dart';
+import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/controllers/sync_controller.dart';
 import 'package:klabautermann_app/services/settings_window/settings_window_link.dart';
 import 'package:klabautermann_app/services/ssh_config_source.dart';
@@ -32,7 +36,10 @@ final class AppHarness {
     required this.appearance,
     required this.coverage,
     required this.announcements,
+    required this.dockerNotice,
     required this.sync,
+    this.admin,
+    this.operations,
   });
 
   final FakeEngineClient engine;
@@ -42,7 +49,10 @@ final class AppHarness {
   final AppearanceController appearance;
   final CoverageController coverage;
   final AnnouncementController announcements;
+  final DockerNoticeController dockerNotice;
   final SyncController sync;
+  final AdminController? admin;
+  final OperationsController? operations;
 
   void dispose() {
     fleet.dispose();
@@ -51,7 +61,10 @@ final class AppHarness {
     appearance.dispose();
     coverage.dispose();
     announcements.dispose();
+    dockerNotice.dispose();
     sync.dispose();
+    admin?.dispose();
+    operations?.dispose();
   }
 }
 
@@ -71,7 +84,12 @@ final class AppHarness {
 /// [syncStoreIssues] what it reported about its sync files. [coverage]
 /// replaces a controller whose first-run card was
 /// already dismissed, so the card shows only in the tests that want it.
-/// [announcements] replaces an in-memory A11Y-15 switch that is on.
+/// [announcements] replaces an in-memory A11Y-15 switch that is on, and
+/// [dockerNotice] an in-memory SAF-08 notice not yet dismissed.
+/// [appVersion] stands in for what `readAppVersion` read. [safety], which
+/// the caller disposes, adds the safety preferences; none leaves the
+/// Safety menu and notices out. [admin] adds the admin mode controller
+/// over the fake engine, and [operations] the operations one.
 /// [linkGrace] defaults to zero, which disconnects a server as its last
 /// view closes: the tree unmounts at the end of every test, and the test
 /// binding fails a test that leaves a grace timer pending.
@@ -83,6 +101,10 @@ Future<AppHarness> pumpApp(
   AppearanceController? appearance,
   CoverageController? coverage,
   AnnouncementController? announcements,
+  SafetyController? safety,
+  bool admin = false,
+  bool operations = false,
+  DockerNoticeController? dockerNotice,
   DeviceSettingsIssue? settingsIssue,
   ImportStoreIssue? importStoreIssue,
   InstanceLockUnavailable? instanceLockIssue,
@@ -90,6 +112,7 @@ Future<AppHarness> pumpApp(
   List<SyncStoreIssue> syncStoreIssues = const [],
   OpenSettingsWindow? openSettingsWindow,
   ValueListenable<bool>? toolbarBand,
+  String? appVersion,
   Duration linkGrace = Duration.zero,
 }) async {
   tester.view.physicalSize = size;
@@ -105,7 +128,10 @@ Future<AppHarness> pumpApp(
     appearance: appearance ?? AppearanceController(),
     coverage: coverage ?? CoverageController(firstRunCardDismissed: true),
     announcements: announcements ?? AnnouncementController(),
+    dockerNotice: dockerNotice ?? DockerNoticeController(),
     sync: SyncController(engine, account: syncAccount),
+    admin: admin ? AdminController(engine) : null,
+    operations: operations ? OperationsController(engine) : null,
   );
   addTearDown(() async {
     harness.dispose();
@@ -120,6 +146,10 @@ Future<AppHarness> pumpApp(
       appearance: harness.appearance,
       coverage: harness.coverage,
       announcements: harness.announcements,
+      safety: safety,
+      admin: harness.admin,
+      operations: harness.operations,
+      dockerNotice: harness.dockerNotice,
       sync: harness.sync,
       settingsIssue: settingsIssue,
       importStoreIssue: importStoreIssue,
@@ -127,6 +157,7 @@ Future<AppHarness> pumpApp(
       instanceLockIssue: instanceLockIssue,
       openSettingsWindow: openSettingsWindow,
       toolbarBand: toolbarBand,
+      appVersion: appVersion,
     ),
   );
   await tester.pumpAndSettle();
