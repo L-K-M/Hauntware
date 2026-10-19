@@ -160,6 +160,8 @@ void main() {
     final cron = parseCron(
       '== crontab_meta ==\nrc=0\n'
       '== crontab ==\n*/5 * * * * env API_TOKEN=abc123 /opt/push\n'
+      '30 4 * * * PGPASSWORD=Hunter2 pg_dump db\n'
+      '45 4 * * * --password=Hunter2 run\n'
       '== etc_crontab ==\n'
       '17 * * * * root run-parts /etc/cron.hourly\n'
       '== cron_d ==\n\n'
@@ -172,6 +174,10 @@ void main() {
     expect(result.cron.jobs.first.raw, isNot(contains('abc123')));
     final row = result.jobs.whereType<CronJobEntry>().first;
     expect(row.job.command, isNot(contains('abc123')));
+    // A secret leading the command is masked as well as one after it.
+    for (final job in result.cron.jobs) {
+      expect('${job.command} ${job.raw}', isNot(contains('Hunter2')));
+    }
     expect(
       result.jobs.whereType<PeriodicJobEntry>().single.driverIds,
       hasLength(1),

@@ -41,6 +41,10 @@ final class _Panel {
   /// Whether the panel's tab shows.
   final ValueNotifier<bool> visible;
 
+  /// The server the panel shows, which a desktop selection changes in
+  /// place.
+  final server = ValueNotifier(_serverId);
+
   /// What the monitoring clock reads.
   DateTime now = jobsNow;
   int _seq = 0;
@@ -142,6 +146,7 @@ Future<_Panel> _pump(
   final monitoring = MonitoringController(engine, now: () => panel.now);
   addTearDown(() async {
     shown.dispose();
+    panel.server.dispose();
     monitoring.dispose();
     await engine.close();
   });
@@ -164,10 +169,13 @@ Future<_Panel> _pump(
           ),
     ValueListenableBuilder(
       valueListenable: shown,
-      builder: (context, visible, _) => JobsPanel(
-        monitoring: monitoring,
-        serverId: _serverId,
-        visible: visible,
+      builder: (context, visible, _) => ValueListenableBuilder(
+        valueListenable: panel.server,
+        builder: (context, serverId, _) => JobsPanel(
+          monitoring: monitoring,
+          serverId: serverId,
+          visible: visible,
+        ),
       ),
     ),
     size: size,
@@ -1080,6 +1088,35 @@ void main() {
       );
       expect(find.text("alice's crontab"), findsNothing);
       expect(find.text('Other users'), findsNothing);
+
+      // Back on, the tab starts from the streams' rows again.
+      await panel.emit(
+        tester,
+        const AdminModeState(_serverId, AdminModePhase.on),
+      );
+      expect(find.text("alice's crontab"), findsNothing);
+    });
+
+    testWidgets('another server shows none of the last one\'s crontabs', (
+      tester,
+    ) async {
+      final panel = await _pump(tester, safety: managed);
+      await panel.all(tester);
+      for (final id in [_serverId, 'srv-2']) {
+        await panel.emit(tester, AdminModeState(id, AdminModePhase.on));
+      }
+      await tester.tap(find.text('Other users'));
+      await tester.pumpAndSettle();
+      final first =
+          panel.engine.sentOfType<ReadUserCrontabs>().single
+              as ReadUserCrontabs;
+
+      // The desktop selection moves while the read is under way.
+      panel.server.value = 'srv-2';
+      await tester.pumpAndSettle();
+      await panel.emit(tester, others(first.requestId));
+      expect(find.text("alice's crontab"), findsNothing);
+      expect(find.text("Reading other users' crontabs."), findsNothing);
     });
 
     testWidgets('a failed read says why', (tester) async {

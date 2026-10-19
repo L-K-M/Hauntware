@@ -3065,9 +3065,12 @@ avoid 1 and 2, which sudo and the shell use, and 126 and 127.
 
 As built in M4 (E14,
 `klabautermann_core/lib/src/operations/plans/host_plans.dart`),
-planning a kill reads the process over the link first: its start ticks, which must still match the intent's, then
-`HostCommands.processFacts`, its real uid and `comm`. The plan elevates
-only when the uid differs from the probe's login uid, names the target
+planning a kill reads the process over the link first: its start
+ticks, which must still match the intent's, then
+`HostCommands.processFacts`, the owner of its `/proc` entry and its
+`comm`. The plan elevates only when the owner differs from the probe's
+login uid (a non-dumpable process, such as `ssh-agent`, is owned by
+root there, so killing one's own elevates too), names the target
 by its `comm` for a typed confirmation, and drops the session when the
 PID is on its path. The runner reads the guarded kill's exits 3 and 4
 as re-validation failures (process gone, PID reused), not as a failed

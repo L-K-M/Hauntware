@@ -37,8 +37,10 @@ SafetyController safetyFromSettings(
 );
 
 /// The policy [json] holds, leniently: anything unreadable reads as the
-/// safe default (management off, not read-only, the default expiry), so a
-/// damaged file can only take actions away, never grant them.
+/// safe default (management off, the default expiry), so a damaged file
+/// can only take actions away, never grant them. A read-only switch that
+/// is there but not a bool reads as on: as off it would hand actions
+/// back.
 SafetyPolicy decodeStoredSafety(Map<String, Object?>? json) {
   final minutes = json?[_SafetyKey.adminExpiryMinutes.name];
   final expiry = minutes is int ? Duration(minutes: minutes) : null;
@@ -51,7 +53,7 @@ SafetyPolicy decodeStoredSafety(Map<String, Object?>? json) {
     }
   }
   return SafetyPolicy(
-    globalReadOnly: json?[_SafetyKey.globalReadOnly.name] == true,
+    globalReadOnly: _readOnly(json?[_SafetyKey.globalReadOnly.name]),
     servers: Map.unmodifiable(servers),
     adminExpiry: kAdminExpiryChoices.contains(expiry)
         ? expiry!
@@ -78,12 +80,19 @@ Map<String, Object?> encodeServerSafety(ServerSafety safety) => {
 };
 
 /// The inverse of [encodeServerSafety], as leniently as
-/// [decodeStoredSafety].
-ServerSafety decodeServerSafety(Map<String, Object?> json) => ServerSafety(
-  management: json[_ServerKey.management.name] == true,
-  readOnly: json[_ServerKey.readOnly.name] == true,
-  marks: switch (json[_ServerKey.marks.name]) {
-    final List<Object?> marks => Set.unmodifiable(marks.whereType<String>()),
-    _ => const {},
-  },
-);
+/// [decodeStoredSafety]: a damaged read-only switch turns management off.
+ServerSafety decodeServerSafety(Map<String, Object?> json) {
+  final readOnly = json[_ServerKey.readOnly.name];
+  final damaged = readOnly != null && readOnly is! bool;
+  return ServerSafety(
+    management: !damaged && json[_ServerKey.management.name] == true,
+    readOnly: readOnly == true,
+    marks: switch (json[_ServerKey.marks.name]) {
+      final List<Object?> marks => Set.unmodifiable(marks.whereType<String>()),
+      _ => const {},
+    },
+  );
+}
+
+/// A stored read-only switch: off only when absent or false.
+bool _readOnly(Object? value) => value != null && value != false;
