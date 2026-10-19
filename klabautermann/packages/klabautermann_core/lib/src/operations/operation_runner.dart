@@ -9,6 +9,7 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
 import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
 import 'package:seance_core/seance_core.dart'
     show
+        ChannelOpenException,
         ElevationException,
         RemoteCommandException,
         RemoteCommandResult,
@@ -117,7 +118,11 @@ final class OperationRunner {
     final serverId = plan.intent.serverId;
     final link = _linkFor(serverId);
     if (link == null) return failed(ActionFailure.noLink);
-    if (plan.requiredLevel == RequiredLevel.admin && session == null) {
+    // An elevated step needs the session whatever level the plan names.
+    final elevates =
+        plan.requiredLevel == RequiredLevel.admin ||
+        plan.steps.any((step) => step is ShellStep && step.elevated);
+    if (elevates && session == null) {
       return failed(ActionFailure.elevationRefused);
     }
 
@@ -208,6 +213,9 @@ final class OperationRunner {
     } on DockerException {
       return failed(ActionFailure.transport);
     } on DockerEndpointUnavailable {
+      return failed(ActionFailure.transport);
+    } on ChannelOpenException {
+      // The link refused the channel, at its session limit or closing.
       return failed(ActionFailure.transport);
     }
     return ActionFinished(planId: planId, outcome: ActionOutcome.succeeded);

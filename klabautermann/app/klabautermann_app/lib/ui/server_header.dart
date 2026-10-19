@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:ghost_servers/ghost_servers.dart';
 import 'package:ghost_theme/ghost_theme.dart' show GhostChrome;
@@ -10,6 +11,7 @@ import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import 'access/access_panel.dart' show engineNameText;
 import 'coverage.dart' show ServerCoverageChip;
+import 'docker/docker_endpoint.dart';
 import 'fleet_rail.dart' show linkFailureText, linkStatusWord;
 import 'fleet_row_state.dart';
 import 'fleet_rows.dart' show fleetStatusIcon, fleetStatusStrings;
@@ -18,8 +20,14 @@ import 'server_safety.dart';
 
 /// The server header of 03 §10.2 and §10.5: the server's name, unless the
 /// phone's app bar carries it, its link state, the coverage chip, the
-/// detected runtime, and why the link failed when the engine could tell,
-/// a client limitation (03 §5.3) included.
+/// runtime, the Docker transport label in every mode (03 §5.9, E4) with
+/// SAF-08's engine badge and the low-session indicator, and why the link
+/// failed when the engine could tell, a client limitation (03 §5.3)
+/// included.
+///
+/// Once the Docker endpoint names a route, the runtime is the engine the
+/// API names there (M13), without the caveat that Podman may answer on
+/// Docker's path; before, it is the probe's detected runtime.
 ///
 /// The state resolves through `ghostServerIndicator` under the rail rule,
 /// as the server's fleet row does, so both read the same: a dot, an icon
@@ -42,7 +50,7 @@ class ServerHeader extends StatelessWidget {
   /// rebuilds the header when it notifies.
   final FleetController fleet;
 
-  /// The probe's profile, for the runtime.
+  /// The probe's profile, for the runtime, and the Docker endpoint.
   final MonitoringController monitoring;
 
   final bool showTitle;
@@ -83,24 +91,12 @@ class ServerHeader extends StatelessWidget {
             AdminModeChip(serverId: server.id),
           ],
         ),
-        Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            ServerCoverageChip(fleet: fleet),
-            // Re-read on every build: a server that left the fleet and came
-            // back has a new profile listenable (SYN-08).
-            ValueListenableBuilder<HostProfile?>(
-              valueListenable: monitoring.profileFor(server.id),
-              builder: (context, profile, _) => Text(
-                detectedRuntimeText(AppLocalizations.of(context), profile),
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ],
+        _EngineFacts(
+          // Re-read on every build: a server that left the fleet and came
+          // back has new listenables (SYN-08).
+          profile: monitoring.profileFor(server.id),
+          endpoint: monitoring.docker.endpointFor(server.id),
+          leading: ServerCoverageChip(fleet: fleet),
         ),
         for (final message in [
           ?failure,
@@ -127,6 +123,65 @@ class ServerHeader extends StatelessWidget {
       ],
     );
   }
+}
+
+/// [leading], then the runtime, the Docker transport label, SAF-08's
+/// badge for the engine a route reaches and the low-session indicator,
+/// wrapping at large text.
+class _EngineFacts extends StatelessWidget {
+  const _EngineFacts({
+    required this.profile,
+    required this.endpoint,
+    required this.leading,
+  });
+
+  final ValueListenable<HostProfile?> profile;
+  final ValueListenable<DockerEndpointState?> endpoint;
+  final Widget leading;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: Listenable.merge([profile, endpoint]),
+    builder: (context, _) {
+      final l10n = AppLocalizations.of(context);
+      final theme = Theme.of(context);
+      final style = theme.textTheme.labelMedium?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
+      );
+      final state = endpoint.value;
+      final route = state?.route;
+      return Wrap(
+        spacing: 12,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          leading,
+          Text(
+            route == null
+                ? detectedRuntimeText(l10n, profile.value)
+                : l10n.overviewHeaderRuntime(dockerEngineText(l10n, route)),
+            style: style,
+          ),
+          Text(dockerTransportText(l10n, state), style: style),
+          if (route != null)
+            DockerRootBadge(route: route, user: profile.value?.user),
+          if (state?.lowSession ?? false)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              spacing: 4,
+              children: [
+                Icon(
+                  Icons.low_priority,
+                  size: 16,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                Flexible(child: Text(l10n.dockerLowSession, style: style)),
+              ],
+            ),
+        ],
+      );
+    },
+  );
 }
 
 /// The most of its surface's height the server header takes; past it, it

@@ -4,7 +4,9 @@ import 'dart:math' show max;
 import 'package:meta/meta.dart';
 import 'package:seance_protocol/seance_protocol.dart';
 
-import '../hostkey/tofu.dart';
+import '../catalog/host_key_mutations.dart';
+import '../catalog/pin_verdicts.dart';
+import '../catalog/record_coordinator.dart' show HostKeyConflict;
 import '../inbox/inbox_service.dart';
 import '../inbox/inbox_stores.dart';
 import '../store/stores.dart';
@@ -28,7 +30,18 @@ const String _syncLoggerName = 'seance.sync';
 /// without precise dirty-tracking.
 class SyncCoordinator {
   final ConfigStore configStore;
-  final HostKeyStore hostKeyStore;
+
+  /// The TOFU pins. Conflict-aware because a pulled pin is written only
+  /// when it agrees with the local one: a separate read and write could
+  /// overwrite a key the connection flow pinned in between.
+  final ConflictAwareHostKeyStore hostKeyStore;
+
+  /// The user's pin verdicts (catalog-library.md §7): a locator under a
+  /// negative pin never takes a pulled key, and a conflict whose pulled
+  /// fingerprint the user already rejected is not raised again. Null means
+  /// no verdicts are kept, so every conflict is raised; a pulled pin that
+  /// disagrees with the local one is never written either way.
+  final PinVerdictStore? pinVerdicts;
   final RecordCodec codec;
   final LocalRecordStore local;
   final String deviceId;
@@ -95,6 +108,7 @@ class SyncCoordinator {
   SyncCoordinator({
     required this.configStore,
     required this.hostKeyStore,
+    this.pinVerdicts,
     required this.codec,
     required this.local,
     required this.deviceId,
@@ -107,6 +121,29 @@ class SyncCoordinator {
     this.inboxStatusStore,
     DateTime Function()? now,
   }) : now = now ?? DateTime.now;
+
+  /// The pulled `hostkey:` records the latest [applyToStores] held back
+  /// because they disagree with this device's pin (Séance #56). Re-derived
+  /// on every apply from the mirror against the live store, never stored,
+  /// so a conflict stays until the user resolves it or the account stops
+  /// carrying the pulled key. [PulledPinResolver] resolves one.
+  List<HostKeyConflict> get pinConflicts => List.unmodifiable(_pinConflicts);
+  List<HostKeyConflict> _pinConflicts = const [];
+
+  /// [pulled] as a conflict to raise, or null when it is not one after all
+  /// (the local pin changed since the conditional write refused it) or the
+  /// user already kept their pin over this very key.
+  Future<HostKeyConflict?> _pinConflict(HostKey pulled) async {
+    final local = await hostKeyStore.get(pulled.host, pulled.port);
+    if (local == null || !local.conflictsWith(pulled)) return null;
+    final rejected = await pinVerdicts?.rejectedFingerprintFor(pulled.locator);
+    if (rejected == pulled.fingerprintSha256) return null;
+    return HostKeyConflict(
+      locator: pulled.locator,
+      local: local,
+      pulled: pulled,
+    );
+  }
 
   /// The credentials [servers] opt into publishing to the account.
   ///
@@ -558,6 +595,8 @@ class SyncCoordinator {
     // so unlike a config it cannot outrank its retraction on its own.
     final revivedSecrets = <(String, int)>[];
     final skippedIds = <String>[];
+    final pinConflicts = <HostKeyConflict>[];
+    final negativePins = await pinVerdicts?.negativePins() ?? const {};
     // Inbox app removals re-dated past a live copy that beat them; see the
     // inboxApp case. Counted with the other re-datings so [run] pushes them.
     var redatedRemovals = 0;
@@ -715,7 +754,16 @@ class SyncCoordinator {
               continue;
             }
             if (localOnlyLocators.contains(pin.locator)) continue;
-            await hostKeyStore.put(pin);
+            // The user untrusted this address: a peer still pushing the old
+            // pin is not a reason to trust it again.
+            if (negativePins.contains(pin.locator)) continue;
+            // A pulled pin that disagrees with this device's is held back,
+            // never written (Séance #56): on a hostile network a forged
+            // record would otherwise win trust on every device.
+            final installed = await hostKeyStore.putIfNoConflict(pin);
+            if (installed == HostKeyInstallResult.installed) continue;
+            final conflict = await _pinConflict(pin);
+            if (conflict != null) pinConflicts.add(conflict);
           case RecordKind.secret:
             secretRecords.add(dec);
           case RecordKind.snippet:
@@ -859,6 +907,7 @@ class SyncCoordinator {
         skip(enc.id, error, stackTrace);
       }
     }
+    _pinConflicts = pinConflicts;
 
     await _applySecretRecords(secretRecords, skip);
 

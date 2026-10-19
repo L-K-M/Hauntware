@@ -10,6 +10,8 @@ import 'package:klabautermann_core/src/operations/operation_plan.dart';
 import 'package:klabautermann_core/src/operations/operation_runner.dart';
 import 'package:seance_core/seance_core.dart'
     show
+        ChannelOpenException,
+        ChannelRefusal,
         ElevatedExecutor,
         ElevationProbe,
         RemoteCommandException,
@@ -121,14 +123,14 @@ void main() {
   });
 
   group('re-validates before the first step (03 §8.5)', () {
-    Future<ActionFinished> check(
+    Future<(ActionFinished, _Link)> check(
       Revalidation revalidation,
       RemoteCommandResult answer,
-    ) {
+    ) async {
       final link = _Link(
         (command, _) => command.contains("'reboot'") ? _ok : answer,
       );
-      return runner(link).run(
+      final finished = await runner(link).run(
         'plan-1',
         _plan(
           [
@@ -137,6 +139,7 @@ void main() {
           revalidate: [revalidation],
         ),
       );
+      return (finished, link);
     }
 
     final cases = <(String, Revalidation, RemoteCommandResult, Object?)>[
@@ -189,9 +192,13 @@ void main() {
     ];
     for (final (name, revalidation, answer, expected) in cases) {
       test(name, () async {
-        final finished = await check(revalidation, answer);
+        final (finished, link) = await check(revalidation, answer);
         if (expected == null) {
           expect(finished.outcome, ActionOutcome.succeeded);
+          // The check went over the link, and the step only after it.
+          expect(link.commands, hasLength(2));
+          expect(link.commands.first, isNot(contains("'reboot'")));
+          expect(link.commands.last, contains("'reboot'"));
         } else {
           expect(finished.failure, ActionFailure.revalidation);
           expect(finished.revalidation, expected);
@@ -279,5 +286,30 @@ void main() {
     final finished = await runner(broken).run('plan-2', plan);
     expect(finished.outcome, ActionOutcome.failed);
     expect(finished.failure, ActionFailure.transport);
+
+    // A link at its session limit refuses the channel instead.
+    final full = _Link(
+      (_, _) => throw const ChannelOpenException(
+        ChannelRefusal.sessionLimit,
+        'no session channel',
+      ),
+    );
+    final refused = await runner(full).run('plan-3', plan);
+    expect(refused.failure, ActionFailure.transport);
+    expect(events.whereType<ActionFinished>(), hasLength(3));
+    expect(results, hasLength(3));
+  });
+
+  test('an elevated step never runs without a session, whatever the '
+      'plan claims', () async {
+    final link = _Link((_, _) => _ok);
+    final finished = await runner(link).run(
+      'plan-1',
+      _plan([
+        ShellStep(['systemctl', 'restart', 'nginx.service'], elevated: true),
+      ]),
+    );
+    expect(finished.failure, ActionFailure.elevationRefused);
+    expect(link.commands, isEmpty);
   });
 }

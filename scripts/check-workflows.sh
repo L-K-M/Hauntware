@@ -241,7 +241,7 @@ grep -q 'rm -f "$assets_dir/SHA256SUMS"' .github/workflows/release.yml ||
 # build cannot ship an APK that refuses to upgrade in place.
 # awk matches by itself: `| grep -q` would exit at the first hit and,
 # under pipefail, the SIGPIPE awk gets would fail a passing check.
-for leg in client_planchette client_seance client_poltergeist; do
+for leg in client_planchette client_seance client_poltergeist client_klabautermann; do
   awk -v leg="$leg" '
     $0 == "  " leg ":" { inside = 1; next }
     inside && /^  [A-Za-z0-9_-]+:/ { inside = 0 }

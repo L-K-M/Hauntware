@@ -1,7 +1,7 @@
 name: planchette_app
 description: A focused text editor built with the shared Planchette editor.
 publish_to: none
-version: 1.9.1+1090199
+version: 1.9.2+1090299
 
 environment:
   sdk: ^3.12.0
@@ -23,7 +23,7 @@ dependencies:
   ghost_ui:
     path: ../../packages/ghost_ui
   path: 1.9.1
-  path_provider: 2.1.5
+  path_provider: 2.1.6
   planchette_core:
     path: ../../packages/planchette_core
   planchette_editor:

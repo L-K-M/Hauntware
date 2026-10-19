@@ -186,6 +186,17 @@ final class RemoteAppearance extends ChangeNotifier
   Future<void> setMode(ThemeModePreference mode) async {
     await _call(SettingsLinkMethod.setThemeMode, mode.name);
   }
+
+  @override
+  Future<void> setAppearance(
+    ThemePalette palette,
+    ThemeModePreference mode,
+  ) async {
+    await _call(
+      SettingsLinkMethod.setAppearance,
+      encodeAppearance(AppAppearance(palette: palette, mode: mode)),
+    );
+  }
 }
 
 /// [SafetySettings] over the link: the app's policy and its servers'

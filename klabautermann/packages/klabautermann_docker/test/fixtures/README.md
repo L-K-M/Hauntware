@@ -43,6 +43,14 @@ volumes, `/system/df`, a finite `since`/`until` events window, and
 `/info` under versions one below the daemon's minimum, one above its
 maximum and at the client floor 1.41.
 
+`RecordedDaemon` and `RecordedCorpus` in `lib/testing.dart` serve a
+directory to the real HTTP client (03 section 11.1's fake transport);
+`recorded_api_test.dart` replays each one, and `harness.dart`'s
+`recordedCorpus` loads it. A request matches by method, path and
+normalized query; a path at another version inside the daemon's range
+gets the native recording, and anything unrecorded gets a 404 that the
+tests treat as a failure.
+
 The seeded secrets are fake and low entropy (`fixture-password`).
 `capture.sh --docker-api-only` checks a fresh capture against these
 directories by structure, never by value; `--update` replaces them.
