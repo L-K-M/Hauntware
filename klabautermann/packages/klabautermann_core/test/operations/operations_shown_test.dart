@@ -7,6 +7,8 @@ import 'dart:io';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/catalog/sync_state_file.dart'
     show SyncStateIssueKind;
+import 'package:klabautermann_core/src/operations/confirmation.dart';
+import 'package:klabautermann_core/src/operations/operation_plan.dart';
 import 'package:klabautermann_core/src/operations/operations_shown.dart';
 import 'package:test/test.dart';
 
@@ -23,6 +25,26 @@ void main() {
   Future<OperationsShownStore> open([
     SupportDirectoryAccess access = SupportDirectoryAccess.exclusive,
   ]) => OperationsShownStore.open(support, access: access);
+
+  test('a launch from a plan carries its steps redacted', () {
+    final launch = OperationLaunch.ofPlan(
+      OperationPlan(
+        intent: const RedeployStack('srv-1', project: 'web'),
+        kind: OperationKind.redeploy,
+        targetName: 'web',
+        steps: [
+          ShellStep(['env', 'API_TOKEN=ghp_secretsecretsecret', 'true']),
+        ],
+        requiredLevel: RequiredLevel.login,
+        runner: const RunnerFacts(identity: 'deploy'),
+      ),
+      startedAt: DateTime.utc(2026, 10, 19),
+    );
+    expect(launch.action, 'RedeployStack');
+    expect(launch.targetName, 'web');
+    expect(launch.steps.single, contains('«redacted»'));
+    expect(launch.steps.single, isNot(contains('ghp_secret')));
+  });
 
   test('notes round-trip, launch facts included', () async {
     final store = await open();

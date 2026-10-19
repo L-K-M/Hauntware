@@ -423,11 +423,8 @@ void engineMain(
             directory: runner.runsAsRoot
                 ? OpDirectoryKind.root
                 : OpDirectoryKind.user,
-            launch: OperationLaunch(
-              action: '${plan.intent.runtimeType}',
-              targetName: plan.targetName,
-              steps: [for (final step in plan.steps) step.display],
-              tier: plan.tier,
+            launch: OperationLaunch.ofPlan(
+              plan,
               startedAt: DateTime.now().toUtc(),
             ),
           );
