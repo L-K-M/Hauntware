@@ -1211,8 +1211,9 @@ M2, the host read MVP, is the current milestone. What is on main:
   from it with its goldens (collector-set version 7). Two days later
   `quay.io` had dropped that digest too, since it retags `fedora:44`
   daily, so `fedora-44` now pins Docker Hub's official `fedora:44`
-  through `mirror.gcr.io`, whose digests stay pullable, and the fixture
-  is recaptured from it.
+  through `mirror.gcr.io`, as the other official images are, and the
+  fixture is recaptured from it. Docker Hub has so far kept replaced
+  official digests pullable, but promises nothing.
 - Docker fixture and rank-1 smoke (M3, 03 §5.4, §11.3, D10): the
   fixture adds `dind` (Docker 29.9.1, privileged, unpublished, dockerd
   on one Unix socket with gid 990, on a named volume) and `docker-sshd`
