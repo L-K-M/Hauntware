@@ -419,21 +419,57 @@ const kCronLinesEvaluated = 200;
 
 /// [cron] with its jobs rows (7.7): each line's next runs after [at] in
 /// the server zone of [profile] or the line's `CRON_TZ` (D58), for the
-/// first [kCronLinesEvaluated] lines.
+/// first [kCronLinesEvaluated] lines. Commands cross masked (8.9).
 CronResult cronResult(CronSnapshot cron, HostProfile? profile, DateTime at) {
   final server = serverCronZone(profile, at);
+  final shown = maskedCronJobs(cron.jobs);
   return CronResult(
-    cron,
+    CronSnapshot(
+      jobs: [for (final job in cron.jobs) shown[job]!],
+      dirEntries: cron.dirEntries,
+      ownCrontabPresent: cron.ownCrontabPresent,
+      timeoutAbsent: cron.timeoutAbsent,
+    ),
     jobs: mergeJobs(
       cron: cron,
       nowUtc: at,
       zone: server.zone,
       zoneFor: (name) => cronTzZone(name, at),
       evaluateLimit: kCronLinesEvaluated,
+      shownJob: (job) => shown[job]!,
     ),
     zoneName: server.zoneName,
     zoneFallback: server.fallback,
   );
+}
+
+/// Each of [jobs] with its command and line masked by 8.9's rules, each
+/// read as one command line, so a secret in a cron line reaches the app
+/// only as the mask. The masker never reads the program's slot as a
+/// value, so an empty program stands in front: a command that starts
+/// with `NAME=secret` or `--password=…` is masked from its first word,
+/// and a line's schedule is read as ordinary words. One budget covers
+/// the reading, as for a procs reading. There is no reveal for cron
+/// lines yet.
+Map<CronJob, CronJob> maskedCronJobs(List<CronJob> jobs) {
+  final budget = ArgumentMaskingBudget();
+  String mask(String text) =>
+      maskCommandLine(['', text], budget: budget)[1].display;
+  return Map.identity()..addEntries([
+    for (final job in jobs)
+      MapEntry(
+        job,
+        CronJob(
+          source: job.source,
+          schedule: job.schedule,
+          command: mask(job.command),
+          raw: mask(job.raw),
+          expression: job.expression,
+          user: job.user,
+          cronTz: job.cronTz,
+        ),
+      ),
+  ]);
 }
 
 /// SYS-01's identity, resolved from hostnamectl, then os-release and

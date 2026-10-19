@@ -173,6 +173,8 @@ void main() {
         ),
         const SetAdminMode('srv-1', enabled: true),
         AuditQuery('srv-1', before: DateTime.utc(2026, 10, 18), limit: 20),
+        const ReadUserCrontabs('srv-1', requestId: 'r-1'),
+        const AcknowledgeOperation('srv-1', '0123456789abcdef'),
         const AnswerPrompt('prompt-1', PromptTrustAnswer(true)),
         const AnswerPrompt('prompt-2', PromptCancelAnswer()),
         const HandleAlert('alert-1', AlertAction.acknowledge),
@@ -291,6 +293,7 @@ void main() {
             impact: const PlanImpact(ImpactKind.stopsContainers, count: 3),
             ownership: const PlanOwnership('coolify'),
             protected: ProtectedReason.userMarked,
+            followUnit: 'backup.service',
           ),
         ),
         const ActionRefused(
@@ -298,6 +301,10 @@ void main() {
           intent: StartTimer('srv-1', timer: 'backup.timer'),
         ),
         const ActionRefused(ActionRefusalReason.stalePlan, planId: 'plan-1'),
+        const ActionRefused(
+          ActionRefusalReason.targetChanged,
+          intent: KillProcess('srv-1', pid: 4300, startTicks: 9001),
+        ),
         AdminModeState(
           'srv-1',
           AdminModePhase.on,
@@ -329,6 +336,49 @@ void main() {
             exitCode: 5,
           ),
         ], more: true),
+        UserCrontabs(
+          serverId: 'srv-1',
+          requestId: 'r-1',
+          directory: '/var/spool/cron/crontabs',
+          unreadable: const ['carol'],
+          skipped: 1,
+          zoneName: 'Etc/UTC',
+        ),
+        UserCrontabs(
+          serverId: 'srv-1',
+          requestId: 'r-2',
+          failure: UserCrontabsFailure.adminRequired,
+        ),
+        OperationsChanged(
+          'srv-1',
+          operations: [
+            DetachedOperation(
+              id: '0123456789abcdef',
+              directory: OpDirectoryKind.root,
+              state: DetachedOperationState.done,
+              unit: 'klabautermann-op-0123456789abcdef.service',
+              startedAt: DateTime.utc(2026, 10, 18, 9),
+              endedAt: DateTime.utc(2026, 10, 18, 9, 5),
+              exitCode: 0,
+              action: 'RedeployStack',
+              targetName: 'web',
+              acknowledged: true,
+            ),
+          ],
+          directories: const {
+            OpDirectoryKind.user: OpDirectoryListing(
+              state: OpDirectoryState.absent,
+              path: '/home/klab/.local/state/klabautermann/ops',
+              count: 0,
+            ),
+          },
+        ),
+        OperationsChanged(
+          'srv-1',
+          unavailable: const CollectorUnavailable(
+            CollectorUnavailableReason.timeout,
+          ),
+        ),
         const ActionProgress(planId: 'plan-1', stepIndex: 1, stepCount: 3),
         const ActionFinished(
           planId: 'plan-1',
@@ -346,6 +396,13 @@ void main() {
           failure: ActionFailure.stepFailed,
           failedStep: 1,
           httpStatus: 409,
+        ),
+        const ActionFinished(
+          planId: 'plan-4',
+          outcome: ActionOutcome.failed,
+          failure: ActionFailure.adminRequired,
+          failedStep: 0,
+          exitCode: 1,
         ),
         const Prompt(
           promptId: 'p-1',
@@ -1151,6 +1208,20 @@ void main() {
         ),
       );
       expect((file.source as FileLogSource).path, '/var/log/nginx/access.log');
+      expect((file.source as FileLogSource).redacted, isFalse);
+
+      final operation = await spec(
+        LogStreamSpec(
+          serverId: 'srv-1',
+          source: const OperationLogSource('0123456789abcdef'),
+          window: 500,
+          follow: true,
+        ),
+      );
+      expect(
+        (operation.source as OperationLogSource).operationId,
+        '0123456789abcdef',
+      );
 
       final close = await roundTrip(const CloseStream('logs-1')) as CloseStream;
       expect(close.streamId, 'logs-1');

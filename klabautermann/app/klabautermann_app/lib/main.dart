@@ -9,6 +9,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'app.dart';
+import 'controllers/admin_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/docker_endpoint_choices.dart';
@@ -16,6 +17,7 @@ import 'controllers/docker_notice_controller.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitor_set.dart';
 import 'controllers/monitoring_controller.dart';
+import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
 import 'controllers/sync_controller.dart';
 import 'services/app_version.dart';
@@ -26,6 +28,7 @@ import 'services/settings_window/settings_window_host.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'services/ssh_config_source.dart';
 import 'services/stored_appearance.dart';
+import 'services/stored_safety.dart';
 import 'services/window_state.dart';
 import 'settings_window_app.dart';
 import 'ui/already_running_app.dart';
@@ -180,6 +183,15 @@ Future<void> main(List<String> args) async {
   // The host-key and keyboard-interactive prompts the engine raises while
   // it connects, shown one at a time over every route.
   final prompts = PromptController(engine);
+  // Admin mode per server (03 §8.2): the engine runs it and holds the
+  // password; the header's chip asks and shows its state.
+  final admin = AdminController(engine);
+  // Action previews and runs (03 §8.5): the engine plans and runs them;
+  // the app shows the preview and the results.
+  final operations = OperationsController(
+    engine,
+    auditInMemory: engine.ready.auditInMemory,
+  );
   // Pull-only sync (03 §4.3, D14): the sign-in and rounds the user asks
   // for, and the OS keystore the engine's sync reaches through this
   // isolate, which alone can call the keystore plugin (D62).
@@ -202,6 +214,20 @@ Future<void> main(List<String> args) async {
     save: settings.setAnnounceThresholdBands,
   );
 
+  // The safety preferences (M4 plan M4), device-local in settings.json and
+  // applied to the engine now, since it starts with every server
+  // observe-only, and on every change.
+  final safety = safetyFromSettings(
+    settings,
+    engine,
+    labelOf: (serverId) =>
+        fleet.servers
+            .where((server) => server.id == serverId)
+            .firstOrNull
+            ?.displayName ??
+        serverId,
+  );
+
   // SAF-08's notice heads the Docker tab until dismissed on this device,
   // which settings.json keeps (03 §8.4).
   final dockerNotice = DockerNoticeController(
@@ -220,6 +246,7 @@ Future<void> main(List<String> args) async {
     announcements: announcements,
     appVersion: appVersion,
     monitorSet: fleet.monitorSettings,
+    safety: safety,
   );
 
   runApp(
@@ -230,6 +257,9 @@ Future<void> main(List<String> args) async {
       appearance: appearance,
       coverage: coverage,
       announcements: announcements,
+      safety: safety,
+      admin: admin,
+      operations: operations,
       dockerNotice: dockerNotice,
       sync: sync,
       settingsIssue: settings.issue,

@@ -290,6 +290,34 @@ abstract final class HostCommands {
     ];
   }
 
+  /// Prints the owner of process [pid]'s `/proc` entry and its `comm`,
+  /// `<uid> <comm>`, for planning a kill (03 §7.2): the uid decides
+  /// whether it needs elevation, the comm whether it is protected. The
+  /// owner is the effective uid, and root for a non-dumpable process, so
+  /// such a kill elevates even when it is the user's own: safe, if more
+  /// than needed. It exits 3 when the process is gone.
+  static List<String> processFacts(int pid) {
+    if (pid <= 0) {
+      throw HostCommandError('pid must be positive', argument: '$pid');
+    }
+    return [
+      'sh',
+      '-c',
+      'u=\$(stat -c %u "/proc/\$1" 2>/dev/null) || exit 3\n'
+          'IFS= read -r c 2>/dev/null <"/proc/\$1/comm" || exit 3\n'
+          "printf '%s %s\\n' \"\$u\" \"\$c\"",
+      'klabautermann-facts',
+      '$pid',
+    ];
+  }
+
+  /// Prints the unit timer [timer] activates (its `Unit=`), for JOB-08's
+  /// run-timer-now plan (03 §7.7).
+  static List<String> timerActivates(String timer) {
+    _check(ArgValidators.unitName, timer);
+    return ['systemctl', 'show', '--property=Unit', '--value', '--', timer];
+  }
+
   /// Prints systemd's load state of [unit] (`loaded`, `not-found`, ...),
   /// for an operation's re-validation (03 §8.5): a unit that no longer
   /// loads is not acted on.

@@ -79,6 +79,11 @@ final class DockerController {
 
   final Map<String, _DockerServer> _servers = {};
 
+  /// Details still shown for servers that left the fleet (SYN-08), by
+  /// server and container id. Each says so and keeps what was read until
+  /// its last view closes, since a view holds its listenable that long.
+  final Map<(String, String), _InspectedContainer> _leftFleet = {};
+
   /// The fleet's ids from the last [CatalogReplaced] seen, as in
   /// `MonitoringController`: null until then, when every server counts
   /// as listed.
@@ -220,16 +225,22 @@ final class DockerController {
     String containerId,
   ) {
     final server = _server(serverId);
+    // Details a view still shows from before the server left the fleet
+    // are taken back, so every view of the container shares one and each
+    // close pairs with an open; they are read again.
+    final kept = server.inspected.containsKey(containerId)
+        ? null
+        : _leftFleet.remove((serverId, containerId));
     final inspected = server.inspected.putIfAbsent(
       containerId,
-      () => _InspectedContainer(_summaryIn(server, containerId)),
+      () => kept ?? _InspectedContainer(_summaryIn(server, containerId)),
     );
     inspected.views++;
-    if (inspected.views > 1) return inspected.details;
+    if (inspected.views > 1 && kept == null) return inspected.details;
 
     if (!_listed(serverId)) {
-      inspected.details.value = const DockerContainerDetails(
-        failure: DockerQueryFailed(DockerQueryFailure.notInFleet),
+      inspected.details.value = inspected.details.value.copyWith(
+        failure: () => const DockerQueryFailed(DockerQueryFailure.notInFleet),
       );
     } else {
       _inspect(serverId, containerId, inspected);
@@ -239,6 +250,16 @@ final class DockerController {
 
   /// The last view to close lets the container's details go.
   void closeContainer(String serverId, String containerId) {
+    final key = (serverId, containerId);
+    if (_leftFleet[key] case final inspected?) {
+      inspected.views--;
+      if (inspected.views > 0) return;
+
+      _leftFleet.remove(key);
+      inspected.dispose();
+      return;
+    }
+
     final server = _servers[serverId];
     final inspected = server?.inspected[containerId];
     if (server == null || inspected == null) return;
@@ -540,6 +561,7 @@ final class DockerController {
         final ids = _fleetIds = {for (final entry in entries) entry.serverId};
         _servers.removeWhere((serverId, server) {
           if (ids.contains(serverId)) return false;
+          _keepShownDetails(serverId, server);
           server.dispose();
           return true;
         });
@@ -578,6 +600,23 @@ final class DockerController {
   _DockerServer _server(String serverId) =>
       _servers.putIfAbsent(serverId, _DockerServer.new);
 
+  /// Moves the details [server] still has shown into [_leftFleet], each
+  /// saying the server left the fleet, before the server goes; every one
+  /// it has is shown, as the last view to close removes it.
+  void _keepShownDetails(String serverId, _DockerServer server) {
+    for (final MapEntry(key: containerId, value: inspected)
+        in server.inspected.entries) {
+      inspected
+        ..queryId = null
+        ..readAgain = false
+        ..details.value = inspected.details.value.copyWith(
+          failure: () => const DockerQueryFailed(DockerQueryFailure.notInFleet),
+        );
+      _leftFleet[(serverId, containerId)] = inspected;
+    }
+    server.inspected.clear();
+  }
+
   void dispose() {
     unawaited(_events.cancel());
     _stopped = true;
@@ -587,6 +626,10 @@ final class DockerController {
       server.dispose();
     }
     _servers.clear();
+    for (final inspected in _leftFleet.values) {
+      inspected.dispose();
+    }
+    _leftFleet.clear();
   }
 }
 

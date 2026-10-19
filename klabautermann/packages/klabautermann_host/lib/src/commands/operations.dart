@@ -353,6 +353,19 @@ abstract final class OperationCommands {
     ];
   }
 
+  /// Prints the login user's operation directory as the `ops` collector
+  /// resolves it (03 §7.17): `${XDG_STATE_HOME:-$HOME/.local/state}`, a
+  /// relative `XDG_STATE_HOME` ignored, then [kOpsDirSuffix]. The engine
+  /// runs it in the login shell before a launch on the user rows, since a
+  /// transient unit has no `XDG_STATE_HOME` of its own.
+  static List<String> userOpsDir() => [
+    'sh',
+    '-c',
+    r'u=${XDG_STATE_HOME:-$HOME/.local/state}; '
+        r'case $u in /*) ;; *) u=$HOME/.local/state ;; esac; '
+        "printf '%s\\n' \"\$u$kOpsDirSuffix\"",
+  ];
+
   /// `rm -f --` of each operation's record, log and leftover temp file
   /// in [dir] (03 §7.17 "Cleanup"), after its result was shown and
   /// audited. [kRootOpsDir] needs the elevation prelude: the login user

@@ -506,6 +506,60 @@ void main() {
     });
   });
 
+  group('endpoint users (M4 E15)', () {
+    test('outside the fleet or before a probe answer there is none', () async {
+      final h = _Harness();
+      await expectLater(
+        h.router.useEndpoint('elsewhere', (_, _) async => 0),
+        throwsA(
+          isA<DockerEndpointUnavailable>().having(
+            (e) => e.failure,
+            'failure',
+            DockerQueryFailure.notInFleet,
+          ),
+        ),
+      );
+      await expectLater(
+        h.router.useEndpoint(_srv, (_, _) async => 0),
+        throwsA(
+          isA<DockerEndpointUnavailable>().having(
+            (e) => e.failure,
+            'failure',
+            DockerQueryFailure.profileUnknown,
+          ),
+        ),
+      );
+    });
+
+    test('runs on the negotiated client once the endpoint resolves', () async {
+      final h = _Harness();
+      final daemon = h.forwarding.daemons[_rootful] = EngineDaemon();
+      h.router.probed(_srv, _profile([_rootful]));
+      final used = h.router.useEndpoint(
+        _srv,
+        (client, route) async =>
+            (client.apiVersion.pathSegment, route.socketPath),
+      );
+      expect(await used, ('v1.52', _rootful));
+      expect(daemon.requests.last, startsWith('GET /version'));
+    });
+
+    test('a failed resolution answers the waiting user', () async {
+      final h = _Harness();
+      h.router.probed(_srv, _profile(const []));
+      await expectLater(
+        h.router.useEndpoint(_srv, (_, _) async => 0),
+        throwsA(
+          isA<DockerEndpointUnavailable>().having(
+            (e) => e.failure,
+            'failure',
+            DockerQueryFailure.endpointUnavailable,
+          ),
+        ),
+      );
+    });
+  });
+
   group('relays (M9)', () {
     const tools = {'docker': '/usr/bin/docker', 'podman': null, 'socat': null};
 

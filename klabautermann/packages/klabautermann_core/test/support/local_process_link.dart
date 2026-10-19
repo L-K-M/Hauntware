@@ -62,6 +62,27 @@ final class LocalProcessLink extends TestLinkBase {
     return remote;
   }
 
+  /// [command] to its end, as `SshLink.run` collects an exec channel.
+  @override
+  Future<RemoteCommandResult> run(
+    String command, {
+    Duration? timeout,
+    int maxOutputBytes = 256 * 1024,
+    List<int>? stdin,
+  }) async {
+    final p = await start(command);
+    final stdout = utf8.decodeStream(p.stdout);
+    final stderr = utf8.decodeStream(p.stderr);
+    p.stdin.add(stdin ?? const []);
+    await p.stdin.close();
+    final exit = await p.exit;
+    return RemoteCommandResult(
+      exitCode: exit.exitCode,
+      stdout: await stdout,
+      stderr: await stderr,
+    );
+  }
+
   /// Kills what is still running and removes the `sh` link.
   Future<void> dispose() async {
     for (final p in processes) {

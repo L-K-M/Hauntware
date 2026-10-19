@@ -6,6 +6,8 @@ import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'access/access_panel.dart';
 import 'access/panel_gate.dart';
+import 'docker/container_details.dart' show InspectedContainer;
+import 'docker/container_logs.dart' show ContainerLogsScope;
 import 'docker/docker_panel.dart';
 import 'jobs_panel.dart';
 import 'logs/logs_panel.dart';
@@ -137,10 +139,33 @@ class _PanelsState extends State<_Panels> {
   /// its panel, so focus moves into the Access tab (03 §10.10).
   final FocusNode _accessFocus = FocusNode();
 
+  /// The desktop shell's container logs, which show in the Docker tab.
+  ValueNotifier<InspectedContainer?>? _logs;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final logs = ContainerLogsScope.find(context);
+    if (identical(logs, _logs)) return;
+    _logs?.removeListener(_onLogsOpened);
+    _logs = logs?..addListener(_onLogsOpened);
+  }
+
   @override
   void dispose() {
+    _logs?.removeListener(_onLogsOpened);
     _accessFocus.dispose();
     super.dispose();
+  }
+
+  /// Logs opened from outside the Docker tab, as the inspector does while
+  /// another tab shows, bring the Docker tab forward so they show.
+  void _onLogsOpened() {
+    final opened = _logs?.value;
+    if (opened == null || opened.serverId != widget.serverId) return;
+    DefaultTabController.of(context).index = ServerWorkspace._panels.indexOf(
+      ServerPanel.docker,
+    );
   }
 
   void _openAccess(TabController tabs) {
