@@ -506,6 +506,47 @@ void main() {
     );
   });
 
+  for (final phone in [false, true]) {
+    testWidgets('details open on a server that leaves the fleet say so, '
+        'keep what was read and close cleanly (SYN-08, '
+        '${phone ? 'phone page' : 'inspector'})', (tester) async {
+      final harness = await _pump(
+        tester,
+        size: phone ? _phone : _desktop,
+        phone: phone,
+      );
+      await _open(tester);
+      await harness.answer(
+        tester,
+        DockerContainerPayload(dockerContainerDetails(_id)),
+      );
+
+      await harness.emit(tester, CatalogReplaced(const []));
+      expect(tester.takeException(), isNull);
+      expect(
+        _inDetails(find.text('This server is no longer in the fleet.')),
+        findsOne,
+      );
+
+      // The view still draws and reveals what was read.
+      final masked = _inDetails(find.text('POSTGRES_PASSWORD'));
+      await tester.ensureVisible(masked);
+      await tester.tap(masked);
+      await tester.pumpAndSettle();
+      expect(_inDetails(find.text('hunter2')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      if (phone) {
+        await tester.pageBack();
+      } else {
+        harness.inspection.value = null;
+      }
+      await tester.pumpAndSettle();
+      expect(find.byType(ContainerDetailsView), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('says why the details could not be read, keeps the last ones '
       'and reads again', (tester) async {
     final harness = await _pump(tester);
