@@ -122,6 +122,10 @@ void main() {
           lists: {DockerWatchList.containers},
         ),
         const DockerUnwatch(serverId: 'srv-1', watchId: 'w-1'),
+        const SetDockerEndpoint(
+          serverId: 'srv-1',
+          choice: DockerEndpointCustom('/srv/engine.sock'),
+        ),
         const PlanAction(
           UnitAction(
             'srv-1',
@@ -423,6 +427,59 @@ void main() {
       }
     });
 
+    test('endpoint choices survive and compare by kind and path '
+        '(CN-09)', () async {
+      for (final choice in const <DockerEndpointChoice>[
+        DockerEndpointAuto(),
+        DockerEndpointDetected('/run/podman/podman.sock'),
+        DockerEndpointCustom('/srv/engine.sock'),
+      ]) {
+        final sent =
+            await roundTrip(
+                  SetDockerEndpoint(serverId: 'srv-1', choice: choice),
+                )
+                as SetDockerEndpoint;
+        expect(sent.choice, choice);
+        expect(sent.choice.hashCode, choice.hashCode);
+
+        final state =
+            await roundTrip(
+                  DockerEndpointState(
+                    serverId: 'srv-1',
+                    phase: DockerEndpointPhase.failed,
+                    failure: DockerEndpointFailure.invalidChoice,
+                    choice: choice,
+                  ),
+                )
+                as DockerEndpointState;
+        expect(state.choice, choice);
+      }
+      expect(
+        const DockerEndpointDetected('/a.sock'),
+        isNot(const DockerEndpointCustom('/a.sock')),
+      );
+      expect(
+        const DockerEndpointCustom('/a.sock'),
+        isNot(const DockerEndpointCustom('/b.sock')),
+      );
+
+      final compose =
+          await roundTrip(
+                const DockerResult(
+                  serverId: 'srv-1',
+                  queryId: 'q-9',
+                  payload: DockerComposePayload(
+                    DockerComposeCli(pluginVersion: '2.29.7'),
+                  ),
+                ),
+              )
+              as DockerResult;
+      expect(
+        (compose.payload as DockerComposePayload).composeCli.pluginVersion,
+        '2.29.7',
+      );
+    });
+
     test('Docker queries, results and endpoint states survive with their '
         'payloads (M7)', () async {
       final query =
@@ -490,6 +547,7 @@ void main() {
       expect(state.label, DockerRouteLabel.cliRelay);
       expect(state.route!.runtime, EngineRuntime.podman);
       expect(state.negotiatedApi, const ApiVersion(1, 44));
+      expect(state.choice, const DockerEndpointAuto());
 
       final failed =
           await roundTrip(

@@ -9,7 +9,7 @@ import 'dart:convert';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/docker/docker_router.dart';
 import 'package:klabautermann_host/klabautermann_host.dart';
-import 'package:seance_core/seance_core.dart' show SshLink;
+import 'package:seance_core/seance_core.dart' show RemoteCommandResult, SshLink;
 import 'package:test/test.dart';
 
 import '../support/engine_daemon.dart';
@@ -647,6 +647,261 @@ void main() {
       expect(await h.result(id), _failed(DockerQueryFailure.connectionFailed));
       expect((await h.state()).phase, DockerEndpointPhase.resolving);
       expect((await h.state()).failure, DockerEndpointFailure.unreachable);
+    });
+  });
+
+  group('endpoint choice (CN-09, D54)', () {
+    test('a choice resolves a ready endpoint again over its socket, the '
+        'states carry it, and auto goes back', () async {
+      final h = _Harness();
+      h.forwarding
+        ..daemons[_rootful] = EngineDaemon()
+        ..daemons[_podman] = EngineDaemon(libpodApiVersion: '5.2.0');
+      await h.open();
+      final auto = await h.resolve(_profile([_rootful, _podman]));
+      expect(auto.route!.socketPath, _rootful);
+      expect(auto.choice, const DockerEndpointAuto());
+
+      const chosen = DockerEndpointDetected(_podman);
+      h.router.setEndpoint(
+        const SetDockerEndpoint(serverId: _srv, choice: chosen),
+      );
+      final resolving = await h.state();
+      expect(resolving.phase, DockerEndpointPhase.resolving);
+      expect(resolving.choice, chosen);
+      final ready = await h.state();
+      expect(ready.phase, DockerEndpointPhase.ready);
+      expect(ready.route!.socketPath, _podman);
+      expect(ready.route!.runtime, EngineRuntime.podman);
+      expect(ready.choice, chosen);
+      expect(h.forwarding.opens.last, _podman);
+
+      h.router.setEndpoint(
+        const SetDockerEndpoint(serverId: _srv, choice: DockerEndpointAuto()),
+      );
+      expect((await h.state()).choice, const DockerEndpointAuto());
+      final back = await h.state();
+      expect(back.route!.socketPath, _rootful);
+      expect(back.choice, const DockerEndpointAuto());
+    });
+
+    test('a custom path outside 03 §5.4 is tried first and reads '
+        'unclassified', () async {
+      const custom = '/srv/engine/api.sock';
+      final h = _Harness();
+      h.forwarding
+        ..daemons[_rootful] = EngineDaemon()
+        ..daemons[custom] = EngineDaemon();
+      h.router.setEndpoint(
+        const SetDockerEndpoint(
+          serverId: _srv,
+          choice: DockerEndpointCustom(custom),
+        ),
+      );
+      await h.open();
+
+      final ready = await h.resolve(_profile([_rootful]));
+      expect(ready.route!.socketPath, custom);
+      expect(ready.route!.mode, isNull);
+      expect(ready.route!.rootEquivalence, DockerRootEquivalence.unclassified);
+      expect(h.forwarding.opens.first, custom);
+    });
+
+    test('a chosen socket that answers on no rung gives way to the '
+        'detected ones, which the state tells apart', () async {
+      const gone = '/srv/gone.sock';
+      final h = _Harness();
+      h.forwarding
+        ..daemons[_rootful] = EngineDaemon()
+        ..probeAnswers[gone] = '1\n1\n1\n';
+      h.router.setEndpoint(
+        const SetDockerEndpoint(
+          serverId: _srv,
+          choice: DockerEndpointCustom(gone),
+        ),
+      );
+      await h.open();
+
+      final ready = await h.resolve(_profile([_rootful]));
+      expect(ready.choice, const DockerEndpointCustom(gone));
+      expect(ready.route!.socketPath, _rootful);
+    });
+
+    test('a path that is no socket path fails as an invalid choice without '
+        'running the ladder', () async {
+      final h = _Harness();
+      h.forwarding.daemons[_rootful] = EngineDaemon();
+      await h.open();
+      await h.resolve(_profile([_rootful]));
+      final opened = h.forwarding.opens.length;
+
+      for (final bad in ['run/docker.sock', '/a\nb.sock', '']) {
+        h.router.setEndpoint(
+          SetDockerEndpoint(serverId: _srv, choice: DockerEndpointCustom(bad)),
+        );
+        expect((await h.state()).phase, DockerEndpointPhase.resolving);
+        final failed = await h.state();
+        expect(failed.phase, DockerEndpointPhase.failed, reason: bad);
+        expect(failed.failure, DockerEndpointFailure.invalidChoice);
+        expect(failed.choice, DockerEndpointCustom(bad));
+        expect(failed.label, DockerRouteLabel.none);
+      }
+      expect(h.forwarding.opens, hasLength(opened));
+      expect(h.forwarding.commands, isEmpty);
+
+      final id = h.query(const DockerEngineQuery());
+      expect((await h.state()).phase, DockerEndpointPhase.resolving);
+      expect((await h.state()).failure, DockerEndpointFailure.invalidChoice);
+      expect(
+        await h.result(id),
+        _failed(DockerQueryFailure.endpointUnavailable),
+      );
+    });
+
+    test('the same choice again, or one for a server outside the fleet, '
+        'changes nothing', () async {
+      final h = _Harness();
+      h.forwarding
+        ..daemons[_rootful] = EngineDaemon()
+        ..daemons[_podman] = EngineDaemon();
+      await h.open();
+      await h.resolve(_profile([_rootful, _podman]));
+      const chosen = SetDockerEndpoint(
+        serverId: _srv,
+        choice: DockerEndpointDetected(_podman),
+      );
+      h.router.setEndpoint(chosen);
+      expect((await h.state()).phase, DockerEndpointPhase.resolving);
+      expect((await h.state()).phase, DockerEndpointPhase.ready);
+
+      h.router
+        ..setEndpoint(chosen)
+        ..setEndpoint(
+          const SetDockerEndpoint(
+            serverId: 'srv-elsewhere',
+            choice: DockerEndpointDetected(_rootful),
+          ),
+        );
+      // The next event is the query's answer: no state went out between.
+      h.query(const DockerEngineQuery());
+      expect(await h.next(), isA<DockerResult>());
+    });
+
+    test('a waiting endpoint says the new choice, and a disconnect keeps '
+        'it', () async {
+      final h = _Harness();
+      h.forwarding
+        ..daemons[_rootful] = EngineDaemon()
+        ..daemons[_podman] = EngineDaemon();
+      await h.open();
+      const chosen = DockerEndpointDetected(_podman);
+      h.router.setEndpoint(
+        const SetDockerEndpoint(serverId: _srv, choice: chosen),
+      );
+      final waiting = await h.state();
+      expect(waiting.phase, DockerEndpointPhase.waiting);
+      expect(waiting.choice, chosen);
+      expect(
+        (await h.resolve(_profile([_rootful, _podman]))).route!.socketPath,
+        _podman,
+      );
+
+      h.router.disconnect(_srv);
+      expect((await h.state()).choice, chosen);
+      h.query(const DockerEngineQuery());
+      expect((await h.state()).phase, DockerEndpointPhase.resolving);
+      final ready = await h.state();
+      expect(ready.route!.socketPath, _podman);
+      expect(ready.choice, chosen);
+    });
+
+    test('an endpoint change (SYN-08) or leaving the fleet forgets the '
+        'choice', () async {
+      for (final drop in <void Function(DockerRouter)>[
+        (router) => router.forget({_srv}),
+        (router) => router
+          ..retain(const {})
+          ..retain({_srv}),
+      ]) {
+        final h = _Harness();
+        h.forwarding
+          ..daemons[_rootful] = EngineDaemon()
+          ..daemons[_podman] = EngineDaemon();
+        h.router.setEndpoint(
+          const SetDockerEndpoint(
+            serverId: _srv,
+            choice: DockerEndpointDetected(_podman),
+          ),
+        );
+        await h.open();
+        expect(
+          (await h.resolve(_profile([_rootful, _podman]))).route!.socketPath,
+          _podman,
+        );
+
+        drop(h.router);
+        expect((await h.state()).phase, DockerEndpointPhase.waiting);
+        h.router.probed(_srv, _profile([_rootful, _podman]));
+        h.query(const DockerEngineQuery());
+        final resolving = await h.state();
+        expect(resolving.phase, DockerEndpointPhase.resolving);
+        expect(resolving.choice, const DockerEndpointAuto());
+        expect((await h.state()).route!.socketPath, _rootful);
+      }
+    });
+
+    test('a compose query reads the CLIs once per endpoint', () async {
+      final h = _Harness();
+      h.forwarding
+        ..daemons[_rootful] = EngineDaemon()
+        ..answer = (command) => command.contains('docker-compose version')
+            ? Future.value(
+                const RemoteCommandResult(
+                  stdout:
+                      '0 0\nDocker Compose version v2.29.7\n'
+                      'docker-compose version 1.29.2, build 5becea4c\n',
+                  exitCode: 0,
+                ),
+              )
+            : null;
+      await h.open();
+      await h.resolve(_profile([_rootful]));
+
+      for (var round = 0; round < 2; round++) {
+        final id = h.query(const DockerComposeQuery());
+        final cli = (await h.result(id) as DockerComposePayload).composeCli;
+        expect(cli.pluginVersion, '2.29.7');
+        expect(cli.standaloneVersion, '1.29.2');
+        expect(cli.standaloneLegacy, isTrue);
+      }
+      expect(h.forwarding.commands, hasLength(1));
+      expect(
+        h.forwarding.commands.single,
+        contains("'--host' 'unix:///var/run/docker.sock' 'compose'"),
+      );
+    });
+
+    test('a compose check that fails is answered as a failed command, and '
+        'tried again next time', () async {
+      final h = _Harness();
+      h.forwarding.daemons[_rootful] = EngineDaemon();
+      await h.open();
+      await h.resolve(_profile([_rootful]));
+      var answers = 0;
+      h.forwarding.answer = (_) => Future.value(
+        answers++ == 0
+            ? const RemoteCommandResult(stderr: 'boom', exitCode: 2)
+            : const RemoteCommandResult(stdout: '127 127\n\n\n', exitCode: 0),
+      );
+
+      final failed = h.query(const DockerComposeQuery());
+      expect(
+        await h.result(failed),
+        _failed(DockerQueryFailure.connectionFailed),
+      );
+      final id = h.query(const DockerComposeQuery());
+      final cli = (await h.result(id) as DockerComposePayload).composeCli;
+      expect((cli.pluginVersion, cli.standaloneVersion), (null, null));
     });
   });
 

@@ -217,6 +217,30 @@ final class DockerRouteNone extends DockerRouteResult {
   String toString() => 'DockerRouteNone(${reason.name})';
 }
 
+/// Why a path cannot be CN-09's chosen engine socket (D54).
+enum DockerSocketPathProblem {
+  /// It does not start with `/`, which an empty path does not either.
+  notAbsolute,
+
+  /// It holds a NUL or a line break (03 §8.8).
+  unsafeCharacter,
+}
+
+/// Why [path] cannot name the engine socket a server's endpoint uses, or
+/// null when the ladder and the CLI's `--host unix://` option take it as
+/// written (`validateSocketPath`, 03 §8.8). The app checks a typed path
+/// with it, the settings store a stored one, and the engine every
+/// [DockerLadder.resolve] override.
+DockerSocketPathProblem? dockerSocketPathProblem(String path) {
+  if (!path.startsWith('/')) return DockerSocketPathProblem.notAbsolute;
+  try {
+    validateSocketPath(path);
+    return null;
+  } on ArgumentError {
+    return DockerSocketPathProblem.unsafeCharacter;
+  }
+}
+
 /// Opens one duplex over [route] on [link]: a streamlocal channel, or a
 /// fresh relay process per connection (03 §5.9). The sudo relay starts
 /// through [admin]'s elevation and fails without it, as when admin mode

@@ -1,5 +1,9 @@
+import 'dart:io' show FileSystemException;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/docker_controller.dart';
+import 'package:klabautermann_app/controllers/docker_endpoint_choices.dart';
+import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/docker.dart';
@@ -1233,6 +1237,303 @@ void main() {
       final late = docker.openContainer('srv-2', 'c-8');
       expect(late.value.failure?.failure, DockerQueryFailure.cancelled);
       expect(inspects(), hasLength(2));
+    });
+  });
+
+  group('the endpoint choice (CN-09, D54)', () {
+    const podman = DockerEndpointDetected('/run/podman/podman.sock');
+    const custom = DockerEndpointCustom('/srv/engine.sock');
+
+    List<SetDockerEndpoint> choices() =>
+        engine.sentOfType<SetDockerEndpoint>().cast();
+
+    test('a stored socket goes ahead of the endpoint query each time the '
+        'link comes up; automatic sends nothing', () async {
+      final stored = DockerEndpointChoices(
+        stored: const {
+          'srv-1': DockerEndpointOverride(podman, endpoint: 'a@h:22'),
+        },
+      );
+      final withChoices = DockerController(engine, endpointChoices: stored);
+      addTearDown(() {
+        withChoices.dispose();
+        stored.dispose();
+      });
+
+      await emit(const LinkState('srv-1', LinkReady()));
+      await emit(const LinkState('srv-2', LinkReady()));
+      expect(engine.sent.whereType<SetDockerEndpoint>().length, 1);
+      final first = engine.sent.indexWhere((r) => r is SetDockerEndpoint);
+      // The last: the controller setUp made answers the link as well.
+      final query = engine.sent.lastIndexWhere(
+        (r) => r is DockerQuery && r.serverId == 'srv-1',
+      );
+      expect(first, lessThan(query), reason: 'the choice goes first');
+      expect(choices().single.serverId, 'srv-1');
+      expect(choices().single.choice, podman);
+
+      // The engine may have forgotten it with the server meanwhile.
+      await emit(const LinkState('srv-1', LinkIdle()));
+      await emit(const LinkState('srv-1', LinkReady()));
+      expect(choices(), hasLength(2));
+    });
+
+    test('a change goes out while the link is up, once, and automatic only '
+        'after a socket was sent', () async {
+      await emit(const LinkState('srv-1', LinkReady()));
+      expect(choices(), isEmpty);
+
+      await docker.chooseEndpoint('srv-1', custom);
+      await docker.chooseEndpoint('srv-1', custom);
+      expect(choices().map((c) => c.choice), [custom]);
+      expect(docker.endpointChoices.choiceFor('srv-1'), custom);
+
+      await docker.chooseEndpoint('srv-1', const DockerEndpointAuto());
+      expect(choices().map((c) => c.choice), [
+        custom,
+        const DockerEndpointAuto(),
+      ]);
+
+      // Without a link the choice waits for it.
+      await docker.chooseEndpoint('srv-2', podman);
+      expect(choices(), hasLength(2));
+      await emit(const LinkState('srv-2', LinkReady()));
+      expect(choices().last.serverId, 'srv-2');
+      expect(choices().last.choice, podman);
+    });
+
+    test('a choice dropped while the link is down goes out as automatic '
+        'when it comes back', () async {
+      await emit(const LinkState('srv-1', LinkReady()));
+      await docker.chooseEndpoint('srv-1', custom);
+      await emit(const LinkState('srv-1', LinkIdle()));
+      await docker.chooseEndpoint('srv-1', const DockerEndpointAuto());
+      expect(choices(), hasLength(1));
+
+      await emit(const LinkState('srv-1', LinkReady()));
+      expect(choices().last.choice, const DockerEndpointAuto());
+    });
+
+    test('a save that fails rethrows, and the choice holds', () async {
+      final failing = DockerEndpointChoices(
+        save: (_, _) => Future.error(const FileSystemException('disk full')),
+      );
+      final withChoices = DockerController(engine, endpointChoices: failing);
+      addTearDown(() {
+        withChoices.dispose();
+        failing.dispose();
+      });
+      await emit(const LinkState('srv-1', LinkReady()));
+
+      await expectLater(
+        withChoices.chooseEndpoint('srv-1', custom),
+        throwsA(isA<FileSystemException>()),
+      );
+      expect(failing.choiceFor('srv-1'), custom);
+      expect(choices().single.choice, custom);
+    });
+
+    test('the fleet drops a choice whose server left or moved to another '
+        'endpoint (SYN-08), and the store with it', () async {
+      final saved = <String, DockerEndpointOverride?>{};
+      final purged = <Map<String, String>>[];
+      final fleet = FleetController(engine);
+      final choices = DockerEndpointChoices(
+        save: (serverId, override) async => saved[serverId] = override,
+        purge: (endpoints) async {
+          purged.add(endpoints);
+          return const {};
+        },
+      )..followFleet(fleet);
+      addTearDown(() {
+        choices.dispose();
+        fleet.dispose();
+      });
+      const web = FleetEntry(
+        serverId: 'srv-1',
+        label: 'web-1',
+        host: 'web-1.example',
+        port: 22,
+        user: 'alice',
+        origin: FleetEntryOrigin.sshConfig,
+      );
+      const db = FleetEntry(
+        serverId: 'srv-2',
+        label: 'db-1',
+        host: '10.0.0.4',
+        port: 2222,
+        origin: FleetEntryOrigin.sshConfig,
+        jumpRoute: ['bastion'],
+      );
+      await emit(CatalogReplaced(const [web, db]));
+      expect(purged.single, {
+        'srv-1': 'alice@web-1.example:22',
+        'srv-2': '@10.0.0.4:2222 bastion',
+      });
+
+      await choices.choose('srv-1', podman);
+      await choices.choose('srv-2', custom);
+      expect(
+        saved['srv-1'],
+        const DockerEndpointOverride(
+          podman,
+          endpoint: 'alice@web-1.example:22',
+        ),
+      );
+
+      // A selection notifies too, but is no new fleet.
+      fleet.select('srv-1');
+      expect(purged, hasLength(1));
+
+      // web-1 now names another machine, and db-1 left.
+      await emit(
+        CatalogReplaced(const [
+          FleetEntry(
+            serverId: 'srv-1',
+            label: 'web-1',
+            host: 'web-2.example',
+            port: 22,
+            user: 'alice',
+            origin: FleetEntryOrigin.sshConfig,
+          ),
+        ]),
+      );
+      expect(choices.choiceFor('srv-1'), const DockerEndpointAuto());
+      expect(choices.choiceFor('srv-2'), const DockerEndpointAuto());
+      expect(purged.last, {'srv-1': 'alice@web-2.example:22'});
+
+      // The same endpoint keeps a choice.
+      await choices.choose('srv-1', custom);
+      await emit(
+        CatalogReplaced(const [
+          FleetEntry(
+            serverId: 'srv-1',
+            label: 'web-1 renamed',
+            host: 'web-2.example',
+            port: 22,
+            user: 'alice',
+            origin: FleetEntryOrigin.sshConfig,
+          ),
+        ]),
+      );
+      expect(choices.choiceFor('srv-1'), custom);
+    });
+  });
+
+  group('the compose CLIs for the Access tab (CN-24)', () {
+    List<DockerQuery> composeQueries() => [
+      for (final query in queries())
+        if (query.query is DockerComposeQuery) query,
+    ];
+
+    test('read once a shown Access tab\'s endpoint is ready, kept for the '
+        'endpoint, and read again for a new route', () async {
+      final compose = docker.composeFor('srv-1');
+      docker.openAccess('srv-1');
+      expect(composeQueries(), isEmpty, reason: 'no endpoint yet');
+
+      await emit(dockerReady('srv-1'));
+      expect(composeQueries(), hasLength(1));
+      await emit(dockerReady('srv-1'));
+      expect(composeQueries(), hasLength(1), reason: 'one in flight');
+
+      await emit(
+        dockerAnswer(
+          composeQueries().single,
+          const DockerComposePayload(DockerComposeCli(pluginVersion: '2.29.7')),
+        ),
+      );
+      expect(
+        (compose.value! as DockerComposePayload).composeCli.pluginVersion,
+        '2.29.7',
+      );
+      expect(docker.engineFor('srv-1').value, isNull);
+
+      await emit(dockerReady('srv-1'));
+      expect(composeQueries(), hasLength(1), reason: 'the same endpoint');
+
+      await emit(dockerReady('srv-1', rank: DockerRank.cliRelay));
+      expect(compose.value, isNull);
+      expect(composeQueries(), hasLength(2));
+    });
+
+    test('a hidden Access tab reads nothing; a failure is kept and an '
+        'endpoint that went keeps waiting', () async {
+      docker
+        ..openAccess('srv-1')
+        ..closeAccess('srv-1');
+      await emit(dockerReady('srv-1'));
+      expect(composeQueries(), isEmpty);
+
+      docker.openAccess('srv-1');
+      expect(composeQueries(), hasLength(1));
+      await emit(
+        dockerAnswer(
+          composeQueries().single,
+          const DockerQueryFailed(DockerQueryFailure.cancelled),
+        ),
+      );
+      expect(docker.composeFor('srv-1').value, isNull);
+
+      docker
+        ..closeAccess('srv-1')
+        ..openAccess('srv-1');
+      expect(composeQueries(), hasLength(2));
+      await emit(
+        dockerAnswer(
+          composeQueries().last,
+          const DockerQueryFailed(DockerQueryFailure.connectionFailed),
+        ),
+      );
+      expect(docker.composeFor('srv-1').value, isA<DockerQueryFailed>());
+    });
+
+    test('a read in flight across a new route is let go, and the new '
+        'route read', () async {
+      docker.openAccess('srv-1');
+      await emit(dockerReady('srv-1'));
+      final stale = composeQueries().single;
+
+      await emit(dockerReady('srv-1', rank: DockerRank.cliRelay));
+      expect(composeQueries(), hasLength(2));
+      await emit(
+        dockerAnswer(
+          stale,
+          const DockerComposePayload(DockerComposeCli(pluginVersion: '2.20.0')),
+        ),
+      );
+      expect(docker.composeFor('srv-1').value, isNull);
+      await emit(
+        dockerAnswer(
+          composeQueries().last,
+          const DockerComposePayload(DockerComposeCli(pluginVersion: '2.29.7')),
+        ),
+      );
+      expect(
+        (docker.composeFor('srv-1').value! as DockerComposePayload)
+            .composeCli
+            .pluginVersion,
+        '2.29.7',
+      );
+    });
+
+    test('a stacks list names them too', () async {
+      final compose = docker.composeFor('srv-1');
+      await emit(
+        DockerListChanged(
+          serverId: 'srv-1',
+          list: DockerWatchList.stacks,
+          payload: const DockerStacksPayload(
+            ComposeGrouping(projects: [], unmanaged: []),
+            composeCli: DockerComposeCli(standaloneVersion: '1.29.2'),
+          ),
+          at: DateTime(2026, 10, 17),
+        ),
+      );
+      expect(
+        (compose.value! as DockerComposePayload).composeCli.standaloneLegacy,
+        isTrue,
+      );
     });
   });
 }

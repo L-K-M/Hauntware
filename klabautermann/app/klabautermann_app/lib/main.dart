@@ -12,6 +12,7 @@ import 'app.dart';
 import 'controllers/admin_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/coverage_controller.dart';
+import 'controllers/docker_endpoint_choices.dart';
 import 'controllers/docker_notice_controller.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitor_set.dart';
@@ -164,10 +165,21 @@ Future<void> main(List<String> args) async {
     monitorSetDefault: monitorSetDefaultFor(defaultTargetPlatform),
     saveMonitorSet: settings.setMonitorSet,
   );
+  // CN-09's Docker socket per server, chosen on this device and kept in
+  // settings.json (03 §4.10, D54); a server the fleet drops or moves to
+  // another endpoint loses its choice (SYN-08).
+  final dockerEndpointChoices = DockerEndpointChoices(
+    stored: settings.dockerEndpointOverrides,
+    save: settings.setDockerEndpointOverride,
+    purge: settings.purgeDockerEndpointOverrides,
+  )..followFleet(fleet);
   // Spawned once per launch: a restarted engine would be a new client
   // with new controllers over it, whose seq floors start empty (D44), and
   // KlabautermannApp remounts its tree when handed them.
-  final monitoring = MonitoringController(engine);
+  final monitoring = MonitoringController(
+    engine,
+    dockerEndpointChoices: dockerEndpointChoices,
+  );
   // The host-key and keyboard-interactive prompts the engine raises while
   // it connects, shown one at a time over every route.
   final prompts = PromptController(engine);

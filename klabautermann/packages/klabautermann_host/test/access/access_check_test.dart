@@ -23,7 +23,8 @@ _Row _of(HostProfile p, AccessItem item) => _row(evaluateAccess(p).row(item));
 
 /// Password sudo: no fix until SAF-17's narrow rules (03 §8.1).
 const _passwordSudo = (_missing, R.sudoNotPasswordless, null, true);
-const _pending = (_unknown, R.pendingDockerSupport, null, false);
+const _pending = (_unknown, R.dockerEndpointPending, null, false);
+const _composePending = (_unknown, R.composeNotChecked, null, false);
 const _noSocket = (_missing, R.noEngineSocket, null, false);
 const _noEngine = (_missing, R.noEngine, null, false);
 const _json = (_ok, R.systemdJson, null, false);
@@ -40,7 +41,7 @@ final _tables = <String, Map<AccessItem, _Row>>{
     ),
     I.dockerSocket: _noSocket,
     I.streamlocal: _pending,
-    I.composePlugin: _pending,
+    I.composePlugin: _composePending,
     I.systemd: _json,
     I.runtime: _noEngine,
   },
@@ -50,7 +51,7 @@ final _tables = <String, Map<AccessItem, _Row>>{
     I.journal: (_ok, R.journalGroup, null, false),
     I.dockerSocket: (_ok, R.rootfulSocket, null, true),
     I.streamlocal: _pending,
-    I.composePlugin: _pending,
+    I.composePlugin: _composePending,
     I.systemd: _json,
     I.runtime: (_ok, R.enginesDetected, null, false),
   },
@@ -60,7 +61,7 @@ final _tables = <String, Map<AccessItem, _Row>>{
     I.journal: (_ok, R.journalGroup, null, false),
     I.dockerSocket: _noSocket,
     I.streamlocal: _pending,
-    I.composePlugin: _pending,
+    I.composePlugin: _composePending,
     I.systemd: (_ok, R.systemdTextFallback, null, false),
     I.runtime: _noEngine,
   },
@@ -70,7 +71,7 @@ final _tables = <String, Map<AccessItem, _Row>>{
     I.journal: (_missing, R.noJournal, null, false),
     I.dockerSocket: _noSocket,
     I.streamlocal: _pending,
-    I.composePlugin: _pending,
+    I.composePlugin: _composePending,
     I.systemd: (_missing, R.notSystemd, null, false),
     I.runtime: _noEngine,
   },
@@ -337,6 +338,140 @@ void main() {
       final p = host(sockets: [socket('/var/run/docker.sock', exists: false)]);
       expect(evaluateAccess(p).engines, isEmpty);
       expect(_of(p, I.runtime), _noEngine);
+    });
+  });
+
+  group('the Docker endpoint\'s facts (CN-24, CN-09)', () {
+    _Row docker(AccessItem item, DockerAccessFacts facts, [HostProfile? p]) =>
+        _row(evaluateAccess(p ?? host(), docker: facts).row(item));
+
+    test('streamlocal follows the ladder, unknown until it ran', () {
+      final cases = <StreamlocalAccess?, _Row>{
+        null: _pending,
+        StreamlocalAccess.allowed: (_ok, R.streamlocalAllowed, null, false),
+        StreamlocalAccess.disabled: (
+          _missing,
+          R.streamlocalDisabled,
+          null,
+          false,
+        ),
+        StreamlocalAccess.socketDenied: (
+          _missing,
+          R.streamlocalSocketDenied,
+          null,
+          false,
+        ),
+        StreamlocalAccess.untested: (
+          _unknown,
+          R.streamlocalUntested,
+          null,
+          false,
+        ),
+      };
+      for (final MapEntry(key: access, value: want) in cases.entries) {
+        expect(
+          docker(I.streamlocal, DockerAccessFacts(streamlocal: access)),
+          want,
+          reason: '$access',
+        );
+      }
+    });
+
+    test('the compose plugin, a standalone binary, v1, or none', () {
+      final cases = <ComposeFacts, _Row>{
+        const ComposeFacts(
+          pluginVersion: '2.29.7',
+          standaloneVersion: '1.29.2',
+        ): (
+          _ok,
+          R.composePlugin,
+          null,
+          false,
+        ),
+        const ComposeFacts(standaloneVersion: '2.29.7'): (
+          _missing,
+          R.composeStandaloneOnly,
+          null,
+          false,
+        ),
+        const ComposeFacts(standaloneVersion: '1.29.2', standaloneLegacy: true):
+            (_missing, R.composeLegacyOnly, null, false),
+        const ComposeFacts(): (_missing, R.noCompose, null, false),
+      };
+      for (final MapEntry(key: compose, value: want) in cases.entries) {
+        expect(
+          docker(I.composePlugin, DockerAccessFacts(compose: compose)),
+          want,
+          reason: '$want',
+        );
+      }
+    });
+
+    test('compose stays unknown until checked, and says a failed check', () {
+      expect(
+        docker(I.composePlugin, const DockerAccessFacts()),
+        _composePending,
+      );
+      expect(
+        docker(
+          I.composePlugin,
+          const DockerAccessFacts(composeCheckFailed: true),
+        ),
+        (_unknown, R.composeCheckFailed, null, false),
+      );
+    });
+
+    test('a socket chosen on the device reads as chosen manually while '
+        'in use or unsettled, and unavailable otherwise', () {
+      const chosen = '/srv/engine.sock';
+      // Even before the probe answered its sockets.
+      final unanswered = host(denied: {'sockets'});
+      for (final inUse in [true, null]) {
+        expect(
+          docker(
+            I.runtime,
+            DockerAccessFacts(chosenSocket: chosen, chosenSocketInUse: inUse),
+            unanswered,
+          ),
+          (_ok, R.runtimeChosenManually, null, false),
+          reason: '$inUse',
+        );
+      }
+      expect(
+        docker(
+          I.runtime,
+          const DockerAccessFacts(
+            chosenSocket: chosen,
+            chosenSocketInUse: false,
+          ),
+        ),
+        (_missing, R.runtimeChosenUnavailable, null, false),
+      );
+      // Without a choice the probe's runtimes decide, as before.
+      expect(docker(I.runtime, const DockerAccessFacts()), _noEngine);
+    });
+
+    test('the facts change no host row', () {
+      final p = fixtureProfile('ubuntu-2404');
+      const facts = DockerAccessFacts(
+        streamlocal: StreamlocalAccess.allowed,
+        compose: ComposeFacts(pluginVersion: '2.29.7'),
+      );
+      final plain = evaluateAccess(p).rows;
+      final withFacts = evaluateAccess(p, docker: facts).rows;
+      for (final item in [
+        I.sudoNoPassword,
+        I.journal,
+        I.dockerSocket,
+        I.systemd,
+        I.runtime,
+      ]) {
+        expect(
+          _row(withFacts[item.index]),
+          _row(plain[item.index]),
+          reason: item.name,
+        );
+      }
     });
   });
 }

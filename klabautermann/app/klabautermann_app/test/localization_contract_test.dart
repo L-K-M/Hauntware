@@ -96,6 +96,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "':'",
     r"'[${entry.host}]'",
     r"'$login$host:${entry.port}'",
+    // The endpoint key a device preference is kept with (SYN-08): login,
+    // host and port, then the jump hops, space-separated. Never shown.
+    r"'${entry.user ?? ''}@${entry.host}:${entry.port}'",
+    "' '",
     // A programmer error and import diagnostics: surfaces show ARB text
     // for a rejected import (sshConfigImportFailed), never its reason.
     "'this platform has no ssh_config to import'",
@@ -132,9 +136,19 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'summary-${_count++}'",
     r"'df-${_count++}'",
     r"'container-${_count++}'",
+    r"'compose-${_count++}'",
     r"'images-${_count++}'",
     r"'stacks-${_count++}'",
     r"'stack-file-${_count++}'",
+  },
+  'lib/controllers/docker_endpoint_choices.dart': {
+    // The not-saved diagnostic of a purge, which no surface starts; a
+    // choice the user makes shows ARB text when not saved
+    // (dockerSocketNotSaved).
+    r"'The Docker socket choices were not saved: $error'",
+    // The endpoint key of a server the last fleet did not list, which the
+    // next fleet then drops. Never shown.
+    "''",
   },
   'lib/controllers/log_streams.dart': {
     // A log stream id the engine keys a stream's events by (03 §10.1), and
@@ -373,6 +387,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The separator `docker ps` prints between ports; machine data.
     "', '",
   },
+  // debugPrint of a socket choice that was not saved; the toast is ARB
+  // text (dockerSocketNotSaved).
+  'lib/ui/docker/docker_endpoint_picker.dart': {r"'$error'"},
   'lib/ui/docker/images_panel.dart': {
     // The key tests find a phone row by, in the table rows' form, and the
     // line break between its cells in its screen-reader label, each ARB

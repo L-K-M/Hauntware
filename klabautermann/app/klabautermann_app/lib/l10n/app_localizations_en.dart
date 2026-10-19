@@ -1330,8 +1330,51 @@ class AppLocalizationsEn extends AppLocalizations {
       'No Docker or Podman socket was found.';
 
   @override
-  String get accessReasonPendingDocker =>
-      'Checked once Docker support arrives.';
+  String get accessReasonDockerEndpointPending =>
+      'Checked when Klabautermann looks for this server\'s Docker engine, after it connects.';
+
+  @override
+  String get accessReasonStreamlocalAllowed =>
+      'The SSH server forwards the engine socket, the fastest route to Docker.';
+
+  @override
+  String get accessReasonStreamlocalDisabled =>
+      'The SSH server refused to forward the engine socket (AllowStreamLocalForwarding or DisableForwarding in its sshd_config). Docker goes through a slower relay on the server when it has one.';
+
+  @override
+  String get accessReasonStreamlocalSocketDenied =>
+      'The SSH server could not open the engine socket as your account, which cannot use it. The Docker socket row shows how access is granted.';
+
+  @override
+  String get accessReasonStreamlocalUntested =>
+      'Not tested: no engine socket could be tried. The Docker tab says why.';
+
+  @override
+  String accessReasonComposePlugin(String version) {
+    return 'Version $version.';
+  }
+
+  @override
+  String accessReasonComposeStandaloneOnly(String version) {
+    return 'Only the standalone docker-compose $version is installed. Stacks show read-only and their sources are not verified.';
+  }
+
+  @override
+  String accessReasonComposeLegacyOnly(String version) {
+    return 'Only Compose v1 ($version) is installed, unmaintained since 2023. Stacks show read-only.';
+  }
+
+  @override
+  String get accessReasonNoCompose =>
+      'Neither docker compose nor docker-compose is installed.';
+
+  @override
+  String get accessReasonComposeNotChecked =>
+      'Checked once Klabautermann reaches this server\'s Docker engine.';
+
+  @override
+  String get accessReasonComposeCheckFailed =>
+      'The check for docker compose failed on this server.';
 
   @override
   String accessReasonSystemdJson(int version) {
@@ -1364,6 +1407,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get accessReasonNoEngine => 'No Docker or Podman engine was found.';
+
+  @override
+  String accessReasonRuntimeChosen(String path) {
+    return 'Chosen manually on this device: $path';
+  }
+
+  @override
+  String accessReasonRuntimeChosenUnavailable(String path) {
+    return '$path was chosen on this device, but Docker does not use it: it did not answer, so another socket or none is in use.';
+  }
 
   @override
   String get accessRootEquivalentBadge => 'Root-equivalent';
@@ -1429,7 +1482,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get accessRuntimeAlias =>
-      'Podman can also answer on Docker\'s socket path. Docker support will tell them apart.';
+      'Podman can also answer on Docker\'s socket path. Once connected, the server header names the engine that answers.';
 
   @override
   String accessPanelHiddenTitle(String panel) {
@@ -3712,6 +3765,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Engine API: the connection failed while looking for a route';
 
   @override
+  String get dockerTransportInvalidChoice =>
+      'No Engine API route: the chosen socket path is not valid';
+
+  @override
   String get dockerLowSession => 'Low-session mode';
 
   @override
@@ -3797,6 +3854,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'The connection to this server failed while Klabautermann looked for the engine.';
 
   @override
+  String get dockerGateInvalidChoice =>
+      'The socket path chosen for this server is not a valid absolute path. Choose another socket below.';
+
+  @override
   String get dockerRetry => 'Try again';
 
   @override
@@ -3846,6 +3907,56 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dockerNoticeNotSaved =>
       'Klabautermann could not save that you dismissed the root-equivalence note, so it shows again after a restart.';
+
+  @override
+  String get dockerSocketLabel => 'Socket';
+
+  @override
+  String get dockerSocketAutomatic => 'Find automatically';
+
+  @override
+  String dockerSocketCustomCurrent(String path) {
+    return 'Custom: $path';
+  }
+
+  @override
+  String get dockerSocketCustomAction => 'Custom path…';
+
+  @override
+  String dockerSocketNotInUse(String path) {
+    return '$path was chosen but did not answer, so the sockets found are tried instead.';
+  }
+
+  @override
+  String get dockerSocketNotSaved =>
+      'Klabautermann could not save the socket choice, so it applies only until Klabautermann quits.';
+
+  @override
+  String get dockerSocketCustomTitle => 'Custom engine socket';
+
+  @override
+  String get dockerSocketCustomBody =>
+      'Klabautermann tries this socket first. If it does not answer, the sockets it finds are tried instead.';
+
+  @override
+  String get dockerSocketCustomField => 'Socket path';
+
+  @override
+  String get dockerSocketCustomHint => '/run/user/1000/docker.sock';
+
+  @override
+  String get dockerSocketCustomUse => 'Use';
+
+  @override
+  String get dockerSocketCustomCancel => 'Cancel';
+
+  @override
+  String get dockerSocketPathNotAbsolute =>
+      'Enter an absolute path, starting with /.';
+
+  @override
+  String get dockerSocketPathUnsafe =>
+      'The path cannot contain line breaks or NUL characters.';
 
   @override
   String get appearanceThemeTitle => 'Theme';

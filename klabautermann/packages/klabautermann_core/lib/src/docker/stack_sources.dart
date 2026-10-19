@@ -244,7 +244,7 @@ final class StackSources {
       );
     }
 
-    final cli = await _detect();
+    final cli = await detectCli();
     if (cli == null) {
       return const StackUnverified(StackUnverifiedReason.checkFailed);
     }
@@ -312,9 +312,10 @@ final class StackSources {
     return [for (final code in codes) code.trim() == '0'];
   }
 
-  /// The CLIs, looked for once in one exec; null, and looked for again
-  /// next time, when the exec failed.
-  Future<DockerComposeCli?> _detect() {
+  /// The CLIs, looked for once in one exec, for verification and the
+  /// Access tab's [DockerComposeQuery]; null, and looked for again next
+  /// time, when the exec failed.
+  Future<DockerComposeCli?> detectCli() {
     if (_cli case final cli?) return Future.value(cli);
     return _detecting ??= () async {
       final plugin = composeVersion(socketPath: _socketPath, json: false);

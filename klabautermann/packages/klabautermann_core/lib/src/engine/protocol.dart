@@ -51,7 +51,8 @@ import '../docker/docker_ladder.dart'
         DockerNoRouteReason,
         DockerRank,
         DockerRootEquivalence,
-        DockerRouteLabel;
+        DockerRouteLabel,
+        dockerSocketPathProblem;
 import '../operations/plan_types.dart';
 
 /// The isolate protocol version; [Hello] and [EngineReady] compare it so an
@@ -171,6 +172,13 @@ import '../operations/plan_types.dart';
 /// M9), which goes out again when a link learns a session limit; no
 /// message changed shape.
 ///
+/// CN-09's endpoint choice then joined v3 the same way (D54):
+/// [SetDockerEndpoint] carries a sealed [DockerEndpointChoice] the app
+/// keeps per server on the device, [DockerEndpointState] gained the
+/// choice it resolved with, [DockerEndpointFailure] gained
+/// `invalidChoice`, and [DockerComposeQuery], answered by
+/// [DockerComposePayload], reads the compose CLIs for the Access tab
+/// without a stacks watch.
 /// Disk use then joined v3 the same way (03 §7.1 OV-05): a
 /// [DockerSystemDfQuery] reads `/system/df` on demand, answered by a
 /// [DockerSystemDfPayload] of per-type totals.
@@ -478,6 +486,26 @@ final class DockerUnwatch extends EngineRequest {
 
   final String serverId;
   final String watchId;
+}
+
+/// Sets which engine socket [serverId]'s Docker endpoint uses (CN-09,
+/// D54): the app's per-server choice from `settings.json` (03 §4.10),
+/// sent as the user changes it and again each time the server's link
+/// comes up. The engine keeps it until another arrives or the server
+/// leaves the fleet or changes endpoint (SYN-08), and a session that
+/// holds an endpoint resolves again with it at once; the same choice
+/// again changes nothing. A socket choice is the ladder's first
+/// candidate, ahead of the sockets the probe found (03 §5.4), so one
+/// that answers on no rung gives way to them; [DockerEndpointState]
+/// carries the choice and the route found, which tell the two apart. A
+/// path [dockerSocketPathProblem] refuses fails the endpoint with
+/// [DockerEndpointFailure.invalidChoice]. Ignored for a server outside
+/// the fleet.
+final class SetDockerEndpoint extends EngineRequest {
+  const SetDockerEndpoint({required this.serverId, required this.choice});
+
+  final String serverId;
+  final DockerEndpointChoice choice;
 }
 
 /// Previews an operation: the engine answers [ActionPlanned], or
@@ -962,6 +990,7 @@ final class DockerEndpointState extends EngineEvent {
     this.lowSession = false,
     this.failure,
     this.noRouteReason,
+    this.choice = const DockerEndpointAuto(),
   });
 
   final String serverId;
@@ -988,6 +1017,10 @@ final class DockerEndpointState extends EngineEvent {
 
   /// Why no rung reached an engine; set with [DockerEndpointFailure.noRoute].
   final DockerNoRouteReason? noRouteReason;
+
+  /// The endpoint choice (CN-09) this state was found with: the last
+  /// [SetDockerEndpoint] for the server, or automatic.
+  final DockerEndpointChoice choice;
 
   /// The header label (03 §5.9): the route's, or none.
   DockerRouteLabel get label => route?.rank.label ?? DockerRouteLabel.none;
@@ -2266,6 +2299,14 @@ final class DockerStackFileQuery extends DockerQuerySpec {
   final String path;
 }
 
+/// The compose CLIs on the server (03 §7.16 STK-05), for the Access tab's
+/// compose row (CN-24) without a stacks watch: looked for once per
+/// endpoint in one exec, as stack verification does. Answered by
+/// [DockerComposePayload].
+final class DockerComposeQuery extends DockerQuerySpec {
+  const DockerComposeQuery();
+}
+
 /// A list a [DockerWatch] follows (03 §7.12 to §7.14).
 enum DockerWatchList {
   /// Every container (CTR-01), as [DockerContainersPayload].
@@ -2355,6 +2396,13 @@ final class DockerStacksPayload extends DockerPayload {
 
   /// The compose CLI found, once the engine has looked.
   final DockerComposeCli? composeCli;
+}
+
+/// The compose CLIs a [DockerComposeQuery] found.
+final class DockerComposePayload extends DockerPayload {
+  const DockerComposePayload(this.composeCli);
+
+  final DockerComposeCli composeCli;
 }
 
 /// Whether a compose project's files are its source (03 §7.16 STK-01).
@@ -2579,7 +2627,7 @@ enum DockerQueryFailure {
   daemonError,
 
   /// The connection to the daemon failed, timed out or carried malformed
-  /// HTTP.
+  /// HTTP, or a command the query runs on the server failed.
   connectionFailed,
 
   /// The endpoint closed before the query ran: its link went, the app
@@ -2626,6 +2674,10 @@ enum DockerEndpointFailure {
 
   /// The link failed while the ladder ran.
   linkError,
+
+  /// The endpoint choice names a socket path [dockerSocketPathProblem]
+  /// refuses, so the ladder did not run.
+  invalidChoice,
 }
 
 /// The route a [DockerEndpointState] names (03 §5.4, §5.9; SAF-08).
@@ -2651,6 +2703,55 @@ final class DockerEndpointRoute {
   final EngineMode? mode;
 
   final DockerRootEquivalence rootEquivalence;
+}
+
+/// Which engine socket a server's Docker endpoint uses (CN-09, D54).
+@immutable
+sealed class DockerEndpointChoice {
+  const DockerEndpointChoice();
+}
+
+/// The engine finds the socket itself (03 §5.4's discovery).
+final class DockerEndpointAuto extends DockerEndpointChoice {
+  const DockerEndpointAuto();
+
+  @override
+  bool operator ==(Object other) => other is DockerEndpointAuto;
+
+  @override
+  int get hashCode => (DockerEndpointAuto).hashCode;
+}
+
+/// A socket the user named, tried first.
+sealed class DockerEndpointSocket extends DockerEndpointChoice {
+  const DockerEndpointSocket(this.socketPath);
+
+  /// The socket's absolute path on the server.
+  final String socketPath;
+}
+
+/// One of the sockets the probe found (03 §5.4).
+final class DockerEndpointDetected extends DockerEndpointSocket {
+  const DockerEndpointDetected(super.socketPath);
+
+  @override
+  bool operator ==(Object other) =>
+      other is DockerEndpointDetected && other.socketPath == socketPath;
+
+  @override
+  int get hashCode => Object.hash(DockerEndpointDetected, socketPath);
+}
+
+/// A path the user typed, such as a socket outside 03 §5.4's list.
+final class DockerEndpointCustom extends DockerEndpointSocket {
+  const DockerEndpointCustom(super.socketPath);
+
+  @override
+  bool operator ==(Object other) =>
+      other is DockerEndpointCustom && other.socketPath == socketPath;
+
+  @override
+  int get hashCode => Object.hash(DockerEndpointCustom, socketPath);
 }
 
 /// One inspected container as it crosses (03 §7.12 CTR-03, CTR-04): the

@@ -6,6 +6,7 @@ import 'package:klabautermann_app/controllers/admin_controller.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
+import 'package:klabautermann_app/controllers/docker_endpoint_choices.dart';
 import 'package:klabautermann_app/controllers/docker_notice_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
@@ -85,7 +86,9 @@ final class AppHarness {
 /// replaces a controller whose first-run card was
 /// already dismissed, so the card shows only in the tests that want it.
 /// [announcements] replaces an in-memory A11Y-15 switch that is on, and
-/// [dockerNotice] an in-memory SAF-08 notice not yet dismissed.
+/// [dockerNotice] an in-memory SAF-08 notice not yet dismissed, and
+/// [dockerEndpointChoices] the Docker controller's in-memory socket
+/// choices (the caller disposes one it passes).
 /// [appVersion] stands in for what `readAppVersion` read. [safety], which
 /// the caller disposes, adds the safety preferences; none leaves the
 /// Safety menu and notices out. [admin] adds the admin mode controller
@@ -105,6 +108,7 @@ Future<AppHarness> pumpApp(
   bool admin = false,
   bool operations = false,
   DockerNoticeController? dockerNotice,
+  DockerEndpointChoices? dockerEndpointChoices,
   DeviceSettingsIssue? settingsIssue,
   ImportStoreIssue? importStoreIssue,
   InstanceLockUnavailable? instanceLockIssue,
@@ -123,7 +127,11 @@ Future<AppHarness> pumpApp(
   final harness = AppHarness(
     engine: engine,
     fleet: FleetController(engine, servers: servers, sshConfig: sshConfig),
-    monitoring: MonitoringController(engine, linkGrace: linkGrace),
+    monitoring: MonitoringController(
+      engine,
+      linkGrace: linkGrace,
+      dockerEndpointChoices: dockerEndpointChoices,
+    ),
     prompts: PromptController(engine),
     appearance: appearance ?? AppearanceController(),
     coverage: coverage ?? CoverageController(firstRunCardDismissed: true),

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart';
+import 'package:klabautermann_app/controllers/docker_endpoint_choices.dart';
 import 'package:klabautermann_app/controllers/docker_notice_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
@@ -12,6 +13,7 @@ import 'package:klabautermann_app/ui/access/access_panel.dart' show AccessPanel;
 import 'package:klabautermann_app/ui/docker/container_details.dart';
 import 'package:klabautermann_app/ui/docker/container_logs.dart';
 import 'package:klabautermann_app/ui/docker/docker_endpoint.dart';
+import 'package:klabautermann_app/ui/docker/docker_endpoint_picker.dart';
 import 'package:klabautermann_app/ui/docker/docker_panel.dart';
 import 'package:klabautermann_app/ui/inspector_pane.dart';
 import 'package:klabautermann_app/ui/server_coverage.dart'
@@ -43,12 +45,14 @@ Future<AppHarness> _openWeb1(
   WidgetTester tester, {
   Size size = _desktop,
   DockerNoticeController? notice,
+  DockerEndpointChoices? choices,
 }) async {
   final harness = await pumpApp(
     tester,
     size: size,
     servers: twoServers,
     dockerNotice: notice,
+    dockerEndpointChoices: choices,
   );
   await tester.tap(find.text('web-1'));
   await tester.pumpAndSettle();
@@ -141,7 +145,60 @@ final _failures = <(DockerEndpointState, String, String)>[
     'The connection to this server failed while Klabautermann looked for '
         'the engine.',
   ),
+  (
+    _failed(DockerEndpointFailure.invalidChoice),
+    'No Engine API route: the chosen socket path is not valid',
+    'The socket path chosen for this server is not a valid absolute path. '
+        'Choose another socket below.',
+  ),
 ];
+
+const _rootful = '/var/run/docker.sock';
+const _podman = '/run/podman/podman.sock';
+const _custom = '/srv/engine.sock';
+
+/// A Debian host with a rootful Docker and a rootful Podman socket.
+HostProfile _twoEngines() => debianHost(
+  overrides: {
+    'engineSockets': [
+      {'path': _rootful, 'exists': true, 'writable': true},
+      {'path': _podman, 'exists': true, 'writable': true},
+    ],
+  },
+);
+
+List<SetDockerEndpoint> _choicesSent(AppHarness harness) =>
+    harness.engine.sentOfType<SetDockerEndpoint>().cast();
+
+/// Opens web-1's Docker tab over [choices] with [_twoEngines] probed and
+/// the endpoint [state] reported.
+Future<AppHarness> _openPicker(
+  WidgetTester tester,
+  DockerEndpointChoices choices, {
+  DockerEndpointState? state,
+}) async {
+  final harness = await _openWeb1(
+    tester,
+    notice: DockerNoticeController(dismissed: true),
+    choices: choices,
+  );
+  await _openDockerTab(tester);
+  await _emit(tester, harness, HostProfileChanged('srv-1', _twoEngines()));
+  await _emit(tester, harness, const LinkState('srv-1', LinkReady()));
+  await _emit(tester, harness, state ?? dockerReady('srv-1'));
+  return harness;
+}
+
+/// Opens the socket picker's menu, whose button shows [current], and
+/// taps [option] in it.
+Future<void> _pick(WidgetTester tester, String current, String option) async {
+  await tester.tap(find.text(current).first);
+  await tester.pumpAndSettle();
+  // The button keeps every item in its own stack; the open menu's copy is
+  // the last.
+  await tester.tap(find.text(option).last);
+  await tester.pumpAndSettle();
+}
 
 DockerEndpointState _failed(DockerEndpointFailure failure) =>
     DockerEndpointState(
@@ -617,8 +674,15 @@ void main() {
       );
       expect(_inDocker(find.text('Verified source')), findsWidgets);
 
-      // The overview shows beside the list on a 1280 px window.
-      await tester.ensureVisible(_inDocker(find.text('web-db')));
+      // The overview shows beside the list on a 1280 px window, its
+      // containers below the engine strip's endpoint picker.
+      await tester.ensureVisible(
+        find.descendant(
+          of: find.byType(DockerPanel),
+          matching: find.text('web-db', skipOffstage: false),
+          skipOffstage: false,
+        ),
+      );
       await tester.pumpAndSettle();
       await tester.tap(_inDocker(find.text('web-db')));
       await tester.pumpAndSettle();
@@ -830,6 +894,239 @@ void main() {
         _inDocker(find.text('Docker Engine - Community 27.3.1')),
         findsOneWidget,
       );
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('the socket picker (CN-09, D54)', () {
+    testWidgets('lists automatic and each detected socket, and sends the one '
+        'picked', (tester) async {
+      final choices = DockerEndpointChoices();
+      addTearDown(choices.dispose);
+      final harness = await _openPicker(tester, choices);
+      expect(_inDocker(find.text('Socket')), findsOneWidget);
+      expect(_inDocker(find.text('Find automatically')), findsWidgets);
+      expect(_choicesSent(harness), isEmpty);
+
+      await _pick(tester, 'Find automatically', 'Podman, rootful at $_podman');
+      expect(_choicesSent(harness).single.serverId, 'srv-1');
+      expect(
+        _choicesSent(harness).single.choice,
+        const DockerEndpointDetected(_podman),
+      );
+      expect(choices.choiceFor('srv-1'), const DockerEndpointDetected(_podman));
+
+      // In use once the engine reaches it: no warning.
+      await _emit(
+        tester,
+        harness,
+        DockerEndpointState(
+          serverId: 'srv-1',
+          phase: DockerEndpointPhase.ready,
+          route: const DockerEndpointRoute(
+            rank: DockerRank.streamlocal,
+            socketPath: _podman,
+            runtime: EngineRuntime.podman,
+            rootEquivalence: DockerRootEquivalence.rootfulSocket,
+            mode: EngineMode.rootful,
+          ),
+          negotiatedApi: const ApiVersion(1, 41),
+          choice: choices.choiceFor('srv-1'),
+        ),
+      );
+      expect(
+        find.textContaining('was chosen but did not answer'),
+        findsNothing,
+      );
+
+      await _pick(tester, 'Podman, rootful at $_podman', 'Find automatically');
+      expect(_choicesSent(harness).last.choice, const DockerEndpointAuto());
+    });
+
+    testWidgets('takes a custom path once it is an absolute socket path, '
+        'and says when the chosen socket did not answer', (tester) async {
+      final choices = DockerEndpointChoices();
+      addTearDown(choices.dispose);
+      final harness = await _openPicker(tester, choices);
+
+      await _pick(tester, 'Find automatically', 'Custom path…');
+      expect(find.text('Custom engine socket'), findsOneWidget);
+      final field = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(field, 'srv/engine.sock');
+      await tester.tap(find.text('Use'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Enter an absolute path, starting with /.'),
+        findsOneWidget,
+      );
+      expect(_choicesSent(harness), isEmpty);
+
+      await tester.enterText(field, _custom);
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Enter an absolute path, starting with /.'),
+        findsNothing,
+      );
+      await tester.tap(find.text('Use'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(
+        _choicesSent(harness).single.choice,
+        const DockerEndpointCustom(_custom),
+      );
+      expect(_inDocker(find.text('Custom: $_custom')), findsWidgets);
+
+      // The engine gave way to the detected socket.
+      await _emit(
+        tester,
+        harness,
+        DockerEndpointState(
+          serverId: 'srv-1',
+          phase: DockerEndpointPhase.ready,
+          route: dockerReady('srv-1').route,
+          negotiatedApi: const ApiVersion(1, 47),
+          choice: const DockerEndpointCustom(_custom),
+        ),
+      );
+      expect(
+        _inDocker(
+          find.text(
+            '$_custom was chosen but did not answer, so the sockets found '
+            'are tried instead.',
+          ),
+        ),
+        findsOneWidget,
+      );
+
+      // The dialog opens on the current path, and Cancel changes nothing.
+      await _pick(tester, 'Custom: $_custom', 'Custom path…');
+      expect(tester.widget<TextField>(field).controller!.text, _custom);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(_choicesSent(harness), hasLength(1));
+    });
+
+    testWidgets('a failed endpoint offers the picker under its reason', (
+      tester,
+    ) async {
+      final choices = DockerEndpointChoices(
+        stored: const {
+          'srv-1': DockerEndpointOverride(
+            DockerEndpointCustom(_custom),
+            endpoint: '',
+          ),
+        },
+      );
+      addTearDown(choices.dispose);
+      final harness = await _openPicker(
+        tester,
+        choices,
+        state: dockerNoRoute('srv-1', DockerNoRouteReason.noSocket),
+      );
+      // The stored choice went out as the link came up.
+      expect(
+        _choicesSent(harness).single.choice,
+        const DockerEndpointCustom(_custom),
+      );
+      expect(find.byType(DockerPanel), findsNothing);
+      expect(find.text('Custom: $_custom'), findsWidgets);
+
+      await _emit(
+        tester,
+        harness,
+        const DockerEndpointState(
+          serverId: 'srv-1',
+          phase: DockerEndpointPhase.failed,
+          failure: DockerEndpointFailure.noRoute,
+          noRouteReason: DockerNoRouteReason.noSocket,
+          choice: DockerEndpointCustom(_custom),
+        ),
+      );
+      expect(
+        find.text(
+          '$_custom was chosen but did not answer, so the sockets found are '
+          'tried instead.',
+        ),
+        findsOneWidget,
+      );
+
+      await _pick(tester, 'Custom: $_custom', 'Docker, rootful at $_rootful');
+      expect(
+        _choicesSent(harness).last.choice,
+        const DockerEndpointDetected(_rootful),
+      );
+    });
+
+    testWidgets('a choice that cannot be saved says it lasts until quit', (
+      tester,
+    ) async {
+      final choices = DockerEndpointChoices(
+        save: (_, _) async => throw const DeviceSettingsReadOnlyException(
+          DeviceSettingsIssueKind.newerVersion,
+        ),
+      );
+      addTearDown(choices.dispose);
+      final harness = await _openPicker(tester, choices);
+
+      final previous = debugPrint;
+      final printed = <String>[];
+      debugPrint = (message, {wrapWidth}) => printed.add('$message');
+      try {
+        await _pick(
+          tester,
+          'Find automatically',
+          'Docker, rootful at $_rootful',
+        );
+      } finally {
+        debugPrint = previous;
+      }
+      expect(printed.single, contains('DeviceSettingsReadOnlyException'));
+      expect(
+        find.text(
+          'Klabautermann could not save the socket choice, so it applies '
+          'only until Klabautermann quits.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        _choicesSent(harness).single.choice,
+        const DockerEndpointDetected(_rootful),
+      );
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('lays out on a phone at 200 % text', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final choices = DockerEndpointChoices(
+        stored: const {
+          'srv-1': DockerEndpointOverride(
+            DockerEndpointCustom('/srv/a/rather/long/path/to/engine.sock'),
+            endpoint: '',
+          ),
+        },
+      );
+      addTearDown(choices.dispose);
+      final harness = await _openWeb1(
+        tester,
+        size: _phone,
+        notice: DockerNoticeController(dismissed: true),
+        choices: choices,
+      );
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text('Docker'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _emit(tester, harness, HostProfileChanged('srv-1', _twoEngines()));
+      await _emit(tester, harness, dockerReady('srv-1'));
+      expect(find.byType(DockerEndpointPicker), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

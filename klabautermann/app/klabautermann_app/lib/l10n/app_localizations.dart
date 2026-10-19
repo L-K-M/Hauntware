@@ -1864,7 +1864,7 @@ abstract class AppLocalizations {
   /// **'Docker socket'**
   String get accessItemDockerSocket;
 
-  /// Access tab row title: whether the SSH server allows forwarding to a Unix socket, which Docker support uses. 'Streamlocal' is OpenSSH's term; keep it.
+  /// Access tab row title: whether the SSH server allows forwarding to a Unix socket, which the Docker tab uses. 'Streamlocal' is OpenSSH's term; keep it.
   ///
   /// In en, this message translates to:
   /// **'Streamlocal forwarding'**
@@ -1972,11 +1972,71 @@ abstract class AppLocalizations {
   /// **'No Docker or Podman socket was found.'**
   String get accessReasonNoEngineSocket;
 
-  /// Access tab row reason for streamlocal forwarding and the compose plugin, which the app checks only from the release with Docker support.
+  /// Access tab row reason for streamlocal forwarding before the engine has looked for the server's Docker endpoint (no connection yet, or still looking).
   ///
   /// In en, this message translates to:
-  /// **'Checked once Docker support arrives.'**
-  String get accessReasonPendingDocker;
+  /// **'Checked when Klabautermann looks for this server\'s Docker engine, after it connects.'**
+  String get accessReasonDockerEndpointPending;
+
+  /// Access tab row reason: the SSH server forwards the Docker engine's Unix socket (streamlocal, transport rank 1).
+  ///
+  /// In en, this message translates to:
+  /// **'The SSH server forwards the engine socket, the fastest route to Docker.'**
+  String get accessReasonStreamlocalAllowed;
+
+  /// Access tab row reason: the SSH server refused to forward a socket the account can use. AllowStreamLocalForwarding and DisableForwarding are sshd_config option names; keep them.
+  ///
+  /// In en, this message translates to:
+  /// **'The SSH server refused to forward the engine socket (AllowStreamLocalForwarding or DisableForwarding in its sshd_config). Docker goes through a slower relay on the server when it has one.'**
+  String get accessReasonStreamlocalDisabled;
+
+  /// Access tab row reason: the SSH server could not open the engine socket because the login account may not use it; 'Docker socket' is the accessItemDockerSocket row title.
+  ///
+  /// In en, this message translates to:
+  /// **'The SSH server could not open the engine socket as your account, which cannot use it. The Docker socket row shows how access is granted.'**
+  String get accessReasonStreamlocalSocketDenied;
+
+  /// Access tab row reason: the Docker endpoint failed before any socket could be tried (none found, the check failed, or the engine did not answer).
+  ///
+  /// In en, this message translates to:
+  /// **'Not tested: no engine socket could be tried. The Docker tab says why.'**
+  String get accessReasonStreamlocalUntested;
+
+  /// Access tab row reason: the docker compose plugin is installed; version is its version as it printed it, such as 2.29.7.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version}.'**
+  String accessReasonComposePlugin(String version);
+
+  /// Access tab row reason: only the standalone docker-compose binary (Compose v2) is installed; version is its version.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the standalone docker-compose {version} is installed. Stacks show read-only and their sources are not verified.'**
+  String accessReasonComposeStandaloneOnly(String version);
+
+  /// Access tab row reason: only the Python Compose v1 binary is installed; version is its version, such as 1.29.2.
+  ///
+  /// In en, this message translates to:
+  /// **'Only Compose v1 ({version}) is installed, unmaintained since 2023. Stacks show read-only.'**
+  String accessReasonComposeLegacyOnly(String version);
+
+  /// Access tab row reason: no compose command was found on the server. Both are command names; keep them.
+  ///
+  /// In en, this message translates to:
+  /// **'Neither docker compose nor docker-compose is installed.'**
+  String get accessReasonNoCompose;
+
+  /// Access tab row reason for the compose plugin before the Docker endpoint is ready.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked once Klabautermann reaches this server\'s Docker engine.'**
+  String get accessReasonComposeNotChecked;
+
+  /// Access tab row reason: the command that looks for the compose plugin failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The check for docker compose failed on this server.'**
+  String get accessReasonComposeCheckFailed;
 
   /// Access tab row reason: systemd 246 or later.
   ///
@@ -2025,6 +2085,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No Docker or Podman engine was found.'**
   String get accessReasonNoEngine;
+
+  /// Access tab runtime row reason: the user chose this server's Docker engine socket in the Docker tab (CN-09); path is the socket's path on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Chosen manually on this device: {path}'**
+  String accessReasonRuntimeChosen(String path);
+
+  /// Access tab runtime row reason: the socket the user chose is not the one in use; path is the chosen socket's path on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'{path} was chosen on this device, but Docker does not use it: it did not answer, so another socket or none is in use.'**
+  String accessReasonRuntimeChosenUnavailable(String path);
 
   /// Access tab: badge beside a row whose right equals root on the server (SAF-08).
   ///
@@ -2131,7 +2203,7 @@ abstract class AppLocalizations {
   /// Access tab and Docker tab: note under a socket at Docker's path, which a podman-docker install may serve.
   ///
   /// In en, this message translates to:
-  /// **'Podman can also answer on Docker\'s socket path. Docker support will tell them apart.'**
+  /// **'Podman can also answer on Docker\'s socket path. Once connected, the server header names the engine that answers.'**
   String get accessRuntimeAlias;
 
   /// Shown instead of a server panel that cannot work with this server or account; panel is the panel's tab name.
@@ -4816,6 +4888,12 @@ abstract class AppLocalizations {
   /// **'Engine API: the connection failed while looking for a route'**
   String get dockerTransportLinkError;
 
+  /// The server header's Docker transport label (03 §5.9, E4) when the socket path chosen for the server is not an absolute path.
+  ///
+  /// In en, this message translates to:
+  /// **'No Engine API route: the chosen socket path is not valid'**
+  String get dockerTransportInvalidChoice;
+
   /// Server header: the server allows few SSH sessions, so Docker shares them sparingly (03 §5.2).
   ///
   /// In en, this message translates to:
@@ -4954,6 +5032,12 @@ abstract class AppLocalizations {
   /// **'The connection to this server failed while Klabautermann looked for the engine.'**
   String get dockerGateLinkError;
 
+  /// Docker tab, shown instead of its panels under accessPanelHiddenTitle: the chosen socket path is not valid; the socket picker follows below.
+  ///
+  /// In en, this message translates to:
+  /// **'The socket path chosen for this server is not a valid absolute path. Choose another socket below.'**
+  String get dockerGateInvalidChoice;
+
   /// Docker tab: asks again for the Docker endpoint or the engine details after a failure.
   ///
   /// In en, this message translates to:
@@ -5037,6 +5121,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Klabautermann could not save that you dismissed the root-equivalence note, so it shows again after a restart.'**
   String get dockerNoticeNotSaved;
+
+  /// Docker tab: label beside the picker that chooses which engine socket the app uses for this server (CN-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Socket'**
+  String get dockerSocketLabel;
+
+  /// Docker socket picker option: the app finds the engine socket itself.
+  ///
+  /// In en, this message translates to:
+  /// **'Find automatically'**
+  String get dockerSocketAutomatic;
+
+  /// Docker socket picker option: the custom socket path chosen for this server.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom: {path}'**
+  String dockerSocketCustomCurrent(String path);
+
+  /// Docker socket picker option that opens a dialog to type a socket path.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom path…'**
+  String get dockerSocketCustomAction;
+
+  /// Docker tab, under the socket picker: the chosen socket is not the one in use; path is the chosen socket.
+  ///
+  /// In en, this message translates to:
+  /// **'{path} was chosen but did not answer, so the sockets found are tried instead.'**
+  String dockerSocketNotInUse(String path);
+
+  /// Toast when the socket choice could not be written to the device settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save the socket choice, so it applies only until Klabautermann quits.'**
+  String get dockerSocketNotSaved;
+
+  /// Title of the dialog that takes a custom Docker engine socket path.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom engine socket'**
+  String get dockerSocketCustomTitle;
+
+  /// Body of the custom socket dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann tries this socket first. If it does not answer, the sockets it finds are tried instead.'**
+  String get dockerSocketCustomBody;
+
+  /// Label of the custom socket dialog's text field.
+  ///
+  /// In en, this message translates to:
+  /// **'Socket path'**
+  String get dockerSocketCustomField;
+
+  /// Hint in the custom socket dialog's field: an example socket path on a Linux server. Keep it as is.
+  ///
+  /// In en, this message translates to:
+  /// **'/run/user/1000/docker.sock'**
+  String get dockerSocketCustomHint;
+
+  /// Custom socket dialog button that applies the typed path.
+  ///
+  /// In en, this message translates to:
+  /// **'Use'**
+  String get dockerSocketCustomUse;
+
+  /// Custom socket dialog button that closes it without a change.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get dockerSocketCustomCancel;
+
+  /// Custom socket dialog error: the typed path does not start with a slash.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an absolute path, starting with /.'**
+  String get dockerSocketPathNotAbsolute;
+
+  /// Custom socket dialog error: the typed path holds a line break or a NUL character.
+  ///
+  /// In en, this message translates to:
+  /// **'The path cannot contain line breaks or NUL characters.'**
+  String get dockerSocketPathUnsafe;
 
   /// Appearance tab: heading of the preset grid.
   ///

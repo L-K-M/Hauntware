@@ -163,7 +163,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   runtimes per host for CN-09), each `ok`, `missing` or `unknown` with
   an enum reason. Only the journal and Docker socket rows can carry a
   copyable fix argv, which is never run; sudo has none until SAF-17.
-  Streamlocal and the compose plugin stay unknown until M3. Panel
+  Streamlocal, the compose plugin and a chosen runtime come from the
+  Docker endpoint's facts since D20 (below). Panel
   capability declarations for the M2 host panels (the probe now also
   checks `dmesg` and `tail` for LOG-03 and LOG-22) and an
   external-monitor rule over the units list. The Access tab, panel
@@ -360,6 +361,26 @@ M2, the host read MVP, is the current milestone. What is on main:
   output. The editor's text field reads a mask as its asterisks; the
   count of masked values is said beside it. Tested against the fake
   engine only.
+- Runtime override and the Docker Access rows (M3, D20, 03 §4.10,
+  §5.4, §10.1, CN-09, CN-24, D54): `SetDockerEndpoint` carries a
+  server's socket choice (automatic, a detected socket or a custom
+  path); the engine keeps it across links, resolves a session again
+  with it as the ladder's first candidate, fails a path that is not an
+  absolute socket path as `invalidChoice`, and forgets it with the
+  server (SYN-08). `DockerEndpointState` carries the choice. The app
+  keeps each choice in `settings.json`
+  (`klabautermann.docker.endpointOverrides`) with the endpoint it was
+  made for, drops it when the fleet drops the server or moves it to
+  another endpoint, and sends it as the link comes up and on each
+  change. The Docker tab's engine strip, and the failed tab under its
+  reason, hold the picker (automatic, each socket the probe found, a
+  custom path checked before it is sent) and say when the chosen socket
+  did not answer. `evaluateAccess(profile, docker:)` answers the
+  streamlocal row from the route (allowed, disabled, denied, untested),
+  the compose row from a `DockerComposeQuery` the Access tab asks for
+  once the endpoint is ready (version, standalone only, v1 only, none),
+  and the runtime row "chosen manually". Tested over fakes and the fake
+  engine only; D21 and D22 meet the rows on real sshd variants.
 - Overview Docker summary (M3, D19, 03 §7.1, §10.1, §10.4, OV-02,
   OV-05): once a server's Docker endpoint is ready, the Overview holds
   a `DockerWatch` of the containers and images of its own while it
@@ -1013,10 +1034,11 @@ M2, the host read MVP, is the current milestone. What is on main:
   would split or expand a word, behind a Copy button that only writes the
   clipboard; the row says whether the copy worked, and a copy from another
   row clears that line. The tab says the app never runs a fix, and shows
-  the detected runtime read-only (CN-09). A tab whose host panels all lack
-  a capability the probe answered does not build its panel: a notice in
-  its place names what is missing and links to Access, which the desktop
-  selects with focus moved in and a phone pushes. The Docker tab follows
+  the detected runtime (CN-09), chosen in the Docker tab since D20. A
+  tab whose host panels all lack a capability the probe answered does
+  not build its panel: a notice in its place names what is missing and
+  links to Access, which the desktop selects with focus moved in and a
+  phone pushes. The Docker tab follows
   its Docker endpoint since M3 (D12, above). Since K44b turned links
   on, the app's engine sends `HostProfileChanged` for a connected server,
   so the rows and the panel gating follow its probe.

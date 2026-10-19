@@ -74,12 +74,11 @@ final class EngineStart {
 
   /// Whether the engine opens SSH links (03 §5.1, §10.1). Without them it
   /// has no link supervisor, sampling scheduler, log streams or Docker
-  /// sessions: [Connect], [OpenLogStream], [DockerQuery] and
-  /// [DockerWatch] get [RequestRejected] and nothing dials, samples or
-  /// reads, [CloseStream], [DockerUnwatch], [Disconnect],
-  /// [RefreshSubscription] and
-  /// [SetAppActivity] change nothing, subscriptions are only recorded,
-  /// and no [Prompt] is ever open. The app's composition root leaves
+  /// sessions: [Connect], [OpenLogStream], [DockerQuery], [DockerWatch]
+  /// and [SetDockerEndpoint] get [RequestRejected] and nothing dials,
+  /// samples or reads, [CloseStream], [DockerUnwatch], [Disconnect],
+  /// [RefreshSubscription] and [SetAppActivity] change nothing,
+  /// subscriptions are only recorded, and no [Prompt] is ever open. The app's composition root leaves
   /// them off; tests turn them on.
   final bool linksEnabled;
 
@@ -129,7 +128,8 @@ final class EngineStart {
 /// once the probe has answered and reports it as [DockerEndpointState]
 /// (03 §5.8, §5.9), [DockerWatch] and [DockerUnwatch] go to that session,
 /// which follows the engine's events into [DockerListChanged] lists
-/// (03 §7.12), [EnrollSync] and [RunSyncRound] run pull-only sync
+/// (03 §7.12), [SetDockerEndpoint] sets the socket it tries first
+/// (CN-09), [EnrollSync] and [RunSyncRound] run pull-only sync
 /// one at a time beside the request queue (03 §4.3, D63), answered by
 /// [SyncStatus] and, when they succeed, the fleet, after an
 /// [EndpointChanged] for each confirmed endpoint a round changed (03
@@ -848,6 +848,13 @@ void engineMain(
         }
       case DockerUnwatch():
         docker?.unwatch(message);
+      case SetDockerEndpoint():
+        switch (docker) {
+          case null:
+            reject(message, 'links are off in this engine');
+          case final docker:
+            docker.setEndpoint(message);
+        }
       case ImportSshConfig(:final text):
         final ({
           List<ImportedHost> hosts,

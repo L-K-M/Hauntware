@@ -39,6 +39,7 @@ export 'src/settings/device_settings_store.dart'
         DeviceSettingsReadOnlyException,
         DeviceSettingsStore,
         DeviceSettingsWriter,
+        DockerEndpointOverride,
         deviceSettingsFileName,
         deviceSettingsSchemaVersion,
         writeFileAtomically;
@@ -159,6 +160,14 @@ export 'src/docker/docker_ladder.dart'
         DockerRank,
         DockerRootEquivalence,
         DockerRouteLabel;
+// CN-09's endpoint choice (D54): the check a typed or stored socket path
+// gets before it is kept or sent, and the Access tab's Docker facts
+// (CN-24) from a server's DockerEndpointState.
+export 'src/docker/docker_ladder.dart'
+    show DockerSocketPathProblem, dockerSocketPathProblem;
+export 'src/docker/docker_access.dart' show dockerAccessFacts;
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show ComposeFacts, DockerAccessFacts;
 
 export 'package:klabautermann_docker/klabautermann_docker.dart'
     show
