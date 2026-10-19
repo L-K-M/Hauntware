@@ -1,4 +1,4 @@
-Captured on 2026-10-18 by `klabautermann_core/tool/capture_fixtures.dart`
+Captured on 2026-10-19 by `klabautermann_core/tool/capture_fixtures.dart`
 (local mode, `/usr/sbin/bash -s`) from
 Fedora Linux 44 (Container Image), Linux 6.18.44-fc-v139 x86_64;
 collector-set version 8. Goldens come from
@@ -32,5 +32,5 @@ parses as the capture did.
 
 Container capture: `klabautermann/test/integration/capture.sh` ran
 the tool as root in a fresh container of
-`quay.io/fedora/fedora:44@sha256:4a78eff1423dcce55cf68b8fd66e7cdca61c85978283db3ecc3089a8419fbbc0`,
+`mirror.gcr.io/library/fedora:44@sha256:43b29f65a41eb9c35e1cd5323e3bdf3b655c2357a9f4f1ff2f9c2798e5045d80`,
 whose PID 1 is `sleep infinity`.
