@@ -1617,6 +1617,17 @@ What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 Docker actions in the app (E22): a container's details and the
+  Containers row menu offer the verbs its state allows (start, stop,
+  restart, pause, unpause, kill with any signal), and a stopped
+  container is removed, with its anonymous volumes behind the typed
+  confirmation. A running container is stopped first: the app never
+  forces a removal. The Images row menu and phone row remove an image,
+  by force behind the typed confirmation when containers use it. A
+  stack's overview starts, stops and restarts it, with the manager
+  named when another tool deploys it. Where Docker or a stack file
+  needs root, the Docker gate, the Access tab's socket row and the file
+  view offer "Turn on admin mode".
 - M4 Docker actions suite (E28): on the Docker fixture, as the fixture
   user in the `docker` group, the engine runs every container action,
   removes an unused image and an in-use one only by force with its typed

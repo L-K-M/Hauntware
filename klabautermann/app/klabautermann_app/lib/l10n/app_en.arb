@@ -4157,6 +4157,66 @@
   "@unitReload": {
     "description": "Unit action (SVC-03): reloads the unit's configuration."
   },
+  "adminTurnOn": "Turn on admin mode",
+  "@adminTurnOn": {
+    "description": "Button where something needs root (SAF-02): asks the engine to turn admin mode on for this server, as the header's chip does."
+  },
+  "dockerContainerStart": "Start",
+  "@dockerContainerStart": {
+    "description": "Container action (CTR-02)."
+  },
+  "dockerContainerStop": "Stop",
+  "@dockerContainerStop": {
+    "description": "Container action (CTR-02)."
+  },
+  "dockerContainerRestart": "Restart",
+  "@dockerContainerRestart": {
+    "description": "Container action (CTR-02)."
+  },
+  "dockerContainerPause": "Pause",
+  "@dockerContainerPause": {
+    "description": "Container action (CTR-05): freezes the container's processes."
+  },
+  "dockerContainerUnpause": "Unpause",
+  "@dockerContainerUnpause": {
+    "description": "Container action (CTR-05): resumes a paused container."
+  },
+  "dockerContainerKill": "Kill",
+  "@dockerContainerKill": {
+    "description": "Container action (CTR-05): sends the engine's default signal, SIGKILL."
+  },
+  "dockerContainerRemove": "Remove",
+  "@dockerContainerRemove": {
+    "description": "Container action (CTR-06), offered once the container has stopped."
+  },
+  "dockerContainerRemoveVolumes": "Remove with volumes",
+  "@dockerContainerRemoveVolumes": {
+    "description": "Container action (CTR-06): also removes the container's anonymous volumes, behind the typed confirmation."
+  },
+  "dockerImageRemove": "Remove",
+  "@dockerImageRemove": {
+    "description": "Image action (IMG-02) for an image no container uses."
+  },
+  "dockerImageForceRemove": "Force remove",
+  "@dockerImageForceRemove": {
+    "description": "Image action (IMG-02) for an image containers use, behind the typed confirmation."
+  },
+  "dockerStackStart": "Start",
+  "@dockerStackStart": {
+    "description": "Stack action (STK-03): starts the project's containers in dependency order."
+  },
+  "dockerStackStop": "Stop",
+  "@dockerStackStop": {
+    "description": "Stack action (STK-03): stops the project's containers in reverse dependency order."
+  },
+  "dockerStackRestart": "Restart",
+  "@dockerStackRestart": {
+    "description": "Stack action (STK-03)."
+  },
+  "dockerActions": "Actions",
+  "@dockerActions": {
+    "description": "Tooltip of the button that opens a container's or image's actions in the phone list."
+  },
   "jobsRunNow": "Run now",
   "@jobsRunNow": {
     "description": "Timer action (JOB-08): starts the unit the timer activates now."
@@ -4518,7 +4578,7 @@
   },
   "dockerTransportNeedsAdminMode": "No Engine API route: the socket needs admin mode",
   "@dockerTransportNeedsAdminMode": {
-    "description": "The server header's Docker transport label (03 §5.9, E4) when the account cannot use the engine socket but sudo exists; admin mode arrives later."
+    "description": "The server header's Docker transport label (03 §5.9, E4) when the account cannot use the engine socket but sudo exists, and admin mode is off."
   },
   "dockerTransportSocketDenied": "No Engine API route: your account cannot use the socket",
   "@dockerTransportSocketDenied": {
@@ -4610,9 +4670,9 @@
   "@dockerGateNoRelay": {
     "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: forwarding refused and no relay. Command names stay as they are."
   },
-  "dockerGateNeedsAdminMode": "Your account cannot use the engine socket. Reaching it through sudo needs admin mode, which arrives in a later milestone.",
+  "dockerGateNeedsAdminMode": "Your account cannot use the engine socket. Turn on admin mode to reach it through sudo.",
   "@dockerGateNeedsAdminMode": {
-    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the account cannot use the socket, but sudo exists."
+    "description": "Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the account cannot use the socket, but sudo exists. A Turn on admin mode button follows it."
   },
   "dockerGateSocketDenied": "Your account cannot use the engine socket, and this server has no sudo. The Access tab shows how access is granted.",
   "@dockerGateSocketDenied": {
@@ -6091,7 +6151,7 @@
       }
     }
   },
-  "dockerStackFileFailed": "{reason, select, unknownStack{No container belongs to this stack any more.} notVerified{This stack's source is no longer verified, so its files do not show.} notStackFile{This path is none of the stack's files.} notFound{There is no file at this path on the host.} permissionDenied{Your account cannot read this file. Reading it through sudo needs admin mode, which arrives in a later milestone.} notRegularFile{This path is a link, a directory or another special file, which is not read.} readFailed{The file could not be read, or it changed while it was read.} other{The file could not be read.}}",
+  "dockerStackFileFailed": "{reason, select, unknownStack{No container belongs to this stack any more.} notVerified{This stack's source is no longer verified, so its files do not show.} notStackFile{This path is none of the stack's files.} notFound{There is no file at this path on the host.} permissionDenied{Your account cannot read this file. Admin mode reads it through sudo.} notRegularFile{This path is a link, a directory or another special file, which is not read.} readFailed{The file could not be read, or it changed while it was read.} other{The file could not be read.}}",
   "@dockerStackFileFailed": {
     "description": "Stack file view: why the engine read no file (STK-04). reason is the engine's failure name.",
     "placeholders": {

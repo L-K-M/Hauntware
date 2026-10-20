@@ -7,10 +7,25 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../controllers/operations_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
+import 'action_entry.dart' show OperationsScope;
 import 'confirm.dart';
 
 /// Below this width the preview is a bottom sheet, as on phones (10.5).
 const double _sheetBelowWidth = 600;
+
+/// Plans and previews [intent], if an operations controller is in scope
+/// and no other preview is on its way (the preview is modal). [onRun]
+/// hears of the preview once its plan runs. Every action entry starts
+/// here.
+void startAction(
+  BuildContext context,
+  ActionIntent intent, {
+  void Function(ActionPreview preview)? onRun,
+}) {
+  final operations = OperationsScope.maybeOf(context);
+  if (operations == null || operations.planning) return;
+  unawaited(previewAndRun(context, operations, intent, onRun: onRun));
+}
 
 /// Plans [intent] through [operations], shows the preview, and runs the
 /// plan once the user confirms (SAF-04, SAF-05). A refused plan says why
