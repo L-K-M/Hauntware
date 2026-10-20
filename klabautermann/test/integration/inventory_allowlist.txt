@@ -1,0 +1,25 @@
+# The host writes 03 §8.11 allows in the MVP, for inventory.dart: per
+# line the row a change belongs to, then an absolute path glob (`*` and
+# `?` within one path segment, `**` across segments). A change no line
+# covers fails the run. inventory.sh already leaves out what 8.11
+# excludes: /proc, /sys, /dev, runtime state under /run (transient units
+# `klabautermann-op-<id>` among it), journals, login records (wtmp,
+# btmp, lastlog, auth logs) and engine state (/var/lib/docker and its
+# kin). Each line below says why it is needed.
+
+# Detached-operation records and logs (user): the state directory the
+# first operation creates under XDG_STATE_HOME's default, and the
+# records and logs, which acknowledging the result deletes.
+detached-user   /home/*/.local
+detached-user   /home/*/.local/state
+detached-user   /home/*/.local/state/klabautermann
+detached-user   /home/*/.local/state/klabautermann/ops
+detached-user   /home/*/.local/state/klabautermann/ops/*.json
+detached-user   /home/*/.local/state/klabautermann/ops/*.log
+
+# Detached-operation records and logs (root), for an operation that
+# needs root (03 §7.17): the root-owned directory and its files.
+detached-root   /var/lib/klabautermann
+detached-root   /var/lib/klabautermann/ops
+detached-root   /var/lib/klabautermann/ops/*.json
+detached-root   /var/lib/klabautermann/ops/*.log

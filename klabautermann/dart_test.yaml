@@ -20,6 +20,10 @@ tags:
   # starts and seeds; they also carry `integration`, so they run with
   # the engine suites, and skip without the fixture (03 §11.3).
   docker:
+  # The scripted MVP session the host write inventory brackets (M4 E31),
+  # which run.sh's inventory leg runs alone between snapshots; skipped
+  # without the fixture.
+  inventory:
 # A wedged shell test (an unread pipe or a hung child shell) would pin the
 # VM; cap every test instead.
 timeout: 60s

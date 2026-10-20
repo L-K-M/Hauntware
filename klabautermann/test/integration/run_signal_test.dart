@@ -23,7 +23,11 @@ const _lockLine = "readonly lock_file='/tmp/klabautermann-fixture.lock'";
 /// A run stops as package:test does: a first SIGTERM lets the running test
 /// finish, here 30 s after the start, and a second one stops it at once.
 /// `compose down` takes `$STUB_DOWN_SECONDS` when it is set. `ssh` plays
-/// the Docker host, where `docker load` reports an image.
+/// the Docker host, where `docker load` reports an image. With
+/// `--tags inventory`, `dart test` plays the inventory session and exits
+/// at once with `$STUB_INVENTORY_EXIT` (default 0); `dart run` of
+/// inventory.dart plays its check, exiting with
+/// `$STUB_INVENTORY_CHECK_EXIT` (default 0).
 const _stubs = {
   'docker': r'''
 echo "docker $*" >>"$STUB_LOG"
@@ -50,7 +54,15 @@ cat >/dev/null
 if [[ "$*" == *' docker load '* ]]; then echo 'Loaded image ID: sha256:stub'; fi
 ''',
   'dart': r'''
+if [[ "$1" == run && "$*" == *inventory.dart* ]]; then
+  echo 'inventory checked' >>"$STUB_LOG"
+  exit "${STUB_INVENTORY_CHECK_EXIT:-0}"
+fi
 if [[ "$1" == run ]]; then cat >/dev/null; exit 0; fi
+if [[ " $* " == *' --tags inventory '* ]]; then
+  echo 'inventory started' >>"$STUB_LOG"
+  exit "${STUB_INVENTORY_EXIT:-0}"
+fi
 run=suites
 exit_status="${STUB_SUITES_EXIT:-}"
 if [[ " $* " == *' --tags soak '* ]]; then
@@ -136,6 +148,7 @@ void main() {
       ..writeAsStringSync('#!/usr/bin/env bash\n$_runnerVm');
     // What run.sh pipes to the Docker host, which the stand-in ignores.
     File('${integration.path}/seed_docker.sh').writeAsStringSync('exit 0\n');
+    File('${integration.path}/inventory.sh').writeAsStringSync('exit 0\n');
     final chmod = await Process.run('chmod', [
       '+x',
       for (final name in _stubs.keys) '${bin.path}/$name',
@@ -151,6 +164,8 @@ void main() {
     String? downSeconds,
     String? runnerVmExit,
     bool holdRunnerVm = false,
+    String? inventoryExit,
+    String? inventoryCheckExit,
     String? soakExit,
     bool holdSoak = false,
     bool soakEvidence = true,
@@ -167,6 +182,8 @@ void main() {
         'STUB_SUITES_EXIT': ?suitesExit,
         'STUB_DOWN_SECONDS': ?downSeconds,
         'STUB_RUNNER_VM_EXIT': ?runnerVmExit,
+        'STUB_INVENTORY_EXIT': ?inventoryExit,
+        'STUB_INVENTORY_CHECK_EXIT': ?inventoryCheckExit,
         if (holdRunnerVm) 'STUB_RUNNER_VM_HOLD': '1',
         'STUB_SOAK_EXIT': ?soakExit,
         if (holdSoak) 'STUB_SOAK_HOLD': '1',
@@ -279,6 +296,50 @@ void main() {
     expect(
       fixtureLifetime(),
       containsAllInOrder(['runner-vm started', 'soak started']),
+    );
+  });
+
+  test('run.sh exits with the inventory session\'s status once the suites '
+      'pass, and checks no diff after a failed session', () async {
+    final (process: _, :exitCode, :output) = await startRun(
+      suitesExit: '0',
+      inventoryExit: '6',
+    );
+
+    expect(
+      await exitCode.timeout(const Duration(seconds: 20)),
+      6,
+      reason: '$output',
+    );
+    final lifetime = fixtureLifetime();
+    expect(
+      lifetime,
+      containsAllInOrder([
+        'suites started',
+        contains(' exec -T --user root docker-sshd sh -s -- /'),
+        'inventory started',
+        contains(' exec -T --user root docker-sshd sh -s -- /'),
+        'runner-vm started',
+      ]),
+    );
+    expect(lifetime, isNot(contains('inventory checked')));
+  });
+
+  test('a host write outside the allowlist fails the run once the suites '
+      'pass', () async {
+    final (process: _, :exitCode, :output) = await startRun(
+      suitesExit: '0',
+      inventoryCheckExit: '7',
+    );
+
+    expect(
+      await exitCode.timeout(const Duration(seconds: 20)),
+      7,
+      reason: '$output',
+    );
+    expect(
+      fixtureLifetime(),
+      containsAllInOrder(['inventory started', 'inventory checked']),
     );
   });
 
