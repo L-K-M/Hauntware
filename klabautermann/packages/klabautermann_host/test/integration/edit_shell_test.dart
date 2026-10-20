@@ -26,7 +26,8 @@ final _shells = <String, String>{
     if (_which(name) case final p?) name: p,
 };
 
-const _token = '0123456789abcdef';
+// Low entropy, so the secret scan does not read it as a key.
+const _token = 'feedfacefeedface';
 
 /// The octal permission bits of [path].
 String _mode(String path) =>
@@ -61,12 +62,19 @@ void main() {
           executable,
           argv.sublist(1),
           environment: {
-            'PATH': '${shims.path}:${Platform.environment['PATH']}',
+            'PATH': '${shims.path}:${Platform.environment['PATH'] ?? ''}',
             'LC_ALL': 'C',
           },
         );
-        process.stdin.write(stdin ?? '');
-        await process.stdin.close();
+        // A refused command exits without reading its input, and the
+        // write then races its exit into a broken pipe; its exit code
+        // and stderr are what the test reads.
+        try {
+          process.stdin.write(stdin ?? '');
+          await process.stdin.close();
+        } on SocketException {
+          // The command closed its stdin first.
+        }
         final out = process.stdout.transform(utf8.decoder).join();
         final err = process.stderr.transform(utf8.decoder).join();
         return ProcessResult(
@@ -197,6 +205,11 @@ void main() {
         final acl = await run(EditCommands.copyAttributes(target, temp));
         expect(acl.exitCode, EditExit.aclNotCarried);
 
+        // A getfacl that fails says nothing about the ACL, so it refuses.
+        shim('getfacl', 'exit 1');
+        final failed = await run(EditCommands.copyAttributes(target, temp));
+        expect(failed.exitCode, EditExit.aclNotCarried);
+
         shim('getfacl', r"printf 'user::rw-\ngroup::r--\nother::---\n\n'");
         shim('getfattr', r"""printf '# file: x\nuser.klab="spike"\n\n'""");
         final xattr = await run(EditCommands.copyAttributes(target, temp));
@@ -234,7 +247,7 @@ void main() {
         ]);
         expect(
           Directory(backups).listSync().map((e) => e.path),
-          isNot(contains(endsWith('.tmp'))),
+          isNot(contains(contains('.tmp'))),
         );
       });
 
@@ -246,7 +259,10 @@ void main() {
         );
         expect(write.exitCode, 0, reason: '${write.stderr}');
         expect(File(manifest).readAsStringSync(), '{"v":1}');
-        expect(File('$manifest.klabautermann-tmp').existsSync(), isFalse);
+        expect(
+          File(manifest).parent.listSync().map((e) => e.path),
+          isNot(contains(contains('klabautermann-tmp'))),
+        );
 
         final read = await run(EditCommands.manifestRead(manifest));
         expect(read.stdout, '{"v":1}');
