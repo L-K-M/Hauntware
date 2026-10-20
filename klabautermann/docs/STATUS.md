@@ -1729,7 +1729,10 @@ What is on main:
 - M4 detached runner, first half (E17a): the engine picks each
   operation's runner from the host profile, the work's level and admin
   mode, and launches it with a fresh id. Re-attach, results and cleanup
-  follow in E17b.
+  follow in E17b. Each recorded host's probe picks its rows in a test
+  (X3): the systemd hosts reach back to RHEL 8's systemd 239, which takes
+  the rows' `--collect` (236 and later), and the containers and Alpine
+  take `setsid`.
 - M4 activity log (E24): the server header's Safety menu opens
   Activity, the device audit log as a sortable table with each run's
   redacted steps in its details and older pages on request. Copy puts
