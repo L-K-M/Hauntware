@@ -59,6 +59,19 @@ void main() {
       expect(utf8.decode(r.body), 'rest');
     });
 
+    test('keeps the raw stream after a 101 upgrade', () {
+      final r = parseRecordedResponse(
+        _bytes(
+          '${_head('101 UPGRADED', ['Connection: Upgrade', 'Upgrade: tcp'])}'
+          '\x01\x00\x00\x00\x00\x00\x00\x01x',
+        ),
+      );
+      expect(r.framing, BodyFraming.upgraded);
+      expect(r.body, hasLength(9));
+      expect(r.complete, isTrue);
+      expect(classifyBody(r.body), BodyKind.stdcopy);
+    });
+
     test('gives a HEAD response no body', () {
       final r = parseRecordedResponse(
         _bytes(_head('200 OK', ['Content-Length: 2', 'Api-Version: 1.55'])),

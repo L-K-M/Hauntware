@@ -20,7 +20,10 @@ const String sourceFileName = 'SOURCE.md';
 const int manifestFormat = 1;
 
 /// How a response body is delimited on the wire (RFC 9112 §6.3).
-enum BodyFraming { none, length, chunked, close }
+/// [upgraded] is a `101` response to a hijacked request (03 §5.7): the
+/// bytes after its head are the raw stream, which ends when the daemon
+/// closes the connection.
+enum BodyFraming { none, length, chunked, close, upgraded }
 
 /// What a body holds, judged from its bytes: the check compares the kind,
 /// never the content.
@@ -108,7 +111,7 @@ RecordedResponse parseRecordedResponse(
     BodyFraming.none => (Uint8List(0), true),
     BodyFraming.length => _lengthBody(response, rest),
     BodyFraming.chunked => _dechunk(rest),
-    BodyFraming.close => (rest, true),
+    BodyFraming.close || BodyFraming.upgraded => (rest, true),
   };
   if (framing == BodyFraming.none && rest.isNotEmpty) {
     throw const FormatException('bytes after a response without a body');
@@ -124,6 +127,7 @@ RecordedResponse parseRecordedResponse(
 }
 
 BodyFraming _framing(RecordedResponse head, int status, bool headRequest) {
+  if (!headRequest && status == 101) return BodyFraming.upgraded;
   if (headRequest || status == 204 || status == 304 || status < 200) {
     return BodyFraming.none;
   }
@@ -234,7 +238,7 @@ int? truncationPoint(List<int> raw, int lines) {
         if (rest[i] == 10 && ++seen == lines) return bodyStart + i + 1;
       }
       return null;
-    case BodyFraming.none || BodyFraming.length:
+    case BodyFraming.none || BodyFraming.length || BodyFraming.upgraded:
       return null;
   }
 }
