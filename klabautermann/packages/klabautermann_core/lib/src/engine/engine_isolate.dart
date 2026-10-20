@@ -367,10 +367,15 @@ void engineMain(
         if (router == null) {
           throw const DockerEndpointUnavailable(DockerQueryFailure.cancelled);
         }
-        return router.useEndpoint(
+        final status = await router.useEndpoint(
           serverId,
           (client, _) => runApiStep(client, step),
         );
+        if (status >= 200 && status < 300) {
+          final (:container, :images) = apiStepChanges(step);
+          router.actionRan(serverId, containers: {?container}, images: images);
+        }
+        return status;
       },
       docker: (serverId, check) async {
         final router = docker;
