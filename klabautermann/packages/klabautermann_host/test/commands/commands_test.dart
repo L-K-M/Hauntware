@@ -33,6 +33,39 @@ void main() {
   });
 
   group('journalctl', () {
+    test('a boot by offset or ID replaces the bare -b', () {
+      expect(HostCommands.journalctl(boot: const JournalBoot.offset(-1)), [
+        'journalctl',
+        '-o',
+        'json',
+        '--no-pager',
+        '-b',
+        '-1',
+      ]);
+      const id = '0123456789abcdef0123456789abcdef';
+      expect(
+        HostCommands.journalctl(kernel: true, boot: const JournalBoot.id(id)),
+        ['journalctl', '-o', 'json', '--no-pager', '-k', '-b', id],
+      );
+      for (final bad in [
+        const JournalBoot.offset(1),
+        const JournalBoot.id('0123'),
+        const JournalBoot.id('-b; id'),
+      ]) {
+        expect(
+          () => HostCommands.journalctl(boot: bad),
+          throwsA(isA<HostCommandError>()),
+        );
+      }
+      expect(
+        () => HostCommands.journalctl(
+          currentBoot: true,
+          boot: const JournalBoot.offset(0),
+        ),
+        throwsA(isA<HostCommandError>()),
+      );
+    });
+
     test('filters append in a fixed order and JSON is always set', () {
       expect(
         HostCommands.journalctl(
@@ -446,5 +479,38 @@ void main() {
       () => HostCommands.unitLoadState('-x'),
       throwsA(isA<HostCommandError>()),
     );
+  });
+
+  group('log sources', () {
+    test('the boot list asks for JSON only where journalctl has it', () {
+      expect(HostCommands.journalBoots(JournalBootsFormat.json), [
+        'journalctl',
+        '--list-boots',
+        '--no-pager',
+        '-o',
+        'json',
+      ]);
+      expect(HostCommands.journalBoots(JournalBootsFormat.text), [
+        'journalctl',
+        '--list-boots',
+        '--no-pager',
+      ]);
+    });
+
+    test('a rotated log reads through the decompressor its name asks for', () {
+      final gz = HostCommands.rotatedTail('/var/log/syslog.2.gz', lines: 50);
+      expect(gz.sublist(4), ['zcat', '/var/log/syslog.2.gz', '50']);
+      final xz = HostCommands.rotatedTail('/var/log/messages.xz', lines: 5);
+      expect(xz.sublist(4), ['xzcat', '/var/log/messages.xz', '5']);
+      expect(
+        () => HostCommands.rotatedTail('/var/log/syslog', lines: 5),
+        throwsA(isA<HostCommandError>()),
+        reason: 'an uncompressed log reads through tail',
+      );
+      expect(
+        () => HostCommands.rotatedTail('../etc/shadow.gz', lines: 5),
+        throwsA(isA<HostCommandError>()),
+      );
+    });
   });
 }

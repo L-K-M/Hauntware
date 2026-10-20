@@ -29,6 +29,7 @@ export 'src/parse/dmesg.dart';
 export 'src/parse/fs.dart';
 export 'src/parse/identity.dart';
 export 'src/parse/journal.dart';
+export 'src/parse/log_sources.dart';
 export 'src/parse/metrics.dart';
 export 'src/parse/models.dart';
 export 'src/parse/oncalendar.dart';
