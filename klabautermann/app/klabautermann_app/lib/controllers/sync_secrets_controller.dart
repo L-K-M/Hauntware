@@ -51,8 +51,10 @@ final class SyncSecretsController extends ChangeNotifier
   @override
   Future<void> setSyncSecrets(bool enabled) async {
     if (enabled == _value) return;
-    _value = enabled;
+    // A throw from apply means the engine never took it, so nothing is
+    // kept either.
     _apply(enabled);
+    _value = enabled;
     notifyListeners();
     try {
       await _save?.call(enabled);

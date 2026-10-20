@@ -227,8 +227,12 @@ class _PromptHostState extends State<PromptHost> {
               dialogKey: dialogKey,
             );
             return switch (reply) {
+              // Kept only when the engine offered to keep it.
               GhostPasswordReply(:final password, :final saveToVault) =>
-                PromptSecretAnswer(password, save: saveToVault),
+                PromptSecretAnswer(
+                  password,
+                  save: request.canSave && saveToVault,
+                ),
               _ => const PromptSecretAnswer(null),
             };
           }),
