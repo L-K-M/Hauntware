@@ -309,6 +309,18 @@ Future<int> runApiStep(DockerClient client, ApiStep step) async {
   }
 }
 
+/// What [step] changes once it succeeds, for the watched lists to read
+/// again: the container its path addresses (`/containers/<id>/...`), or
+/// the images for an image removal.
+({String? container, bool images}) apiStepChanges(ApiStep step) {
+  final segments = Uri(path: step.path).pathSegments;
+  final at = segments.indexOf('containers');
+  if (at >= 0 && at + 1 < segments.length) {
+    return (container: segments[at + 1], images: false);
+  }
+  return (container: null, images: segments.contains('images'));
+}
+
 /// Checks [check] against the engine: null while the target still has
 /// the id the preview saw.
 Future<RevalidationFailure?> revalidateDockerTarget(

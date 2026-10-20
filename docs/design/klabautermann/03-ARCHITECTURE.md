@@ -5932,9 +5932,13 @@ the engine in `engine_isolate.dart` beside it):
   [E] of the first are refreshed together, the containers they name
   (up to 16 [E]) read with an `id` filter and merged in, more of them,
   or an event without an id, re-listing them all, and image events
-  re-listing the images. A stream that ends opens again over the same
-  endpoint after 1 s, doubling to 30 s [E]; one whose endpoint drops
-  resumes over the next. Either resumes with `since` at the last
+  re-listing the images. A Docker action that succeeds reads its
+  container, or the images after an image removal, the same way once
+  its reply arrives: the engine can log a change's event before its
+  list holds the change (`containerPause` logs `pause` first), so the
+  event's own read may show the old state. A stream that ends opens
+  again over the same endpoint after 1 s, doubling to 30 s [E]; one
+  whose endpoint drops resumes over the next. Either resumes with `since` at the last
   event's second when the stream was lost 60 s ago or less on the same
   socket, and re-lists in full otherwise. A resumed stream re-lists
   too, though not as a fresh list: the daemon replays from memory,

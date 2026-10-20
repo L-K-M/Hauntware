@@ -1686,7 +1686,9 @@ What is on main:
   re-validated by inspect before they run. Removing volumes, forcing an
   image in use, and a managed or protected target need the typed
   confirmation. A stack acts in its services' dependency order and a
-  cycle refuses. The app's Docker actions arrive with E22.
+  cycle refuses. The app's Docker actions arrive with E22. A step that
+  succeeds reads its container (or the images) again for the watched
+  lists, since Docker can log a pause before its list shows it.
 - M4 elevated reads (E16b): with admin mode on, the engine reads a
   root-only log file the app asks to read elevated, and a stack file
   SFTP may not read, through the admin session; a follow ends when admin

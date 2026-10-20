@@ -431,6 +431,28 @@ final class DockerWatcher {
           break;
       }
     }
+    _schedule();
+  }
+
+  /// Reads again what a finished action changed: the [containers] it
+  /// addressed, and the images after an image removal. The engine can
+  /// log a change's event before the list endpoint holds the change
+  /// (Docker's containerPause logs `pause` first), so the read that event
+  /// starts may still show the old state, while the action's reply only
+  /// comes once the list holds it.
+  void changed({Set<String> containers = const {}, bool images = false}) {
+    if (_target == null) return;
+    if (_wantsContainers) {
+      _changedIds.addAll(containers.where((id) => id.isNotEmpty));
+    }
+    if (images && _lists.contains(DockerWatchList.images)) {
+      _due(DockerWatchList.images, fresh: false);
+    }
+    _schedule();
+  }
+
+  /// Reads what is due after [kDockerEventBatch], so a burst reads once.
+  void _schedule() {
     if (_relist.isEmpty && _changedIds.isEmpty) return;
     _batch ??= _startTimer(kDockerEventBatch, () {
       _batch = null;
