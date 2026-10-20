@@ -10,6 +10,10 @@ import 'fixture.dart';
 /// job or a Docker request included.
 const actionWait = Duration(seconds: 60);
 
+/// Covers sudo's delay after each wrong password (pam_faildelay) and the
+/// validation runs that follow.
+const _adminWait = Duration(seconds: 60);
+
 /// Turns management on for [servers], so their plans may run; every other
 /// server stays observe-only (SAF-01).
 void manage(FixtureEngine engine, Iterable<String> servers) => engine.send(
@@ -93,4 +97,60 @@ void expectSucceeded(EngineEvent event) {
       (ActionOutcome.succeeded, null, null, null),
     ),
   );
+}
+
+/// Turns admin mode on for [serverId], answering each elevation prompt
+/// with the next of [answers], and returns the state it settles in with
+/// the prompts it asked.
+Future<(AdminModeState, List<ElevationPromptRequest>)> turnOnAdmin(
+  FixtureEngine engine,
+  String serverId,
+  List<String> answers,
+) async {
+  final asked = <ElevationPromptRequest>[];
+  engine.send(SetAdminMode(serverId, enabled: true));
+  while (true) {
+    final event = await engine.until<EngineEvent>(
+      (e) => switch (e) {
+        Prompt(serverId: final s, request: ElevationPromptRequest()) =>
+          s == serverId,
+        AdminModeState(serverId: final s, :final phase) =>
+          s == serverId &&
+              (phase == AdminModePhase.on || phase == AdminModePhase.failed),
+        _ => false,
+      },
+      _adminWait,
+    );
+    switch (event) {
+      case Prompt(:final promptId, request: final ElevationPromptRequest r):
+        asked.add(r);
+        expect(
+          asked.length,
+          lessThanOrEqualTo(answers.length),
+          reason: 'asked more often than expected',
+        );
+        engine.send(
+          AnswerPrompt(promptId, PromptSecretAnswer(answers[asked.length - 1])),
+        );
+      case final AdminModeState state:
+        return (state, asked);
+      default:
+        // The test above accepts nothing else.
+        break;
+    }
+  }
+}
+
+/// [serverId]'s host profile: the first one the engine sent, or the
+/// next.
+Future<HostProfile> hostProfile(FixtureEngine engine, String serverId) async {
+  for (final event in engine.seen) {
+    if (event is HostProfileChanged && event.serverId == serverId) {
+      return event.profile;
+    }
+  }
+  final changed = await engine.until<HostProfileChanged>(
+    (e) => e.serverId == serverId,
+  );
+  return changed.profile;
 }

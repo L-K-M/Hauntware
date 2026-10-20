@@ -1633,6 +1633,21 @@ M2, the host read MVP, is the current milestone. What is on main:
   re-attach) and fails on any change outside 03 §8.11's MVP rows,
   encoded once in `test/integration/inventory_allowlist.txt`. The
   runner VM's snapshot follows separately.
+- M4 runner-VM Docker suite (E30): on the GitHub-hosted runner's own
+  engine, with root's default Docker context on a dead socket, the
+  engine finds no route for an account outside the `docker` group until
+  admin mode is on, then the sudo relay (rank 3) through the password
+  prelude. A redeploy over it pulls a new digest from a registry on the
+  runner and runs as root under `systemd-run`, outlives a forced
+  reconnect that ends admin mode, is found again, and keeps its root
+  records after acknowledgement until admin mode is on again. An
+  account in the `docker` group, over the CLI relay since the leg's
+  sshd forwards nothing, redeploys under `systemd-run --uid` in admin
+  mode and under `systemd-run --user` with linger without it. Every
+  step names the socket with `--host`. The docker-scoped NOPASSWD
+  account's rank 3 and its refused root operation stay untested: admin
+  mode asks that account for a password it lacks (owner decision
+  pending).
 - M4 runner-VM actions suite (E29): on the GitHub-hosted runner, as
   throwaway accounts, the engine turns admin mode on after a wrong
   password is asked again, and under `timestamp_timeout=0` (rung 4);

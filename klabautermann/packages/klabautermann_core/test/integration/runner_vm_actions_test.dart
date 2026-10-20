@@ -23,10 +23,6 @@ import 'support/actions.dart';
 import 'support/fixture.dart';
 import 'support/runner_vm.dart';
 
-/// Covers sudo's delay after each wrong password (pam_faildelay) and the
-/// validation runs that follow.
-const _adminWait = Duration(seconds: 60);
-
 /// Covers journald writing a unit's output before a read finds it.
 const _journalWait = Duration(seconds: 20);
 
@@ -52,7 +48,7 @@ void main() {
     for (final server in servers) {
       await engine.connect(server, vm.hostKeys);
       await engine.subscribe(server, {SampleStream.identity});
-      await _profile(engine, server);
+      await hostProfile(engine, server);
     }
     return engine;
   }
@@ -63,7 +59,7 @@ void main() {
       final engine = await managed('admin-retry', [sudoServer]);
       final password = await vm.sudoPassword();
 
-      final (state, asked) = await _admin(engine, sudoServer, [
+      final (state, asked) = await turnOnAdmin(engine, sudoServer, [
         _wrongPassword,
         password,
       ]);
@@ -94,7 +90,7 @@ void main() {
     test('three wrong passwords fail it', () async {
       final engine = await managed('admin-wrong', [sudoServer]);
 
-      final (state, asked) = await _admin(
+      final (state, asked) = await turnOnAdmin(
         engine,
         sudoServer,
         List.filled(3, _wrongPassword),
@@ -107,7 +103,7 @@ void main() {
     test('without a cached credential (rung 4) it turns on, and an '
         'elevated restart runs', () async {
       final engine = await managed('admin-rung4', [nocacheServer]);
-      final (state, _) = await _admin(engine, nocacheServer, [
+      final (state, _) = await turnOnAdmin(engine, nocacheServer, [
         await vm.nocachePassword(),
       ]);
       expect(state.phase, AdminModePhase.on);
@@ -133,7 +129,7 @@ void main() {
     test('stop, start, restart and reload run as root in admin '
         'mode', () async {
       final engine = await managed('units-admin', [sudoServer]);
-      await _admin(engine, sudoServer, [await vm.sudoPassword()]);
+      await turnOnAdmin(engine, sudoServer, [await vm.sudoPassword()]);
 
       Future<void> act(SystemctlVerb verb) async {
         final planned = await plan(
@@ -189,7 +185,7 @@ void main() {
 
     test('the protected ssh.service runs only with its typed name', () async {
       final engine = await managed('units-protected', [sudoServer]);
-      await _admin(engine, sudoServer, [await vm.sudoPassword()]);
+      await turnOnAdmin(engine, sudoServer, [await vm.sudoPassword()]);
 
       final planned = await plan(
         engine,
@@ -223,7 +219,7 @@ void main() {
   test('run timer now starts its service, whose journal follows the run '
       '(JOB-08)', () async {
     final engine = await managed('timer-now', [sudoServer, journalServer]);
-    await _admin(engine, sudoServer, [await vm.sudoPassword()]);
+    await turnOnAdmin(engine, sudoServer, [await vm.sudoPassword()]);
 
     final planned = await plan(
       engine,
@@ -277,7 +273,7 @@ void main() {
 
     expect((await read('off')).failure, UserCrontabsFailure.adminRequired);
 
-    await _admin(engine, sudoServer, [await vm.sudoPassword()]);
+    await turnOnAdmin(engine, sudoServer, [await vm.sudoPassword()]);
     final read2 = await read('on');
     expect(read2.failure, isNull);
     expect(read2.unreadable, isEmpty);
@@ -318,7 +314,7 @@ void main() {
     expect(refused.reason, ActionRefusalReason.adminRequired);
     expect(await _alive(pid), isTrue);
 
-    await _admin(engine, sudoServer, [await vm.sudoPassword()]);
+    await turnOnAdmin(engine, sudoServer, [await vm.sudoPassword()]);
     final planned = await plan(engine, intent);
     expect(planned.preview.runner.identity, 'root');
     expect((planned.preview.steps.single as ShellStep).elevated, isTrue);
@@ -330,48 +326,6 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 200));
     }
   });
-}
-
-/// Turns admin mode on for [serverId], answering each elevation prompt
-/// with the next of [answers], and returns the state it settles in with
-/// the prompts it asked.
-Future<(AdminModeState, List<ElevationPromptRequest>)> _admin(
-  FixtureEngine engine,
-  String serverId,
-  List<String> answers,
-) async {
-  final asked = <ElevationPromptRequest>[];
-  engine.send(SetAdminMode(serverId, enabled: true));
-  while (true) {
-    final event = await engine.until<EngineEvent>(
-      (e) => switch (e) {
-        Prompt(serverId: final s, request: ElevationPromptRequest()) =>
-          s == serverId,
-        AdminModeState(serverId: final s, :final phase) =>
-          s == serverId &&
-              (phase == AdminModePhase.on || phase == AdminModePhase.failed),
-        _ => false,
-      },
-      _adminWait,
-    );
-    switch (event) {
-      case Prompt(:final promptId, request: final ElevationPromptRequest r):
-        asked.add(r);
-        expect(
-          asked.length,
-          lessThanOrEqualTo(answers.length),
-          reason: 'asked more often than expected',
-        );
-        engine.send(
-          AnswerPrompt(promptId, PromptSecretAnswer(answers[asked.length - 1])),
-        );
-      case final AdminModeState state:
-        return (state, asked);
-      default:
-        // The test above accepts nothing else.
-        break;
-    }
-  }
 }
 
 /// [unit]'s [property] as `systemctl show` prints it, read by the runner
@@ -413,16 +367,4 @@ Future<void> _untilJournal(RunnerVm vm, String unit, String message) async {
 Future<bool> _alive(int pid) async {
   final ps = await Process.run('ps', ['-o', 'stat=', '-p', '$pid']);
   return ps.exitCode == 0 && !'${ps.stdout}'.trim().startsWith('Z');
-}
-
-Future<HostProfile> _profile(FixtureEngine engine, String serverId) async {
-  for (final event in engine.seen) {
-    if (event is HostProfileChanged && event.serverId == serverId) {
-      return event.profile;
-    }
-  }
-  final changed = await engine.until<HostProfileChanged>(
-    (e) => e.serverId == serverId,
-  );
-  return changed.profile;
 }

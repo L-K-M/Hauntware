@@ -3999,7 +3999,8 @@ argv; nothing runs it before E17. Decisions:
   under `/tmp`, and the root directory only on the root rows.
 
 Real-shell tests run under dash and bash. The root path and its
-`chown` were checked by hand only (E30 covers them on the runner VM).
+`chown` run on the runner VM in spike S4 (D66) and in E30's root
+redeploy, whose records only the prelude removes.
 
 As built in M4 (E07, `klabautermann_host/lib/src/parse/ops.dart`), the
 slow `ops` collector lists
