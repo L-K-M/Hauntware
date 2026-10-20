@@ -234,6 +234,7 @@ void main() {
         socketPath: '/run/docker.sock',
         project: 'web',
         forceRecreate: true,
+        noDeps: true,
         scale: {'api': 3},
         services: ['api'],
       );
@@ -241,10 +242,21 @@ void main() {
         'up',
         '-d',
         '--force-recreate',
+        '--no-deps',
         '--scale',
         'api=3',
         'api',
       ]);
+      for (final good in [0, kComposeMaxScale]) {
+        expect(
+          composeUp(
+            socketPath: '/run/docker.sock',
+            project: 'web',
+            scale: {'api': good},
+          ).argv,
+          contains('api=$good'),
+        );
+      }
       for (final bad in [-1, kComposeMaxScale + 1]) {
         expect(
           () => composeUp(

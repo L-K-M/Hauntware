@@ -194,7 +194,9 @@ const int kComposeMaxScale = 100;
 /// `... compose ... up -d` (03 §7.16 STK-06, STK-23). `--remove-orphans`
 /// is only added on explicit request; `-v` is never added.
 /// [forceRecreate] recreates [services] even when their configuration is
-/// unchanged, and [scale] sets a service's replica count.
+/// unchanged, and [scale] sets a service's replica count. [noDeps] keeps
+/// `up` to [services] alone: without it, Compose also creates and starts
+/// their `depends_on` chain.
 ComposeInvocation composeUp({
   String binary = 'docker',
   required String socketPath,
@@ -207,6 +209,7 @@ ComposeInvocation composeUp({
   bool detach = true,
   bool removeOrphans = false,
   bool forceRecreate = false,
+  bool noDeps = false,
   Map<String, int> scale = const {},
   bool plainProgress = true,
   bool noAnsi = true,
@@ -225,9 +228,14 @@ ComposeInvocation composeUp({
   if (detach) argv.add('-d');
   if (removeOrphans) argv.add('--remove-orphans');
   if (forceRecreate) argv.add('--force-recreate');
+  if (noDeps) argv.add('--no-deps');
   for (final MapEntry(key: service, value: replicas) in scale.entries) {
     if (replicas < 0 || replicas > kComposeMaxScale) {
-      throw ArgumentError.value(replicas, 'scale', 'not a replica count');
+      throw ArgumentError.value(
+        replicas,
+        'scale[$service]',
+        'not a replica count (0 to $kComposeMaxScale)',
+      );
     }
     argv
       ..add('--scale')

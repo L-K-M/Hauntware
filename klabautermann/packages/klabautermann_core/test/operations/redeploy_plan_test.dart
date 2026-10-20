@@ -475,6 +475,7 @@ void main() {
         'up',
         '-d',
         '--force-recreate',
+        '--no-deps',
         'db',
       ]);
 
@@ -493,6 +494,7 @@ void main() {
         'never',
         'up',
         '-d',
+        '--no-deps',
         '--scale',
         'web=3',
         'web',

@@ -1056,7 +1056,9 @@ void engineMain(
                         compose,
                         context,
                       ),
-                      _ => throw StateError('not a compose intent'),
+                      _ => throw StateError(
+                        'not a compose intent: ${intent.runtimeType}',
+                      ),
                     };
                   }),
                 ).catchError(

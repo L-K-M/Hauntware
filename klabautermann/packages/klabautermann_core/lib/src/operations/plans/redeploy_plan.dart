@@ -169,6 +169,7 @@ Future<PlanAttempt> planStackCompose(
             configFiles: files.configFiles,
             envFiles: files.envFiles,
             forceRecreate: true,
+            noDeps: true,
             services: [service!],
           ),
           StackComposeVerb.scaleService => composeUp(
@@ -177,6 +178,7 @@ Future<PlanAttempt> planStackCompose(
             projectDirectory: files.projectDirectory,
             configFiles: files.configFiles,
             envFiles: files.envFiles,
+            noDeps: true,
             scale: {service!: replicas!},
             services: [service],
           ),
