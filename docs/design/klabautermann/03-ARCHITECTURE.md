@@ -1581,6 +1581,7 @@ graph TD
   GUI["ghost_ui"]
   GM["ghost_marks"]
   GD["ghost_desktop"]
+  GF["ghost_fonts"]
   PE["planchette_editor (read-only in MVP, editing v1)"]
   PCO["planchette_core"]
   FSS["flutter_secure_storage"]
@@ -1605,6 +1606,9 @@ graph TD
   SC --> DS
   ST --> SC
   ST --> XT
+  ST --> GUI
+  ST --> GT
+  ST --> GF
   GS --> GUI
   GS --> GM
   GS --> SP

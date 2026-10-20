@@ -8,6 +8,7 @@ import 'package:ghost_ui/ghost_ui.dart' show formatShortcutActivator;
 import 'package:planchette_editor/planchette_editor.dart'
     show GhostMenuDivider, GhostMenuItem;
 import 'package:seance_core/seance_core.dart';
+import 'package:seance_terminal/seance_terminal.dart' show TerminalKeyboardBar;
 import 'package:xterm/xterm.dart';
 
 import '../app_state.dart';
@@ -34,7 +35,6 @@ import 'sidebar_panel.dart';
 import 'tab_close.dart';
 import 'terminal_appearance.dart';
 import 'terminal_find_bar.dart';
-import 'terminal_keyboard_bar.dart';
 import 'top_toast.dart';
 
 /// Touch platforms get the on-screen key row (Tab/Ctrl/arrows) and need the
@@ -1186,7 +1186,7 @@ class _SessionViewState extends State<_SessionView> {
     if (!tab.isConnected) {
       return _Disconnected(tab: tab, state: widget.state);
     }
-    final appearance = TerminalAppearance.resolve(
+    final appearance = resolveTerminalAppearance(
       widget.state.services.settings,
       Theme.of(context).brightness,
     );
@@ -1325,7 +1325,7 @@ class _SessionViewState extends State<_SessionView> {
               terminal: terminal,
               controller: _terminalController,
               viewport: TerminalViewSearchViewport(_viewKey, _scroll),
-              theme: TerminalAppearance.resolve(
+              theme: resolveTerminalAppearance(
                 widget.state.services.settings,
                 Theme.of(context).brightness,
               ).theme,
