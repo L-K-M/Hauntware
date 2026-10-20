@@ -1620,6 +1620,25 @@ M2, the host read MVP, is the current milestone. What is on main:
   sampler keeps running. A stack check there reads "Waiting for a
   channel" and runs again with the next list instead of failing (03
   §5.2).
+- M4 Docker actions suite (E28): on the Docker fixture, as the fixture
+  user in the `docker` group, the engine runs every container action,
+  removes an unused image and an in-use one only by force with its typed
+  name, and stops, starts and restarts a stack, each followed by the
+  watched list. A managed stack and the container publishing port 22
+  need the typed name, and the unverified and managed stacks are not
+  redeployed. The user's own process is stopped, continued and killed,
+  and a plan whose process exited fails its check. The redeploy pulls a
+  new digest from the fixture registry and recreates the stack as a
+  detached operation under BusyBox `setsid`, which outlives the
+  session's sshd processes, is found again over the new link, has its
+  output followed, and is acknowledged, deleted and audited with
+  `--host` in every step. Locally the suite takes about 90 s.
+- M4 host write inventory (E31, X6): run.sh snapshots the Docker host
+  as root before and after a scripted MVP session (every read, every
+  Docker action, a process signal and a detached redeploy with a
+  re-attach) and fails on any change outside 03 §8.11's MVP rows,
+  encoded once in `test/integration/inventory_allowlist.txt`. The
+  runner VM's snapshot follows separately.
 - M4 runner-VM actions suite (E29): on the GitHub-hosted runner, as
   throwaway accounts, the engine turns admin mode on after a wrong
   password is asked again, and under `timestamp_timeout=0` (rung 4);
