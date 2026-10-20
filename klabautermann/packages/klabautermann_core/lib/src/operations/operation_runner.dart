@@ -28,6 +28,16 @@ import 'plan_types.dart';
 /// it throws ends the run as a transport failure.
 typedef ApiStepRunner = Future<int> Function(String serverId, ApiStep step);
 
+/// Runs one [ExecStep] on [serverId]'s engine (CTX-08) and returns the
+/// command's exit code, null when the daemon reported none, and its
+/// redacted output. A [DockerException] or [DockerEndpointUnavailable]
+/// it throws ends the run as a transport failure.
+typedef ExecStepRunner =
+    Future<({int? exitCode, ExecOutput output})> Function(
+      String serverId,
+      ExecStep step,
+    );
+
 /// Checks a [DockerTargetUnchanged] or a [StackConfigUnchanged] on
 /// [serverId] through its Docker endpoint: null when unchanged.
 typedef DockerRevalidator =
@@ -65,6 +75,7 @@ final class OperationRunner {
     required this._linkFor,
     required this._emit,
     this._api,
+    this._exec,
     this._docker,
     this._launch,
     this._finished,
@@ -75,6 +86,7 @@ final class OperationRunner {
   final SshLink? Function(String serverId) _linkFor;
   final void Function(EngineEvent event) _emit;
   final ApiStepRunner? _api;
+  final ExecStepRunner? _exec;
   final DockerRevalidator? _docker;
   final DetachedLauncher? _launch;
   final void Function(OperationResult result)? _finished;
@@ -120,6 +132,7 @@ final class OperationRunner {
       int? exitCode,
       int? httpStatus,
       RevalidationFailure? revalidation,
+      ExecOutput? output,
     }) => ActionFinished(
       planId: planId,
       outcome: ActionOutcome.failed,
@@ -128,7 +141,12 @@ final class OperationRunner {
       exitCode: exitCode,
       httpStatus: httpStatus,
       revalidation: revalidation,
+      output: output,
     );
+
+    // What a one-off command printed, for the answer.
+    ExecOutput? output;
+    int? exitCode;
 
     final serverId = plan.intent.serverId;
     final link = _linkFor(serverId);
@@ -219,6 +237,22 @@ final class OperationRunner {
                 httpStatus: status,
               );
             }
+          case final ExecStep step:
+            final exec = _exec;
+            if (exec == null) {
+              return failed(ActionFailure.unsupportedStep, step: i);
+            }
+            final result = await exec(serverId, step);
+            output = result.output;
+            exitCode = result.exitCode;
+            if (exitCode != 0) {
+              return failed(
+                ActionFailure.stepFailed,
+                step: i,
+                exitCode: exitCode,
+                output: output,
+              );
+            }
         }
       }
     } on ElevationException {
@@ -233,7 +267,12 @@ final class OperationRunner {
       // The link refused the channel, at its session limit or closing.
       return failed(ActionFailure.transport);
     }
-    return ActionFinished(planId: planId, outcome: ActionOutcome.succeeded);
+    return ActionFinished(
+      planId: planId,
+      outcome: ActionOutcome.succeeded,
+      exitCode: exitCode,
+      output: output,
+    );
   }
 
   Future<RevalidationFailure?> _revalidate(

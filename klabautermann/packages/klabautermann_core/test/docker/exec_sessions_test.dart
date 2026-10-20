@@ -133,6 +133,14 @@ final class _ExecDaemon {
   }
 }
 
+/// One stdcopy frame: stream, three zero bytes, big-endian length.
+List<int> _frame(int stream, List<int> payload) {
+  final header = ByteData(8)
+    ..setUint8(0, stream)
+    ..setUint32(4, payload.length);
+  return [...header.buffer.asUint8List(), ...payload];
+}
+
 const _policy = SafetyPolicy(
   servers: {'srv-1': ServerSafety(management: true)},
 );
@@ -439,6 +447,101 @@ void main() {
 
     expect(utf8.decode(output('t-1')), 'bye');
     expect(closed('t-1'), isNull);
+  });
+
+  group('a one-off command (CTX-08)', () {
+    Future<({int? exitCode, ExecOutput output})> run(
+      void Function(StreamSink<List<int>> stream) write, {
+      String Function(String text)? redact,
+    }) async {
+      final result = runOneOffExec(
+        ExecStep(
+          path: '/v1.44/containers/c1/exec',
+          containerId: 'c1',
+          argv: const ['sh', '-c', 'echo out; echo err >&2; exit 3'],
+          user: 'app',
+        ),
+        open: () async {
+          leases++;
+          return (
+            lease: DockerStreamLease(
+              DockerClient(
+                DockerHttpClient(
+                  () async => daemon.connect().client,
+                  maxConnections: 1,
+                ),
+                apiVersion: const ApiVersion(1, 44),
+              ),
+              release: () => released++,
+            ),
+            rank: DockerRank.cliRelay,
+          );
+        },
+        control: <T>(call) => call(pool),
+        redact: redact ?? (text) => text,
+      );
+      await pumpEventQueue(times: 50);
+      final shell = daemon.shells['e1']!.server;
+      write(shell.sink);
+      daemon.exitCodes['e1'] = 3;
+      // Every frame reaches the client before the daemon closes.
+      await pumpEventQueue(times: 50);
+      await shell.close();
+      return result;
+    }
+
+    test('creates a non-TTY exec without stdin and keeps the streams apart '
+        'with the exit code', () async {
+      final result = await run((sink) {
+        sink
+          ..add(_frame(1, utf8.encode('out\n')))
+          ..add(_frame(2, utf8.encode('err\n')));
+      });
+
+      expect(daemon.bodies['create e1'], {
+        'AttachStdin': false,
+        'AttachStdout': true,
+        'AttachStderr': true,
+        'Tty': false,
+        'Cmd': ['sh', '-c', 'echo out; echo err >&2; exit 3'],
+        'User': 'app',
+      });
+      expect(daemon.bodies['start e1'], {'Detach': false, 'Tty': false});
+      expect(result.exitCode, 3);
+      expect(result.output.stdout, 'out\n');
+      expect(result.output.stderr, 'err\n');
+      expect(result.output.truncated, isFalse);
+      expect(released, leases);
+    });
+
+    test(
+      'keeps at most the cap of output and says it dropped the rest',
+      () async {
+        final result = await run((sink) {
+          sink
+            ..add(_frame(1, List.filled(kExecOutputMax - 2, 0x61)))
+            ..add(_frame(2, utf8.encode('bcd')))
+            ..add(_frame(1, utf8.encode('more')));
+        });
+
+        expect(result.output.stdout.length, kExecOutputMax - 2);
+        expect(result.output.stderr, 'bc');
+        expect(result.output.truncated, isTrue);
+        expect(result.exitCode, 3, reason: 'read to the end for the code');
+      },
+    );
+
+    test('hands both streams to the redactor', () async {
+      final result = await run(
+        (sink) => sink
+          ..add(_frame(1, utf8.encode('token=s3cret')))
+          ..add(_frame(2, utf8.encode('password=hunter2'))),
+        redact: (text) => text.replaceAll(RegExp(r'=\S+'), '=[redacted]'),
+      );
+
+      expect(result.output.stdout, 'token=[redacted]');
+      expect(result.output.stderr, 'password=[redacted]');
+    });
   });
 
   test('output goes out at most once per batch interval', () async {

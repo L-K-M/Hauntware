@@ -266,7 +266,8 @@ List<String> detachedArgv(OperationPlan plan) => [
     for (final step in plan.steps)
       switch (step) {
         ShellStep(:final commandLine) => commandLine,
-        ApiStep() => throw ArgumentError('a detached step runs in a shell'),
+        ApiStep() ||
+        ExecStep() => throw ArgumentError('a detached step runs in a shell'),
       },
   ].join(' && '),
 ];

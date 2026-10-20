@@ -186,7 +186,9 @@ import '../operations/plan_types.dart';
 /// Container shells then joined v3 the same way (03 §7.13 CTX-07):
 /// [OpenTerminal], [TerminalInput], [TerminalResize], [TerminalEndInput]
 /// and [CloseTerminal] run one, answered by [TerminalOpened],
-/// [TerminalBytes] and [TerminalClosed].
+/// [TerminalBytes] and [TerminalClosed]. One-off commands joined next
+/// (CTX-08): [ContainerExec] is planned as an action, and
+/// [ActionFinished] gained the [ExecOutput] it captured.
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -1157,6 +1159,7 @@ final class ActionFinished extends EngineEvent {
     this.httpStatus,
     this.revalidation,
     this.operationId,
+    this.output,
   });
 
   final String planId;
@@ -1169,8 +1172,8 @@ final class ActionFinished extends EngineEvent {
   /// The index of the step that failed, in the preview's steps.
   final int? failedStep;
 
-  /// A failed shell step's exit status; null when the channel ended
-  /// without one.
+  /// A failed shell step's exit status, or a [ContainerExec]'s whether
+  /// it failed or not; null when the channel ended without one.
   final int? exitCode;
 
   /// A failed API step's HTTP status.
@@ -1182,7 +1185,31 @@ final class ActionFinished extends EngineEvent {
   /// The detached operation a started plan runs as, which
   /// [OperationsChanged] lists.
   final String? operationId;
+
+  /// What a [ContainerExec] printed, whether it succeeded or failed.
+  final ExecOutput? output;
 }
+
+/// A one-off command's output (CTX-08), with secrets redacted as the
+/// audit log redacts them, at most [kExecOutputMax] bytes in all.
+@immutable
+final class ExecOutput {
+  const ExecOutput({
+    required this.stdout,
+    required this.stderr,
+    this.truncated = false,
+  });
+
+  final String stdout;
+  final String stderr;
+
+  /// Whether the command printed more than [kExecOutputMax] bytes, the
+  /// rest of which was read and dropped.
+  final bool truncated;
+}
+
+/// The most a one-off command's output keeps [E] (CTX-08).
+const int kExecOutputMax = 1024 * 1024;
 
 /// Why a plan failed.
 enum ActionFailure {
@@ -3092,6 +3119,22 @@ final class ContainerAction extends ActionIntent {
   final String containerId;
   final ContainerVerb verb;
   final KillSignal? signal;
+}
+
+/// Runs [argv] once in [containerId] without a TTY (03 §7.13, CTX-08), as
+/// [user] where set, and reports its output and exit code in
+/// [ActionFinished.output] and [ActionFinished.exitCode].
+final class ContainerExec extends ActionIntent {
+  ContainerExec(
+    super.serverId, {
+    required this.containerId,
+    required Iterable<String> argv,
+    this.user,
+  }) : argv = List.unmodifiable(argv);
+
+  final String containerId;
+  final List<String> argv;
+  final String? user;
 }
 
 /// Removes a container (CTR-05), its anonymous volumes with [volumes],
