@@ -598,7 +598,7 @@ and `Secret`. The package gets its own tests instead.
 
 ## 11. Decided question and estimates
 
-Open question: where do the protocol-typed save rules live?
+Question: where do the protocol-typed save rules live?
 
 - (a) In `ghost_servers`' protocol-typed library. No `seance/` change, but
   the Klabautermann engine is pure Dart and cannot depend on a Flutter
