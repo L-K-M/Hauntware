@@ -18,11 +18,13 @@ export 'src/engine/protocol.dart';
 // The plain-data plan parts an ActionPreview carries (03 §8.5), and
 // DangerLinter's findings in it.
 export 'src/operations/plan_types.dart';
+
 export 'package:seance_core/seance_core.dart'
     show DangerFinding, DangerSeverity;
 // The signal and unit verb an ActionIntent names (PRC-02, SVC-03).
 export 'package:klabautermann_host/klabautermann_host.dart'
     show KillSignal, SystemctlVerb;
+
 // FL-21's monitor set rules, which the engine enforces and the app's
 // toggles offer (03 §4.3 step 4).
 export 'src/fleet/monitor_set.dart'
@@ -113,6 +115,10 @@ export 'src/sampling/sample_results.dart' show kCronLinesEvaluated;
 // in, and how far each directory's listing got.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show OpDirectoryKind, OpDirectoryListing, OpDirectoryState;
+// The footprint view (SAF-14, 03 §8.11): the manifest rows and backup
+// index entries a FootprintState carries.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show BackupEntry, FootprintKind, FootprintRow;
 // The Logs panel's LOG-04 notice: the access check's journal row (K04)
 // over the probe's HostProfile.
 export 'package:klabautermann_host/klabautermann_host.dart'
@@ -166,6 +172,7 @@ export 'src/docker/docker_ladder.dart'
 export 'src/docker/docker_ladder.dart'
     show DockerSocketPathProblem, dockerSocketPathProblem;
 export 'src/docker/docker_access.dart' show dockerAccessFacts;
+
 export 'package:klabautermann_host/klabautermann_host.dart'
     show ComposeFacts, DockerAccessFacts;
 

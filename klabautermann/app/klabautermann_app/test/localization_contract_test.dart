@@ -85,6 +85,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // An edit read's request id, never shown.
     r"'edit-${_nextEditRead++}'",
   },
+  'lib/ui/footprint_page.dart': {
+    // The index's source prefix for a crontab's backups (03 §8.11), which
+    // the page strips before it shows the account.
+    "'crontab:'",
+    // A backup's path in its directory, which only the read takes.
+    r"'$directory/${entry.name}'",
+  },
   'lib/ui/edit/remote_editor.dart': {
     // A crontab's highlighting and validation key, never shown.
     "'crontab'",

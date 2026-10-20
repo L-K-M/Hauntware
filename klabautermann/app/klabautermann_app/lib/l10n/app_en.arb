@@ -6330,5 +6330,106 @@
         "type": "String"
       }
     }
+  },
+  "footprintMenu": "Footprint",
+  "@footprintMenu": {
+    "description": "Server Safety menu: opens what Klabautermann keeps on the server (SAF-14)."
+  },
+  "footprintTitle": "Footprint on {server}",
+  "@footprintTitle": {
+    "description": "Footprint page title. server is the server's name.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "footprintVerify": "Check again",
+  "@footprintVerify": {
+    "description": "Footprint page: asks the engine to verify the footprint again."
+  },
+  "footprintChecking": "Checking what Klabautermann keeps on this server…",
+  "@footprintChecking": {
+    "description": "Footprint page: shown until the engine answers."
+  },
+  "footprintRootUnchecked": "Root's backups and manifest are checked in admin mode.",
+  "@footprintRootUnchecked": {
+    "description": "Footprint page: root's part is not read without admin mode."
+  },
+  "footprintWarning": "The check reported: {warning}",
+  "@footprintWarning": {
+    "description": "Footprint page: one problem the check found, in the engine's words.",
+    "placeholders": {
+      "warning": {
+        "type": "String"
+      }
+    }
+  },
+  "footprintNone": "Klabautermann keeps nothing on this server.",
+  "@footprintNone": {
+    "description": "Footprint page: no manifest rows and no backups."
+  },
+  "footprintScope": "{scope, select, user{Your account} root{Root} other{Other}}",
+  "@footprintScope": {
+    "description": "Footprint page: a scope's heading. scope is the FootprintScope name.",
+    "placeholders": {
+      "scope": {
+        "type": "String"
+      }
+    }
+  },
+  "footprintFile": "{kind, select, backupDirectory{Backup directory} backupIndex{Backup index} other{File}} · {present, select, true{present} other{missing on the host}}",
+  "@footprintFile": {
+    "description": "Footprint page: a manifest row's kind and whether it is on the host. kind is the FootprintKind name; present is true or false.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      },
+      "present": {
+        "type": "String"
+      }
+    }
+  },
+  "footprintKeepLast": "{count, plural, =1{Keep only the newest backup of each file} other{Keep the newest {count} backups of each file}}",
+  "@footprintKeepLast": {
+    "description": "Footprint page: removes older backups (Q11, tier 1).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "footprintRemoveAll": "Remove all backups",
+  "@footprintRemoveAll": {
+    "description": "Footprint page: removes every backup of one file (Q11, typed confirmation)."
+  },
+  "footprintCrontabSource": "{user}'s crontab",
+  "@footprintCrontabSource": {
+    "description": "Footprint page: the heading of a crontab's backups. user is the account.",
+    "placeholders": {
+      "user": {
+        "type": "String"
+      }
+    }
+  },
+  "footprintBackup": "{hash} · {status, select, intact{unchanged} modified{changed on the host since it was recorded} missing{missing on the host} other{unknown}}",
+  "@footprintBackup": {
+    "description": "Footprint page: a backup's short hash and whether it still has the recorded content. status is the FootprintBackupStatus name.",
+    "placeholders": {
+      "hash": {
+        "type": "String"
+      },
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "footprintRestore": "Restore…",
+  "@footprintRestore": {
+    "description": "Footprint page: opens the file's editor with this backup as the new text, to review and save."
+  },
+  "footprintRestoreChanged": "The backup changed since it was checked, so it was not opened.",
+  "@footprintRestoreChanged": {
+    "description": "Footprint page: the backup read back does not have its recorded hash."
   }
 }

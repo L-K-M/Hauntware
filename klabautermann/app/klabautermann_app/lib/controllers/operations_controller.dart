@@ -76,6 +76,9 @@ final class OperationsController extends ChangeNotifier {
   /// answers each [AuditQuery] in order and names only the server.
   final Map<String, List<Completer<AuditRecords>>> _auditReads = {};
 
+  /// Each server's footprint as the engine last verified it (SAF-14).
+  final Map<String, FootprintState> _footprints = {};
+
   /// Edit reads waiting on the engine, by request id.
   final Map<String, Completer<EditReadResult>> _editReads = {};
   int _nextEditRead = 0;
@@ -166,6 +169,15 @@ final class OperationsController extends ChangeNotifier {
 
   static const _noEditRead = EditReadFailed(EditReadFailure.noLink);
 
+  /// [serverId]'s footprint as the engine last verified it, on connect,
+  /// when admin mode turned on, after an edit or a backup removal, or on
+  /// [verifyFootprint]; null before the first.
+  FootprintState? footprintOf(String serverId) => _footprints[serverId];
+
+  /// Asks the engine to verify [serverId]'s footprint again; the answer
+  /// replaces [footprintOf].
+  void verifyFootprint(String serverId) => _send(FootprintQuery(serverId));
+
   /// What a request the engine cannot take gets: no engine means no link.
   static const _noEngine = PlanRefused(ActionRefusalReason.noLink);
 
@@ -206,6 +218,9 @@ final class OperationsController extends ChangeNotifier {
         _end(planId, RunFinished(event));
       case OperationsChanged(:final serverId):
         _detached[serverId] = event;
+        notifyListeners();
+      case FootprintState(:final serverId):
+        _footprints[serverId] = event;
         notifyListeners();
       case EditRead(:final requestId, :final result):
         _editReads.remove(requestId)?.complete(result);

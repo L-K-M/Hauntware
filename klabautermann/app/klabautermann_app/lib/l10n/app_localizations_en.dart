@@ -5198,4 +5198,92 @@ class AppLocalizationsEn extends AppLocalizations {
   String editDiffYourLabel(String path) {
     return '$path (yours)';
   }
+
+  @override
+  String get footprintMenu => 'Footprint';
+
+  @override
+  String footprintTitle(String server) {
+    return 'Footprint on $server';
+  }
+
+  @override
+  String get footprintVerify => 'Check again';
+
+  @override
+  String get footprintChecking =>
+      'Checking what Klabautermann keeps on this server…';
+
+  @override
+  String get footprintRootUnchecked =>
+      'Root\'s backups and manifest are checked in admin mode.';
+
+  @override
+  String footprintWarning(String warning) {
+    return 'The check reported: $warning';
+  }
+
+  @override
+  String get footprintNone => 'Klabautermann keeps nothing on this server.';
+
+  @override
+  String footprintScope(String scope) {
+    String _temp0 = intl.Intl.selectLogic(scope, {
+      'user': 'Your account',
+      'root': 'Root',
+      'other': 'Other',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String footprintFile(String kind, String present) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'backupDirectory': 'Backup directory',
+      'backupIndex': 'Backup index',
+      'other': 'File',
+    });
+    String _temp1 = intl.Intl.selectLogic(present, {
+      'true': 'present',
+      'other': 'missing on the host',
+    });
+    return '$_temp0 · $_temp1';
+  }
+
+  @override
+  String footprintKeepLast(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Keep the newest $count backups of each file',
+      one: 'Keep only the newest backup of each file',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get footprintRemoveAll => 'Remove all backups';
+
+  @override
+  String footprintCrontabSource(String user) {
+    return '$user\'s crontab';
+  }
+
+  @override
+  String footprintBackup(String hash, String status) {
+    String _temp0 = intl.Intl.selectLogic(status, {
+      'intact': 'unchanged',
+      'modified': 'changed on the host since it was recorded',
+      'missing': 'missing on the host',
+      'other': 'unknown',
+    });
+    return '$hash · $_temp0';
+  }
+
+  @override
+  String get footprintRestore => 'Restore…';
+
+  @override
+  String get footprintRestoreChanged =>
+      'The backup changed since it was checked, so it was not opened.';
 }
