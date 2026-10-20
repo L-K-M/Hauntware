@@ -126,6 +126,8 @@ export 'src/masking.dart'
         maskedValueWithUrlCheck,
         secretKeyPattern,
         urlCredentialSpans;
+export 'src/models/exec.dart'
+    show ExecConsoleSize, ExecInspect, parseExecInspect;
 export 'src/models/container.dart'
     show
         ContainerConfig,
