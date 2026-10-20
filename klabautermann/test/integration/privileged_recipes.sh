@@ -83,10 +83,12 @@ setup() {
 describe() {
   echo "owner: $(stat -c '%U:%G' "$target")"
   echo "mode: $(stat -c '%a' "$target")"
-  if have getfacl; then
-    getfacl -c "$target" 2>/dev/null | sed -e '/^$/d' -e 's/^/acl: /'
-  else
+  if ! have getfacl; then
     echo 'acl: (no getfacl)'
+  elif acl="$(getfacl -c "$target" 2>/dev/null)"; then
+    printf '%s\n' "$acl" | sed -e '/^$/d' -e 's/^/acl: /'
+  else
+    echo 'acl: (getfacl failed)'
   fi
   if ! have getfattr; then
     echo 'xattr user.klab: (no getfattr)'
