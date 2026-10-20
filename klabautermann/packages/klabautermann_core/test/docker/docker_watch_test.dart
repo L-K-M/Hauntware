@@ -234,6 +234,57 @@ void main() {
       expect(h.requests(_containersPath), hasLength(2));
     });
 
+    test('an action re-reads what it changed, which the event that '
+        'preceded the change could not show', () async {
+      final h = _Harness();
+      await h.start({DockerWatchList.containers, DockerWatchList.images});
+
+      // Docker logs a pause before the list it reads holds it
+      // (containerPause), so the event's own read sees it running.
+      h.daemon.emit(_event('abc', action: 'pause'));
+      await h.clock.elapse(kDockerEventBatch);
+      final early = h.lists().single;
+      expect(
+        (early.payload as DockerContainersPayload).containers.first.state,
+        'running',
+      );
+
+      // The action's reply comes once the list holds the change.
+      h.daemon.routes[_containersPath] = jsonEncode([
+        _container('abc', state: 'paused'),
+      ]);
+      h.router.actionRan(_srv, containers: {'abc'});
+      await h.clock.elapse(kDockerEventBatch);
+      final sent = h.lists();
+      expect(sent, [_list(DockerWatchList.containers)]);
+      final containers =
+          (sent.single.payload as DockerContainersPayload).containers;
+      expect([for (final c in containers) c.id], ['abc', 'def']);
+      expect(containers.first.state, 'paused');
+      expect(
+        Uri.parse(
+          h.requests(_containersPath).last.split(' ')[1],
+        ).queryParameters['filters'],
+        jsonEncode({
+          'id': ['abc'],
+        }),
+      );
+
+      // An image removal re-reads the images.
+      final images = h.requests('/images/json').length;
+      h.router.actionRan(_srv, images: true);
+      await h.clock.elapse(kDockerEventBatch);
+      expect(h.lists(), [_list(DockerWatchList.images)]);
+      expect(h.requests('/images/json'), hasLength(images + 1));
+    });
+
+    test('an action on a server without a watch reads nothing', () async {
+      final h = _Harness();
+      h.router.actionRan(_srv, containers: {'abc'}, images: true);
+      await h.clock.elapse(kDockerEventBatch);
+      expect(h.daemon.requests, isEmpty);
+    });
+
     test('a container the targeted read misses is gone, and one it finds '
         'joins at the end', () async {
       final h = _Harness();

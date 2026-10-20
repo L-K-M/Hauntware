@@ -286,6 +286,19 @@ final class DockerRouter {
     _pump(opened);
   }
 
+  /// Tells [serverId]'s watches that an action changed the [containers]
+  /// it addressed, or the images, so the lists read them again rather
+  /// than trust the event the engine logged for it (see
+  /// [DockerWatcher.changed]). Nothing is read without a watch.
+  void actionRan(
+    String serverId, {
+    Set<String> containers = const {},
+    bool images = false,
+  }) => _sessions[serverId]?.watcher?.changed(
+    containers: containers,
+    images: images,
+  );
+
   /// Ends the watch [request] names; the last one stops the server's
   /// events stream and stats.
   void unwatch(DockerUnwatch request) {

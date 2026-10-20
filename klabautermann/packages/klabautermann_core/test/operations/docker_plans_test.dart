@@ -478,6 +478,31 @@ void main() {
   });
 
   group('running the steps', () {
+    test('a step names the container or the images it changes', () {
+      expect(
+        apiStepChanges(
+          ApiStep(method: 'POST', path: '/v1.44/containers/c1/pause'),
+        ),
+        (container: 'c1', images: false),
+      );
+      expect(
+        apiStepChanges(
+          ApiStep(
+            method: 'DELETE',
+            path: '/v1.44/containers/c1',
+            query: {'v': '1'},
+          ),
+        ),
+        (container: 'c1', images: false),
+      );
+      expect(
+        apiStepChanges(
+          ApiStep(method: 'DELETE', path: '/v1.44/images/nginx%3Alatest'),
+        ),
+        (container: null, images: true),
+      );
+    });
+
     late _Engine engine;
     setUp(() => engine = _Engine()..containers.add(_container('web-1')));
 
