@@ -6168,5 +6168,167 @@
         "type": "String"
       }
     }
+  },
+  "editClose": "Close",
+  "@editClose": {
+    "description": "Remote editor: closes the editor dialog; asks first when changes are not saved."
+  },
+  "editTitleFile": "Edit {name}",
+  "@editTitleFile": {
+    "description": "Remote editor: the title for a file (SAF-12). name is the file name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "editTitleOwnCrontab": "Edit your crontab",
+  "@editTitleOwnCrontab": {
+    "description": "Remote editor: the title for the login user's crontab (JOB-04)."
+  },
+  "editTitleCrontab": "Edit {user}'s crontab",
+  "@editTitleCrontab": {
+    "description": "Remote editor: the title for another account's crontab (JOB-06). user is the account name.",
+    "placeholders": {
+      "user": {
+        "type": "String"
+      }
+    }
+  },
+  "editRetry": "Read again",
+  "@editRetry": {
+    "description": "Remote editor: reads the file again after a failed read."
+  },
+  "editReading": "Reading the file…",
+  "@editReading": {
+    "description": "Remote editor: shown while the engine reads the file."
+  },
+  "editReadFailed": "{reason, select, noLink{There is no connection to this server.} invalidTarget{Klabautermann does not edit this path.} notFound{There is no file at this path on the host.} adminRequired{Only root can read this file. Turn on admin mode to edit it.} tooLarge{This file is too large for the editor.} notText{This file is not text.} failed{The file could not be read.} other{The file could not be read.}}",
+  "@editReadFailed": {
+    "description": "Remote editor: why the engine read nothing. reason is the engine's EditReadFailure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "editRootFile": "Root's file",
+  "@editRootFile": {
+    "description": "Remote editor: chip on a file only root may write; saving it runs through admin mode."
+  },
+  "editUnsaved": "Not saved",
+  "@editUnsaved": {
+    "description": "Remote editor: shown while the text differs from the server's."
+  },
+  "editEditorLabel": "Editor for {path}",
+  "@editEditorLabel": {
+    "description": "Remote editor: accessibility label of the editor. path is the file being edited.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "editDiscard": "Discard changes",
+  "@editDiscard": {
+    "description": "Remote editor: drops the changes for the server's text."
+  },
+  "editReview": "Review changes",
+  "@editReview": {
+    "description": "Remote editor: shows the diff and the format checks before saving."
+  },
+  "editDiscardTitle": "Discard your changes?",
+  "@editDiscardTitle": {
+    "description": "Remote editor: title of the confirmation before changes are dropped."
+  },
+  "editDiscardBody": "Your changes are not saved to the server and will be lost.",
+  "@editDiscardBody": {
+    "description": "Remote editor: body of the confirmation before changes are dropped."
+  },
+  "editKeepEditing": "Keep editing",
+  "@editKeepEditing": {
+    "description": "Remote editor: closes a dialog and returns to the editor."
+  },
+  "editConflictTitle": "The file changed on the server",
+  "@editConflictTitle": {
+    "description": "Remote editor: title of the conflict sheet, when the file changed since it was read."
+  },
+  "editConflictBody": "It changed since you opened it, so your save did not run. Your changes are still here.",
+  "@editConflictBody": {
+    "description": "Remote editor: body of the conflict sheet."
+  },
+  "editConflictDiscard": "Discard mine",
+  "@editConflictDiscard": {
+    "description": "Remote editor: conflict sheet; replaces the user's text with the server's."
+  },
+  "editConflictCompare": "Reload and compare",
+  "@editConflictCompare": {
+    "description": "Remote editor: conflict sheet; reads the server's text and reviews the user's text against it."
+  },
+  "editProblem": "{line, plural, other{Line {line}}}: {kind, select, syntaxError{does not parse} duplicateKey{key set again} duplicateTable{table declared again} duplicateAttribute{attribute given twice} jsonComment{comment in JSON} jsonTrailingComma{trailing comma in JSON} unterminatedQuote{quote never closed} tabIndentation{tab indentation} mismatchedClosingTag{closing tag does not match} unclosedElement{element never closed} unexpectedClosingTag{closing tag without an open element} mergeConflict{merge conflict marker} other{problem}} {subject}",
+  "@editProblem": {
+    "description": "Remote editor review: one format problem. line is 1-based; kind is the TextProblemKind name; subject is the key, tag or parser detail, or empty.",
+    "placeholders": {
+      "line": {
+        "type": "int"
+      },
+      "kind": {
+        "type": "String"
+      },
+      "subject": {
+        "type": "String"
+      }
+    }
+  },
+  "editSave": "Save to server",
+  "@editSave": {
+    "description": "Remote editor review: plans the save, whose preview shows every step before it runs."
+  },
+  "editSaveAnyway": "Save anyway",
+  "@editSaveAnyway": {
+    "description": "Remote editor review: saves although the format checks found problems."
+  },
+  "editDiffing": "Comparing…",
+  "@editDiffing": {
+    "description": "Remote editor review: shown while the diff is computed."
+  },
+  "editDiffStatus": "{status, select, identical{Your text is the same as the server's.} tooLarge{The change is too large to show as a diff.} timedOut{The comparison took too long to show.} failed{The comparison failed.} other{The change cannot be shown.}}",
+  "@editDiffStatus": {
+    "description": "Remote editor review: why no diff shows. status is the UnifiedDiffStatus name.",
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "editDiffLabel": "Changes to the file",
+  "@editDiffLabel": {
+    "description": "Remote editor review: accessibility label of the diff."
+  },
+  "dockerStackFileEdit": "Edit",
+  "@dockerStackFileEdit": {
+    "description": "Stack file view: opens the file shown in the editor (STK-07)."
+  },
+  "jobsEditOwnCrontab": "Edit your crontab",
+  "@jobsEditOwnCrontab": {
+    "description": "Jobs tab: opens the login user's crontab in the editor (JOB-04)."
+  },
+  "editDiffServerLabel": "{path} (server)",
+  "@editDiffServerLabel": {
+    "description": "Remote editor review: the diff's label for the server's text. path is the file.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "editDiffYourLabel": "{path} (yours)",
+  "@editDiffYourLabel": {
+    "description": "Remote editor review: the diff's label for the user's text. path is the file.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
   }
 }

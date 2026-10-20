@@ -4642,6 +4642,23 @@ by its `ActionEntryPoint`, hiding it unless the server's actions are
 allowed and nothing is read-only, which one test checks for every
 point.
 
+As built in M5 (M17, `app/klabautermann_app/lib/ui/edit/`), the editor
+reads its target through `OperationsController.readEditable`, which
+pairs each `ReadEditable` with its `EditRead` by request id, and edits
+it in `planchette_editor`, unlocked. It is a dialog on wide windows and
+a full-screen page below 600 dp, and closing it with unsaved text asks
+first. "Review changes" shows `boundedUnifiedDiff` of the server's text
+against the user's, with `validateText`'s problems as warnings that do
+not block, since the host's own checks run at planning. Saving plans an
+`EditFile` against the hash the read returned, through the same preview
+as every action. A plan refused as `targetChanged`, or a run that ends
+with `contentChanged`, opens the conflict sheet. "Reload and compare"
+reads the server's text as the new base, keeps the user's and opens the
+review again; "Discard mine" takes the server's. A finished save reads
+the target again for its new base. The stack file view and the Jobs
+tab, for the login user's crontab, open it through the `fileEdit`
+entry point. The text lives only in the editor's state.
+
 ### 8.6 Confirmation tiers and protected targets (SAF-05, SAF-22)
 
 | Tier | Examples | Confirmation |

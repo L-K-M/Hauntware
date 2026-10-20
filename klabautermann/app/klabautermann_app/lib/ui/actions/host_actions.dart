@@ -236,7 +236,7 @@ void _runTimer(
 ) => startAction(
   context,
   StartTimer(serverId, timer: timer),
-  onRun: (preview) {
+  onRun: (_, preview) {
     if (preview.followUnit case final unit?) onRun(unit);
   },
 );
