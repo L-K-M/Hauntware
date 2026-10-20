@@ -150,7 +150,8 @@
   affects and which tool manages the target. You confirm with a tap,
   and type the target's name where an action could cut you off or
   affects a lot: stopping the service your connection depends on,
-  removing volumes, or acting on a stack another tool manages. You can
+  removing a container with its volumes, or acting on a stack another
+  tool manages. You can
   mark your own protected targets in Settings > Safety; they are kept on
   this device.
 - Processes, services and timers: terminate, kill or send any signal to
@@ -166,8 +167,8 @@
   only root may read, and reach a Docker socket your account cannot use
   through sudo, which the server header marks as root-equivalent.
 - Docker: start, stop, restart, pause, unpause and kill containers,
-  remove a stopped one, remove images (by force, with the name typed,
-  when a container uses one), and start, stop and restart compose
+  remove a stopped one, remove images (an image a container uses
+  needs force and typing its name), and start, stop and restart compose
   stacks. Pull and redeploy a stack you deployed with compose: it runs on
   the server as an operation that carries on if you disconnect or close
   the app, and the chip in the server header shows it, follows its output
