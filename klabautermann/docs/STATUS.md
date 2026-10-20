@@ -1657,7 +1657,8 @@ What is on main:
   row elevates (`systemd-run`, or `sh` for the root `setsid` row) with
   any arguments. Otherwise an operation over the sudo relay is refused
   as `sudoRightMissing`, and one that needs no root takes the rows
-  without elevation. A listing that cannot be read refuses nothing. The
+  without elevation. A listing that cannot be read, or a link that fails
+  while reading it, refuses nothing. The
   reader is tested on spike S4's recorded listing and sudoers' other
   forms, the planner over fakes; E30 meets it on the runner VM.
 - M4 pull and redeploy (E18): `PlanAction` plans STK-06 for a verified,
@@ -1792,8 +1793,8 @@ What is on main:
   sudo and the unit's clean environment, and `KillUserProcesses` reads
   without privilege. Under a NOPASSWD rule scoped to the docker CLI,
   `sudo -n -l` lists the rule without a password while `systemd-run`
-  needs one; the engine does not read the rules yet, so such an account
-  still has its elevated launches refused by sudo (E30).
+  needs one, which the engine now reads before it elevates a runner
+  (below).
 - M4 theme editing (E25): Settings > Appearance edits the theme with
   ghost_theme's shared editor (presets, mode, colours, font, corners,
   copy, paste and reset), in the app and in the desktop settings window,
