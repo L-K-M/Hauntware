@@ -87,14 +87,27 @@ ReadHeader? parseReadHeader(String line) {
 }
 
 /// Reads `sha256sum` output, as [EditCommands.sha256List] prints it, into
-/// a hash per path. Lines it does not recognise are skipped.
+/// a hash per path. Lines it does not recognise are skipped. GNU marks a
+/// line whose path holds a backslash with a leading `\` and escapes the
+/// path; BusyBox prints the path as it is.
 Map<String, String> parseSha256List(String output) => {
   for (final line in output.split('\n'))
-    if (_sha256Line.firstMatch(line) case final m?) m[2]!: m[1]!,
+    if (_sha256Line.firstMatch(line) case final m?)
+      m[1] == null ? m[3]! : _unescapeSha256Path(m[3]!): m[2]!,
 };
 
-final _readHeader = RegExp(r'^(\d+) (\d+) (\d+) ([0-7]{3,4}) ([0-9a-f]{64})$');
-final _sha256Line = RegExp(r'^([0-9a-f]{64})  (/.*)$');
+String _unescapeSha256Path(String path) => path.replaceAllMapped(
+  RegExp(r'\\(.)'),
+  (m) => switch (m[1]!) {
+    'n' => '\n',
+    'r' => '\r',
+    final c => c,
+  },
+);
+
+// `stat -c %a` prints the mode without leading zeros, so 0007 reads `7`.
+final _readHeader = RegExp(r'^(\d+) (\d+) (\d+) ([0-7]{1,4}) ([0-9a-f]{64})$');
+final _sha256Line = RegExp(r'^(\\)?([0-9a-f]{64})  (/.*)$');
 final _sha256 = RegExp(r'^[0-9a-f]{64}$');
 final _backupName = RegExp(r'^[0-9a-f]{64}-\d{1,12}$');
 final _token = RegExp('^[0-9a-f]{$kEditTempTokenLength}\$');
@@ -124,7 +137,8 @@ if cp --attributes-only --preserve=mode,ownership,xattr -- "$t" "$tmp" 2>/dev/nu
   exit 0
 fi
 if command -v getfacl >/dev/null 2>&1; then
-  n=$(getfacl -c -- "$t" 2>/dev/null | grep -c -v -e '^$' -e '^user::' -e '^group::' -e '^other::')
+  a=$(getfacl -c -- "$t" 2>/dev/null) || exit 102
+  n=$(printf '%s\n' "$a" | grep -c -v -e '^$' -e '^user::' -e '^group::' -e '^other::')
   [ "$n" -eq 0 ] || exit 102
 fi
 if command -v getfattr >/dev/null 2>&1; then
@@ -156,8 +170,9 @@ h=${h%% *}
 t=$(date +%s)
 b=$d/$h-$t
 cp -p -- "$1" "$b.tmp" && mv -f -- "$b.tmp" "$b" || { s=$?; rm -f -- "$b.tmp"; exit "$s"; }
-{ cat -- "$d/index" 2>/dev/null; printf '%s\t%s\t%s\n' "$t" "$h" "$1"; } > "$d/.index.tmp" &&
-  mv -f -- "$d/.index.tmp" "$d/index" || exit
+x=$d/.index.tmp.$$
+{ cat -- "$d/index" 2>/dev/null; printf '%s\t%s\t%s\n' "$t" "$h" "$1"; } > "$x" &&
+  mv -f -- "$x" "$d/index" || { s=$?; rm -f -- "$x"; exit "$s"; }
 printf '%s\n' "$b"''';
 
 /// Replaces a crontab with stdin while `crontab -l` still hashes to the
@@ -204,8 +219,8 @@ cat > "$1.klabautermann-tmp" && mv -f -- "$1.klabautermann-tmp" "$1" ||
 const String _kManifestWriteScript = r'''
 umask 077
 mkdir -p -- "${1%/*}" || exit
-cat > "$1.klabautermann-tmp" && mv -f -- "$1.klabautermann-tmp" "$1" ||
-  { s=$?; rm -f -- "$1.klabautermann-tmp"; exit "$s"; }''';
+x=$1.klabautermann-tmp.$$
+cat > "$x" && mv -f -- "$x" "$1" || { s=$?; rm -f -- "$x"; exit "$s"; }''';
 
 /// The validated builders of the edit pipeline (03 §8.5, §8.8, D67).
 abstract final class EditCommands {

@@ -4,7 +4,8 @@
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:test/test.dart';
 
-const _token = '0123456789abcdef';
+// Low entropy, so the secret scan does not read it as a key.
+const _token = 'feedfacefeedface';
 const _target = '/etc/nginx/nginx.conf';
 const _temp = '/etc/nginx/.nginx.conf.klabautermann-tmp-$_token';
 final _hash = 'a' * 64;
@@ -217,10 +218,14 @@ void main() {
     ));
     expect(parseReadHeader('120 0 4 640 xyz'), isNull);
     expect(parseReadHeader('120 0 4 999 $_hash'), isNull);
+    // `stat -c %a` drops leading zeros.
+    expect(parseReadHeader('0 0 0 7 $_hash')?.mode, 7);
     expect(parseReadHeader('99999999999999999999 0 0 644 $_hash'), isNull);
     expect(parseSha256List('$_hash  /etc/a\n${'b' * 64}  /etc/b c\nnoise\n'), {
       '/etc/a': _hash,
       '/etc/b c': 'b' * 64,
     });
+    // GNU escapes a path with a backslash and marks its line.
+    expect(parseSha256List('\\$_hash  /etc/a\\\\b\n'), {r'/etc/a\b': _hash});
   });
 }
