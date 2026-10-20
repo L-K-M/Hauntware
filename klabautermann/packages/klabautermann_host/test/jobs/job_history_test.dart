@@ -58,6 +58,21 @@ void main() {
       ]);
     });
 
+    test('an overlong delay and an impossible stamp date warn', () {
+      final r = parseAnacron(
+        '1 99999999999999999999 big true\n'
+        '1 5 bad true\n'
+        '$kAnacronStampsMarker\n'
+        'bad 20261340\n',
+      );
+      expect(r.value.single.identifier, 'bad');
+      expect(r.value.single.lastRun, isNull);
+      expect(r.warnings, [
+        'anacron: stamp "bad 20261340"',
+        'anacron: line "1 99999999999999999999 big true"',
+      ]);
+    });
+
     test('the builder runs a constant script', () {
       final argv = HostCommands.anacron();
       expect(argv.take(2), ['sh', '-c']);

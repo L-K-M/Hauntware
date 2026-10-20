@@ -79,7 +79,8 @@ const _namedPeriods = {
 };
 
 final _envLine = RegExp(r'^\s*[A-Za-z_][A-Za-z0-9_]*\s*=');
-final _anacronJob = RegExp(r'^\s*(\S+)\s+(\d+)\s+(\S+)\s+(.+)$');
+// A delay of up to nine digits, so it always parses as an int.
+final _anacronJob = RegExp(r'^\s*(\S+)\s+(\d{1,9})\s+(\S+)\s+(.+)$');
 final _stamp = RegExp(r'^(\S+) (\d{4})(\d\d)(\d\d)\s*$');
 
 /// Reads [HostCommands.anacron]'s output: the table's jobs, each with the
@@ -100,11 +101,18 @@ ParseResult<List<AnacronJob>> parseAnacron(String raw) {
       if (!line.endsWith(' ?')) warnings.add('anacron: stamp "$line"');
       continue;
     }
-    stamps[m[1]!] = DateTime.utc(
+    final (year, month, day) = (
       int.parse(m[2]!),
       int.parse(m[3]!),
       int.parse(m[4]!),
     );
+    final date = DateTime.utc(year, month, day);
+    // DateTime rolls an impossible date such as 20261340 over silently.
+    if (date.month != month || date.day != day) {
+      warnings.add('anacron: stamp "$line"');
+      continue;
+    }
+    stamps[m[1]!] = date;
   }
 
   final jobs = <AnacronJob>[];
