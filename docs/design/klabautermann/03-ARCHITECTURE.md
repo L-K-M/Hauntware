@@ -1256,8 +1256,10 @@ Proposals awaiting the owner close the section; they are not decisions.
      (`getfacl` lists more than the three base entries) or xattrs
      (`getfattr -d -m -` lists any but `security.selinux`) is refused,
      naming what this path would drop, rather than written without
-     them. A host with neither tool is taken to carry neither, as
-     nothing on it could have set them, and the write goes ahead;
+     them. What a missing tool cannot check is taken to be absent, an
+     accepted risk: attributes set from elsewhere (an image built on
+     another host, shared storage) would be dropped. A host with
+     neither tool writes ahead unchecked;
   4. the hash re-check runs right before `mv`, and `restorecon` runs on
      the target after it when SELinux enforces;
   5. any failed step removes the temp and leaves the target as it was.
