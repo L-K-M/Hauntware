@@ -5,7 +5,6 @@
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:crypto/crypto.dart' show sha256;
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/admin/admin_mode.dart';
 import 'package:klabautermann_core/src/operations/confirmation.dart';
@@ -13,97 +12,33 @@ import 'package:klabautermann_core/src/operations/edit_reader.dart';
 import 'package:klabautermann_core/src/operations/operation_plan.dart';
 import 'package:klabautermann_core/src/operations/plans/edit_plan.dart';
 import 'package:klabautermann_host/klabautermann_host.dart'
-    show EditCommands, EditExit, HostProfile, kRootBackupsDir;
+    show
+        EditCommands,
+        EditExit,
+        HostProfile,
+        backupFootprint,
+        encodeFootprintManifest,
+        kRootBackupsDir,
+        kRootManifestPath;
 import 'package:seance_core/seance_core.dart'
-    show ElevatedExecutor, ElevationProbe, RemoteCommandResult;
+    show ElevatedExecutor, ElevationProbe;
 import 'package:test/test.dart';
 
-import '../support/scripted_link.dart';
+import '../support/edit_host.dart';
 
 const _server = 'srv-1';
 const _password = 'correct-horse-staple';
-const _home = '/home/deploy/.local/state/klabautermann/backups';
+const _home = kHostUserBackups;
 final _profile = HostProfile(uid: 1000, user: 'deploy');
 
-String _sha(String text) => sha256.convert(utf8.encode(text)).toString();
-
-/// A file the host serves to the read script: its owner, mode and text,
-/// and whether only root may read it.
-typedef _File = ({int uid, String mode, String text, bool rootOnly});
-
-/// Plays the host: the read script over [files], `crontab -l` over
-/// [crontabs], and the backup directory; through the elevation prelude
-/// when the command carries it.
-final class _Host extends TestLinkBase {
-  final files = <String, _File>{};
-  final crontabs = <String, String>{};
-  final commands = <String>[];
-  bool enforcing = false;
-
-  @override
-  Future<RemoteCommandResult> run(
-    String command, {
-    Duration? timeout,
-    int maxOutputBytes = 256 * 1024,
-    List<int>? stdin,
-  }) async {
-    commands.add(command);
-    final elevated = command.contains(' elevate ');
-    if (command.contains('klabautermann-read')) {
-      final path = files.keys.firstWhere(command.contains, orElse: () => '');
-      final file = files[path];
-      if (file == null) {
-        return const RemoteCommandResult(
-          exitCode: 1,
-          stderr: 'stat: cannot statx: No such file or directory\n',
-        );
-      }
-      if (file.rootOnly && !elevated) {
-        return const RemoteCommandResult(
-          exitCode: 1,
-          stderr: 'stat: Permission denied\n',
-        );
-      }
-      final bytes = utf8.encode(file.text).length;
-      return RemoteCommandResult(
-        exitCode: 0,
-        stdout:
-            '$bytes ${file.uid} ${file.uid} ${file.mode} '
-            '${_sha(file.text)}\n${file.text}',
-      );
-    }
-    if (command.contains("'crontab' '-l'")) {
-      final user =
-          RegExp(r"'-u' '([a-z_][a-z0-9_-]*)'").firstMatch(command)?[1] ??
-          'deploy';
-      final table = crontabs[user];
-      return table == null
-          ? RemoteCommandResult(exitCode: 1, stderr: 'no crontab for $user\n')
-          : RemoteCommandResult(exitCode: 0, stdout: table);
-    }
-    if (command.contains('/sys/fs/selinux/enforce')) {
-      return enforcing
-          ? const RemoteCommandResult(exitCode: 0, stdout: '1\n')
-          : const RemoteCommandResult(
-              exitCode: 1,
-              stderr: 'cat: /sys/fs/selinux/enforce: No such file\n',
-            );
-    }
-    if (command.contains(kBackupsDirSuffixForTest)) {
-      return const RemoteCommandResult(exitCode: 0, stdout: '$_home\n');
-    }
-    return const RemoteCommandResult(exitCode: 0);
-  }
-}
-
-const kBackupsDirSuffixForTest = 'klabautermann/backups';
+String _sha(String text) => sha256Of(text);
 
 void main() {
-  late _Host host;
+  late EditHost host;
   AdminSession? admin;
 
   setUp(() {
-    host = _Host();
+    host = EditHost();
     admin = null;
   });
 
@@ -242,7 +177,12 @@ void main() {
       for (final step in plan.steps) (step as ShellStep).argv,
     ];
 
-    test("the login user's file: backup, temp, attributes, swap", () async {
+    String tempOf(OperationPlan plan) => argvs(
+      plan,
+    ).firstWhere((argv) => argv.contains('klabautermann-write')).last;
+
+    test("the login user's file: backup, manifest, temp, attributes, "
+        'swap', () async {
       const path = '/home/deploy/app/.env';
       host.files[path] = (
         uid: 1000,
@@ -251,22 +191,26 @@ void main() {
         rootOnly: false,
       );
 
-      final attempt = await plan(
+      final p = (await plan(
         const FileTarget(path),
         'TOKEN=b\n',
         _sha('TOKEN=a\n'),
-      );
-      final p = attempt.plan!;
-      final temp = (p.steps[1] as ShellStep).argv.last;
+      )).plan!;
+      final temp = tempOf(p);
 
       expect(temp, startsWith('/home/deploy/app/..env.klabautermann-tmp-'));
       expect(argvs(p), [
         EditCommands.backupFile(path, _home),
+        EditCommands.manifestWrite(kHostUserManifest),
         EditCommands.writeTemp(temp),
         EditCommands.copyAttributes(path, temp),
         EditCommands.replaceIfHash(path, temp, _sha('TOKEN=a\n')),
       ]);
-      expect(utf8.decode((p.steps[1] as ShellStep).input!), 'TOKEN=b\n');
+      expect(
+        utf8.decode((p.steps[1] as ShellStep).input!),
+        encodeFootprintManifest(backupFootprint(_home)),
+      );
+      expect(utf8.decode((p.steps[2] as ShellStep).input!), 'TOKEN=b\n');
       expect((p.steps.last as ShellStep).exitMeanings, {
         EditExit.hashMismatch: RevalidationFailure.contentChanged,
       });
@@ -279,21 +223,68 @@ void main() {
         HostWriteRow.editTarget,
         HostWriteRow.editTempFile,
         HostWriteRow.userBackups,
+        HostWriteRow.footprintManifest,
         HostWriteRow.loginRecords,
       ]);
       expect(p.targetName, path);
       expect(p.danger, isEmpty, reason: 'the scripts are fixed text');
+
+      // A manifest that lists the backups already is left alone.
+      host.readable[kHostUserManifest] = encodeFootprintManifest(
+        backupFootprint(_home),
+      );
+      final again = (await plan(
+        const FileTarget(path),
+        'TOKEN=b\n',
+        _sha('TOKEN=a\n'),
+      )).plan!;
+      expect(
+        argvs(again).where((a) => a.contains('klabautermann-manifest')),
+        isEmpty,
+      );
+      expect(again.hostWrites, isNot(contains(HostWriteRow.footprintManifest)));
     });
 
-    test("root's file runs every step elevated and backs up under "
-        '/var/lib', () async {
+    test(
+      'a manifest the engine cannot read whole is not written over',
+      () async {
+        host.files['/home/deploy/a'] = (
+          uid: 1000,
+          mode: '644',
+          text: 'x\n',
+          rootOnly: false,
+        );
+        host.readable[kHostUserManifest] = '{not json';
+
+        expect(
+          (await plan(
+            const FileTarget('/home/deploy/a'),
+            'y\n',
+            _sha('x\n'),
+          )).refusal,
+          ActionRefusalReason.invalidTarget,
+        );
+      },
+    );
+
+    test("root's file needs admin mode even to plan; then every step runs "
+        'elevated and backs up under /var/lib', () async {
       host.files['/etc/app.conf'] = (
         uid: 0,
         mode: '640',
         text: 'a=1\n',
         rootOnly: false,
       );
+      expect(
+        (await plan(
+          const FileTarget('/etc/app.conf'),
+          'a=2\n',
+          _sha('a=1\n'),
+        )).refusal,
+        ActionRefusalReason.adminRequired,
+      );
 
+      adminOn();
       final p = (await plan(
         const FileTarget('/etc/app.conf'),
         'a=2\n',
@@ -302,10 +293,10 @@ void main() {
 
       expect(p.steps.every((s) => (s as ShellStep).elevated), isTrue);
       expect(p.cleanup.single.elevated, isTrue);
-      expect(
-        argvs(p).first,
+      expect(argvs(p).take(2), [
         EditCommands.backupFile('/etc/app.conf', kRootBackupsDir),
-      );
+        EditCommands.manifestWrite(kRootManifestPath),
+      ]);
       expect(p.requiredLevel, RequiredLevel.admin);
       expect(p.runner.identity, 'root');
       expect(p.hostWrites, contains(HostWriteRow.rootBackups));
@@ -337,9 +328,9 @@ void main() {
         'deploy ALL=(ALL) NOPASSWD: /usr/bin/docker\n',
         _sha('deploy ALL=(ALL) ALL\n'),
       )).plan!;
-      final temp = (p.steps[1] as ShellStep).argv.last;
+      final temp = tempOf(p);
 
-      expect(argvs(p)[2], ['visudo', '-c', '-f', temp]);
+      expect(argvs(p), contains(equals(['visudo', '-c', '-f', temp])));
       expect(p.protected, ProtectedReason.builtIn);
       expect(p.tier, ConfirmationTier.typedPhrase);
     });
@@ -401,6 +392,7 @@ void main() {
       expect(p.targetName, 'crontab:deploy');
       expect(argvs(p), [
         EditCommands.crontabBackup(_home, indexName: 'crontab:deploy'),
+        EditCommands.manifestWrite(kHostUserManifest),
         EditCommands.crontabWriteIfHash(
           _sha('0 3 * * * /usr/local/bin/backup\n'),
         ),

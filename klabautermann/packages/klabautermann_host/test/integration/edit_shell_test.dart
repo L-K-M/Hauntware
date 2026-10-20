@@ -305,6 +305,43 @@ void main() {
         );
       });
 
+      test('an index is rewritten only while its hash holds; presence and '
+          'an absent manifest read cleanly', () async {
+        final backups = '${dir.path}/state$kBackupsDirSuffix';
+        Directory(backups).createSync(recursive: true);
+        final index = File('$backups/$kEditBackupIndexName')
+          ..writeAsStringSync('1\ta\t/x\n');
+
+        final stale = await run(
+          EditCommands.backupIndexWrite(backups, _sha256Of(target)),
+          stdin: '',
+        );
+        expect(stale.exitCode, EditExit.hashMismatch);
+        expect(index.readAsStringSync(), '1\ta\t/x\n');
+
+        final fresh = await run(
+          EditCommands.backupIndexWrite(backups, _sha256Of(index.path)),
+          stdin: '2\tb\t/y\n',
+        );
+        expect(fresh.exitCode, 0, reason: '${fresh.stderr}');
+        expect(index.readAsStringSync(), '2\tb\t/y\n');
+
+        final present = await run(
+          EditCommands.existingPaths([backups, '${dir.path}/gone', index.path]),
+        );
+        expect(present.exitCode, 0);
+        expect((present.stdout as String).trim().split('\n'), [
+          backups,
+          index.path,
+        ]);
+
+        final manifest = await run(
+          EditCommands.manifestRead('${dir.path}/c$kManifestSuffix'),
+        );
+        expect(manifest.exitCode, 0);
+        expect(manifest.stdout, '');
+      });
+
       test('the manifest is written whole and verified by sha256sum', () async {
         final manifest = '${dir.path}/config/klabautermann/manifest.json';
         final write = await run(

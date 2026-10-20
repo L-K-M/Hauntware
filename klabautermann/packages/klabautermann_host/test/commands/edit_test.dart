@@ -96,6 +96,41 @@ void main() {
     );
   });
 
+  test('footprint builders read, write and remove only their own '
+      'files', () {
+    expect(
+      EditCommands.manifestRead(kRootManifestPath).last,
+      kRootManifestPath,
+    );
+    expect(
+      () => EditCommands.manifestWrite('/etc/passwd'),
+      _refused('not a manifest path'),
+    );
+    expect(EditCommands.backupIndexWrite(kRootBackupsDir, _hash).sublist(3), [
+      'klabautermann-index',
+      '$kRootBackupsDir/index',
+      _hash,
+    ]);
+    expect(EditCommands.removeBackups(kRootBackupsDir, ['$_hash-17']), [
+      'rm',
+      '-f',
+      '--',
+      '$kRootBackupsDir/$_hash-17',
+    ]);
+    for (final bad in ['../index', 'index', '$_hash-x']) {
+      expect(
+        () => EditCommands.removeBackups(kRootBackupsDir, [bad]),
+        _refused('not a backup name'),
+        reason: bad,
+      );
+    }
+    expect(EditCommands.existingPaths(['/a', '/b']).sublist(3), [
+      'klabautermann-exists',
+      '/a',
+      '/b',
+    ]);
+  });
+
   test('paths must be absolute, normalized files without control '
       'characters (03 §8.8)', () {
     for (final bad in [

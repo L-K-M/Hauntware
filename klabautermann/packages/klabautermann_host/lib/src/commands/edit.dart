@@ -36,6 +36,13 @@ const String kRootBackupsDir = '/var/lib/klabautermann/backups';
 /// the engine resolves in the login shell's environment.
 const String kBackupsDirSuffix = '/klabautermann/backups';
 
+/// The root footprint manifest (SAF-14, 03 §8.11).
+const String kRootManifestPath = '/etc/klabautermann/manifest.json';
+
+/// How the login user's manifest path ends; the whole path is
+/// `${XDG_CONFIG_HOME:-$HOME/.config}/klabautermann/manifest.json`.
+const String kManifestSuffix = '/klabautermann/manifest.json';
+
 /// The index in each backup directory: one line per backup,
 /// `<epoch seconds> TAB <sha256> TAB <original path>`.
 const String kEditBackupIndexName = 'index';
@@ -89,6 +96,7 @@ Map<String, String> parseSha256List(String output) => {
 final _readHeader = RegExp(r'^(\d+) (\d+) (\d+) ([0-7]{3,4}) ([0-9a-f]{64})$');
 final _sha256Line = RegExp(r'^([0-9a-f]{64})  (/.*)$');
 final _sha256 = RegExp(r'^[0-9a-f]{64}$');
+final _backupName = RegExp(r'^[0-9a-f]{64}-\d{1,12}$');
 final _token = RegExp('^[0-9a-f]{$kEditTempTokenLength}\$');
 
 /// Prints `<size> <uid> <gid> <mode> <sha256>` and then, when the size is
@@ -180,6 +188,16 @@ mv -f -- "$d/.crontab.tmp" "$b" || { s=$?; rm -f -- "$d/.crontab.tmp"; exit "$s"
 { cat -- "$d/index" 2>/dev/null; printf '%s\t%s\t%s\n' "$t" "$h" "$n"; } > "$d/.index.tmp" &&
   mv -f -- "$d/.index.tmp" "$d/index" || exit
 printf '%s\n' "$b"''';
+
+/// Replaces a backup index with stdin while it still hashes to the
+/// SHA-256 the plan read (an absent index hashes as empty), so a backup
+/// another edit added meanwhile is never dropped from it.
+const String _kIndexWriteIfHashScript = r'''
+umask 077
+c=$( { cat -- "$1" 2>/dev/null || :; } | sha256sum) || exit
+if [ "${c%% *}" != "$2" ]; then exit 101; fi
+cat > "$1.klabautermann-tmp" && mv -f -- "$1.klabautermann-tmp" "$1" ||
+  { s=$?; rm -f -- "$1.klabautermann-tmp"; exit "$s"; }''';
 
 /// Writes stdin to the manifest through a temp file beside it, creating
 /// its directory 0700.
@@ -350,17 +368,87 @@ abstract final class EditCommands {
     ];
   }
 
-  /// Prints the footprint manifest at [path] (SAF-14, 03 §8.11).
+  /// Prints the login user's manifest path, resolved in the login
+  /// shell's environment as [userBackupsDir] resolves its directory.
+  static List<String> userManifestPath() => [
+    'sh',
+    '-c',
+    r'c=${XDG_CONFIG_HOME:-$HOME/.config}; '
+        r'case $c in /*) ;; *) c=$HOME/.config ;; esac; '
+        "printf '%s\\n' \"\$c$kManifestSuffix\"",
+  ];
+
+  /// Prints the footprint manifest at [path] (SAF-14, 03 §8.11), or
+  /// nothing when there is none yet.
   static List<String> manifestRead(String path) {
-    _checkPath(path);
-    return ['cat', '--', path];
+    _checkManifest(path);
+    return _readIfPresent(path);
   }
 
   /// Replaces the footprint manifest at [path] with stdin, atomically.
   static List<String> manifestWrite(String path) {
-    _checkPath(path);
+    _checkManifest(path);
     return ['sh', '-c', _kManifestWriteScript, 'klabautermann-manifest', path];
   }
+
+  /// Prints the index of backup directory [dir], or nothing when it has
+  /// none.
+  static List<String> backupIndexRead(String dir) {
+    _checkBackupDir(dir);
+    return _readIfPresent('$dir/$kEditBackupIndexName');
+  }
+
+  /// Replaces the index of backup directory [dir] with stdin, atomically,
+  /// while it still hashes to [baseSha256]; otherwise exits
+  /// [EditExit.hashMismatch] and leaves it as it was.
+  static List<String> backupIndexWrite(String dir, String baseSha256) {
+    _checkBackupDir(dir);
+    if (!_sha256.hasMatch(baseSha256)) {
+      throw HostCommandError('not a SHA-256', argument: baseSha256);
+    }
+    return [
+      'sh',
+      '-c',
+      _kIndexWriteIfHashScript,
+      'klabautermann-index',
+      '$dir/$kEditBackupIndexName',
+      baseSha256,
+    ];
+  }
+
+  /// Prints each of [paths] that exists, one per line.
+  static List<String> existingPaths(List<String> paths) {
+    if (paths.isEmpty) throw const HostCommandError('no paths');
+    paths.forEach(_checkPath);
+    return [
+      'sh',
+      '-c',
+      r'''for p; do [ -e "$p" ] && printf '%s\n' "$p"; done; :''',
+      'klabautermann-exists',
+      ...paths,
+    ];
+  }
+
+  /// Removes the backups named [names], `<sha256>-<epoch>`, from [dir].
+  static List<String> removeBackups(String dir, List<String> names) {
+    _checkBackupDir(dir);
+    if (names.isEmpty) throw const HostCommandError('no backups');
+    for (final name in names) {
+      if (!_backupName.hasMatch(name)) {
+        throw HostCommandError('not a backup name', argument: name);
+      }
+    }
+    return ['rm', '-f', '--', for (final name in names) '$dir/$name'];
+  }
+
+  /// The read of [path] that prints nothing when it is absent.
+  static List<String> _readIfPresent(String path) => [
+    'sh',
+    '-c',
+    r'[ ! -e "$1" ] || exec cat -- "$1"',
+    'klabautermann-read-if-present',
+    path,
+  ];
 
   /// `sha256sum` of each of [paths], for the footprint's verification;
   /// [parseSha256List] reads the output, which leaves out a path that is
@@ -387,6 +475,13 @@ abstract final class EditCommands {
   static void _checkUser(String? user) {
     if (user != null && ArgValidators.userName(user) != null) {
       throw HostCommandError('not a user name', argument: user);
+    }
+  }
+
+  static void _checkManifest(String path) {
+    _checkPath(path);
+    if (path != kRootManifestPath && !path.endsWith(kManifestSuffix)) {
+      throw HostCommandError('not a manifest path', argument: path);
     }
   }
 
