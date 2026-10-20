@@ -51,6 +51,10 @@ import '../sampling/subscriptions.dart';
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
 import 'protocol.dart';
 
+/// How long a shutdown waits for open shells to end and write their
+/// audit records; a link that went silent cannot hold the quit longer.
+const Duration _shutdownGrace = Duration(seconds: 2);
+
 /// What the engine isolate starts with, sent once by `Isolate.spawn`
 /// (D18): the port it answers on and the app's support directory, where it
 /// keeps the files it owns (03 §4.10). Plain data; the app resolves the
@@ -1246,10 +1250,12 @@ void engineMain(
           }),
         );
       case Shutdown():
-        // Each stream's end goes out before the isolate does, and its
-        // process goes with the isolate.
+        // Open shells end first, so their TerminalClosed and audit
+        // records are not cut off by Isolate.exit. Each stream's end goes
+        // out before the isolate does, and its process goes with the
+        // isolate.
+        await terminals?.dispose().timeout(_shutdownGrace, onTimeout: () {});
         unawaited(logs?.close());
-        unawaited(terminals?.dispose());
         unawaited(docker?.close());
         commands.close();
         Isolate.exit();
