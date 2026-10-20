@@ -133,4 +133,23 @@ void main() {
       expect(source.boot, isNull);
     });
   });
+
+  group('rotated files (LOG-08)', () {
+    for (final (path, compressed) in [
+      ('/var/log/syslog', false),
+      ('/var/log/syslog.1', false),
+      ('/var/log/syslog.2.gz', true),
+      ('/var/log/journal.xz', true),
+    ]) {
+      test('$path ${compressed ? 'reads as a window' : 'follows'}', () {
+        final query = const LogQuery()
+            .withSource(LogSourceKind.file)
+            .withPath(path);
+        final source = query.toSource(DateTime.utc(2026)) as FileLogSource;
+        expect(source.path, path);
+        expect(source.compressed, compressed);
+        expect(query.followable, !compressed);
+      });
+    }
+  });
 }

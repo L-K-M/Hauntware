@@ -1,5 +1,6 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
+
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -1870,6 +1871,48 @@ class AppLocalizationsEn extends AppLocalizations {
   String get logsPanelCommonPaths => 'Common paths';
 
   @override
+  String get logsPanelBrowseFiles => 'Browse /var/log';
+
+  @override
+  String get logsPanelFiles => 'Files in /var/log';
+
+  @override
+  String get logsPanelFilesFilter => 'Filter by name';
+
+  @override
+  String get logsPanelFilesLoading => 'Listing the server\'s log files…';
+
+  @override
+  String logsPanelFilesFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server denied access to /var/log.',
+      'missing': 'The server cannot list /var/log.',
+      'other': 'Listing the server\'s log files failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsPanelFilesEmpty => 'The server has no files under /var/log.';
+
+  @override
+  String get logsPanelFilesNoMatch => 'No file path contains this text.';
+
+  @override
+  String logsPanelFileDetails(String size, String modified) {
+    return '$size, changed $modified';
+  }
+
+  @override
+  String get logsPanelFileCompressed =>
+      'Compressed: reads its last lines, without following';
+
+  @override
+  String get logsPanelFileUnreadable =>
+      'Your account cannot read it; admin mode can';
+
+  @override
   String get logsPanelApply => 'Apply';
 
   @override
@@ -1907,6 +1950,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get logsPanelLivePastBoot =>
       'A past boot has no new entries to follow';
+
+  @override
+  String get logsPanelLiveCompressed =>
+      'A compressed file has no new lines to follow';
 
   @override
   String get logsPanelJournalLimited =>
