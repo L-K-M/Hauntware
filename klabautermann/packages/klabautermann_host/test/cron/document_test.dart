@@ -105,6 +105,18 @@ void main() {
       expect(resumed.resume(4).text, resumed.text);
     });
 
+    test('a CRLF job pauses and resumes byte for byte', () {
+      final doc = CrontabDocument.parse('* * * * * a\r\n* * * * * b\r\n');
+      final paused = doc.pause(0, at: at);
+      final line = paused.lines[0];
+
+      expect(line.kind, CrontabLineKind.pausedJob);
+      expect(line.pausedAt, at);
+      expect(line.pausedJob, '* * * * * a\r');
+      expect(paused.pause(0, at: at).text, paused.text);
+      expect(paused.resume(0).text, doc.text);
+    });
+
     test('only jobs pause and only paused jobs resume', () {
       final doc = CrontabDocument.parse(_crontab);
       expect(() => doc.pause(0, at: at), throwsArgumentError);

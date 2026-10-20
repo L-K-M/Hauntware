@@ -32,8 +32,11 @@ enum CrontabLineKind {
 /// A `NAME=value` line, as cron matches one before reading a job.
 final _environment = RegExp(r'^\s*[A-Za-z_][A-Za-z0-9_]*\s*=');
 
-/// The pause marker, its UTC time and the job line it holds.
-final _paused = RegExp('^${RegExp.escape(kCrontabPauseMarker)}(\\S+) (.*)\$');
+/// The pause marker, its UTC time and the job line it holds: `[\s\S]`
+/// rather than `.`, which stops at the `\r` a CRLF line keeps.
+final _paused = RegExp(
+  '^${RegExp.escape(kCrontabPauseMarker)}(\\S+) ([\\s\\S]*)\$',
+);
 
 /// One line of a crontab, without its newline.
 @immutable
