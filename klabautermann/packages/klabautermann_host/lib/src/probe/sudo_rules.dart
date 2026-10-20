@@ -54,7 +54,9 @@ bool? sudoListAllows(String output, String program) {
         RegExp(r'\s+'),
       );
       final head = words.first;
-      if (negated && _globMatches(_baseName(head), program)) {
+      // A path ending in `/` names every file in that directory.
+      final directory = head.endsWith('/');
+      if (negated && (directory || _globMatches(_baseName(head), program))) {
         allowed = false;
         continue;
       }
@@ -94,32 +96,69 @@ bool? sudoListAllows(String output, String program) {
   return (asRoot: asRoot, commands: commands);
 }
 
+/// The bracket expression opening at [start] as a regex character class,
+/// and the index of its closing `]`; null when it never closes, which
+/// leaves the `[` literal.
+({String regex, int end})? _bracket(String pattern, int start) {
+  var i = start + 1;
+  final negate = i < pattern.length && (pattern[i] == '!' || pattern[i] == '^');
+  if (negate) i++;
+
+  final members = StringBuffer();
+  // A `]` first in the set is a member, not its end.
+  if (i < pattern.length && pattern[i] == ']') {
+    members.write(r'\]');
+    i++;
+  }
+  for (; i < pattern.length; i++) {
+    final c = pattern[i];
+    if (c == ']') {
+      return (regex: '[${negate ? '^' : ''}$members]', end: i);
+    }
+    if (c == r'\' && i + 1 < pattern.length) {
+      members.write(_classLiteral(pattern[++i]));
+    } else if (c == r'\' || c == '^' || c == '[') {
+      members.write(_classLiteral(c));
+    } else {
+      members.write(c);
+    }
+  }
+  return null;
+}
+
+/// [c] as a literal member of a regex character class: letters and
+/// digits as they are, since `\d` or `\w` would name a class, and any
+/// other character escaped.
+String _classLiteral(String c) =>
+    RegExp(r'[A-Za-z0-9]').hasMatch(c) ? c : '\\$c';
+
 String _baseName(String path) => path.substring(path.lastIndexOf('/') + 1);
 
 /// Whether [pattern], a sudoers glob's last path component, matches
-/// [name]: `*`, `?` and bracket expressions, with `!` negating a bracket
-/// as in fnmatch(3). A pattern without glob characters never matches here;
-/// the exact comparison covers it.
+/// [name]: `*`, `?` and bracket expressions, with `!` or `^` negating a
+/// bracket and a `]` first in one taken as a member, as in fnmatch(3),
+/// and a backslash making the next character literal. A pattern without
+/// glob characters never matches here; the exact comparison covers it.
 bool _globMatches(String pattern, String name) {
   if (!pattern.contains(_globCharacters)) return false;
 
   final regex = StringBuffer('^');
   for (var i = 0; i < pattern.length; i++) {
     final char = pattern[i];
-    if (char == '*') {
+    if (char == r'\' && i + 1 < pattern.length) {
+      regex.write(RegExp.escape(pattern[++i]));
+    } else if (char == '*') {
       regex.write('.*');
     } else if (char == '?') {
       regex.write('.');
     } else if (char == '[') {
-      final close = pattern.indexOf(']', i + 2);
-      if (close < 0) {
+      final bracket = _bracket(pattern, i);
+      if (bracket == null) {
         regex.write(r'\[');
         continue;
       }
-      var set = pattern.substring(i + 1, close);
-      if (set.startsWith('!')) set = '^${set.substring(1)}';
-      regex.write('[${set.replaceAll(r'\', r'\\')}]');
-      i = close;
+      regex.write(bracket.regex);
+      i = bracket.end;
     } else {
       regex.write(RegExp.escape(char));
     }
