@@ -9,7 +9,7 @@
   raised again; a different one is still raised. Before, the pulled key
   replaced yours silently, so a forged sync record could change which
   key every device trusted (#56).
-- Terminal and editor font pickers now offer 20 bundled families with
+- Terminal and editor font pickers now offer 23 bundled families with
   search and larger previews. The terminal sample uses the session's
   colours and text size. Ligatures default to on, including Monaspace,
   Geist Mono and Intel One Mono's coding features, and can be disabled.

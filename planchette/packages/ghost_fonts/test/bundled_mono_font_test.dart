@@ -64,6 +64,9 @@ const _advanceEm = {
   BundledMonoFont.googleSansCode: 1200 / 2000,
   BundledMonoFont.commitMono: 600 / 1000,
   BundledMonoFont.departureMono: 350 / 550,
+  BundledMonoFont.nordwandMono: 600 / 1000,
+  BundledMonoFont.ioskeleyMonoTerm: 600 / 1000,
+  BundledMonoFont.font3270: 1080 / 2000,
 };
 
 void main() {

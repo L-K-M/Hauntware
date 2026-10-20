@@ -34,7 +34,17 @@ enum BundledMonoFont {
   fragmentMono('Fragment Mono'),
   googleSansCode('Google Sans Code'),
   commitMono('Commit Mono'),
-  departureMono('Departure Mono');
+  departureMono('Departure Mono'),
+
+  /// Only `->` and `=>` ligate. Latin and Cyrillic only: box drawing and
+  /// other terminal symbols come from the next family in the stack.
+  nordwandMono('Nordwand Mono'),
+
+  /// Berkeley Mono's look, built from Iosevka. Subset like [iosevkaTerm].
+  ioskeleyMonoTerm('Ioskeley Mono Term'),
+
+  /// The IBM 3270 terminal's face. Upstream names it 'IBM 3270'.
+  font3270('3270');
 
   const BundledMonoFont(this.displayName);
 
@@ -46,7 +56,7 @@ enum BundledMonoFont {
 
   /// Whether the shipped face has programming ligatures to preview.
   bool get hasProgrammingLigatures => switch (this) {
-    googleSansCode || departureMono => false,
+    googleSansCode || departureMono || font3270 => false,
     _ => true,
   };
 

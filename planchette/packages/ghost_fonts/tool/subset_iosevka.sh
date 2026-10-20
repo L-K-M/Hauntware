@@ -1,23 +1,45 @@
 #!/usr/bin/env bash
-# Rebuilds fonts/IosevkaTerm from the upstream release.
+# Rebuilds fonts/IosevkaTerm or fonts/IoskeleyMonoTerm from the upstream
+# release.
 #
 # Iosevka's full character set costs about 8.4 MB per style; the terminal
 # needs a fraction of it. This keeps the scripts, symbols and drawing
 # characters a terminal shows and the default ligatures (calt), and drops
 # the character-variant and stylistic-set glyphs nothing selects:
 # about 480 KB per style. Characters left out fall back to the next
-# family in the app's stack.
+# family in the app's stack. Ioskeley Mono is an Iosevka build, so the
+# same cut fits it.
 #
 # Needs curl, python3, sha256sum or shasum, and pyftsubset from fonttools 4.67.0
 # (for example: uv tool install fonttools==4.67.0).
 #
-# Usage: tool/subset_iosevka.sh [path/to/PkgTTF-Unhinted-IosevkaTerm-34.9.0.zip]
+# Usage: tool/subset_iosevka.sh iosevka-term|ioskeley-mono-term [path/to/release.zip]
 set -euo pipefail
 
-readonly version=34.9.0
-readonly archive_name="PkgTTF-Unhinted-IosevkaTerm-${version}.zip"
-readonly archive_sha256=b11472aab68b01d5936758962af8da5902ebbb7f8311303236f5e1023a4bee45
-readonly url="https://github.com/be5invis/Iosevka/releases/download/v${version}/${archive_name}"
+# Each family's pinned release, where its styles sit in the archive, and
+# the file name stem the archive and fonts/ share.
+case "${1:-}" in
+  iosevka-term)
+    readonly version=34.9.0
+    readonly archive_name="PkgTTF-Unhinted-IosevkaTerm-${version}.zip"
+    readonly archive_sha256=b11472aab68b01d5936758962af8da5902ebbb7f8311303236f5e1023a4bee45
+    readonly url="https://github.com/be5invis/Iosevka/releases/download/v${version}/${archive_name}"
+    readonly member_dir=''
+    readonly stem=IosevkaTerm
+    ;;
+  ioskeley-mono-term)
+    readonly version=2.1.0
+    readonly archive_name=IoskeleyMono-Term.zip
+    readonly archive_sha256=a45f766d60fb7f1ed244ecd456a890d68cad8bd480f7803325d04133995bc000
+    readonly url="https://github.com/ahatem/IoskeleyMono/releases/download/v${version}/${archive_name}"
+    readonly member_dir=Normal/Unhinted/
+    readonly stem=IoskeleyMonoTerm
+    ;;
+  *)
+    echo "Usage: $0 iosevka-term|ioskeley-mono-term [path/to/release.zip]" >&2
+    exit 2
+    ;;
+esac
 readonly styles=(Regular Bold Italic BoldItalic)
 
 # What a terminal draws, by block:
@@ -48,12 +70,12 @@ readonly unicodes=(
 # HarfBuzz's default features plus the marks: ligatures are calt.
 readonly features=calt,ccmp,locl,mark,mkmk,kern,liga,rlig,clig
 
-out="$(cd "$(dirname "$0")/.." && pwd)/fonts/IosevkaTerm"
+out="$(cd "$(dirname "$0")/.." && pwd)/fonts/$stem"
 mkdir -p "$out"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-archive="${1:-}"
+archive="${2:-}"
 if [[ -z "$archive" ]]; then
   archive="$work/$archive_name"
   curl --fail --location --silent --show-error --output "$archive" "$url"
@@ -67,10 +89,10 @@ fi
 
 ranges="$(IFS=,; echo "${unicodes[*]}")"
 for style in "${styles[@]}"; do
-  file="IosevkaTerm-${style}.ttf"
+  file="${stem}-${style}.ttf"
   python3 -I -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extract(sys.argv[2], sys.argv[3])' \
-    "$archive" "$file" "$work"
-  pyftsubset "$work/$file" \
+    "$archive" "$member_dir$file" "$work"
+  pyftsubset "$work/$member_dir$file" \
     --unicodes="$ranges" \
     --layout-features="$features" \
     --name-IDs='*' --name-languages='*' --name-legacy \
