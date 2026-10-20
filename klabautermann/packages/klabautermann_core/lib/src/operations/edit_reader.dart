@@ -109,6 +109,11 @@ Future<EditReadResult> _readCrontab(String? user, EditContext c) async {
   final String text;
   if (result.exitCode == 0) {
     text = result.stdout;
+    // The same cap as a file's, so the editor never takes a table it
+    // would refuse as a file.
+    if (utf8.encode(text).length > kEditReadCap) {
+      return const EditReadFailed(EditReadFailure.tooLarge);
+    }
   } else if (_noCrontab.hasMatch(result.stderr)) {
     text = '';
   } else {
