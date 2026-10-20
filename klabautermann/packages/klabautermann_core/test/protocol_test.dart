@@ -1138,6 +1138,9 @@ void main() {
         SampleStream.failedUnits: FailedUnitsResult(const []),
         SampleStream.timers: TimersResult(TimersSnapshot()),
         SampleStream.cron: CronResult(CronSnapshot()),
+        // The user manager's streams share the system streams' variants.
+        SampleStream.userUnits: UnitsResult(UnitsSnapshot()),
+        SampleStream.userTimers: TimersResult(TimersSnapshot()),
       };
       expect(variants.keys, SampleStream.values);
       const unavailable = CollectorUnavailable(
@@ -1154,9 +1157,8 @@ void main() {
 
       for (final stream in SampleStream.values) {
         expect(sample(stream, unavailable).result, same(unavailable));
-        for (final MapEntry(key: variantStream, value: result)
-            in variants.entries) {
-          if (variantStream == stream) {
+        for (final result in variants.values) {
+          if (result.runtimeType == variants[stream]!.runtimeType) {
             expect(sample(stream, result).result, same(result));
             continue;
           }

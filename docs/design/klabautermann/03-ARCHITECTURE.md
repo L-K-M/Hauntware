@@ -3353,6 +3353,15 @@ has. Its states line also carries the unit's resources, read when the
 page opens and again when its active or sub state changes. The "Yours"
 switch for user units and the per-type tabs follow in a later change.
 
+The slow sampler's `user_units` and `user_timers` collectors (collector
+set version 9) read `systemctl --user list-units` and `list-timers` in
+the system collectors' block shapes, crossing as the `userUnits` and
+`userTimers` streams with the `units` and `timers` cadences. Where the
+session has no `XDG_RUNTIME_DIR` they set systemd's own
+`/run/user/<uid>` first. Without a user session or linger the bus is
+missing and the section reports an error. The capture tool records no
+fixture for them, since a capture container has no login session.
+
 As built in M4 (E21a), where actions are allowed the Services table's
 row menu and a unit's page offer Start, Stop, Restart and Reload; the
 table keeps no action slot otherwise, so its layout does not change.
