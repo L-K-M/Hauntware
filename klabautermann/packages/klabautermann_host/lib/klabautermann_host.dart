@@ -39,5 +39,6 @@ export 'src/parse/timers.dart';
 export 'src/parse/units.dart';
 export 'src/probe/host_profile.dart';
 export 'src/probe/probe_parse.dart';
+export 'src/probe/sudo_rules.dart';
 export 'src/rates/rates.dart';
 export 'src/rules/threshold.dart';
