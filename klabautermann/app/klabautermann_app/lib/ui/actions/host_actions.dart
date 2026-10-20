@@ -145,6 +145,7 @@ List<SidebarMenuEntry> unitActionEntries(
   BuildContext context, {
   required String serverId,
   required String unit,
+  UnitScope scope = UnitScope.system,
 }) {
   if (!actionsAllowedAt(context, serverId, ActionEntryPoint.unitVerb)) {
     return const [];
@@ -152,8 +153,10 @@ List<SidebarMenuEntry> unitActionEntries(
   final l10n = AppLocalizations.of(context);
   SidebarMenuAction act(SystemctlVerb verb) => SidebarMenuAction(
     label: _verbLabel(l10n, verb),
-    onSelected: () =>
-        startAction(context, UnitAction(serverId, unit: unit, verb: verb)),
+    onSelected: () => startAction(
+      context,
+      UnitAction(serverId, unit: unit, verb: verb, scope: scope),
+    ),
   );
   return [
     for (final verb in _unitVerbs) act(verb),
@@ -170,10 +173,14 @@ class UnitActionButtons extends StatelessWidget {
     super.key,
     required this.serverId,
     required this.unit,
+    this.scope = UnitScope.system,
   });
 
   final String serverId;
   final String unit;
+
+  /// The manager [unit] belongs to (SVC-09).
+  final UnitScope scope;
 
   @override
   Widget build(BuildContext context) {
@@ -189,7 +196,7 @@ class UnitActionButtons extends StatelessWidget {
             OutlinedButton(
               onPressed: () => startAction(
                 context,
-                UnitAction(serverId, unit: unit, verb: verb),
+                UnitAction(serverId, unit: unit, verb: verb, scope: scope),
               ),
               child: Text(_verbLabel(l10n, verb)),
             ),
@@ -199,7 +206,7 @@ class UnitActionButtons extends StatelessWidget {
                 MenuItemButton(
                   onPressed: () => startAction(
                     context,
-                    UnitAction(serverId, unit: unit, verb: verb),
+                    UnitAction(serverId, unit: unit, verb: verb, scope: scope),
                   ),
                   child: Text(_verbLabel(l10n, verb)),
                 ),

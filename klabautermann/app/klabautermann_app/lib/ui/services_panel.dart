@@ -15,6 +15,7 @@ import 'logs/log_level.dart';
 import 'logs/log_view.dart';
 import 'logs/log_view_controller.dart';
 import 'services_view.dart';
+import 'server_surfaces.dart' show ServerPanel;
 import 'sortable_table.dart';
 import 'unit_details.dart';
 
@@ -83,6 +84,14 @@ class ServicesPanel extends StatefulWidget {
 class _ServicesPanelState extends State<ServicesPanel> {
   late ValueListenable<Sample?> _units;
 
+  /// Whose units the panel lists: the system manager's, or the login
+  /// user's own (SVC-09), whose stream it subscribes while it shows them.
+  UnitScope _scope = UnitScope.system;
+
+  /// The subscription that reads the login user's units while [_scope]
+  /// is theirs and the panel shows.
+  static final _userSubscription = '${ServerPanel.services.name}.user';
+
   /// The filters, order and open unit, which outlive tab switches: the
   /// workspace keeps a panel built once opened. Services lead, since most
   /// other units are devices, mounts and slices.
@@ -110,6 +119,7 @@ class _ServicesPanelState extends State<ServicesPanel> {
   void initState() {
     super.initState();
     _attach();
+    _followUser();
   }
 
   @override
@@ -117,17 +127,21 @@ class _ServicesPanelState extends State<ServicesPanel> {
     super.didUpdateWidget(oldWidget);
     if (widget.serverId == oldWidget.serverId &&
         widget.monitoring == oldWidget.monitoring) {
+      if (widget.visible != oldWidget.visible) _followUser();
       return;
     }
 
+    oldWidget.monitoring.unsubscribe(oldWidget.serverId, _userSubscription);
     _units.removeListener(_onUnits);
     _attach();
+    _followUser();
     _open = null;
     _returnFocus = null;
   }
 
   @override
   void dispose() {
+    widget.monitoring.unsubscribe(widget.serverId, _userSubscription);
     _units.removeListener(_onUnits);
     _listFocus.dispose();
     _pageFocus.dispose();
@@ -136,8 +150,34 @@ class _ServicesPanelState extends State<ServicesPanel> {
   }
 
   void _attach() {
-    _units = widget.monitoring.sampleFor(widget.serverId, SampleStream.units)
-      ..addListener(_onUnits);
+    _units = widget.monitoring.sampleFor(widget.serverId, switch (_scope) {
+      UnitScope.system => SampleStream.units,
+      UnitScope.user => SampleStream.userUnits,
+    })..addListener(_onUnits);
+  }
+
+  /// Reads the login user's units while they are listed and the panel
+  /// shows; the system's come with the panel's own streams.
+  void _followUser() {
+    if (_scope == UnitScope.user && widget.visible) {
+      widget.monitoring.subscribe(widget.serverId, _userSubscription, const {
+        SampleStream.userUnits,
+      });
+    } else {
+      widget.monitoring.unsubscribe(widget.serverId, _userSubscription);
+    }
+  }
+
+  void _setScope(UnitScope scope) {
+    if (scope == _scope) return;
+    _units.removeListener(_onUnits);
+    setState(() {
+      _scope = scope;
+      _open = null;
+      _returnFocus = null;
+    });
+    _attach();
+    _followUser();
   }
 
   void _onUnits() => setState(() {});
@@ -200,6 +240,7 @@ class _ServicesPanelState extends State<ServicesPanel> {
                   logPlacement: widget.logPlacement,
                   closeFocus: _closeFocus,
                   onClose: _close,
+                  scope: _scope,
                 ),
               );
         // The list keeps its place in the tree, so opening a unit keeps the
@@ -209,7 +250,32 @@ class _ServicesPanelState extends State<ServicesPanel> {
           child: Focus(
             focusNode: _listFocus,
             includeSemantics: false,
-            child: _list(l10n, units, result, wide: wide),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: SegmentedButton<UnitScope>(
+                    showSelectedIcon: false,
+                    segments: [
+                      ButtonSegment(
+                        value: UnitScope.system,
+                        label: Text(l10n.servicesScopeSystem),
+                      ),
+                      ButtonSegment(
+                        value: UnitScope.user,
+                        label: Text(l10n.servicesScopeUser),
+                      ),
+                    ],
+                    selected: {_scope},
+                    onSelectionChanged: (selected) =>
+                        _setScope(selected.single),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Expanded(child: _list(l10n, units, result, wide: wide)),
+              ],
+            ),
           ),
         );
         if (page == null) return Padding(padding: padding, child: list);
@@ -261,6 +327,15 @@ class _ServicesPanelState extends State<ServicesPanel> {
     final theme = Theme.of(context);
     if (units == null) {
       return switch (result) {
+        // Without a login session or linger the user manager is not
+        // there to ask (SVC-09).
+        final CollectorUnavailable unavailable when _scope == UnitScope.user =>
+          _notice(
+            theme,
+            Icons.person_off_outlined,
+            l10n.servicesUserUnavailable,
+            unavailable.detail,
+          ),
         final CollectorUnavailable unavailable => _unavailable(
           l10n,
           theme,
@@ -343,6 +418,7 @@ class _ServicesPanelState extends State<ServicesPanel> {
                 context,
                 serverId: widget.serverId,
                 unit: unit.unit,
+                scope: _scope,
               )
             : null,
         empty: Padding(
@@ -451,6 +527,7 @@ class _UnitPage extends StatelessWidget {
     required this.logPlacement,
     required this.closeFocus,
     required this.onClose,
+    required this.scope,
   });
 
   final MonitoringController monitoring;
@@ -465,6 +542,9 @@ class _UnitPage extends StatelessWidget {
   final UnitLogPlacement logPlacement;
   final FocusNode closeFocus;
   final VoidCallback onClose;
+
+  /// The manager the unit belongs to (SVC-09).
+  final UnitScope scope;
 
   @override
   Widget build(BuildContext context) {
@@ -500,6 +580,7 @@ class _UnitPage extends StatelessWidget {
                 monitoring: monitoring,
                 serverId: serverId,
                 unit: name,
+                scope: scope,
               ),
             ),
           ),
@@ -508,12 +589,13 @@ class _UnitPage extends StatelessWidget {
       if (description != null) Text(description),
       // Only where actions show, so the page keeps its layout otherwise.
       if (actionsAllowedAt(context, serverId, ActionEntryPoint.unitVerb))
-        UnitActionButtons(serverId: serverId, unit: name),
+        UnitActionButtons(serverId: serverId, unit: name, scope: scope),
       // SVC-08 (v1): what the unit uses now, after its states.
       UnitResourcesView(
         monitoring: monitoring,
         serverId: serverId,
         unit: name,
+        scope: scope,
         revision: (states?.active, states?.sub),
         leading: [
           for (final (label, value) in [
@@ -525,6 +607,20 @@ class _UnitPage extends StatelessWidget {
         ],
       ),
     ];
+    // The unit logs read the system journal by unit, where a user unit's
+    // lines are not found under its name (LOG-22 reads them later).
+    if (scope == UnitScope.user) {
+      return SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: 8,
+          children: [
+            ...facts,
+            _notice(theme, Icons.info_outline, l10n.servicesUserLogsAbsent),
+          ],
+        ),
+      );
+    }
     return switch (logPlacement) {
       UnitLogPlacement.inline => _UnitLogs(
         monitoring: monitoring,

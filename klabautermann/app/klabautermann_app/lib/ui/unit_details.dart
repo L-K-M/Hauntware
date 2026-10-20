@@ -38,6 +38,7 @@ class UnitResourcesView extends StatefulWidget {
     required this.unit,
     required this.leading,
     this.revision,
+    this.scope = UnitScope.system,
   });
 
   final MonitoringController monitoring;
@@ -45,6 +46,7 @@ class UnitResourcesView extends StatefulWidget {
   final String unit;
   final List<Widget> leading;
   final Object? revision;
+  final UnitScope scope;
 
   @override
   State<UnitResourcesView> createState() => _UnitResourcesViewState();
@@ -68,7 +70,8 @@ class _UnitResourcesViewState extends State<UnitResourcesView> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.unit != widget.unit ||
         oldWidget.serverId != widget.serverId ||
-        oldWidget.revision != widget.revision) {
+        oldWidget.revision != widget.revision ||
+        oldWidget.scope != widget.scope) {
       unawaited(_read());
     }
   }
@@ -77,7 +80,7 @@ class _UnitResourcesViewState extends State<UnitResourcesView> {
     final read = ++_reads;
     final result = await widget.monitoring.queryUnit(
       widget.serverId,
-      UnitResourcesQuery(widget.unit),
+      UnitResourcesQuery(widget.unit, scope: widget.scope),
     );
     if (!mounted || read != _reads) return;
     setState(() => _answer = result.payload);
@@ -171,12 +174,14 @@ Future<void> openUnitFile(
   required MonitoringController monitoring,
   required String serverId,
   required String unit,
+  UnitScope scope = UnitScope.system,
 }) {
   final l10n = AppLocalizations.of(context);
   final view = UnitFileView(
     monitoring: monitoring,
     serverId: serverId,
     unit: unit,
+    scope: scope,
   );
   if (MediaQuery.sizeOf(context).width < _pageBelowWidth) {
     return Navigator.of(context).push(
@@ -240,11 +245,13 @@ class UnitFileView extends StatefulWidget {
     required this.monitoring,
     required this.serverId,
     required this.unit,
+    this.scope = UnitScope.system,
   });
 
   final MonitoringController monitoring;
   final String serverId;
   final String unit;
+  final UnitScope scope;
 
   @override
   State<UnitFileView> createState() => _UnitFileViewState();
@@ -274,7 +281,7 @@ class _UnitFileViewState extends State<UnitFileView> {
   Future<void> _read() async {
     final result = await widget.monitoring.queryUnit(
       widget.serverId,
-      UnitFileQuery(widget.unit),
+      UnitFileQuery(widget.unit, scope: widget.scope),
     );
     if (!mounted) return;
     setState(() {

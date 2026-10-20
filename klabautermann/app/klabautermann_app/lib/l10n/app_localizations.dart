@@ -6747,6 +6747,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'File of {unit}'**
   String unitFileEditorLabel(String unit);
+
+  /// Services tab: lists the system manager's units.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get servicesScopeSystem;
+
+  /// Services tab: lists the login user's own units (SVC-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Yours'**
+  String get servicesScopeUser;
+
+  /// Unit page of a user unit: its journal lines are not read (SVC-09).
+  ///
+  /// In en, this message translates to:
+  /// **'The logs of your own units are not shown here yet.'**
+  String get servicesUserLogsAbsent;
+
+  /// Services tab, Yours: the user manager could not be reached (SVC-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Your own units could not be read. Your user manager runs only while you are logged in, or with lingering enabled.'**
+  String get servicesUserUnavailable;
 }
 
 class _AppLocalizationsDelegate

@@ -5137,4 +5137,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String unitFileEditorLabel(String unit) {
     return 'File of $unit';
   }
+
+  @override
+  String get servicesScopeSystem => 'System';
+
+  @override
+  String get servicesScopeUser => 'Yours';
+
+  @override
+  String get servicesUserLogsAbsent =>
+      'The logs of your own units are not shown here yet.';
+
+  @override
+  String get servicesUserUnavailable =>
+      'Your own units could not be read. Your user manager runs only while you are logged in, or with lingering enabled.';
 }
