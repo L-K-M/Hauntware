@@ -80,6 +80,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // A caller error's diagnostic: the preview is modal, so no screen ever
   // shows it.
+  // The display path that picks the unit file view's INI highlighting,
+  // never shown.
+  'lib/ui/unit_details.dart': {"'unit.service'"},
   'lib/controllers/operations_controller.dart': {
     "'a preview is already pending'",
   },
@@ -163,6 +166,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'leaveServer without openServer for $serverId'",
     // A subscription id the engine keys a surface's streams by (D45).
     r"'$surface-${_subscriptionCount++}'",
+    // A unit read's request id, never shown.
+    r"'unit-${_nextUnitQuery++}'",
   },
   // Services panel (SVC-01 to SVC-04, CN-10).
   'lib/controllers/log_reads.dart': {

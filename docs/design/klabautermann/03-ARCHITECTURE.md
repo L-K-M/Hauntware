@@ -3346,6 +3346,13 @@ and the secrets of `Exec*=` lines, as process arguments are masked
 (8.9). A user manager without a session or linger answers
 `managerUnavailable`.
 
+The unit page (plan M27a) offers the v1 verbs behind "More", on the
+page and in the row menu. Its name row opens the unit file read-only in
+Planchette's editor, masked, with a timed reveal as the stack file view
+has. Its states line also carries the unit's resources, read when the
+page opens and again when its active or sub state changes. The "Yours"
+switch for user units and the per-type tabs follow in a later change.
+
 As built in M4 (E21a), where actions are allowed the Services table's
 row menu and a unit's page offer Start, Stop, Restart and Reload; the
 table keeps no action slot otherwise, so its layout does not change.

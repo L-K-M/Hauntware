@@ -175,6 +175,10 @@ final class MonitoringController extends ChangeNotifier {
 
   final Map<String, _ServerReadings> _readings = {};
 
+  /// Unit reads waiting on the engine, by request id.
+  final Map<String, (String, Completer<UnitQueryResult>)> _unitQueries = {};
+  int _nextUnitQuery = 0;
+
   /// The refreshes waiting for their readings.
   final Set<_PendingRefresh> _refreshes = {};
 
@@ -402,6 +406,25 @@ final class MonitoringController extends ChangeNotifier {
   /// it once it no longer shows it.
   LogRead openLogRead(LogStreamSpec spec) => LogRead(logs, spec);
 
+  /// Reads [query] on [serverId]: a unit's file, its resources or the
+  /// sockets (03 §7.5, SVC-07, SVC-08, SVC-10). A stopped engine answers
+  /// no link.
+  Future<UnitQueryResult> queryUnit(String serverId, UnitQuerySpec query) {
+    final requestId = 'unit-${_nextUnitQuery++}';
+    if (_engineStopped) return Future.value(_noUnitLink(serverId, requestId));
+    final answer = Completer<UnitQueryResult>();
+    _unitQueries[requestId] = (serverId, answer);
+    _send(UnitQuery(serverId: serverId, requestId: requestId, query: query));
+    return answer.future;
+  }
+
+  static UnitQueryResult _noUnitLink(String serverId, String requestId) =>
+      UnitQueryResult(
+        serverId: serverId,
+        requestId: requestId,
+        payload: const UnitQueryFailed(UnitQueryFailure.noLink),
+      );
+
   /// A view of [serverId] opened (the desktop workspace, the phone's pushed
   /// screen). The first sends [Connect]; within the grace after the last
   /// leave the link is still held and nothing is sent.
@@ -586,6 +609,8 @@ final class MonitoringController extends ChangeNotifier {
         // As for a sample: a server that left the fleet stays purged.
         if (_fleetIds case final ids? when !ids.contains(serverId)) return;
         _server(serverId).gap(event);
+      case UnitQueryResult(:final requestId):
+        _unitQueries.remove(requestId)?.$2.complete(event);
       case EngineEvent():
         break;
     }
@@ -635,6 +660,11 @@ final class MonitoringController extends ChangeNotifier {
 
   void _onEngineDone() {
     _engineStopped = true;
+    for (final MapEntry(key: requestId, value: (serverId, answer))
+        in _unitQueries.entries) {
+      answer.complete(_noUnitLink(serverId, requestId));
+    }
+    _unitQueries.clear();
     for (final timer in _leaving.values) {
       timer.cancel();
     }

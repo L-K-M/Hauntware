@@ -6168,5 +6168,121 @@
         "type": "String"
       }
     }
+  },
+  "unitEnable": "Enable",
+  "@unitEnable": {
+    "description": "Unit action (SVC-05): starts the unit at boot."
+  },
+  "unitDisable": "Disable",
+  "@unitDisable": {
+    "description": "Unit action (SVC-05): stops starting the unit at boot."
+  },
+  "unitMask": "Mask",
+  "@unitMask": {
+    "description": "Unit action (SVC-06): prevents the unit from being started at all."
+  },
+  "unitUnmask": "Unmask",
+  "@unitUnmask": {
+    "description": "Unit action (SVC-06): lets a masked unit start again."
+  },
+  "unitResetFailed": "Reset failed state",
+  "@unitResetFailed": {
+    "description": "Unit action (SVC-06): clears the unit's failed state."
+  },
+  "unitMoreActions": "More",
+  "@unitMoreActions": {
+    "description": "Unit page and row menu: the v1 unit actions (SVC-05, SVC-06)."
+  },
+  "unitQueryFailed": "{reason, select, noLink{There is no connection to this server.} invalidUnit{This is not a unit name.} notFound{The manager has no such unit.} managerUnavailable{Your user manager cannot be reached: you need a login session or lingering.} failed{The read failed.} other{The read failed.}}",
+  "@unitQueryFailed": {
+    "description": "Unit page: why a unit read found nothing. reason is the engine's UnitQueryFailure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "unitResourcesMemory": "Memory",
+  "@unitResourcesMemory": {
+    "description": "Unit page: the unit's current memory use."
+  },
+  "unitResourcesCpu": "CPU time",
+  "@unitResourcesCpu": {
+    "description": "Unit page: the CPU time the unit used."
+  },
+  "unitResourcesCpuSeconds": "{seconds} s",
+  "@unitResourcesCpuSeconds": {
+    "description": "Unit page: CPU time in seconds. seconds is formatted with one decimal.",
+    "placeholders": {
+      "seconds": {
+        "type": "String"
+      }
+    }
+  },
+  "unitResourcesTasks": "Tasks",
+  "@unitResourcesTasks": {
+    "description": "Unit page: the unit's current tasks."
+  },
+  "unitResourcesRestarts": "Restarts",
+  "@unitResourcesRestarts": {
+    "description": "Unit page: how often systemd restarted the unit."
+  },
+  "unitResourcesMainPid": "Main PID",
+  "@unitResourcesMainPid": {
+    "description": "Unit page: the unit's main process ID."
+  },
+  "unitResourcesActiveSince": "Active since",
+  "@unitResourcesActiveSince": {
+    "description": "Unit page: when the unit last became active."
+  },
+  "unitFileShow": "Show unit file",
+  "@unitFileShow": {
+    "description": "Unit page: opens the unit file and its drop-ins (SVC-07)."
+  },
+  "unitFileTitle": "{unit} file",
+  "@unitFileTitle": {
+    "description": "Unit file view title. unit is the unit name.",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "unitFileClose": "Close",
+  "@unitFileClose": {
+    "description": "Unit file view: closes the dialog."
+  },
+  "unitFileReading": "Reading the unit file…",
+  "@unitFileReading": {
+    "description": "Unit file view: shown while the file is read."
+  },
+  "unitFileMasked": "{count, plural, =1{1 value is masked.} other{{count} values are masked.}} Reveal shows them for {seconds} seconds.",
+  "@unitFileMasked": {
+    "description": "Unit file view: how many values the engine masked, and how long a reveal lasts.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "unitFileReveal": "Reveal values",
+  "@unitFileReveal": {
+    "description": "Unit file view: shows the masked values for a while."
+  },
+  "unitFileHide": "Hide values",
+  "@unitFileHide": {
+    "description": "Unit file view: masks the revealed values again."
+  },
+  "unitFileEditorLabel": "File of {unit}",
+  "@unitFileEditorLabel": {
+    "description": "Unit file view: accessibility label of the read-only editor.",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
   }
 }

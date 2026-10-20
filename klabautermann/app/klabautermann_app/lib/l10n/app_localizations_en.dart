@@ -5046,4 +5046,95 @@ class AppLocalizationsEn extends AppLocalizations {
     });
     return '$_temp0';
   }
+
+  @override
+  String get unitEnable => 'Enable';
+
+  @override
+  String get unitDisable => 'Disable';
+
+  @override
+  String get unitMask => 'Mask';
+
+  @override
+  String get unitUnmask => 'Unmask';
+
+  @override
+  String get unitResetFailed => 'Reset failed state';
+
+  @override
+  String get unitMoreActions => 'More';
+
+  @override
+  String unitQueryFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noLink': 'There is no connection to this server.',
+      'invalidUnit': 'This is not a unit name.',
+      'notFound': 'The manager has no such unit.',
+      'managerUnavailable':
+          'Your user manager cannot be reached: you need a login session or lingering.',
+      'failed': 'The read failed.',
+      'other': 'The read failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get unitResourcesMemory => 'Memory';
+
+  @override
+  String get unitResourcesCpu => 'CPU time';
+
+  @override
+  String unitResourcesCpuSeconds(String seconds) {
+    return '$seconds s';
+  }
+
+  @override
+  String get unitResourcesTasks => 'Tasks';
+
+  @override
+  String get unitResourcesRestarts => 'Restarts';
+
+  @override
+  String get unitResourcesMainPid => 'Main PID';
+
+  @override
+  String get unitResourcesActiveSince => 'Active since';
+
+  @override
+  String get unitFileShow => 'Show unit file';
+
+  @override
+  String unitFileTitle(String unit) {
+    return '$unit file';
+  }
+
+  @override
+  String get unitFileClose => 'Close';
+
+  @override
+  String get unitFileReading => 'Reading the unit file…';
+
+  @override
+  String unitFileMasked(int count, int seconds) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count values are masked.',
+      one: '1 value is masked.',
+    );
+    return '$_temp0 Reveal shows them for $seconds seconds.';
+  }
+
+  @override
+  String get unitFileReveal => 'Reveal values';
+
+  @override
+  String get unitFileHide => 'Hide values';
+
+  @override
+  String unitFileEditorLabel(String unit) {
+    return 'File of $unit';
+  }
 }
