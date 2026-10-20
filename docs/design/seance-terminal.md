@@ -194,7 +194,10 @@ second interface with one implementation would only forward calls.
 Signatures still mention `seance_core` types (`TerminalEngine`,
 `TerminalSize`, `RemoteShellKind`). The barrel does not export them, so
 app code cannot name or construct them without importing `seance_core`,
-which the contract test already forbids. That is the boundary P4 asks
+which the contract test already forbids. The constructor's one such
+parameter, `initialSize`, is optional (`xterm_engine.dart:140-145`), so
+Klabautermann builds the engine as `XtermTerminalEngine()` and lets the
+first `onResize` size it. That is the boundary P4 asks
 for; 3.4 makes it checked.
 
 ### 3.2 Byte transport session
@@ -227,9 +230,12 @@ Behaviour: `output` feeds `engine.feed`; `engine.userInput` goes to
 `write` while open; it sets `engine.terminal.onResize` to
 `engine.resize(TerminalSize(w, h))` plus `resize(columns: w, rows: h)`,
 as `app_state.dart:1465-1467` does for Séance; `output` ending fires
-`onClosed` once, also when assigned late (as `ssh_session.dart:694-698`);
-`close()` cancels the subscriptions, closes the transport and disposes
-the engine, once. Implementing `SessionTransport` is what 03 §7.13 names
+`onClosed` once, also when assigned late (as `ssh_session.dart:694-698`),
+and cancels the input subscription, so nothing more is written; an
+`output` error tears down as `close()` does and fires `onClosed` once,
+and never escapes the subscription; `close()` cancels the subscriptions,
+closes the transport and disposes the engine, once. Input after the
+session closed is dropped, never written to the transport. Implementing `SessionTransport` is what 03 §7.13 names
 ("through a new `SessionTransport`", 03:3749-3750); the interface name is
 not exported.
 
@@ -288,9 +294,11 @@ Rules, in order:
    other than tab removed) and `engine.terminal.paste`. It is not linted:
    a line with no line break never runs without the user's Enter, the
    sanitizer's own rule (`paste_sanitizer.dart:9-15`).
-3. Text with a line break is linted with `inspect`. No findings: every
-   line goes through `PasteSanitizer.sanitize`, the lines are joined with
-   `\n`, and the result is pasted. Findings, or an `inspect` error: the
+3. Text with a line break is linted with `inspect`. Lines are split at
+   `\r\n`, `\r` and `\n`, the split `sanitizeFirstLine` already uses
+   (`paste_sanitizer.dart:33`), so no line reaches `sanitize` with a CR.
+   No findings: every line goes through `PasteSanitizer.sanitize`, the
+   lines are joined with `\n`, and the result is pasted. Findings, or an `inspect` error: the
    policy calls `confirm`; `pasteAll` pastes as above, `firstLineOnly`
    pastes `PasteSanitizer.sanitizeFirstLine(text)`, `cancel` pastes
    nothing.
@@ -322,8 +330,10 @@ paths.
 - Every barrel export has a `show` list, and no shown name is declared at
   top level in `seance/packages/seance_core/lib` or
   `seance/packages/seance_protocol/lib` (regex over `class`, `enum`,
-  `mixin`, `typedef`, `extension type` and top-level functions). None of
-  the names in 5 collides today (checked at `11ee9db7`).
+  `mixin`, `typedef`, `extension`, `extension type`, top-level
+  functions, and top-level variables, constants and getters). None of
+  the names in 5 collides today (checked at `11ee9db7`, and for the
+  wider set at `cc65864b`).
 
 The test reads the barrel by its monorepo path, so it runs before the
 app depends on the package (M12).
