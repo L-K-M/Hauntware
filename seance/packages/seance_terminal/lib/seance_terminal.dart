@@ -10,6 +10,14 @@ export 'package:xterm/xterm.dart'
         TerminalTheme,
         TerminalView;
 
+export 'src/byte_session.dart' show TerminalByteSession, TerminalByteTransport;
+export 'src/paste_policy.dart'
+    show
+        TerminalPasteChoice,
+        TerminalPasteFinding,
+        TerminalPastePolicy,
+        TerminalPasteReview,
+        TerminalPasteSeverity;
 export 'src/terminal_appearance.dart'
     show
         SeanceTerminalThemes,
