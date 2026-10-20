@@ -229,6 +229,60 @@ void main() {
       }
     });
 
+    test('up recreates and scales only on request, within bounds', () {
+      final up = composeUp(
+        socketPath: '/run/docker.sock',
+        project: 'web',
+        forceRecreate: true,
+        scale: {'api': 3},
+        services: ['api'],
+      );
+      expect(up.argv.sublist(up.argv.indexOf('up')), [
+        'up',
+        '-d',
+        '--force-recreate',
+        '--scale',
+        'api=3',
+        'api',
+      ]);
+      for (final bad in [-1, kComposeMaxScale + 1]) {
+        expect(
+          () => composeUp(
+            socketPath: '/run/docker.sock',
+            project: 'web',
+            scale: {'api': bad},
+          ),
+          throwsArgumentError,
+        );
+      }
+      expect(
+        () => composeUp(
+          socketPath: '/run/docker.sock',
+          project: 'web',
+          scale: {'a pi': 1},
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('down names every env file', () {
+      final down = composeDown(
+        socketPath: '/run/docker.sock',
+        project: 'web',
+        envFiles: ['/srv/a.env', '/srv/b.env'],
+      );
+      expect(
+        down.argv,
+        containsAllInOrder([
+          '--env-file',
+          '/srv/a.env',
+          '--env-file',
+          '/srv/b.env',
+          'down',
+        ]),
+      );
+    });
+
     test('down never adds -v', () {
       final down = composeDown(socketPath: '/run/docker.sock', project: 'web');
       expect(down.argv, isNot(contains('-v')));

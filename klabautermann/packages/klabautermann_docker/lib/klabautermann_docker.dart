@@ -40,6 +40,7 @@ export 'src/compose/commands.dart'
         composeRestart,
         composeUp,
         composeVersion,
+        kComposeMaxScale,
         validateAbsolutePath,
         validateComposeProjectName,
         validateComposeServiceName,
