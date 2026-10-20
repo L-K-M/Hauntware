@@ -1070,7 +1070,8 @@ final class JournalBoots extends HostPayload {
   final List<JournalBootEntry> boots;
 }
 
-/// A [HostQuery] that read nothing; [detail] is the end of its stderr.
+/// A [HostQuery] that read nothing; [detail] is the end of its stderr,
+/// or the text of an error the read threw (a timeout or a lost link).
 final class HostQueryFailed extends HostPayload {
   const HostQueryFailed(this.failure, {this.detail});
 
