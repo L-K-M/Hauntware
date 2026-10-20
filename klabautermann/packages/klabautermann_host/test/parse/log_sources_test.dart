@@ -70,6 +70,21 @@ void main() {
       expect(text.value, isEmpty);
       expect(text.warnings, ['list-boots: row skipped']);
     });
+
+    test('an oversized offset or a row without times warns, never '
+        'throws', () {
+      final r = parseJournalBoots(
+        '99999999999999999999 $_a Sun 2025-10-19 08:00:01 UTC\n'
+        '  0 $_b no times here\n',
+        JournalBootsFormat.text,
+      );
+      expect(r.value.map((b) => (b.offset, b.id)), [(0, _b)]);
+      expect(r.value.single.firstEntry, isNull);
+      expect(r.warnings, [
+        'list-boots: row skipped',
+        'list-boots: row without entry times',
+      ]);
+    });
   });
 
   group('log files', () {
@@ -104,6 +119,17 @@ void main() {
       final r = parseLogFiles('1 10 0 /var/log/my app/out log.txt\n');
       expect(r.value.single.path, '/var/log/my app/out log.txt');
     });
+
+    test('a size or time beyond what Dart holds warns, never throws', () {
+      final r = parseLogFiles(
+        '1 99999999999999999999 0 /var/log/a\n'
+        '1 1 99999999999999999999 /var/log/b\n'
+        '1 1 9000000000000 /var/log/c\n'
+        '1 1 0 /var/log/d\n',
+      );
+      expect(r.value.single.path, '/var/log/d');
+      expect(r.warnings, hasLength(3));
+    });
   });
 
   group('read failures', () {
@@ -116,6 +142,10 @@ void main() {
         127,
       );
       expect(rotatedTailFailure('$kDecompressFailedMarker 1'), 1);
+      expect(
+        rotatedTailFailure('$kDecompressFailedMarker 99999999999999999999'),
+        isNull,
+      );
     });
 
     test('a journalctl without pattern matching is recognised', () {

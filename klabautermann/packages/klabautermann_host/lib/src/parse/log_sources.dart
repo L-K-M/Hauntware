@@ -1,7 +1,8 @@
 /// Parsers for the v1 log sources (03 §7.6): the journal's boot list
 /// (LOG-09), the files under `/var/log` (LOG-08) and the failures their
 /// reads report. Each takes the output of a [HostCommands] builder run
-/// through `commandLine`, which exports `TZ=UTC`, and never throws on
+/// through `commandLine`, which exports `LC_ALL=C` (so the text boot
+/// table names weekdays in English) and `TZ=UTC`, and never throws on
 /// host input.
 library;
 
@@ -115,7 +116,8 @@ List<JournalBootEntry> _bootsText(String raw, List<String> warnings) {
   for (final line in const LineSplitter().convert(raw)) {
     if (line.trim().isEmpty || line.trimLeft().startsWith('IDX')) continue;
     final m = _bootRow.firstMatch(line);
-    if (m == null) {
+    final offset = m == null ? null : int.tryParse(m.group(1)!);
+    if (m == null || offset == null) {
       warnings.add('list-boots: row skipped');
       continue;
     }
@@ -130,9 +132,10 @@ List<JournalBootEntry> _bootsText(String raw, List<String> warnings) {
           int.parse(t.group(6)!),
         ),
     ];
+    if (stamps.isEmpty) warnings.add('list-boots: row without entry times');
     boots.add(
       JournalBootEntry(
-        offset: int.parse(m.group(1)!),
+        offset: offset,
         id: m.group(2)!,
         firstEntry: stamps.isNotEmpty ? stamps.first : null,
         lastEntry: stamps.length > 1 ? stamps[1] : null,
@@ -178,6 +181,9 @@ final class LogFileEntry {
 
 final _logFileRow = RegExp(r'^([01]) (\d+) (\d+) (/.*)$');
 
+/// The last second a [DateTime] holds: 100,000,000 days after the epoch.
+const _maxEpochSeconds = 8640000000000;
+
 /// Reads [HostCommands.logFiles]' output, sorted by path. Malformed rows
 /// warn and are skipped.
 ParseResult<List<LogFileEntry>> parseLogFiles(String raw) {
@@ -186,16 +192,21 @@ ParseResult<List<LogFileEntry>> parseLogFiles(String raw) {
   for (final line in const LineSplitter().convert(raw)) {
     if (line.isEmpty) continue;
     final m = _logFileRow.firstMatch(line);
-    if (m == null) {
+    final bytes = m == null ? null : int.tryParse(m.group(2)!);
+    final seconds = m == null ? null : int.tryParse(m.group(3)!);
+    if (m == null ||
+        bytes == null ||
+        seconds == null ||
+        seconds > _maxEpochSeconds) {
       warnings.add('log files: row skipped');
       continue;
     }
     files.add(
       LogFileEntry(
         path: m.group(4)!,
-        bytes: int.parse(m.group(2)!),
+        bytes: bytes,
         modified: DateTime.fromMillisecondsSinceEpoch(
-          int.parse(m.group(3)!) * 1000,
+          seconds * 1000,
           isUtc: true,
         ),
         readable: m.group(1) == '1',
@@ -211,7 +222,9 @@ ParseResult<List<LogFileEntry>> parseLogFiles(String raw) {
 /// is not installed.
 int? rotatedTailFailure(String stderr) {
   final m = RegExp(
-    '${RegExp.escape(kDecompressFailedMarker)} (\\d+)',
+    // An exit status has at most three digits, so the parse cannot
+    // overflow on a garbled line.
+    '${RegExp.escape(kDecompressFailedMarker)} (\\d{1,3})(?!\\d)',
   ).firstMatch(stderr);
   return m == null ? null : int.parse(m.group(1)!);
 }
