@@ -569,7 +569,7 @@ final class DockerRouter {
       case _Ready(:final endpoint):
         endpoint.stacks = StackSources(
           socketPath: endpoint.route.socketPath,
-          run: (command, {required timeout, required maxOutputBytes}) {
+          run: (command, {required timeout, required maxOutputBytes}) async {
             // A background check does not wait for a session the samplers
             // hold at the link's learned limit, nor borrow one (M6). Other
             // checks and the pooled connection give theirs back, so a check
@@ -580,7 +580,7 @@ final class DockerRouter {
             )) {
               throw const StackCheckWaiting();
             }
-            return _shortAction(
+            return await _shortAction(
               session,
               link,
               () => link.run(
