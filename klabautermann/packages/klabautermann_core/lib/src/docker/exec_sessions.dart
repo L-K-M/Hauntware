@@ -228,7 +228,9 @@ final class ExecSessions {
   /// Passes [request]'s bytes to its shell, or holds them while it starts.
   void input(TerminalInput request) {
     final terminal = _terminals[request.terminalId];
-    if (terminal == null || terminal.inputEnded) return;
+    // An ended shell stays listed while its exit code is read, with its
+    // connection already closed.
+    if (terminal == null || terminal.ended || terminal.inputEnded) return;
     final duplex = terminal.duplex;
     if (duplex != null) {
       duplex.sink.add(request.bytes);

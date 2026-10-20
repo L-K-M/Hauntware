@@ -172,6 +172,9 @@ void main() {
   late Object? openFailure;
   late ExecSessions sessions;
 
+  // Holds the short calls back while it is pending.
+  Completer<void>? controlGate;
+
   // The endpoint's pooled client, for the short calls.
   late DockerClient pool;
 
@@ -187,6 +190,7 @@ void main() {
     released = 0;
     rank = DockerRank.cliRelay;
     openFailure = null;
+    controlGate = null;
     sessions = ExecSessions(
       open: (serverId) async {
         if (openFailure case final failure?) throw failure;
@@ -205,7 +209,10 @@ void main() {
           rank: rank,
         );
       },
-      control: <T>(serverId, call) => call(pool),
+      control: <T>(serverId, call) async {
+        await controlGate?.future;
+        return call(pool);
+      },
       emit: events.add,
       fleet: (serverId) => serverId == 'srv-1',
       audit: (record) async => audits.add(record),
@@ -394,6 +401,21 @@ void main() {
       ..input(TerminalInput('t-1', Uint8List.fromList(utf8.encode('id\r'))));
     await settle();
     expect(utf8.decode(daemon.stdin['e1']!.toBytes()), 'id\r');
+  });
+
+  test('input after the shell exited, while its exit code is read, is '
+      'dropped', () async {
+    sessions.open(_open(), _policy);
+    await settle();
+    final gate = controlGate = Completer<void>();
+    await daemon.shells['e1']!.server.close();
+    await settle();
+    expect(closed('t-1'), isNull, reason: 'the exit code is still read');
+
+    sessions.input(TerminalInput('t-1', Uint8List.fromList([0x0d])));
+    gate.complete();
+    await settle();
+    expect(closed('t-1')?.reason, TerminalCloseReason.exited);
   });
 
   test('CloseTerminal closes the connection and gives the slot back', () async {

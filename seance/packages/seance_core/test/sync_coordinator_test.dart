@@ -923,6 +923,43 @@ void main() {
     expect(after.blob, orderedEquals(before.blob));
   });
 
+  test('Klabautermann settings stay byte-identical and are never applied',
+      () async {
+    final server0 = FakeServer();
+    final codec = RecordCodec(secureRandomBytes(32));
+    final pref = await codec.encrypt(DecryptedRecord(
+      id: 'klabautermann:pref:server-1',
+      kind: RecordKind.klabautermann,
+      updatedAt: 100,
+      deviceId: 'klabautermann',
+      // Shaped like a server, so applying it would mint a phantom one.
+      data: server('server-1', 'not a server', 100).toJson(),
+    ));
+    await server0.push([pref]);
+    final before = (await server0.pull(since: 0)).records.single;
+    final configStore = InMemoryConfigStore();
+    final coordinator = SyncCoordinator(
+      configStore: configStore,
+      hostKeyStore: InMemoryHostKeyStore(),
+      codec: codec,
+      local: InMemoryLocalRecordStore(),
+      deviceId: 'seance',
+    );
+    final pushesBeforeSync = server0.pushedRecords;
+
+    final first = await coordinator.run(server0);
+    await coordinator.run(server0);
+    final after = (await server0.pull(since: 0)).records.single;
+
+    expect(first.pulled, 1);
+    expect(await configStore.listServers(), isEmpty);
+    expect(server0.pushedRecords, pushesBeforeSync,
+        reason: 'neither re-pushed nor tombstoned');
+    expect(after.deleted, isFalse);
+    expect(after.seq, before.seq);
+    expect(after.blob, orderedEquals(before.blob));
+  });
+
   test('persistent records are re-applied without another pull', () async {
     final server0 = FakeServer();
     final codec = RecordCodec(secureRandomBytes(32));
