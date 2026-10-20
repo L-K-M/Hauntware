@@ -14,6 +14,7 @@ export 'src/access/access_check.dart';
 export 'src/access/external_monitors.dart';
 export 'src/access/panels.dart';
 export 'src/commands/commands.dart';
+export 'src/commands/edit.dart';
 export 'src/commands/operations.dart';
 export 'src/cron/evaluate.dart';
 export 'src/cron/expression.dart';
