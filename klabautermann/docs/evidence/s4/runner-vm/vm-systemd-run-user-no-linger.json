@@ -1,0 +1,48 @@
+{
+  "case": "vm-systemd-run-user-no-linger",
+  "recordedAt": "2026-10-19T19:38:30.839036Z",
+  "user": "klab-vm",
+  "uid": 1002,
+  "runner": "loginSystemdUser",
+  "linger": "no",
+  "sessionEnvironment": "XDG_RUNTIME_DIR=/run/user/1001\nDBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1002/bus\n",
+  "launch": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "runningRecord": {
+    "v": 1,
+    "id": "e47dc6046cb63eb8",
+    "state": "running",
+    "pid": 28704,
+    "startTicks": 50374,
+    "unit": "klabautermann-op-e47dc6046cb63eb8.service",
+    "exit": null,
+    "startedAt": 1792438695,
+    "endedAt": null
+  },
+  "beforeLogout": {
+    "state": "S",
+    "ppid": 28628,
+    "pgrp": 28704,
+    "session": 28704,
+    "uid": 1002
+  },
+  "loggedOut": true,
+  "afterLogout": null,
+  "userManagerAfter": "inactive",
+  "survived": false,
+  "doneRecord": {
+    "v": 1,
+    "id": "e47dc6046cb63eb8",
+    "state": "running",
+    "pid": 28704,
+    "startTicks": 50374,
+    "unit": "klabautermann-op-e47dc6046cb63eb8.service",
+    "exit": null,
+    "startedAt": 1792438695,
+    "endedAt": null
+  },
+  "log": ""
+}

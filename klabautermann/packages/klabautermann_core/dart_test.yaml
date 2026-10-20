@@ -2,8 +2,9 @@
 # and the capture tool's runs against dash and bash), the `integration`
 # tag of the sshd fixture tests, the `runner-vm` tag of the runner VM's
 # systemd tests, the `runner-vm-s4` tag of spike S4's cases there, the
-# `soak` tag of the fixture soak and the `docker` tag of the Docker
-# host's tests, which carry `integration` too. package:test
+# `soak` tag of the fixture soak, the `docker` tag of the Docker host's
+# tests, which carry `integration` too, and the `inventory` tag of the
+# host write inventory's session. package:test
 # reads dart_test.yaml from the working directory, so this file serves
 # runs from this package; runs from klabautermann/ (CI) load
 # klabautermann/dart_test.yaml, which repeats the tags.
@@ -14,3 +15,4 @@ tags:
   runner-vm-s4:
   soak:
   docker:
+  inventory:

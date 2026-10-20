@@ -1,0 +1,54 @@
+{
+  "case": "debian-setsid-background",
+  "recordedAt": "2026-10-19T19:32:35.475505Z",
+  "host": "mirror.gcr.io/library/debian:13@sha256:913f6706df59a68922d1dd08f78c2476560a8d367897200a6005b00e5f67c2d5",
+  "user": "klab",
+  "setsid": "setsid from util-linux 2.41.5",
+  "launcher": "setsidBackground",
+  "launch": {
+    "exit": 0,
+    "stdout": "217\n",
+    "stderr": ""
+  },
+  "launchMilliseconds": 44,
+  "printed": "217",
+  "runningRecord": {
+    "v": 1,
+    "id": "5c5ebc6a5206f1ad",
+    "state": "running",
+    "pid": 217,
+    "startTicks": 15505,
+    "unit": null,
+    "exit": null,
+    "startedAt": 1792438347,
+    "endedAt": null
+  },
+  "beforeSessionEnd": {
+    "state": "S",
+    "ppid": 1,
+    "pgrp": 217,
+    "session": 217,
+    "uid": 1000
+  },
+  "afterSessionEnd": {
+    "state": "S",
+    "ppid": 1,
+    "pgrp": 217,
+    "session": 217,
+    "uid": 1000
+  },
+  "survived": true,
+  "newSession": true,
+  "doneRecord": {
+    "v": 1,
+    "id": "5c5ebc6a5206f1ad",
+    "state": "done",
+    "pid": 217,
+    "startTicks": 15505,
+    "unit": null,
+    "exit": 0,
+    "startedAt": 1792438347,
+    "endedAt": 1792438355
+  },
+  "log": "s4-done\n"
+}

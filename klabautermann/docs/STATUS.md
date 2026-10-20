@@ -1625,6 +1625,25 @@ M2, the host read MVP, is the current milestone. What is on main:
   named when another tool deploys it. Where Docker or a stack file
   needs root, the Docker gate, the Access tab's socket row and the file
   view offer "Turn on admin mode".
+- M4 Docker actions suite (E28): on the Docker fixture, as the fixture
+  user in the `docker` group, the engine runs every container action,
+  removes an unused image and an in-use one only by force with its typed
+  name, and stops, starts and restarts a stack, each followed by the
+  watched list. A managed stack and the container publishing port 22
+  need the typed name, and the unverified and managed stacks are not
+  redeployed. The user's own process is stopped, continued and killed,
+  and a plan whose process exited fails its check. The redeploy pulls a
+  new digest from the fixture registry and recreates the stack as a
+  detached operation under BusyBox `setsid`, which outlives the
+  session's sshd processes, is found again over the new link, has its
+  output followed, and is acknowledged, deleted and audited with
+  `--host` in every step. Locally the suite takes about 90 s.
+- M4 host write inventory (E31, X6): run.sh snapshots the Docker host
+  as root before and after a scripted MVP session (every read, every
+  Docker action, a process signal and a detached redeploy with a
+  re-attach) and fails on any change outside 03 §8.11's MVP rows,
+  encoded once in `test/integration/inventory_allowlist.txt`. The
+  runner VM's snapshot follows separately.
 - M4 runner-VM actions suite (E29): on the GitHub-hosted runner, as
   throwaway accounts, the engine turns admin mode on after a wrong
   password is asked again, and under `timestamp_timeout=0` (rung 4);
@@ -1658,6 +1677,16 @@ M2, the host read MVP, is the current milestone. What is on main:
   user cannot write is reached through rank 3, the engine CLI's
   `dial-stdio` under `sudo -n` or the password prelude, one elevated exec
   per connection. Admin mode ending drops the route.
+- M4 sudo rules for the elevated runners (03 §7.17, D66): before a
+  redeploy elevates its runner, the engine lists the login user's sudo
+  rules (`sudo -l`, with admin mode's password when it has one) and
+  elevates only when one lets root run every command or the program the
+  row elevates (`systemd-run`, or `sh` for the root `setsid` row) with
+  any arguments. Otherwise an operation over the sudo relay is refused
+  as `sudoRightMissing`, and one that needs no root takes the rows
+  without elevation. A listing that cannot be read refuses nothing. The
+  reader is tested on spike S4's recorded listing and sudoers' other
+  forms, the planner over fakes; E30 meets it on the runner VM.
 - M4 pull and redeploy (E18): `PlanAction` plans STK-06 for a verified,
   unmanaged stack as one detached operation of `config -q`, `pull` and
   `up -d` through the endpoint's `--host`, listing orphans and warning
@@ -1776,8 +1805,22 @@ M2, the host read MVP, is the current milestone. What is on main:
   `<id>.json` records atomically with `mv`, the launch argv of the five
   runner rows, cleanup and the 7-day prune. Real-shell tests run under
   dash and bash. Nothing runs these builders yet: E14 and E17 will.
-  The root-run wrapper's `chown` was checked by hand only, and whether
-  the backgrounded `setsid` launch survives logout waits for spike S4.
+  Spike S4 (below) ran them on real hosts.
+- M4 spike S4 (E02, 03 D66, evidence in
+  [docs/evidence/s4](evidence/s4/README.md)): `runner_vm_s4_test.dart`
+  on the runner VM and `s4_setsid_test.dart` on the Docker fixture and
+  in a Debian 13 container run E08's wrapper through each runner row and
+  record what survives the session's end. `systemd-run` system and
+  `--uid` through the prelude, `--user` with linger and the
+  backgrounded `setsid` launcher under BusyBox and util-linux survive;
+  `--user` without linger dies with the user manager. Root-run records
+  are the login user's but only the prelude removes them, `--collect`
+  unloads failed units too, a step's `--host` reaches the engine through
+  sudo and the unit's clean environment, and `KillUserProcesses` reads
+  without privilege. Under a NOPASSWD rule scoped to the docker CLI,
+  `sudo -n -l` lists the rule without a password while `systemd-run`
+  needs one; the engine does not read the rules yet, so such an account
+  still has its elevated launches refused by sudo (E30).
 - M4 theme editing (E25): Settings > Appearance edits the theme with
   ghost_theme's shared editor (presets, mode, colours, font, corners,
   copy, paste and reset), in the app and in the desktop settings window,
