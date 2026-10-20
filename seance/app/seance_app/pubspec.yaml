@@ -39,6 +39,9 @@ dependencies:
   # a thin UI over it. Re-exports seance_protocol.
   seance_core:
     path: ../../packages/seance_core
+  # The terminal engine (docs/design/seance-terminal.md).
+  seance_terminal:
+    path: ../../packages/seance_terminal
   # Terminal widget — Séance's vendored fork of xterm.dart 4.0.0 (selection
   # fixes upstream's private gesture wiring makes unreachable from the app;
   # see third_party/xterm/PATCHES.md). libghostty swaps in behind
