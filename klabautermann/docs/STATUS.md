@@ -7,7 +7,10 @@ normative plan (`03-ARCHITECTURE.md` §2 is the decision log).
 
 ## Where things stand
 
-M2, the host read MVP, is the current milestone. What is on main:
+M2's host reads and M3's Docker reads are on main, and M4, actions and
+admin mode, is under way. M3 met its automated exits ([M3 exit](#m3-exit),
+below); the real-host and device checks stay open under the manual gates.
+What is on main:
 
 - `klabautermann_host`: HWS/1 program, frame protocol, capability probe,
   parsers and snapshot/rate models with per-platform fixture goldens.
@@ -1673,7 +1676,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   row elevates (`systemd-run`, or `sh` for the root `setsid` row) with
   any arguments. Otherwise an operation over the sudo relay is refused
   as `sudoRightMissing`, and one that needs no root takes the rows
-  without elevation. A listing that cannot be read refuses nothing. The
+  without elevation. A listing that cannot be read, or a link that fails
+  while reading it, refuses nothing. The
   reader is tested on spike S4's recorded listing and sudoers' other
   forms, the planner over fakes; E30 meets it on the runner VM.
 - M4 pull and redeploy (E18): `PlanAction` plans STK-06 for a verified,
@@ -1808,8 +1812,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   sudo and the unit's clean environment, and `KillUserProcesses` reads
   without privilege. Under a NOPASSWD rule scoped to the docker CLI,
   `sudo -n -l` lists the rule without a password while `systemd-run`
-  needs one; the engine does not read the rules yet, so such an account
-  still has its elevated launches refused by sudo (E30).
+  needs one, which the engine now reads before it elevates a runner
+  (above).
 - M4 theme editing (E25): Settings > Appearance edits the theme with
   ghost_theme's shared editor (presets, mode, colours, font, corners,
   copy, paste and reset), in the app and in the desktop settings window,
@@ -1849,6 +1853,31 @@ Planchette's and Poltergeist's do, so the Dart menu bar must be
 installed. The Linux and Windows runners show their window on the first
 frame, so a startup that never reaches `runApp` fails there.
 
+## M3 exit
+
+M3, the Docker read MVP (04 §13, M3 plan D01 to D23), met each automated
+exit on the evidence below. Every M3 scope row of 04 is built, except
+rank 3 and elevated reads, which come with M4 as planned, and the
+mutation rows (CTR-02, 05, 06, IMG-02, STK-03, 06), which are M4's.
+
+| Exit | Evidence | Status |
+|---|---|---|
+| E1: recorded-API tests for 1.41, 1.44, 1.52, 1.55 and Podman compat | D01's corpus from rootful Docker 20.10.24, 25.0.5, 29.0.4 and 29.7.2 and Podman 5.8.7's compat service; D02's `recorded_api_test.dart` replays every directory; CI records again and compares by structure | met with rootful daemons (Q1, 06); rootless daemons and real hosts are manual |
+| E2: integration tests on the Docker fixture | D10's `docker_link_test.dart`; D21's `docker_engine_test.dart` (real engine, links on: lists, events, inspect and file masking, logs, stats, images, stacks) | met |
+| E3: the negative sshd variants | D11's `docker_refusal_test.dart` on the base's OpenSSH 10.6; D22's `docker_fallback_test.dart` (five variants on rank 2, `MaxSessions 2` in low-session mode, an account with no relay on none) | met; rank 4 is not exercised, since the fixture has no socat |
+| E4: the header names the transport in every mode | D12's header label and low-session indicator over the fake engine; D22 records each variant's route and label from the real engine | met |
+
+The [U]s M3 set out to settle are settled: Docker 20.10 and Podman send
+logs without a `Content-Type`, and a one-shot `precpu_stats` is zeroed
+(D01, D21); Compose v5.6 takes `config --hash '*'` (D21); and on OpenSSH
+10.6 every forwarding variant refuses streamlocal alike, with only
+`AllowStreamLocalForwarding no` still opening `direct-tcpip` (D11).
+Left open: at `MaxSessions 2` the two samplers hold both sessions, so
+stack checks read "check failed" (D22; M4's E13 has them wait for a
+channel instead); the rootful Podman fixture variant (optional D24)
+was not built; a large host's `/system/df` time is unmeasured; and the
+socat relay (rank 4) has never run against a real socat.
+
 ## Open manual gates
 
 The milestone sign-off gates are tracked in
@@ -1862,6 +1891,10 @@ is not a device smoke test:
 - macOS keychain prompts.
 - VM passes on Debian 12, Ubuntu 24.04 and 26.04 (sudo-rs), RHEL 8 and 9,
   Alpine and a BusyBox NAS, plus a Synology host (11.3).
+- Docker on real hosts (M3, Q1): rootful Docker, which CI runs only in
+  containers, rootless Docker and rootless Podman, which the CI corpus
+  does not record, a Snap Docker install, the socat relay (rank 4), and
+  a real host's socket choice, Access rows and stack checks.
 
 None of those applies to M1a yet; they gate the milestones that ship the
 matching behavior; this list keeps them visible so they are not lost
