@@ -162,9 +162,10 @@ void main() {
     );
   }
 
-  /// Waits until [serverId] lists operation [id] in a state [accept]
-  /// takes, and returns it.
-  Future<DetachedOperation> untilOperation(
+  /// The next list from [serverId] that holds operation [id] in a state
+  /// [accept] takes, and that operation. Lists an earlier wait read past
+  /// do not count, so a list after a reconnect proves the re-attach.
+  Future<DetachedOperation> nextOperation(
     FixtureEngine engine,
     String serverId,
     String id,
@@ -180,15 +181,42 @@ void main() {
     return changed.operations.singleWhere((o) => o.id == id);
   }
 
-  /// Waits until [serverId]'s list no longer holds operation [id].
+  /// [serverId]'s operation [id] once a list holds it in a state [accept]
+  /// takes, counting the lists an earlier wait read past (a list can
+  /// arrive before the event that wait was for).
+  Future<DetachedOperation> untilOperation(
+    FixtureEngine engine,
+    String serverId,
+    String id,
+    bool Function(DetachedOperation operation) accept, {
+    Duration timeout = _redeployWait,
+  }) async {
+    for (final seen in engine.seen.whereType<OperationsChanged>()) {
+      if (seen.serverId != serverId) continue;
+      if (seen.operations.where((o) => o.id == id).firstOrNull
+          case final operation? when accept(operation)) {
+        return operation;
+      }
+    }
+    return nextOperation(engine, serverId, id, accept, timeout: timeout);
+  }
+
+  /// Waits until [serverId]'s list no longer holds operation [id], which
+  /// the latest list already read may show.
   Future<void> untilOperationGone(
     FixtureEngine engine,
     String serverId,
     String id,
-  ) => engine.until<OperationsChanged>(
-    (e) => e.serverId == serverId && !e.operations.any((o) => o.id == id),
-    actionWait,
-  );
+  ) async {
+    bool gone(OperationsChanged e) =>
+        e.serverId == serverId && !e.operations.any((o) => o.id == id);
+    final latest = engine.seen
+        .whereType<OperationsChanged>()
+        .where((e) => e.serverId == serverId)
+        .lastOrNull;
+    if (latest != null && gone(latest)) return;
+    await engine.until<OperationsChanged>(gone, actionWait);
+  }
 
   /// The audit record of the redeploy on [serverId], the engine's only
   /// one.
@@ -272,7 +300,7 @@ void main() {
       (e) => e.serverId == sudoServer && e.status is LinkReady,
       _redialWait,
     );
-    final done = await untilOperation(
+    final done = await nextOperation(
       engine,
       sudoServer,
       id,
@@ -379,6 +407,7 @@ void main() {
       lingerServer,
       (s) => s.phase == DockerEndpointPhase.ready,
     )).route!;
+    expect(route.rank, DockerRank.cliRelay);
 
     final pushed = await pushNewDigest(user);
     final planned = await plan(

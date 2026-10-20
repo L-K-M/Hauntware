@@ -141,14 +141,14 @@ Future<(AdminModeState, List<ElevationPromptRequest>)> turnOnAdmin(
   }
 }
 
-/// [serverId]'s host profile: the first one the engine sent, or the
+/// [serverId]'s host profile: the latest one the engine sent, or the
 /// next.
 Future<HostProfile> hostProfile(FixtureEngine engine, String serverId) async {
-  for (final event in engine.seen) {
-    if (event is HostProfileChanged && event.serverId == serverId) {
-      return event.profile;
-    }
-  }
+  final latest = engine.seen
+      .whereType<HostProfileChanged>()
+      .where((e) => e.serverId == serverId)
+      .lastOrNull;
+  if (latest != null) return latest.profile;
   final changed = await engine.until<HostProfileChanged>(
     (e) => e.serverId == serverId,
   );

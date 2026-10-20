@@ -140,7 +140,8 @@ readonly test_units=("$test_service" "$job_service" "$job_timer")
 readonly registry_image='mirror.gcr.io/library/registry:3.0.0@sha256:6c5666b861f3505b116bb9aa9b25175e71210414bd010d92035ff64018f9457e'
 readonly stack_base_image='mirror.gcr.io/library/busybox:1.37@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e'
 readonly registry_container='klabautermann-runner-vm-registry'
-readonly registry='127.0.0.1:5243/klabautermann-runner-vm'
+readonly registry_port=5243
+readonly registry="127.0.0.1:$registry_port/klabautermann-runner-vm"
 readonly stack_users=("$sudo_user" "$linger_user")
 
 skip() {
@@ -312,7 +313,7 @@ on_exit() {
   if ((stacks_started)); then
     for user in "${stack_users[@]}"; do
       runner_docker compose --project-name "$user" down --remove-orphans \
-        --timeout 1 || cleanup=1
+        --volumes --timeout 1 || cleanup=1
     done
   fi
   if ((registry_started)); then
@@ -528,7 +529,7 @@ start_registry() {
   local user attempt
   registry_started=1
   runner_docker run --detach --quiet --name "$registry_container" \
-    --publish 127.0.0.1:5243:5000 "$registry_image" >/dev/null
+    --publish "127.0.0.1:$registry_port:5000" "$registry_image" >/dev/null
   runner_docker pull --quiet "$stack_base_image" >/dev/null
   for user in "${stack_users[@]}"; do
     runner_docker image tag "$stack_base_image" "$registry/$user:1"
@@ -666,6 +667,8 @@ ssh_args=(-F /dev/null -o BatchMode=yes -o IdentitiesOnly=yes
 create_user "$limited_user"
 create_user "$journal_user" --groups systemd-journal
 create_user "$sudo_user"
+# In the docker group, so the engine reaches Docker as this account
+# itself, over the CLI relay (the Docker suite's login-user redeploys).
 create_user "$linger_user" --groups docker
 create_user "$docker_user"
 create_user "$nocache_user"

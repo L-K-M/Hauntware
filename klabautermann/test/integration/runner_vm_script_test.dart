@@ -501,7 +501,7 @@ void main() {
           'sudo rm -f -- ${sandbox.path}/sudoers.d/leg',
           for (final user in _stackUsers)
             '$_docker compose --project-name $user down --remove-orphans '
-                '--timeout 1',
+                '--volumes --timeout 1',
           '$_docker rm --force --volumes $_registryContainer',
         ]),
         reason: lines.join('\n'),
