@@ -145,6 +145,7 @@ Future<PlanAttempt> _plan({
   ProtectionContext protection = const ProtectionContext(),
   DockerEndpointRoute route = _route,
   bool adminMode = false,
+  Future<bool> Function(String program)? sudoAllows,
 }) => planRedeploy(
   RedeployStack(_server, project: 'shop', removeOrphans: removeOrphans),
   (
@@ -156,6 +157,7 @@ Future<PlanAttempt> _plan({
     stacks: _host.sources(),
     profile: profile ?? _profile(),
     adminMode: adminMode,
+    sudoAllows: sudoAllows ?? (_) async => true,
     protection: protection,
     loginUser: 'deploy',
   ),
@@ -288,6 +290,53 @@ void main() {
         (await _plan(route: relay)).refusal,
         ActionRefusalReason.adminRequired,
       );
+    });
+
+    test('without a sudo rule for the elevated program, a root operation '
+        'is refused and a login one elevates nothing (D66)', () async {
+      const relay = DockerEndpointRoute(
+        rank: DockerRank.sudoRelay,
+        socketPath: _socket,
+        runtime: EngineRuntime.docker,
+        rootEquivalence: DockerRootEquivalence.rootfulSocket,
+      );
+      final asked = <String>[];
+      Future<bool> scoped(String program) async {
+        asked.add(program);
+        return false;
+      }
+
+      expect(
+        (await _plan(
+          route: relay,
+          adminMode: true,
+          sudoAllows: scoped,
+        )).refusal,
+        ActionRefusalReason.sudoRightMissing,
+      );
+      expect(asked, ['sh'], reason: "the root setsid row elevates sh");
+
+      asked.clear();
+      final login = _planned(
+        await _plan(
+          adminMode: true,
+          sudoAllows: scoped,
+          profile: HostProfile(
+            uid: 1000,
+            user: 'deploy',
+            systemdDir: true,
+            lingerEnabled: true,
+            xdgRuntimeDir: '/run/user/1000',
+          ),
+        ),
+      );
+      expect(asked, ['systemd-run']);
+      expect(login.detachedRunner, DetachedRunner.loginSystemdUser);
+
+      asked.clear();
+      final plain = _planned(await _plan(sudoAllows: scoped));
+      expect(asked, isEmpty, reason: 'a row that elevates nothing asks not');
+      expect(plain.detachedRunner, DetachedRunner.loginSetsid);
     });
 
     test('a setsid operation under KillUserProcesses warns', () async {

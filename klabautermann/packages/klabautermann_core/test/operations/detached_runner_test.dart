@@ -1,13 +1,20 @@
 // The detached runner's selection and launch (03 §7.17, M4 E17a): each
 // row of the runner table and its refusals, the preview's logout warning,
-// operation ids, and the launch over the link or through elevation.
+// operation ids, the launch over the link or through elevation, and the
+// sudo rules an elevated row needs (D66).
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/admin/admin_mode.dart';
 import 'package:klabautermann_core/src/operations/detached_runner.dart';
 import 'package:klabautermann_host/klabautermann_host.dart'
-    show DetachedRunner, kOpIdLength, kRootOpsDir, validateOpId;
+    show
+        DetachedRunner,
+        OperationCommands,
+        kOpIdLength,
+        kRootOpsDir,
+        validateOpId;
 import 'package:seance_core/seance_core.dart'
     show
         ElevatedExecutor,
@@ -43,6 +50,7 @@ final class _Link extends TestLinkBase {
 
   final Map<String, RemoteCommandResult> answers;
   final commands = <String>[];
+  final stdins = <List<int>?>[];
   Object? failure;
 
   @override
@@ -53,6 +61,7 @@ final class _Link extends TestLinkBase {
     List<int>? stdin,
   }) async {
     commands.add(command);
+    stdins.add(stdin);
     if (failure case final error?) throw error;
     for (final MapEntry(:key, :value) in answers.entries) {
       if (command.contains(key)) return value;
@@ -250,6 +259,123 @@ void main() {
         (await launch(broken, DetachedRunner.loginSetsid)).failure,
         LaunchFailure.transport,
       );
+    });
+  });
+
+  group('sudo rules (D66)', () {
+    const sudo = 'Sudo version 1.9.16p2';
+    const scoped =
+        'User deploy may run the following commands on host:\n'
+        '    (root) NOPASSWD: /usr/bin/docker\n';
+    const everything =
+        'User deploy may run the following commands on host:\n'
+        '    (ALL : ALL) ALL\n';
+    final withSudo = HostProfile(
+      uid: 1000,
+      user: 'deploy',
+      sudoVersionLine: sudo,
+    );
+
+    AdminSession session(_Link link, String? password) => AdminSession.test(
+      ElevatedExecutor(link, const ElevationProbe(sudoVersionLine: sudo)),
+      password,
+    );
+
+    test('each elevated row names the program its launch elevates', () {
+      for (final runner in DetachedRunner.values) {
+        final program = elevatedProgram(runner);
+        if (!runner.elevated) {
+          expect(program, isNull, reason: '$runner');
+          continue;
+        }
+        final launch = OperationCommands.detachedLaunch(
+          runner,
+          dir: runner.runsAsRoot ? kRootOpsDir : _userDir,
+          id: _id,
+          uid: 1000,
+          argv: const ['true'],
+        );
+        expect(launch.first, program, reason: '$runner');
+      }
+    });
+
+    test('the listing decides, read with the password on stdin', () async {
+      final link = _Link({'sudo': _out(scoped)});
+      expect(
+        await sudoAllowsProgram(
+          link: link,
+          session: session(link, 'hunter2'),
+          profile: withSudo,
+          program: 'systemd-run',
+        ),
+        isFalse,
+      );
+      expect(link.commands.single, "LC_ALL=C sudo -S -p '' -l");
+      expect(utf8.decode(link.stdins.single!), 'hunter2\n');
+
+      final open = _Link({'sudo': _out(everything)});
+      expect(
+        await sudoAllowsProgram(
+          link: open,
+          session: session(open, null),
+          profile: withSudo,
+          program: 'sh',
+        ),
+        isTrue,
+      );
+      expect(
+        open.commands.single,
+        'LC_ALL=C sudo -n -l',
+        reason: 'no password',
+      );
+    });
+
+    test('an unreadable listing, a failed link, a root login and no '
+        'sudo refuse nothing', () async {
+      final refused = _Link({
+        'sudo': const RemoteCommandResult(
+          exitCode: 1,
+          stderr: 'sudo: a password is required\n',
+        ),
+      });
+      expect(
+        await sudoAllowsProgram(
+          link: refused,
+          session: session(refused, null),
+          profile: withSudo,
+          program: 'systemd-run',
+        ),
+        isTrue,
+      );
+      final broken = _Link({})
+        ..failure = const RemoteCommandException('channel closed');
+      expect(
+        await sudoAllowsProgram(
+          link: broken,
+          session: session(broken, null),
+          profile: withSudo,
+          program: 'systemd-run',
+        ),
+        isTrue,
+        reason: 'a link that fails reads no listing',
+      );
+
+      for (final profile in [
+        HostProfile(uid: 0, user: 'root', sudoVersionLine: sudo),
+        HostProfile(uid: 1000, user: 'deploy'),
+      ]) {
+        final link = _Link({'sudo': _out(scoped)});
+        expect(
+          await sudoAllowsProgram(
+            link: link,
+            session: session(link, null),
+            profile: profile,
+            program: 'systemd-run',
+          ),
+          isTrue,
+        );
+        expect(link.commands, isEmpty);
+      }
     });
   });
 }

@@ -1647,6 +1647,16 @@ M2, the host read MVP, is the current milestone. What is on main:
   user cannot write is reached through rank 3, the engine CLI's
   `dial-stdio` under `sudo -n` or the password prelude, one elevated exec
   per connection. Admin mode ending drops the route.
+- M4 sudo rules for the elevated runners (03 §7.17, D66): before a
+  redeploy elevates its runner, the engine lists the login user's sudo
+  rules (`sudo -l`, with admin mode's password when it has one) and
+  elevates only when one lets root run every command or the program the
+  row elevates (`systemd-run`, or `sh` for the root `setsid` row) with
+  any arguments. Otherwise an operation over the sudo relay is refused
+  as `sudoRightMissing`, and one that needs no root takes the rows
+  without elevation. A listing that cannot be read refuses nothing. The
+  reader is tested on spike S4's recorded listing and sudoers' other
+  forms, the planner over fakes; E30 meets it on the runner VM.
 - M4 pull and redeploy (E18): `PlanAction` plans STK-06 for a verified,
   unmanaged stack as one detached operation of `config -q`, `pull` and
   `up -d` through the endpoint's `--host`, listing orphans and warning
