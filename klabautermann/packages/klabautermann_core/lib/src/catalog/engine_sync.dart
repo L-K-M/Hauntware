@@ -265,27 +265,29 @@ final class EngineSync {
       return _failedWith(operation, error);
     }
     try {
-      final credentials = KeystoreSyncCredentialStore(
-        keystore: _keystore,
-        // Nothing to re-seal without a vault file (K49a's contract): a
-        // first enrollment then installs the account key directly, where
-        // staging would need a master key no install has yet.
-        vaultJournal: await _vault.exists() ? _vault.store : null,
-      );
-      final result =
-          await SyncEnrollment(
-            credentials: credentials,
-            state: enrollment,
-            records: _records,
-            handlers: const [],
-          ).login(
-            api: api,
-            baseUrl: baseUrl,
-            username: username,
-            password: request.password,
-            encryptionPassphrase: request.encryptionPassphrase,
-            mode: SyncAccountMode.shared,
-          );
+      // No save runs between the look for a vault and the key's install.
+      final result = await _vault.exclusive(() async {
+        final credentials = KeystoreSyncCredentialStore(
+          keystore: _keystore,
+          // Nothing to re-seal without a vault file (K49a's contract): a
+          // first enrollment then installs the account key directly, where
+          // staging would need a master key no install has yet.
+          vaultJournal: await _vault.exists() ? _vault.store : null,
+        );
+        return SyncEnrollment(
+          credentials: credentials,
+          state: enrollment,
+          records: _records,
+          handlers: const [],
+        ).login(
+          api: api,
+          baseUrl: baseUrl,
+          username: username,
+          password: request.password,
+          encryptionPassphrase: request.encryptionPassphrase,
+          mode: SyncAccountMode.shared,
+        );
+      });
       _account = SyncAccountInfo(baseUrl: baseUrl, username: username);
       await _coordinator(result.vaultKey).applyPulled();
       return _status(
