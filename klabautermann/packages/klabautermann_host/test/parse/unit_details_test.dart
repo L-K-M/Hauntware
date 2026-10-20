@@ -102,6 +102,8 @@ void main() {
         'systemd-journald.service\n'
         '/run/a                        a.socket                       '
         'a.service, b.service\n'
+        '/run/dm-event.socket          dm-event.socket                '
+        'dm-event.service\n'
         '/run/idle                     idle.socket\n'
         '\n'
         'garbage without a unit\n',
@@ -122,6 +124,11 @@ void main() {
           'listen': '/run/a',
           'unit': 'a.socket',
           'activates': ['a.service', 'b.service'],
+        },
+        {
+          'listen': '/run/dm-event.socket',
+          'unit': 'dm-event.socket',
+          'activates': ['dm-event.service'],
         },
         {'listen': '/run/idle', 'unit': 'idle.socket', 'activates': <String>[]},
       ]);

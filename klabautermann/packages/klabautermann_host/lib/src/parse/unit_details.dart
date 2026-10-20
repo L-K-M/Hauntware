@@ -191,14 +191,15 @@ List<UnitSocket> _socketsJson(String raw, List<String> warnings) {
 }
 
 /// `--no-legend` text: `LISTEN UNIT ACTIVATES`. A netlink address holds
-/// a space (`audit 1`), so the row splits at its `.socket` word: the
-/// address before it, the activated units after it.
+/// a space (`audit 1`), so the row splits at its last `.socket` word, the
+/// unit: an address may end in `.socket` too (`/run/dm-event.socket`),
+/// while a socket only activates services.
 List<UnitSocket> _socketsText(String raw, List<String> warnings) {
   final sockets = <UnitSocket>[];
   for (final line in const LineSplitter().convert(raw)) {
     if (line.trim().isEmpty) continue;
     final words = line.trim().split(RegExp(r'\s+'));
-    final at = words.indexWhere((w) => w.endsWith('.socket'));
+    final at = words.lastIndexWhere((w) => w.endsWith('.socket'));
     if (at < 1) {
       warnings.add('list-sockets: row without a socket unit skipped');
       continue;
