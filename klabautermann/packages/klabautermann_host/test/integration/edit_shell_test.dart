@@ -27,7 +27,7 @@ final _shells = <String, String>{
 };
 
 // Low entropy, so the secret scan does not read it as a key.
-const _token = 'feedfacefeedface';
+const _tempId = 'feedfacefeedface';
 
 /// The octal permission bits of [path].
 String _mode(String path) =>
@@ -51,7 +51,7 @@ void main() {
         target = '${dir.path}/app.conf';
         File(target).writeAsStringSync('original\n');
         Process.runSync('chmod', ['0640', target]);
-        temp = EditCommands.tempPathFor(target, _token);
+        temp = EditCommands.tempPathFor(target, _tempId);
       });
 
       /// Runs [argv] with [shell] as its `sh` and [stdin], with the shims
