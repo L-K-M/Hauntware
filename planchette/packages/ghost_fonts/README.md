@@ -1,6 +1,6 @@
 # ghost_fonts
 
-The 20 monospace families every Ghost app bundles, available offline.
+The 23 monospace families every Ghost app bundles, available offline.
 `BundledMonoFont` names them; `ghostMonoFontFamilies` is the stack code text
 falls back through. Apps register each family as
 `packages/ghost_fonts/<family>` from their font manifest; tests call
@@ -24,11 +24,16 @@ falls back through. Apps register each family as
 | Google Sans Code | variable weight, upright and italic | none |
 | Commit Mono | regular, bold, italic, bold italic | `ss01` (math), `ss02` (arrows) |
 | Departure Mono | regular | none |
+| Nordwand Mono | regular, bold, italic, bold italic | `liga` (`->` and `=>` only) |
+| Ioskeley Mono Term | regular, bold, italic, bold italic | `calt` |
+| 3270 | regular | none |
 
 The engine synthesizes styles absent upstream. Google Sans Code uses its
-unmodified variable faces, with `MONO` at its default of 1. All fonts together
-occupy about 21 MiB before application compression, about 16 MiB more than the
-original four.
+unmodified variable faces, with `MONO` at its default of 1. Nordwand Mono
+covers Latin and Cyrillic only, so box drawing in a terminal comes from the
+next family in the stack. 3270 is upstream's “IBM 3270” under a shorter name;
+the file is unchanged. All fonts together occupy about 23 MB before application
+compression, about 18 MB more than the original four.
 
 `showMonoFontPicker` shares searchable, font-rendered rows and a larger preview
 with code, ambiguous glyphs and emphasis. Desktop uses two panes; narrow screens
@@ -46,23 +51,25 @@ change plain-letter outlines while preserving their cell advances.
 
 ## Licences
 
-The fonts are under the SIL Open Font License 1.1; the package code is public
-domain (Unlicense). `LICENSE` holds every
-text in the chunk format Flutter's build copies into each app's NOTICES, and
-a test checks there is one per family. The suite licence gate
-(`tool/license_gate`) covers Séance's component only, so it does not see
-these files.
+The fonts are under the SIL Open Font License 1.1. 3270's release ships a BSD
+3-Clause licence instead, though its name table cites the OFL; its Debian logo
+glyph is CC BY-SA 3.0 or LGPL 3+. The package code is public domain
+(Unlicense). `LICENSE` holds every text in the chunk format Flutter's build
+copies into each app's NOTICES, and a test checks there is one per family.
+The suite licence gate (`tool/license_gate`) covers Séance's component only,
+so it does not see these files.
 
 Cascadia Code reserves “Cascadia Code”; Intel One Mono reserves “Intel”;
 Monaspace reserves “Monaspace” and its five subfamily names. Their shipped files
 are unmodified. The other additional families declare no reserved names.
-Commit Mono and Departure Mono's **font** licenses are OFL, regardless of the
-licenses used for code in their repositories. Codelia is commercial and is not
-included.
+Commit Mono, Departure Mono and Nordwand Mono's **font** licenses are OFL,
+regardless of the licenses used for code in their repositories. Ioskeley Mono
+Term's chunk also carries Iosevka's copyright. Codelia is commercial and is
+not included.
 
 ## Sources
 
-Unmodified release files, except Iosevka Term:
+Unmodified release files, except the Iosevka builds:
 
 | Family | Release | Archive (SHA-256) |
 | --- | --- | --- |
@@ -70,6 +77,7 @@ Unmodified release files, except Iosevka Term:
 | JetBrains Mono | [JetBrains/JetBrainsMono v2.304](https://github.com/JetBrains/JetBrainsMono/releases/tag/v2.304) | `JetBrainsMono-2.304.zip` (`6f6376c6ed2960ea8a963cd7387ec9d76e3f629125bc33d1fdcd7eb7012f7bbf`), `fonts/ttf/` |
 | Fira Code | [tonsky/FiraCode 6.2](https://github.com/tonsky/FiraCode/releases/tag/6.2) | `Fira_Code_v6.2.zip` (`0949915ba8eb24d89fd93d10a7ff623f42830d7c5ffc3ecbf960e4ecad3e3e79`), `ttf/` |
 | Maple Mono | [subframe7536/maple-font v7.9](https://github.com/subframe7536/maple-font/releases/tag/v7.9) | `MapleMono-TTF.zip` (`3a35f8f0669bef3dded9df208cc4526a6f7573210e134816e9084a8981271d75`) |
+| Ioskeley Mono Term | [ahatem/IoskeleyMono v2.1.0](https://github.com/ahatem/IoskeleyMono/releases/tag/v2.1.0) | `IoskeleyMono-Term.zip` (`a45f766d60fb7f1ed244ecd456a890d68cad8bd480f7803325d04133995bc000`), `Normal/Unhinted/` |
 
 The additional releases, exact archive members, source/license SHA-256 and
 shipped-file SHA-256 are pinned in [`tool/font_releases.json`](tool/font_releases.json):
@@ -88,6 +96,8 @@ shipped-file SHA-256 are pinned in [`tool/font_releases.json`](tool/font_release
 | Google Sans Code | [googlefonts/googlesans-code v7.001](https://github.com/googlefonts/googlesans-code/releases/tag/v7.001) |
 | Commit Mono | [eigilnikolajsen/commit-mono v1.143](https://github.com/eigilnikolajsen/commit-mono/releases/tag/v1.143), hinted TTFs |
 | Departure Mono | [rektdeckard/departure-mono v1.500](https://github.com/rektdeckard/departure-mono/releases/tag/v1.500) |
+| Nordwand Mono | [tywr/Nordwand-Mono 1.3.1](https://github.com/tywr/Nordwand-Mono/releases/tag/1.3.1) |
+| 3270 | [rbanffy/3270font v3.0.1](https://github.com/rbanffy/3270font/releases/tag/v3.0.1), standard-width TTF |
 
 Google Sans Code's asset filenames omit brackets for Flutter's asset loader;
 the bytes and internal family names are unchanged. Commit Mono's license chunk
@@ -97,7 +107,8 @@ also retains the copyright from its fonts' name table.
 Without `--check`, it restores the pinned files and their LICENSE chunks from
 upstream, checking digests before writing. No font toolchain is needed.
 
-Iosevka's full character set is about 8.4 MB per style. `tool/subset_iosevka.sh`
+Iosevka's full character set is about 8.4 MB per style, and Ioskeley Mono is an
+Iosevka build. `tool/subset_iosevka.sh iosevka-term|ioskeley-mono-term`
 keeps the scripts, symbols, box drawing, braille and powerline characters a
 terminal draws, and the default ligatures, and drops the character variants
 nothing selects: about 480 KB per style. Characters it leaves out fall back
@@ -113,6 +124,10 @@ fb2b2cf52292bd23e70164a4c175b9ac8cd78c6047eb65684cd4ed9e4bb96de7  fonts/IosevkaT
 a764b281a3cb3a5c0aab7eb8641bc44d3ad2b013ddf0b8cddea074aa84053191  fonts/IosevkaTerm/IosevkaTerm-BoldItalic.ttf
 54a9c2436533e310fde9e64622ea700f4731ddad418e8d3d4e4395be02de0e76  fonts/IosevkaTerm/IosevkaTerm-Italic.ttf
 9c11c76757268986effdcbcfd83cc944d3dd10bffa7d58f44fe5357f9c243bed  fonts/IosevkaTerm/IosevkaTerm-Regular.ttf
+29ada9c2fda35507fdbdf55011f7c33c24193d59b541506cd37b79f183abae6c  fonts/IoskeleyMonoTerm/IoskeleyMonoTerm-Bold.ttf
+e14b30d4404a8dc7abb91e37ef8bd4ffb0d905c6f8245f724b66481f0ed0dac0  fonts/IoskeleyMonoTerm/IoskeleyMonoTerm-BoldItalic.ttf
+c64ca0716c5164324351b5087544215df56e0424526021f4f1f5053f4167e9bf  fonts/IoskeleyMonoTerm/IoskeleyMonoTerm-Italic.ttf
+0618e3e9e19083df436c4ec82e804a9a7ddcada13aff1898d1a620a9a97fdc36  fonts/IoskeleyMonoTerm/IoskeleyMonoTerm-Regular.ttf
 5590990c82e097397517f275f430af4546e1c45cff408bde4255dad142479dcb  fonts/JetBrainsMono/JetBrainsMono-Bold.ttf
 4039d5ce0ed225bf9c8b2c8c6436290ae2f356b7e90d70fa666227238324aa3b  fonts/JetBrainsMono/JetBrainsMono-BoldItalic.ttf
 9d0a1f7a708e6af183f1193b7e81d40da294f5c67682c085d8401c60aac8ded4  fonts/JetBrainsMono/JetBrainsMono-Italic.ttf

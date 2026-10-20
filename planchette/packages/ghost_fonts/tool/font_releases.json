@@ -470,5 +470,60 @@
         ]
       }
     ]
+  },
+  {
+    "url": "https://github.com/tywr/Nordwand-Mono/releases/download/1.3.1/NordwandMono-TTF.zip",
+    "sha256": "9725cfd15e21dede25c64c80aab54dcc3f27c4a127d20f13478c121aee5ae6c5",
+    "license": {
+      "source": "https://raw.githubusercontent.com/tywr/Nordwand-Mono/refs/tags/1.3.1/LICENSE-FONT.txt",
+      "sha256": "e0e493edae714ad5bb243a346f3fd45ecdd94a00584118297f2d05e0f6187d38"
+    },
+    "families": [
+      {
+        "name": "Nordwand Mono",
+        "files": [
+          {
+            "member": "NordwandMono-Regular.ttf",
+            "path": "fonts/NordwandMono/NordwandMono-Regular.ttf",
+            "sha256": "f397693da75187c714805015668640919df16341aeca63ed734433ed3367f921"
+          },
+          {
+            "member": "NordwandMono-Bold.ttf",
+            "path": "fonts/NordwandMono/NordwandMono-Bold.ttf",
+            "sha256": "bf015275943bfe206cb876192bf0fc2fadee4a41e09080bcc10636f5c654ee50"
+          },
+          {
+            "member": "NordwandMono-Italic.ttf",
+            "path": "fonts/NordwandMono/NordwandMono-Italic.ttf",
+            "sha256": "bb2ac72444f862e0ce8a899c953b97e2dd4db8a0f4484272ca01cf005a0cee05"
+          },
+          {
+            "member": "NordwandMono-BoldItalic.ttf",
+            "path": "fonts/NordwandMono/NordwandMono-BoldItalic.ttf",
+            "sha256": "b043875b11202cb24aa343621014b640c0aca25187ae251fcff8ff52de91fe01"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "url": "https://github.com/rbanffy/3270font/releases/download/v3.0.1/3270_fonts_d916271.zip",
+    "sha256": "623fb815b16d6c4940b5014a21c5474ef6cddb02c325d03f153341b676b4cffa",
+    "license": {
+      "source": "LICENSE.txt",
+      "sha256": "ef855fadca28e91a4123f7299bd79dcd78a7e19dfc364039790bb75bdedd515a"
+    },
+    "families": [
+      {
+        "name": "3270",
+        "files": [
+          {
+            "member": "3270-Regular.ttf",
+            "path": "fonts/3270/3270-Regular.ttf",
+            "sha256": "81aa369c1f580253d3bc082de725039d0d95c5b7ccdc98107f3dabd0c76c561f"
+          }
+        ]
+      }
+    ]
   }
 ]

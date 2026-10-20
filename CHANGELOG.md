@@ -20,12 +20,13 @@
 
 ### Added
 
-- The font catalog now has 20 families, including Cascadia Code, Victor
-  Mono, Lilex, 0xProto and all five Monaspace faces. A searchable picker
-  previews code, ambiguous characters and emphasis before applying a
-  font. Ligatures are on by default and can be disabled, including the
-  font-specific sets used by Monaspace, Geist Mono and Intel One Mono.
-  All fonts work offline and ship with their OFL notices.
+- The font catalog now has 23 families, including Cascadia Code, Victor
+  Mono, Lilex, 0xProto, all five Monaspace faces, Ioskeley Mono, Nordwand
+  Mono and 3270. A searchable picker previews code, ambiguous characters
+  and emphasis before applying a font. Ligatures are on by default and
+  can be disabled, including the font-specific sets used by Monaspace,
+  Geist Mono and Intel One Mono. All fonts work offline and ship with
+  their licence notices.
 - Séance and Poltergeist on Android update themselves when you ask.
   When a newer release is out, Séance's update banner and Poltergeist's
   Alerts tab offer Update with the download size. The app downloads

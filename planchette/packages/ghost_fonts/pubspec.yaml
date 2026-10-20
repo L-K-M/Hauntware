@@ -201,3 +201,26 @@ flutter:
     - family: Departure Mono
       fonts:
         - asset: "fonts/DepartureMono/DepartureMono-Regular.otf"
+    - family: Nordwand Mono
+      fonts:
+        - asset: "fonts/NordwandMono/NordwandMono-Regular.ttf"
+        - asset: "fonts/NordwandMono/NordwandMono-Bold.ttf"
+          weight: 700
+        - asset: "fonts/NordwandMono/NordwandMono-Italic.ttf"
+          style: italic
+        - asset: "fonts/NordwandMono/NordwandMono-BoldItalic.ttf"
+          weight: 700
+          style: italic
+    - family: Ioskeley Mono Term
+      fonts:
+        - asset: "fonts/IoskeleyMonoTerm/IoskeleyMonoTerm-Regular.ttf"
+        - asset: "fonts/IoskeleyMonoTerm/IoskeleyMonoTerm-Bold.ttf"
+          weight: 700
+        - asset: "fonts/IoskeleyMonoTerm/IoskeleyMonoTerm-Italic.ttf"
+          style: italic
+        - asset: "fonts/IoskeleyMonoTerm/IoskeleyMonoTerm-BoldItalic.ttf"
+          weight: 700
+          style: italic
+    - family: "3270"
+      fonts:
+        - asset: "fonts/3270/3270-Regular.ttf"

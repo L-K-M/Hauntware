@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Preview 20 bundled fonts.** The editor's font button opens a
+- **Preview 23 bundled fonts.** The editor's font button opens a
   searchable picker with code, ambiguous glyphs, bold and italics.
   Previewing changes nothing until you choose Use font. Ligatures are on
   by default and can be disabled, including font-specific coding sets.
