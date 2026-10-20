@@ -1,6 +1,8 @@
 // The v1 job history reads (03 §7.7; M5 plan M24): anacron's jobs with
 // their commands masked, a timer's last run, cron's logged runs, and why
 // a read found nothing.
+import 'dart:async';
+
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/jobs/job_history_query.dart';
 import 'package:klabautermann_host/klabautermann_host.dart'
@@ -157,5 +159,20 @@ void main() {
           .failure,
       JobHistoryFailure.noLink,
     );
+  });
+
+  test('any other error still answers, as failed with its text', () async {
+    // The engine runs the query unawaited, so an error that escaped would
+    // leave the request unanswered.
+    final timedOut = _Link(_out(''))
+      ..failure = TimeoutException('no answer', const Duration(seconds: 30));
+    final failed =
+        await _query(timedOut, const CronRunsQuery()) as JobHistoryFailed;
+    expect(failed.failure, JobHistoryFailure.failed);
+    expect(failed.detail, contains('no answer'));
+
+    final long = _Link(_out(''))..failure = StateError('x' * 2000);
+    final capped = await _query(long, const AnacronQuery()) as JobHistoryFailed;
+    expect(capped.detail!.length, lessThanOrEqualTo(500));
   });
 }

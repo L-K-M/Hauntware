@@ -81,18 +81,22 @@ Future<JobHistoryResult> runJobHistoryQuery(
     return answer(const JobHistoryFailed(JobHistoryFailure.invalidTarget));
   } on RemoteCommandException {
     return answer(const JobHistoryFailed(JobHistoryFailure.noLink));
+  } on Object catch (error) {
+    // The engine runs this unawaited, as the host queries: an answer must
+    // go out whatever else fails, such as a timeout.
+    return answer(_failedWith('$error'));
   }
 }
 
-JobHistoryFailed _failed(RemoteCommandResult result) {
-  final stderr = result.stderr.trim();
-  return JobHistoryFailed(
-    JobHistoryFailure.failed,
-    detail: stderr.length > _detailLimit
-        ? stderr.substring(0, _detailLimit)
-        : stderr,
-  );
-}
+JobHistoryFailed _failed(RemoteCommandResult result) =>
+    _failedWith(result.stderr.trim());
+
+JobHistoryFailed _failedWith(String detail) => JobHistoryFailed(
+  JobHistoryFailure.failed,
+  detail: detail.length > _detailLimit
+      ? detail.substring(0, _detailLimit)
+      : detail,
+);
 
 /// [text] masked as one command line, under [budget]. The masker never
 /// reads the program's slot as a value, so an empty program stands in
