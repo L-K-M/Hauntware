@@ -1973,6 +1973,10 @@ is not a device smoke test:
   preview, confirmation tiers and protected targets on a phone (PLT-03);
   admin mode ending when iOS backgrounds the app (PLT-04); and the
   activity log afterwards.
+- Privileged file writes under SELinux (M5 M01, D67), on RHEL 9 with
+  SELinux enforcing: a root-owned file the engine edits keeps its label
+  (`ls -Z` before and after the write, which runs `restorecon`). The
+  spike's containers cannot observe labels.
 - The 24 h soak (03 §11.4) against ten hosts, which CI runs only for
   minutes.
 
