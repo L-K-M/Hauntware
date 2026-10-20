@@ -28,6 +28,11 @@ enum RecordKind {
   assistantSettings,
   inboxApp,
   inboxStatus,
+
+  /// Klabautermann's own settings (`klabautermann:pref:` and
+  /// `klabautermann:rule:` records, 03 §4.8). Séance and Poltergeist keep
+  /// them without applying them; only Klabautermann reads them.
+  klabautermann,
   unknown,
 }
 
