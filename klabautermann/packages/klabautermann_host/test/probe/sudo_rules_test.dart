@@ -110,6 +110,58 @@ void main() {
     );
   });
 
+  test('a negated glob that matches the program denies it', () {
+    for (final negated in [
+      '!/usr/bin/systemd-run*',
+      '!/usr/bin/systemd-?un',
+      '!/usr/bin/systemd-[rx]un',
+      '!/usr/bin/*',
+      '!/usr/*/systemd-run',
+    ]) {
+      expect(
+        sudoListAllows(_listing(['(ALL) ALL, $negated']), 'systemd-run'),
+        isFalse,
+        reason: negated,
+      );
+    }
+    expect(
+      sudoListAllows(_listing(['(ALL) ALL, !/usr/bin/su*']), 'systemd-run'),
+      isTrue,
+    );
+    expect(
+      sudoListAllows(_listing(['(ALL) ALL, !/usr/bin/[!s]*']), 'systemd-run'),
+      isTrue,
+    );
+  });
+
+  test('a glob that would allow the program does not count', () {
+    // Only the base name is known, not where the program lives, so a
+    // glob allows nothing; sudo would refuse a runner it does not cover.
+    expect(
+      sudoListAllows(_listing(['(root) /usr/bin/systemd-*']), 'systemd-run'),
+      isFalse,
+    );
+  });
+
+  test("each command's own tags are read past", () {
+    expect(
+      sudoListAllows(
+        _listing([
+          '(root) NOPASSWD: /usr/bin/ls, NOEXEC: /usr/bin/systemd-run',
+        ]),
+        'systemd-run',
+      ),
+      isTrue,
+    );
+    expect(
+      sudoListAllows(
+        _listing(['(ALL) ALL, NOPASSWD: !/usr/bin/systemd-run']),
+        'systemd-run',
+      ),
+      isFalse,
+    );
+  });
+
   test('a user with no rule may run nothing', () {
     expect(
       sudoListAllows(

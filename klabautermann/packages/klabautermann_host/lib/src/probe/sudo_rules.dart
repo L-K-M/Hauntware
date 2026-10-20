@@ -16,13 +16,18 @@ final _tags = RegExp(r'^(?:[A-Z_]+:\s*)+');
 /// A comma between commands; sudoers escapes one inside a command.
 final _commandSeparator = RegExp(r'(?<!\\),');
 
+/// The characters that make a sudoers path a glob (sudoers(5), "Wildcards").
+final _globCharacters = RegExp(r'[*?\[]');
+
 /// Whether [output], `sudo -l` run as the login user, lets root run
 /// [program] (a base name such as `systemd-run`) with any arguments: a
 /// rule whose run-as user is root or `ALL` and whose commands hold `ALL`
 /// or [program] without arguments, or with a lone `*`, which matches any.
 /// A negated command naming [program] denies it unless a later one allows
 /// it again: sudoers lets the last match win, and `sudo -l` lists the
-/// rules in sudoers' order.
+/// rules in sudoers' order. Only [program]'s base name is known, not its
+/// directory, so a glob counts one way only: a negated one whose base name
+/// matches denies, and one that would allow allows nothing.
 ///
 /// False when sudo says the user may run nothing; null when [output]
 /// holds no listing at all (a refusal, a failed password, or another
@@ -41,12 +46,18 @@ bool? sudoListAllows(String output, String program) {
 
     final rule = _parseRule(line.trim());
     if (rule == null || !rule.asRoot) continue;
-    for (final command in rule.commands) {
+    for (final entry in rule.commands) {
+      // Each command may carry its own tags: `/bin/ls, NOEXEC: /bin/vi`.
+      final command = entry.replaceFirst(_tags, '');
       final negated = command.startsWith('!');
       final words = (negated ? command.substring(1) : command).trim().split(
         RegExp(r'\s+'),
       );
       final head = words.first;
+      if (negated && _globMatches(_baseName(head), program)) {
+        allowed = false;
+        continue;
+      }
       final names = head == 'ALL' || _baseName(head) == program;
       if (!names) continue;
       if (negated) {
@@ -84,3 +95,35 @@ bool? sudoListAllows(String output, String program) {
 }
 
 String _baseName(String path) => path.substring(path.lastIndexOf('/') + 1);
+
+/// Whether [pattern], a sudoers glob's last path component, matches
+/// [name]: `*`, `?` and bracket expressions, with `!` negating a bracket
+/// as in fnmatch(3). A pattern without glob characters never matches here;
+/// the exact comparison covers it.
+bool _globMatches(String pattern, String name) {
+  if (!pattern.contains(_globCharacters)) return false;
+
+  final regex = StringBuffer('^');
+  for (var i = 0; i < pattern.length; i++) {
+    final char = pattern[i];
+    if (char == '*') {
+      regex.write('.*');
+    } else if (char == '?') {
+      regex.write('.');
+    } else if (char == '[') {
+      final close = pattern.indexOf(']', i + 2);
+      if (close < 0) {
+        regex.write(r'\[');
+        continue;
+      }
+      var set = pattern.substring(i + 1, close);
+      if (set.startsWith('!')) set = '^${set.substring(1)}';
+      regex.write('[${set.replaceAll(r'\', r'\\')}]');
+      i = close;
+    } else {
+      regex.write(RegExp.escape(char));
+    }
+  }
+  regex.write(r'$');
+  return RegExp(regex.toString()).hasMatch(name);
+}
