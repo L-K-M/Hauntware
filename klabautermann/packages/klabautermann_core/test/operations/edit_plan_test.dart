@@ -228,6 +228,12 @@ void main() {
       expect((read as EditContent).text, '*/5 * * * * /usr/bin/true\n');
       expect(read.privileged, isTrue);
     });
+
+    test('a crontab past the read cap is refused as a file is', () async {
+      host.crontabs['deploy'] = '# ${'x' * kEditReadCap}\n';
+      final read = await readEditable(const CrontabTarget(), context());
+      expect((read as EditReadFailed).failure, EditReadFailure.tooLarge);
+    });
   });
 
   group('plans', () {

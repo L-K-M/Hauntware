@@ -1093,7 +1093,8 @@ void engineMain(
           return;
         }
         // Not awaited: the read waits on the host while the queue serves
-        // the app; readEditable answers rather than throws.
+        // the app. readEditable answers rather than throws; a lend that
+        // fails still answers, so the editor never waits on nothing.
         unawaited(
           lendSession(
             serverId,
@@ -1102,7 +1103,12 @@ void engineMain(
               profile: profile,
               admin: admin?.session(serverId),
             )),
-          ).then(answer),
+          ).then(
+            answer,
+            onError: (Object error) => answer(
+              EditReadFailed(EditReadFailure.failed, detail: '$error'),
+            ),
+          ),
         );
       case AuditQuery(:final serverId, :final before, :final limit):
         final (:records, :more) = await audit.query(
