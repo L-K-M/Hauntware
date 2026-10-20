@@ -8,7 +8,13 @@ import 'package:meta/meta.dart';
 import 'package:seance_core/catalog.dart'
     show EndpointPin, EndpointPinStore, endpointPinsFileName;
 import 'package:seance_core/seance_core.dart'
-    show ImportedHost, Prober, ServerConfig, SshLink, TcpBannerProber;
+    show
+        ImportedHost,
+        Prober,
+        SecretRedactor,
+        ServerConfig,
+        SshLink,
+        TcpBannerProber;
 
 import '../admin/admin_mode.dart';
 import '../audit/audit_log.dart';
@@ -32,6 +38,7 @@ import '../links/link_connector.dart';
 import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
 import '../logs/log_stream_router.dart';
+import 'host_queries.dart';
 import '../operations/confirmation.dart';
 import '../operations/detached_runner.dart';
 import '../operations/operation_plan.dart'
@@ -49,6 +56,10 @@ import '../sampling/sampling_scheduler.dart';
 import '../sampling/subscriptions.dart';
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
 import 'protocol.dart';
+
+/// Redacts the lines an export carries (LOG-10, 03 §8.9), as the audit
+/// log and operation output are.
+final _exportRedactor = SecretRedactor();
 
 /// What the engine isolate starts with, sent once by `Isolate.spawn`
 /// (D18): the port it answers on and the app's support directory, where it
@@ -187,6 +198,9 @@ void engineMain(
   // none while links are off. It follows every LinkState and probe
   // answer.
   DockerRouter? docker;
+  // One-shot host reads over each server's ready link (03 §7.6); none
+  // while links are off.
+  HostQueries? hostQueries;
   // Admin mode per server (03 §8.2), over the links; none while links are
   // off. The safety policy the app last sent; until then every server is
   // observe-only (SAF-01).
@@ -486,6 +500,11 @@ void engineMain(
       },
       opsRead: (serverId, section) =>
           unawaited(operations?.listed(serverId, section)),
+    );
+    hostQueries = HostQueries(
+      linkFor: links.link,
+      systemdVersionOf: (serverId) => profiles[serverId]?.systemdVersion,
+      emit: uiPort.send,
     );
     logs = LogStreamRouter(
       linkFor: links.link,
@@ -879,6 +898,23 @@ void engineMain(
         }
       case DockerUnwatch():
         docker?.unwatch(message);
+      case HostQuery(:final serverId):
+        switch (hostQueries) {
+          case null:
+            reject(message, 'links are off in this engine');
+          case _ when !fleetIds.contains(serverId):
+            reject(message, 'no fleet server $serverId');
+          case final queries:
+            // Not awaited: the queue keeps serving while the host answers.
+            unawaited(queries.query(message));
+        }
+      case RedactLines(:final requestId, :final lines):
+        uiPort.send(
+          RedactedLines(
+            requestId,
+            lines.map(_exportRedactor.redact).join('\n'),
+          ),
+        );
       case SetDockerEndpoint():
         switch (docker) {
           case null:

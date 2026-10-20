@@ -155,9 +155,11 @@ String? unitLogsNotice(AppLocalizations l10n, LogRead read) {
         LogStreamEndReason.invalid => l10n.servicesLogsInvalid,
         LogStreamEndReason.missing => l10n.servicesLogsMissing,
         LogStreamEndReason.denied => l10n.servicesLogsDenied,
-        // A container's logs, which a unit's page never opens.
+        // A container's logs and a journal pattern, which a unit's page
+        // never opens or sends.
         LogStreamEndReason.failed ||
-        LogStreamEndReason.logDriverUnreadable => l10n.servicesLogsFailed,
+        LogStreamEndReason.logDriverUnreadable ||
+        LogStreamEndReason.searchUnsupported => l10n.servicesLogsFailed,
       },
     },
   };

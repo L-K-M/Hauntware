@@ -196,6 +196,22 @@ final class JournalBoot {
   final int? _offset;
   final String? _id;
 
+  /// The offset, or null for a boot named by [id].
+  int? get offset => _offset;
+
+  /// The boot ID, or null for a boot named by [offset].
+  String? get id => _id;
+
+  @override
+  bool operator ==(Object other) =>
+      other is JournalBoot && other._offset == _offset && other._id == _id;
+
+  @override
+  int get hashCode => Object.hash(_offset, _id);
+
+  @override
+  String toString() => 'JournalBoot(${_id ?? _offset})';
+
   /// The `-b` argument, after validating it.
   String get _wire {
     final id = _id;
