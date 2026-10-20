@@ -1794,7 +1794,7 @@ What is on main:
   without privilege. Under a NOPASSWD rule scoped to the docker CLI,
   `sudo -n -l` lists the rule without a password while `systemd-run`
   needs one, which the engine now reads before it elevates a runner
-  (below).
+  (above).
 - M4 theme editing (E25): Settings > Appearance edits the theme with
   ghost_theme's shared editor (presets, mode, colours, font, corners,
   copy, paste and reset), in the app and in the desktop settings window,
