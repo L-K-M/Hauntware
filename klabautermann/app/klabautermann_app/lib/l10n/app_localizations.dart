@@ -4468,6 +4468,96 @@ abstract class AppLocalizations {
   /// **'Reload'**
   String get unitReload;
 
+  /// Button where something needs root (SAF-02): asks the engine to turn admin mode on for this server, as the header's chip does.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on admin mode'**
+  String get adminTurnOn;
+
+  /// Container action (CTR-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get dockerContainerStart;
+
+  /// Container action (CTR-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get dockerContainerStop;
+
+  /// Container action (CTR-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Restart'**
+  String get dockerContainerRestart;
+
+  /// Container action (CTR-05): freezes the container's processes.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get dockerContainerPause;
+
+  /// Container action (CTR-05): resumes a paused container.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpause'**
+  String get dockerContainerUnpause;
+
+  /// Container action (CTR-05): sends the engine's default signal, SIGKILL.
+  ///
+  /// In en, this message translates to:
+  /// **'Kill'**
+  String get dockerContainerKill;
+
+  /// Container action (CTR-06), offered once the container has stopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get dockerContainerRemove;
+
+  /// Container action (CTR-06): also removes the container's anonymous volumes, behind the typed confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove with volumes'**
+  String get dockerContainerRemoveVolumes;
+
+  /// Image action (IMG-02) for an image no container uses.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get dockerImageRemove;
+
+  /// Image action (IMG-02) for an image containers use, behind the typed confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Force remove'**
+  String get dockerImageForceRemove;
+
+  /// Stack action (STK-03): starts the project's containers in dependency order.
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get dockerStackStart;
+
+  /// Stack action (STK-03): stops the project's containers in reverse dependency order.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get dockerStackStop;
+
+  /// Stack action (STK-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Restart'**
+  String get dockerStackRestart;
+
+  /// Tooltip of the button that opens a container's or image's actions in the phone list.
+  ///
+  /// In en, this message translates to:
+  /// **'Actions'**
+  String get dockerActions;
+
   /// Timer action (JOB-08): starts the unit the timer activates now.
   ///
   /// In en, this message translates to:
@@ -4840,7 +4930,7 @@ abstract class AppLocalizations {
   /// **'No Engine API route: forwarding is off and there is no relay'**
   String get dockerTransportNoRelay;
 
-  /// The server header's Docker transport label (03 §5.9, E4) when the account cannot use the engine socket but sudo exists; admin mode arrives later.
+  /// The server header's Docker transport label (03 §5.9, E4) when the account cannot use the engine socket but sudo exists, and admin mode is off.
   ///
   /// In en, this message translates to:
   /// **'No Engine API route: the socket needs admin mode'**
@@ -4972,10 +5062,10 @@ abstract class AppLocalizations {
   /// **'Socket forwarding is off on this server, and it has nothing to relay through: no docker or podman command, no socat and no nc.'**
   String get dockerGateNoRelay;
 
-  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the account cannot use the socket, but sudo exists.
+  /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the account cannot use the socket, but sudo exists. A Turn on admin mode button follows it.
   ///
   /// In en, this message translates to:
-  /// **'Your account cannot use the engine socket. Reaching it through sudo needs admin mode, which arrives in a later milestone.'**
+  /// **'Your account cannot use the engine socket. Turn on admin mode to reach it through sudo.'**
   String get dockerGateNeedsAdminMode;
 
   /// Docker tab, shown instead of its panels when Docker cannot be reached, under accessPanelHiddenTitle: the account cannot use the socket and there is no sudo.
@@ -6517,7 +6607,7 @@ abstract class AppLocalizations {
   /// Stack file view: why the engine read no file (STK-04). reason is the engine's failure name.
   ///
   /// In en, this message translates to:
-  /// **'{reason, select, unknownStack{No container belongs to this stack any more.} notVerified{This stack\'s source is no longer verified, so its files do not show.} notStackFile{This path is none of the stack\'s files.} notFound{There is no file at this path on the host.} permissionDenied{Your account cannot read this file. Reading it through sudo needs admin mode, which arrives in a later milestone.} notRegularFile{This path is a link, a directory or another special file, which is not read.} readFailed{The file could not be read, or it changed while it was read.} other{The file could not be read.}}'**
+  /// **'{reason, select, unknownStack{No container belongs to this stack any more.} notVerified{This stack\'s source is no longer verified, so its files do not show.} notStackFile{This path is none of the stack\'s files.} notFound{There is no file at this path on the host.} permissionDenied{Your account cannot read this file. Admin mode reads it through sudo.} notRegularFile{This path is a link, a directory or another special file, which is not read.} readFailed{The file could not be read, or it changed while it was read.} other{The file could not be read.}}'**
   String dockerStackFileFailed(String reason);
 
   /// Stack file view: why the read could not run. reason is the engine's failure name.

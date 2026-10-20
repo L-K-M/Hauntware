@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart'
     show SidebarMenuAction, SidebarMenuEntry, SidebarMenuSubmenu;
@@ -12,19 +10,6 @@ import 'action_preview.dart';
 /// The signals offered first, each a top-level verb so the keyboard
 /// reaches them (the table's row menu cannot focus a submenu yet).
 const _firstSignals = [KillSignal.sigterm, KillSignal.sigkill];
-
-/// Plans and previews [intent], if an operations controller is in scope
-/// and no other preview is on its way (the preview is modal). [onRun]
-/// hears of the preview once its plan runs.
-void _act(
-  BuildContext context,
-  ActionIntent intent, {
-  void Function(ActionPreview preview)? onRun,
-}) {
-  final operations = OperationsScope.maybeOf(context);
-  if (operations == null || operations.planning) return;
-  unawaited(previewAndRun(context, operations, intent, onRun: onRun));
-}
 
 String _signalLabel(AppLocalizations l10n, KillSignal signal) =>
     switch (signal) {
@@ -50,7 +35,7 @@ List<SidebarMenuEntry> processActionEntries(
   final l10n = AppLocalizations.of(context);
   SidebarMenuAction send(KillSignal signal) => SidebarMenuAction(
     label: _signalLabel(l10n, signal),
-    onSelected: () => _act(
+    onSelected: () => startAction(
       context,
       KillProcess(serverId, pid: row.pid, startTicks: ticks, signal: signal),
     ),
@@ -84,7 +69,7 @@ class ProcessActionButtons extends StatelessWidget {
     final ticks = row.startTicks;
     if (ticks == null) return const SizedBox.shrink();
     final l10n = AppLocalizations.of(context);
-    void send(KillSignal signal) => _act(
+    void send(KillSignal signal) => startAction(
       context,
       KillProcess(serverId, pid: row.pid, startTicks: ticks, signal: signal),
     );
@@ -154,7 +139,7 @@ List<SidebarMenuEntry> unitActionEntries(
       SidebarMenuAction(
         label: _verbLabel(l10n, verb),
         onSelected: () =>
-            _act(context, UnitAction(serverId, unit: unit, verb: verb)),
+            startAction(context, UnitAction(serverId, unit: unit, verb: verb)),
       ),
   ];
 }
@@ -182,8 +167,10 @@ class UnitActionButtons extends StatelessWidget {
         children: [
           for (final verb in _unitVerbs)
             OutlinedButton(
-              onPressed: () =>
-                  _act(context, UnitAction(serverId, unit: unit, verb: verb)),
+              onPressed: () => startAction(
+                context,
+                UnitAction(serverId, unit: unit, verb: verb),
+              ),
               child: Text(_verbLabel(l10n, verb)),
             ),
         ],
@@ -246,7 +233,7 @@ void _runTimer(
   String serverId,
   String timer,
   void Function(String unit) onRun,
-) => _act(
+) => startAction(
   context,
   StartTimer(serverId, timer: timer),
   onRun: (preview) {

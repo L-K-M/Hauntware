@@ -6,6 +6,8 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../controllers/docker_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
+import '../actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
+import '../actions/docker_actions.dart' show StackActionButtons;
 import 'container_details.dart' show openContainerDetails;
 import 'containers_panel.dart'
     show ContainerHealthBadge, DockerNotice, containerStateText;
@@ -696,6 +698,8 @@ class StackOverview extends StatelessWidget {
         ),
       ),
       if (marker != null) _ManagedByNote(marker: marker),
+      if (actionsAllowedAt(context, serverId, ActionEntryPoint.stackVerb))
+        StackActionButtons(serverId: serverId, project: project.name),
       _Section(
         title: l10n.dockerStackSource,
         children: [

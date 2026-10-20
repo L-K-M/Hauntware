@@ -6,6 +6,9 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../controllers/docker_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
+import '../actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
+import '../actions/docker_actions.dart'
+    show ImageActionsButton, imageActionEntries;
 import '../sortable_table.dart';
 import 'containers_panel.dart' show DockerNotice;
 import 'containers_view.dart' show searchTerms;
@@ -262,6 +265,18 @@ class _ImagesPanelState extends State<ImagesPanel> {
       rowKey: _rowKey,
       sort: _sort,
       onSort: (sort) => setState(() => _sort = sort),
+      rowActions:
+          actionsAllowedAt(
+            context,
+            widget.serverId,
+            ActionEntryPoint.imageRemove,
+          )
+          ? (entry) => imageActionEntries(
+              context,
+              serverId: widget.serverId,
+              entry: entry,
+            )
+          : null,
       empty: empty,
     );
   }
@@ -386,7 +401,7 @@ class _ImagesPanelState extends State<ImagesPanel> {
             (id: column.id, label: column.label, text: column.text(entry)),
         ];
         final tags = entry.tags;
-        return Semantics(
+        final row = Semantics(
           key: ValueKey(_phoneRowKey(entry)),
           container: true,
           label: [
@@ -424,6 +439,14 @@ class _ImagesPanelState extends State<ImagesPanel> {
               ],
             ),
           ),
+        );
+        // The actions sit beside the row's one node, so a screen reader
+        // reaches them as a button of their own.
+        return Row(
+          children: [
+            Expanded(child: row),
+            ImageActionsButton(serverId: widget.serverId, entry: entry),
+          ],
         );
       },
     );

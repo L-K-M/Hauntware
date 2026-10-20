@@ -8,6 +8,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../controllers/docker_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
+import '../actions/docker_actions.dart' show containerActionEntries;
 import '../sortable_table.dart';
 import 'container_details.dart';
 import 'container_logs.dart';
@@ -320,6 +321,11 @@ class _ContainersPanelState extends State<ContainersPanel> {
               serverId: widget.serverId,
               container: container,
             ),
+          ),
+          ...containerActionEntries(
+            context,
+            serverId: widget.serverId,
+            container: container,
           ),
         ],
       },

@@ -3,6 +3,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
+import '../admin_mode_chip.dart';
 import '../docker/docker_endpoint.dart' show dockerFailureText;
 import '../docker/docker_endpoint_picker.dart';
 import '../server_surfaces.dart';
@@ -148,6 +149,8 @@ class GatedPanel extends StatelessWidget {
                 onRetry: () => monitoring.docker.retry(serverId),
                 children: [
                   Text(dockerFailureText(l10n, state)),
+                  if (state.noRouteReason == DockerNoRouteReason.needsAdminMode)
+                    TurnOnAdminModeButton(serverId: serverId),
                   DockerEndpointPicker(
                     docker: monitoring.docker,
                     profile: monitoring.profileFor(serverId),

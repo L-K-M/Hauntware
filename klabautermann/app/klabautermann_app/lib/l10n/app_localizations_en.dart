@@ -3431,6 +3431,51 @@ class AppLocalizationsEn extends AppLocalizations {
   String get unitReload => 'Reload';
 
   @override
+  String get adminTurnOn => 'Turn on admin mode';
+
+  @override
+  String get dockerContainerStart => 'Start';
+
+  @override
+  String get dockerContainerStop => 'Stop';
+
+  @override
+  String get dockerContainerRestart => 'Restart';
+
+  @override
+  String get dockerContainerPause => 'Pause';
+
+  @override
+  String get dockerContainerUnpause => 'Unpause';
+
+  @override
+  String get dockerContainerKill => 'Kill';
+
+  @override
+  String get dockerContainerRemove => 'Remove';
+
+  @override
+  String get dockerContainerRemoveVolumes => 'Remove with volumes';
+
+  @override
+  String get dockerImageRemove => 'Remove';
+
+  @override
+  String get dockerImageForceRemove => 'Force remove';
+
+  @override
+  String get dockerStackStart => 'Start';
+
+  @override
+  String get dockerStackStop => 'Stop';
+
+  @override
+  String get dockerStackRestart => 'Restart';
+
+  @override
+  String get dockerActions => 'Actions';
+
+  @override
   String get jobsRunNow => 'Run now';
 
   @override
@@ -3815,7 +3860,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dockerGateNeedsAdminMode =>
-      'Your account cannot use the engine socket. Reaching it through sudo needs admin mode, which arrives in a later milestone.';
+      'Your account cannot use the engine socket. Turn on admin mode to reach it through sudo.';
 
   @override
   String get dockerGateSocketDenied =>
@@ -4973,7 +5018,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'notStackFile': 'This path is none of the stack\'s files.',
       'notFound': 'There is no file at this path on the host.',
       'permissionDenied':
-          'Your account cannot read this file. Reading it through sudo needs admin mode, which arrives in a later milestone.',
+          'Your account cannot read this file. Admin mode reads it through sudo.',
       'notRegularFile':
           'This path is a link, a directory or another special file, which is not read.',
       'readFailed':

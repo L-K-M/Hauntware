@@ -10,6 +10,8 @@ import '../../controllers/docker_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart' show klabautermannThemeStyle;
+import '../actions/docker_actions.dart'
+    show ContainerActionButtons, containerActionsShown;
 import '../processes_panel.dart' show kRevealDuration;
 import '../processes_view.dart' show argumentText, clipProcessText;
 import 'container_details_view.dart';
@@ -407,6 +409,8 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
     return [
       if (detectOwnership(labels).primary case final marker?)
         _ManagedByBadge(marker: marker),
+      if (containerActionsShown(context, widget.serverId, row))
+        ContainerActionButtons(serverId: widget.serverId, container: row),
       if (masked)
         Text(
           l10n.dockerDetailsRevealNote(kRevealDuration.inSeconds),
