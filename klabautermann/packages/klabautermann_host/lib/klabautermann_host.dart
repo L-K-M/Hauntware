@@ -16,6 +16,7 @@ export 'src/access/panels.dart';
 export 'src/commands/commands.dart';
 export 'src/commands/operations.dart';
 export 'src/cron/evaluate.dart';
+export 'src/cron/document.dart';
 export 'src/cron/expression.dart';
 export 'src/hws/collector.dart';
 export 'src/hws/frames.dart';
