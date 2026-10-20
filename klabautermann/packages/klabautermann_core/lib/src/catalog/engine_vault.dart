@@ -83,6 +83,20 @@ final class EngineVault {
   /// The vault file's store, for sync's re-key journal and coordinator.
   final FileVaultStore store;
 
+  // The tail of [exclusive]'s queue.
+  Future<void> _tail = Future.value();
+
+  /// Runs [body] once every earlier [save] and [exclusive] body has ended.
+  /// Two first saves at once would each mint a master key, the second
+  /// replacing the key the first sealed under; and a save between an
+  /// enrollment's look for a vault and its install of the account key
+  /// would seal under a key that install replaces.
+  Future<T> exclusive<T>(Future<T> Function() body) {
+    final run = _tail.then((_) => body());
+    _tail = run.then((_) {}, onError: (Object _) {});
+    return run;
+  }
+
   /// Whether the vault file, or a re-key staged for it, exists.
   Future<bool> exists() async =>
       await _file.exists() || await File('${_file.path}.rekey').exists();
@@ -114,11 +128,13 @@ final class EngineVault {
         VaultUnavailableReason.directoryShared,
       );
     }
-    final key = await _masterKey();
-    await SecretVault(
-      store,
-      key,
-    ).putLocalSecret(secret, updatedAt: DateTime.now().millisecondsSinceEpoch);
+    await exclusive(() async {
+      final key = await _masterKey();
+      await SecretVault(store, key).putLocalSecret(
+        secret,
+        updatedAt: DateTime.now().millisecondsSinceEpoch,
+      );
+    });
   }
 
   /// The keystore's master key, minting one only when nothing is sealed

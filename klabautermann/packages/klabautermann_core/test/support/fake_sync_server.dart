@@ -178,6 +178,9 @@ final class MemoryKeystore implements SyncKeystore {
   /// keyring.
   bool refuseWrites = false;
 
+  /// Hears each master key written.
+  void Function(List<int> key)? onWrite;
+
   @override
   Future<void> putApiKey(String name, String value) async {
     if (refuseWrites) throw const SyncKeystoreRefusedException('locked');
@@ -197,5 +200,6 @@ final class MemoryKeystore implements SyncKeystore {
   Future<void> writeMasterKey(List<int> key) async {
     if (refuseWrites) throw const SyncKeystoreRefusedException('locked');
     masterKey = List.of(key);
+    onWrite?.call(masterKey!);
   }
 }

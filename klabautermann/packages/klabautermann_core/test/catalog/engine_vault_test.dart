@@ -69,6 +69,23 @@ void main() {
     expect((await vault.read('secret-a'))?.value, 'hunter2');
   });
 
+  test('two first saves at once mint one key and both open', () async {
+    final vault = open();
+    final minted = <List<int>>[];
+    keystore.onWrite = minted.add;
+
+    await Future.wait([
+      vault.save(_secret),
+      vault.save(
+        const Secret(id: 'secret-b', kind: SecretKind.password, value: 'x'),
+      ),
+    ]);
+
+    expect(minted, hasLength(1));
+    expect((await open().read('secret-a'))?.value, 'hunter2');
+    expect((await open().read('secret-b'))?.value, 'x');
+  });
+
   test('without a vault file a read asks the keystore nothing', () async {
     keystore.masterKey = null;
     expect(await open().read('secret-a'), isNull);
