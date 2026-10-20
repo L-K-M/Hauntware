@@ -1,0 +1,110 @@
+{
+  "case": "vm-docker-host",
+  "recordedAt": "2026-10-19T19:37:14.254712Z",
+  "deadDefaultContext": "klabautermann-dead",
+  "withHost": {
+    "user": "klab-vm-sudo",
+    "unit": "klabautermann-op-a4f342721d712b14.service",
+    "launch": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "doneRecord": {
+      "v": 1,
+      "id": "a4f342721d712b14",
+      "state": "done",
+      "pid": 27604,
+      "startTicks": 44003,
+      "unit": "klabautermann-op-a4f342721d712b14.service",
+      "exit": 0,
+      "startedAt": 1792438632,
+      "endedAt": 1792438632
+    },
+    "modes": "root:root 755 /var/lib/klabautermann/ops\nklab-vm-sudo:root 600 /var/lib/klabautermann/ops/a4f342721d712b14.json\nklab-vm-sudo:root 600 /var/lib/klabautermann/ops/a4f342721d712b14.log\n",
+    "log": "28.0.4\n",
+    "unitCollected": true,
+    "loadStateAfter": "not-found",
+    "cleanupUnelevated": {
+      "exit": 1,
+      "stdout": "",
+      "stderr": "rm: cannot remove '/var/lib/klabautermann/ops/a4f342721d712b14.json': Permission denied\nrm: cannot remove '/var/lib/klabautermann/ops/a4f342721d712b14.log': Permission denied\n"
+    },
+    "cleanupElevated": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "filesLeft": ""
+  },
+  "withoutHost": {
+    "user": "klab-vm-sudo",
+    "unit": "klabautermann-op-99cd680b0b40a4c2.service",
+    "launch": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "doneRecord": {
+      "v": 1,
+      "id": "99cd680b0b40a4c2",
+      "state": "done",
+      "pid": 27735,
+      "startTicks": 44105,
+      "unit": "klabautermann-op-99cd680b0b40a4c2.service",
+      "exit": 1,
+      "startedAt": 1792438633,
+      "endedAt": 1792438633
+    },
+    "modes": "root:root 755 /var/lib/klabautermann/ops\nklab-vm-sudo:root 600 /var/lib/klabautermann/ops/99cd680b0b40a4c2.json\nklab-vm-sudo:root 600 /var/lib/klabautermann/ops/99cd680b0b40a4c2.log\n",
+    "log": "\nCannot connect to the Docker daemon at unix:///run/klabautermann-runner-vm-dead.sock. Is the docker daemon running?\n",
+    "unitCollected": true,
+    "loadStateAfter": "not-found",
+    "cleanupUnelevated": {
+      "exit": 1,
+      "stdout": "",
+      "stderr": "rm: cannot remove '/var/lib/klabautermann/ops/99cd680b0b40a4c2.json': Permission denied\nrm: cannot remove '/var/lib/klabautermann/ops/99cd680b0b40a4c2.log': Permission denied\n"
+    },
+    "cleanupElevated": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "filesLeft": ""
+  },
+  "unitEnvironment": {
+    "user": "klab-vm-sudo",
+    "unit": "klabautermann-op-32d10d98035d71e8.service",
+    "launch": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "doneRecord": {
+      "v": 1,
+      "id": "32d10d98035d71e8",
+      "state": "done",
+      "pid": 27841,
+      "startTicks": 44207,
+      "unit": "klabautermann-op-32d10d98035d71e8.service",
+      "exit": 0,
+      "startedAt": 1792438634,
+      "endedAt": 1792438634
+    },
+    "modes": "root:root 755 /var/lib/klabautermann/ops\nklab-vm-sudo:root 600 /var/lib/klabautermann/ops/32d10d98035d71e8.json\nklab-vm-sudo:root 600 /var/lib/klabautermann/ops/32d10d98035d71e8.log\n",
+    "log": "USER=root\nOLDPWD=/\nSYSTEMD_EXEC_PID=27841\nJOURNAL_STREAM=10:73017\nMEMORY_PRESSURE_WATCH=/sys/fs/cgroup/system.slice/klabautermann-op-32d10d98035d71e8.service/memory.pressure\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/snap/bin\nINVOCATION_ID=d4a2af4f93fa465198d81a9836ad6ee8\nLANG=C.UTF-8\nPWD=/\nSGX_AESM_ADDR=1\nMEMORY_PRESSURE_WRITE=c29tZSAyMDAwMDAgMjAwMDAwMAA=\n",
+    "unitCollected": true,
+    "loadStateAfter": "not-found",
+    "cleanupUnelevated": {
+      "exit": 1,
+      "stdout": "",
+      "stderr": "rm: cannot remove '/var/lib/klabautermann/ops/32d10d98035d71e8.json': Permission denied\nrm: cannot remove '/var/lib/klabautermann/ops/32d10d98035d71e8.log': Permission denied\n"
+    },
+    "cleanupElevated": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "filesLeft": ""
+  }
+}

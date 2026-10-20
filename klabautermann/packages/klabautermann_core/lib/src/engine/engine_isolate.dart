@@ -1030,6 +1030,16 @@ void engineMain(
                       stacks: stacks,
                       profile: profile,
                       adminMode: admin?.session(serverId) != null,
+                      sudoAllows: (program) async {
+                        final session = admin?.session(serverId);
+                        if (session == null) return true;
+                        return sudoAllowsProgram(
+                          link: link,
+                          session: session,
+                          profile: profile,
+                          program: program,
+                        );
+                      },
                       protection: protection,
                       loginUser: profile.user ?? 'login user',
                     )),

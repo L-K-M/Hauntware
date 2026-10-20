@@ -1,0 +1,37 @@
+{
+  "case": "vm-systemd-run-system",
+  "recordedAt": "2026-10-19T19:37:11.178974Z",
+  "user": "klab-vm-sudo",
+  "unit": "klabautermann-op-b76257ec66407603.service",
+  "launch": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "doneRecord": {
+    "v": 1,
+    "id": "b76257ec66407603",
+    "state": "done",
+    "pid": 27411,
+    "startTicks": 43898,
+    "unit": "klabautermann-op-b76257ec66407603.service",
+    "exit": 0,
+    "startedAt": 1792438630,
+    "endedAt": 1792438630
+  },
+  "modes": "root:root 755 /var/lib/klabautermann/ops\nklab-vm-sudo:root 600 /var/lib/klabautermann/ops/b76257ec66407603.json\nklab-vm-sudo:root 600 /var/lib/klabautermann/ops/b76257ec66407603.log\n",
+  "log": "0\ns4-done\n",
+  "unitCollected": true,
+  "loadStateAfter": "not-found",
+  "cleanupUnelevated": {
+    "exit": 1,
+    "stdout": "",
+    "stderr": "rm: cannot remove '/var/lib/klabautermann/ops/b76257ec66407603.json': Permission denied\nrm: cannot remove '/var/lib/klabautermann/ops/b76257ec66407603.log': Permission denied\n"
+  },
+  "cleanupElevated": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "filesLeft": ""
+}
