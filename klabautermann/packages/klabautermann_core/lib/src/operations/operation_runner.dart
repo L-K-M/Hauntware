@@ -183,13 +183,9 @@ final class OperationRunner {
         );
         switch (plan.steps[i]) {
           case final ShellStep step:
-            final result = step.elevated
-                ? await session!.executor.run(
-                    step.argv,
-                    password: session.password,
-                  )
-                : await link.run(step.commandLine, stdin: const []);
+            final result = await _runShell(link, step, session);
             if (result.exitCode != 0) {
+              await _cleanUp(link, plan, session);
               if (step.exitMeanings[result.exitCode] case final changed?) {
                 return failed(
                   ActionFailure.revalidation,
@@ -213,6 +209,7 @@ final class OperationRunner {
             }
             final status = await api(serverId, step);
             if (status < _httpOk || status >= _httpMultipleChoices) {
+              await _cleanUp(link, plan, session);
               return failed(
                 ActionFailure.stepFailed,
                 step: i,
@@ -222,8 +219,10 @@ final class OperationRunner {
         }
       }
     } on ElevationException {
+      await _cleanUp(link, plan, session);
       return failed(ActionFailure.elevationRefused);
     } on RemoteCommandException {
+      await _cleanUp(link, plan, session);
       return failed(ActionFailure.transport);
     } on DockerException {
       return failed(ActionFailure.transport);
@@ -234,6 +233,37 @@ final class OperationRunner {
       return failed(ActionFailure.transport);
     }
     return ActionFinished(planId: planId, outcome: ActionOutcome.succeeded);
+  }
+
+  /// Runs [step] over [link], or through [session]'s elevation, with its
+  /// input on stdin.
+  Future<RemoteCommandResult> _runShell(
+    SshLink link,
+    ShellStep step,
+    AdminSession? session,
+  ) => step.elevated
+      ? session!.executor.run(
+          step.argv,
+          password: session.password,
+          stdin: step.input,
+        )
+      : link.run(step.commandLine, stdin: step.input ?? const []);
+
+  /// Runs [plan]'s cleanup steps after a failure, best effort: a cleanup
+  /// that fails, or a link that is gone, leaves what 03 §8.11's rows say
+  /// the next run or the footprint view removes.
+  Future<void> _cleanUp(
+    SshLink link,
+    OperationPlan plan,
+    AdminSession? session,
+  ) async {
+    for (final step in plan.cleanup) {
+      try {
+        await _runShell(link, step, session);
+      } on Object {
+        return;
+      }
+    }
   }
 
   Future<RevalidationFailure?> _revalidate(

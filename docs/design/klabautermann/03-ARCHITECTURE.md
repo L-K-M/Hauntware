@@ -4613,10 +4613,17 @@ OperationPlan {
   on the host (`docker compose config -q`, the cron parser,
   `systemd-analyze verify`, `visudo -c`); show the diff and the host writes;
   back up into the central backup directory (8.11); write a temp file in the
-  same directory, re-check the target hash, rename (user-owned files over
-  SFTP `posix-rename`; root-owned files through the prelude with D67's
-  attribute recipe and `restorecon` when SELinux enforces; SELinux
-  labels are a manual check on RHEL 9).
+  same directory, re-check the target hash, rename (D67's commands, run
+  as the login user for its own files and through the prelude for
+  root's, with `restorecon` when SELinux enforces; SELinux labels are a
+  manual check on RHEL 9). As built in M5 (M15), one path serves both
+  owners, so both get the hash re-check right before the rename, which
+  an SFTP upload, comparing only size and times, lacks. The read runs the
+  same way and returns size, owner, mode and hash with the content.
+  Planning reads `/sys/fs/selinux/enforce` along with the target, rather
+  than adding it to the probe, to decide the `restorecon` step. A
+  crontab is backed up from `crontab -l` and replaced with `crontab -`
+  while `crontab -l` still hashes to the edit's base.
 
 As built in M4 (E20, `app/klabautermann_app/lib/ui/actions/`), the app
 asks for one preview at a time through `OperationsController`: the

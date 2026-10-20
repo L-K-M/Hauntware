@@ -184,6 +184,7 @@ void main() {
         OperationKind.redeploy,
         OperationKind.removeContainer,
         OperationKind.removeUnusedImage,
+        OperationKind.editFile,
       };
       for (final kind in OperationKind.values) {
         expect(

@@ -249,6 +249,78 @@ void main() {
     },
   );
 
+  test("a step's input reaches its stdin, after the password line when "
+      'elevated', () async {
+    final stdins = <String>[];
+    final link = _Link((command, stdin) {
+      stdins.add(stdin);
+      return _ok;
+    });
+    const probe = ElevationProbe(
+      sudoVersionLine: 'Sudo version 1.9.16p2',
+      printfIsBuiltin: true,
+    );
+    final content = utf8.encode('new: content\n');
+    final plan = _plan([
+      ShellStep(['cat'], input: content),
+      ShellStep(['cat'], input: content, elevated: true),
+    ], level: RequiredLevel.admin);
+
+    final finished = await runner(link).run(
+      'plan-1',
+      plan,
+      session: AdminSession.test(ElevatedExecutor(link, probe), _password),
+    );
+
+    expect(finished.outcome, ActionOutcome.succeeded);
+    expect(stdins.first, 'new: content\n');
+    expect(stdins.last, '$_password\nnew: content\n');
+    expect(link.commands.join(), isNot(contains(_password)));
+    expect(plan.steps.first.display, endsWith('< new content (13 bytes)'));
+  });
+
+  test('a failed step runs the cleanup; a step exit can mean the content '
+      'changed', () async {
+    final link = _Link(
+      (command, _) => command.contains('replace')
+          ? const RemoteCommandResult(exitCode: 101)
+          : _ok,
+    );
+    final plan = OperationPlan(
+      intent: const UnitAction(
+        _server,
+        unit: 'nginx.service',
+        verb: SystemctlVerb.restart,
+      ),
+      kind: OperationKind.editFile,
+      targetName: '/etc/app.conf',
+      steps: [
+        ShellStep(['write']),
+        ShellStep(
+          ['replace'],
+          exitMeanings: const {101: RevalidationFailure.contentChanged},
+        ),
+        ShellStep(['never']),
+      ],
+      cleanup: [
+        ShellStep(['cleanup']),
+      ],
+      requiredLevel: RequiredLevel.login,
+      runner: const RunnerFacts(identity: 'deploy'),
+    );
+
+    final finished = await runner(link).run('plan-1', plan);
+
+    expect(finished.failure, ActionFailure.revalidation);
+    expect(finished.revalidation, RevalidationFailure.contentChanged);
+    expect(finished.failedStep, 1);
+    expect(link.commands.map((c) => c.split(' ').last), [
+      "'write'",
+      "'replace'",
+      "'cleanup'",
+    ]);
+  });
+
   test('API steps need the Docker runner and a 2xx answer', () async {
     final link = _Link((_, _) => _ok);
     final plan = _plan([

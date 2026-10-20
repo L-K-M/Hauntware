@@ -182,6 +182,11 @@ import '../operations/plan_types.dart';
 /// Disk use then joined v3 the same way (03 §7.1 OV-05): a
 /// [DockerSystemDfQuery] reads `/system/df` on demand, answered by a
 /// [DockerSystemDfPayload] of per-type totals.
+///
+/// The edit pipeline then joined v3 the same way (03 §8.5, SAF-12):
+/// [ReadEditable], answered by [EditRead], reads an [EditTarget] for the
+/// editor; the [EditFile] intent plans its write; [RevalidationFailure]
+/// gained `contentChanged` for a target changed under the write.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -425,6 +430,22 @@ final class CloseStream extends EngineRequest {
   const CloseStream(this.streamId);
 
   final String streamId;
+}
+
+/// Reads [target] on [serverId] for an edit (03 §8.5, SAF-12), answered
+/// by one [EditRead] with [requestId]: the content and its SHA-256,
+/// which an [EditFile] names, and who owns it. A file the login user
+/// cannot read is read through admin mode when it is on.
+final class ReadEditable extends EngineRequest {
+  const ReadEditable({
+    required this.serverId,
+    required this.requestId,
+    required this.target,
+  });
+
+  final String serverId;
+  final String requestId;
+  final EditTarget target;
 }
 
 /// Runs one read-only Docker Engine query on [serverId]'s engine (03
@@ -1078,6 +1099,77 @@ final class ActionProgress extends EngineEvent {
 /// A plan finished, one way or another (03 §10.1). A failed plan says
 /// why in typed facts the app words (D35): which step, its exit status or
 /// HTTP status, and what re-validation found.
+/// The answer to the [ReadEditable] with [requestId].
+final class EditRead extends EngineEvent {
+  const EditRead({
+    required this.serverId,
+    required this.requestId,
+    required this.result,
+  });
+
+  final String serverId;
+  final String requestId;
+  final EditReadResult result;
+}
+
+/// What an [EditRead] carries.
+@immutable
+sealed class EditReadResult {
+  const EditReadResult();
+}
+
+/// The target's [text], whose UTF-8 bytes hash to [sha256]. A file has
+/// its numeric [uid], [gid] and permission [mode]; a crontab has none.
+/// [privileged] says a write needs admin mode: the file belongs to
+/// another account, or the crontab is another account's.
+final class EditContent extends EditReadResult {
+  const EditContent({
+    required this.text,
+    required this.sha256,
+    required this.privileged,
+    this.uid,
+    this.gid,
+    this.mode,
+  });
+
+  final String text;
+  final String sha256;
+  final bool privileged;
+  final int? uid, gid, mode;
+}
+
+/// A [ReadEditable] that read nothing; [detail] is the end of stderr.
+final class EditReadFailed extends EditReadResult {
+  const EditReadFailed(this.failure, {this.detail});
+
+  final EditReadFailure failure;
+  final String? detail;
+}
+
+/// Why a [ReadEditable] read nothing.
+enum EditReadFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// The engine refused the target before reading (03 §8.8).
+  invalidTarget,
+
+  /// The file does not exist.
+  notFound,
+
+  /// Only root may read it, and admin mode is off.
+  adminRequired,
+
+  /// The file is larger than the editor takes (`kEditReadMaxBytes`).
+  tooLarge,
+
+  /// The file is not UTF-8 text.
+  notText,
+
+  /// The read failed otherwise.
+  failed,
+}
+
 final class ActionFinished extends EngineEvent {
   const ActionFinished({
     required this.planId,
@@ -1162,6 +1254,11 @@ enum RevalidationFailure {
 
   /// The container id or the stack's configuration changed.
   targetChanged,
+
+  /// An edited file or crontab no longer has the hash the edit started
+  /// from: someone else changed it (03 §8.5). The app reads it again and
+  /// shows the difference.
+  contentChanged,
 
   /// The check could not read what it compares.
   unreadable,
@@ -3015,6 +3112,58 @@ final class RedeployStack extends ActionIntent {
 
   final String project;
   final bool removeOrphans;
+}
+
+/// What an edit reads and writes (03 §8.5, SAF-12, X-05).
+@immutable
+sealed class EditTarget {
+  const EditTarget();
+}
+
+/// A file by its absolute, normalized path (03 §8.8).
+final class FileTarget extends EditTarget {
+  const FileTarget(this.path);
+
+  final String path;
+
+  @override
+  bool operator ==(Object other) => other is FileTarget && other.path == path;
+
+  @override
+  int get hashCode => path.hashCode;
+}
+
+/// A crontab (JOB-04 to JOB-07): the login user's, or [user]'s, which
+/// another account's needs admin mode.
+final class CrontabTarget extends EditTarget {
+  const CrontabTarget({this.user});
+
+  final String? user;
+
+  @override
+  bool operator ==(Object other) =>
+      other is CrontabTarget && other.user == user;
+
+  @override
+  int get hashCode => Object.hash(CrontabTarget, user);
+}
+
+/// Replaces [target]'s content with [text] (SAF-12, X-05), only while the
+/// target still has [baseSha256], the hash its [ReadEditable] read. The
+/// plan backs the target up first, writes a temp file beside it, carries
+/// its owner, mode, ACL and xattrs over (D67) and renames it over the
+/// target; a crontab goes through `crontab -`.
+final class EditFile extends ActionIntent {
+  const EditFile(
+    super.serverId, {
+    required this.target,
+    required this.text,
+    required this.baseSha256,
+  });
+
+  final EditTarget target;
+  final String text;
+  final String baseSha256;
 }
 
 /// The app's safety preferences (M4 plan M4, SAF-01, SAF-06): per server,

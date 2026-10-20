@@ -18,6 +18,7 @@ library;
 
 import '../hws/collector.dart' show ArgValidators;
 import 'commands.dart' show HostCommandError;
+import 'operations.dart' show OperationCommands;
 
 /// What every temp file's name holds between the target's name and its
 /// token (03 §8.11): `.<name>.klabautermann-tmp-<token>`.
@@ -151,6 +152,35 @@ cp -p -- "$1" "$b.tmp" && mv -f -- "$b.tmp" "$b" || { s=$?; rm -f -- "$b.tmp"; e
   mv -f -- "$d/.index.tmp" "$d/index" || exit
 printf '%s\n' "$b"''';
 
+/// Replaces a crontab with stdin while `crontab -l` still hashes to the
+/// SHA-256 the edit started from: a missing crontab reads, and hashes, as
+/// empty. The first argument is the hash, then `crontab`'s own words.
+const String _kCrontabWriteIfHashScript = r'''
+h=$1
+shift
+c=$(crontab -l "$@" 2>/dev/null; printf x)
+c=$(printf '%s' "${c%x}" | sha256sum) || exit
+if [ "${c%% *}" != "$h" ]; then exit 101; fi
+exec crontab "$@" -''';
+
+/// Saves `crontab -l`'s output as a backup, as [_kBackupScript] saves a
+/// file, under the name `crontab:<user>` in the index.
+const String _kCrontabBackupScript = r'''
+umask 077
+d=$1
+n=$2
+shift 2
+mkdir -p -- "$d" && chmod 0700 -- "$d" || exit
+t=$(date +%s)
+crontab -l "$@" > "$d/.crontab.tmp" 2>/dev/null || : > "$d/.crontab.tmp"
+h=$(sha256sum -- "$d/.crontab.tmp") || exit
+h=${h%% *}
+b=$d/$h-$t
+mv -f -- "$d/.crontab.tmp" "$b" || { s=$?; rm -f -- "$d/.crontab.tmp"; exit "$s"; }
+{ cat -- "$d/index" 2>/dev/null; printf '%s\t%s\t%s\n' "$t" "$h" "$n"; } > "$d/.index.tmp" &&
+  mv -f -- "$d/.index.tmp" "$d/index" || exit
+printf '%s\n' "$b"''';
+
 /// Writes stdin to the manifest through a temp file beside it, creating
 /// its directory 0700.
 const String _kManifestWriteScript = r'''
@@ -224,8 +254,15 @@ abstract final class EditCommands {
     ];
   }
 
+  /// Prints `1` while SELinux enforces; fails where the host has no
+  /// SELinux (D67). World-readable, so the login user's read decides.
+  static List<String> selinuxEnforcing() => const [
+    'cat',
+    '/sys/fs/selinux/enforce',
+  ];
+
   /// Restores [path]'s SELinux label (D67): the step a write adds after
-  /// the rename when the probe found SELinux enforcing.
+  /// the rename while [selinuxEnforcing] prints `1`.
   static List<String> restorecon(String path) {
     _checkPath(path);
     return ['restorecon', '--', path];
@@ -237,15 +274,23 @@ abstract final class EditCommands {
     return ['rm', '-f', '--', temp];
   }
 
+  /// Prints the login user's backup directory, resolved in the login
+  /// shell's environment as [OperationCommands.userOpsDir] resolves the
+  /// operation directory.
+  static List<String> userBackupsDir() => [
+    'sh',
+    '-c',
+    r'u=${XDG_STATE_HOME:-$HOME/.local/state}; '
+        r'case $u in /*) ;; *) u=$HOME/.local/state ;; esac; '
+        "printf '%s\\n' \"\$u$kBackupsDirSuffix\"",
+  ];
+
   /// Copies [target] into [dir], [kRootBackupsDir] or a user directory
   /// ending in [kBackupsDirSuffix], as `<sha256>-<epoch>`, appends to
   /// its [kEditBackupIndexName], and prints the copy's path (03 §8.11).
   static List<String> backupFile(String target, String dir) {
     _checkPath(target);
-    _checkPath(dir);
-    if (dir != kRootBackupsDir && !dir.endsWith(kBackupsDirSuffix)) {
-      throw HostCommandError('not a backup directory', argument: dir);
-    }
+    _checkBackupDir(dir);
     return ['sh', '-c', _kBackupScript, 'klabautermann-backup', target, dir];
   }
 
@@ -253,13 +298,55 @@ abstract final class EditCommands {
   /// to JOB-07). `crontab` validates the whole table before it installs
   /// it; [HostCommands.commandLine] runs it under `LC_ALL=C`.
   static List<String> crontabWrite({String? user}) {
-    if (user != null && ArgValidators.userName(user) != null) {
-      throw HostCommandError('not a user name', argument: user);
-    }
+    _checkUser(user);
     return [
       'crontab',
       if (user != null) ...['-u', user],
       '-',
+    ];
+  }
+
+  /// Replaces [user]'s crontab, or the login user's, with stdin while its
+  /// current table still hashes to [sha256]; otherwise exits
+  /// [EditExit.hashMismatch] and installs nothing (JOB-04 to JOB-07).
+  static List<String> crontabWriteIfHash(String sha256, {String? user}) {
+    if (!_sha256.hasMatch(sha256)) {
+      throw HostCommandError('not a SHA-256', argument: sha256);
+    }
+    _checkUser(user);
+    return [
+      'sh',
+      '-c',
+      _kCrontabWriteIfHashScript,
+      'klabautermann-crontab',
+      sha256,
+      if (user != null) ...['-u', user],
+    ];
+  }
+
+  /// Saves [user]'s crontab, or the login user's, into [dir] as
+  /// [backupFile] saves a file, indexed under [indexName]
+  /// (`crontab:<user>`); an absent crontab saves as empty. Prints the
+  /// copy's path.
+  static List<String> crontabBackup(
+    String dir, {
+    required String indexName,
+    String? user,
+  }) {
+    _checkBackupDir(dir);
+    _checkUser(user);
+    if (!indexName.startsWith('crontab:') ||
+        indexName.codeUnits.any((c) => c < 0x20 || c == 0x7f)) {
+      throw HostCommandError('not a crontab index name', argument: indexName);
+    }
+    return [
+      'sh',
+      '-c',
+      _kCrontabBackupScript,
+      'klabautermann-crontab-backup',
+      dir,
+      indexName,
+      if (user != null) ...['-u', user],
     ];
   }
 
@@ -294,6 +381,19 @@ abstract final class EditCommands {
     }
     if (path.codeUnits.any((c) => c < 0x20 || c == 0x7f)) {
       throw HostCommandError('path has a control character', argument: path);
+    }
+  }
+
+  static void _checkUser(String? user) {
+    if (user != null && ArgValidators.userName(user) != null) {
+      throw HostCommandError('not a user name', argument: user);
+    }
+  }
+
+  static void _checkBackupDir(String dir) {
+    _checkPath(dir);
+    if (dir != kRootBackupsDir && !dir.endsWith(kBackupsDirSuffix)) {
+      throw HostCommandError('not a backup directory', argument: dir);
     }
   }
 

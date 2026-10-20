@@ -26,6 +26,9 @@ enum OperationKind {
   forceRemoveImageInUse(ConfirmationTier.typedPhrase),
   prune(ConfirmationTier.typedPhrase),
   composeDown(ConfirmationTier.typedPhrase),
+
+  /// An edit of a file the user reviewed in the diff (SAF-12).
+  editFile(ConfirmationTier.acknowledge),
   crontabOverwrite(ConfirmationTier.typedPhrase),
   reboot(ConfirmationTier.typedPhrase),
   packageUpgrade(ConfirmationTier.typedPhrase);

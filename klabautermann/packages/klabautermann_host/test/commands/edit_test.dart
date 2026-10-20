@@ -70,6 +70,32 @@ void main() {
     }
   });
 
+  test('crontab swaps carry the hash first, then crontab\'s own words', () {
+    expect(EditCommands.crontabWriteIfHash(_hash).sublist(3), [
+      'klabautermann-crontab',
+      _hash,
+    ]);
+    expect(
+      EditCommands.crontabWriteIfHash(_hash, user: 'www-data').sublist(4),
+      [_hash, '-u', 'www-data'],
+    );
+    expect(
+      () => EditCommands.crontabWriteIfHash('abc'),
+      _refused('not a SHA-256'),
+    );
+    expect(
+      EditCommands.crontabBackup(
+        kRootBackupsDir,
+        indexName: 'crontab:root',
+      ).sublist(3),
+      ['klabautermann-crontab-backup', kRootBackupsDir, 'crontab:root'],
+    );
+    expect(
+      () => EditCommands.crontabBackup(kRootBackupsDir, indexName: 'x'),
+      _refused('not a crontab index name'),
+    );
+  });
+
   test('paths must be absolute, normalized files without control '
       'characters (03 §8.8)', () {
     for (final bad in [

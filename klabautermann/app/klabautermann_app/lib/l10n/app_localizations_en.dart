@@ -3237,6 +3237,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'transientUnit': 'A transient systemd unit, gone when it ends',
       'engineState': 'The container engine\'s own state',
       'loginRecords': 'Login records, as every SSH command leaves',
+      'editTarget': 'The file or crontab you edited',
+      'editTempFile':
+          'A temporary copy beside the file, renamed over it or removed',
+      'userBackups': 'A backup in your Klabautermann backups folder',
+      'rootBackups': 'A backup under /var/lib/klabautermann/backups',
       'other': 'A change on the server',
     });
     return '$_temp0';
@@ -3583,6 +3588,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'RemoveImage': 'Remove image',
       'StackAction': 'Stack action',
       'RedeployStack': 'Redeploy stack',
+      'EditFile': 'Edit',
       'other': 'Action',
     });
     return '$_temp0';
