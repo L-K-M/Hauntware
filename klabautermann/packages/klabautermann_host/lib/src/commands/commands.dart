@@ -351,12 +351,15 @@ abstract final class HostCommands {
   /// SVC-03's guards. [activates] is the timer's `Unit=`, any unit but a
   /// timer [R: systemd.timer(5)]; the caller follows its journal with
   /// [journalctl]'s `unit`, `since` and [JournalOrder.follow].
-  static List<String> timerStart(String activates) {
+  static List<String> timerStart(
+    String activates, {
+    UnitManager manager = const UnitManager.system(),
+  }) {
     _check(ArgValidators.unitName, activates);
     if (activates.endsWith('.timer')) {
       throw HostCommandError('a timer activates no timer', argument: activates);
     }
-    return systemctl(SystemctlVerb.start, activates);
+    return systemctl(SystemctlVerb.start, activates, manager: manager);
   }
 
   /// The guarded kill (PRC-02, 03 §7.2): `sh -c` with a constant script
@@ -426,17 +429,37 @@ abstract final class HostCommands {
 
   /// Prints the unit timer [timer] activates (its `Unit=`), for JOB-08's
   /// run-timer-now plan (03 §7.7).
-  static List<String> timerActivates(String timer) {
+  static List<String> timerActivates(
+    String timer, {
+    UnitManager manager = const UnitManager.system(),
+  }) {
     _check(ArgValidators.unitName, timer);
-    return ['systemctl', 'show', '--property=Unit', '--value', '--', timer];
+    return [
+      ...manager._head,
+      'show',
+      '--property=Unit',
+      '--value',
+      '--',
+      timer,
+    ];
   }
 
   /// Prints systemd's load state of [unit] (`loaded`, `not-found`, ...),
   /// for an operation's re-validation (03 §8.5): a unit that no longer
   /// loads is not acted on.
-  static List<String> unitLoadState(String unit) {
+  static List<String> unitLoadState(
+    String unit, {
+    UnitManager manager = const UnitManager.system(),
+  }) {
     _check(ArgValidators.unitName, unit);
-    return ['systemctl', 'show', '--property=LoadState', '--value', '--', unit];
+    return [
+      ...manager._head,
+      'show',
+      '--property=LoadState',
+      '--value',
+      '--',
+      unit,
+    ];
   }
 
   /// The crontab spool listing for JOB-03 (03 §7.7, M14), run elevated:

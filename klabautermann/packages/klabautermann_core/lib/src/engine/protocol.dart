@@ -19,6 +19,8 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         SystemdUnit,
         SystemctlVerb,
         TimersSnapshot,
+        UnitResources,
+        UnitSocket,
         UnitsSnapshot,
         EngineMode,
         EngineRuntime;
@@ -182,6 +184,11 @@ import '../operations/plan_types.dart';
 /// Disk use then joined v3 the same way (03 §7.1 OV-05): a
 /// [DockerSystemDfQuery] reads `/system/df` on demand, answered by a
 /// [DockerSystemDfPayload] of per-type totals.
+///
+/// The v1 unit rows then joined v3 the same way (03 §7.5, SVC-05 to
+/// SVC-10): [UnitAction] and [StartTimer] gained a [UnitScope], and
+/// [UnitQuery], answered by [UnitQueryResult], reads a unit's file, its
+/// resources or the sockets.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -425,6 +432,51 @@ final class CloseStream extends EngineRequest {
   const CloseStream(this.streamId);
 
   final String streamId;
+}
+
+/// Reads one unit's details, or the sockets, on [serverId] (03 §7.5,
+/// SVC-07, SVC-08, SVC-10), answered by one [UnitQueryResult] with
+/// [requestId]. Each reads as the login user, never through sudo.
+final class UnitQuery extends EngineRequest {
+  const UnitQuery({
+    required this.serverId,
+    required this.requestId,
+    required this.query,
+  });
+
+  final String serverId;
+  final String requestId;
+  final UnitQuerySpec query;
+}
+
+/// What a [UnitQuery] reads.
+@immutable
+sealed class UnitQuerySpec {
+  const UnitQuerySpec({this.scope = UnitScope.system});
+
+  final UnitScope scope;
+}
+
+/// [unit]'s file and drop-ins (`systemctl cat`, SVC-07), answered by
+/// [UnitFilePayload].
+final class UnitFileQuery extends UnitQuerySpec {
+  const UnitFileQuery(this.unit, {super.scope});
+
+  final String unit;
+}
+
+/// [unit]'s resources (`systemctl show`, SVC-08), answered by
+/// [UnitResourcesPayload].
+final class UnitResourcesQuery extends UnitQuerySpec {
+  const UnitResourcesQuery(this.unit, {super.scope});
+
+  final String unit;
+}
+
+/// The manager's sockets (`systemctl list-sockets`, SVC-10), answered by
+/// [UnitSocketsPayload].
+final class SocketsQuery extends UnitQuerySpec {
+  const SocketsQuery({super.scope});
 }
 
 /// Runs one read-only Docker Engine query on [serverId]'s engine (03
@@ -958,6 +1010,78 @@ final class LogStreamState extends EngineEvent {
 
   final String streamId;
   final LogStreamStatus status;
+}
+
+/// The answer to the [UnitQuery] [requestId] on [serverId]: what it read,
+/// or [UnitQueryFailed] with why, plus the parser's warnings.
+final class UnitQueryResult extends EngineEvent {
+  UnitQueryResult({
+    required this.serverId,
+    required this.requestId,
+    required this.payload,
+    Iterable<String> warnings = const [],
+  }) : warnings = List.unmodifiable(warnings);
+
+  final String serverId;
+  final String requestId;
+  final UnitPayload payload;
+  final List<String> warnings;
+}
+
+/// What a [UnitQuery] found.
+@immutable
+sealed class UnitPayload {
+  const UnitPayload();
+}
+
+/// A unit's file and drop-ins as `systemctl cat` prints them, each after
+/// a `# <path>` line, with `Environment=` values and secrets in `Exec`
+/// lines masked (03 §8.9).
+final class UnitFilePayload extends UnitPayload {
+  UnitFilePayload(Iterable<MaskedValue> text) : text = List.unmodifiable(text);
+
+  final List<MaskedValue> text;
+}
+
+final class UnitResourcesPayload extends UnitPayload {
+  const UnitResourcesPayload(this.resources);
+
+  final UnitResources resources;
+}
+
+final class UnitSocketsPayload extends UnitPayload {
+  UnitSocketsPayload(Iterable<UnitSocket> sockets)
+    : sockets = List.unmodifiable(sockets);
+
+  final List<UnitSocket> sockets;
+}
+
+/// Why a [UnitQuery] read nothing.
+enum UnitQueryFailure {
+  /// The server is not in the fleet, or has no ready link or probe.
+  noLink,
+
+  /// The unit name is not a unit's (03 §8.8).
+  invalidUnit,
+
+  /// The manager has no such unit.
+  notFound,
+
+  /// The login user's manager could not be reached: no user session and
+  /// no linger (SVC-09).
+  managerUnavailable,
+
+  /// The command failed otherwise; the detail says how.
+  failed,
+}
+
+final class UnitQueryFailed extends UnitPayload {
+  const UnitQueryFailed(this.failure, {this.detail});
+
+  final UnitQueryFailure failure;
+
+  /// The host's error text, for [UnitQueryFailure.failed].
+  final String? detail;
 }
 
 /// The answer to the [DockerQuery] [queryId] on [serverId] (03 §10.1):
@@ -2931,17 +3055,41 @@ final class KillProcess extends ActionIntent {
 
 /// Starts, stops, restarts or reloads a system unit (SVC-03).
 final class UnitAction extends ActionIntent {
-  const UnitAction(super.serverId, {required this.unit, required this.verb});
+  const UnitAction(
+    super.serverId, {
+    required this.unit,
+    required this.verb,
+    this.scope = UnitScope.system,
+  });
 
   final String unit;
   final SystemctlVerb verb;
+  final UnitScope scope;
 }
 
-/// Runs a system timer's service now (JOB-08).
+/// Runs a timer's service now (JOB-08), the system's or the login
+/// user's.
 final class StartTimer extends ActionIntent {
-  const StartTimer(super.serverId, {required this.timer});
+  const StartTimer(
+    super.serverId, {
+    required this.timer,
+    this.scope = UnitScope.system,
+  });
 
   final String timer;
+  final UnitScope scope;
+}
+
+/// Which systemd manager a unit action or query addresses (03 §7.5,
+/// SVC-09).
+enum UnitScope {
+  /// The system manager.
+  system,
+
+  /// The login user's own manager (`systemctl --user`). Its actions run
+  /// as the login user, never through sudo, which would address root's
+  /// manager instead.
+  user,
 }
 
 /// What [ContainerAction] does to a container (CTR-02).

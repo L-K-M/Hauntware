@@ -42,6 +42,7 @@ import '../operations/operations_shown.dart';
 import '../operations/plan_registry.dart';
 import '../operations/plan_types.dart' show RequiredLevel;
 import '../operations/plans/docker_plans.dart';
+import '../services/unit_queries.dart';
 import '../operations/plans/host_plans.dart';
 import '../operations/plans/redeploy_plan.dart';
 import '../operations/protected_targets.dart';
@@ -1124,6 +1125,33 @@ void engineMain(
               session: session,
               profile: profiles[serverId],
               now: DateTime.now().toUtc(),
+            ),
+          ).then(uiPort.send),
+        );
+      case UnitQuery(:final serverId, :final requestId, :final query):
+        final link = links?.link(serverId);
+        final profile = profiles[serverId];
+        if (!fleetIds.contains(serverId) || link == null || profile == null) {
+          uiPort.send(
+            UnitQueryResult(
+              serverId: serverId,
+              requestId: requestId,
+              payload: const UnitQueryFailed(UnitQueryFailure.noLink),
+            ),
+          );
+          return;
+        }
+        // Not awaited, as the other reads: runUnitQuery answers rather
+        // than throws.
+        unawaited(
+          lendSession(
+            serverId,
+            () => runUnitQuery(
+              serverId,
+              requestId,
+              query,
+              link: link,
+              profile: profile,
             ),
           ).then(uiPort.send),
         );

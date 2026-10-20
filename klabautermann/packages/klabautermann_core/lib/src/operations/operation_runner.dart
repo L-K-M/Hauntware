@@ -242,8 +242,11 @@ final class OperationRunner {
     Revalidation check,
   ) async {
     switch (check) {
-      case UnitLoaded(:final unit):
-        final result = await _read(link, HostCommands.unitLoadState(unit));
+      case UnitLoaded(:final unit, :final manager):
+        final result = await _read(
+          link,
+          HostCommands.unitLoadState(unit, manager: manager),
+        );
         if (result.exitCode != 0) return RevalidationFailure.unreadable;
         return result.stdout.trim() == 'loaded'
             ? null
