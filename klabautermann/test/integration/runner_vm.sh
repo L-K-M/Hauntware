@@ -319,9 +319,11 @@ on_exit() {
   if ((registry_started)); then
     runner_docker rm --force --volumes "$registry_container" >/dev/null ||
       cleanup=1
-    # The tags the leg and the suite made; the pulled images stay.
+    # The tags the leg and the suite made. The pulled images stay, as do
+    # the digests a redeploy left untagged, which list as <none>.
     tags="$(runner_docker image ls --format '{{.Repository}}:{{.Tag}}' \
       --filter "reference=$registry/*")" || cleanup=1
+    tags="$(grep -v ':<none>$' <<<"$tags" || true)"
     # shellcheck disable=SC2086 # one tag per word
     [[ -z "$tags" ]] || runner_docker image rm $tags >/dev/null || cleanup=1
   fi
