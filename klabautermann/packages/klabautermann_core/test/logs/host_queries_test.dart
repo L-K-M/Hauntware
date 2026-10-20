@@ -2,7 +2,7 @@
 // §7.6): each query runs its validated command and answers once, with
 // the parsed rows or why it read none.
 import 'package:klabautermann_core/klabautermann_core.dart';
-import 'package:klabautermann_core/src/engine/host_queries.dart';
+import 'package:klabautermann_core/src/logs/host_queries.dart';
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:seance_core/seance_core.dart'
     show RemoteCommandException, RemoteCommandResult, quoteShellWord;

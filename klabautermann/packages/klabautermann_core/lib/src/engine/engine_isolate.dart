@@ -37,8 +37,8 @@ import '../links/channel_quota.dart';
 import '../links/link_connector.dart';
 import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
+import '../logs/host_queries.dart';
 import '../logs/log_stream_router.dart';
-import 'host_queries.dart';
 import '../operations/confirmation.dart';
 import '../operations/detached_runner.dart';
 import '../operations/operation_plan.dart'

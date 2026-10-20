@@ -10,8 +10,8 @@ import 'dart:async';
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:seance_core/seance_core.dart' show SshLink, quoteShellWord;
 
-import '../logs/log_service.dart' show logEndDetail, logRefusal;
-import 'protocol.dart';
+import '../engine/protocol.dart';
+import 'log_service.dart' show logEndDetail, logRefusal;
 
 /// How long one query's command may run once its channel is open.
 const kHostQueryTimeout = Duration(seconds: 30);
@@ -57,27 +57,34 @@ final class HostQueries {
       return answer(const HostQueryFailed(HostQueryFailure.noLink));
     }
 
-    switch (request.query) {
-      case VarLogQuery():
-        switch (await _run(link, HostCommands.logFiles())) {
-          case _Failed(:final payload):
-            answer(payload);
-          case _Ran(:final stdout):
-            final parsed = parseLogFiles(stdout);
-            answer(VarLogFiles(parsed.value), parsed.warnings);
-        }
-      case BootsQuery():
-        final format =
-            (_systemdVersionOf(serverId) ?? 0) >= kListBootsJsonSystemd
-            ? JournalBootsFormat.json
-            : JournalBootsFormat.text;
-        switch (await _run(link, HostCommands.journalBoots(format))) {
-          case _Failed(:final payload):
-            answer(payload);
-          case _Ran(:final stdout):
-            final parsed = parseJournalBoots(stdout, format);
-            answer(JournalBoots(parsed.value), parsed.warnings);
-        }
+    // The parsers never throw on host output, but an answer must go out
+    // whatever happens: the engine runs this unawaited, so an escape
+    // would be an uncaught error in its isolate.
+    try {
+      switch (request.query) {
+        case VarLogQuery():
+          switch (await _run(link, HostCommands.logFiles())) {
+            case _Failed(:final payload):
+              answer(payload);
+            case _Ran(:final stdout):
+              final parsed = parseLogFiles(stdout);
+              answer(VarLogFiles(parsed.value), parsed.warnings);
+          }
+        case BootsQuery():
+          final format =
+              (_systemdVersionOf(serverId) ?? 0) >= kListBootsJsonSystemd
+              ? JournalBootsFormat.json
+              : JournalBootsFormat.text;
+          switch (await _run(link, HostCommands.journalBoots(format))) {
+            case _Failed(:final payload):
+              answer(payload);
+            case _Ran(:final stdout):
+              final parsed = parseJournalBoots(stdout, format);
+              answer(JournalBoots(parsed.value), parsed.warnings);
+          }
+      }
+    } on Object catch (error) {
+      answer(HostQueryFailed(HostQueryFailure.failed, detail: '$error'));
     }
   }
 
