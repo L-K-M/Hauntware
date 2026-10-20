@@ -166,5 +166,9 @@ void main() {
     });
     // GNU escapes a path with a backslash and marks its line.
     expect(parseSha256List('\\$_hash  /etc/a\\\\b\n'), {r'/etc/a\b': _hash});
+    // And a newline in the path the same way.
+    expect(parseSha256List('\\$_hash  /etc/a\\nb\n'), {'/etc/a\nb': _hash});
+    // BusyBox prints a backslash as it is, on an unmarked line.
+    expect(parseSha256List('$_hash  /etc/a\\b\n'), {r'/etc/a\b': _hash});
   });
 }
