@@ -499,10 +499,11 @@ String stackVerdictText(AppLocalizations l10n, StackVerdict verdict) =>
     };
 
 /// The kinds of verdict, whose names [verdict]'s messages select by.
-enum _VerdictKind { verifying, verified, unverified, notOnHost }
+enum _VerdictKind { verifying, waiting, verified, unverified, notOnHost }
 
 /// The name [verdict]'s messages select by.
 String _verdictName(StackVerdict verdict) => switch (verdict) {
+  StackVerifying(waiting: StackWait.channel) => _VerdictKind.waiting,
   StackVerifying() => _VerdictKind.verifying,
   StackVerified() => _VerdictKind.verified,
   StackUnverified() => _VerdictKind.unverified,

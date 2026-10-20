@@ -9,6 +9,8 @@ import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/docker/docker_router.dart';
+import 'package:klabautermann_core/src/docker/docker_watch.dart'
+    show kDockerEventBatch;
 import 'package:klabautermann_core/src/docker/stack_sources.dart';
 import 'package:klabautermann_core/src/links/channel_quota.dart';
 import 'package:klabautermann_docker/klabautermann_docker.dart'
@@ -173,6 +175,7 @@ final class _Harness {
     router = DockerRouter(
       linkFor: (_) => forwarding,
       emit: events.add,
+      samplerSessions: (_) => samplers,
       startTimer: clock.startTimer,
       now: () => clock.now,
     )..retain({_srv});
@@ -184,6 +187,9 @@ final class _Harness {
   final files = _Files();
   late final DockerRouter router;
   final events = <EngineEvent>[];
+
+  /// The session channels the server's samplers hold (M4 E13).
+  int samplers = 0;
 
   final missing = <String>{};
   String cli = _plugin;
@@ -569,6 +575,51 @@ void main() {
         everyElement(isA<StackUnverified>()),
       );
     });
+  });
+
+  group('at the learned session limit (M4 E13, plan M6)', () {
+    test('a check the samplers leave no session for reads waiting for a '
+        'channel, runs nothing, and checks with the next list once one '
+        'is free', () async {
+      final h = _Harness(_demo())..samplers = kSamplerChannels;
+      h.forwarding.seen = const SshLinkSeen(learnedSessionLimit: 2);
+      final waiting = await h.verified();
+      expect(
+        waiting.verdicts['demo'],
+        isA<StackVerifying>().having(
+          (v) => v.waiting,
+          'waiting',
+          StackWait.channel,
+        ),
+      );
+      expect(h.runs, isEmpty);
+
+      // A step borrowed the slow sampler's session: the next list, here
+      // after a container event, checks the stack and verifies it.
+      h.samplers = kSamplerChannels - 1;
+      h.daemon.emit({
+        'Type': 'container',
+        'Action': 'start',
+        'Actor': {'ID': 'w1', 'Attributes': <String, String>{}},
+        'time': 1760702400,
+        'timeNano': 1760702400 * 1000000000,
+      });
+      await h.clock.elapse(kDockerEventBatch);
+      await h.settle();
+      expect(h.stacks().last.verdicts['demo'], isA<StackVerified>());
+      expect(h.kinds, [_Run.test, _Run.cli, _Run.config]);
+    });
+
+    test(
+      'at a learned limit of 3 the check runs beside the samplers',
+      () async {
+        final h = _Harness(_demo())..samplers = kSamplerChannels;
+        h.forwarding.seen = const SshLinkSeen(learnedSessionLimit: 3);
+        final last = await h.verified();
+        expect(last.verdicts['demo'], isA<StackVerified>());
+        expect(h.mostInFlight, 1);
+      },
+    );
   });
 
   group('file reads (STK-04, M11)', () {

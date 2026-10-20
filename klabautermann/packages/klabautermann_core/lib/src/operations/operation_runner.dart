@@ -42,6 +42,12 @@ typedef DetachedLauncher =
       AdminSession? session,
     );
 
+/// Runs [body], a user-initiated step's work on [serverId]'s link, with a
+/// session channel free for it: on a link at its learned session limit,
+/// the slow sampler lends its own for the while (M4 plan M6).
+typedef SessionLender =
+    Future<T> Function<T>(String serverId, Future<T> Function() body);
+
 /// What became of one run, for the audit log (8.10, E12b).
 typedef OperationResult = ({
   String planId,
@@ -62,6 +68,7 @@ final class OperationRunner {
     this._docker,
     this._launch,
     this._finished,
+    this._lend,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now;
 
@@ -71,6 +78,7 @@ final class OperationRunner {
   final DockerRevalidator? _docker;
   final DetachedLauncher? _launch;
   final void Function(OperationResult result)? _finished;
+  final SessionLender? _lend;
   final DateTime Function() _now;
 
   /// Runs [plan] as [planId]. The caller took it from the registry,
@@ -82,7 +90,14 @@ final class OperationRunner {
     AdminSession? session,
   }) async {
     final startedAt = _now();
-    final finished = await _run(planId, plan, session);
+    // Shell steps and a detached launch each open a session channel; API
+    // steps go through the Docker endpoint instead.
+    final lend = _lend;
+    final needsSession =
+        plan.detached || plan.steps.any((step) => step is ShellStep);
+    final finished = lend != null && needsSession
+        ? await lend(plan.intent.serverId, () => _run(planId, plan, session))
+        : await _run(planId, plan, session);
     _emit(finished);
     _finished?.call((
       planId: planId,

@@ -635,16 +635,22 @@ final class DockerWatcher {
 
   /// Checks the projects the stacks list has without a verdict and sends
   /// it again, until a check finds every project of the list it read
-  /// known; one run per endpoint.
+  /// known; one run per endpoint. A check that waited for a channel runs
+  /// again with the next list, not in this run (M4 plan M6).
   Future<void> _verify(DockerWatchTarget target, int epoch) async {
     _verifying = epoch;
     try {
+      var first = true;
       while (epoch == _epoch && _lists.contains(DockerWatchList.stacks)) {
         final containers = _containers;
         if (containers == null) return;
         final grouping = groupComposeProjects(containers);
         final verdicts = target.stacks.known(grouping);
-        if (!verdicts.values.any((v) => v is StackVerifying)) return;
+        final unchecked = verdicts.values.any(
+          (v) => v is StackVerifying && (first || v.waiting == null),
+        );
+        if (!unchecked) return;
+        first = false;
 
         await target.stacks.verify(grouping);
         if (epoch != _epoch || _containers == null) return;

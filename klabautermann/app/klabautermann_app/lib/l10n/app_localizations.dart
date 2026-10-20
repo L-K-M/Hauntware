@@ -6418,10 +6418,10 @@ abstract class AppLocalizations {
   /// **'None found, so no stack\'s source can be verified.'**
   String get dockerStacksCliNone;
 
-  /// Stacks: the chip saying whether a stack's compose files on the host are its source (STK-01). verdict is verifying, verified, notOnHost or unverified.
+  /// Stacks: the chip saying whether a stack's compose files on the host are its source (STK-01). verdict is verifying, waiting (the check waits for a free SSH session channel on a server whose session limit the samplers fill), verified, notOnHost or unverified.
   ///
   /// In en, this message translates to:
-  /// **'{verdict, select, verifying{Checking source…} verified{Verified source} notOnHost{Source not on host} other{Unverified source}}'**
+  /// **'{verdict, select, verifying{Checking source…} waiting{Waiting for a channel} verified{Verified source} notOnHost{Source not on host} other{Unverified source}}'**
   String dockerStackVerdict(String verdict);
 
   /// Stacks: the chip of a stack whose compose files are missing from the host, deployed by a manager that runs compose in its own container (STK-01, Dockge's rule). manager is the product name, never translated.

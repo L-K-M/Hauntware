@@ -22,6 +22,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
 import 'package:seance_core/seance_core.dart' show SshLink, quoteShellWord;
 
 import '../engine/protocol.dart';
+import '../links/channel_quota.dart' show kSamplerChannels;
 import 'sample_pipeline.dart';
 import 'sample_results.dart' show sampleStreamCollector;
 import 'sampler_session.dart';
@@ -210,6 +211,47 @@ final class SamplingScheduler {
 
     server.opsOwed = true;
     if (server.run case final run?) _schedule(server, run, run.slow);
+  }
+
+  /// The session channels [serverId]'s samplers hold now (03 §5.2): both
+  /// while it is sampled, one while its slow sampler is lent
+  /// ([yieldSlowSampler]), none otherwise.
+  int samplerSessions(String serverId) => switch (_servers[serverId]?.run) {
+    null => 0,
+    final run when run.slowLent > 0 => kSamplerChannels - 1,
+    _ => kSamplerChannels,
+  };
+
+  /// Lends [serverId]'s slow sampler's session channel to a
+  /// user-initiated step on a link at its learned session limit (M4 plan
+  /// M6). The slow sampler stops; calling the returned function once the
+  /// step is done starts it again on the same link, with its READY
+  /// handshake, and its streams come due as it answers. The fast sampler
+  /// samples on throughout. Steps that overlap share one lending, and the
+  /// sampler starts again after the last. Null when the server is not
+  /// sampled, so there is nothing to lend.
+  Future<void Function()?> yieldSlowSampler(String serverId) async {
+    final server = _servers[serverId];
+    final run = server?.run;
+    if (server == null || run == null) return null;
+
+    if (run.slowLent++ == 0) {
+      final sampler = run.slow;
+      sampler.timer?.cancel();
+      sampler.timer = null;
+      unawaited(sampler.states?.cancel());
+      run.slowClosing = sampler.session.close();
+    }
+    await run.slowClosing;
+
+    var returned = false;
+    return () {
+      if (returned) return;
+      returned = true;
+      if (--run.slowLent > 0 || !identical(server.run, run)) return;
+      run.slowClosing = null;
+      run.slow = _open(server, run, SamplerKind.slow);
+    };
   }
 
   /// Re-reads [serverId]'s subscriptions and link, starting or stopping
@@ -805,7 +847,14 @@ final class _Run {
   /// When the run started, by the monotonic clock; periods align to it.
   final Duration epoch;
   late final _Sampler fast;
-  late final _Sampler slow;
+
+  /// Replaced when a lending ends ([SamplingScheduler.yieldSlowSampler]).
+  late _Sampler slow;
+
+  /// How many user-initiated steps borrow the slow sampler's session, and
+  /// its close while they wait for it.
+  int slowLent = 0;
+  Future<void>? slowClosing;
   Set<SampleStream> streams = const {};
 
   /// When each stream read in this run is next due, by the monotonic

@@ -324,6 +324,30 @@ void engineMain(
               : BackgroundLinkPolicy.keepOpen,
         )
       : null;
+
+  // A user-initiated step on a link at its learned session limit borrows
+  // the slow sampler's session for the while; the fast sampler samples on
+  // (M4 plan M6). Elsewhere the step runs as it is.
+  Future<T> lendSession<T>(String serverId, Future<T> Function() body) async {
+    final link = links?.link(serverId);
+    final inUse =
+        (scheduler?.samplerSessions(serverId) ?? 0) +
+        channelQuotas.of(serverId).sessionsHeld;
+    if (link == null ||
+        !leavesNoSession(
+          learnedSessionLimit: link.seen.learnedSessionLimit,
+          inUse: inUse,
+        )) {
+      return body();
+    }
+    final giveBack = await scheduler?.yieldSlowSampler(serverId);
+    try {
+      return await body();
+    } finally {
+      giveBack?.call();
+    }
+  }
+
   // FL-21's monitor set (03 §4.3 step 4, §6.4): the servers whose
   // `overview` the fleet rows read while the app is in the foreground,
   // whether or not a view shows them, over links dialed unattended so
@@ -362,6 +386,7 @@ void engineMain(
     runner = OperationRunner(
       linkFor: links.link,
       emit: uiPort.send,
+      lend: lendSession,
       api: (serverId, step) async {
         final router = docker;
         if (router == null) {
@@ -471,6 +496,7 @@ void engineMain(
     docker = DockerRouter(
       linkFor: links.link,
       emit: uiPort.send,
+      samplerSessions: (serverId) => scheduler?.samplerSessions(serverId) ?? 0,
       adminFor: (serverId) => admin?.session(serverId),
       quotas: channelQuotas,
     );
@@ -955,12 +981,16 @@ void engineMain(
         final Future<PlanAttempt> attempt;
         switch (intent) {
           case KillProcess() || UnitAction() || StartTimer():
-            attempt = planHostAction(intent, (
-              link: link,
-              profile: profile,
-              protection: protection,
-              adminMode: admin?.session(serverId) != null,
-            ));
+            // Planning reads the target over the link, as the run will.
+            attempt = lendSession(
+              serverId,
+              () => planHostAction(intent, (
+                link: link,
+                profile: profile,
+                protection: protection,
+                adminMode: admin?.session(serverId) != null,
+              )),
+            );
           case ContainerAction() ||
               RemoveContainer() ||
               RemoveImage() ||
@@ -992,30 +1022,34 @@ void engineMain(
               refuse(ActionRefusalReason.engineUnavailable);
               return;
             }
-            attempt = router
-                .useStacks(
+            // Planning verifies the stack and lists its services over the
+            // link, so it borrows a session as a run does.
+            attempt =
+                lendSession(
                   serverId,
-                  (client, route, stacks) => planRedeploy(intent, (
-                    client: client,
-                    route: route,
-                    stacks: stacks,
-                    profile: profile,
-                    adminMode: admin?.session(serverId) != null,
-                    sudoAllows: (program) async {
-                      final session = admin?.session(serverId);
-                      if (session == null) return true;
-                      return sudoAllowsProgram(
-                        link: link,
-                        session: session,
-                        profile: profile,
-                        program: program,
-                      );
-                    },
-                    protection: protection,
-                    loginUser: profile.user ?? 'login user',
-                  )),
-                )
-                .catchError(
+                  () => router.useStacks(
+                    serverId,
+                    (client, route, stacks) => planRedeploy(intent, (
+                      client: client,
+                      route: route,
+                      stacks: stacks,
+                      profile: profile,
+                      adminMode: admin?.session(serverId) != null,
+                      sudoAllows: (program) async {
+                        final session = admin?.session(serverId);
+                        if (session == null) return true;
+                        return sudoAllowsProgram(
+                          link: link,
+                          session: session,
+                          profile: profile,
+                          program: program,
+                        );
+                      },
+                      protection: protection,
+                      loginUser: profile.user ?? 'login user',
+                    )),
+                  ),
+                ).catchError(
                   (Object _) => (
                     plan: null,
                     refusal: ActionRefusalReason.engineUnavailable,
@@ -1082,12 +1116,15 @@ void engineMain(
         // Not awaited: one elevated command per user, and the queue keeps
         // serving the app meanwhile.
         unawaited(
-          readUserCrontabs(
+          lendSession(
             serverId,
-            requestId: requestId,
-            session: session,
-            profile: profiles[serverId],
-            now: DateTime.now().toUtc(),
+            () => readUserCrontabs(
+              serverId,
+              requestId: requestId,
+              session: session,
+              profile: profiles[serverId],
+              now: DateTime.now().toUtc(),
+            ),
           ).then(uiPort.send),
         );
       case SetSafetyPolicy(:final policy):

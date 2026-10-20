@@ -312,4 +312,45 @@ void main() {
     expect(finished.failure, ActionFailure.elevationRefused);
     expect(link.commands, isEmpty);
   });
+
+  test('shell steps run with a session lent for them, API steps without '
+      '(M4 E13, plan M6)', () async {
+    final link = _Link((_, _) => _ok);
+    final lent = <String>[];
+    var inside = false;
+    final lending = OperationRunner(
+      linkFor: (_) => link,
+      emit: events.add,
+      api: (_, _) async {
+        expect(inside, isFalse, reason: 'an API step borrows nothing');
+        return 204;
+      },
+      lend: <T>(serverId, body) async {
+        lent.add(serverId);
+        inside = true;
+        try {
+          return await body();
+        } finally {
+          inside = false;
+        }
+      },
+    );
+
+    final shell = await lending.run(
+      'plan-1',
+      _plan([
+        ShellStep(['systemctl', 'restart', 'nginx.service']),
+      ]),
+    );
+    expect(shell.outcome, ActionOutcome.succeeded);
+    expect(lent, [_server]);
+    expect(link.commands, hasLength(1));
+
+    final api = await lending.run(
+      'plan-2',
+      _plan([ApiStep(method: 'POST', path: '/v1.44/containers/abc/restart')]),
+    );
+    expect(api.outcome, ActionOutcome.succeeded);
+    expect(lent, [_server], reason: 'no second lending');
+  });
 }

@@ -1617,6 +1617,12 @@ What is on main:
   restarted may have missed lines. Since K44b turned links on, the app's
   engine serves the panel's reads over the server's link and sends the
   host profile that LOG-04's notice follows.
+- M4 low-session exec policy (E13, plan M6): at a learned session
+  limit the samplers fill, a user-initiated step borrows the slow
+  sampler's session and gives it back with a fresh READY. The fast
+  sampler keeps running. A stack check there reads "Waiting for a
+  channel" and runs again with the next list instead of failing (03
+  §5.2).
 - M4 Docker actions in the app (E22): a container's details and the
   Containers row menu offer the verbs its state allows (start, stop,
   restart, pause, unpause, kill with any signal), and a stopped

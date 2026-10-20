@@ -145,4 +145,35 @@ void main() {
     quotas.retain({'srv-2'});
     expect(quotas.of('srv-1'), isNot(same(quota)));
   });
+
+  group('a session for another exec (M4 E13, plan M6)', () {
+    test('a link that learned no limit always has one', () {
+      expect(leavesNoSession(learnedSessionLimit: null, inUse: 8), isFalse);
+    });
+
+    test('at a learned limit of 2 the samplers hold every session', () {
+      expect(
+        leavesNoSession(learnedSessionLimit: 2, inUse: kSamplerChannels),
+        isTrue,
+      );
+      expect(
+        leavesNoSession(learnedSessionLimit: 2, inUse: kSamplerChannels - 1),
+        isFalse,
+        reason: 'once the slow sampler lends its own',
+      );
+    });
+
+    test('at a learned limit of 3 one is left until a check takes it', () {
+      final quota = ChannelQuota();
+      int inUse() => kSamplerChannels + quota.sessionsHeld;
+      expect(leavesNoSession(learnedSessionLimit: 3, inUse: inUse()), isFalse);
+
+      quota.take(ChannelShare.shortAction);
+      expect(quota.sessionsHeld, 1);
+      expect(leavesNoSession(learnedSessionLimit: 3, inUse: inUse()), isTrue);
+
+      quota.give(ChannelShare.shortAction);
+      expect(leavesNoSession(learnedSessionLimit: 3, inUse: inUse()), isFalse);
+    });
+  });
 }
