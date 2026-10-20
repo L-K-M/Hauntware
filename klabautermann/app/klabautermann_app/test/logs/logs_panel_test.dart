@@ -326,14 +326,156 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Warning and above').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Current boot only'));
     await tester.tap(find.text('Apply'));
     await tester.pumpAndSettle();
 
     final source = panel.opens.last.spec.source as JournalLogSource;
     expect(source.unit, 'nginx.service');
     expect(source.priority, LogPriority.warning);
-    expect(source.currentBootOnly, isTrue);
+    expect(source.currentBootOnly, isFalse);
+  });
+
+  testWidgets('searches with a regular expression and says when one does '
+      'not compile (LOG-06)', (tester) async {
+    final panel = await _pump(tester);
+    await panel.running(tester);
+    await tester.tap(find.byTooltip('Regular expression'));
+    await tester.enterText(find.byType(TextField).last, 'timed (out');
+    await tester.pumpAndSettle(const Duration(milliseconds: 300));
+    expect(find.text('Not a valid regular expression'), findsOneWidget);
+    expect(
+      tester
+          .widget<IconButton>(
+            find.widgetWithIcon(IconButton, Icons.travel_explore),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    await tester.enterText(find.byType(TextField).last, r'(timed|unexp\w+) ');
+    await tester.pumpAndSettle(const Duration(milliseconds: 300));
+    expect(find.text('Not a valid regular expression'), findsNothing);
+    expect(find.text('2 matches'), findsOneWidget);
+  });
+
+  testWidgets('hands the search to the server as a journal pattern, and '
+      'reads the whole journal again (LOG-06)', (tester) async {
+    final panel = await _pump(tester);
+    await panel.running(tester);
+    await tester.enterText(find.byType(TextField).last, 'Timed out?');
+    await tester.pumpAndSettle(const Duration(milliseconds: 300));
+    await tester.tap(find.byTooltip('Search the whole journal on the server'));
+    await tester.pumpAndSettle();
+
+    // Plain text is escaped, and case is ignored as the local search does.
+    final source = panel.opens.last.spec.source as JournalLogSource;
+    expect(source.grep, r'(?i)Timed out\?');
+    expect(find.text(r'Server search: (?i)Timed out\?'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Clear the server search'));
+    await tester.pumpAndSettle();
+    expect((panel.opens.last.spec.source as JournalLogSource).grep, isNull);
+    expect(find.textContaining('Server search'), findsNothing);
+
+    // Only the journal matches on the server.
+    await tester.tap(find.text('Kernel'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byTooltip('Search the whole journal on the server'),
+      findsNothing,
+    );
+  });
+
+  testWidgets('says when the server\'s journal cannot search', (tester) async {
+    final panel = await _pump(tester);
+    await panel.emit(
+      tester,
+      LogStreamState(
+        panel.opens.last.streamId,
+        const LogStreamEnded(LogStreamEndReason.searchUnsupported),
+      ),
+    );
+    expect(find.textContaining('journal cannot search'), findsOneWidget);
+    expect(find.text('Retry'), findsNothing);
+  });
+
+  testWidgets('picks this boot or a past one from the server\'s list; a '
+      'past boot has no follow (LOG-09)', (tester) async {
+    final panel = await _pump(tester);
+    await tester.tap(find.text('All boots'));
+    await tester.pumpAndSettle();
+    expect(find.text("Reading the server's boots…"), findsOneWidget);
+
+    final query = panel.engine.sentOfType<HostQuery>().single as HostQuery;
+    expect(query.query, isA<BootsQuery>());
+    JournalBootEntry boot(int offset) => JournalBootEntry(
+      offset: offset,
+      id: ('${-offset}' * 32).substring(0, 32),
+      firstEntry: DateTime.utc(2026, 10, 10 + offset, 8),
+      lastEntry: DateTime.utc(2026, 10, 10 + offset, 20),
+    );
+    await panel.emit(
+      tester,
+      HostResult(
+        serverId: 'srv-1',
+        queryId: query.queryId,
+        payload: JournalBoots([boot(-2), boot(0), boot(-1)]),
+      ),
+    );
+    // Past boots only, newest first; this boot has its own choice.
+    expect(find.text('Previous boot'), findsOneWidget);
+    expect(find.text('2 boots ago'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Previous boot')).dy,
+      lessThan(tester.getTopLeft(find.text('2 boots ago')).dy),
+    );
+
+    await tester.tap(find.text('Previous boot'));
+    await tester.pumpAndSettle();
+    final spec = panel.opens.last.spec;
+    expect((spec.source as JournalLogSource).boot, JournalBoot.id('1' * 32));
+    expect(spec.follow, isFalse);
+    final live = tester.widget<FilterChip>(find.byType(FilterChip));
+    expect(live.onSelected, isNull);
+    expect(live.tooltip, 'A past boot has no new entries to follow');
+
+    // The kernel log reads the same past boot.
+    await tester.tap(find.text('Kernel'));
+    await tester.pumpAndSettle();
+    expect(
+      (panel.opens.last.spec.source as KernelLogSource).boot,
+      JournalBoot.id('1' * 32),
+    );
+
+    await tester.tap(find.text('Journal'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Previous boot'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('This boot'));
+    await tester.pumpAndSettle();
+    final current = panel.opens.last.spec;
+    expect((current.source as JournalLogSource).currentBootOnly, isTrue);
+    expect((current.source as JournalLogSource).boot, isNull);
+    expect(current.follow, isTrue);
+  });
+
+  testWidgets('says why the boots could not be listed', (tester) async {
+    final panel = await _pump(tester);
+    await tester.tap(find.text('All boots'));
+    await tester.pumpAndSettle();
+    final query = panel.engine.sentOfType<HostQuery>().single as HostQuery;
+    await panel.emit(
+      tester,
+      HostResult(
+        serverId: 'srv-1',
+        queryId: query.queryId,
+        payload: const HostQueryFailed(HostQueryFailure.denied),
+      ),
+    );
+    expect(
+      find.text('The server denied access to its boot list.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('keeps the keyboard focus where it was after applying', (

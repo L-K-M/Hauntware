@@ -56,8 +56,13 @@ enum _StatusWord {
   denied,
   failed,
   rejected,
+  searchUnsupported,
   needsPath,
 }
+
+/// The boot picker's choices other than a past boot
+/// ([AppLocalizations.logsPanelBootChoice]).
+enum _BootWord { all, current }
 
 /// The states after which reading again may help.
 const _retryable = {
@@ -68,6 +73,8 @@ const _retryable = {
 };
 
 _LiveWord _liveWord(LogsPanelController panel) {
+  // A past boot has nothing new to follow.
+  if (!panel.canFollow) return _LiveWord.stopped;
   if (!panel.live) return _LiveWord.paused;
   if (panel.rejected) return _LiveWord.unavailable;
   if (!panel.ready) return _LiveWord.stopped;
@@ -101,11 +108,10 @@ _StatusWord? _statusWord(LogsPanelController panel) {
       LogStreamEndReason.missing => _StatusWord.missing,
       LogStreamEndReason.denied => _StatusWord.denied,
       // Only a container's logs end for their driver, and their view
-      // names it in place of this status (ContainerLogsView). No view
-      // sends a journal pattern before LOG-06's search box (M27b).
+      // names it in place of this status (ContainerLogsView).
       LogStreamEndReason.failed ||
-      LogStreamEndReason.logDriverUnreadable ||
-      LogStreamEndReason.searchUnsupported => _StatusWord.failed,
+      LogStreamEndReason.logDriverUnreadable => _StatusWord.failed,
+      LogStreamEndReason.searchUnsupported => _StatusWord.searchUnsupported,
       LogStreamEndReason.windowFilled ||
       LogStreamEndReason.oldestReached ||
       LogStreamEndReason.closed => null,
@@ -182,7 +188,14 @@ class _LogsPanelState extends State<LogsPanel> {
         builder: (context, _) => LayoutBuilder(
           builder: (context, constraints) {
             final compact = constraints.maxWidth < scaler.scale(_phoneWidth);
-            final search = LogSearchField(search: _panel.search);
+            final journal = _panel.query.source == LogSourceKind.journal;
+            final search = LogSearchField(
+              search: _panel.search,
+              // LOG-06: the journal can match on the server.
+              onSearchServer: journal
+                  ? (pattern) => _panel.apply(_panel.query.withGrep(pattern))
+                  : null,
+            );
             final header = Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -194,6 +207,24 @@ class _LogsPanelState extends State<LogsPanel> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
                     child: search,
+                  ),
+                if (journal && _panel.query.grep.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                    child: Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: InputChip(
+                        avatar: const Icon(Icons.travel_explore, size: 18),
+                        // The pattern is shown as sent to the server.
+                        label: Text(
+                          l10n.logsPanelServerMatch(_panel.query.grep),
+                        ),
+                        deleteButtonTooltipMessage:
+                            l10n.logsPanelServerMatchClear,
+                        onDeleted: () =>
+                            _panel.apply(_panel.query.withGrep('')),
+                      ),
+                    ),
                   ),
                 ValueListenableBuilder(
                   valueListenable: widget.monitoring.logs.journalLimitedFor(
@@ -293,10 +324,16 @@ class _LogsPanelState extends State<LogsPanel> {
             sheet: false,
             onApply: _panel.apply,
           ),
+        if (query.source != LogSourceKind.file)
+          OutlinedButton.icon(
+            onPressed: _pickBoot,
+            icon: const Icon(Icons.history),
+            label: Text(_bootLabel(l10n, query)),
+          ),
         LogLiveChip(panel: _panel),
         if (!compact)
           SizedBox(
-            width: MediaQuery.textScalerOf(context).scale(_fieldWidth * 1.75),
+            width: MediaQuery.textScalerOf(context).scale(_fieldWidth * 2.25),
             child: search,
           ),
       ],
@@ -386,6 +423,31 @@ class _LogsPanelState extends State<LogsPanel> {
     _panel.apply(_panel.query.withSource(picked));
   }
 
+  String _bootLabel(AppLocalizations l10n, LogQuery query) =>
+      switch (query.pastBoot) {
+        final boot? => l10n.logsPanelBootPast(-boot.offset),
+        // The kernel log reads the current boot unless a past one is set.
+        null
+            when query.currentBootOnly ||
+                query.source == LogSourceKind.kernel =>
+          l10n.logsPanelBootChoice(_BootWord.current.name),
+        null => l10n.logsPanelBootChoice(_BootWord.all.name),
+      };
+
+  /// LOG-09's boot picker: every boot (the journal only), this boot, or
+  /// a past one from the server's list.
+  Future<void> _pickBoot() async {
+    final query = _panel.query;
+    final picked = await _sheet<LogBootChoice>(
+      (context) => LogBootPicker(
+        boots: widget.monitoring.queryHost(widget.serverId, const BootsQuery()),
+        query: query,
+      ),
+    );
+    if (!mounted || picked == null) return;
+    _panel.apply(_panel.query.withBoot(picked.past, current: picked.current));
+  }
+
   Future<void> _editFilters() => _sheet<void>(
     (context) => _FilterForm(
       query: _panel.query,
@@ -422,16 +484,18 @@ class _FilterFormState extends State<_FilterForm> {
   late final _identifier = TextEditingController(text: widget.query.identifier);
   late final _path = TextEditingController(text: widget.query.path);
   late LogPriority? _priority = widget.query.priority;
-  late bool _boot = widget.query.currentBootOnly;
   late LogTimeRange _range = widget.query.range;
 
+  // The boot and the server search are the bar's; the form keeps them.
   LogQuery get _draft => LogQuery(
     source: widget.query.source,
     unit: _unit.text.trim(),
     identifier: _identifier.text.trim(),
     priority: _priority,
-    currentBootOnly: _boot,
+    currentBootOnly: widget.query.currentBootOnly,
+    pastBoot: widget.query.pastBoot,
     range: _range,
+    grep: widget.query.grep,
     path: _path.text,
   );
 
@@ -493,15 +557,6 @@ class _FilterFormState extends State<_FilterForm> {
                   child: Text(l10n.logsPanelTimeRangeOption(range.name)),
                 ),
             ],
-          ),
-        ),
-        Align(
-          alignment: AlignmentDirectional.centerStart,
-          widthFactor: 1,
-          child: FilterChip(
-            label: Text(l10n.logsPanelCurrentBoot),
-            selected: _boot,
-            onSelected: (boot) => setState(() => _boot = boot),
           ),
         ),
       ],
@@ -594,8 +649,10 @@ class LogLiveChip extends StatelessWidget {
       showCheckmark: false,
       avatar: Icon(word.icon, size: 18),
       label: Text(l10n.logsPanelLiveState(word.name)),
-      tooltip: l10n.logsPanelLiveTooltip,
-      onSelected: panel.setLive,
+      tooltip: panel.canFollow
+          ? l10n.logsPanelLiveTooltip
+          : l10n.logsPanelLivePastBoot,
+      onSelected: panel.canFollow ? panel.setLive : null,
     );
   }
 }
@@ -635,12 +692,15 @@ class LogStatusNotice extends StatelessWidget {
   }
 }
 
-/// LOG-05's search field over the lines held, with case matching and
-/// stepping; Enter steps to the next match.
+/// LOG-05's search field over the lines held, with case matching, LOG-06's
+/// regular expressions and stepping; Enter steps to the next match. With
+/// [onSearchServer], a button hands the search to the server as a
+/// journalctl pattern ([serverLogPattern]).
 class LogSearchField extends StatefulWidget {
-  const LogSearchField({super.key, required this.search});
+  const LogSearchField({super.key, required this.search, this.onSearchServer});
 
   final LogSearch search;
+  final ValueChanged<String>? onSearchServer;
 
   @override
   State<LogSearchField> createState() => _LogSearchFieldState();
@@ -665,6 +725,7 @@ class _LogSearchFieldState extends State<LogSearchField> {
       builder: (context, _) {
         final search = widget.search;
         final steppable = search.total > 0;
+        final onSearchServer = widget.onSearchServer;
         return Row(
           children: [
             Expanded(
@@ -694,7 +755,10 @@ class _LogSearchFieldState extends State<LogSearchField> {
                   // A label, not a hint, so the field keeps its name for
                   // screen readers once it holds text.
                   labelText: l10n.logsPanelSearchLabel,
-                  suffixText: search.query.isEmpty
+                  errorText: search.invalidPattern
+                      ? l10n.logsPanelSearchInvalid
+                      : null,
+                  suffixText: search.query.isEmpty || search.invalidPattern
                       ? null
                       : switch (search.currentNumber) {
                           final number? => l10n.logsPanelSearchPosition(
@@ -714,6 +778,26 @@ class _LogSearchFieldState extends State<LogSearchField> {
               tooltip: l10n.logsPanelSearchCase,
               onPressed: () => search.setCaseSensitive(!search.caseSensitive),
             ),
+            IconButton.outlined(
+              isSelected: search.regex,
+              icon: const Icon(Icons.data_object),
+              tooltip: l10n.logsPanelSearchRegex,
+              onPressed: () => search.setRegex(!search.regex),
+            ),
+            if (onSearchServer != null)
+              IconButton(
+                icon: const Icon(Icons.travel_explore),
+                tooltip: l10n.logsPanelSearchServer,
+                onPressed: search.query.isEmpty || search.invalidPattern
+                    ? null
+                    : () => onSearchServer(
+                        serverLogPattern(
+                          search.query,
+                          regex: search.regex,
+                          caseSensitive: search.caseSensitive,
+                        ),
+                      ),
+              ),
             IconButton(
               icon: const Icon(Icons.keyboard_arrow_up),
               tooltip: l10n.logsPanelSearchPrevious,
@@ -728,6 +812,117 @@ class _LogSearchFieldState extends State<LogSearchField> {
         );
       },
     );
+  }
+}
+
+/// What [LogBootPicker] chose: a [past] boot, or none, with [current]
+/// for this boot rather than every boot.
+typedef LogBootChoice = ({JournalBootEntry? past, bool current});
+
+/// LOG-09's boot picker over [boots], the server's answer to a
+/// [BootsQuery]: every boot (the journal only), this boot, and the past
+/// ones, newest first, each with when its entries start and end. It pops
+/// a [LogBootChoice].
+class LogBootPicker extends StatelessWidget {
+  const LogBootPicker({super.key, required this.boots, required this.query});
+
+  final Future<HostResult> boots;
+  final LogQuery query;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final journal = query.source == LogSourceKind.journal;
+    final past = query.pastBoot;
+
+    Widget choice(
+      String title, {
+      String? subtitle,
+      required bool selected,
+      required LogBootChoice value,
+    }) => ListTile(
+      title: Text(title),
+      subtitle: subtitle == null ? null : Text(subtitle),
+      selected: selected,
+      trailing: selected ? const Icon(Icons.check) : null,
+      onTap: () => Navigator.pop(context, value),
+    );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          l10n.logsPanelBoot,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        if (journal)
+          choice(
+            l10n.logsPanelBootChoice(_BootWord.all.name),
+            selected: past == null && !query.currentBootOnly,
+            value: (past: null, current: false),
+          ),
+        choice(
+          l10n.logsPanelBootChoice(_BootWord.current.name),
+          selected: past == null && (query.currentBootOnly || !journal),
+          value: (past: null, current: true),
+        ),
+        FutureBuilder(
+          future: boots,
+          builder: (context, snapshot) => switch (snapshot.data?.payload) {
+            null => _note(context, l10n.logsPanelBootsLoading),
+            JournalBoots(:final boots) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final boot
+                    in boots.where((boot) => boot.offset < 0).toList()
+                      ..sort((a, b) => b.offset.compareTo(a.offset)))
+                  choice(
+                    l10n.logsPanelBootPast(-boot.offset),
+                    subtitle: _span(context, l10n, boot),
+                    selected: past?.id == boot.id,
+                    value: (past: boot, current: false),
+                  ),
+              ],
+            ),
+            HostQueryFailed(:final failure) => _note(
+              context,
+              l10n.logsPanelBootsFailed(failure.name),
+            ),
+            _ => _note(
+              context,
+              l10n.logsPanelBootsFailed(HostQueryFailure.failed.name),
+            ),
+          },
+        ),
+      ],
+    );
+  }
+
+  static Widget _note(BuildContext context, String text) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    child: Text(text, style: Theme.of(context).textTheme.bodyMedium),
+  );
+
+  /// When [boot]'s entries start and end, in local time; null when the
+  /// server did not say.
+  static String? _span(
+    BuildContext context,
+    AppLocalizations l10n,
+    JournalBootEntry boot,
+  ) {
+    final first = boot.firstEntry, last = boot.lastEntry;
+    if (first == null || last == null) return null;
+    final localizations = MaterialLocalizations.of(context);
+    String format(DateTime time) {
+      final local = time.toLocal();
+      return l10n.activityTime(
+        localizations.formatShortDate(local),
+        localizations.formatTimeOfDay(TimeOfDay.fromDateTime(local)),
+      );
+    }
+
+    return l10n.logsPanelBootSpan(format(first), format(last));
   }
 }
 
