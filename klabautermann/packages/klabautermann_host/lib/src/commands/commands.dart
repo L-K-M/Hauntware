@@ -183,6 +183,40 @@ enum JournalOrder {
   follow,
 }
 
+/// [HostCommands.anacron]'s exit when it printed the table and stamps.
+const int kAnacronListed = 0;
+
+/// [HostCommands.anacron]'s exit when `/etc/anacrontab` does not exist:
+/// anacron is not installed.
+const int kAnacronMissing = 3;
+
+/// [HostCommands.anacron]'s exit when `/etc/anacrontab` exists but could
+/// not be read.
+const int kAnacronUnreadable = 4;
+
+/// The marker before anacron's job stamps in [HostCommands.anacron]'s
+/// output; the table comes before it.
+const String kAnacronStampsMarker = '== klabautermann anacron stamps ==';
+
+/// Prints `/etc/anacrontab`, then [kAnacronStampsMarker], then one
+/// `<job> <stamp>` line per file under `/var/spool/anacron` (JOB-04, 03
+/// §7.7); an unreadable stamp prints `?`.
+const String _kAnacronScript =
+    '''
+[ -e /etc/anacrontab ] || exit $kAnacronMissing
+cat /etc/anacrontab || exit $kAnacronUnreadable
+printf '\n%s\n' '$kAnacronStampsMarker'
+for f in /var/spool/anacron/*; do
+  [ -f "\$f" ] || continue
+  d=\$(cat -- "\$f" 2>/dev/null) || d='?'
+  printf '%s %s\n' "\${f##*/}" "\${d:-?}"
+done
+exit $kAnacronListed''';
+
+/// The syslog identifiers cron daemons log their runs under (JOB-05, 03
+/// §7.7): Debian's and Ubuntu's cron, cronie and BusyBox crond.
+const List<String> kCronJournalIdentifiers = ['CRON', 'CROND', 'crond'];
+
 /// The locale [HostCommands.commandLine] exports (03 §8.8, A11Y-08).
 enum CommandLocale {
   /// `C`: for output only the engine reads, and on hosts without
@@ -433,6 +467,50 @@ abstract final class HostCommands {
     _check(ArgValidators.absolutePath, path);
     if (lines < 0) throw const HostCommandError('negative line count');
     return ['tail', '-n', '$lines', if (follow) '-F', '--', path];
+  }
+
+  /// anacron's table and job stamps (JOB-04, 03 §7.7); the exit codes are
+  /// [kAnacronListed], [kAnacronMissing] and [kAnacronUnreadable], and
+  /// `parseAnacron` reads the output.
+  static List<String> anacron() => const [
+    'sh',
+    '-c',
+    _kAnacronScript,
+    'klabautermann-anacron',
+  ];
+
+  /// A timer's last run (JOB-05, 03 §7.7): `systemctl show` of the
+  /// timer's `LastTriggerUSec` and the result of [service], the unit it
+  /// activates; `parseTimerLastRun` reads the two blocks.
+  static List<String> timerLastRun(String timer, String service) {
+    _check(ArgValidators.timerUnit, timer);
+    _check(ArgValidators.unitName, service);
+    return [
+      'systemctl',
+      'show',
+      '--property=Id,LastTriggerUSec,Result,ExecMainStatus,'
+          'ExecMainExitTimestamp',
+      '--',
+      timer,
+      service,
+    ];
+  }
+
+  /// cron's own log of the jobs it started (JOB-05, 03 §7.7): the newest
+  /// [lines] records under [kCronJournalIdentifiers], newest first.
+  /// `parseCronRuns` reads them; cron records no exit status.
+  static List<String> cronRuns({required int lines}) {
+    if (lines < 0) throw const HostCommandError('negative line count');
+    return [
+      'journalctl',
+      '-o',
+      'json',
+      '--no-pager',
+      for (final id in kCronJournalIdentifiers) ...['-t', id],
+      '-n',
+      '$lines',
+      '-r',
+    ];
   }
 
   /// `crontab -l -u <user>` for the jobs view's user switch (03 §7.7).
