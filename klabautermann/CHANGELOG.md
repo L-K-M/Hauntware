@@ -141,4 +141,40 @@
   wrong engine socket, choose another one, or type its path, in the
   Docker tab; the choice is kept on this device. The Access tab says
   whether socket forwarding works and which Compose is installed.
-  Starting, stopping and removing arrive in a later version.
+- Klabautermann can now act on a server as well as read it, once you
+  allow actions on it from the server header's Safety menu. Every server
+  starts observe-only, a server or the whole app can be set read-only
+  (Settings > Safety), and nothing you have not allowed shows an action.
+  Before anything runs you see its exact commands, which of them run as
+  root, the risks Klabautermann recognises in them, what the action
+  affects and which tool manages the target. You confirm with a tap,
+  and type the target's name where an action could cut you off or
+  affects a lot: stopping the service your connection depends on,
+  removing volumes, or acting on a stack another tool manages. You can
+  mark your own protected targets in Settings > Safety; they are kept on
+  this device.
+- Processes, services and timers: terminate, kill or send any signal to
+  a process, start, stop, restart or reload a service, and run a timer's
+  service now and follow its journal as it runs. Another user's process
+  is signalled only in admin mode, and a process that was replaced
+  meanwhile is left alone. Run now starts system timers only.
+- Admin mode: turn it on from the server header with your sudo password,
+  which is kept in memory only while admin mode lasts. It ends after the
+  time you choose in Settings > Safety, when the connection drops, when
+  the app goes to the background, or when you turn it off. In admin mode
+  you can read other users' crontabs (masked) and log or stack files
+  only root may read, and reach a Docker socket your account cannot use
+  through sudo, which the server header marks as root-equivalent.
+- Docker: start, stop, restart, pause, unpause and kill containers,
+  remove a stopped one, remove images (by force, with the name typed,
+  when a container uses one), and start, stop and restart compose
+  stacks. Pull and redeploy a stack you deployed with compose: it runs on
+  the server as an operation that carries on if you disconnect or close
+  the app, and the chip in the server header shows it, follows its output
+  and shows its result when you are back. A server that allows only a
+  few SSH sessions lends one to your action and takes it back afterwards.
+- Every action you run is recorded on this device, without its secrets:
+  Activity, in the server header's Safety menu, lists the records and
+  copies them.
+- Settings > Appearance edits the theme as Séance does: presets, light
+  or dark, colours, font and corners, with copy, paste and reset.

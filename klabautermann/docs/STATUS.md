@@ -7,10 +7,11 @@ normative plan (`03-ARCHITECTURE.md` §2 is the decision log).
 
 ## Where things stand
 
-M2's host reads and M3's Docker reads are on main, and M4, actions and
-admin mode, is under way. M3 met its automated exits ([M3 exit](#m3-exit),
-below); the real-host and device checks stay open under the manual gates.
-What is on main:
+M2's host reads, M3's Docker reads and M4's actions and admin mode, the
+MVP preview, are on main. M3 and M4 met their automated exits
+([M3 exit](#m3-exit) and [M4 exit](#m4-exit), below), except M4's case of
+a sudo rule scoped to `docker`, which waits on a decision; the real-host
+and device checks stay open under the manual gates. What is on main:
 
 - `klabautermann_host`: HWS/1 program, frame protocol, capability probe,
   parsers and snapshot/rate models with per-platform fixture goldens.
@@ -1849,7 +1850,7 @@ What is on main:
   sudo and the unit's clean environment, and `KillUserProcesses` reads
   without privilege. Under a NOPASSWD rule scoped to the docker CLI,
   `sudo -n -l` lists the rule without a password while `systemd-run`
-  needs one, which the engine now reads before it elevates a runner
+  needs one; the engine now reads the rules before it elevates a runner
   (above).
 - M4 theme editing (E25): Settings > Appearance edits the theme with
   ghost_theme's shared editor (presets, mode, colours, font, corners,
@@ -1915,6 +1916,36 @@ channel instead); the rootful Podman fixture variant (optional D24)
 was not built; a large host's `/system/df` time is unmeasured; and the
 socat relay (rank 4) has never run against a real socat.
 
+## M4 exit
+
+M4, the MVP actions and safety (04 §13, M4 plan E01 to E33), met each
+automated exit on the evidence below but one case of X5. Every 02 §2 MVP
+row is built or recorded in 03 §1.4, which M4 extends by two rows:
+CN-22's merged stack logs come with stack logs in v1, and run timer now
+starts system timers only (JOB-08). The protected targets a user marks
+stay on the device until v1's `pref` record syncs them (4.8), as
+planned.
+
+| Exit | Evidence | Status |
+|---|---|---|
+| X1: every 02 §2 MVP row, and SAF-11, built or a recorded deviation | The entries above; 03 §1.4's SAF-11, CN-22 and JOB-08 rows | met |
+| X2: integration tests for each mutation path | E28's `docker_actions_test.dart` (every container, image and stack action and the user's own process signals) on the Docker fixture; E29's `runner_vm_actions_test.dart` (unit actions, run timer now, other users' crontabs, a kill through elevation) on the runner VM; E28's suite also showed Docker logging a pause before its list holds it, so an action now reads its container again (#333) | met |
+| X3: the detached compose flow with re-attach under the user runners | BusyBox `setsid` on the Docker fixture (E28); `systemd-run` on the system manager, `--uid` and `--user` with linger on the runner VM (E30); every recorded host's runner rows, from RHEL 8's systemd 239 (`detached_runner_fixtures_test.dart`) | met |
+| X4: in admin mode as the login user and as root through the sudo relay, pinned with `--host` | E30's redeploys as root over rank 3 and as the login user under `--uid`, each step naming the socket while root's default Docker context points at a dead socket | met |
+| X5: the rank 3 relay, also under a NOPASSWD rule scoped to `docker`, whose detached root operation is refused | Rank 3 through the password prelude (E30); the scoped rule's listing and `systemd-run`'s refusal on the runner VM in spike S4 (D66), and the planner's `sudoRightMissing` over fakes | partial: admin mode asks such an account for a password it lacks, so neither its rank 3 nor the refusal is reached on a host; waits on a decision |
+| X6: the host write inventory (03 §11.5) | E31's `inventory.sh` around a scripted MVP session on the Docker fixture host, against 03 §8.11's rows in `inventory_allowlist.txt` | met |
+| X7: the elevation CI test (03 §11.1) | E29's suite on the runner VM, beside Séance's real-sudo test | met |
+| X8: the manual checklist on one phone per OS and three real hosts | [Open manual gates](#open-manual-gates) | open |
+| X9: `check-workflows.sh` with the `client_klabautermann` leg | E32; the `Workflow and tool contracts` job | met |
+| X10: a release dry run with the five clients | `scripts/release.sh --check` against `lkm-release` 1.1.0 resolves the suite at 1.9.2 across 25 pubspecs with a clean tree and names the Klabautermann preview apps in its CI note; every PR's CI builds the five clients | met |
+
+Left open: rank 3 and the refused root operation for an account whose
+only sudo rule is NOPASSWD `docker` (X5); the runner VM's own host write
+snapshot, beyond 03 §11.5's fixture host; the radial `Gauge`, the
+`CoreHeatmap` and a load sparkline of 03 §10.7, where bar gauges, per-core
+bars and the CPU and memory sparklines serve OV-03 and CPU-02 meanwhile;
+and the device and real-host checks below.
+
 ## Open manual gates
 
 The milestone sign-off gates are tracked in
@@ -1932,6 +1963,17 @@ is not a device smoke test:
   containers, rootless Docker and rootless Podman, which the CI corpus
   does not record, a Snap Docker install, the socat relay (rank 4), and
   a real host's socket choice, Access rows and stack checks.
+- Actions on real targets (M4, X8): one phone per OS and three real
+  hosts, Debian 12, Ubuntu 26.04 (sudo-rs) and RHEL 9 or a BusyBox NAS.
+  Admin mode with a wrong password and then the right one, and under
+  `timestamp_timeout=0`; a unit restart, a kill, run timer now, another
+  user's crontab; a container stop, start and removal and a stack
+  redeploy that outlives a dropped connection and is found again; the
+  preview, confirmation tiers and protected targets on a phone (PLT-03);
+  admin mode ending when iOS backgrounds the app (PLT-04); and the
+  activity log afterwards.
+- The 24 h soak (03 §11.4) against ten hosts, which CI runs only for
+  minutes.
 
 None of those applies to M1a yet; they gate the milestones that ship the
 matching behavior; this list keeps them visible so they are not lost
