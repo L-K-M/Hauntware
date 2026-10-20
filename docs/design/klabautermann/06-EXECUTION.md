@@ -70,7 +70,13 @@ until a person with the hardware signs them off (04, section 13).
 | Real hosts on systemd 239 and 245, Alpine and a BusyBox NAS | M2 to M4 | open |
 | Docker on real hosts: rootful and rootless Docker, rootless Podman, Snap Docker, the socat relay | M3 to M4 | open |
 | Manual checklist on one phone per OS and three real hosts | M4 | open |
+| 24 h soak against ten hosts (03 §11.4) | M4 | open |
 | Manual checklist on every platform; owner sign-off | M7 | open |
+
+M4's checklist suggests Debian 12, Ubuntu 26.04 (sudo-rs) and RHEL 9 or
+a BusyBox NAS as the three hosts; who provides the phones and hosts, and
+runs the soak, is the owner's call (M4 plan Q6). STATUS lists what each
+gate exercises.
 
 ## Releases
 
