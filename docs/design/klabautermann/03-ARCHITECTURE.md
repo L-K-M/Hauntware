@@ -2251,6 +2251,27 @@ list says so. The `sender` and `alertstatus` records of a server are
 removed with sealed `removed` records when alerting is removed for that
 server.
 
+As built in M5 (M04): the engine's coordinator applies `pref` and `rule`
+records through `klabautermann_core`'s `KlabautermannRecordHandler` into
+`klabautermann_records.json` (4.10), still pull-only. A payload's `id`
+is the whole record id and its `type` the id's second segment. A `pref`
+holds `readOnly`, `cadence` (a 6.4 column), `pinnedUnits`,
+`pinnedContainers`, `protectedTargets`, `panelOrder`, `hostAuditLine`
+and `stackScanDirs` (absolute paths); a cadence this build does not know
+leaves the device's. A `rule` holds the rule model's fields (7.19) under
+their model names, so `evalScope` reads `client` for this device, plus a
+`target` (the server id or group name a `server` or `group` scope names).
+A record over its blob or count cap, of another kind, or whose `id` or
+`type` disagrees with its envelope trips and is skipped; a `v` above 1 is
+kept like an unknown type. The handler applies in the coordinator's last
+phase, so an excluded server is judged against the round's final server
+set, and it never opens records for the passphrase trial, since the v1.x
+`sudo` and `registry` types carry credentials. The engine sends each
+server's preferences as `ServerPrefsChanged` after its fleet, then only
+changes, a null for a removal, and every succeeded sync status carries
+the prefix budget. Retracting an excluded server's `pref` is written but
+refused until pushes are on (M05).
+
 ### 4.9 What never syncs
 
 Metrics, history, logs, inspect output, `docker compose config` output,
@@ -2280,6 +2301,7 @@ platform identities in 04, section 12.3):
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
 | `capabilities/<name>.json` | Cached probe results, 24 h TTL; named, written only by a process that holds the directory alone, and purged as D59 decides | `klabautermann_core` | MVP |
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
+| `klabautermann_records.json` [E] | The `klabautermann:` records the coordinator applied (4.8, M5, M04): per record id, the `(updatedAt, deviceId)` it won with and its sealed payload, sealed removals, unknown types and newer versions included, so the tuple guard holds across restarts and §3.1's recovery re-seals them verbatim. A `pref` whose server is absent waits here. Kept like the sync state files. Never pushed while sync is pull-only | `klabautermann_core` | v1 |
 | `operations_shown.json` [E] | Detached operations this device remembers (M4, E17b, 7.17): per server and operation id, the operation's directory, whether its result was shown and audited here, and, for one this device launched, the audit record's facts (action, target, redacted steps, tier, start). An entry goes once the operation's files are gone. Kept like the sync state files: written only with exclusive access, a damaged file set aside; losing it costs a result's launch facts and the reminder of a root cleanup, which the 7-day prune covers. Never synced | `klabautermann_core` | MVP |
 | `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample) | `klabautermann_core` | v1 |
 | `alerts.jsonl` | In-app alert history, 30 days [E]; from v1.x also host alerts fetched from the inbox or read from a host spool, with source tier, server item ids and status (D42) | `klabautermann_core` | v1 |

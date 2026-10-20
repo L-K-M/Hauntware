@@ -16,6 +16,7 @@ import '../admin/safety_policy.dart';
 import '../admin/user_crontabs.dart';
 import '../capabilities/capability_cache.dart';
 import '../catalog/engine_sync.dart';
+import '../catalog/klabautermann_records.dart' show diffServerPrefs;
 import '../catalog/keystore_channel.dart';
 import '../docker/docker_router.dart';
 import '../fleet/endpoint_pins.dart';
@@ -515,6 +516,19 @@ void engineMain(
   // Whether the app has had a fleet. Probing waits for it, since the app
   // keeps answers only for servers its fleet lists.
   var fleetSent = false;
+
+  // The synced preferences the app last heard, so a round sends only
+  // what changed.
+  var prefsSent = <String, String>{};
+  Future<void> sendServerPrefs() async {
+    final (changes, sent) = diffServerPrefs(
+      prefsSent,
+      await sync.serverPrefs(),
+    );
+    changes.forEach(uiPort.send);
+    prefsSent = sent;
+  }
+
   void probeFleet() {
     if (!fleetSent) return;
     reachability?.update(probeTargets(fleetEntries(), configOf));
@@ -723,6 +737,7 @@ void engineMain(
       }
       if (status.phase == SyncPhase.succeeded) {
         uiPort.send(CatalogReplaced(fleetEntries()));
+        await sendServerPrefs();
       }
       uiPort.send(status);
     });
@@ -756,6 +771,7 @@ void engineMain(
         // anything.
         uiPort.send(CatalogReplaced(fleetEntries()));
         fleetSent = true;
+        await sendServerPrefs();
         probeFleet();
       case Connect(:final serverId):
         sendCachedProfile(serverId);
