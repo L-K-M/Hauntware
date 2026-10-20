@@ -15,12 +15,14 @@ const runnerVmSkipReason =
 
 /// The fleet aliases of the client config each engine imports: the
 /// account outside every journal group (LOG-04), the one in
-/// `systemd-journal`, and the two with password sudo, the second without
-/// a cached credential (M4 E29).
+/// `systemd-journal`, the two with password sudo, the second without a
+/// cached credential (M4 E29), and the one with linger on, in the
+/// `docker` group (M4 E30).
 const limitedServer = 'ssh-config:limited';
 const journalServer = 'ssh-config:journal';
 const sudoServer = 'ssh-config:sudo';
 const nocacheServer = 'ssh-config:nocache';
+const lingerServer = 'ssh-config:linger';
 
 /// The groups whose members read the whole journal (03 §8.1).
 const journalGroups = {'systemd-journal', 'adm', 'wheel'};
@@ -94,8 +96,11 @@ final class RunnerVm {
   Future<String> sudoPassword() async =>
       (await File(_variable('SUDO_PASSWORD_FILE')).readAsString()).trim();
 
-  /// The account with linger on, and none of sudo.
+  /// The account with linger on, in the `docker` group and with password
+  /// sudo, and its password (M4 E30).
   String get lingerUser => _variable('LINGER_USER');
+  Future<String> lingerPassword() async =>
+      (await File(_variable('LINGER_PASSWORD_FILE')).readAsString()).trim();
 
   /// The account with password sudo and `timestamp_timeout=0`, which
   /// takes 8.3's rung 4, and its password (M4 E29).
@@ -127,6 +132,17 @@ final class RunnerVm {
   /// engine as root only through its own `--host`.
   String get dockerSocket => _variable('DOCKER_SOCKET');
   String get deadDockerContext => _variable('DEAD_DOCKER_CONTEXT');
+
+  /// The repository prefix of the registry runner_vm.sh runs on the
+  /// runner's engine, where each stack's image is `<registry>/<user>:1`.
+  /// [sudoUser] and [lingerUser] each have a compose project named after
+  /// them in `~/stack`, whose one service is `app` (M4 E30).
+  String get registry => _variable('REGISTRY');
+
+  /// Runs `docker` as root against the runner's engine, out of the
+  /// engine's sight, and returns its stdout.
+  Future<String> docker(List<String> arguments) =>
+      sudo(['docker', '--host', 'unix://$dockerSocket', ...arguments]);
 
   /// The transient system timer runner_vm.sh started, and its
   /// `OnCalendar=` expression in systemd's normalized form.
@@ -178,16 +194,22 @@ Host nocache
   Port $_port
   User $nocacheUser
   IdentityFile $_identityFile
+
+Host linger
+  HostName $_host
+  Port $_port
+  User $lingerUser
+  IdentityFile $_identityFile
 ''';
 
   /// An engine that imports [limitedServer], [journalServer],
-  /// [sudoServer] and [nocacheServer]. [name] titles its event log in the
-  /// evidence directory.
+  /// [sudoServer], [nocacheServer] and [lingerServer]. [name] titles its
+  /// event log in the evidence directory.
   Future<FixtureEngine> engine(String name) => FixtureEngine.launch(
     name: name,
     runtimeDirectory: _runtimeDirectory,
     sshConfig: _sshConfig,
-    hosts: 4,
+    hosts: 5,
     evidenceDirectory: _evidenceDirectory,
   );
 

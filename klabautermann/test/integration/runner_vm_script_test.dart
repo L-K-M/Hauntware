@@ -27,6 +27,12 @@ const _users = [
   _nocacheUser,
 ];
 const _timer = 'klabautermann-runner-vm.timer';
+
+/// How the leg runs docker as root: on the runner's engine by its socket,
+/// as root's default context reaches nothing.
+const _docker = 'sudo docker --host unix:///var/run/docker.sock';
+const _registryContainer = 'klabautermann-runner-vm-registry';
+const _stackUsers = [_sudoUser, _lingerUser];
 const _testUnits = [
   'klabautermann-vm-test.service',
   'klabautermann-vm-job.service',
@@ -264,7 +270,7 @@ void main() {
         'create_user "\$limited_user"',
         'create_user "\$journal_user" --groups systemd-journal',
         'create_user "\$sudo_user"',
-        'create_user "\$linger_user"',
+        'create_user "\$linger_user" --groups docker',
         'create_user "\$docker_user"',
         'create_user "\$nocache_user"',
       ]);
@@ -493,6 +499,10 @@ void main() {
           for (final user in _users) 'sudo crontab -u $user -r',
           for (final user in _users) 'sudo userdel --remove $user',
           'sudo rm -f -- ${sandbox.path}/sudoers.d/leg',
+          for (final user in _stackUsers)
+            '$_docker compose --project-name $user down --remove-orphans '
+                '--volumes --timeout 1',
+          '$_docker rm --force --volumes $_registryContainer',
         ]),
         reason: lines.join('\n'),
       );
@@ -629,6 +639,35 @@ void main() {
           startsWith('suite started '),
         ]),
       );
+      // The registry, each stack's image in it, and each stack in its
+      // account's home, all before the suite.
+      expect(
+        lines,
+        containsAllInOrder([
+          startsWith(
+            '$_docker run --detach --quiet --name $_registryContainer '
+            '--publish 127.0.0.1:5243:5000 ',
+          ),
+          for (final user in _stackUsers)
+            '$_docker push --quiet 127.0.0.1:5243/klabautermann-runner-vm/'
+                '$user:1',
+          for (final user in _stackUsers)
+            '$_docker compose --project-name $user --project-directory '
+                '${state.path}/home/$user/stack --file '
+                '${state.path}/home/$user/stack/compose.yaml up --detach '
+                '--quiet-pull',
+          startsWith('suite started '),
+        ]),
+        reason: lines.join('\n'),
+      );
+      for (final user in _stackUsers) {
+        expect(
+          File(
+            '${state.path}/home/$user/stack/compose.yaml',
+          ).readAsStringSync(),
+          contains('image: 127.0.0.1:5243/klabautermann-runner-vm/$user:1\n'),
+        );
+      }
       expect(File('${state.path}/crontabs').readAsLinesSync(), [
         for (final user in _users)
           '5 4 1 1 * curl -s https://ops:secret-$user@example.invalid/ping',
@@ -646,11 +685,12 @@ void main() {
       expect(await exitCode, 0, reason: '$output');
       final fed = File('${state.path}/chpasswd').readAsStringSync();
       final match = RegExp(
-        '^$_sudoUser:([0-9a-f]{48})\n$_nocacheUser:([0-9a-f]{48})\n\$',
+        '^$_sudoUser:([0-9a-f]{48})\n$_lingerUser:([0-9a-f]{48})\n'
+        '$_nocacheUser:([0-9a-f]{48})\n\$',
       ).firstMatch(fed);
       expect(match, isNotNull, reason: 'chpasswd read "$fed"');
-      final passwords = [match![1]!, match[2]!];
-      expect(passwords.toSet(), hasLength(2), reason: 'one each');
+      final passwords = [match![1]!, match[2]!, match[3]!];
+      expect(passwords.toSet(), hasLength(3), reason: 'one each');
       final lines = logged();
       final exported = File('${state.path}/suite.env').readAsStringSync();
       for (final (name, text) in [
@@ -663,6 +703,10 @@ void main() {
         }
       }
       expect(exported, contains('KLABAUTERMANN_RUNNER_VM_SUDO_PASSWORD_FILE='));
+      expect(
+        exported,
+        contains('KLABAUTERMANN_RUNNER_VM_LINGER_PASSWORD_FILE='),
+      );
       expect(
         exported,
         contains('KLABAUTERMANN_RUNNER_VM_NOCACHE_PASSWORD_FILE='),

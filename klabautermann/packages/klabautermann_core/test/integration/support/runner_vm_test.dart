@@ -15,6 +15,7 @@ const _offline = {
   'KLABAUTERMANN_RUNNER_VM_JOURNAL_USER': 'klab-vm-journal',
   'KLABAUTERMANN_RUNNER_VM_SUDO_USER': 'klab-vm-sudo',
   'KLABAUTERMANN_RUNNER_VM_NOCACHE_USER': 'klab-vm-nocache',
+  'KLABAUTERMANN_RUNNER_VM_LINGER_USER': 'klab-vm-linger',
   'KLABAUTERMANN_RUNNER_VM_IDENTITY_FILE': '/nonexistent/identity',
   'KLABAUTERMANN_RUNNER_VM_KNOWN_HOSTS': '/nonexistent/known_hosts',
   'KLABAUTERMANN_RUNNER_VM_HOST_KEY_FINGERPRINT': 'SHA256:host',
@@ -36,7 +37,7 @@ void main() {
     expect(() => vm!.limitedUser, throwsStateError);
   });
 
-  test('an engine imports the four accounts into runner_vm.sh\'s runtime '
+  test('an engine imports the five accounts into runner_vm.sh\'s runtime '
       'directory', () async {
     final runtime = await Directory.systemTemp.createTemp('klab-vm-runtime-');
     addTearDown(() => runtime.delete(recursive: true));
@@ -45,7 +46,7 @@ void main() {
       'KLABAUTERMANN_RUNNER_VM_RUNTIME': runtime.path,
     })!;
 
-    // FixtureEngine.launch waits for exactly four hosts imported.
+    // FixtureEngine.launch waits for exactly five hosts imported.
     final engine = await vm.engine('offline import');
 
     expect(engine.supportDirectory, startsWith('${runtime.path}/'));

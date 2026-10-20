@@ -16,7 +16,11 @@
 # rung 4 under timestamp_timeout=0, admin mode ending with the link, unit
 # start, stop, restart and reload, the protected ssh.service, run timer
 # now with its journal, other users' crontabs and a kill through
-# elevation.
+# elevation; and the engine's Docker routes and detached redeploys on
+# the runner's own engine (runner_vm_docker_test.dart, M4 E30): rank 3
+# through the password prelude, a root redeploy under systemd-run that
+# outlives a forced reconnect and whose root files go once admin mode is
+# back, and the login user's under systemd-run --uid and --user.
 #
 # run.sh calls it after the fixture suites. It creates accounts and runs
 # a root sshd, so it runs only on a GitHub-hosted runner, the ephemeral
@@ -26,18 +30,23 @@
 # What it changes on the runner, all undone on every exit: the accounts
 # klab-vm (outside systemd-journal and adm, for LOG-04), klab-vm-journal
 # (in systemd-journal), klab-vm-sudo (password sudo), klab-vm-linger
-# (linger on), klab-vm-docker (a NOPASSWD rule scoped to the docker CLI)
+# (linger on, in the docker group, password sudo), klab-vm-docker (a
+# NOPASSWD rule scoped to the docker CLI)
 # and klab-vm-nocache (password sudo with timestamp_timeout=0, 8.3's
 # rung 4) with their homes, sessions, linger and crontabs (one each); the
 # sudoers drop-in with those rules; the test units in /etc/systemd/system
 # (a service that reloads, and a timer with its oneshot service, which
 # never fires on its own); root's Docker CLI directory, whose default context it
 # points at a socket nothing listens on, so only a step's own --host
-# reaches the engine (M4 plan M17); the sshd on 127.0.0.1:2243 with its
+# reaches the engine (M4 plan M17); on the runner's engine, a registry
+# container on 127.0.0.1:5243, the images pushed there under
+# 127.0.0.1:5243/klabautermann-runner-vm/ and a compose project in the
+# homes of klab-vm-sudo and klab-vm-linger; the sshd on 127.0.0.1:2243 with its
 # root-owned directory under /tmp; a transient system timer; the
 # operation units and the root operation directory the S4 suite leaves;
 # and its key and capture directories. klab-vm-sudo's password is made
-# at job start, as is klab-vm-nocache's, each kept in a 0600 file in the
+# at job start, as are klab-vm-linger's and klab-vm-nocache's, each kept
+# in a 0600 file in the
 # runner's own key directory and handed to chpasswd on stdin by a builtin
 # printf: never in argv, the environment, a log or the repository. Later
 # legs reuse the accounts. The system sshd, its config and port 22 stay
@@ -45,7 +54,8 @@
 # openssh-server or cron with apt first, with a policy-rc.d that refuses
 # the package's start of the system sshd or cron daemon; the package
 # stays installed, enabled for a boot that never comes, as the runner is
-# discarded with the job. Signing in
+# discarded with the job, as do the registry and busybox images the
+# Docker suite pulls. Signing in
 # leaves what any SSH login leaves: journal entries and logind sessions.
 #
 # With KLABAUTERMANN_EVIDENCE_DIR set, its logs, test results and the
@@ -122,6 +132,17 @@ readonly job_timer='klabautermann-vm-job.timer'
 readonly reload_message='klabautermann-vm-test reloaded'
 readonly job_message='klabautermann-vm-job ran'
 readonly test_units=("$test_service" "$job_service" "$job_timer")
+# The Docker suite's registry on the runner's engine, published on
+# loopback only, which the engine treats as insecure without a setting;
+# the image its stacks run, pulled once and pushed there for each stack;
+# and the accounts with a compose project of their own, named after
+# them.
+readonly registry_image='mirror.gcr.io/library/registry:3.0.0@sha256:6c5666b861f3505b116bb9aa9b25175e71210414bd010d92035ff64018f9457e'
+readonly stack_base_image='mirror.gcr.io/library/busybox:1.37@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e'
+readonly registry_container='klabautermann-runner-vm-registry'
+readonly registry_port=5243
+readonly registry="127.0.0.1:$registry_port/klabautermann-runner-vm"
+readonly stack_users=("$sudo_user" "$linger_user")
 
 skip() {
   echo "::notice::Runner-VM leg skipped: $*"
@@ -186,6 +207,8 @@ root_docker_created=0
 root_docker_saved=''
 suite_started=0
 units_installed=0
+registry_started=0
+stacks_started=0
 created_users=()
 crontab_users=()
 
@@ -254,7 +277,7 @@ stop_sshd() {
 }
 
 on_exit() {
-  local status="$?" cleanup=0 user dir
+  local status="$?" cleanup=0 user dir tags
   trap - EXIT
   # A further signal would otherwise end this shell part-way through
   # teardown and leave an account or the sshd behind.
@@ -285,6 +308,24 @@ on_exit() {
     sudo -n rm -f -- "${test_units[@]/#/$unit_dir/}" || cleanup=1
     sudo -n systemctl daemon-reload || cleanup=1
     sudo -n systemctl reset-failed "${test_units[@]}" 2>/dev/null || true
+  fi
+  # Before the accounts, whose homes hold the compose files.
+  if ((stacks_started)); then
+    for user in "${stack_users[@]}"; do
+      runner_docker compose --project-name "$user" down --remove-orphans \
+        --volumes --timeout 1 || cleanup=1
+    done
+  fi
+  if ((registry_started)); then
+    runner_docker rm --force --volumes "$registry_container" >/dev/null ||
+      cleanup=1
+    # The tags the leg and the suite made. The pulled images stay, as do
+    # the digests a redeploy left untagged, which list as <none>.
+    tags="$(runner_docker image ls --format '{{.Repository}}:{{.Tag}}' \
+      --filter "reference=$registry/*")" || cleanup=1
+    tags="$(grep -v ':<none>$' <<<"$tags" || true)"
+    # shellcheck disable=SC2086 # one tag per word
+    [[ -z "$tags" ]] || runner_docker image rm $tags >/dev/null || cleanup=1
   fi
   if ((root_docker_created)); then
     sudo -n rm -rf -- "$root_docker_dir" || cleanup=1
@@ -394,23 +435,29 @@ new_password() {
   [[ "$password" =~ ^[0-9a-f]{48}$ ]] || die 'no password from /dev/urandom'
 }
 
-# Gives klab-vm-sudo and klab-vm-nocache a password each, made now. They
+# Gives klab-vm-sudo, klab-vm-linger and klab-vm-nocache a password
+# each, made now. They
 # stay in this shell and in 0600 files under the runner's own key
 # directory, which the suites read; printf is a bash builtin, so the lines
 # chpasswd reads are in no process's argv. Nothing prints them.
 set_passwords() {
-  local password sudo_password
+  local password sudo_password linger_password
   new_password
   sudo_password="$password"
   new_password
+  linger_password="$password"
+  new_password
   (umask 077 &&
     printf '%s\n' "$sudo_password" >"$runtime_dir/sudo-password" &&
+    printf '%s\n' "$linger_password" >"$runtime_dir/linger-password" &&
     printf '%s\n' "$password" >"$runtime_dir/nocache-password")
-  printf '%s:%s\n%s:%s\n' "$sudo_user" "$sudo_password" \
-    "$nocache_user" "$password" | sudo -n chpasswd
+  printf '%s:%s\n%s:%s\n%s:%s\n' "$sudo_user" "$sudo_password" \
+    "$linger_user" "$linger_password" "$nocache_user" "$password" |
+    sudo -n chpasswd
 }
 
-# Password sudo for klab-vm-sudo, the same for klab-vm-nocache without a
+# Password sudo for klab-vm-sudo and klab-vm-linger, the same for
+# klab-vm-nocache without a
 # cached credential (rung 4 of 03 §8.3), and for klab-vm-docker a NOPASSWD
 # rule scoped to the docker CLI, which the S4 suite reads with sudo -n -l
 # and which cannot start systemd-run (03 §7.17, Docker-scoped sudo rules).
@@ -419,6 +466,7 @@ set_passwords() {
 install_sudoers() {
   printf '%s\n' \
     "$sudo_user ALL=(ALL) ALL" \
+    "$linger_user ALL=(ALL) ALL" \
     "$nocache_user ALL=(ALL) ALL" \
     "Defaults:$nocache_user timestamp_timeout=0" \
     "$docker_user ALL=(root) NOPASSWD: $docker_cli" >"$runtime_dir/sudoers"
@@ -468,6 +516,54 @@ install_test_units() {
   done
   sudo -n systemctl daemon-reload
   sudo -n systemctl start "$test_service" "$job_timer"
+}
+
+# docker as root on the runner's own engine: root's default context is
+# the dead one.
+runner_docker() {
+  sudo -n docker --host "unix://$docker_socket" "$@"
+}
+
+# The Docker suite's registry, and each stack's image pushed to it: the
+# suite pushes a new digest of a stack's image to have its redeploy pull
+# it, as the fixture's registry serves the Docker host's (E28).
+start_registry() {
+  local user attempt
+  registry_started=1
+  runner_docker run --detach --quiet --name "$registry_container" \
+    --publish "127.0.0.1:$registry_port:5000" "$registry_image" >/dev/null
+  runner_docker pull --quiet "$stack_base_image" >/dev/null
+  for user in "${stack_users[@]}"; do
+    runner_docker image tag "$stack_base_image" "$registry/$user:1"
+    # The registry listens a moment after its container starts.
+    for ((attempt = 1; ; attempt++)); do
+      runner_docker push --quiet "$registry/$user:1" >/dev/null && break
+      ((attempt < ready_attempts)) || die "the registry took no push of $user's image"
+      sleep 1
+    done
+  done
+}
+
+# A compose project in each stack account's home, named after it, whose
+# files the account owns, as a stack the account deployed itself would
+# be; root starts it, so the account needs no Docker access of its own.
+# Its one container sleeps under an init, so a stop takes no grace
+# period.
+start_stacks() {
+  local user home dir
+  stacks_started=1
+  for user in "${stack_users[@]}"; do
+    home="$(getent passwd "$user" | cut -d : -f 6)"
+    dir="$home/stack"
+    printf '%s\n' 'services:' '  app:' "    image: $registry/$user:1" \
+      '    command: [sleep, "86400"]' '    init: true' \
+      >"$runtime_dir/compose-$user.yaml"
+    sudo -n install -d -m 0755 -o "$user" -g "$user" "$dir"
+    sudo -n install -m 0644 -o "$user" -g "$user" \
+      "$runtime_dir/compose-$user.yaml" "$dir/compose.yaml"
+    runner_docker compose --project-name "$user" --project-directory "$dir" \
+      --file "$dir/compose.yaml" up --detach --quiet-pull
+  done
 }
 
 # One crontab for each account, which the actions suite reads through
@@ -573,7 +669,9 @@ ssh_args=(-F /dev/null -o BatchMode=yes -o IdentitiesOnly=yes
 create_user "$limited_user"
 create_user "$journal_user" --groups systemd-journal
 create_user "$sudo_user"
-create_user "$linger_user"
+# In the docker group, so the engine reaches Docker as this account
+# itself, over the CLI relay (the Docker suite's login-user redeploys).
+create_user "$linger_user" --groups docker
 create_user "$docker_user"
 create_user "$nocache_user"
 set_passwords
@@ -657,6 +755,8 @@ sudo -n loginctl enable-linger "$linger_user"
 use_dead_docker_context
 install_test_units
 install_crontabs
+start_registry
+start_stacks
 
 timer_started=1
 sudo -n systemd-run --quiet --unit="$timer_unit" --on-calendar="$calendar" \
@@ -669,6 +769,7 @@ export KLABAUTERMANN_RUNNER_VM_JOURNAL_USER="$journal_user"
 export KLABAUTERMANN_RUNNER_VM_SUDO_USER="$sudo_user"
 export KLABAUTERMANN_RUNNER_VM_SUDO_PASSWORD_FILE="$runtime_dir/sudo-password"
 export KLABAUTERMANN_RUNNER_VM_LINGER_USER="$linger_user"
+export KLABAUTERMANN_RUNNER_VM_LINGER_PASSWORD_FILE="$runtime_dir/linger-password"
 export KLABAUTERMANN_RUNNER_VM_DOCKER_USER="$docker_user"
 export KLABAUTERMANN_RUNNER_VM_NOCACHE_USER="$nocache_user"
 export KLABAUTERMANN_RUNNER_VM_NOCACHE_PASSWORD_FILE="$runtime_dir/nocache-password"
@@ -681,6 +782,7 @@ export KLABAUTERMANN_RUNNER_VM_JOB_MESSAGE="$job_message"
 export KLABAUTERMANN_RUNNER_VM_DOCKER_CLI="$docker_cli"
 export KLABAUTERMANN_RUNNER_VM_DOCKER_SOCKET="$docker_socket"
 export KLABAUTERMANN_RUNNER_VM_DEAD_DOCKER_CONTEXT="$dead_context"
+export KLABAUTERMANN_RUNNER_VM_REGISTRY="$registry"
 export KLABAUTERMANN_RUNNER_VM_IDENTITY_FILE="$runtime_dir/identity"
 export KLABAUTERMANN_RUNNER_VM_KNOWN_HOSTS="$runtime_dir/known_hosts"
 export KLABAUTERMANN_RUNNER_VM_HOST_KEY_FINGERPRINT="$host_key_fingerprint"
