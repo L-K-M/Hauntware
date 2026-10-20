@@ -82,7 +82,9 @@ const Duration kExecOneOffTimeout = Duration(minutes: 10);
 /// [open] gives, which closes when the command ends. Keeps at most
 /// [kExecOutputMax] bytes of stdout and stderr together, reading and
 /// dropping the rest, and hands both through [redact]. A command that
-/// outlives [timeout] ends as a [DockerTransportException].
+/// outlives [timeout] ends as a [DockerTransportException]; the Engine
+/// API has no call that stops an exec, so a command that ignores its
+/// closed streams keeps running in the container until it ends.
 Future<({int? exitCode, ExecOutput output})> runOneOffExec(
   ExecStep step, {
   required Future<({DockerStreamLease lease, DockerRank rank})> Function() open,

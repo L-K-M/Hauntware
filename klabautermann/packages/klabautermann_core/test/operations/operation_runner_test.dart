@@ -8,6 +8,8 @@ import 'package:klabautermann_core/src/admin/admin_mode.dart';
 import 'package:klabautermann_core/src/operations/confirmation.dart';
 import 'package:klabautermann_core/src/operations/operation_plan.dart';
 import 'package:klabautermann_core/src/operations/operation_runner.dart';
+import 'package:klabautermann_docker/klabautermann_docker.dart'
+    show DockerConflictException;
 import 'package:seance_core/seance_core.dart'
     show
         ChannelOpenException,
@@ -307,6 +309,18 @@ void main() {
     expect(failed.failure, ActionFailure.stepFailed);
     expect((failed.failedStep, failed.exitCode), (0, 2));
     expect(failed.output, same(output));
+
+    // A daemon that refuses the exec answered: the step failed, not the
+    // transport.
+    final refused = await runner(
+      link,
+      exec: (_, step) async => throw const DockerConflictException(
+        409,
+        'container abc is not running',
+      ),
+    ).run('plan-1', plan);
+    expect(refused.failure, ActionFailure.stepFailed);
+    expect((refused.failedStep, refused.httpStatus), (0, 409));
   });
 
   test('without a link, or when it fails, nothing is claimed to run', () async {

@@ -5,7 +5,7 @@
 // plan's steps run on the host instead, as one operation the runner
 // launches (03 §7.17, M4 E18).
 import 'package:klabautermann_docker/klabautermann_docker.dart'
-    show DockerException;
+    show DockerApiException, DockerException;
 import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
 import 'package:seance_core/seance_core.dart'
     show
@@ -30,8 +30,9 @@ typedef ApiStepRunner = Future<int> Function(String serverId, ApiStep step);
 
 /// Runs one [ExecStep] on [serverId]'s engine (CTX-08) and returns the
 /// command's exit code, null when the daemon reported none, and its
-/// redacted output. A [DockerException] or [DockerEndpointUnavailable]
-/// it throws ends the run as a transport failure.
+/// redacted output. A [DockerApiException] it throws, the daemon's
+/// refusal, fails the step; any other [DockerException] or a
+/// [DockerEndpointUnavailable] ends the run as a transport failure.
 typedef ExecStepRunner =
     Future<({int? exitCode, ExecOutput output})> Function(
       String serverId,
@@ -242,7 +243,18 @@ final class OperationRunner {
             if (exec == null) {
               return failed(ActionFailure.unsupportedStep, step: i);
             }
-            final result = await exec(serverId, step);
+            final ({int? exitCode, ExecOutput output}) result;
+            try {
+              result = await exec(serverId, step);
+            } on DockerApiException catch (e) {
+              // The daemon answered and refused, as for a container that
+              // stopped: the step failed, as an API step's error does.
+              return failed(
+                ActionFailure.stepFailed,
+                step: i,
+                httpStatus: e.statusCode,
+              );
+            }
             output = result.output;
             exitCode = result.exitCode;
             if (exitCode != 0) {
