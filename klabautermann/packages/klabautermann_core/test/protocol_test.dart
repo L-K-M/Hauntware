@@ -116,6 +116,24 @@ void main() {
           query: DockerContainersQuery(),
         ),
         const PlanAction(KillProcess('srv-1', pid: 42, startTicks: 9001)),
+        const JobHistoryQuery(
+          serverId: 'srv-1',
+          requestId: 'h-1',
+          query: AnacronQuery(),
+        ),
+        const JobHistoryQuery(
+          serverId: 'srv-1',
+          requestId: 'h-2',
+          query: TimerLastRunQuery(
+            timer: 'backup.timer',
+            service: 'backup.service',
+          ),
+        ),
+        const JobHistoryQuery(
+          serverId: 'srv-1',
+          requestId: 'h-3',
+          query: CronRunsQuery(lines: 20),
+        ),
         const DockerWatch(
           serverId: 'srv-1',
           watchId: 'w-1',
@@ -378,6 +396,43 @@ void main() {
           unavailable: const CollectorUnavailable(
             CollectorUnavailableReason.timeout,
           ),
+        ),
+        JobHistoryResult(
+          serverId: 'srv-1',
+          requestId: 'h-1',
+          payload: AnacronPayload([
+            AnacronJob(
+              period: const AnacronPeriod.days(1),
+              delayMinutes: 5,
+              identifier: 'cron.daily',
+              command: 'run-parts /etc/cron.daily',
+              lastRun: DateTime.utc(2026, 10, 20),
+            ),
+          ]),
+          warnings: const ['w'],
+        ),
+        JobHistoryResult(
+          serverId: 'srv-1',
+          requestId: 'h-2',
+          payload: TimerLastRunPayload(
+            TimerLastRun(lastTrigger: DateTime.utc(2026, 10, 20, 3)),
+          ),
+        ),
+        JobHistoryResult(
+          serverId: 'srv-1',
+          requestId: 'h-3',
+          payload: CronRunsPayload([
+            LoggedCronRun(
+              at: DateTime.utc(2026, 10, 20),
+              user: 'root',
+              command: 'true',
+            ),
+          ]),
+        ),
+        JobHistoryResult(
+          serverId: 'srv-1',
+          requestId: 'h-4',
+          payload: const JobHistoryFailed(JobHistoryFailure.notInstalled),
         ),
         const ActionProgress(planId: 'plan-1', stepIndex: 1, stepCount: 3),
         const ActionFinished(

@@ -42,6 +42,7 @@ import '../operations/operations_shown.dart';
 import '../operations/plan_registry.dart';
 import '../operations/plan_types.dart' show RequiredLevel;
 import '../operations/plans/docker_plans.dart';
+import '../jobs/job_history_query.dart';
 import '../operations/plans/host_plans.dart';
 import '../operations/plans/redeploy_plan.dart';
 import '../operations/protected_targets.dart';
@@ -1124,6 +1125,32 @@ void engineMain(
               session: session,
               profile: profiles[serverId],
               now: DateTime.now().toUtc(),
+            ),
+          ).then(uiPort.send),
+        );
+      case JobHistoryQuery(:final serverId, :final requestId, :final query):
+        final link = links?.link(serverId);
+        if (!fleetIds.contains(serverId) || link == null) {
+          uiPort.send(
+            JobHistoryResult(
+              serverId: serverId,
+              requestId: requestId,
+              payload: const JobHistoryFailed(JobHistoryFailure.noLink),
+            ),
+          );
+          return;
+        }
+        // Not awaited, as the other reads: the query answers rather than
+        // throws.
+        unawaited(
+          lendSession(
+            serverId,
+            () => runJobHistoryQuery(
+              serverId,
+              requestId,
+              query,
+              link: link,
+              admin: admin?.session(serverId),
             ),
           ).then(uiPort.send),
         );

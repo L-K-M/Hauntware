@@ -4,6 +4,7 @@ import 'dart:typed_data';
 // `Collector` (its argument validators) and `ServerZone` (`offsetAt`) do.
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
+        AnacronJob,
         CpuPercentages,
         CronSnapshot,
         DiskRate,
@@ -12,12 +13,14 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         JobEntry,
         KillSignal,
         LoadAvg,
+        LoggedCronRun,
         NetRate,
         OpDirectoryKind,
         OpDirectoryListing,
         ProcsSelection,
         SystemdUnit,
         SystemctlVerb,
+        TimerLastRun,
         TimersSnapshot,
         UnitsSnapshot,
         EngineMode,
@@ -182,6 +185,10 @@ import '../operations/plan_types.dart';
 /// Disk use then joined v3 the same way (03 §7.1 OV-05): a
 /// [DockerSystemDfQuery] reads `/system/df` on demand, answered by a
 /// [DockerSystemDfPayload] of per-type totals.
+///
+/// Job history then joined v3 the same way (03 §7.7, JOB-04, JOB-05):
+/// [JobHistoryQuery], answered by [JobHistoryResult], reads anacron's
+/// jobs and stamps, a timer's last run, or the runs cron logged.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -425,6 +432,51 @@ final class CloseStream extends EngineRequest {
   const CloseStream(this.streamId);
 
   final String streamId;
+}
+
+/// Reads one piece of [serverId]'s job history (03 §7.7, JOB-04, JOB-05),
+/// answered by one [JobHistoryResult] with [requestId]. Each reads as the
+/// login user, or through admin mode when it is on, which the journal of
+/// cron's runs may need.
+final class JobHistoryQuery extends EngineRequest {
+  const JobHistoryQuery({
+    required this.serverId,
+    required this.requestId,
+    required this.query,
+  });
+
+  final String serverId;
+  final String requestId;
+  final JobHistorySpec query;
+}
+
+/// What a [JobHistoryQuery] reads.
+@immutable
+sealed class JobHistorySpec {
+  const JobHistorySpec();
+}
+
+/// `/etc/anacrontab` with each job's stamp (JOB-04), answered by
+/// [AnacronPayload].
+final class AnacronQuery extends JobHistorySpec {
+  const AnacronQuery();
+}
+
+/// [timer]'s last trigger and how [service]'s run ended (JOB-05),
+/// answered by [TimerLastRunPayload].
+final class TimerLastRunQuery extends JobHistorySpec {
+  const TimerLastRunQuery({required this.timer, required this.service});
+
+  final String timer;
+  final String service;
+}
+
+/// The newest [lines] job starts cron logged (JOB-05), answered by
+/// [CronRunsPayload].
+final class CronRunsQuery extends JobHistorySpec {
+  const CronRunsQuery({this.lines = 50});
+
+  final int lines;
 }
 
 /// Runs one read-only Docker Engine query on [serverId]'s engine (03
@@ -958,6 +1010,71 @@ final class LogStreamState extends EngineEvent {
 
   final String streamId;
   final LogStreamStatus status;
+}
+
+/// The answer to the [JobHistoryQuery] [requestId] on [serverId]: what
+/// it read, or [JobHistoryFailed] with why, plus the parser's warnings.
+final class JobHistoryResult extends EngineEvent {
+  JobHistoryResult({
+    required this.serverId,
+    required this.requestId,
+    required this.payload,
+    Iterable<String> warnings = const [],
+  }) : warnings = List.unmodifiable(warnings);
+
+  final String serverId;
+  final String requestId;
+  final JobHistoryPayload payload;
+  final List<String> warnings;
+}
+
+/// What a [JobHistoryQuery] found.
+@immutable
+sealed class JobHistoryPayload {
+  const JobHistoryPayload();
+}
+
+/// anacron's jobs, their commands masked (03 §8.9).
+final class AnacronPayload extends JobHistoryPayload {
+  AnacronPayload(Iterable<AnacronJob> jobs) : jobs = List.unmodifiable(jobs);
+
+  final List<AnacronJob> jobs;
+}
+
+final class TimerLastRunPayload extends JobHistoryPayload {
+  const TimerLastRunPayload(this.lastRun);
+
+  final TimerLastRun lastRun;
+}
+
+/// cron's logged job starts, newest first, their commands masked.
+final class CronRunsPayload extends JobHistoryPayload {
+  CronRunsPayload(Iterable<LoggedCronRun> runs)
+    : runs = List.unmodifiable(runs);
+
+  final List<LoggedCronRun> runs;
+}
+
+/// Why a [JobHistoryQuery] read nothing.
+enum JobHistoryFailure {
+  /// The server is not in the fleet, or has no ready link.
+  noLink,
+
+  /// A timer or unit name is not a unit's (03 §8.8).
+  invalidTarget,
+
+  /// The host has no `/etc/anacrontab`, so anacron is not installed.
+  notInstalled,
+
+  /// The command failed otherwise; the detail says how.
+  failed,
+}
+
+final class JobHistoryFailed extends JobHistoryPayload {
+  const JobHistoryFailed(this.failure, {this.detail});
+
+  final JobHistoryFailure failure;
+  final String? detail;
 }
 
 /// The answer to the [DockerQuery] [queryId] on [serverId] (03 §10.1):

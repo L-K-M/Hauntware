@@ -3529,6 +3529,13 @@ answers each open with a `LogStreamState` before it returns, and
   prelude for other users, whose stdin handling 8.3 verifies); pause with a
   marker comment; managed-crontab detection; run a cron command now (JOB-19:
   `sh -c` as the job user, danger-linted, detached when long).
+- **As built in M5 (M24, first part).** `JobHistoryQuery` reads
+  anacron's table with each job's stamp (JOB-04), a timer's last trigger
+  with its service's result, and the job starts cron logged (JOB-05).
+  Each runs as the login user, or through admin mode when it is on,
+  which a journal the login user cannot read needs. Commands cross
+  masked, as the cron rows' do. A host without `/etc/anacrontab`
+  answers `notInstalled`.
 - **v1.x.** Timer creator, output capture, dead-man pings (T1, +E), missed
   runs, fleet jobs overview.
 

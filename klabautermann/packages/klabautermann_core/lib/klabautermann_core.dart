@@ -113,6 +113,9 @@ export 'src/sampling/sample_results.dart' show kCronLinesEvaluated;
 // in, and how far each directory's listing got.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show OpDirectoryKind, OpDirectoryListing, OpDirectoryState;
+// Job history (JOB-04, JOB-05): what a JobHistoryResult carries.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show AnacronJob, AnacronPeriod, LoggedCronRun, TimerLastRun;
 // The Logs panel's LOG-04 notice: the access check's journal row (K04)
 // over the probe's HostProfile.
 export 'package:klabautermann_host/klabautermann_host.dart'
