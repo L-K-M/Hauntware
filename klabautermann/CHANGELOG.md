@@ -125,7 +125,7 @@
 - A server's Docker tab shows its containers, images and compose stacks
   over the same SSH connection, with nothing installed on the server.
   Klabautermann reaches the engine by forwarding its socket over SSH, or
-  through the server's docker or podman command, or socat, when sshd
+  through the server's docker or podman command, or its socat, when sshd
   forbids forwarding; the server header says which, and says so when the
   server allows too few SSH sessions to keep everything live. Containers
   are listed with state, health, CPU and memory, grouped by compose

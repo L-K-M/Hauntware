@@ -1856,7 +1856,8 @@ logs without a `Content-Type`, and a one-shot `precpu_stats` is zeroed
 Left open: at `MaxSessions 2` the two samplers hold both sessions, so
 stack checks read "check failed" (D22; M4's E13 has them wait for a
 channel instead); the rootful Podman fixture variant (optional D24)
-was not built; a large host's `/system/df` time is unmeasured.
+was not built; a large host's `/system/df` time is unmeasured; and the
+socat relay (rank 4) has never run against a real socat.
 
 ## Open manual gates
 
@@ -1871,9 +1872,10 @@ is not a device smoke test:
 - macOS keychain prompts.
 - VM passes on Debian 12, Ubuntu 24.04 and 26.04 (sudo-rs), RHEL 8 and 9,
   Alpine and a BusyBox NAS, plus a Synology host (11.3).
-- Docker on real hosts (M3, Q1): rootless Docker and rootless Podman,
-  which the CI corpus does not record, a Snap Docker install, and a
-  real host's socket choice, Access rows and stack checks.
+- Docker on real hosts (M3, Q1): rootful Docker, which CI runs only in
+  containers, rootless Docker and rootless Podman, which the CI corpus
+  does not record, a Snap Docker install, the socat relay (rank 4), and
+  a real host's socket choice, Access rows and stack checks.
 
 None of those applies to M1a yet; they gate the milestones that ship the
 matching behavior; this list keeps them visible so they are not lost

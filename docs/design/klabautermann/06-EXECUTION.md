@@ -68,7 +68,7 @@ until a person with the hardware signs them off (04, section 13).
 | macOS keychain check after the keystore switch | F3 | open |
 | Engine budgets on a low-end Android phone and an older iPhone | S5 | open |
 | Real hosts on systemd 239 and 245, Alpine and a BusyBox NAS | M2 to M4 | open |
-| Docker on real hosts: rootless Docker and Podman, Snap Docker | M3 to M4 | open |
+| Docker on real hosts: rootful and rootless Docker, rootless Podman, Snap Docker, the socat relay | M3 to M4 | open |
 | Manual checklist on one phone per OS and three real hosts | M4 | open |
 | Manual checklist on every platform; owner sign-off | M7 | open |
 
