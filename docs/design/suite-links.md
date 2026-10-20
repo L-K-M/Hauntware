@@ -242,7 +242,9 @@ C1 controls, the exact set `buildChangeDirectoryCommand` throws on
 (`shell_command.dart:30-38`), so a link that parses can always be staged.
 One path grammar for both apps keeps the corpus single; the cost is that
 a folder whose name contains `\` cannot be linked, as in Poltergeist
-today.
+today. A sender with a Windows path writes it with forward slashes
+(`C:/Users/name`); a backslash path is refused, never repaired. The
+parser corpus (§9) includes both.
 
 No key outside these sets is accepted. `cmd`, `command`, `exec`, `run`,
 `script`, `snippet` and any unknown key refuse the link (D12, 03:401-403;
@@ -399,9 +401,12 @@ Delivery:
 
 - `main()` subscribes to `AppLinks().uriLinkStream` after the settings
   window's early return (`SA/lib/main.dart:35-38`) and before `runApp`,
-  so a cold-start link is queued. The intake stores links durably first
-  and raises the window second, as `_acceptDeepLink` does
-  (`PA/lib/main.dart:781-794`).
+  so a cold-start link is queued. The intake queues a link first and
+  raises the window second, as `_acceptDeepLink` does
+  (`PA/lib/main.dart:781-794`, whose "durable" means queued before the
+  best-effort activation). The queue is in memory only: nothing is
+  written to disk, a link survives no restart, and a sender whose link
+  was lost sends it again.
 - The handler binds once `_init` has produced the `AppState` and the root
   navigator exists (`main.dart:141-172`). Until then links wait.
 
@@ -439,9 +444,11 @@ Per request:
    then waits for that tab's `shellIntegration` to report a known shell
    at `acceptingInput` with no input, bounded at 20 seconds after
    `connected` (an assumption), and calls
-   `engine.stageChangeDirectory(cwd)` (`xterm_engine.dart:351-371`). Any
-   result but `staged`, or the timeout, shows a message naming the
-   folder with a Copy path action, worded like Files'
+   `engine.stageChangeDirectory(cwd)` (`xterm_engine.dart:351-371`). A
+   tab that ends before `connected` (refused, failed or cancelled
+   authentication, a declined host key, the user closing it) ends the
+   wait at once. Any result but `staged`, that end, or the timeout,
+   shows a message naming the folder with a Copy path action, worded like Files'
    (`files_pane.dart:1287-1296`). Séance never sends Enter and never
    falls back to typing the path without integration.
 6. Host-key, credential and app-lock prompts run on the normal connect
@@ -615,6 +622,8 @@ running; Flatpak handler export.
 1. "A bounded queue of pending links (Poltergeist's model)" (03:4328):
    Poltergeist bounds only the review's visible list (:19, :750-771);
    `_pending` has no limit (:476). Séance adds a hard limit (§6).
+   Poltergeist's queue gets the same limit in a PR of its own after
+   F5d-1, since the move changes no behaviour (03 D3).
 2. "A visible trust review before any connect" for every intake
    (03:4327): Poltergeist opens catalog-id links without a review (1.4).
    Séance reviews every link. Changing Poltergeist is out of scope and a
