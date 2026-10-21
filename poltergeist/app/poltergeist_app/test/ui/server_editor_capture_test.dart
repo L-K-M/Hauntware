@@ -92,10 +92,9 @@ ServerConfig _server({
 /// The application layer the editor writes through, reduced to what the
 /// scenes read back.
 final class _Delegate extends ServerEditorDelegate {
-  _Delegate({this.configured = false, this.storedSecret});
+  _Delegate({this.configured = false});
 
   final bool configured;
-  final Secret? storedSecret;
   (ServerConfig, Secret?)? saved;
 
   @override
@@ -111,7 +110,7 @@ final class _Delegate extends ServerEditorDelegate {
   Future<String?> pickIdentityFile() async => null;
 
   @override
-  Future<Secret?> readSecret(String secretId) async => storedSecret;
+  Future<Secret?> readSecret(String secretId) async => null;
 
   @override
   Future<void> save(ServerConfig config, {Secret? secret}) async {
