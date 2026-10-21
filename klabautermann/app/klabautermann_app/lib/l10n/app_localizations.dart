@@ -6615,6 +6615,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server\'s capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} daemonError{The engine refused or failed to list the stack\'s containers.} connectionFailed{The connection to the engine failed while reading the file.} cancelled{The read stopped before it ran.} other{The file could not be read.}}'**
   String dockerStackFileQueryFailed(String reason);
+
+  /// The server header's button that opens this server's terminal in the Séance app through a seance:// link (X-03). Shown only where Séance can receive the link.
+  ///
+  /// In en, this message translates to:
+  /// **'Open terminal in Séance'**
+  String get handOffOpenInSeance;
+
+  /// Toast when the operating system refused to open the seance:// link for the server header's Open terminal in Séance button.
+  ///
+  /// In en, this message translates to:
+  /// **'Séance did not open the link.'**
+  String get handOffSeanceNotOpened;
 }
 
 class _AppLocalizationsDelegate

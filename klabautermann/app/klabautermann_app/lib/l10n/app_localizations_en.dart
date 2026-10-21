@@ -5046,4 +5046,10 @@ class AppLocalizationsEn extends AppLocalizations {
     });
     return '$_temp0';
   }
+
+  @override
+  String get handOffOpenInSeance => 'Open terminal in Séance';
+
+  @override
+  String get handOffSeanceNotOpened => 'Séance did not open the link.';
 }

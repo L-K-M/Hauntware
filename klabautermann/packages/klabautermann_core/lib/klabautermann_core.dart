@@ -139,6 +139,17 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         HostPanel,
         evaluatePanel;
 export 'package:seance_core/seance_core.dart' show quoteShellWord;
+// Hand-offs to Séance and Poltergeist (X-03, X-04, X-10; D12): the suite's
+// link builders, which refuse anything but a server and a folder, so no
+// link can carry a command (X8).
+export 'package:seance_core/seance_core.dart'
+    show
+        buildPoltergeistBrowse,
+        buildSeanceConnect,
+        poltergeistBrowseRoute,
+        poltergeistDeepLinkScheme,
+        seanceConnectRoute,
+        seanceDeepLinkScheme;
 // The sync sign-in form (03 §4.3 step 1) checks its fields with the
 // suite's enrollment rule before the engine is asked, and the pull-only
 // test names the push policy.

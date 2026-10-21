@@ -1,0 +1,184 @@
+// Hand-offs to Séance and Poltergeist (X-03, X-04, X-10; M5 plan M31).
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:klabautermann_app/controllers/fleet_controller.dart' show FleetServer;
+import 'package:klabautermann_app/services/hand_off.dart';
+import 'package:klabautermann_app/ui/hand_off_actions.dart';
+
+import 'support/harness.dart';
+
+const _catalogId = '123e4567-e89b-42d3-a456-426614174000';
+
+/// The keys a sender might use to smuggle a command (X8).
+const _commandKeys = ['cmd', 'command', 'exec', 'run', 'script', 'snippet'];
+
+void main() {
+  group('links', () {
+    test('a Séance link names the server and the folder, nothing else', () {
+      final bare = seanceHandOff(_catalogId.toUpperCase())!;
+      expect(bare.scheme, 'seance');
+      expect(bare.host, 'connect');
+      expect(bare.queryParameters, {'serverId': _catalogId});
+
+      final inFolder = seanceHandOff(_catalogId, folder: '/srv/app; rm -rf ~')!;
+      expect(inFolder.queryParameters, {
+        'serverId': _catalogId,
+        'cwd': '/srv/app; rm -rf ~',
+      });
+      for (final link in [bare, inFolder]) {
+        expect(
+          link.queryParameters.keys,
+          isNot(anyElement(isIn(_commandKeys))),
+        );
+      }
+    });
+
+    test('a Poltergeist link names the server and the path, nothing else', () {
+      final link = poltergeistHandOff(_catalogId, path: '/var/log/syslog')!;
+      expect(link.scheme, 'poltergeist');
+      expect(link.host, 'browse');
+      expect(link.queryParameters, {
+        'serverId': _catalogId,
+        'path': '/var/log/syslog',
+      });
+    });
+
+    test('a server or folder the siblings cannot name gets no link', () {
+      // An ssh_config import's id only this app knows.
+      expect(seanceHandOff('ssh-config:web'), isNull);
+      expect(seanceHandOff(_catalogId, folder: 'relative'), isNull);
+      expect(seanceHandOff(_catalogId, folder: '/srv/\nreboot'), isNull);
+      expect(poltergeistHandOff(_catalogId, path: '/srv/'), isNull);
+      expect(poltergeistHandOff('ssh-config:web', path: '/'), isNull);
+    });
+  });
+
+  group('availability', () {
+    test('follows where each sibling registers its scheme', () {
+      final table = {
+        for (final platform in TargetPlatform.values)
+          platform: {
+            for (final target in HandOffTarget.values)
+              if (handOffIntakeOn(target, platform)) target,
+          },
+      };
+      expect(table, {
+        TargetPlatform.android: HandOffTarget.values.toSet(),
+        TargetPlatform.iOS: HandOffTarget.values.toSet(),
+        TargetPlatform.macOS: HandOffTarget.values.toSet(),
+        TargetPlatform.linux: {HandOffTarget.poltergeist},
+        TargetPlatform.windows: {HandOffTarget.poltergeist},
+        TargetPlatform.fuchsia: <HandOffTarget>{},
+      });
+    });
+
+    test('needs both an intake and a handler, and a failed probe is no '
+        'handler', () async {
+      final probed = <Uri>[];
+      final errors = <Object>[];
+      final launcher = await UrlHandOffLauncher.probe(
+        platform: TargetPlatform.linux,
+        onError: (error, _) => errors.add(error),
+        probe: (uri) async {
+          probed.add(uri);
+          return true;
+        },
+        open: (_) async => true,
+      );
+      // Séance has no Linux intake, so it is not even asked about.
+      expect(probed, [Uri.parse('poltergeist://browse')]);
+      expect(launcher.available(HandOffTarget.seance), isFalse);
+      expect(launcher.available(HandOffTarget.poltergeist), isTrue);
+
+      final failing = await UrlHandOffLauncher.probe(
+        platform: TargetPlatform.macOS,
+        onError: (error, _) => errors.add(error),
+        probe: (uri) async =>
+            uri.scheme == 'seance' ? throw StateError('no probe') : false,
+        open: (_) async => true,
+      );
+      expect(failing.available(HandOffTarget.seance), isFalse);
+      expect(failing.available(HandOffTarget.poltergeist), isFalse);
+      expect(errors, [isStateError]);
+    });
+  });
+
+  group('the server header', () {
+    testWidgets('opens the server in Séance where it can take the link', (
+      tester,
+    ) async {
+      final launcher = _Launcher({HandOffTarget.seance});
+      await _openServer(tester, launcher, id: _catalogId);
+
+      await tester.tap(find.text('Open terminal in Séance'));
+      await tester.pumpAndSettle();
+
+      expect(launcher.opened, [
+        Uri.parse('seance://connect?serverId=$_catalogId'),
+      ]);
+    });
+
+    testWidgets('says so when the OS refuses the link', (tester) async {
+      final launcher = _Launcher({HandOffTarget.seance}, opens: false);
+      await _openServer(tester, launcher, id: _catalogId);
+
+      await tester.tap(find.text('Open terminal in Séance'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Séance did not open the link.'), findsOneWidget);
+    });
+
+    testWidgets('offers nothing without an intake, a handler or a catalog '
+        'id', (tester) async {
+      await _openServer(tester, _Launcher({}), id: _catalogId);
+      expect(find.text('Open terminal in Séance'), findsNothing);
+
+      await _openServer(
+        tester,
+        _Launcher({HandOffTarget.seance}),
+        id: 'ssh-config:web',
+      );
+      expect(find.text('Open terminal in Séance'), findsNothing);
+    });
+
+    testWidgets('offers nothing without a launcher', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(home: OpenInSeanceButton(serverId: _catalogId)),
+      );
+      expect(find.byType(TextButton), findsNothing);
+    });
+  });
+}
+
+Future<void> _openServer(
+  WidgetTester tester,
+  HandOffLauncher launcher, {
+  required String id,
+}) async {
+  await pumpApp(
+    tester,
+    servers: [
+      FleetServer(id: id, displayName: 'web-1', address: 'web-1.example'),
+    ],
+    handOff: launcher,
+  );
+  await tester.tap(find.text('web-1'));
+  await tester.pumpAndSettle();
+}
+
+final class _Launcher implements HandOffLauncher {
+  _Launcher(this._available, {this.opens = true});
+
+  final Set<HandOffTarget> _available;
+  final bool opens;
+  final opened = <Uri>[];
+
+  @override
+  bool available(HandOffTarget target) => _available.contains(target);
+
+  @override
+  Future<bool> open(Uri link) async {
+    opened.add(link);
+    return opens;
+  }
+}

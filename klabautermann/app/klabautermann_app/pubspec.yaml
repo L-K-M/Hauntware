@@ -76,6 +76,9 @@ dependencies:
   # flutter_secure_storage_windows back from 4.2.2 to 4.1.0, before its
   # fixes for concurrent reads and writes losing data.
   package_info_plus: 10.2.2
+  # Hand-offs to Séance and Poltergeist (X-03, X-04, X-10): opens their
+  # links and probes for a handler. Pinned to the version Poltergeist runs.
+  url_launcher: 6.3.2
 
 dev_dependencies:
   flutter_test:

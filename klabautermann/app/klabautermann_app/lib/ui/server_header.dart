@@ -16,6 +16,7 @@ import 'docker/docker_endpoint.dart';
 import 'fleet_rail.dart' show linkFailureText, linkStatusWord;
 import 'fleet_row_state.dart';
 import 'fleet_rows.dart' show fleetStatusIcon, fleetStatusStrings;
+import 'hand_off_actions.dart';
 import 'admin_mode_chip.dart';
 import 'server_safety.dart';
 
@@ -90,6 +91,7 @@ class ServerHeader extends StatelessWidget {
               serverName: server.displayName,
             ),
             AdminModeChip(serverId: server.id),
+            OpenInSeanceButton(serverId: server.id),
             DetachedOperationsChip(
               serverId: server.id,
               serverName: server.displayName,

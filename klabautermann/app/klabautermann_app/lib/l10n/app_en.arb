@@ -6168,5 +6168,13 @@
         "type": "String"
       }
     }
+  },
+  "handOffOpenInSeance": "Open terminal in Séance",
+  "@handOffOpenInSeance": {
+    "description": "The server header's button that opens this server's terminal in the Séance app through a seance:// link (X-03). Shown only where Séance can receive the link."
+  },
+  "handOffSeanceNotOpened": "Séance did not open the link.",
+  "@handOffSeanceNotOpened": {
+    "description": "Toast when the operating system refused to open the seance:// link for the server header's Open terminal in Séance button."
   }
 }
