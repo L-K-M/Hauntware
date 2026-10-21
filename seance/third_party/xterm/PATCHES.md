@@ -542,10 +542,12 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     nothing. Cmd has no bit in the
     mouse protocol, so the remote only ever saw a plain click. Now the press
     is not reported when Cmd is held over a link, the link opens, and
-    holding Cmd shows the hand there. Cmd-clicks elsewhere, plain clicks
-    and the Ctrl link modifier on other platforms (a reportable modifier)
-    still go to the remote. The press decides: one already reported stays
-    the remote's even if Cmd goes down before its release.
+    holding Cmd shows the hand there, also when the pointer rests while Cmd
+    goes down or up. Cmd-clicks elsewhere, plain clicks and the Ctrl link
+    modifier on other platforms (a reportable modifier) still go to the
+    remote. The press decides: one already reported stays the remote's even
+    if Cmd goes down before its release. Only single clicks are claimed, so
+    the later presses of a Cmd-multi-click still reach the remote.
 
 ### App-layer notes (outside this package)
 

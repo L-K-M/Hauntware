@@ -28,6 +28,17 @@ import 'package:xterm/src/ui/themes.dart';
 
 enum _SelectionHandle { start, end }
 
+/// [seance fork] The keys [TerminalViewState._linkModifierOutranksRemote]
+/// reads.
+final _linkModifierKeys = {
+  LogicalKeyboardKey.metaLeft,
+  LogicalKeyboardKey.metaRight,
+  LogicalKeyboardKey.shiftLeft,
+  LogicalKeyboardKey.shiftRight,
+  LogicalKeyboardKey.altLeft,
+  LogicalKeyboardKey.altRight,
+};
+
 class TerminalView extends StatefulWidget {
   const TerminalView(
     this.terminal, {
@@ -194,6 +205,11 @@ class TerminalViewState extends State<TerminalView> {
   Uri? _hoveredLink;
   bool _hoverInvalidationPending = false;
 
+  /// [seance fork] Global position of the mouse hovering the view, or null
+  /// once it leaves. Holding Cmd changes which links show, and the pointer
+  /// may not move when it does.
+  Offset? _hoverPosition;
+
   /// [seance fork] The cell of the last plain primary click, kept as a
   /// content-glued buffer anchor so a later shift-click can select the range
   /// between the two points (even across scrolling or trimming in between).
@@ -217,6 +233,7 @@ class TerminalViewState extends State<TerminalView> {
     _controller.addListener(_updateSelectionHandles);
     widget.terminal.addListener(_updateSelectionHandles);
     _focusNode.addListener(_onSelectionFocusChange);
+    HardwareKeyboard.instance.addHandler(_onLinkModifierKey);
     _shortcutManager = ShortcutManager(
       shortcuts: widget.shortcuts ?? defaultTerminalShortcuts,
     );
@@ -285,6 +302,7 @@ class TerminalViewState extends State<TerminalView> {
     _controller.removeListener(_invalidateLinkHover);
     _controller.removeListener(_updateSelectionHandles);
     _focusNode.removeListener(_onSelectionFocusChange);
+    HardwareKeyboard.instance.removeHandler(_onLinkModifierKey);
     if (widget.focusNode == null) {
       _focusNode.dispose();
     }
@@ -410,7 +428,10 @@ class TerminalViewState extends State<TerminalView> {
           ? SystemMouseCursors.click
           : widget.mouseCursor,
       onHover: widget.onLinkTap == null ? null : _onLinkHover,
-      onExit: (_) => _setHoveredLink(null),
+      onExit: (_) {
+        _hoverPosition = null;
+        _setHoveredLink(null);
+      },
       child: child,
     );
 
@@ -441,8 +462,26 @@ class TerminalViewState extends State<TerminalView> {
   }
 
   void _onLinkHover(PointerHoverEvent event) {
+    _hoverPosition = event.position;
+    _refreshLinkHover();
+  }
+
+  /// [seance fork] Re-reads the hovered link when a modifier that decides
+  /// it goes up or down, so the hand follows Cmd without the pointer moving.
+  bool _onLinkModifierKey(KeyEvent event) {
+    if (_hoverPosition != null &&
+        widget.onLinkTap != null &&
+        _linkModifierKeys.contains(event.logicalKey)) {
+      _refreshLinkHover();
+    }
+    return false;
+  }
+
+  void _refreshLinkHover() {
+    final position = _hoverPosition;
+    if (position == null) return;
     final offset = renderTerminal.getCellOffset(
-      renderTerminal.globalToLocal(event.position),
+      renderTerminal.globalToLocal(position),
     );
     _setHoveredLink(
         _remoteOwnsTapAt(offset) && !_linkModifierOutranksRemote

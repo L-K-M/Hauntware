@@ -231,16 +231,41 @@ void main() {
     await tester.pump();
     expect(showsLink(), isFalse);
 
+    // The pointer stays put: the hint follows Cmd alone.
     await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
-    await mouse.moveTo(point + const Offset(1, 0));
     await tester.pump();
     expect(showsLink(), isTrue);
 
     await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
-    await mouse.moveTo(point);
     await tester.pump();
     expect(showsLink(), isFalse);
     await mouse.removePointer();
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('a claimed press dragged away reports nothing', (tester) async {
+    final terminal = Terminal();
+    final controller = TerminalController();
+    addTearDown(controller.dispose);
+    final opened = <Uri>[];
+    final point = await pumpTerminal(tester, terminal, controller, opened);
+    terminal.write('\x1b[?1000h$sgrMouse');
+    final output = <String>[];
+    terminal.onOutput = output.add;
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    final press = await tester.startGesture(
+      point,
+      kind: PointerDeviceKind.mouse,
+    );
+    // Past the tap's deadline, so its press is claimed before the drag.
+    await tester.pump(kPressTimeout * 2);
+    await press.moveBy(const Offset(60, 0));
+    await press.up();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pump(gestureTimeout);
+
+    expect(output, isEmpty);
+    expect(opened, isEmpty);
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
   for (final update in {
