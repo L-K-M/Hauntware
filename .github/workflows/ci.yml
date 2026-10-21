@@ -49,9 +49,10 @@ env:
 # Fork PRs never reach the self-hosted runners: this repo is public.
 # GitHub-hosted on purpose: macOS, Windows and Android legs, the jobs
 # that need Docker (the self-hosted runners have no daemon; contracts'
-# actionlint is a container action), seance_dart (pinned sudo texts)
-# and the timing measurements, whose budgets assume GitHub's runner
-# images.
+# actionlint is a container action), seance_dart (pinned sudo texts),
+# klabautermann_dart (its host-sampling and owner-only file tests need
+# a VM with systemd and a non-root user) and the timing measurements,
+# whose budgets assume GitHub's runner images.
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -370,7 +371,7 @@ jobs:
     name: Klabautermann pure-Dart packages (Ubuntu)
     needs: affected
     if: needs.affected.outputs.klabautermann == 'true'
-    runs-on: ${{ github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
       run:
