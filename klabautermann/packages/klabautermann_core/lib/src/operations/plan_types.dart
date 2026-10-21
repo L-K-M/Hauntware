@@ -61,7 +61,8 @@ final class ShellStep extends PlanStep {
   String get display {
     final line = elevated ? 'sudo: $commandLine' : commandLine;
     final bytes = input?.length;
-    return bytes == null ? line : '$line < new content ($bytes bytes)';
+    if (bytes == null) return line;
+    return '$line < new content ($bytes ${bytes == 1 ? 'byte' : 'bytes'})';
   }
 }
 
