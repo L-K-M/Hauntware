@@ -2608,11 +2608,41 @@ abstract class AppLocalizations {
   /// **'{level, select, emergency{Emergency} alert{Alert and above} critical{Critical and above} error{Error and above} warning{Warning and above} notice{Notice and above} info{Info and above} other{Debug and above}}'**
   String logsPanelPriorityLevel(String level);
 
-  /// Toggle of the Logs panel's journal filters that shows only entries since the server last started.
+  /// Tooltip and title of the Logs panel's boot picker, which chooses the server start whose journal or kernel entries are shown.
   ///
   /// In en, this message translates to:
-  /// **'Current boot only'**
-  String get logsPanelCurrentBoot;
+  /// **'Boot'**
+  String get logsPanelBoot;
+
+  /// The boot picker's choice: every boot the journal keeps, or only the one since the server last started.
+  ///
+  /// In en, this message translates to:
+  /// **'{choice, select, all{All boots} current{This boot} other{Boot}}'**
+  String logsPanelBootChoice(String choice);
+
+  /// A past boot in the boot picker, counted back from the current one.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Previous boot} other{{count} boots ago}}'**
+  String logsPanelBootPast(int count);
+
+  /// When a boot's first and last journal entries were written, under its name in the boot picker.
+  ///
+  /// In en, this message translates to:
+  /// **'{start} to {end}'**
+  String logsPanelBootSpan(String start, String end);
+
+  /// Shown in the boot picker while the server lists its boots.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the server\'s boots…'**
+  String get logsPanelBootsLoading;
+
+  /// Shown in the boot picker when the server's boots could not be listed.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected to the server.} denied{The server denied access to its boot list.} missing{The server has no journal to list boots from.} other{Reading the server\'s boots failed.}}'**
+  String logsPanelBootsFailed(String failure);
 
   /// Label of the Logs panel's time range filter.
   ///
@@ -2650,6 +2680,66 @@ abstract class AppLocalizations {
   /// **'Common paths'**
   String get logsPanelCommonPaths;
 
+  /// Button beside the file path field that lists the server's log files under /var/log (LOG-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Browse /var/log'**
+  String get logsPanelBrowseFiles;
+
+  /// Title of the sheet listing the server's log files under /var/log.
+  ///
+  /// In en, this message translates to:
+  /// **'Files in /var/log'**
+  String get logsPanelFiles;
+
+  /// Label of the field that narrows the /var/log listing to paths containing its text.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter by name'**
+  String get logsPanelFilesFilter;
+
+  /// Shown in the /var/log browser while the server lists its files.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing the server\'s log files…'**
+  String get logsPanelFilesLoading;
+
+  /// Shown in the /var/log browser when the server's files could not be listed.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected to the server.} denied{The server denied access to /var/log.} missing{The server cannot list /var/log.} other{Listing the server\'s log files failed.}}'**
+  String logsPanelFilesFailed(String failure);
+
+  /// Shown in the /var/log browser when the listing is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'The server has no files under /var/log.'**
+  String get logsPanelFilesEmpty;
+
+  /// Shown in the /var/log browser when the filter matches no file.
+  ///
+  /// In en, this message translates to:
+  /// **'No file path contains this text.'**
+  String get logsPanelFilesNoMatch;
+
+  /// Under a file's path in the /var/log browser: its size and when it last changed.
+  ///
+  /// In en, this message translates to:
+  /// **'{size}, changed {modified}'**
+  String logsPanelFileDetails(String size, String modified);
+
+  /// Under a rotated .gz or .xz file in the /var/log browser.
+  ///
+  /// In en, this message translates to:
+  /// **'Compressed: reads its last lines, without following'**
+  String get logsPanelFileCompressed;
+
+  /// Under a file in the /var/log browser that the server account may not read.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account cannot read it; admin mode can'**
+  String get logsPanelFileUnreadable;
+
   /// Button that reads the log again with the filters or path entered.
   ///
   /// In en, this message translates to:
@@ -2674,6 +2764,18 @@ abstract class AppLocalizations {
   /// **'Follow new entries as the server writes them'**
   String get logsPanelLiveTooltip;
 
+  /// Tooltip of the Logs panel's Live chip while it is off because a past boot is shown.
+  ///
+  /// In en, this message translates to:
+  /// **'A past boot has no new entries to follow'**
+  String get logsPanelLivePastBoot;
+
+  /// Tooltip of the Logs panel's Live chip while it is off because a compressed rotated file is shown.
+  ///
+  /// In en, this message translates to:
+  /// **'A compressed file has no new lines to follow'**
+  String get logsPanelLiveCompressed;
+
   /// Notice above the journal when the server shows the signed-in account only its own entries. The group names are names on the server and stay as they are.
   ///
   /// In en, this message translates to:
@@ -2689,7 +2791,7 @@ abstract class AppLocalizations {
   /// Status line above the log saying what reading it is doing or why it stopped.
   ///
   /// In en, this message translates to:
-  /// **'{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} gap{Following again. Lines written while it was paused or disconnected may be missing.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} other{Choose or type the absolute path of a file to tail.}}'**
+  /// **'{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} gap{Following again. Lines written while it was paused or disconnected may be missing.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} searchUnsupported{This server\'s journal cannot search. Clear the server search to read the log.} other{Choose or type the absolute path of a file to tail.}}'**
   String logsPanelStatus(String status);
 
   /// Button that opens the log again after it stopped or was refused.
@@ -2727,6 +2829,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Match case'**
   String get logsPanelSearchCase;
+
+  /// Tooltip of the toggle that makes the log search read its text as a regular expression.
+  ///
+  /// In en, this message translates to:
+  /// **'Regular expression'**
+  String get logsPanelSearchRegex;
+
+  /// Error under the log search field when its text, read as a regular expression, does not compile.
+  ///
+  /// In en, this message translates to:
+  /// **'Not a valid regular expression'**
+  String get logsPanelSearchInvalid;
+
+  /// Tooltip of the button that reads only the journal entries matching the search, matched by the server, rather than searching the entries already shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Search the whole journal on the server'**
+  String get logsPanelSearchServer;
+
+  /// Chip above the log while the server reads only the journal entries matching a pattern; the pattern is shown as sent.
+  ///
+  /// In en, this message translates to:
+  /// **'Server search: {pattern}'**
+  String logsPanelServerMatch(String pattern);
+
+  /// Tooltip of the button on the server-search chip that reads the whole journal again.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the server search'**
+  String get logsPanelServerMatchClear;
 
   /// How many matches the log search found, before one is selected.
   ///
