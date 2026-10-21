@@ -311,6 +311,9 @@ Future<List<Map<String, Object?>>> measureProcs(
 /// process count holds for the whole round.
 const _sleeperSeconds = 3600;
 
+/// How long [Sleepers.spawn] waits for its children to exec sleep.
+const _sleeperStartWait = Duration(seconds: 10);
+
 /// Whether [pid] is still a sleeper. Once a sleeper has ended and been
 /// reaped, the kernel can give its pid to an unrelated process.
 bool isSleeper(int pid) {
@@ -355,6 +358,18 @@ final class Sleepers {
     if (pids.length != n) {
       await sleepers.kill();
       throw StateError('started ${pids.length} of $n sleepers');
+    }
+    // `$!` names a child as soon as it forks, before it execs sleep, and
+    // kill() signals only pids that are sleepers by then; a child caught
+    // early would never be signalled and the spawner would wait for it.
+    final started = Stopwatch()..start();
+    while (!pids.every(isSleeper)) {
+      if (started.elapsed > _sleeperStartWait) {
+        pids.forEach(Process.killPid);
+        await sleepers.kill();
+        throw StateError('sleepers did not exec within $_sleeperStartWait');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 10));
     }
     return sleepers;
   }
