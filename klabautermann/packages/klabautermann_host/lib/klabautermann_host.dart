@@ -23,6 +23,7 @@ export 'src/hws/frames.dart';
 export 'src/hws/program.dart';
 export 'src/hws/request.dart';
 export 'src/hws/tick_assembler.dart';
+export 'src/jobs/job_history.dart';
 export 'src/jobs/jobs.dart';
 export 'src/jobs/schedule.dart';
 export 'src/parse/cron.dart';
