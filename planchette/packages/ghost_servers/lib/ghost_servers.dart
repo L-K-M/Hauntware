@@ -16,5 +16,6 @@ export 'src/keyboard_interactive_dialog.dart';
 export 'src/server_grouping.dart';
 export 'src/server_editor/delegate.dart';
 export 'src/server_editor/draft.dart';
+export 'src/server_editor/server_editor.dart';
 export 'src/server_editor/strings.dart';
 export 'src/server_status.dart';
