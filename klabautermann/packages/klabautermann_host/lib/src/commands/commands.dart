@@ -4,6 +4,7 @@
 /// the caller's injected `quoteShellWord`, the only quoting there is.
 library;
 
+import '../cron/document.dart' show splitCronCommand;
 import '../hws/collector.dart' show ArgValidators;
 import '../hws/request.dart' show ShellQuote;
 import 'proc_stat.dart';
@@ -182,6 +183,11 @@ enum JournalOrder {
   /// Follow (`-f`): the earlier records oldest first, then each new one.
   follow,
 }
+
+/// How a cron command runs as another user (JOB-19, 03 §7.7): util-linux
+/// `runuser`, which root runs without a password prompt or PAM session
+/// checks, or `su` where a host lacks it (BusyBox).
+enum RunAsTool { runuser, su }
 
 /// The locale [HostCommands.commandLine] exports (03 §8.8, A11Y-08).
 enum CommandLocale {
@@ -433,6 +439,26 @@ abstract final class HostCommands {
     _check(ArgValidators.absolutePath, path);
     if (lines < 0) throw const HostCommandError('negative line count');
     return ['tail', '-n', '$lines', if (follow) '-F', '--', path];
+  }
+
+  /// A cron job's command run now (JOB-19, 03 §7.7): `sh -c` with the
+  /// command [splitCronCommand] split off, as the login user or, through
+  /// elevation, as [asUser] with [tool]. The caller feeds the split's
+  /// standard input and runs a long job detached (7.17).
+  static List<String> runCronCommand(
+    String command, {
+    String? asUser,
+    RunAsTool tool = RunAsTool.runuser,
+  }) {
+    if (command.trim().isEmpty || command.codeUnits.contains(0)) {
+      throw HostCommandError('not a command', argument: command);
+    }
+    if (asUser == null) return ['sh', '-c', command];
+    _check(ArgValidators.userName, asUser);
+    return switch (tool) {
+      RunAsTool.runuser => ['runuser', '-u', asUser, '--', 'sh', '-c', command],
+      RunAsTool.su => ['su', '-s', '/bin/sh', '-c', command, asUser],
+    };
   }
 
   /// `crontab -l -u <user>` for the jobs view's user switch (03 §7.7).
