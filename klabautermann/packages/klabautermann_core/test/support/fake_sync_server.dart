@@ -70,6 +70,22 @@ final class FakeSyncServer {
     _records[server.id] = sealed.withSeq(++_seq);
   }
 
+  /// Seals [secret] as its `secret:` record under the account key and
+  /// seeds it, stamped [updatedAt].
+  Future<void> seedSecret(Secret secret, {int updatedAt = 1}) async {
+    final id = 'secret:${secret.id}';
+    final sealed = await RecordCrypto(RecordCodec(keys.vaultKey)).seal(
+      DecryptedRecord(
+        id: id,
+        kind: RecordKind.secret,
+        updatedAt: updatedAt,
+        deviceId: 'seance-device',
+        data: secret.toJson(),
+      ),
+    );
+    _records[id] = sealed.withSeq(++_seq);
+  }
+
   /// The [SyncTransportFactory] over this server.
   SyncTransport transport(String baseUrl, {String? token}) {
     transports++;
@@ -162,6 +178,9 @@ final class MemoryKeystore implements SyncKeystore {
   /// keyring.
   bool refuseWrites = false;
 
+  /// Hears each master key written.
+  void Function(List<int> key)? onWrite;
+
   @override
   Future<void> putApiKey(String name, String value) async {
     if (refuseWrites) throw const SyncKeystoreRefusedException('locked');
@@ -181,5 +200,6 @@ final class MemoryKeystore implements SyncKeystore {
   Future<void> writeMasterKey(List<int> key) async {
     if (refuseWrites) throw const SyncKeystoreRefusedException('locked');
     masterKey = List.of(key);
+    onWrite?.call(masterKey!);
   }
 }
