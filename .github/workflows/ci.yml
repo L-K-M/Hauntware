@@ -97,9 +97,45 @@ jobs:
       - name: Test suite release tool
         run: dart test tool/release_version/test
 
+  # ---- Affected products ------------------------------------------------
+  # Every product job waits on this selection. A pull request runs only
+  # the products its diff reaches through pubspec path dependencies
+  # (scripts/ci-affected-products.py): a Klabautermann-only change skips
+  # every Planchette, Séance and Poltergeist leg. Main pushes and manual
+  # runs still build every product, so main stays the full-coverage
+  # record. The shared gates above and the detector-filtered legs below
+  # are not gated.
+  affected:
+    name: Detect affected products
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      planchette: ${{ steps.select.outputs.planchette }}
+      seance: ${{ steps.select.outputs.seance }}
+      poltergeist: ${{ steps.select.outputs.poltergeist }}
+      klabautermann: ${{ steps.select.outputs.klabautermann }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The PR merge commit plus its parents: HEAD^1..HEAD is exactly
+          # what merging the PR changes on its base.
+          fetch-depth: 2
+      - name: Select product jobs
+        id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            python3 scripts/ci-affected-products.py HEAD^1 HEAD >> "$GITHUB_OUTPUT"
+          else
+            python3 scripts/ci-affected-products.py --all >> "$GITHUB_OUTPUT"
+          fi
+
   # ---- Planchette -------------------------------------------------------
   planchette_core:
     name: Planchette core (${{ matrix.os }})
+    needs: affected
+    if: needs.affected.outputs.planchette == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -127,6 +163,8 @@ jobs:
   # ---- Séance -----------------------------------------------------------
   seance_dart:
     name: Séance pure-Dart packages (analyze + test)
+    needs: affected
+    if: needs.affected.outputs.seance == 'true'
     # Pinned for the real-sudo step: its wrong-password test expects
     # classic sudo's texts. Ubuntu 26.04 makes sudo-rs the default
     # sudo, so moving this job there needs sudo-rs texts recorded.
@@ -233,6 +271,8 @@ jobs:
   # before they moved to seance_core; seance_dart covers Ubuntu.
   seance_catalog:
     name: Séance catalog library (${{ matrix.os }})
+    needs: affected
+    if: needs.affected.outputs.seance == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -260,6 +300,8 @@ jobs:
   # ---- Poltergeist ------------------------------------------------------
   poltergeist_dart:
     name: Poltergeist pure-Dart packages (${{ matrix.os }})
+    needs: affected
+    if: needs.affected.outputs.poltergeist == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -316,6 +358,8 @@ jobs:
   # the sampler's shell test needs dash and bash.
   klabautermann_dart:
     name: Klabautermann pure-Dart packages (Ubuntu)
+    needs: affected
+    if: needs.affected.outputs.klabautermann == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -1263,6 +1307,8 @@ jobs:
   # ---- Flutter suites ---------------------------------------------------
   planchette_flutter:
     name: Planchette editor and app (analyze + test)
+    needs: affected
+    if: needs.affected.outputs.planchette == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -1350,6 +1396,8 @@ jobs:
 
   seance_flutter:
     name: Séance app (analyze + test)
+    needs: affected
+    if: needs.affected.outputs.seance == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30   # first run downloads the Flutter toolchain
     steps:
@@ -1377,6 +1425,8 @@ jobs:
 
   poltergeist_flutter:
     name: Poltergeist app (analyze + test)
+    needs: affected
+    if: needs.affected.outputs.poltergeist == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30   # first run downloads the Flutter toolchain
     steps:
@@ -1397,6 +1447,8 @@ jobs:
 
   klabautermann_flutter:
     name: Klabautermann app (analyze + test)
+    needs: affected
+    if: needs.affected.outputs.klabautermann == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30   # first run downloads the Flutter toolchain
     steps:
@@ -1426,6 +1478,8 @@ jobs:
 
   planchette_client:
     name: Planchette client (${{ matrix.target }})
+    needs: affected
+    if: needs.affected.outputs.planchette == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     strategy:
@@ -1531,6 +1585,8 @@ jobs:
 
   seance_client:
     name: Séance client (${{ matrix.target }})
+    needs: affected
+    if: needs.affected.outputs.seance == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45   # first run downloads the Flutter toolchain
     strategy:
@@ -1669,6 +1725,8 @@ jobs:
 
   poltergeist_client:
     name: Poltergeist client (${{ matrix.target }})
+    needs: affected
+    if: needs.affected.outputs.poltergeist == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45   # first run downloads the Flutter toolchain
     strategy:
@@ -1800,6 +1858,8 @@ jobs:
   # keep the two in step from then on.
   klabautermann_client:
     name: Klabautermann client (${{ matrix.target }})
+    needs: affected
+    if: needs.affected.outputs.klabautermann == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45   # first run downloads the Flutter toolchain
     strategy:
@@ -1932,6 +1992,8 @@ jobs:
   # ---- Séance sync server image -----------------------------------------
   docker:
     name: Sync server Docker image
+    needs: affected
+    if: needs.affected.outputs.seance == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
