@@ -208,27 +208,38 @@ mv -f -- "$d/.crontab.tmp" "$b" || { s=$?; rm -f -- "$d/.crontab.tmp"; exit "$s"
   mv -f -- "$d/.index.tmp" "$d/index" || exit
 printf '%s\n' "$b"''';
 
+/// Sets `c` to the SHA-256 of `$1`, or of nothing when `$1` does not
+/// exist. A `$1` that exists but cannot be read exits non-zero, so it
+/// never passes for an absent one.
+const String _kHashOrEmpty =
+    'if [ -e "\$1" ]; then c=\$(sha256sum < "\$1") || exit; '
+    'else c=\$(sha256sum < /dev/null); fi\n';
+
+/// Exits [EditExit.hashMismatch] unless `c` holds the SHA-256 in `$2`.
+const String _kExitUnlessHash =
+    'if [ "\${c%% *}" != "\$2" ]; then exit ${EditExit.hashMismatch}; fi\n';
+
 /// Replaces a backup index with stdin while it still hashes to the
 /// SHA-256 the plan read (an absent index hashes as empty), so a backup
 /// another edit added meanwhile is never dropped from it.
-const String _kIndexWriteIfHashScript = r'''
-umask 077
-c=$( { cat -- "$1" 2>/dev/null || :; } | sha256sum) || exit
-if [ "${c%% *}" != "$2" ]; then exit 101; fi
-cat > "$1.klabautermann-tmp" && mv -f -- "$1.klabautermann-tmp" "$1" ||
-  { s=$?; rm -f -- "$1.klabautermann-tmp"; exit "$s"; }''';
+const String _kIndexWriteIfHashScript =
+    'umask 077\n'
+    '$_kHashOrEmpty'
+    '$_kExitUnlessHash'
+    'cat > "\$1.klabautermann-tmp" && mv -f -- "\$1.klabautermann-tmp" "\$1" ||\n'
+    '  { s=\$?; rm -f -- "\$1.klabautermann-tmp"; exit "\$s"; }';
 
 /// Writes stdin to the manifest through a temp file beside it, creating
 /// its directory 0700, while the manifest still hashes to the read the
 /// plan rewrote (an absent one hashes as empty); otherwise exits
 /// [EditExit.hashMismatch].
-const String _kManifestWriteScript = r'''
-umask 077
-mkdir -p -- "${1%/*}" || exit
-c=$( { cat -- "$1" 2>/dev/null || :; } | sha256sum) || exit
-if [ "${c%% *}" != "$2" ]; then exit 101; fi
-x=$1.klabautermann-tmp.$$
-cat > "$x" && mv -f -- "$x" "$1" || { s=$?; rm -f -- "$x"; exit "$s"; }''';
+const String _kManifestWriteScript =
+    'umask 077\n'
+    'mkdir -p -- "\${1%/*}" || exit\n'
+    '$_kHashOrEmpty'
+    '$_kExitUnlessHash'
+    'x=\$1.klabautermann-tmp.\$\$\n'
+    'cat > "\$x" && mv -f -- "\$x" "\$1" || { s=\$?; rm -f -- "\$x"; exit "\$s"; }';
 
 /// The validated builders of the edit pipeline (03 §8.5, §8.8, D67).
 abstract final class EditCommands {

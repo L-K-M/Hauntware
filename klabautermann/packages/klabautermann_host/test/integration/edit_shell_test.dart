@@ -381,6 +381,27 @@ void main() {
           isNot(contains(contains('klabautermann-tmp'))),
         );
 
+        // One that exists but cannot be read never passes for absent: a
+        // directory at the path once hashed as empty and took the file.
+        final blockedManifest =
+            '${dir.path}/blocked/config/klabautermann/manifest.json';
+        final blockedBackups = '${dir.path}/blocked$kBackupsDirSuffix';
+        final targets = {
+          blockedManifest: EditCommands.manifestWrite(
+            blockedManifest,
+            _emptySha256,
+          ),
+          '$blockedBackups/$kEditBackupIndexName':
+              EditCommands.backupIndexWrite(blockedBackups, _emptySha256),
+        };
+        for (final MapEntry(key: path, value: write) in targets.entries) {
+          Directory(path).createSync(recursive: true);
+          final refused = await run(write, stdin: '{"v":3}');
+          expect(refused.exitCode, isNot(0), reason: path);
+          expect(refused.exitCode, isNot(EditExit.hashMismatch), reason: path);
+          expect(Directory(path).listSync(), isEmpty, reason: path);
+        }
+
         final read = await run(EditCommands.manifestRead(manifest));
         expect(read.stdout, '{"v":1}');
 

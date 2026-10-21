@@ -269,7 +269,9 @@ Future<_Manifest> _manifestStep(
   return _ManifestWrite(
     ShellStep(
       // Against the read above: a manifest another run changed since is
-      // never overwritten with rows built from the old one.
+      // not overwritten with rows built from the old one. The check and
+      // the rename are two steps, so two runs between them can still
+      // drop one's rows; its backup then shows as an orphan.
       EditCommands.manifestWrite(
         path,
         sha256.convert(utf8.encode(read.stdout)).toString(),
