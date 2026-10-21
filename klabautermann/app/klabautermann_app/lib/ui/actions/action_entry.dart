@@ -19,6 +19,9 @@ enum ActionEntryPoint {
   /// "Run now" on a cron line (JOB-19).
   cronRunNow,
 
+  /// Pause and Resume on a cron line (JOB-07).
+  cronPause,
+
   /// A container's state verbs (CTR-02).
   containerVerb,
 

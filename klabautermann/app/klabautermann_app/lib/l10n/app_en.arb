@@ -4343,6 +4343,18 @@
   "@jobsRunNow": {
     "description": "Timer action (JOB-08): starts the unit the timer activates now."
   },
+  "jobsPause": "Pause",
+  "@jobsPause": {
+    "description": "Cron line action (JOB-07): comments the line out, through an edit of the crontab, so cron skips it until it is resumed."
+  },
+  "jobsResume": "Resume",
+  "@jobsResume": {
+    "description": "Paused cron line action (JOB-07): restores the line Pause commented out, through an edit of the crontab."
+  },
+  "jobsPauseLineChanged": "The crontab no longer holds this line as shown. Wait for the next reading and try again.",
+  "@jobsPauseLineChanged": {
+    "description": "Toast when Pause or Resume reads the crontab and the line has changed or gone since the Jobs tab read it (JOB-07)."
+  },
   "jobsRunOutputTitle": "Output of {unit}",
   "@jobsRunOutputTitle": {
     "description": "Title of the sheet that follows a timer run's journal; unit is the service the timer started.",

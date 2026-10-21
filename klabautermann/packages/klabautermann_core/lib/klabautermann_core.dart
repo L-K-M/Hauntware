@@ -91,6 +91,7 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         CronDst,
         CronFieldItem,
         CronFields,
+        CronJob,
         CronJobEntry,
         CronMacro,
         CronRun,
@@ -108,6 +109,9 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         userCrontabSource;
 
 export 'src/sampling/sample_results.dart' show kCronLinesEvaluated;
+// Pause and Resume rewrite a cron line through the edit pipeline
+// (JOB-07): the crontab that holds it and the text with it toggled.
+export 'src/jobs/cron_pause.dart' show cronPauseTarget, togglePausedCronJob;
 
 // Detached operations (03 §7.17): which directory an operation records
 // in, and how far each directory's listing got.

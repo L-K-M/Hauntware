@@ -3638,6 +3638,18 @@ As built in M5 (M27c, first part), the Jobs tab shows these:
   its exit status and what it printed. Edit crontab, Pause and Resume
   follow once the editor (M17) shares this base.
 
+As built in M5 (M27c, second part), Pause and Resume (JOB-07) sit in a
+cron line's row menu and details, on the login user's crontab and, in
+admin mode, another user's (`cronPauseTarget`); system tables and
+managed lines offer neither. The app reads the crontab through
+`ReadEditable`, `togglePausedCronJob` turns the first line that reads as
+the row did into the pause comment or back, and the result is planned
+as an `EditFile` against that read's hash, so the preview, the backup,
+the hash check right before the rename and the audit are an edit's. A
+crontab that no longer holds the line plans nothing and says so; one
+changed between the read and the run is refused as `contentChanged`.
+Edit crontab came with the editor (M17).
+
 As built in M2 (`app/klabautermann_app/lib/ui/jobs_panel.dart`,
 `jobs_view.dart`), the Jobs tab lists the `cron` stream's jobs rows and
 a row per `timers` entry in the sortable table, next run first, with
