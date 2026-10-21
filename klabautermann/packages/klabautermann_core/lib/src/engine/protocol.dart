@@ -11,9 +11,12 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         FsSnapshot,
         HostProfile,
         JobEntry,
+        JournalBoot,
+        JournalBootEntry,
         KillSignal,
         LoadAvg,
         LoggedCronRun,
+        LogFileEntry,
         NetRate,
         OpDirectoryKind,
         OpDirectoryListing,
@@ -212,6 +215,13 @@ import '../operations/plan_types.dart';
 /// SVC-10): [UnitAction] and [StartTimer] gained a [UnitScope], and
 /// [UnitQuery], answered by [UnitQueryResult], reads a unit's file, its
 /// resources or the sockets.
+///
+/// The v1 log sources then joined v3 the same way (03 §7.6, LOG-06 to
+/// LOG-10): [JournalLogSource] gained `grep` and `boot`,
+/// [KernelLogSource] `boot`, [FileLogSource] `compressed`, and
+/// [LogStreamEndReason] `searchUnsupported`; [HostQuery], answered by
+/// [HostResult], lists `/var/log` and the journal's boots; and
+/// [RedactLines], answered by [RedactedLines], redacts an export.
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -575,6 +585,53 @@ final class DockerQuery extends EngineRequest {
   final String queryId;
 
   final DockerQuerySpec query;
+}
+
+/// Runs one read-only host query on [serverId] over its link (03 §7.6),
+/// answered by one [HostResult] with [queryId]. A server without a ready
+/// link is answered at once with [HostQueryFailure.noLink].
+final class HostQuery extends EngineRequest {
+  const HostQuery({
+    required this.serverId,
+    required this.queryId,
+    required this.query,
+  });
+
+  final String serverId;
+
+  /// The app's own id for the query, which its [HostResult] carries.
+  final String queryId;
+
+  final HostQuerySpec query;
+}
+
+/// What a [HostQuery] reads.
+@immutable
+sealed class HostQuerySpec {
+  const HostQuerySpec();
+}
+
+/// The regular files under `/var/log`, two levels deep (LOG-08), as
+/// [VarLogFiles].
+final class VarLogQuery extends HostQuerySpec {
+  const VarLogQuery();
+}
+
+/// The journal's boots (LOG-09), as [JournalBoots]: `journalctl
+/// --list-boots` as JSON on systemd 251 and later, the text table on
+/// older ones and where the probe found no version.
+final class BootsQuery extends HostQuerySpec {
+  const BootsQuery();
+}
+
+/// Redacts [lines] the app holds for an export (LOG-10, 03 §8.9) through
+/// the engine's secret redactor, which the app cannot import, answered
+/// by [RedactedLines] with [requestId].
+final class RedactLines extends EngineRequest {
+  const RedactLines(this.requestId, this.lines);
+
+  final String requestId;
+  final List<String> lines;
 }
 
 /// Watches [lists] on [serverId]'s engine (03 §7.12 DKE-02, CST-01), as
@@ -1306,6 +1363,75 @@ final class DockerResult extends EngineEvent {
   final String queryId;
   final DockerPayload payload;
   final List<String> warnings;
+}
+
+/// The answer to the [HostQuery] with [queryId]. [warnings] name the rows
+/// the parser skipped.
+final class HostResult extends EngineEvent {
+  const HostResult({
+    required this.serverId,
+    required this.queryId,
+    required this.payload,
+    this.warnings = const [],
+  });
+
+  final String serverId;
+  final String queryId;
+  final HostPayload payload;
+  final List<String> warnings;
+}
+
+/// What a [HostResult] carries.
+@immutable
+sealed class HostPayload {
+  const HostPayload();
+}
+
+/// [VarLogQuery]'s files, sorted by path.
+final class VarLogFiles extends HostPayload {
+  const VarLogFiles(this.files);
+
+  final List<LogFileEntry> files;
+}
+
+/// [BootsQuery]'s boots, oldest first, as journalctl lists them.
+final class JournalBoots extends HostPayload {
+  const JournalBoots(this.boots);
+
+  final List<JournalBootEntry> boots;
+}
+
+/// A [HostQuery] that read nothing; [detail] is the end of its stderr,
+/// or the text of an error the read threw (a timeout or a lost link).
+final class HostQueryFailed extends HostPayload {
+  const HostQueryFailed(this.failure, {this.detail});
+
+  final HostQueryFailure failure;
+  final String? detail;
+}
+
+/// Why a [HostQuery] read nothing.
+enum HostQueryFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// The host refused the read.
+  denied,
+
+  /// The tool the query runs is absent on the host.
+  missing,
+
+  /// The read failed otherwise: a timeout, a lost link, or an exit the
+  /// query does not expect.
+  failed,
+}
+
+/// [RedactLines]' lines, redacted, joined with newlines.
+final class RedactedLines extends EngineEvent {
+  const RedactedLines(this.requestId, this.text);
+
+  final String requestId;
+  final String text;
 }
 
 /// What the engine knows of [serverId]'s Docker endpoint (03 §5.8, §5.9),
@@ -2329,17 +2455,18 @@ sealed class LogSource {
 
 /// The systemd journal through `journalctl -o json`, read as
 /// [JournalRecord]s, with LOG-01's filters; SVC-04's unit logs filter by
-/// [unit]. A null filter matches every record. There is no text filter:
-/// LOG-05 searches the records the view holds, and `journalctl -g`
-/// arrives with LOG-06 (v1).
+/// [unit]. A null filter matches every record. LOG-05 searches the
+/// records the view holds; [grep] has journalctl match them (LOG-06).
 final class JournalLogSource extends LogSource {
   const JournalLogSource({
     this.unit,
     this.identifier,
     this.priority,
     this.currentBootOnly = false,
+    this.boot,
     this.since,
     this.until,
+    this.grep,
   });
 
   /// A systemd unit name (`-u`).
@@ -2351,30 +2478,46 @@ final class JournalLogSource extends LogSource {
   /// The least urgent priority shown (`-p`): records at it or more urgent.
   final LogPriority? priority;
 
-  /// Only the current boot's records (`-b`); past boots arrive with
-  /// LOG-09's boot picker (v1).
+  /// Only the current boot's records (`-b`).
   final bool currentBootOnly;
+
+  /// Only [boot]'s records (`-b <boot>`, LOG-09), picked from a
+  /// [BootsQuery]; not with [currentBootOnly]. A follow reads the
+  /// current boot, so it takes no [boot].
+  final JournalBoot? boot;
 
   /// The time range (`--since`, `--until`). A follow takes no [until],
   /// since it reads up to the present.
   final DateTime? since, until;
+
+  /// A PCRE2 pattern journalctl matches against each record's message
+  /// (`-g`, LOG-06), case-insensitive while it is all lower case. A
+  /// journalctl built without pattern matching ends the read
+  /// [LogStreamEndReason.searchUnsupported].
+  final String? grep;
 }
 
-/// The kernel's messages for the current boot (LOG-03): `journalctl -k`,
-/// read as [JournalRecord]s, with `dmesg --json --decode` only as a
-/// fallback, read as [KernelRecord]s. Past boots arrive with LOG-09 (v1).
+/// The kernel's messages for the current boot (LOG-03), or for [boot]
+/// (LOG-09): `journalctl -k`, read as [JournalRecord]s, with
+/// `dmesg --json --decode` only as the current boot's fallback, read as
+/// [KernelRecord]s.
 final class KernelLogSource extends LogSource {
-  const KernelLogSource();
+  const KernelLogSource({this.boot});
+
+  /// A past boot, picked from a [BootsQuery]; null for the current one.
+  /// A follow reads the current boot, so it takes none.
+  final JournalBoot? boot;
 }
 
 /// One file's lines as [FileRecord]s (LOG-22): `tail -n` for a window,
 /// and `tail -F`, which follows the file by name across rotation, for a
-/// follow. No archives.
+/// follow. A [compressed] rotated file (LOG-08) reads as a window only.
 final class FileLogSource extends LogSource {
   const FileLogSource(
     this.path, {
     this.redacted = false,
     this.elevated = false,
+    this.compressed = false,
   });
 
   /// The absolute path, typed or picked from the common paths; the engine
@@ -2390,6 +2533,12 @@ final class FileLogSource extends LogSource {
   /// [LogStreamEndReason.denied]. Without admin mode it ends denied, and
   /// a follow ends so when admin mode does.
   final bool elevated;
+
+  /// [path] is a rotated `.gz` or `.xz` file, read through `zcat` or
+  /// `xzcat` (LOG-08): its last [LogStreamSpec.window] lines, within the
+  /// engine's output cap, never followed. A decompressor the host lacks
+  /// ends the read [LogStreamEndReason.missing].
+  final bool compressed;
 }
 
 /// A detached operation's output (03 §7.17): the engine reads its
@@ -2662,6 +2811,11 @@ enum LogStreamEndReason {
   /// cache disabled, or on Podman, which has no such cache, any but
   /// `k8s-file`, `json-file` and `journald`. [LogStreamEnded.detail] names the driver.
   logDriverUnreadable,
+
+  /// The host's journalctl cannot match a [JournalLogSource.grep]
+  /// pattern: it was built without PCRE2, or cannot load it (LOG-06).
+  /// The view's own search (LOG-05) still works.
+  searchUnsupported,
 }
 
 /// What a [DockerQuery] reads (03 §7.12 to §7.14).

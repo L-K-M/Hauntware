@@ -14,6 +14,8 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         CronJob,
         CronJobEntry,
         FsMount,
+        JournalBoot,
+        JournalBootEntry,
         ServerZone,
         SystemdTimer,
         mergeJobs,
@@ -110,6 +112,20 @@ void main() {
           ),
         ),
         const CloseStream('stream-1'),
+        OpenLogStream(
+          streamId: 'stream-3',
+          spec: LogStreamSpec(
+            serverId: 'srv-1',
+            source: const JournalLogSource(
+              boot: JournalBoot.offset(-1),
+              grep: 'oom',
+            ),
+            window: 100,
+            follow: false,
+          ),
+        ),
+        const HostQuery(serverId: 'srv-1', queryId: 'h-1', query: BootsQuery()),
+        const RedactLines('r-1', ['a', 'b']),
         const DockerQuery(
           serverId: 'srv-1',
           queryId: 'q-1',
@@ -296,6 +312,24 @@ void main() {
           queryId: 'q-1',
           payload: DockerImagesPayload([]),
         ),
+        HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-1',
+          payload: JournalBoots([
+            JournalBootEntry(
+              offset: -1,
+              id: '0123456789abcdef0123456789abcdef',
+              firstEntry: DateTime.utc(2026, 10, 19),
+            ),
+          ]),
+          warnings: const ['list-boots: row skipped'],
+        ),
+        const HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-2',
+          payload: HostQueryFailed(HostQueryFailure.noLink),
+        ),
+        const RedactedLines('r-1', 'a\nb'),
         const DockerEndpointState(
           serverId: 'srv-1',
           phase: DockerEndpointPhase.waiting,

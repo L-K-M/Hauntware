@@ -162,6 +162,30 @@ void main() {
       expect(answer.more, isFalse);
     });
 
+    test('an export redacts its lines in the engine (LOG-10)', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+
+      client.send(
+        const RedactLines('r-1', ['plain', 'token ghp_A1b2C3d4E5f6G7h8I9j0K1']),
+      );
+      final answer = (await next(events)) as RedactedLines;
+      expect(answer.requestId, 'r-1');
+      expect(answer.text, startsWith('plain\ntoken '));
+      expect(answer.text, isNot(contains('ghp_A1b2C3d4E5f6G7h8I9j0K1')));
+    });
+
+    test('a host query needs links', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+
+      client.send(
+        const HostQuery(serverId: 'nope', queryId: 'h-1', query: VarLogQuery()),
+      );
+      final answer = (await next(events)) as RequestRejected;
+      expect(answer.reason, 'links are off in this engine');
+    });
+
     test('the safety policy refuses plans and admin mode in the engine '
         '(SAF-01, SAF-06)', () async {
       final client = await spawnEngine();
