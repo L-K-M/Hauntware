@@ -9,7 +9,11 @@ import 'package:flutter/services.dart';
 import 'package:ghost_marks/ghost_marks.dart';
 import 'package:ghost_marks/ghost_marks.dart'
     as marks
-    show ServerAppearanceStrings, showServerColorPicker, showServerMarkPicker;
+    show
+        ServerAppearanceStrings,
+        ServerMarkImageReader,
+        showServerColorPicker,
+        showServerMarkPicker;
 import 'package:ghost_ui/ghost_ui.dart' show showTopToastIn;
 import 'package:seance_protocol/seance_protocol.dart';
 
@@ -24,7 +28,8 @@ import 'strings.dart';
 /// server when null, in a dialog at most 520 wide. [monoStyle] draws the
 /// pasted key, the login script and the test transcript; [hexStyle] the
 /// custom colour picker's hex field. [sections] are drawn after the login
-/// script.
+/// script. [readMarkImage] reads the image a mark is imported from, the
+/// app's own picker (ghost_marks holds none).
 Future<void> showGhostServerEditor(
   BuildContext context,
   GhostServerEditorDelegate delegate,
@@ -33,6 +38,7 @@ Future<void> showGhostServerEditor(
   marks.ServerAppearanceStrings appearanceStrings =
       const marks.ServerAppearanceStrings(),
   required TextStyle monoStyle,
+  required marks.ServerMarkImageReader readMarkImage,
   TextStyle? hexStyle,
   Set<GhostServerOptionalField> fields = const {
     GhostServerOptionalField.startDirectory,
@@ -51,6 +57,7 @@ Future<void> showGhostServerEditor(
           strings: strings,
           appearanceStrings: appearanceStrings,
           monoStyle: monoStyle,
+          readMarkImage: readMarkImage,
           hexStyle: hexStyle,
           fields: fields,
           sections: sections,
@@ -100,6 +107,7 @@ class _ServerEditor extends StatefulWidget {
   final GhostServerEditorStrings strings;
   final marks.ServerAppearanceStrings appearanceStrings;
   final TextStyle monoStyle;
+  final marks.ServerMarkImageReader readMarkImage;
   final TextStyle? hexStyle;
   final Set<GhostServerOptionalField> fields;
   final List<GhostServerEditorSection> sections;
@@ -110,6 +118,7 @@ class _ServerEditor extends StatefulWidget {
     required this.strings,
     required this.appearanceStrings,
     required this.monoStyle,
+    required this.readMarkImage,
     this.hexStyle,
     required this.fields,
     this.sections = const [],
@@ -759,6 +768,7 @@ class _ServerEditorState extends State<_ServerEditor> {
       current: _mark,
       accent: _tint,
       strings: widget.appearanceStrings,
+      readImage: widget.readMarkImage,
     );
     if (chosen == null || !mounted) return;
     setState(() => _mark = chosen);

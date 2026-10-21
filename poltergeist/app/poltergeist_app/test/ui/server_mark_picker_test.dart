@@ -27,6 +27,7 @@ void main() {
                 context,
                 current: const ServerGlyphMark(null),
                 accent: accent,
+                readImage: () async => null,
                 strings: PoltergeistServerAppearanceStrings(
                   AppLocalizations.of(context),
                 ),

@@ -15,6 +15,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:ghost_marks_picker/ghost_marks_picker.dart';
 import 'package:ghost_servers/ghost_servers.dart';
 import 'package:ghost_servers/server_config_draft.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
@@ -114,6 +115,7 @@ Future<void> showServerEditor(
     strings: strings,
     appearanceStrings: PoltergeistServerAppearanceStrings(l10n),
     monoStyle: poltergeistMonoTextStyle,
+    readMarkImage: pickServerMarkImage,
     hexStyle: poltergeistMonoTextStyle,
     // Poltergeist shows the start folder; Séance's editor hides it.
     fields: const {GhostServerOptionalField.startDirectory},
