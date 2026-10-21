@@ -7097,6 +7097,21 @@ timer and the directories; the system sshd, its config and port 22 stay
 untouched. The accounts with sudo, `systemd-run`, linger, the elevation
 prelude and the detached runners remain for later legs.
 
+As built in M5 (M20b), `klabautermann_core/test/integration/
+runner_vm_edit_test.dart` (tag `runner-vm`) edits in admin mode as the
+password-sudo account. A root file, `root:adm` 0640 with an ACL entry
+for that account and a `user.` xattr, is replaced through the prelude
+with its owner, mode, ACL and xattr kept; its backup lands in
+`/var/lib/klabautermann/backups`, 0700, with the root manifest, which a
+new engine's connect leaves unchecked until admin mode turns on. A unit
+file whose candidate `systemd-analyze verify` rejects is left as it was
+with no temp file, and one it accepts replaces it; a root file changed
+between plan and run keeps the outside change; and the unprivileged
+account's crontab is replaced through `crontab -u <user> -` and backed
+up as root. Each test seeds its own files and removes them, the root
+backups and the manifest; runner_vm.sh removes them too on every exit,
+and installs `acl` or `attr` where `setfacl` or `setfattr` is missing.
+
 As built in M3 (D10), the Docker host's image
 (`klabautermann/test/integration/sshd/Dockerfile.docker`) builds `FROM`
 the same Poltergeist base and copies the static `docker` CLI and its
