@@ -147,6 +147,11 @@ void main() {
         controller: controller,
         viewport: viewport,
         theme: TerminalThemes.defaultTheme,
+        // These buffers hold a few dozen rows, and the tests read a
+        // search's hits as soon as it starts: one slice must cover the
+        // buffer however slow the runner, so the default 4 ms budget
+        // would make them timing-dependent.
+        sliceBudget: const Duration(minutes: 1),
       );
       addTearDown(session.dispose);
       return session;
