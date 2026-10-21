@@ -467,6 +467,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/logs/logs_panel.dart': {
     // The empty server pattern, which reads the whole journal again.
     "''",
+    // The folder LOG-08 browses, a path on the server handed to the
+    // siblings (X-10), never shown.
+    "'/var/log'",
   },
   'lib/ui/logs/log_query.dart': {
     // PCRE2's inline flag that makes journalctl's pattern ignore case

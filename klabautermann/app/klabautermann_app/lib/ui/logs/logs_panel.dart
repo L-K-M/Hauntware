@@ -6,6 +6,8 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
+import '../hand_off_actions.dart'
+    show FileHandOff, FolderHandOffs, folderHandOffsShown;
 import 'log_level.dart';
 import 'log_query.dart';
 import 'log_search.dart';
@@ -465,6 +467,7 @@ class _LogsPanelState extends State<LogsPanel> {
   /// LOG-08's `/var/log` browser: the path picked, or null.
   Future<String?> _browseFiles() => _sheet<String>(
     (context) => LogFilePicker(
+      serverId: widget.serverId,
       files: widget.monitoring.queryHost(widget.serverId, const VarLogQuery()),
       selected: _panel.query.path,
     ),
@@ -948,10 +951,18 @@ class LogBootPicker extends StatelessWidget {
 /// file's path, size and last change, with rotated archives marked
 /// compressed and the files the login user may not read marked as
 /// needing admin mode, in words beside the icon. A filter narrows a long
-/// listing by path; picking a file pops its path.
+/// listing by path; picking a file pops its path. The folder opens in
+/// Séance and Poltergeist, and each file in Poltergeist, where they take
+/// links (X-04, X-10).
 class LogFilePicker extends StatefulWidget {
-  const LogFilePicker({super.key, required this.files, required this.selected});
+  const LogFilePicker({
+    super.key,
+    required this.serverId,
+    required this.files,
+    required this.selected,
+  });
 
+  final String serverId;
   final Future<HostResult> files;
 
   /// The path the panel reads now, marked in the list.
@@ -981,6 +992,12 @@ class _LogFilePickerState extends State<LogFilePicker> {
           l10n.logsPanelFiles,
           style: Theme.of(context).textTheme.titleMedium,
         ),
+        if (folderHandOffsShown(
+          context,
+          serverId: widget.serverId,
+          folder: _varLog,
+        ))
+          FolderHandOffs(serverId: widget.serverId, folder: _varLog),
         const SizedBox(height: 12),
         TextField(
           controller: _filter,
@@ -1057,11 +1074,20 @@ class _LogFilePickerState extends State<LogFilePicker> {
         ],
       ),
       selected: selected,
-      trailing: selected ? const Icon(Icons.check) : null,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (selected) const Icon(Icons.check),
+          FileHandOff(serverId: widget.serverId, path: file.path),
+        ],
+      ),
       onTap: () => Navigator.pop(context, file.path),
     );
   }
 }
+
+/// The folder LOG-08 browses.
+const _varLog = '/var/log';
 
 /// A picker sheet's line of state: loading, empty or failed.
 Widget _sheetNote(BuildContext context, String text) => Padding(
