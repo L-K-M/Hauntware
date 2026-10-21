@@ -260,6 +260,33 @@ void main() {
     expect(r.warnings, [contains('short line')]);
   });
 
+  test('a paused job is a paused row holding its line, and a managed '
+      "block's jobs name their manager (JOB-07, JOB-09)", () {
+    final r = parseCron(
+      _payload(
+        crontab:
+            '${kCrontabPauseMarker}2026-10-21T03:00:00Z 0 3 * * * /bin/backup\n'
+            '$kCrontabPauseMarker'
+            '2026-10-21T03:00:00Z MAILTO=x\n'
+            '# dokku cron jobs\n'
+            '*/5 * * * * dokku run app task',
+        cronD: 'coolify\t0 4 * * * root /opt/coolify/prune',
+      ),
+      _ctx,
+    );
+
+    final [paused, managed, cronD] = r.value.jobs;
+    expect(paused.paused, isTrue);
+    expect(paused.command, '/bin/backup');
+    expect(paused.raw, startsWith(kCrontabPauseMarker));
+    expect(paused.managedBy, isNull);
+    expect(managed.paused, isFalse);
+    expect(managed.managedBy, CrontabManager.dokku);
+    expect(cronD.managedBy, CrontabManager.coolify);
+    expect(cronD.toJson()['managedBy'], 'coolify');
+    expect(paused.toJson()['paused'], isTrue);
+  });
+
   group('one source read alone (JOB-19)', () {
     test('a user table carries its user and source', () {
       final jobs = parseCrontabText(
@@ -282,6 +309,15 @@ void main() {
       );
       expect(jobs.single.user, 'www-data');
       expect(jobs.single.command, 'php /srv/app/cron.php');
+    });
+
+    test("dokku's own crontab is Dokku's, read as another user's", () {
+      final jobs = parseUserCrontab(
+        '0 3 * * * /usr/bin/dokku cleanup\n',
+        user: 'dokku',
+      ).value;
+      expect(jobs.single.managedBy, CrontabManager.dokku);
+      expect(jobs.single.user, 'dokku');
     });
   });
 }

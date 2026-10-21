@@ -18,6 +18,7 @@ export 'src/commands/operations.dart';
 export 'src/cron/evaluate.dart';
 export 'src/cron/document.dart';
 export 'src/cron/expression.dart';
+export 'src/cron/managed.dart';
 export 'src/hws/collector.dart';
 export 'src/hws/frames.dart';
 export 'src/hws/program.dart';

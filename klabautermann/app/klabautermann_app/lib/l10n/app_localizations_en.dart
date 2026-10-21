@@ -2433,6 +2433,7 @@ class AppLocalizationsEn extends AppLocalizations {
           'Runs are worked out for the first $limit cron lines only.',
       'anacron':
           'anacron runs this directory; its timing is not shown in this version.',
+      'paused': 'Paused: cron skips this job until it is resumed.',
       'other': 'No cron line runs this directory.',
     });
     return '$_temp0';
@@ -2448,6 +2449,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'noRunInHorizon': 'None in $years years',
       'notEvaluated': 'Not worked out',
       'anacron': 'Timed by anacron',
+      'paused': 'Paused',
       'other': 'Not run',
     });
     return '$_temp0';

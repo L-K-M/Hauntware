@@ -467,6 +467,8 @@ Map<CronJob, CronJob> maskedCronJobs(List<CronJob> jobs) {
           expression: job.expression,
           user: job.user,
           cronTz: job.cronTz,
+          paused: job.paused,
+          managedBy: job.managedBy,
         ),
       ),
   ]);

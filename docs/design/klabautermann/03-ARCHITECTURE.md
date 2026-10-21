@@ -3554,6 +3554,21 @@ comes back redacted, capped at `kExecOutputMax`, in
 minimal environment are not reproduced, and a long run is not detached
 yet.
 
+As built in M5 (M24c), the rows carry JOB-07 and JOB-09:
+- A line `CrontabDocument.pause` commented out with
+  `# klabautermann:paused <time>` reads as a row of its own,
+  `CronJob.paused`, whose runs are unknown as `paused`; it drives no
+  `cron.<period>` directory. Run now runs its held command.
+- `crontabOwners` marks the lines another manager owns, carried as
+  `CronJob.managedBy` and kept through the masking. The dokku account's
+  crontab is wholly Dokku's, a cron.d file named for a manager is that
+  manager's, and a comment naming Dokku, Coolify, Dokploy or Runtipi
+  opens a block that runs to the next blank line [U: the managers'
+  exact markers].
+- Pause and resume are edits of the crontab (M15a's `EditFile`). The
+  act-anyway an edit of a managed line needs (8.7) joins the edit plan
+  once that pipeline and these rows share a base.
+
 As built in M2 (`app/klabautermann_app/lib/ui/jobs_panel.dart`,
 `jobs_view.dart`), the Jobs tab lists the `cron` stream's jobs rows and
 a row per `timers` entry in the sortable table, next run first, with
