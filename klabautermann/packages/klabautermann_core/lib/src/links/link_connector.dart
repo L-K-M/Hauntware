@@ -3,6 +3,8 @@ import 'dart:io' show SocketException;
 
 import 'package:seance_core/seance_core.dart'
     show
+        AuthMethod,
+        CredentialDraft,
         CredentialMissingException,
         CredentialResolver,
         CredentialSource,
@@ -12,6 +14,8 @@ import 'package:seance_core/seance_core.dart'
         HostKeyStore,
         HostKeyVerdict,
         KeyboardInteractiveResponder,
+        Secret,
+        SecretKind,
         ServerConfig,
         SshConnectException,
         SshConnectFailureKind,
@@ -20,6 +24,7 @@ import 'package:seance_core/seance_core.dart'
         SshLink,
         TofuVerifier;
 
+import '../catalog/engine_vault.dart' show VaultUnavailableException;
 import '../engine/protocol.dart';
 import 'credential_source.dart';
 import 'prompt_broker.dart';
@@ -113,7 +118,10 @@ final class LinkConnectFailed extends LinkConnectResult {
 /// credentials and its jump hops' through `CredentialResolver`, verifies
 /// host keys with `TofuVerifier` over the pin store it is given, and asks
 /// the user through the [PromptBroker] only on an interactive connect.
-/// Each attempt's prompts are withdrawn when it ends. A changed host key
+/// Each attempt's prompts are withdrawn when it ends. An interactive
+/// connect to a password server whose password the vault lacks asks for
+/// it, and keeps it in the vault when the user says so and the server
+/// accepts it (03 §4.5). A changed host key
 /// blocks the link (03 §10.1) unless the connect reviews it
 /// ([ChangedHostKey.review]). Reconnects, backoff and
 /// the connect cap belong to the link supervisor above it, which hears
@@ -123,16 +131,19 @@ final class LinkConnector {
   /// [hostKeys] holds the pins: the engine's one store, which
   /// `openHostKeyPins` opens and its sync shares (D61, D63, P14).
   /// `hopConfig` looks up a jump hop's config by id, such as
-  /// `ImportedFleet.serverConfig`.
+  /// `ImportedFleet.serverConfig`. [saveSecret] keeps a prompted password
+  /// in the vault, `EngineVault.save`; without it no prompt offers to.
   LinkConnector({
     required CredentialSource credentials,
     required this._hostKeys,
     required this._prompts,
     required this._hopConfig,
+    this._saveSecret,
     this._dial = SshLink.connect,
   }) : _credentials = CredentialResolver(credentials);
 
   final CredentialResolver _credentials;
+  final Future<void> Function(Secret secret)? _saveSecret;
   final HostKeyStore _hostKeys;
   final PromptBroker _prompts;
   final ServerConfig? Function(String id) _hopConfig;
@@ -227,8 +238,48 @@ final class LinkConnector {
       return trusted;
     }
 
+    // A password the user typed for this attempt, and whether to keep it.
+    String? typedPassword;
+    var savePassword = false;
+
     try {
-      final credentials = await _credentials.resolve(config);
+      // A password server asks the user, on a connect they started, when it
+      // names no vault entry or one this device lacks (03 §4.5).
+      SshCredentials? credentials;
+      final asksPassword =
+          interactive && config.authMethod == AuthMethod.password;
+      if (!asksPassword || config.secretRef != null) {
+        try {
+          credentials = await _credentials.resolve(config);
+        } on CredentialMissingException {
+          if (!asksPassword) rethrow;
+        }
+      }
+      if (credentials == null) {
+        final canSave = _saveSecret != null && config.secretRef != null;
+        final answer = await attempt.ask(
+          host: config.host,
+          port: config.port,
+          request: CredentialPromptRequest(
+            user: config.username,
+            canSave: canSave,
+          ),
+        );
+        if (gaveUp) return LinkConnectFailed(_abandonedError);
+        if (answer is! PromptSecretAnswer || (answer.secret ?? '').isEmpty) {
+          return LinkConnectFailed(
+            _noPasswordError,
+            failure: LinkFailureKind.credentialUnavailable,
+          );
+        }
+        typedPassword = answer.secret;
+        savePassword = canSave && answer.save;
+        phase(progress());
+        credentials = await _credentials.resolve(
+          config,
+          draft: CredentialDraft(password: typedPassword),
+        );
+      }
       if (gaveUp) return LinkConnectFailed(_abandonedError);
       if (config.jumpHostId == null) onDialing?.call();
 
@@ -278,11 +329,29 @@ final class LinkConnector {
           return hop;
         },
       );
+      if (savePassword) await _save(config, typedPassword!);
       return LinkConnected(link, keyboardInteractive: answeredQuestions);
     } on Exception catch (error) {
       return _classify(error, refused, cancelledQuestions: cancelledQuestions);
     } finally {
       attempt.end();
+    }
+  }
+
+  /// Keeps [password] as [config]'s vault entry. The link stands whether
+  /// or not the save does: a failed save only means the next connect
+  /// asks again.
+  Future<void> _save(ServerConfig config, String password) async {
+    try {
+      await _saveSecret!(
+        Secret(
+          id: config.secretRef!,
+          kind: SecretKind.password,
+          value: password,
+        ),
+      );
+    } on Object {
+      // Saving is an offer, as in Poltergeist's prompt (02 §10).
     }
   }
 
@@ -335,7 +404,8 @@ final class LinkConnector {
         failure: LinkFailureKind.credentialUnavailable,
         identityFile: failure,
       ),
-      CredentialMissingException() => LinkConnectFailed(
+      CredentialMissingException() ||
+      VaultUnavailableException() => LinkConnectFailed(
         error,
         failure: LinkFailureKind.credentialUnavailable,
       ),
@@ -394,6 +464,9 @@ final class LinkConnector {
 
 /// What an attempt given up before it dialed fails with; nobody reads it.
 final StateError _abandonedError = StateError('connect attempt abandoned');
+
+/// What an attempt whose password prompt went unanswered fails with.
+final StateError _noPasswordError = StateError('no password was entered');
 
 /// A [TofuVerifier] that reports each check's decision, so the connector
 /// can tell when the server's own key has passed.

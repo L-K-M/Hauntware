@@ -186,6 +186,11 @@ import '../operations/plan_types.dart';
 /// [DockerSystemDfQuery] reads `/system/df` on demand, answered by a
 /// [DockerSystemDfPayload] of per-type totals.
 ///
+/// The vault then joined v3 the same way (03 §4.5, SYN-02, FL-03):
+/// [SetSyncSecrets] carries the device's "sync passwords" switch,
+/// [CredentialPromptRequest] gained `canSave` and [PromptSecretAnswer]
+/// `save`, which keeps a login password in the vault.
+///
 /// The v1 log sources then joined v3 the same way (03 §7.6, LOG-06 to
 /// LOG-10): [JournalLogSource] gained `grep` and `boot`,
 /// [KernelLogSource] `boot`, [FileLogSource] `compressed`, and
@@ -590,6 +595,16 @@ final class SetSafetyPolicy extends EngineRequest {
   const SetSafetyPolicy(this.policy);
 
   final SafetyPolicy policy;
+}
+
+/// The device's "sync passwords" switch (03 §4.5, SYN-02), which the app
+/// keeps in `settings.json` as `klabautermann.sync.secrets`, sent at spawn
+/// and on every change. Until it arrives the switch is off: sync rounds
+/// apply no pulled `secret:` record to the vault.
+final class SetSyncSecrets extends EngineRequest {
+  const SetSyncSecrets({required this.enabled});
+
+  final bool enabled;
 }
 
 /// Turns admin mode on or off for [serverId] (03 §8.2, SAF-02). Turning
@@ -3143,19 +3158,56 @@ final class RemoveImage extends ActionIntent {
 /// What [StackAction] does to a Compose project (STK-03).
 enum StackVerb { start, stop, restart }
 
-/// Starts, stops or restarts a Compose project's containers (STK-03).
-/// [actAnyway] confirms acting on a stack another manager owns (03 §8.7).
+/// Starts, stops or restarts a Compose project's containers (STK-03), or
+/// only [service]'s (STK-23). [actAnyway] confirms acting on a stack
+/// another manager owns (03 §8.7).
 final class StackAction extends ActionIntent {
   const StackAction(
     super.serverId, {
     required this.project,
     required this.verb,
+    this.service,
     this.actAnyway = false,
   });
 
   final String project;
   final StackVerb verb;
+  final String? service;
   final bool actAnyway;
+}
+
+/// What [StackComposeAction] runs on a Compose project (STK-23).
+enum StackComposeVerb {
+  /// Pull one service's image.
+  pullService,
+
+  /// Recreate one service's containers even when unchanged.
+  recreateService,
+
+  /// Set one service's replica count.
+  scaleService,
+
+  /// Take the whole stack down, never with its volumes.
+  down,
+}
+
+/// A compose operation on a verified, unmanaged stack (STK-23), run as
+/// one detached operation as STK-06's redeploy is: [service] for every
+/// verb but [StackComposeVerb.down], and [replicas] for
+/// [StackComposeVerb.scaleService].
+final class StackComposeAction extends ActionIntent {
+  const StackComposeAction(
+    super.serverId, {
+    required this.project,
+    required this.verb,
+    this.service,
+    this.replicas,
+  });
+
+  final String project;
+  final StackComposeVerb verb;
+  final String? service;
+  final int? replicas;
 }
 
 /// Pulls a verified, unmanaged stack's images and recreates it (STK-06),
@@ -3375,14 +3427,23 @@ final class KeyboardInteractivePromptRequest extends PromptRequest {
   PromptKind get kind => PromptKind.keyboardInteractive;
 }
 
-/// The login password for [user] (03 §4.5).
+/// The login password for [user] (03 §4.5): asked on a connect the user
+/// started, for a server whose password the vault does not hold.
 final class CredentialPromptRequest extends PromptRequest {
-  const CredentialPromptRequest({required this.user, this.retry = false});
+  const CredentialPromptRequest({
+    required this.user,
+    this.retry = false,
+    this.canSave = false,
+  });
 
   final String user;
 
   /// Whether the server refused the previous answer to this question.
   final bool retry;
+
+  /// Whether the answer can be kept in the vault ([PromptSecretAnswer.save]):
+  /// the server names a vault entry and the engine may write the vault.
+  final bool canSave;
 
   @override
   PromptKind get kind => PromptKind.credential;
@@ -3427,9 +3488,13 @@ final class PromptTrustAnswer extends PromptAnswer {
 /// One secret for [PromptKind.credential] and [PromptKind.elevation];
 /// null dismisses the prompt without answering.
 final class PromptSecretAnswer extends PromptAnswer {
-  const PromptSecretAnswer(this.secret);
+  const PromptSecretAnswer(this.secret, {this.save = false});
 
   final String? secret;
+
+  /// Keep [secret] in the vault once the server accepts it; honoured only
+  /// for a [CredentialPromptRequest] whose `canSave` is set.
+  final bool save;
 }
 
 /// The ordered responses for [PromptKind.keyboardInteractive].
