@@ -225,6 +225,34 @@ GhostServerEditorStrings poltergeistServerEditorStrings(
   colorPickerStrings: PoltergeistColorPickerStrings(l10n),
 );
 
+/// The connection log view's words in ARB.
+GhostConnectionLogStrings poltergeistConnectionLogStrings(
+  AppLocalizations l10n,
+) => GhostConnectionLogStrings(
+  title: l10n.connectionLogTitle,
+  copy: l10n.connectionLogCopy,
+  copied: l10n.connectionLogCopied,
+  copyFailed: l10n.connectionLogCopyFailed,
+  empty: l10n.connectionLogEmpty,
+);
+
+/// The test report's spoken outcomes in ARB.
+GhostConnectionTestStrings poltergeistConnectionTestStrings(
+  AppLocalizations l10n,
+) => GhostConnectionTestStrings(
+  succeeded: l10n.connectionTestSucceeded,
+  failed: l10n.connectionTestFailed,
+);
+
+/// A test result as the shared report takes it.
+GhostTestReport ghostTestReportOf(ConnectionTestResult result) =>
+    GhostTestReport(
+      ok: result.ok,
+      summary: result.summary,
+      notes: result.notes,
+      log: result.log,
+    );
+
 /// The chrome's status colours as the package takes them.
 GhostStatusColors poltergeistStatusColors(PoltergeistChrome chrome) =>
     GhostStatusColors(

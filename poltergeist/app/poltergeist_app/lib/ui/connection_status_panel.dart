@@ -8,10 +8,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:ghost_servers/ghost_servers.dart' show GhostConnectionLogView;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart' show poltergeistMonoTextStyle;
+import 'ghost_servers_adapter.dart' show poltergeistConnectionLogStrings;
 
 /// Mirrors the per-attempt transcript bound (seance_core's
 /// `SshConnectionLog` and the engine-side coalescer both cap at 400).
@@ -252,47 +254,12 @@ class _ConnectionLogView extends StatelessWidget {
   const _ConnectionLogView({required this.lines, required this.onCopied});
 
   @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final l10n = AppLocalizations.of(context);
-    final text = lines.join('\n');
-
-    return Theme(
-      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        tilePadding: EdgeInsets.zero,
-        title: Text(l10n.connectionLogTitle),
-        childrenPadding: EdgeInsets.zero,
-        children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: text.isEmpty ? null : () => onCopied(),
-              icon: const Icon(Icons.copy, size: 16),
-              label: Text(l10n.connectionLogCopy),
-            ),
-          ),
-          Container(
-            width: double.infinity,
-            constraints: const BoxConstraints(maxHeight: 260),
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: SingleChildScrollView(
-              reverse: true,
-              child: SelectableText(
-                text.isEmpty ? l10n.connectionLogEmpty : text,
-                style: poltergeistMonoTextStyle.copyWith(
-                  fontSize: 12,
-                  height: 1.4,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => GhostConnectionLogView(
+    text: lines.join('\n'),
+    monoStyle: poltergeistMonoTextStyle,
+    strings: poltergeistConnectionLogStrings(AppLocalizations.of(context)),
+    // Newest line in view, and a silent copy: the panel's own choices.
+    reverse: true,
+    onCopy: onCopied,
+  );
 }
