@@ -46,6 +46,7 @@ class RefusedRecord {
       RecordKind.assistantSettings => 'assistant settings',
       RecordKind.inboxApp => 'inbox app',
       RecordKind.inboxStatus => 'inbox status',
+      RecordKind.klabautermann => 'Klabautermann setting',
       RecordKind.unknown => 'record',
     };
     final named = name?.trim() ?? '';

@@ -20,6 +20,9 @@ enum OperationKind {
   /// Pull and redeploy, keeping orphans.
   redeploy(ConfirmationTier.acknowledge),
   redeployRemovingOrphans(ConfirmationTier.typedPhrase),
+  stackServicePull(ConfirmationTier.acknowledge),
+  stackServiceRecreate(ConfirmationTier.acknowledge),
+  stackServiceScale(ConfirmationTier.acknowledge),
   removeContainer(ConfirmationTier.acknowledge),
   removeContainerWithVolumes(ConfirmationTier.typedPhrase),
   removeUnusedImage(ConfirmationTier.acknowledge),
