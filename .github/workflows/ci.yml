@@ -1358,6 +1358,19 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
+      # The shared terminal package first, one resolution at a time.
+      - name: Resolve terminal package dependencies
+        working-directory: seance/packages/seance_terminal
+        run: flutter pub get
+      - name: Analyze terminal package
+        working-directory: seance/packages/seance_terminal
+        run: flutter analyze
+      - name: Test terminal package
+        working-directory: seance/packages/seance_terminal
+        run: flutter test
+      - name: Check terminal package formatting
+        working-directory: seance/packages/seance_terminal
+        run: dart format --set-exit-if-changed --output=none .
       - name: Resolve app dependencies
         working-directory: seance/app/seance_app
         run: flutter pub get

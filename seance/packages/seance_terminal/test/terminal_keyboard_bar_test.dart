@@ -4,8 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:seance_app/services/xterm_engine.dart';
-import 'package:seance_app/ui/terminal_keyboard_bar.dart';
+import 'package:seance_terminal/seance_terminal.dart';
 
 void main() {
   late XtermTerminalEngine engine;
@@ -23,7 +22,10 @@ void main() {
     await engine.dispose();
   });
 
-  Future<void> pumpBar(WidgetTester tester) async {
+  Future<void> pumpBar(
+    WidgetTester tester, {
+    TerminalKeyboardBarStrings strings = const TerminalKeyboardBarStrings(),
+  }) async {
     tester.view.physicalSize = const Size(1200, 200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -33,7 +35,7 @@ void main() {
         home: Scaffold(
           body: Align(
             alignment: Alignment.bottomCenter,
-            child: TerminalKeyboardBar(engine: engine),
+            child: TerminalKeyboardBar(engine: engine, strings: strings),
           ),
         ),
       ),
@@ -149,6 +151,30 @@ void main() {
     expect(find.byTooltip('Down arrow'), findsOneWidget);
     expect(find.byTooltip('Right arrow'), findsOneWidget);
     expect(find.byTooltip('Hide keyboard'), findsOneWidget);
+    semantics.dispose();
+  });
+
+  testWidgets('a strings bag words the semantics labels and tooltips', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await pumpBar(
+      tester,
+      strings: const TerminalKeyboardBarStrings(
+        escape: 'Echap',
+        leftArrow: 'Flèche gauche',
+        hideKeyboard: 'Masquer le clavier',
+      ),
+    );
+
+    expect(await tapKey(tester, 'Echap'), [0x1b]);
+    expect(await tapKey(tester, 'Flèche gauche'), [0x1b, 0x5b, 0x44]);
+    expect(find.bySemanticsLabel('Masquer le clavier'), findsOneWidget);
+    expect(find.byTooltip('Flèche gauche'), findsOneWidget);
+    // What the bag leaves out keeps its English default; the cap legends
+    // are key names and do not change.
+    expect(find.bySemanticsLabel('Tab'), findsOneWidget);
+    expect(find.text('esc'), findsOneWidget);
     semantics.dispose();
   });
 }
