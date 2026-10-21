@@ -108,6 +108,7 @@ final class OperationPlan {
     orphans: orphans,
     warnings: warnings,
     revalidate: revalidate,
+    cleanup: cleanup,
   );
 
   /// What [ActionPlanned] carries: the same step, host-write and finding
