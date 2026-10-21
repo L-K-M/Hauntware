@@ -5,6 +5,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../ui/charts/series_ring.dart';
 import '../ui/charts/time_series.dart';
+import 'container_terminals.dart';
 import 'docker_controller.dart';
 import 'docker_endpoint_choices.dart';
 import 'log_reads.dart';
@@ -149,6 +150,7 @@ final class MonitoringController extends ChangeNotifier {
   }) : _clock = _FreshnessClock(now) {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
     logs = LogStreams(_engine);
+    terminals = ContainerTerminals(_engine);
     docker = DockerController(
       _engine,
       endpointChoices: dockerEndpointChoices,
@@ -162,6 +164,10 @@ final class MonitoringController extends ChangeNotifier {
   /// sends every [OpenLogStream] the app sends, [openLogRead]'s included,
   /// since a rejection names no stream.
   late final LogStreams logs;
+
+  /// The container shells views open (03 §7.13, CTX-07): a concern of
+  /// its own for this engine run, listening beside [logs].
+  late final ContainerTerminals terminals;
 
   /// Each server's Docker endpoint, which the server header names, and
   /// the engine details the Docker tab shows (03 §5.9, §10.2): a concern
@@ -648,6 +654,7 @@ final class MonitoringController extends ChangeNotifier {
   void dispose() {
     unawaited(_events.cancel());
     logs.dispose();
+    terminals.dispose();
     docker.dispose();
     _onEngineDone();
     for (final refresh in _refreshes.toList()) {

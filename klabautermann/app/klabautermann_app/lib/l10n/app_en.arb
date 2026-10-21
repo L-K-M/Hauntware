@@ -5850,6 +5850,142 @@
   "@dockerLogsShow": {
     "description": "Tooltip of the button on a container's details, and the container row's menu item, that opens the container's logs (CTX-01)."
   },
+  "dockerShellOpen": "Open a shell",
+  "@dockerShellOpen": {
+    "description": "Tooltip of the button on a container's details that opens a shell in the container (CTX-07)."
+  },
+  "dockerShellHide": "Show details",
+  "@dockerShellHide": {
+    "description": "Tooltip of the inspector button that swaps a container shell back for the container's details, closing the shell (CTX-07)."
+  },
+  "dockerShellTitle": "Shell in {container}",
+  "@dockerShellTitle": {
+    "description": "Title of the page that shows a shell in a container (CTX-07).",
+    "placeholders": {
+      "container": {
+        "type": "String",
+        "example": "web-1"
+      }
+    }
+  },
+  "dockerShellShellLabel": "Shell",
+  "@dockerShellShellLabel": {
+    "description": "Label of the field that picks the shell program to run in a container (CTX-07)."
+  },
+  "dockerShellShellAuto": "Automatic: /bin/bash, then /bin/sh",
+  "@dockerShellShellAuto": {
+    "description": "Hint and menu item of the shell field when no shell is chosen: the engine runs /bin/bash where the container has it, otherwise /bin/sh (CTX-07)."
+  },
+  "dockerShellUserLabel": "User",
+  "@dockerShellUserLabel": {
+    "description": "Label of the field naming the user a container shell runs as (CTX-07)."
+  },
+  "dockerShellUserHint": "The container's user",
+  "@dockerShellUserHint": {
+    "description": "Hint of the empty user field: the shell runs as the container's configured user (CTX-07)."
+  },
+  "dockerShellStart": "Open shell",
+  "@dockerShellStart": {
+    "description": "Button that opens the shell in the container with the chosen shell and user (CTX-07)."
+  },
+  "dockerShellOpening": "Opening the shell…",
+  "@dockerShellOpening": {
+    "description": "Status above a container shell while the engine starts it (CTX-07)."
+  },
+  "dockerShellRunning": "Running {command}",
+  "@dockerShellRunning": {
+    "description": "Status above a running container shell, naming the command the exec runs (CTX-07).",
+    "placeholders": {
+      "command": {
+        "type": "String",
+        "example": "/bin/bash"
+      }
+    }
+  },
+  "dockerShellEnded": "{reason, select, exited{The shell exited.} closed{The shell was closed.} observeOnly{Management is off for this server, so no shell opens.} readOnly{Read-only mode is on, so no shell opens.} notInFleet{This server is no longer in the fleet.} endpointUnavailable{The server's Docker endpoint could not be reached.} noChannel{No session channel was free on the server. Close another view or shell and try again.} tooMany{This server already has the most shells open. Close one first.} refused{The container is gone, or Docker refused the shell.} linkLost{The connection to the server was lost.} adminEnded{Admin mode ended, and the shell with it.} failed{The shell failed.} other{The engine stopped, and the shell with it.}}",
+  "@dockerShellEnded": {
+    "description": "Status above a container shell that ended or never started, by the engine's reason (CTX-07).",
+    "placeholders": {
+      "reason": {
+        "type": "String",
+        "example": "exited"
+      }
+    }
+  },
+  "dockerShellExitCode": "Exit code {code}.",
+  "@dockerShellExitCode": {
+    "description": "Follows the ended status when the shell reported its exit code (CTX-07).",
+    "placeholders": {
+      "code": {
+        "type": "int",
+        "example": "0"
+      }
+    }
+  },
+  "dockerShellReopen": "Open again",
+  "@dockerShellReopen": {
+    "description": "Button that opens the container shell again with the same shell and user after it ended (CTX-07)."
+  },
+  "dockerShellChange": "Change shell",
+  "@dockerShellChange": {
+    "description": "Button that goes back to the shell and user fields after a container shell ended (CTX-07)."
+  },
+  "dockerShellClose": "Close the shell",
+  "@dockerShellClose": {
+    "description": "Tooltip of the button that ends a running container shell (CTX-07)."
+  },
+  "dockerShellCopy": "Copy",
+  "@dockerShellCopy": {
+    "description": "Context menu item that copies the selected terminal text (CTX-07)."
+  },
+  "dockerShellPaste": "Paste",
+  "@dockerShellPaste": {
+    "description": "Button tooltip and context menu item that pastes the clipboard into a container shell, checked first when it has several lines (CTX-07)."
+  },
+  "dockerShellPasteTitle": "{count, plural, one{Paste 1 line?} other{Paste {count} lines?}}",
+  "@dockerShellPasteTitle": {
+    "description": "Title of the dialog that asks before pasting several lines into a container shell (CTX-07).",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "dockerShellPasteFindings": "Some of these lines look dangerous. Each line runs as you paste it.",
+  "@dockerShellPasteFindings": {
+    "description": "Body of the paste dialog when the danger linter flagged lines (CTX-07)."
+  },
+  "dockerShellPasteUnchecked": "These lines could not be checked. Each line runs as you paste it.",
+  "@dockerShellPasteUnchecked": {
+    "description": "Body of the paste dialog when the danger check failed: unknown, not clean (CTX-07)."
+  },
+  "dockerShellPasteFinding": "Line {line}: {explanation}",
+  "@dockerShellPasteFinding": {
+    "description": "One danger finding in the paste dialog: the pasted line it is on and the linter's explanation (CTX-07).",
+    "placeholders": {
+      "line": {
+        "type": "int",
+        "example": "2"
+      },
+      "explanation": {
+        "type": "String",
+        "example": "Recursively deletes files"
+      }
+    }
+  },
+  "dockerShellPasteAll": "Paste all",
+  "@dockerShellPasteAll": {
+    "description": "Paste dialog button that pastes every line (CTX-07)."
+  },
+  "dockerShellPasteFirstLine": "First line only",
+  "@dockerShellPasteFirstLine": {
+    "description": "Paste dialog button that pastes the first line without its line break (CTX-07)."
+  },
+  "dockerShellPasteCancel": "Cancel",
+  "@dockerShellPasteCancel": {
+    "description": "Paste dialog button that pastes nothing (CTX-07)."
+  },
   "dockerLogsTitle": "Logs",
   "@dockerLogsTitle": {
     "description": "Under a container's name above its logs, in the Docker tab's log pane on desktops and in the bottom sheet on phones."

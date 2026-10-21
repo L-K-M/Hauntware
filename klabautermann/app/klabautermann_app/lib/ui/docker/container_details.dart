@@ -10,12 +10,14 @@ import '../../controllers/docker_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart' show klabautermannThemeStyle;
+import '../actions/action_entry.dart';
 import '../actions/docker_actions.dart'
     show ContainerActionButtons, containerActionsShown;
 import '../processes_panel.dart' show kRevealDuration;
 import '../processes_view.dart' show argumentText, clipProcessText;
 import 'container_details_view.dart';
 import 'container_logs.dart';
+import 'container_terminal.dart';
 import 'containers_panel.dart' show ContainerHealthBadge;
 import 'containers_view.dart';
 import 'images_view.dart' show shortImageId;
@@ -87,9 +89,13 @@ void openContainerDetails(
 }
 
 /// The desktop inspector's body while it shows a container: its name, a
-/// button that opens its logs ([openContainerLogs]) and a close button
-/// over its details. It takes keyboard focus as it opens, so the details
-/// are read next, and Escape inside it closes it.
+/// button that opens its logs ([openContainerLogs]), one that swaps its
+/// details for a [ContainerShellPane] where actions are allowed (CTX-07),
+/// and a close button. It takes keyboard focus as it opens, so the
+/// details are read next, and Escape inside it closes it.
+///
+/// The shell pane goes, closing its shell, when another container shows
+/// or actions on the server stop being allowed.
 class ContainerInspectorBody extends StatefulWidget {
   const ContainerInspectorBody({
     super.key,
@@ -108,6 +114,7 @@ class ContainerInspectorBody extends StatefulWidget {
 
 class _ContainerInspectorBodyState extends State<ContainerInspectorBody> {
   final _close = FocusNode();
+  bool _shell = false;
 
   @override
   void initState() {
@@ -115,6 +122,16 @@ class _ContainerInspectorBodyState extends State<ContainerInspectorBody> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _close.requestFocus();
     });
+  }
+
+  @override
+  void didUpdateWidget(ContainerInspectorBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final old = oldWidget.inspected;
+    if (old.serverId != widget.inspected.serverId ||
+        old.container.id != widget.inspected.container.id) {
+      _shell = false;
+    }
   }
 
   @override
@@ -128,6 +145,10 @@ class _ContainerInspectorBodyState extends State<ContainerInspectorBody> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final container = widget.inspected.container;
+    final serverId = widget.inspected.serverId;
+    final shell =
+        _shell &&
+        actionsAllowedAt(context, serverId, ActionEntryPoint.containerShell);
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.escape): widget.onClose,
@@ -159,6 +180,17 @@ class _ContainerInspectorBodyState extends State<ContainerInspectorBody> {
                     container: container,
                   ),
                 ),
+                ActionEntry(
+                  serverId: serverId,
+                  point: ActionEntryPoint.containerShell,
+                  child: IconButton(
+                    tooltip: shell
+                        ? l10n.dockerShellHide
+                        : l10n.dockerShellOpen,
+                    icon: Icon(shell ? Icons.info_outline : Icons.terminal),
+                    onPressed: () => setState(() => _shell = !shell),
+                  ),
+                ),
                 IconButton(
                   focusNode: _close,
                   tooltip: l10n.dockerDetailsClose,
@@ -169,12 +201,19 @@ class _ContainerInspectorBodyState extends State<ContainerInspectorBody> {
             ),
             const SizedBox(height: 8),
             Expanded(
-              child: ContainerDetailsView(
-                monitoring: widget.monitoring,
-                serverId: widget.inspected.serverId,
-                container: container,
-                padding: EdgeInsets.zero,
-              ),
+              child: shell
+                  ? ContainerShellPane(
+                      key: ValueKey((serverId, container.id)),
+                      monitoring: widget.monitoring,
+                      serverId: serverId,
+                      container: container,
+                    )
+                  : ContainerDetailsView(
+                      monitoring: widget.monitoring,
+                      serverId: serverId,
+                      container: container,
+                      padding: EdgeInsets.zero,
+                    ),
             ),
           ],
         ),
@@ -184,8 +223,9 @@ class _ContainerInspectorBodyState extends State<ContainerInspectorBody> {
 }
 
 /// A container's details on a page of its own, as a phone pushes it
-/// (03 §10.5), under an app bar that names it and opens its logs in a
-/// bottom sheet ([openContainerLogs]).
+/// (03 §10.5), under an app bar that names it, opens its logs in a
+/// bottom sheet ([openContainerLogs]) and, where actions are allowed,
+/// pushes a shell in it ([openContainerShellPage]).
 class ContainerDetailsPage extends StatelessWidget {
   const ContainerDetailsPage({
     super.key,
@@ -212,6 +252,22 @@ class ContainerDetailsPage extends StatelessWidget {
               monitoring: monitoring,
               serverId: serverId,
               container: container,
+            ),
+          ),
+        ),
+        ActionEntry(
+          serverId: serverId,
+          point: ActionEntryPoint.containerShell,
+          child: Builder(
+            builder: (context) => IconButton(
+              tooltip: AppLocalizations.of(context).dockerShellOpen,
+              icon: const Icon(Icons.terminal),
+              onPressed: () => openContainerShellPage(
+                context,
+                monitoring: monitoring,
+                serverId: serverId,
+                container: container,
+              ),
             ),
           ),
         ),

@@ -16,10 +16,11 @@ export 'src/engine/engine_client.dart';
 export 'src/engine/engine_isolate.dart' show EngineStart;
 export 'src/engine/protocol.dart';
 // The plain-data plan parts an ActionPreview carries (03 §8.5), and
-// DangerLinter's findings in it.
+// DangerLinter's findings in it. The linter itself checks what is pasted
+// into a container shell, as in Séance's shells (03 §7.13).
 export 'src/operations/plan_types.dart';
 export 'package:seance_core/seance_core.dart'
-    show DangerFinding, DangerSeverity;
+    show DangerFinding, DangerLinter, DangerSeverity;
 // The signal and unit verb an ActionIntent names (PRC-02, SVC-03).
 export 'package:klabautermann_host/klabautermann_host.dart'
     show KillSignal, SystemctlVerb;

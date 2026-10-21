@@ -22,6 +22,10 @@ enum ActionEntryPoint {
   /// Removing a container (CTR-06).
   containerRemove,
 
+  /// A shell in a container (CTX-07; M5 plan Q7: a mutation path in a
+  /// root-equivalent engine).
+  containerShell,
+
   /// Removing an image (IMG-02).
   imageRemove,
 
