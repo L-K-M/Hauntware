@@ -54,7 +54,7 @@ void main() {
       parser.write('\x1b[?1;1S'); // XTSMGRAPHICS
       parser.write('\x1b[>1T'); // XTRMTITLE
       parser.write('\x1b[?1r'); // XTRESTORE
-      parser.write('\x1b[>6n'); // XTMODKEYS: disable
+      parser.write('\x1b[>6n'); // key modifier options: disable
       parser.write('\x1b[?62;22c'); // an echoed primary DA reply
 
       verifyInOrder([
@@ -103,6 +103,37 @@ void main() {
         parser.handler.eraseLine(),
         parser.handler.sendSecondaryDeviceAttributes(),
         parser.handler.sendTertiaryDeviceAttributes(),
+      ]);
+      verifyNoMoreInteractions(parser.handler);
+    });
+
+    test('forgets the previous sequence\'s marker and intermediates', () {
+      final parser = EscapeParser(MockEscapeHandler());
+
+      parser.write('\x1b[>4m\x1b[4m');
+      parser.write('\x1b[2 A\x1b[2A');
+
+      verifyInOrder([
+        parser.handler.unknownCSI(m),
+        parser.handler.setCursorUnderline(),
+        parser.handler.unknownCSI('A'.codeUnitAt(0)),
+        parser.handler.moveCursorY(-2),
+      ]);
+      verifyNoMoreInteractions(parser.handler);
+    });
+
+    test('identifies a sequence split across writes', () {
+      final parser = EscapeParser(MockEscapeHandler());
+
+      parser.write('\x1b[');
+      parser.write('>4');
+      parser.write(';2m');
+      parser.write('\x1b[2');
+      parser.write(' A');
+
+      verifyInOrder([
+        parser.handler.unknownCSI(m),
+        parser.handler.unknownCSI('A'.codeUnitAt(0)),
       ]);
       verifyNoMoreInteractions(parser.handler);
     });

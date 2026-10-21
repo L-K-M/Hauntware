@@ -541,7 +541,7 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     SGR 4;2 and SGR 4. Claude Code sends both, so everything printed after
     it exited was underlined. Likewise XTQMODKEYS (`CSI ? 4 m`) set
     underline, XTSMGRAPHICS (`CSI ? 1 ; 1 S`) and XTRMTITLE (`CSI > 1 T`)
-    scrolled, XTRESTORE (`CSI ? Pm r`) reset the margins, `CSI > 6 n` sent
+    scrolled, XTRESTORE (`CSI ? Pm r`) moved the margins, `CSI > 6 n` sent
     a cursor report, SR/SL (`CSI Ps SP A`/`@`) moved the cursor or inserted
     blanks, and XTPUSHCOLORS (`CSI # P`) deleted characters. A sequence now
     reaches a handler only if that handler implements its marker, and no
