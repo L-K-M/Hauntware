@@ -2670,6 +2670,24 @@ class AppLocalizationsEn extends AppLocalizations {
       'The setting could not be changed.';
 
   @override
+  String get settingsDeviceTitle => 'This device';
+
+  @override
+  String get settingsDeviceName => 'Device name';
+
+  @override
+  String get settingsDeviceNameDetail =>
+      'Servers\' system logs name this device beside each action you take there. Leave it blank for the default.';
+
+  @override
+  String get settingsDeviceNameNotSaved =>
+      'The device name changed, but it could not be saved, so it will not be kept after a restart.';
+
+  @override
+  String get settingsDeviceNameNotChanged =>
+      'The device name could not be changed.';
+
+  @override
   String get settingsAboutTitle => 'About';
 
   @override

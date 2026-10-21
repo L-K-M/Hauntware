@@ -10,6 +10,7 @@ import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 
 import '../../controllers/announcement_controller.dart';
 import '../../controllers/appearance_controller.dart';
+import '../../controllers/device_name.dart';
 import '../../controllers/monitor_set.dart';
 import '../../controllers/safety_controller.dart';
 import '../../controllers/sync_secrets_controller.dart';
@@ -23,6 +24,7 @@ SettingsWindowHost? settingsWindowHostFor(
   TargetPlatform platform, {
   required AppearanceSettings appearance,
   required AnnouncementSettings announcements,
+  required DeviceNameSettings deviceName,
   required String? appVersion,
   required MonitorSetSettings monitorSet,
   required SafetySettings safety,
@@ -33,6 +35,7 @@ SettingsWindowHost? settingsWindowHostFor(
   TargetPlatform.windows => SettingsWindowHost(
     appearance: appearance,
     announcements: announcements,
+    deviceName: deviceName,
     appVersion: appVersion,
     monitorSet: monitorSet,
     safety: safety,
@@ -57,6 +60,7 @@ final class SettingsWindowHost {
   SettingsWindowHost({
     required AppearanceSettings appearance,
     required AnnouncementSettings announcements,
+    required DeviceNameSettings deviceName,
     required this._appVersion,
     required MonitorSetSettings monitorSet,
     required SafetySettings safety,
@@ -66,6 +70,7 @@ final class SettingsWindowHost {
     @visibleForTesting Future<AppExitResponse> Function()? requestAppExit,
   }) : _appearance = appearance,
        _announcements = announcements,
+       _deviceName = deviceName,
        _monitorSet = monitorSet,
        _safety = safety,
        _syncSecrets = syncSecrets {
@@ -76,7 +81,14 @@ final class SettingsWindowHost {
       sections: GhostSettingsSections(
         snapshot: _snapshot,
         handleCall: _handleCall,
-        changes: [appearance, announcements, monitorSet, safety, syncSecrets],
+        changes: [
+          appearance,
+          announcements,
+          deviceName,
+          monitorSet,
+          safety,
+          syncSecrets,
+        ],
       ),
       encodeError: encodeLinkError,
       requestAppExit: requestAppExit,
@@ -85,6 +97,7 @@ final class SettingsWindowHost {
 
   final AppearanceSettings _appearance;
   final AnnouncementSettings _announcements;
+  final DeviceNameSettings _deviceName;
   final String? _appVersion;
   final MonitorSetSettings _monitorSet;
   final SafetySettings _safety;
@@ -108,6 +121,7 @@ final class SettingsWindowHost {
   Map<String, Object?> _snapshot() => {
     SettingsLinkKey.appearance.name: encodeAppearance(_appearance.value),
     SettingsLinkKey.announceThresholdBands.name: _announcements.value,
+    SettingsLinkKey.deviceName.name: _deviceName.value,
     SettingsLinkKey.syncSecrets.name: _syncSecrets.value,
     SettingsLinkKey.appVersion.name: _appVersion,
     SettingsLinkKey.monitorSet.name: encodeMonitorCandidates(_monitorSet.value),
@@ -132,6 +146,8 @@ final class SettingsWindowHost {
         await _appearance.setAppearance(appearance.palette, appearance.mode);
       case SettingsLinkMethod.setAnnounceThresholdBands:
         await _announcements.setAnnounceThresholdBands(argument! as bool);
+      case SettingsLinkMethod.setDeviceName:
+        await _deviceName.setDeviceName(argument! as String);
       case SettingsLinkMethod.setSyncSecrets:
         await _syncSecrets.setSyncSecrets(argument! as bool);
       case SettingsLinkMethod.setMonitored:

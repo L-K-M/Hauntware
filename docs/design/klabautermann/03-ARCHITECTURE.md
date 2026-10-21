@@ -4786,8 +4786,9 @@ As built in M5 (M19), the host line:
 - The switch is `ServerSafety.hostAuditLine`, on by default, in the
   server header's Safety menu. A synced server keeps it in its `pref`
   record; merged with a stored one, off wins, as read-only does.
-- The device is named by `SetDeviceName`; until Settings names it
-  (M19b), the app sends "Klabautermann on <platform>" (Q6), never the
+- The device is named by `SetDeviceName`, from Settings > General's
+  device name (`klabautermann.audit.deviceName` in `settings.json`); a
+  blank one means "Klabautermann on <platform>" (Q6), never the
   hostname.
 - Detached plans carry no line yet: their steps run on the host past the
   session, where no step is best-effort.

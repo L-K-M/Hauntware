@@ -7,6 +7,7 @@ import 'package:klabautermann_core/klabautermann_core.dart'
 
 import '../controllers/announcement_controller.dart';
 import '../controllers/appearance_controller.dart';
+import '../controllers/device_name.dart';
 import '../controllers/monitor_set.dart';
 import '../controllers/safety_controller.dart';
 import '../controllers/sync_secrets_controller.dart';
@@ -18,7 +19,8 @@ import 'appearance_tab.dart';
 import 'monitor_set_feedback.dart';
 
 /// Settings (03 §10.2): the seven planned tabs as placeholders, except
-/// General, which holds A11Y-15's switch (D60) and the about row (M16),
+/// General, which holds A11Y-15's switch (D60), the device name (M5 plan
+/// Q6) and the about row (M16),
 /// Appearance, which already drives the app's appearance, Servers, which
 /// holds FL-21's monitor set (03 §4.3 step 4), Safety (M4 plan M4), and
 /// Sync, which holds the "sync passwords" switch (SYN-02). A
@@ -32,6 +34,7 @@ class SettingsPage extends StatefulWidget {
     required this.announcements,
     required this.appVersion,
     required this.monitorSet,
+    this.deviceName,
     this.safety,
     this.syncSecrets,
     this.initialTab = SettingsTab.general,
@@ -41,6 +44,9 @@ class SettingsPage extends StatefulWidget {
   final AppearanceSettings appearance;
   final AnnouncementSettings announcements;
   final MonitorSetSettings monitorSet;
+
+  /// Null in tests that leave it out, where General shows no device name.
+  final DeviceNameSettings? deviceName;
 
   /// Null in tests that leave safety out, where the tab is a placeholder.
   final SafetySettings? safety;
@@ -121,6 +127,7 @@ class _SettingsPageState extends State<SettingsPage>
             switch (tab) {
               SettingsTab.general => GeneralTab(
                 announcements: widget.announcements,
+                deviceName: widget.deviceName,
                 appVersion: widget.appVersion,
               ),
               SettingsTab.appearance => AppearanceTab(
@@ -142,18 +149,23 @@ class _SettingsPageState extends State<SettingsPage>
 }
 
 /// The General tab: A11Y-15's switch for threshold-band announcements
-/// (D60), which the Overview's health card links to, and the about row
-/// (M16): the app title with its preview label and the version, opening
-/// the About dialog. Phones have no About command, so this row is their
-/// way to the dialog.
+/// (D60), which the Overview's health card links to, the device name the
+/// host syslog line gives (SAF-13, M5 plan Q6), and the about row (M16):
+/// the app title with its preview label and the version, opening the
+/// About dialog. Phones have no About command, so this row is their way
+/// to the dialog.
 class GeneralTab extends StatelessWidget {
   const GeneralTab({
     super.key,
     required this.announcements,
+    this.deviceName,
     required this.appVersion,
   });
 
   final AnnouncementSettings announcements;
+
+  /// As [SettingsPage.deviceName].
+  final DeviceNameSettings? deviceName;
 
   /// As [SettingsPage.appVersion].
   final String? appVersion;
@@ -201,6 +213,18 @@ class GeneralTab extends StatelessWidget {
             title: Text(l10n.settingsAnnounceBands),
             subtitle: Text(l10n.settingsAnnounceBandsDetail),
           ),
+          if (deviceName case final deviceName?) ...[
+            const SizedBox(height: 24),
+            Semantics(
+              header: true,
+              child: Text(
+                l10n.settingsDeviceTitle,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            const SizedBox(height: 8),
+            DeviceNameField(deviceName: deviceName),
+          ],
           const SizedBox(height: 24),
           Semantics(
             header: true,
@@ -218,6 +242,85 @@ class GeneralTab extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The device name's field (M5 plan Q6): what it shows is the name in
+/// force; it applies when submitted or left, and a blank name means the
+/// default. A name taken but not saved, or not taken, says so in a top
+/// toast, as the switches do.
+class DeviceNameField extends StatefulWidget {
+  const DeviceNameField({super.key, required this.deviceName});
+
+  final DeviceNameSettings deviceName;
+
+  @override
+  State<DeviceNameField> createState() => _DeviceNameFieldState();
+}
+
+class _DeviceNameFieldState extends State<DeviceNameField> {
+  late final _text = TextEditingController(text: widget.deviceName.value);
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    widget.deviceName.addListener(_changed);
+    _focus.addListener(() {
+      if (!_focus.hasFocus) unawaited(_apply());
+    });
+  }
+
+  @override
+  void dispose() {
+    widget.deviceName.removeListener(_changed);
+    _focus.dispose();
+    _text.dispose();
+    super.dispose();
+  }
+
+  /// Shows a name set elsewhere, such as in the other settings surface,
+  /// unless the user is typing here.
+  void _changed() {
+    if (_focus.hasFocus) return;
+    _text.text = widget.deviceName.value;
+  }
+
+  Future<void> _apply() async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final l10n = AppLocalizations.of(context);
+    try {
+      await widget.deviceName.setDeviceName(_text.text);
+    } on DeviceNameNotSavedException catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) {
+        showTopToast(overlay, message: l10n.settingsDeviceNameNotSaved);
+      }
+    } on Exception catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) {
+        showTopToast(overlay, message: l10n.settingsDeviceNameNotChanged);
+      }
+    }
+    // The name in force: trimmed, the default for a blank one, or the old
+    // one when the change was not taken.
+    if (mounted) _text.text = widget.deviceName.value;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return TextField(
+      controller: _text,
+      focusNode: _focus,
+      maxLength: kDeviceNameMaxLength,
+      decoration: InputDecoration(
+        labelText: l10n.settingsDeviceName,
+        helperText: l10n.settingsDeviceNameDetail,
+        helperMaxLines: 3,
+      ),
+      onSubmitted: (_) => unawaited(_apply()),
     );
   }
 }

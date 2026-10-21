@@ -3269,6 +3269,26 @@
   "@settingsSyncSecretsNotChanged": {
     "description": "Toast when the app did not take a change of the sync passwords switch."
   },
+  "settingsDeviceTitle": "This device",
+  "@settingsDeviceTitle": {
+    "description": "Heading of the device name on the General settings tab (M5 plan Q6)."
+  },
+  "settingsDeviceName": "Device name",
+  "@settingsDeviceName": {
+    "description": "Label of the device name field on the General settings tab."
+  },
+  "settingsDeviceNameDetail": "Servers' system logs name this device beside each action you take there. Leave it blank for the default.",
+  "@settingsDeviceNameDetail": {
+    "description": "Helper text under the device name field (SAF-13): the name appears in host logs."
+  },
+  "settingsDeviceNameNotSaved": "The device name changed, but it could not be saved, so it will not be kept after a restart.",
+  "@settingsDeviceNameNotSaved": {
+    "description": "Toast when the device name applied but settings.json could not be written."
+  },
+  "settingsDeviceNameNotChanged": "The device name could not be changed.",
+  "@settingsDeviceNameNotChanged": {
+    "description": "Toast when the app did not take a change of the device name."
+  },
   "settingsAboutTitle": "About",
   "@settingsAboutTitle": {
     "description": "Heading of the about row on the General settings tab, which shows the app's title and version and opens the About dialog."
