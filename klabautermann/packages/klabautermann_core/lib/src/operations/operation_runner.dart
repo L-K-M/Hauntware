@@ -13,6 +13,7 @@ import 'package:seance_core/seance_core.dart'
         ElevationException,
         RemoteCommandException,
         RemoteCommandResult,
+        SecretRedactor,
         SshLink,
         quoteShellWord;
 
@@ -208,6 +209,10 @@ final class OperationRunner {
                     password: session.password,
                   )
                 : await link.run(step.commandLine, stdin: const []);
+            if (step.captureOutput) {
+              output = capturedOutput(result.stdout, result.stderr);
+              exitCode = result.exitCode;
+            }
             if (result.exitCode != 0) {
               if (step.exitMeanings[result.exitCode] case final changed?) {
                 return failed(
@@ -223,6 +228,7 @@ final class OperationRunner {
                     : ActionFailure.stepFailed,
                 step: i,
                 exitCode: result.exitCode,
+                output: output,
               );
             }
           case final ApiStep step:
@@ -329,3 +335,21 @@ final _polkitRefused = RegExp(
 
 /// `klab_ticks`'s status for a process that is gone (proc_stat.dart).
 const _kTicksGone = 3;
+
+final _redactor = SecretRedactor();
+
+/// A captured step's output as [ActionFinished.output] carries it (JOB-19):
+/// redacted as the audit log redacts, and at most [kExecOutputMax]
+/// characters in all, stdout first.
+ExecOutput capturedOutput(String stdout, String stderr) {
+  final keptOut = stdout.length > kExecOutputMax
+      ? stdout.substring(0, kExecOutputMax)
+      : stdout;
+  final room = kExecOutputMax - keptOut.length;
+  final keptErr = stderr.length > room ? stderr.substring(0, room) : stderr;
+  return ExecOutput(
+    stdout: _redactor.redact(keptOut),
+    stderr: _redactor.redact(keptErr),
+    truncated: keptOut.length < stdout.length || keptErr.length < stderr.length,
+  );
+}

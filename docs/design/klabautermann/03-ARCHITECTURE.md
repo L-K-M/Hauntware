@@ -3539,6 +3539,21 @@ answers each open with a `LogStreamState` before it returns, and
 - **v1.x.** Timer creator, output capture, dead-man pings (T1, +E), missed
   runs, fleet jobs overview.
 
+As built in M5 (M24b), JOB-19's run now is the `RunCronJob` action. The
+jobs rows carry cron lines masked (8.9), so the engine reads the line's
+source again (`crontab -l`; `crontab -l -u` through elevation for
+another user's; `cat` for `/etc/crontab` and `/etc/cron.d/*`) and finds
+the line by its masked form; a line gone, or two that mask alike, is
+refused as changed. The command runs once as cron would run it: `sh -c`
+with the text after its first unescaped `%` on standard input, as the
+login user, or as the line's user through elevation and
+`runCronCommand`. It is tier 1, like running a timer now; the preview,
+the danger linter and the audit see the command masked, and the output
+comes back redacted, capped at `kExecOutputMax`, in
+`ActionFinished.output`. The crontab's variable lines and cron's own
+minimal environment are not reproduced, and a long run is not detached
+yet.
+
 As built in M2 (`app/klabautermann_app/lib/ui/jobs_panel.dart`,
 `jobs_view.dart`), the Jobs tab lists the `cron` stream's jobs rows and
 a row per `timers` entry in the sortable table, next run first, with

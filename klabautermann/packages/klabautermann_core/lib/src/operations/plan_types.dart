@@ -30,15 +30,33 @@ final class ShellStep extends PlanStep {
     Iterable<String> argv, {
     this.elevated = false,
     this.discardOutput = false,
+    this.captureOutput = false,
+    Iterable<String>? shownArgv,
     Map<int, RevalidationFailure> exitMeanings = const {},
   }) : argv = List.unmodifiable(argv),
+       shownArgv = List.unmodifiable(shownArgv ?? argv),
        exitMeanings = Map.unmodifiable(exitMeanings),
        commandLine =
            HostCommands.commandLine(List.of(argv), quote: quoteShellWord) +
+           (discardOutput ? _discarded : ''),
+       _shownLine =
+           HostCommands.commandLine(
+             List.of(shownArgv ?? argv),
+             quote: quoteShellWord,
+           ) +
            (discardOutput ? _discarded : '');
 
   final List<String> argv;
   final String commandLine;
+
+  /// [argv] as the preview, the linter and the audit show it: the same
+  /// words, with what 8.9 masks masked, as for a cron line's command.
+  final List<String> shownArgv;
+  final String _shownLine;
+
+  /// The runner keeps what the step printed, redacted and capped, for
+  /// [ActionFinished.output] (JOB-19).
+  final bool captureOutput;
 
   /// The step's output goes to `/dev/null`, so only its exit status is
   /// read: `config -q`'s errors can quote interpolated secrets (STK-06).
@@ -53,7 +71,7 @@ final class ShellStep extends PlanStep {
   final Map<int, RevalidationFailure> exitMeanings;
 
   @override
-  String get display => elevated ? 'sudo: $commandLine' : commandLine;
+  String get display => elevated ? 'sudo: $_shownLine' : _shownLine;
 }
 
 const _discarded = ' >/dev/null 2>&1';

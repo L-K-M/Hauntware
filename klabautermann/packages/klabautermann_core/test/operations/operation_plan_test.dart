@@ -178,6 +178,7 @@ void main() {
         OperationKind.unpause,
         OperationKind.kill,
         OperationKind.runTimerNow,
+        OperationKind.cronRunNow,
         OperationKind.stackStart,
         OperationKind.stackStop,
         OperationKind.stackRestart,

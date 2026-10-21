@@ -4,14 +4,19 @@
 // and builds one plan whose steps are exactly what will run.
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
+        CronJob,
         HostCommandError,
         HostCommands,
         HostProfile,
         SystemctlVerb,
         kGuardedKillGone,
-        kGuardedKillReused;
+        kGuardedKillReused,
+        kOwnCrontabSource,
+        parseCrontabText,
+        splitCronCommand,
+        userCrontabSource;
 import 'package:seance_core/seance_core.dart'
-    show RemoteCommandException, SshLink, quoteShellWord;
+    show RemoteCommandException, RemoteCommandResult, SshLink, quoteShellWord;
 
 import '../../engine/protocol.dart';
 import '../confirmation.dart';
@@ -19,6 +24,7 @@ import '../impact.dart';
 import '../operation_plan.dart';
 import '../plan_types.dart';
 import '../protected_targets.dart';
+import '../../sampling/sample_results.dart' show maskedCronJobs;
 
 /// What planning on one server sees: its ready link, its probe, its
 /// session path and marks, and whether admin mode is on.
@@ -44,16 +50,23 @@ const _killChanged = {
   kGuardedKillReused: RevalidationFailure.processReused,
 };
 
+/// Runs [argv] through admin mode's elevation, as root.
+typedef ElevatedRun = Future<RemoteCommandResult> Function(List<String> argv);
+
 /// Plans [intent], a host action, or says why it cannot be planned.
+/// [elevated] runs a read as root while admin mode is on, as reading
+/// another user's crontab needs.
 Future<PlanAttempt> planHostAction(
   ActionIntent intent,
-  HostPlanContext context,
-) async {
+  HostPlanContext context, {
+  ElevatedRun? elevated,
+}) async {
   try {
     return switch (intent) {
       KillProcess() => await _planKill(intent, context),
       UnitAction() => await _planUnit(intent, context),
       StartTimer() => await _planTimer(intent, context),
+      RunCronJob() => await _planCronRun(intent, context, elevated),
       _ => _refused(ActionRefusalReason.notImplemented),
     };
   } on HostCommandError {
@@ -158,6 +171,122 @@ Future<PlanAttempt> _planTimer(StartTimer intent, HostPlanContext c) async {
       revalidate: [UnitLoaded(unit)],
     ),
   );
+}
+
+/// A `/etc/cron.d/` file cron reads: run-parts' names, letters, digits,
+/// `_` and `-`.
+final _cronDFile = RegExp(r'^/etc/cron\.d/[A-Za-z0-9_-]+$');
+
+/// JOB-19: a cron line's command, run once now as the user cron runs it
+/// as, with the line's `%` text on standard input and its output kept.
+/// The app holds the line only masked, so the source is read again and
+/// the line found by its masked form; a line no longer there, or one two
+/// lines mask alike, is refused as changed. The preview, the linter and
+/// the audit show the command masked.
+Future<PlanAttempt> _planCronRun(
+  RunCronJob intent,
+  HostPlanContext c,
+  ElevatedRun? elevated,
+) async {
+  final source = intent.source;
+  final login = c.profile.user;
+  const ownUserPrefix = 'crontab -u ';
+
+  final List<String> read;
+  final bool system;
+  String? owner;
+  if (source == kOwnCrontabSource) {
+    read = const ['crontab', '-l'];
+    system = false;
+  } else if (source.startsWith(ownUserPrefix)) {
+    owner = source.substring(ownUserPrefix.length);
+    if (userCrontabSource(owner) != source) {
+      return _refused(ActionRefusalReason.invalidTarget);
+    }
+    read = HostCommands.crontabList(owner);
+    system = false;
+  } else if (source == '/etc/crontab' || _cronDFile.hasMatch(source)) {
+    read = ['cat', '--', source];
+    system = true;
+  } else {
+    return _refused(ActionRefusalReason.invalidTarget);
+  }
+
+  // Another user's crontab is root's to read (JOB-03).
+  final readsAsRoot = owner != null && owner != login;
+  final String? text;
+  if (readsAsRoot) {
+    if (elevated == null) return _refused(ActionRefusalReason.adminRequired);
+    final result = await elevated(read);
+    text = result.exitCode == 0 ? result.stdout : null;
+  } else {
+    final result = await c.link.run(
+      HostCommands.commandLine(read, quote: quoteShellWord),
+      stdin: const [],
+    );
+    text = result.exitCode == 0 ? result.stdout : null;
+  }
+  if (text == null) return _refused(ActionRefusalReason.targetChanged);
+
+  final jobs = parseCrontabText(
+    text,
+    source: source,
+    systemTable: system,
+    user: owner,
+  );
+  final shown = maskedCronJobs(jobs);
+  final matches = [
+    for (final job in jobs)
+      if (shown[job]!.raw == intent.raw) job,
+  ];
+  if (matches.length != 1) return _refused(ActionRefusalReason.targetChanged);
+  final job = matches.single;
+
+  // A system table names its user; a crontab runs as its owner.
+  final runAs = system ? job.user : owner;
+  final asLogin = runAs == null || runAs == login;
+  final argv = _cronArgv(job, runAs: asLogin ? null : runAs);
+  final shownArgv = _cronArgv(shown[job]!, runAs: asLogin ? null : runAs);
+  if (argv == null || shownArgv == null) {
+    return _refused(ActionRefusalReason.invalidTarget);
+  }
+
+  return _planned(
+    OperationPlan(
+      intent: intent,
+      kind: OperationKind.cronRunNow,
+      targetName: shown[job]!.command,
+      steps: [
+        ShellStep(
+          argv,
+          shownArgv: shownArgv,
+          elevated: !asLogin,
+          captureOutput: true,
+        ),
+      ],
+      requiredLevel: asLogin ? RequiredLevel.login : RequiredLevel.admin,
+      runner: asLogin
+          ? _runner(c, elevated: false)
+          : RunnerFacts(
+              identity: runAs,
+              credentials: RunnerCredentials.adminPassword,
+            ),
+      hostWrites: const [HostWriteRow.loginRecords],
+    ),
+  );
+}
+
+/// The words that run [job]'s command as cron does
+/// ([HostCommands.runCronCommand]), fed the text after its first
+/// unescaped `%` (crontab(5)), as [runAs] when set. Null for a line with
+/// no command.
+List<String>? _cronArgv(CronJob job, {required String? runAs}) {
+  final (:command, :stdin) = splitCronCommand(job.command);
+  if (command.trim().isEmpty) return null;
+  final script = stdin == null
+      ? command
+      : 'printf %s ${quoteShellWord(stdin)} | sh -c ${quoteShellWord(command)}';
+  return HostCommands.runCronCommand(script, asUser: runAs);
 }
 
 RunnerFacts _runner(HostPlanContext c, {required bool elevated}) => RunnerFacts(

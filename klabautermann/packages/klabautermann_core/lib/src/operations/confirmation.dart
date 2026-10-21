@@ -13,6 +13,9 @@ enum OperationKind {
   unpause(ConfirmationTier.acknowledge),
   kill(ConfirmationTier.acknowledge),
   runTimerNow(ConfirmationTier.acknowledge),
+
+  /// A cron line's command, run once now (JOB-19).
+  cronRunNow(ConfirmationTier.acknowledge),
   stackStart(ConfirmationTier.acknowledge),
   stackStop(ConfirmationTier.acknowledge),
   stackRestart(ConfirmationTier.acknowledge),
