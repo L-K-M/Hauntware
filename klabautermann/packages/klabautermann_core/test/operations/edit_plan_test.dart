@@ -520,8 +520,8 @@ void main() {
         'place before the swap', () async {
       serve(override, 'services:\n');
       final p = (await plan(override, lookup())).plan!;
-      final temp = (p.steps[1] as ShellStep).argv.last;
-      final check = p.steps[3] as ShellStep;
+      final temp = _stepRunning(p, 'klabautermann-write').argv.last;
+      final check = _stepRunning(p, 'config');
 
       expect(check.argv, [
         ...composeConfig(
@@ -533,8 +533,9 @@ void main() {
         ).argv,
       ]);
       expect(check.discardOutput, isTrue);
+      final checked = p.steps.indexOf(check);
       expect(
-        (p.steps[4] as ShellStep).argv,
+        (p.steps[checked + 1] as ShellStep).argv,
         EditCommands.replaceIfHash(override, temp, _sha('services:\n')),
       );
       expect(p.targetName, override);
@@ -544,8 +545,8 @@ void main() {
         'the project records none', () async {
       serve(dotEnv, 'services:\n');
       final p = (await plan(dotEnv, lookup())).plan!;
-      final temp = (p.steps[1] as ShellStep).argv.last;
-      final check = (p.steps[3] as ShellStep).argv;
+      final temp = _stepRunning(p, 'klabautermann-write').argv.last;
+      final check = _stepRunning(p, 'config').argv;
 
       expect(check, containsAllInOrder(['--env-file', temp]));
       expect(check, containsAllInOrder(['-f', compose, '-f', override]));
@@ -569,3 +570,9 @@ void main() {
     });
   });
 }
+
+/// [plan]'s first shell step whose argv holds [word], wherever steps
+/// before it, such as the manifest's, put it.
+ShellStep _stepRunning(OperationPlan plan, String word) => plan.steps
+    .whereType<ShellStep>()
+    .firstWhere((step) => step.argv.contains(word));
