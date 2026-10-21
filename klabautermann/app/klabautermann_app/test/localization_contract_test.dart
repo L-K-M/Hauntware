@@ -469,8 +469,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "''",
   },
   'lib/ui/logs/log_query.dart': {
-    // PCRE2's inline flag that makes journalctl's pattern ignore case
-    // (LOG-06): sent to the server, shown only as the pattern sent.
+    // PCRE2's inline flags that pin journalctl's case rule (LOG-06):
+    // sent to the server, shown only as the pattern sent.
+    r"'(?-i)$pattern'",
     r"'(?i)$pattern'",
     "'/'",
     "'..'",

@@ -57,15 +57,16 @@ const List<String> kCommonLogPaths = [
 
 /// Turns LOG-05's search text into the pattern journalctl matches on the
 /// server (LOG-06, `-g`, PCRE2): plain text has its metacharacters
-/// escaped, and a search that ignores case says so with `(?i)`, since
-/// journalctl ignores case only for an all-lower-case pattern.
+/// escaped, and the pattern pins its case rule with `(?i)` or `(?-i)`,
+/// since journalctl otherwise ignores case for an all-lower-case pattern
+/// and matches it for any other.
 String serverLogPattern(
   String query, {
   required bool regex,
   required bool caseSensitive,
 }) {
   final pattern = regex ? query : RegExp.escape(query);
-  return caseSensitive ? pattern : '(?i)$pattern';
+  return caseSensitive ? '(?-i)$pattern' : '(?i)$pattern';
 }
 
 /// What the Logs panel reads: a [source] with LOG-01's journal filters,
