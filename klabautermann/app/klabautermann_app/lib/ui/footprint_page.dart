@@ -97,7 +97,13 @@ class _FootprintPageState extends State<FootprintPage> {
     AppLocalizations l10n,
     FootprintState state,
   ) {
-    final empty = state.files.isEmpty && state.backups.isEmpty;
+    // Nothing kept is a claim only a full read makes: not while root's
+    // part is unread, nor when a warning says something was not read.
+    final empty =
+        state.files.isEmpty &&
+        state.backups.isEmpty &&
+        !state.rootUnchecked &&
+        state.warnings.isEmpty;
     return [
       if (state.rootUnchecked) ...[
         PanelNotice(

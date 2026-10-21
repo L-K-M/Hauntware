@@ -343,4 +343,33 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('nothing is claimed kept-free while root is unchecked or a '
+      'part could not be read', (tester) async {
+    final page = await _pump(tester);
+    await page.emit(
+      tester,
+      const FootprintState(_serverId, rootUnchecked: true),
+    );
+    expect(
+      find.text("Root's backups and manifest are checked in admin mode."),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Klabautermann keeps nothing on this server.'),
+      findsNothing,
+    );
+
+    await page.emit(
+      tester,
+      const FootprintState(
+        _serverId,
+        warnings: ['the backup index could not be read'],
+      ),
+    );
+    expect(
+      find.text('Klabautermann keeps nothing on this server.'),
+      findsNothing,
+    );
+  });
 }
