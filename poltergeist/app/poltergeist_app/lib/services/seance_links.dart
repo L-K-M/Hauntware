@@ -16,8 +16,10 @@ export 'package:poltergeist_core/poltergeist_core.dart'
 
 typedef UriHandlerProbe = Future<bool> Function(Uri uri);
 typedef ExternalUriLauncher = Future<bool> Function(Uri uri);
-typedef SeanceLaunchErrorSink =
-    void Function(Object error, StackTrace stackTrace);
+typedef SeanceLaunchErrorSink = void Function(
+  Object error,
+  StackTrace stackTrace,
+);
 
 abstract interface class SeanceLauncher {
   bool get available;
@@ -61,16 +63,19 @@ final class SeanceLinkLauncher implements SeanceLauncher {
 
   @override
   Future<void> openBookmark(Bookmark bookmark) =>
-      _open(seanceConnectUriForBookmark(bookmark));
+      _open(() => seanceConnectUriForBookmark(bookmark));
 
   @override
   Future<void> openServer(ServerConfig server) =>
-      _open(seanceConnectUriForServer(server));
+      _open(() => seanceConnectUriForServer(server));
 
-  Future<void> _open(Uri uri) async {
+  /// Builds inside the guard: a server the link grammar cannot name (an id
+  /// that is not a UUID, an endpoint Séance would refuse) is reported like
+  /// a refused launch rather than thrown at the menu command.
+  Future<void> _open(Uri Function() build) async {
     if (!available) return;
     try {
-      if (await _launch(uri)) return;
+      if (await _launch(build())) return;
       throw StateError('The Séance link handler refused the request.');
     } on Object catch (error, stackTrace) {
       _onError(error, stackTrace);
