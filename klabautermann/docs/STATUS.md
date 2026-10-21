@@ -1866,6 +1866,12 @@ is on main:
   re-pushes them; an unsealed forged tombstone is ignored and a sealed
   removal applied (X3); a first-seen pin installs on Séance and a
   conflicting one is reported and left out (X4).
+- X-01 theme paste (M5 M32): complete. Themes copied in Séance and
+  Poltergeist paste into the Appearance tab and keep their name,
+  colours, font and corners; Séance's terminal colours, which
+  Klabautermann's palettes do not carry, are dropped.
+  `theme_paste_fixtures_test.dart` replays each app's exact Copy theme
+  text from `test/fixtures/theme_paste/`.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container
