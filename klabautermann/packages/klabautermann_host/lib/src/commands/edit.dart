@@ -219,10 +219,14 @@ cat > "$1.klabautermann-tmp" && mv -f -- "$1.klabautermann-tmp" "$1" ||
   { s=$?; rm -f -- "$1.klabautermann-tmp"; exit "$s"; }''';
 
 /// Writes stdin to the manifest through a temp file beside it, creating
-/// its directory 0700.
+/// its directory 0700, while the manifest still hashes to the read the
+/// plan rewrote (an absent one hashes as empty); otherwise exits
+/// [EditExit.hashMismatch].
 const String _kManifestWriteScript = r'''
 umask 077
 mkdir -p -- "${1%/*}" || exit
+c=$( { cat -- "$1" 2>/dev/null || :; } | sha256sum) || exit
+if [ "${c%% *}" != "$2" ]; then exit 101; fi
 x=$1.klabautermann-tmp.$$
 cat > "$x" && mv -f -- "$x" "$1" || { s=$?; rm -f -- "$x"; exit "$s"; }''';
 
@@ -404,10 +408,23 @@ abstract final class EditCommands {
     return _readIfPresent(path);
   }
 
-  /// Replaces the footprint manifest at [path] with stdin, atomically.
-  static List<String> manifestWrite(String path) {
+  /// Replaces the footprint manifest at [path] with stdin, atomically,
+  /// while it still hashes to [baseSha256], the SHA-256 of the read the
+  /// new rows were built from; otherwise exits [EditExit.hashMismatch]
+  /// and leaves it as it was.
+  static List<String> manifestWrite(String path, String baseSha256) {
     _checkManifest(path);
-    return ['sh', '-c', _kManifestWriteScript, 'klabautermann-manifest', path];
+    if (!_sha256.hasMatch(baseSha256)) {
+      throw HostCommandError('not a SHA-256', argument: baseSha256);
+    }
+    return [
+      'sh',
+      '-c',
+      _kManifestWriteScript,
+      'klabautermann-manifest',
+      path,
+      baseSha256,
+    ];
   }
 
   /// Prints the index of backup directory [dir], or nothing when it has

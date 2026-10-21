@@ -111,9 +111,18 @@ void main() {
       kRootManifestPath,
     );
     expect(
-      () => EditCommands.manifestWrite('/etc/passwd'),
+      () => EditCommands.manifestWrite('/etc/passwd', _hash),
       _refused('not a manifest path'),
     );
+    expect(
+      () => EditCommands.manifestWrite(kRootManifestPath, 'nope'),
+      _refused('not a SHA-256'),
+    );
+    expect(EditCommands.manifestWrite(kRootManifestPath, _hash).sublist(3), [
+      'klabautermann-manifest',
+      kRootManifestPath,
+      _hash,
+    ]);
     expect(EditCommands.backupIndexWrite(kRootBackupsDir, _hash).sublist(3), [
       'klabautermann-index',
       '$kRootBackupsDir/index',

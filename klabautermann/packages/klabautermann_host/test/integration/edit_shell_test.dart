@@ -33,6 +33,10 @@ const _token = 'feedfacefeedface';
 String _mode(String path) =>
     (File(path).statSync().mode & 0x1ff).toRadixString(8);
 
+/// SHA-256 of the empty text: what an absent file reads as.
+const _emptySha256 =
+    'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+
 String _sha256Of(String path) =>
     (Process.runSync('sha256sum', [path]).stdout as String).split(' ').first;
 
@@ -357,11 +361,20 @@ void main() {
 
       test('the manifest is written whole and verified by sha256sum', () async {
         final manifest = '${dir.path}/config/klabautermann/manifest.json';
+        // An absent manifest hashes as the empty read.
         final write = await run(
-          EditCommands.manifestWrite(manifest),
+          EditCommands.manifestWrite(manifest, _emptySha256),
           stdin: '{"v":1}',
         );
         expect(write.exitCode, 0, reason: '${write.stderr}');
+        expect(File(manifest).readAsStringSync(), '{"v":1}');
+
+        // A manifest that changed since the read is left as it is.
+        final stale = await run(
+          EditCommands.manifestWrite(manifest, _emptySha256),
+          stdin: '{"v":2}',
+        );
+        expect(stale.exitCode, EditExit.hashMismatch);
         expect(File(manifest).readAsStringSync(), '{"v":1}');
         expect(
           File(manifest).parent.listSync().map((e) => e.path),
