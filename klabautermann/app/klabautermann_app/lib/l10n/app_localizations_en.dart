@@ -1,6 +1,5 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
-
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -1911,6 +1910,74 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get logsPanelFileUnreadable =>
       'Your account cannot read it; admin mode can';
+
+  @override
+  String get logsExport => 'Export';
+
+  @override
+  String logsExportTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Export $count lines',
+      one: 'Export 1 line',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get logsExportIncludeSecrets => 'Include secrets';
+
+  @override
+  String get logsExportSecretsRedacted =>
+      'Passwords, tokens and keys are replaced before the lines leave the app.';
+
+  @override
+  String get logsExportSecretsIncluded =>
+      'The lines leave the app as they are, secrets included.';
+
+  @override
+  String logsExportAction(String target) {
+    String _temp0 = intl.Intl.selectLogic(target, {
+      'copy': 'Copy',
+      'save': 'Save…',
+      'other': 'Share…',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String logsExportDone(String target) {
+    String _temp0 = intl.Intl.selectLogic(target, {
+      'copy': 'Copied the lines.',
+      'other': 'Saved the lines.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String logsExportFailed(String target) {
+    String _temp0 = intl.Intl.selectLogic(target, {
+      'copy': 'The lines could not be copied.',
+      'save': 'The lines could not be saved.',
+      'other': 'The lines could not be shared.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsExportNotRedacted =>
+      'The lines could not be redacted, so nothing was exported.';
+
+  @override
+  String logsExportFileName(String source) {
+    String _temp0 = intl.Intl.selectLogic(source, {
+      'journal': 'journal',
+      'kernel': 'kernel',
+      'other': 'log',
+    });
+    return '$_temp0.log';
+  }
 
   @override
   String get logsPanelApply => 'Apply';
