@@ -145,7 +145,7 @@ List<SidebarMenuEntry> unitActionEntries(
   BuildContext context, {
   required String serverId,
   required String unit,
-  UnitScope scope = UnitScope.system,
+  required UnitScope scope,
 }) {
   if (!actionsAllowedAt(context, serverId, ActionEntryPoint.unitVerb)) {
     return const [];
@@ -173,7 +173,7 @@ class UnitActionButtons extends StatelessWidget {
     super.key,
     required this.serverId,
     required this.unit,
-    this.scope = UnitScope.system,
+    required this.scope,
   });
 
   final String serverId;

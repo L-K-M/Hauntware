@@ -970,6 +970,8 @@ void main() {
           .cast<Subscribe>()
           .last;
       expect(subscribe.streams, {SampleStream.userUnits});
+      // The panel's own id, so another panel on the server cannot end it.
+      expect(subscribe.subscriptionId, startsWith('services.user-'));
       expect(find.text('Waiting for the first list of units…'), findsOneWidget);
 
       await panel.emit(

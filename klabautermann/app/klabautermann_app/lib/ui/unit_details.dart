@@ -174,7 +174,7 @@ Future<void> openUnitFile(
   required MonitoringController monitoring,
   required String serverId,
   required String unit,
-  UnitScope scope = UnitScope.system,
+  required UnitScope scope,
 }) {
   final l10n = AppLocalizations.of(context);
   final view = UnitFileView(

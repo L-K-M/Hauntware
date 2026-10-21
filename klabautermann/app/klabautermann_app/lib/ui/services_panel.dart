@@ -89,8 +89,11 @@ class _ServicesPanelState extends State<ServicesPanel> {
   UnitScope _scope = UnitScope.system;
 
   /// The subscription that reads the login user's units while [_scope]
-  /// is theirs and the panel shows.
-  static final _userSubscription = '${ServerPanel.services.name}.user';
+  /// is theirs and the panel shows; this panel's own, as each sampled
+  /// surface's is, so another panel on the server never ends it.
+  late final _userSubscription = widget.monitoring.newSubscriptionId(
+    '${ServerPanel.services.name}.user',
+  );
 
   /// The filters, order and open unit, which outlive tab switches: the
   /// workspace keeps a panel built once opened. Services lead, since most
