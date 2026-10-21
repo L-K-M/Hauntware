@@ -158,6 +158,11 @@ void main() {
     expect(allows('!/usr/bin/systemd[-x]run'), isFalse);
     expect(allows('!/usr/bin/systemd[x-]run'), isFalse);
     expect(allows('!/usr/bin/[r-t]ystemd-run'), isFalse);
+    // POSIX classes name their characters; an unknown one matches none.
+    expect(allows('!/usr/bin/[[:alpha:]]*'), isFalse);
+    expect(allows('!/usr/bin/[[:digit:]]*'), isTrue);
+    expect(allows('!/usr/bin/systemd[[:punct:]]run'), isFalse);
+    expect(allows('!/usr/bin/[[:nonsense:]]*'), isTrue);
   });
 
   test('a negated directory denies every program in it', () {
