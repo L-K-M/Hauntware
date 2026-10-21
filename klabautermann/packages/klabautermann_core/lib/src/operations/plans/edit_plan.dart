@@ -25,6 +25,7 @@ import '../edit_reader.dart';
 import '../footprint.dart' show manifestWithBackups;
 import '../operation_plan.dart';
 import '../plan_types.dart';
+import '../stack_edits.dart';
 
 /// Files whose edit can lock the user out of the host or out of root, so
 /// the typed confirmation applies (03 §8.6): sudo's rules and the SSH
@@ -44,11 +45,13 @@ const _contentChanged = {
 };
 
 /// Plans [intent], or says why it cannot be planned. [random] draws the
-/// temp file's token; tests pass a seeded one.
+/// temp file's token; tests pass a seeded one. A [StackFileTarget] is
+/// looked up through [stacks], as its read was.
 Future<PlanAttempt> planEdit(
   EditFile intent,
   EditContext c, {
   Random? random,
+  StackEditLookup? stacks,
 }) async {
   try {
     return switch (intent.target) {
@@ -59,6 +62,14 @@ Future<PlanAttempt> planEdit(
         random ?? Random.secure(),
       ),
       CrontabTarget(:final user) => await _planCrontab(intent, user, c),
+      StackFileTarget(:final project, :final path) => await _planStackFile(
+        intent,
+        project,
+        path,
+        c,
+        random ?? Random.secure(),
+        stacks,
+      ),
     };
   } on HostCommandError {
     return _refused(ActionRefusalReason.invalidTarget);
@@ -67,15 +78,59 @@ Future<PlanAttempt> planEdit(
   }
 }
 
+/// A verified stack's file (STK-07): the file plan, with the candidate
+/// checked by `compose config -q` before the rename.
+Future<PlanAttempt> _planStackFile(
+  EditFile intent,
+  String project,
+  String path,
+  EditContext c,
+  Random random,
+  StackEditLookup? stacks,
+) async {
+  if (stacks == null) return _refused(ActionRefusalReason.engineUnavailable);
+  final source = await stacks(project, path);
+  final found = source.project;
+  final socketPath = source.socketPath;
+  if (found == null || socketPath == null) {
+    return _readRefusal(
+      EditReadFailed(
+        stackReadFailure(source.failure ?? StackFileFailure.unknownStack),
+      ),
+    );
+  }
+  try {
+    return await _planFile(
+      intent,
+      path,
+      c,
+      random,
+      check: (temp) => stackCandidateCheck(
+        project: found,
+        socketPath: socketPath,
+        path: path,
+        temp: temp,
+      ),
+    );
+  } on ArgumentError {
+    // Verification built the same invocation, so a label changed since.
+    return _refused(ActionRefusalReason.stackUnverified);
+  }
+}
+
+/// [check] builds a step that validates the candidate at its temp path,
+/// run after its attributes are carried over and before the rename.
 Future<PlanAttempt> _planFile(
   EditFile intent,
   String path,
   EditContext c,
-  Random random,
-) async {
+  Random random, {
+  List<String> Function(String temp)? check,
+}) async {
   // Validates the path before anything reads it.
   final token = _token(random);
   final temp = EditCommands.tempPathFor(path, token);
+  final checkArgv = check?.call(temp);
 
   final current = await readEditable(FileTarget(path), c);
   if (current is! EditContent || current.sha256 != intent.baseSha256) {
@@ -113,6 +168,9 @@ Future<PlanAttempt> _planFile(
         step(EditCommands.writeTemp(temp), input: utf8.encode(intent.text)),
         if (_isSudoers(path)) step(['visudo', '-c', '-f', temp]),
         step(EditCommands.copyAttributes(path, temp)),
+        // Status only: compose's errors can quote interpolated values.
+        if (checkArgv != null)
+          ShellStep(checkArgv, elevated: privileged, discardOutput: true),
         step(
           EditCommands.replaceIfHash(path, temp, intent.baseSha256),
           cas: true,
@@ -198,6 +256,7 @@ PlanAttempt _readRefusal(EditReadResult current) => _refused(switch (current) {
     EditReadFailure.tooLarge ||
     EditReadFailure.notText => ActionRefusalReason.invalidTarget,
     EditReadFailure.notFound => ActionRefusalReason.targetChanged,
+    EditReadFailure.stackUnverified => ActionRefusalReason.stackUnverified,
   },
 });
 

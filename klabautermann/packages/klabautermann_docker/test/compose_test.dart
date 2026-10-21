@@ -175,6 +175,19 @@ void main() {
       expect(pull.argv.last, 'pull');
     });
 
+    test('config lists the profiles the files name (STK-09)', () {
+      final profiles = composeConfig(
+        socketPath: '/run/docker.sock',
+        project: 'web',
+        configFiles: const ['/opt/web/compose.yaml'],
+        listProfiles: true,
+      );
+      expect(profiles.argv.sublist(profiles.argv.length - 2), [
+        'config',
+        '--profiles',
+      ]);
+    });
+
     test('config lists services, every profile with --profile *', () {
       final services = composeConfig(
         socketPath: '/run/docker.sock',
