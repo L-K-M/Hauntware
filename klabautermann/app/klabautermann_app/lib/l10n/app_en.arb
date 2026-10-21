@@ -4003,7 +4003,7 @@
   "@actionPreviewRemoveOrphans": {
     "description": "Switch in a redeploy preview that plans it again with --remove-orphans, which needs the typed confirmation (STK-06)."
   },
-  "actionPreviewWarning": "{warning, select, profileGatedServices{Some running services are enabled only by a compose profile, which Klabautermann cannot see. The redeploy leaves them as they are.} profilesUnknown{The compose CLI could not list every profile's services, so some of these containers may belong to a service a profile enables.} mayDieAtLogout{This server ends your processes when you log out, which can stop the operation before it finishes.} other{}}",
+  "actionPreviewWarning": "{warning, select, profileGatedServices{Some running services are enabled only by a compose profile, which Klabautermann cannot see. The redeploy leaves them as they are.} profilesUnknown{The compose CLI could not list every profile's services, so some of these containers may belong to a service a profile enables.} mayDieAtLogout{This server ends your processes when you log out, which can stop the operation before it finishes.} unitNotVerified{This server's systemd is older than version 250, so it cannot check the unit file before it is replaced.} other{}}",
   "@actionPreviewWarning": {
     "description": "A warning in the action preview; warning is the engine's PlanWarning name.",
     "placeholders": {

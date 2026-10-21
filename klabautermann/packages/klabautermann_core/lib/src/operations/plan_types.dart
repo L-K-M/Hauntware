@@ -175,6 +175,11 @@ enum PlanWarning {
   /// A `setsid` operation, which logind ends at logout under
   /// `KillUserProcesses=yes` (03 §7.17).
   mayDieAtLogout,
+
+  /// A unit file the host's systemd cannot check before the rename:
+  /// `systemd-analyze verify` reads a temp copy as the unit only from
+  /// systemd 250 (03 §8.5).
+  unitNotVerified,
 }
 
 /// The consequence a plan's impact line names (03 §8.6); the app words

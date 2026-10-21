@@ -26,6 +26,54 @@ void main() {
     );
   });
 
+  test('a unit file names its unit; a drop-in or other file names none', () {
+    for (final (path, unit) in [
+      ('/etc/systemd/system/app.service', 'app.service'),
+      ('/etc/systemd/system/backup.timer', 'backup.timer'),
+      ('/etc/systemd/system/getty@.service', 'getty@.service'),
+      ('/usr/lib/systemd/system/dev-sda1.swap', 'dev-sda1.swap'),
+      ('/home/deploy/.config/systemd/user/sync.service', 'sync.service'),
+    ]) {
+      expect(unitFileName(path), unit, reason: path);
+    }
+    for (final path in [
+      '/etc/systemd/system/app.service.d/override.conf',
+      '/etc/systemd/system.conf',
+      '/etc/systemd/system/app.conf',
+      '/etc/systemd/system/sys-devices.device',
+      '/etc/systemd/system/a:b.service',
+      '/srv/app.service',
+      '/etc/systemd/system/.service',
+    ]) {
+      expect(unitFileName(path), isNull, reason: path);
+    }
+  });
+
+  test('a unit file\'s temp is verified under the unit\'s name', () {
+    const temp = '/etc/systemd/system/.app.service.klabautermann-tmp-$_tempId';
+    expect(EditCommands.verifyUnit(temp, 'app.service'), [
+      'systemd-analyze',
+      'verify',
+      '--',
+      '$temp:app.service',
+    ]);
+    expect(
+      () => EditCommands.verifyUnit(temp, 'app.conf'),
+      _refused('not a unit file name'),
+    );
+    expect(
+      () => EditCommands.verifyUnit(
+        '/srv/a:b/.app.service.klabautermann-tmp-$_tempId',
+        'app.service',
+      ),
+      _refused('FILE:UNIT cannot name a path with :'),
+    );
+    expect(
+      () => EditCommands.verifyUnit(_target, 'app.service'),
+      _refused('not an edit temp file'),
+    );
+  });
+
   test('each builder names its script and passes paths as words', () {
     expect(EditCommands.readFile(_target, cap: 10).sublist(3), [
       'klabautermann-read',

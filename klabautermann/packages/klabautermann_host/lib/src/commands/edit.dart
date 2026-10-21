@@ -47,6 +47,46 @@ const String kManifestSuffix = '/klabautermann/manifest.json';
 /// `<epoch seconds> TAB <sha256> TAB <original path>`.
 const String kEditBackupIndexName = 'index';
 
+/// The first systemd major whose `systemd-analyze verify` reads a file as
+/// another unit (`FILE:UNIT`), which checking a unit file's temp copy
+/// needs: the temp's own name is no unit name.
+const int kVerifyAsUnitSystemd = 250;
+
+/// The unit types a unit file defines (systemd.unit(5)); device and scope
+/// units come from udev and the manager, never from a file.
+const Set<String> _unitFileTypes = {
+  'service',
+  'socket',
+  'target',
+  'mount',
+  'automount',
+  'swap',
+  'path',
+  'timer',
+  'slice',
+};
+
+/// The unit [path] defines when it is a unit file systemd loads: a unit
+/// name, with a unit type's suffix, directly in a `systemd/system` or
+/// `systemd/user` directory. A drop-in, under `<unit>.d/`, defines none,
+/// and neither does a name with `:`, which `FILE:UNIT` would split.
+/// Otherwise null.
+String? unitFileName(String path) {
+  final slash = path.lastIndexOf('/');
+  if (slash <= 0) return null;
+  final directory = path.substring(0, slash);
+  if (!directory.endsWith('/systemd/system') &&
+      !directory.endsWith('/systemd/user')) {
+    return null;
+  }
+  final name = path.substring(slash + 1);
+  final dot = name.lastIndexOf('.');
+  if (dot <= 0 || !_unitFileTypes.contains(name.substring(dot + 1))) {
+    return null;
+  }
+  return _unitName.hasMatch(name) ? name : null;
+}
+
 /// The default cap on what [EditCommands.readFile] prints of a file: an
 /// editor buffer, not a log (03 §8.5).
 const int kEditReadMaxBytes = 1024 * 1024;
@@ -115,6 +155,8 @@ final _sha256Line = RegExp(r'^(\\)?([0-9a-f]{64})  (/.*)$');
 final _sha256 = RegExp(r'^[0-9a-f]{64}$');
 final _backupName = RegExp(r'^[0-9a-f]{64}-\d{1,12}$');
 final _token = RegExp('^[0-9a-f]{$kEditTempTokenLength}\$');
+// systemd.unit(5)'s characters, less `:`.
+final _unitName = RegExp(r'^[A-Za-z0-9_.@\\-]+$');
 
 /// Prints `<size> <uid> <gid> <mode> <sha256>` and then, when the size is
 /// at most the cap, the content. The hash is of the file as `sha256sum` read it; the
@@ -304,6 +346,25 @@ abstract final class EditCommands {
       temp,
       sha256,
     ];
+  }
+
+  /// Checks [temp] as the unit [unit] with `systemd-analyze verify`
+  /// before it replaces the unit file (03 §8.5): `FILE:UNIT` loads the
+  /// temp under the unit's name, which needs systemd
+  /// [kVerifyAsUnitSystemd] or later. It runs in system mode, which
+  /// needs no user manager, for user units too.
+  static List<String> verifyUnit(String temp, String unit) {
+    _checkTemp(temp);
+    if (temp.contains(':')) {
+      throw HostCommandError(
+        'FILE:UNIT cannot name a path with :',
+        argument: temp,
+      );
+    }
+    if (unitFileName('/etc/systemd/system/$unit') != unit) {
+      throw HostCommandError('not a unit file name', argument: unit);
+    }
+    return ['systemd-analyze', 'verify', '--', '$temp:$unit'];
   }
 
   /// Prints `1` while SELinux enforces; fails where the host has no
