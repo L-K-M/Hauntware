@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/catalog/engine_sync.dart';
+import 'package:klabautermann_core/src/catalog/engine_vault.dart';
 import 'package:klabautermann_core/src/catalog/klabautermann_records.dart';
 import 'package:seance_core/catalog.dart'
     show FileVaultStore, InMemoryConflictAwareHostKeyStore;
@@ -43,17 +45,30 @@ void main() {
 
   tearDown(() => support.deleteSync(recursive: true));
 
+  // The engine's vault; [open] wires it to the sync it returns.
+  late EngineVault vault;
+
   Future<EngineSync> open({
     SupportDirectoryAccess access = SupportDirectoryAccess.exclusive,
     String? deviceId = _deviceId,
-  }) => EngineSync.open(
-    supportDirectory: support,
-    access: access,
-    deviceId: deviceId,
-    hostKeys: InMemoryConflictAwareHostKeyStore(),
-    keystore: keystore,
-    transport: server.transport,
-  );
+  }) async {
+    late final EngineSync sync;
+    vault = EngineVault(
+      support,
+      access: access,
+      keystore: keystore,
+      enrolled: () => sync.account != null,
+    );
+    return sync = await EngineSync.open(
+      supportDirectory: support,
+      access: access,
+      deviceId: deviceId,
+      hostKeys: InMemoryConflictAwareHostKeyStore(),
+      keystore: keystore,
+      vault: vault,
+      transport: server.transport,
+    );
+  }
 
   File file(String name) => File('${support.path}/$name');
 
@@ -188,6 +203,116 @@ void main() {
       expect(status.failure, SyncFailure.otherAccount);
       expect(status.account?.baseUrl, _baseUrl);
     });
+  });
+
+  group('synced secrets (03 §4.5, SYN-02)', () {
+    const secret = Secret(
+      id: 'secret-a',
+      kind: SecretKind.password,
+      value: 'from-seance',
+    );
+
+    Future<void> seed({int updatedAt = 1}) async {
+      await server.seedServer(
+        fakeServer(
+          'srv-a',
+          'alpha',
+        ).copyWith(secretRef: 'secret-a', syncSecret: true),
+      );
+      await server.seedSecret(secret, updatedAt: updatedAt);
+    }
+
+    test(
+      'with the switch off a pulled secret stays out of the vault',
+      () async {
+        await seed();
+        final sync = await open();
+
+        final status = await sync.enroll(_enroll);
+
+        expect(status.phase, SyncPhase.succeeded, reason: status.detail);
+        expect(await vault.read('secret-a'), isNull);
+      },
+    );
+
+    test('with the switch on enrollment applies a pulled secret', () async {
+      await seed();
+      final sync = await open();
+      await sync.setSyncSecrets(enabled: true);
+
+      await sync.enroll(_enroll);
+
+      expect((await vault.read('secret-a'))?.value, 'from-seance');
+      expect(server.pushes, 0);
+    });
+
+    test('turning the switch on applies what rounds skipped', () async {
+      await seed();
+      final sync = await open();
+      await sync.enroll(_enroll);
+      expect(await vault.read('secret-a'), isNull);
+
+      await sync.setSyncSecrets(enabled: true);
+
+      expect(sync.syncSecrets, isTrue);
+      expect((await vault.read('secret-a'))?.value, 'from-seance');
+    });
+
+    test('a local password is replaced only by a strictly newer one', () async {
+      final sync = await open();
+      await sync.setSyncSecrets(enabled: true);
+      await sync.enroll(_enroll);
+      await vault.save(secret.copyWith(value: 'typed-here'));
+      final local = (await vault.read('secret-a'))!.updatedAt;
+
+      await seed(updatedAt: local - 1);
+      await sync.runRound();
+      expect((await vault.read('secret-a'))?.value, 'typed-here');
+
+      await server.seedSecret(secret, updatedAt: local + 1);
+      await sync.runRound();
+      expect((await vault.read('secret-a'))?.value, 'from-seance');
+    });
+  });
+
+  test('a save asked for during a round waits for it, so a pulled secret '
+      'and a typed one never interleave on the vault file', () async {
+    final sync = await open();
+    await sync.setSyncSecrets(enabled: true);
+    await sync.enroll(_enroll);
+    await server.seedServer(
+      fakeServer(
+        'srv-a',
+        'alpha',
+      ).copyWith(secretRef: 'secret-a', syncSecret: true),
+    );
+    await server.seedSecret(
+      const Secret(
+        id: 'secret-a',
+        kind: SecretKind.password,
+        value: 'from-seance',
+      ),
+      updatedAt: 1,
+    );
+
+    // The save is asked for while the round waits on its pull, inside
+    // the round's turn on the vault.
+    final order = <String>[];
+    final gate = server.pullGate = Completer<void>();
+    final held = server.pullHeld = Completer<void>();
+    final round = sync.runRound().then((_) => order.add('round'));
+    await held.future;
+    final saving = vault
+        .save(Secret(id: 'secret-b', kind: SecretKind.password, value: 'typed'))
+        .then((_) => order.add('save'));
+    await pumpEventQueue();
+    expect(order, isEmpty);
+    gate.complete();
+    await Future.wait([round, saving]);
+
+    expect(order, ['round', 'save']);
+    expect((await vault.read('secret-a'))?.value, 'from-seance');
+    expect((await vault.read('secret-b'))?.value, 'typed');
   });
 
   group('rounds (03 §4.4, D14)', () {

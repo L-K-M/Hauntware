@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:klabautermann_core/src/catalog/engine_sync.dart';
@@ -43,6 +44,12 @@ final class FakeSyncServer {
   /// Thrown by the next pull, once.
   Object? nextPullError;
 
+  /// Holds every pull until it completes; [pullHeld] completes as one
+  /// waits, so a test can act in the middle of a round. Both stay null
+  /// unless a test sets them: completers cannot cross to an isolate.
+  Completer<void>? pullGate;
+  Completer<void>? pullHeld;
+
   /// Thrown by every call, as a server nobody can reach.
   Object? unreachable;
 
@@ -83,6 +90,22 @@ final class FakeSyncServer {
         updatedAt: updatedAt,
         deviceId: 'klabautermann-device',
         data: data,
+      ),
+    );
+    _records[id] = sealed.withSeq(++_seq);
+  }
+
+  /// Seals [secret] as its `secret:` record under the account key and
+  /// seeds it, stamped [updatedAt].
+  Future<void> seedSecret(Secret secret, {int updatedAt = 1}) async {
+    final id = 'secret:${secret.id}';
+    final sealed = await RecordCrypto(RecordCodec(keys.vaultKey)).seal(
+      DecryptedRecord(
+        id: id,
+        kind: RecordKind.secret,
+        updatedAt: updatedAt,
+        deviceId: 'seance-device',
+        data: secret.toJson(),
       ),
     );
     _records[id] = sealed.withSeq(++_seq);
@@ -152,6 +175,12 @@ final class _FakeTransport implements SyncTransport {
       _server.nextPullError = null;
       throw error;
     }
+    if (_server.pullGate case final gate?) {
+      if (_server.pullHeld case final held? when !held.isCompleted) {
+        held.complete();
+      }
+      await gate.future;
+    }
     if (token != 'token-1') {
       throw const ApiError(code: 'unauthorized', message: 'Invalid token');
     }
@@ -180,6 +209,9 @@ final class MemoryKeystore implements SyncKeystore {
   /// keyring.
   bool refuseWrites = false;
 
+  /// Hears each master key written.
+  void Function(List<int> key)? onWrite;
+
   @override
   Future<void> putApiKey(String name, String value) async {
     if (refuseWrites) throw const SyncKeystoreRefusedException('locked');
@@ -199,5 +231,6 @@ final class MemoryKeystore implements SyncKeystore {
   Future<void> writeMasterKey(List<int> key) async {
     if (refuseWrites) throw const SyncKeystoreRefusedException('locked');
     masterKey = List.of(key);
+    onWrite?.call(masterKey!);
   }
 }

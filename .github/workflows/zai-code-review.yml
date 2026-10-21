@@ -107,7 +107,7 @@ jobs:
         # the first attempt — no review-semantics change.
         if: ${{ env.ZAI_API_KEY != '' && steps.review.outcome == 'failure' }}
         timeout-minutes: 170
-        # Same immutable pin as the first attempt (8e718ac = v0.0.13).
+        # Same immutable pin as the first attempt (13a9ddb = v0.0.15).
         uses: L-K-M/zai-code-review@13a9ddba4ff2e2086dbd91af184f74dee6587c17
         with:
           ZAI_API_KEY: ${{ env.ZAI_API_KEY }}
