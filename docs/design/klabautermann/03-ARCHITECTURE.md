@@ -1251,11 +1251,15 @@ Proposals awaiting the owner close the section; they are not decisions.
   2. its attributes come from the target with `cp --attributes-only
      --preserve=mode,ownership,xattr` where the host's `cp` accepts it;
   3. elsewhere (BusyBox) they come from `stat` through numeric `chown`
-     and `chmod`. A target carrying extended ACL entries (`getfacl`
-     lists more than the three base entries) or xattrs (`getfattr -d`
-     lists any but `security.selinux`) is refused there, naming the
-     missing tool, rather than written without them; a host with
-     neither tool sets neither;
+     and `chmod`, which cannot copy ACLs or xattrs. Where `getfacl` or
+     `getfattr` is present, a target carrying extended ACL entries
+     (`getfacl` lists more than the three base entries) or xattrs
+     (`getfattr -d -m -` lists any but `security.selinux`) is refused,
+     naming what this path would drop, rather than written without
+     them. What a missing tool cannot check is taken to be absent, an
+     accepted risk: attributes set from elsewhere (an image built on
+     another host, shared storage) would be dropped. A host with
+     neither tool writes ahead unchecked;
   4. the hash re-check runs right before `mv`, and `restorecon` runs on
      the target after it when SELinux enforces;
   5. any failed step removes the temp and leaves the target as it was.
@@ -4654,7 +4658,9 @@ not block, since the host's own checks run at planning. Saving plans an
 as every action. A plan refused as `targetChanged`, or a run that ends
 with `contentChanged`, opens the conflict sheet. "Reload and compare"
 reads the server's text as the new base, keeps the user's and opens the
-review again; "Discard mine" takes the server's. A finished save reads
+review again; a reload that fails says why and opens nothing, since a
+review against the refused base would be refused again. "Discard mine"
+takes the server's. A finished save reads
 the target again for its new base. The stack file view and the Jobs
 tab, for the login user's crontab, open it through the `fileEdit`
 entry point. The text lives only in the editor's state.
