@@ -1,0 +1,41 @@
+{
+  "name": "Custom",
+  "accent": "#B58900",
+  "surface": "#002B36",
+  "sidebar": "#00252F",
+  "raised": "#012E39",
+  "text": "#839496",
+  "secondaryText": "#667A82",
+  "hairline": "#174552",
+  "selection": "#1C6A9E",
+  "online": "#859900",
+  "offline": "#DC322F",
+  "connecting": "#B58900",
+  "unknown": "#839496",
+  "terminal": {
+    "background": "#002B36",
+    "foreground": "#839496",
+    "cursor": "#93A1A1",
+    "selection": "#073642",
+    "ansi": [
+      "#073642",
+      "#DC322F",
+      "#859900",
+      "#B58900",
+      "#268BD2",
+      "#D33682",
+      "#2AA198",
+      "#EEE8D5",
+      "#002B36",
+      "#CB4B16",
+      "#586E75",
+      "#657B83",
+      "#839496",
+      "#6C71C4",
+      "#93A1A1",
+      "#FDF6E3"
+    ]
+  },
+  "fontFamily": "JetBrains Mono",
+  "cornerScale": 1.0
+}

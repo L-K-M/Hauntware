@@ -588,6 +588,25 @@ void main() {
       );
     });
 
+    test('Klabautermann settings seal and open under their own kind',
+        () async {
+      final codec = RecordCodec(secureRandomBytes(32));
+      final enc = await codec.encrypt(
+        const DecryptedRecord(
+          id: 'klabautermann:rule:r1',
+          kind: RecordKind.klabautermann,
+          updatedAt: 42,
+          deviceId: 'device-a',
+          data: {'type': 'rule'},
+        ),
+      );
+
+      final dec = await codec.decrypt(enc);
+      expect(dec.kind, RecordKind.klabautermann);
+      expect(dec.data, {'type': 'rule'});
+      expect(recordKindFromName('klabautermann'), RecordKind.klabautermann);
+    });
+
     test('unknown kinds decode as unknown and cannot be encrypted', () async {
       final vaultKey = secureRandomBytes(32);
       final codec = RecordCodec(vaultKey);

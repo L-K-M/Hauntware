@@ -26,7 +26,8 @@
 #      (least-privilege tokens: only that job pushes to GHCR),
 #  10. the checksum job drops a stale SHA256SUMS before recomputing,
 #      so re-running it stays idempotent,
-#  11. all Android client legs verify the built APK's version code.
+#  11. all Android client legs verify the built APK's version code,
+#  12. PR product-job selection follows every cross-product read.
 
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -250,6 +251,16 @@ for leg in client_planchette client_seance client_poltergeist client_klabauterma
   ' .github/workflows/release.yml ||
     err "release.yml $leg must verify the APK version code (verify-android-version.sh)"
 done
+
+# --- 12. PR product-job selection -------------------------------------------
+# ci.yml skips a product's jobs on PRs that cannot reach it. A product
+# file naming another product's path outside pub (a fixture mount, a
+# relative script call) must select the reader too, or a PR could break
+# that product unseen until main runs.
+python3 scripts/ci-affected-products.py --self-test ||
+  err "ci-affected-products self-test failed"
+python3 scripts/ci-affected-products.py --check-references ||
+  err "a cross-product file read is missing from ci-affected-products.py"
 
 if [[ "$fail" -ne 0 || "$missing" -ne 0 || "$uncovered" -ne 0 ]]; then
   echo "workflow contract checks FAILED" >&2

@@ -83,24 +83,30 @@ final class IdentityFileUnavailable implements Exception {
 /// resolver answers that itself, and the agent signs through
 /// `SshAgentClient` when the link connects. A key file is read at connect
 /// time from its expanded path ("reference, don't store"), and every
-/// attempt is recorded in the audit log. There is no vault before the
-/// catalog stores land (F3b), so a vault entry is never found.
+/// attempt is recorded in the audit log. Vault entries are read through
+/// [vault], `EngineVault.read`.
 final class EngineCredentialSource implements CredentialSource {
+  /// [vault] reads a vault entry; without one no entry is ever found.
   /// [environment] and [isMacOS] default to the running process's; tests
   /// pass their own.
   EngineCredentialSource(
     this._audit, {
+    this._vault,
     Map<String, String>? environment,
     bool? isMacOS,
   }) : _environment = environment ?? Platform.environment,
        _isMacOS = isMacOS ?? Platform.isMacOS;
 
   final IdentityAuditLog _audit;
+  final Future<Secret?> Function(String secretRef)? _vault;
   final Map<String, String> _environment;
   final bool _isMacOS;
 
+  /// Throws `VaultUnavailableException` when a vault exists that the
+  /// keystore cannot open.
   @override
-  Future<Secret?> storedSecret(String secretRef) async => null;
+  Future<Secret?> storedSecret(String secretRef) async =>
+      _vault == null ? null : await _vault(secretRef);
 
   /// Reads [config]'s key file. [draft] is ignored: the engine has no
   /// editor drafts or bookmark grants. Throws [IdentityFileUnavailable].
