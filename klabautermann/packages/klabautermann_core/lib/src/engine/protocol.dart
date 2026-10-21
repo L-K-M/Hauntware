@@ -4,9 +4,11 @@ import 'dart:typed_data';
 // `Collector` (its argument validators) and `ServerZone` (`offsetAt`) do.
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
+        BackupEntry,
         CpuPercentages,
         CronSnapshot,
         DiskRate,
+        FootprintRow,
         FsSnapshot,
         HostProfile,
         JobEntry,
@@ -198,6 +200,11 @@ import '../operations/plan_types.dart';
 /// the same pipeline, [DockerStackProfilesQuery] lists the profiles its
 /// files name, and [DockerStackScanQuery] finds compose files in the
 /// folders the user chose.
+///
+/// The footprint then joined v3 the same way (03 §8.11, SAF-14):
+/// [FootprintQuery], answered by [FootprintState], which the engine also
+/// sends unasked; the [KeepLastBackups] and [RemoveBackups] intents plan
+/// backup removal.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -457,6 +464,15 @@ final class ReadEditable extends EngineRequest {
   final String serverId;
   final String requestId;
   final EditTarget target;
+}
+
+/// Verifies [serverId]'s footprint again (SAF-14, P13): answered by a
+/// [FootprintState]. The engine also verifies it on every connect, and
+/// root's part when admin mode turns on.
+final class FootprintQuery extends EngineRequest {
+  const FootprintQuery(this.serverId);
+
+  final String serverId;
 }
 
 /// Runs one read-only Docker Engine query on [serverId]'s engine (03
@@ -1189,6 +1205,58 @@ enum EditReadFailure {
 
   /// The read failed otherwise.
   failed,
+}
+
+/// What Klabautermann keeps on [serverId] (SAF-14, 03 §8.11, P13): the
+/// manifest rows and whether each is there, and every backup the indexes
+/// record with whether its content still has the recorded hash. Root's
+/// part is [rootUnchecked] until admin mode reads it.
+final class FootprintState extends EngineEvent {
+  const FootprintState(
+    this.serverId, {
+    this.files = const [],
+    this.backups = const [],
+    this.rootUnchecked = false,
+    this.warnings = const [],
+  });
+
+  final String serverId;
+  final List<FootprintFile> files;
+  final List<FootprintBackup> backups;
+  final bool rootUnchecked;
+  final List<String> warnings;
+}
+
+/// One manifest row and whether its path exists.
+@immutable
+final class FootprintFile {
+  const FootprintFile(this.scope, this.row, {required this.present});
+
+  final FootprintScope scope;
+  final FootprintRow row;
+  final bool present;
+}
+
+/// One backup an index records, and what verification found.
+@immutable
+final class FootprintBackup {
+  const FootprintBackup(this.scope, this.entry, this.status);
+
+  final FootprintScope scope;
+  final BackupEntry entry;
+  final FootprintBackupStatus status;
+}
+
+/// What verification found of a backup.
+enum FootprintBackupStatus {
+  /// Its content has the hash its index records.
+  intact,
+
+  /// Its content changed on the host ("modified on host").
+  modified,
+
+  /// The index records it, but the file is gone.
+  missing,
 }
 
 /// A plan finished, one way or another (03 §10.1). A failed plan says
@@ -3298,6 +3366,36 @@ final class EditFile extends ActionIntent {
   final EditTarget target;
   final String text;
   final String baseSha256;
+}
+
+/// Whose backups a footprint action or row is (03 §8.11): the login
+/// user's, under its home, or root's under `/var/lib`, which needs admin
+/// mode.
+enum FootprintScope { user, root }
+
+/// Keeps the newest [count] backups of each file in [scope]'s backup
+/// directory and removes the rest, with their index lines (SAF-14,
+/// "keep last N"; tier 1).
+final class KeepLastBackups extends ActionIntent {
+  const KeepLastBackups(super.serverId, {required this.scope, this.count = 5})
+    : assert(count >= 1, 'keep at least one');
+
+  final FootprintScope scope;
+  final int count;
+}
+
+/// Removes every backup of [source], a path or `crontab:<user>`, from
+/// [scope]'s backup directory (SAF-14). They are the only undo of the
+/// edits they back up, so this needs the typed confirmation.
+final class RemoveBackups extends ActionIntent {
+  const RemoveBackups(
+    super.serverId, {
+    required this.scope,
+    required this.source,
+  });
+
+  final FootprintScope scope;
+  final String source;
 }
 
 /// The app's safety preferences (M4 plan M4, SAF-01, SAF-06): per server,

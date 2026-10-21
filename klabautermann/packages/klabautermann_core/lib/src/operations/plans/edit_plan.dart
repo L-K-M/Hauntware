@@ -6,19 +6,24 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
         EditCommands,
         EditExit,
         HostCommandError,
         HostCommands,
-        kRootBackupsDir;
+        encodeFootprintManifest,
+        kRootBackupsDir,
+        kRootManifestPath,
+        parseFootprintManifest;
 import 'package:seance_core/seance_core.dart'
-    show RemoteCommandException, quoteShellWord;
+    show RemoteCommandException, RemoteCommandResult, quoteShellWord;
 
 import '../../engine/protocol.dart';
 import '../confirmation.dart';
 import '../edit_reader.dart';
+import '../footprint.dart' show manifestWithBackups;
 import '../operation_plan.dart';
 import '../plan_types.dart';
 import '../stack_edits.dart';
@@ -133,9 +138,16 @@ Future<PlanAttempt> _planFile(
     return _readRefusal(current);
   }
   final privileged = current.privileged;
+  // Root's backups and manifest are root's alone, so even planning needs
+  // admin mode.
+  if (privileged && c.admin == null) {
+    return _refused(ActionRefusalReason.adminRequired);
+  }
 
   final backups = privileged ? kRootBackupsDir : await _userBackupsDir(c);
   if (backups == null) return _refused(ActionRefusalReason.noLink);
+  final manifest = await _manifestStep(c, root: privileged, backups: backups);
+  if (manifest case _ManifestRefused(:final reason)) return _refused(reason);
   final relabel = await _selinuxEnforcing(c);
 
   ShellStep step(List<String> argv, {List<int>? input, bool cas = false}) =>
@@ -153,6 +165,7 @@ Future<PlanAttempt> _planFile(
       targetName: path,
       steps: [
         step(EditCommands.backupFile(path, backups)),
+        if (manifest case _ManifestWrite(:final step)) step,
         step(EditCommands.writeTemp(temp), input: utf8.encode(intent.text)),
         if (_isSudoers(path)) step(['visudo', '-c', '-f', temp]),
         step(EditCommands.copyAttributes(path, temp)),
@@ -172,6 +185,7 @@ Future<PlanAttempt> _planFile(
         HostWriteRow.editTarget,
         HostWriteRow.editTempFile,
         privileged ? HostWriteRow.rootBackups : HostWriteRow.userBackups,
+        if (manifest is _ManifestWrite) HostWriteRow.footprintManifest,
         HostWriteRow.loginRecords,
       ],
       protected: isProtectedEditPath(path) ? ProtectedReason.builtIn : null,
@@ -192,6 +206,8 @@ Future<PlanAttempt> _planCrontab(
 
   final backups = own ? await _userBackupsDir(c) : kRootBackupsDir;
   if (backups == null) return _refused(ActionRefusalReason.noLink);
+  final manifest = await _manifestStep(c, root: !own, backups: backups);
+  if (manifest case _ManifestRefused(:final reason)) return _refused(reason);
   final name = own ? (c.profile.user ?? 'login user') : user;
   final crontabUser = own ? null : user;
 
@@ -209,6 +225,7 @@ Future<PlanAttempt> _planCrontab(
           ),
           elevated: !own,
         ),
+        if (manifest case _ManifestWrite(:final step)) step,
         ShellStep(
           EditCommands.crontabWriteIfHash(intent.baseSha256, user: crontabUser),
           elevated: !own,
@@ -221,6 +238,7 @@ Future<PlanAttempt> _planCrontab(
       hostWrites: [
         HostWriteRow.editTarget,
         own ? HostWriteRow.userBackups : HostWriteRow.rootBackups,
+        if (manifest is _ManifestWrite) HostWriteRow.footprintManifest,
         HostWriteRow.loginRecords,
       ],
     ),
@@ -242,6 +260,87 @@ PlanAttempt _readRefusal(EditReadResult current) => _refused(switch (current) {
     EditReadFailure.stackUnverified => ActionRefusalReason.stackUnverified,
   },
 });
+
+/// What the plan does about the manifest (03 §8.11): nothing while it
+/// already lists [backups], else writes it with the backup directory's
+/// rows added.
+sealed class _Manifest {
+  const _Manifest();
+}
+
+final class _ManifestListed extends _Manifest {
+  const _ManifestListed();
+}
+
+final class _ManifestWrite extends _Manifest {
+  const _ManifestWrite(this.step);
+
+  final ShellStep step;
+}
+
+final class _ManifestRefused extends _Manifest {
+  const _ManifestRefused(this.reason);
+
+  final ActionRefusalReason reason;
+}
+
+/// Reads the [root] or login user's manifest and says whether the plan
+/// must write it, so the first backup lands with its manifest rows
+/// (SAF-14). A manifest the engine cannot read whole is refused rather
+/// than written over.
+Future<_Manifest> _manifestStep(
+  EditContext c, {
+  required bool root,
+  required String backups,
+}) async {
+  Future<RemoteCommandResult> run(List<String> argv) => root
+      ? c.admin!.executor.run(argv, password: c.admin!.password)
+      : c.link.run(
+          HostCommands.commandLine(argv, quote: quoteShellWord),
+          stdin: const [],
+        );
+
+  final String path;
+  if (root) {
+    path = kRootManifestPath;
+  } else {
+    final resolved = await run(EditCommands.userManifestPath());
+    final userPath = resolved.stdout.trim();
+    if (resolved.exitCode != 0 || !userPath.startsWith('/')) {
+      return const _ManifestRefused(ActionRefusalReason.noLink);
+    }
+    path = userPath;
+  }
+  final read = await run(EditCommands.manifestRead(path));
+  if (read.exitCode != 0) {
+    return const _ManifestRefused(ActionRefusalReason.noLink);
+  }
+  final parsed = parseFootprintManifest(read.stdout);
+  // The rewrite keeps only the rows the parser understood, so a manifest
+  // with any it skipped is refused rather than shortened, as the backup
+  // index is.
+  if (parsed.warnings.isNotEmpty ||
+      (parsed.value.isEmpty && read.stdout.trim().isNotEmpty)) {
+    return const _ManifestRefused(ActionRefusalReason.invalidTarget);
+  }
+  final rows = manifestWithBackups(parsed.value, backups);
+  if (rows == null) return const _ManifestListed();
+  return _ManifestWrite(
+    ShellStep(
+      // Against the read above: a manifest another run changed since is
+      // not overwritten with rows built from the old one. The check and
+      // the rename are two steps, so two runs between them can still
+      // drop one's rows; its backup then shows as an orphan.
+      EditCommands.manifestWrite(
+        path,
+        sha256.convert(utf8.encode(read.stdout)).toString(),
+      ),
+      elevated: root,
+      input: utf8.encode(encodeFootprintManifest(rows)),
+      exitMeanings: _contentChanged,
+    ),
+  );
+}
 
 /// Whether SELinux enforces on the host, so the rename needs
 /// `restorecon` (D67): read at planning time, as the target is, rather

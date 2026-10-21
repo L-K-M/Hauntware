@@ -8,11 +8,14 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
     show groupComposeProjects;
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
+        BackupEntry,
         CoreCpuTimes,
         CronDst,
         CronExpression,
         CronJob,
         CronJobEntry,
+        FootprintKind,
+        FootprintRow,
         FsMount,
         ServerZone,
         SystemdTimer,
@@ -129,6 +132,17 @@ void main() {
           query: DockerContainersQuery(),
         ),
         const PlanAction(KillProcess('srv-1', pid: 42, startTicks: 9001)),
+        const FootprintQuery('srv-1'),
+        const PlanAction(
+          KeepLastBackups('srv-1', scope: FootprintScope.user, count: 3),
+        ),
+        const PlanAction(
+          RemoveBackups(
+            'srv-1',
+            scope: FootprintScope.root,
+            source: '/etc/hosts',
+          ),
+        ),
         const DockerWatch(
           serverId: 'srv-1',
           watchId: 'w-1',
@@ -276,6 +290,29 @@ void main() {
           serverId: 'srv-1',
           requestId: 'e-2',
           result: EditReadFailed(EditReadFailure.adminRequired),
+        ),
+        FootprintState(
+          'srv-1',
+          files: const [
+            FootprintFile(
+              FootprintScope.user,
+              FootprintRow('/b', FootprintKind.backupDirectory),
+              present: true,
+            ),
+          ],
+          backups: [
+            FootprintBackup(
+              FootprintScope.user,
+              BackupEntry(
+                savedAt: DateTime.utc(2026, 10, 20),
+                sha256: 'a' * 64,
+                source: '/etc/hosts',
+              ),
+              FootprintBackupStatus.modified,
+            ),
+          ],
+          rootUnchecked: true,
+          warnings: const ['w'],
         ),
         const DockerEndpointState(
           serverId: 'srv-1',

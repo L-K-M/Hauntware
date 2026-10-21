@@ -1251,11 +1251,15 @@ Proposals awaiting the owner close the section; they are not decisions.
   2. its attributes come from the target with `cp --attributes-only
      --preserve=mode,ownership,xattr` where the host's `cp` accepts it;
   3. elsewhere (BusyBox) they come from `stat` through numeric `chown`
-     and `chmod`. A target carrying extended ACL entries (`getfacl`
-     lists more than the three base entries) or xattrs (`getfattr -d`
-     lists any but `security.selinux`) is refused there, naming the
-     missing tool, rather than written without them; a host with
-     neither tool sets neither;
+     and `chmod`, which cannot copy ACLs or xattrs. Where `getfacl` or
+     `getfattr` is present, a target carrying extended ACL entries
+     (`getfacl` lists more than the three base entries) or xattrs
+     (`getfattr -d -m -` lists any but `security.selinux`) is refused,
+     naming what this path would drop, rather than written without
+     them. What a missing tool cannot check is taken to be absent, an
+     accepted risk: attributes set from elsewhere (an image built on
+     another host, shared storage) would be dropped. A host with
+     neither tool writes ahead unchecked;
   4. the hash re-check runs right before `mv`, and `restorecon` runs on
      the target after it when SELinux enforces;
   5. any failed step removes the temp and leaves the target as it was.
@@ -4822,10 +4826,10 @@ state) before and after a scripted MVP session; only MVP rows may appear.
 | Login records | Every SSH connection | wtmp, lastlog, auth log, journal | Host retention; one long-lived connection keeps it low | MVP |
 | The edit itself | Explicit edit with diff | Target file | User-owned | v1 |
 | Atomic-replace temp file | During a write | Same directory, `.<name>.klabautermann-tmp-<rand>` | Renamed over the target or removed in a `finally` path | v1 |
-| Backups (files the user owns, crontabs) | Every edit | `~/.local/state/klabautermann/backups/` with an index (original path, hash, time), 0700 | "Keep last N" in the footprint view | v1 |
+| Backups (files the user owns, crontabs) | Every edit | `~/.local/state/klabautermann/backups/` with an index (original path, hash, time), 0700 | "Keep last N" in the footprint view, or remove every backup of one file (typed confirmation) | v1 |
 | Backups (root-owned files) | Every privileged edit | `/var/lib/klabautermann/backups/`, root 0700, with an index | Same, in admin mode | v1 |
 | Audit syslog line | Each mutation | journald or syslog through `logger -t klabautermann` | Host retention | v1 |
-| Footprint manifest | First persistent host write | `~/.config/klabautermann/manifest.json`, `/etc/klabautermann/manifest.json` | Lists every persistent row above with path, sha256, owner, mode, kind, template version | v1 |
+| Footprint manifest | First persistent host write | `~/.config/klabautermann/manifest.json`, `/etc/klabautermann/manifest.json` | Lists every persistent row above with path, sha256, owner, mode, kind, template version (v1 as built: path and kind, below) | v1 |
 | Database dumps and volume archives | BAK-01; "back up this volume now" (VOL-05 export, 1.4) | `~/.local/state/klabautermann/dumps/` | Manifest row; user deletes | v1.x |
 | Multi-device lock | Deploys and edits | `~/.local/state/klabautermann/locks/` | TTL | v1.x |
 | Deploy history | Safe update, redeploy | `~/.local/state/klabautermann/deploys/<project>.jsonl`, capped | Manifest row | v1.x |
@@ -4862,6 +4866,21 @@ that outlives a dropped link, re-attaches and is acknowledged.
 A change no row covers fails the run, and the report goes to the
 evidence. The runner VM's snapshot, which needs runner_vm.sh's own
 files left out, follows as a separate change.
+
+As built in v1 (plan M16), the manifest lists each backup directory
+and its index by path and kind, written by the edit that makes the
+scope's first backup, as one more step of its plan. Its rows carry no
+hash: the index changes with every edit, and each backup is verified
+against the hash the index records for it instead. The engine reads
+the login user's part on every connect, root's part when admin mode
+turns on, both after each edit or backup removal and on
+`FootprintQuery`; `FootprintState` reports each row as present or
+absent and each backup as intact, modified or missing. A manifest the
+engine cannot parse is refused rather than written over. "Keep last
+N" (tier 1, N = 5 by default) and removing every backup of one file
+(tier 2, Q11) name each file they delete and rewrite the index only
+while it still hashes to what planning read. Rows for v1.x writes join
+the manifest with those writes.
 
 ### 8.12 Threat model
 
