@@ -36,7 +36,9 @@ final class OperationPlan {
     Iterable<String> orphans = const [],
     Iterable<PlanWarning> warnings = const [],
     Iterable<Revalidation> revalidate = const [],
+    Iterable<ShellStep> cleanup = const [],
   }) : steps = List.unmodifiable(steps),
+       cleanup = List.unmodifiable(cleanup),
        hostWrites = List.unmodifiable(hostWrites),
        orphans = List.unmodifiable(orphans),
        warnings = Set.unmodifiable(warnings),
@@ -55,6 +57,10 @@ final class OperationPlan {
   final OperationKind kind;
   final String targetName;
   final List<PlanStep> steps;
+
+  /// What the runner runs, best effort, after a step fails, such as an
+  /// edit's temp file removal (03 §8.11); the preview does not list it.
+  final List<ShellStep> cleanup;
   final RequiredLevel requiredLevel;
   final RunnerFacts runner;
   final List<HostWriteRow> hostWrites;

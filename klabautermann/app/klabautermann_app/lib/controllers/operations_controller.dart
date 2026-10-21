@@ -75,6 +75,10 @@ final class OperationsController extends ChangeNotifier {
   /// Audit reads waiting on the engine, oldest first, by server: it
   /// answers each [AuditQuery] in order and names only the server.
   final Map<String, List<Completer<AuditRecords>>> _auditReads = {};
+
+  /// Edit reads waiting on the engine, by request id.
+  final Map<String, Completer<EditReadResult>> _editReads = {};
+  int _nextEditRead = 0;
   late final StreamSubscription<EngineEvent> _events;
   Completer<PlanAnswer>? _pending;
   final Map<String, RunState> _runs = {};
@@ -147,6 +151,21 @@ final class OperationsController extends ChangeNotifier {
     return read.future;
   }
 
+  /// Reads [target] on [serverId] for the editor (03 §8.5, SAF-12): its
+  /// text and the hash an edit is planned against. A stopped engine
+  /// answers no link.
+  Future<EditReadResult> readEditable(String serverId, EditTarget target) {
+    if (_engineStopped) return Future.value(_noEditRead);
+    final requestId = 'edit-${_nextEditRead++}';
+    final read = _editReads[requestId] = Completer<EditReadResult>();
+    _send(
+      ReadEditable(serverId: serverId, requestId: requestId, target: target),
+    );
+    return read.future;
+  }
+
+  static const _noEditRead = EditReadFailed(EditReadFailure.noLink);
+
   /// What a request the engine cannot take gets: no engine means no link.
   static const _noEngine = PlanRefused(ActionRefusalReason.noLink);
 
@@ -188,6 +207,8 @@ final class OperationsController extends ChangeNotifier {
       case OperationsChanged(:final serverId):
         _detached[serverId] = event;
         notifyListeners();
+      case EditRead(:final requestId, :final result):
+        _editReads.remove(requestId)?.complete(result);
       case AuditRecords(:final serverId):
         final waiting = _auditReads[serverId];
         if (waiting == null || waiting.isEmpty) return;
@@ -206,6 +227,10 @@ final class OperationsController extends ChangeNotifier {
       }
     }
     _auditReads.clear();
+    for (final read in _editReads.values) {
+      read.complete(_noEditRead);
+    }
+    _editReads.clear();
     notifyListeners();
   }
 

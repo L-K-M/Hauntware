@@ -4291,7 +4291,7 @@ abstract class AppLocalizations {
   /// One host write in the action preview; row is the engine's HostWriteRow name.
   ///
   /// In en, this message translates to:
-  /// **'{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine\'s own state} loginRecords{Login records, as every SSH command leaves} other{A change on the server}}'**
+  /// **'{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine\'s own state} loginRecords{Login records, as every SSH command leaves} editTarget{The file or crontab you edited} editTempFile{A temporary copy beside the file, renamed over it or removed} userBackups{A backup in your Klabautermann backups folder} rootBackups{A backup under /var/lib/klabautermann/backups} footprintManifest{The list of what Klabautermann keeps on the server} other{A change on the server}}'**
   String actionPreviewHostWrite(String row);
 
   /// The action's impact in the preview; kind is the engine's ImpactKind name and count a number of containers.
@@ -4807,7 +4807,7 @@ abstract class AppLocalizations {
   /// An activity log row's action; action is the engine's intent type name.
   ///
   /// In en, this message translates to:
-  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} other{Action}}'**
+  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
   String activityAction(String action);
 
   /// An activity log row's confirmation; tier is the engine's ConfirmationTier name.
@@ -6729,6 +6729,180 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server\'s capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} daemonError{The engine refused or failed to list the stack\'s containers.} connectionFailed{The connection to the engine failed while reading the file.} cancelled{The read stopped before it ran.} other{The file could not be read.}}'**
   String dockerStackFileQueryFailed(String reason);
+
+  /// Remote editor: closes the editor dialog; asks first when changes are not saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get editClose;
+
+  /// Remote editor: the title for a file (SAF-12). name is the file name.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit {name}'**
+  String editTitleFile(String name);
+
+  /// Remote editor: the title for the login user's crontab (JOB-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Edit your crontab'**
+  String get editTitleOwnCrontab;
+
+  /// Remote editor: the title for another account's crontab (JOB-06). user is the account name.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit {user}\'s crontab'**
+  String editTitleCrontab(String user);
+
+  /// Remote editor: reads the file again after a failed read.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get editRetry;
+
+  /// Remote editor: shown while the engine reads the file.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the file…'**
+  String get editReading;
+
+  /// Remote editor: why the engine read nothing. reason is the engine's EditReadFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{There is no connection to this server.} invalidTarget{Klabautermann does not edit this path.} notFound{There is no file at this path on the host.} adminRequired{Only root can read this file. Turn on admin mode to edit it.} tooLarge{This file is too large for the editor.} notText{This file is not text.} failed{The file could not be read.} other{The file could not be read.}}'**
+  String editReadFailed(String reason);
+
+  /// Remote editor: chip on a file only root may write; saving it runs through admin mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Root\'s file'**
+  String get editRootFile;
+
+  /// Remote editor: shown while the text differs from the server's.
+  ///
+  /// In en, this message translates to:
+  /// **'Not saved'**
+  String get editUnsaved;
+
+  /// Remote editor: accessibility label of the editor. path is the file being edited.
+  ///
+  /// In en, this message translates to:
+  /// **'Editor for {path}'**
+  String editEditorLabel(String path);
+
+  /// Remote editor: drops the changes for the server's text.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard changes'**
+  String get editDiscard;
+
+  /// Remote editor: shows the diff and the format checks before saving.
+  ///
+  /// In en, this message translates to:
+  /// **'Review changes'**
+  String get editReview;
+
+  /// Remote editor: title of the confirmation before changes are dropped.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard your changes?'**
+  String get editDiscardTitle;
+
+  /// Remote editor: body of the confirmation before changes are dropped.
+  ///
+  /// In en, this message translates to:
+  /// **'Your changes are not saved to the server and will be lost.'**
+  String get editDiscardBody;
+
+  /// Remote editor: closes a dialog and returns to the editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep editing'**
+  String get editKeepEditing;
+
+  /// Remote editor: title of the conflict sheet, when the file changed since it was read.
+  ///
+  /// In en, this message translates to:
+  /// **'The file changed on the server'**
+  String get editConflictTitle;
+
+  /// Remote editor: body of the conflict sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'It changed since you opened it, so your save did not run. Your changes are still here.'**
+  String get editConflictBody;
+
+  /// Remote editor: conflict sheet; replaces the user's text with the server's.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard mine'**
+  String get editConflictDiscard;
+
+  /// Remote editor: conflict sheet; reads the server's text and reviews the user's text against it.
+  ///
+  /// In en, this message translates to:
+  /// **'Reload and compare'**
+  String get editConflictCompare;
+
+  /// Remote editor review: one format problem. line is 1-based; kind is the TextProblemKind name; subject is the key, tag or parser detail, or empty.
+  ///
+  /// In en, this message translates to:
+  /// **'{line, plural, other{Line {line}}}: {kind, select, syntaxError{does not parse} duplicateKey{key set again} duplicateTable{table declared again} duplicateAttribute{attribute given twice} jsonComment{comment in JSON} jsonTrailingComma{trailing comma in JSON} unterminatedQuote{quote never closed} tabIndentation{tab indentation} mismatchedClosingTag{closing tag does not match} unclosedElement{element never closed} unexpectedClosingTag{closing tag without an open element} mergeConflict{merge conflict marker} other{problem}} {subject}'**
+  String editProblem(int line, String kind, String subject);
+
+  /// Remote editor review: plans the save, whose preview shows every step before it runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Save to server'**
+  String get editSave;
+
+  /// Remote editor review: saves although the format checks found problems.
+  ///
+  /// In en, this message translates to:
+  /// **'Save anyway'**
+  String get editSaveAnyway;
+
+  /// Remote editor review: shown while the diff is computed.
+  ///
+  /// In en, this message translates to:
+  /// **'Comparing…'**
+  String get editDiffing;
+
+  /// Remote editor review: why no diff shows. status is the UnifiedDiffStatus name.
+  ///
+  /// In en, this message translates to:
+  /// **'{status, select, identical{Your text is the same as the server\'s.} tooLarge{The change is too large to show as a diff.} timedOut{The comparison took too long to show.} failed{The comparison failed.} other{The change cannot be shown.}}'**
+  String editDiffStatus(String status);
+
+  /// Remote editor review: accessibility label of the diff.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes to the file'**
+  String get editDiffLabel;
+
+  /// Stack file view: opens the file shown in the editor (STK-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get dockerStackFileEdit;
+
+  /// Jobs tab: opens the login user's crontab in the editor (JOB-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Edit your crontab'**
+  String get jobsEditOwnCrontab;
+
+  /// Remote editor review: the diff's label for the server's text. path is the file.
+  ///
+  /// In en, this message translates to:
+  /// **'{path} (server)'**
+  String editDiffServerLabel(String path);
+
+  /// Remote editor review: the diff's label for the user's text. path is the file.
+  ///
+  /// In en, this message translates to:
+  /// **'{path} (yours)'**
+  String editDiffYourLabel(String path);
 }
 
 class _AppLocalizationsDelegate

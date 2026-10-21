@@ -3239,6 +3239,12 @@ class AppLocalizationsEn extends AppLocalizations {
       'transientUnit': 'A transient systemd unit, gone when it ends',
       'engineState': 'The container engine\'s own state',
       'loginRecords': 'Login records, as every SSH command leaves',
+      'editTarget': 'The file or crontab you edited',
+      'editTempFile':
+          'A temporary copy beside the file, renamed over it or removed',
+      'userBackups': 'A backup in your Klabautermann backups folder',
+      'rootBackups': 'A backup under /var/lib/klabautermann/backups',
+      'footprintManifest': 'The list of what Klabautermann keeps on the server',
       'other': 'A change on the server',
     });
     return '$_temp0';
@@ -3689,6 +3695,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'RedeployStack': 'Redeploy stack',
       'ContainerExec': 'Run command',
       'ContainerShell': 'Container shell',
+      'EditFile': 'Edit',
+      'KeepLastBackups': 'Keep recent backups',
+      'RemoveBackups': 'Remove backups',
       'other': 'Action',
     });
     return '$_temp0';
@@ -5151,5 +5160,148 @@ class AppLocalizationsEn extends AppLocalizations {
       'other': 'The file could not be read.',
     });
     return '$_temp0';
+  }
+
+  @override
+  String get editClose => 'Close';
+
+  @override
+  String editTitleFile(String name) {
+    return 'Edit $name';
+  }
+
+  @override
+  String get editTitleOwnCrontab => 'Edit your crontab';
+
+  @override
+  String editTitleCrontab(String user) {
+    return 'Edit $user\'s crontab';
+  }
+
+  @override
+  String get editRetry => 'Read again';
+
+  @override
+  String get editReading => 'Reading the file…';
+
+  @override
+  String editReadFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noLink': 'There is no connection to this server.',
+      'invalidTarget': 'Klabautermann does not edit this path.',
+      'notFound': 'There is no file at this path on the host.',
+      'adminRequired':
+          'Only root can read this file. Turn on admin mode to edit it.',
+      'tooLarge': 'This file is too large for the editor.',
+      'notText': 'This file is not text.',
+      'failed': 'The file could not be read.',
+      'other': 'The file could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get editRootFile => 'Root\'s file';
+
+  @override
+  String get editUnsaved => 'Not saved';
+
+  @override
+  String editEditorLabel(String path) {
+    return 'Editor for $path';
+  }
+
+  @override
+  String get editDiscard => 'Discard changes';
+
+  @override
+  String get editReview => 'Review changes';
+
+  @override
+  String get editDiscardTitle => 'Discard your changes?';
+
+  @override
+  String get editDiscardBody =>
+      'Your changes are not saved to the server and will be lost.';
+
+  @override
+  String get editKeepEditing => 'Keep editing';
+
+  @override
+  String get editConflictTitle => 'The file changed on the server';
+
+  @override
+  String get editConflictBody =>
+      'It changed since you opened it, so your save did not run. Your changes are still here.';
+
+  @override
+  String get editConflictDiscard => 'Discard mine';
+
+  @override
+  String get editConflictCompare => 'Reload and compare';
+
+  @override
+  String editProblem(int line, String kind, String subject) {
+    String _temp0 = intl.Intl.pluralLogic(
+      line,
+      locale: localeName,
+      other: 'Line $line',
+    );
+    String _temp1 = intl.Intl.selectLogic(kind, {
+      'syntaxError': 'does not parse',
+      'duplicateKey': 'key set again',
+      'duplicateTable': 'table declared again',
+      'duplicateAttribute': 'attribute given twice',
+      'jsonComment': 'comment in JSON',
+      'jsonTrailingComma': 'trailing comma in JSON',
+      'unterminatedQuote': 'quote never closed',
+      'tabIndentation': 'tab indentation',
+      'mismatchedClosingTag': 'closing tag does not match',
+      'unclosedElement': 'element never closed',
+      'unexpectedClosingTag': 'closing tag without an open element',
+      'mergeConflict': 'merge conflict marker',
+      'other': 'problem',
+    });
+    return '$_temp0: $_temp1 $subject';
+  }
+
+  @override
+  String get editSave => 'Save to server';
+
+  @override
+  String get editSaveAnyway => 'Save anyway';
+
+  @override
+  String get editDiffing => 'Comparing…';
+
+  @override
+  String editDiffStatus(String status) {
+    String _temp0 = intl.Intl.selectLogic(status, {
+      'identical': 'Your text is the same as the server\'s.',
+      'tooLarge': 'The change is too large to show as a diff.',
+      'timedOut': 'The comparison took too long to show.',
+      'failed': 'The comparison failed.',
+      'other': 'The change cannot be shown.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get editDiffLabel => 'Changes to the file';
+
+  @override
+  String get dockerStackFileEdit => 'Edit';
+
+  @override
+  String get jobsEditOwnCrontab => 'Edit your crontab';
+
+  @override
+  String editDiffServerLabel(String path) {
+    return '$path (server)';
+  }
+
+  @override
+  String editDiffYourLabel(String path) {
+    return '$path (yours)';
   }
 }

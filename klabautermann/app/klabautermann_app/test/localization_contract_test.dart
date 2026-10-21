@@ -84,6 +84,24 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // shows it.
   'lib/controllers/operations_controller.dart': {
     "'a preview is already pending'",
+    // An edit read's request id, never shown.
+    r"'edit-${_nextEditRead++}'",
+  },
+  'lib/ui/edit/remote_editor.dart': {
+    // A crontab's highlighting and validation key, never shown.
+    "'crontab'",
+    // The path separator a file's title takes its name after.
+    "'/'",
+    // A problem without a subject or detail fills its slot with nothing.
+    "''",
+    // The unified diff's line break and its line markers, which pick a
+    // row's tint; the rows show the diff's own text.
+    r"'\n'",
+    "'+++'",
+    "'---'",
+    "'+'",
+    "'-'",
+    "'@@'",
   },
   // The Activity table's key prefix, never shown, and the copied log's
   // line break between JSON records.

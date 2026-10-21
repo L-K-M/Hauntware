@@ -5,9 +5,11 @@ import 'dart:typed_data';
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
         AnacronJob,
+        BackupEntry,
         CpuPercentages,
         CronSnapshot,
         DiskRate,
+        FootprintRow,
         FsSnapshot,
         HostProfile,
         JobEntry,
@@ -205,6 +207,16 @@ import '../operations/plan_types.dart';
 /// Job history then joined v3 the same way (03 §7.7, JOB-04, JOB-05):
 /// [JobHistoryQuery], answered by [JobHistoryResult], reads anacron's
 /// jobs and stamps, a timer's last run, or the runs cron logged.
+///
+/// The edit pipeline then joined v3 the same way (03 §8.5, SAF-12):
+/// [ReadEditable], answered by [EditRead], reads an [EditTarget] for the
+/// editor; the [EditFile] intent plans its write; [RevalidationFailure]
+/// gained `contentChanged` for a target changed under the write.
+///
+/// The footprint then joined v3 the same way (03 §8.11, SAF-14):
+/// [FootprintQuery], answered by [FootprintState], which the engine also
+/// sends unasked; the [KeepLastBackups] and [RemoveBackups] intents plan
+/// backup removal.
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -501,6 +513,31 @@ final class CronRunsQuery extends JobHistorySpec {
   const CronRunsQuery({this.lines = 50});
 
   final int lines;
+}
+
+/// Reads [target] on [serverId] for an edit (03 §8.5, SAF-12), answered
+/// by one [EditRead] with [requestId]: the content and its SHA-256,
+/// which an [EditFile] names, and who owns it. A file the login user
+/// cannot read is read through admin mode when it is on.
+final class ReadEditable extends EngineRequest {
+  const ReadEditable({
+    required this.serverId,
+    required this.requestId,
+    required this.target,
+  });
+
+  final String serverId;
+  final String requestId;
+  final EditTarget target;
+}
+
+/// Verifies [serverId]'s footprint again (SAF-14, P13): answered by a
+/// [FootprintState]. The engine also verifies it on every connect, and
+/// root's part when admin mode turns on.
+final class FootprintQuery extends EngineRequest {
+  const FootprintQuery(this.serverId);
+
+  final String serverId;
 }
 
 /// Runs one read-only Docker Engine query on [serverId]'s engine (03
@@ -1282,6 +1319,129 @@ final class ActionProgress extends EngineEvent {
   final String? message;
 }
 
+/// The answer to the [ReadEditable] with [requestId].
+final class EditRead extends EngineEvent {
+  const EditRead({
+    required this.serverId,
+    required this.requestId,
+    required this.result,
+  });
+
+  final String serverId;
+  final String requestId;
+  final EditReadResult result;
+}
+
+/// What an [EditRead] carries.
+@immutable
+sealed class EditReadResult {
+  const EditReadResult();
+}
+
+/// The target's [text], whose UTF-8 bytes hash to [sha256]. A file has
+/// its numeric [uid], [gid] and permission [mode]; a crontab has none.
+/// [privileged] says a write needs admin mode: the file belongs to
+/// another account, or the crontab is another account's.
+final class EditContent extends EditReadResult {
+  const EditContent({
+    required this.text,
+    required this.sha256,
+    required this.privileged,
+    this.uid,
+    this.gid,
+    this.mode,
+  });
+
+  final String text;
+  final String sha256;
+  final bool privileged;
+  final int? uid, gid, mode;
+}
+
+/// A [ReadEditable] that read nothing; [detail] is the end of stderr.
+final class EditReadFailed extends EditReadResult {
+  const EditReadFailed(this.failure, {this.detail});
+
+  final EditReadFailure failure;
+  final String? detail;
+}
+
+/// Why a [ReadEditable] read nothing.
+enum EditReadFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// The engine refused the target before reading (03 §8.8).
+  invalidTarget,
+
+  /// The file does not exist.
+  notFound,
+
+  /// Only root may read it, and admin mode is off.
+  adminRequired,
+
+  /// The file is larger than the editor takes (`kEditReadMaxBytes`).
+  tooLarge,
+
+  /// The file is not UTF-8 text.
+  notText,
+
+  /// The read failed otherwise.
+  failed,
+}
+
+/// What Klabautermann keeps on [serverId] (SAF-14, 03 §8.11, P13): the
+/// manifest rows and whether each is there, and every backup the indexes
+/// record with whether its content still has the recorded hash. Root's
+/// part is [rootUnchecked] until admin mode reads it.
+final class FootprintState extends EngineEvent {
+  const FootprintState(
+    this.serverId, {
+    this.files = const [],
+    this.backups = const [],
+    this.rootUnchecked = false,
+    this.warnings = const [],
+  });
+
+  final String serverId;
+  final List<FootprintFile> files;
+  final List<FootprintBackup> backups;
+  final bool rootUnchecked;
+  final List<String> warnings;
+}
+
+/// One manifest row and whether its path exists.
+@immutable
+final class FootprintFile {
+  const FootprintFile(this.scope, this.row, {required this.present});
+
+  final FootprintScope scope;
+  final FootprintRow row;
+  final bool present;
+}
+
+/// One backup an index records, and what verification found.
+@immutable
+final class FootprintBackup {
+  const FootprintBackup(this.scope, this.entry, this.status);
+
+  final FootprintScope scope;
+  final BackupEntry entry;
+  final FootprintBackupStatus status;
+}
+
+/// What verification found of a backup.
+enum FootprintBackupStatus {
+  /// Its content has the hash its index records.
+  intact,
+
+  /// Its content changed on the host ("modified on host").
+  modified,
+
+  /// The index records it, but the file is gone.
+  missing,
+}
+
 /// A plan finished, one way or another (03 §10.1). A failed plan says
 /// why in typed facts the app words (D35): which step, its exit status or
 /// HTTP status, and what re-validation found.
@@ -1395,6 +1555,11 @@ enum RevalidationFailure {
 
   /// The container id or the stack's configuration changed.
   targetChanged,
+
+  /// An edited file or crontab no longer has the hash the edit started
+  /// from: someone else changed it (03 §8.5). The app reads it again and
+  /// shows the difference.
+  contentChanged,
 
   /// The check could not read what it compares.
   unreadable,
@@ -3380,6 +3545,88 @@ final class RedeployStack extends ActionIntent {
 
   final String project;
   final bool removeOrphans;
+}
+
+/// What an edit reads and writes (03 §8.5, SAF-12, X-05).
+@immutable
+sealed class EditTarget {
+  const EditTarget();
+}
+
+/// A file by its absolute, normalized path (03 §8.8).
+final class FileTarget extends EditTarget {
+  const FileTarget(this.path);
+
+  final String path;
+
+  @override
+  bool operator ==(Object other) => other is FileTarget && other.path == path;
+
+  @override
+  int get hashCode => path.hashCode;
+}
+
+/// A crontab (JOB-04 to JOB-07): the login user's, or [user]'s, which
+/// another account's needs admin mode.
+final class CrontabTarget extends EditTarget {
+  const CrontabTarget({this.user});
+
+  final String? user;
+
+  @override
+  bool operator ==(Object other) =>
+      other is CrontabTarget && other.user == user;
+
+  @override
+  int get hashCode => Object.hash(CrontabTarget, user);
+}
+
+/// Replaces [target]'s content with [text] (SAF-12, X-05), only while the
+/// target still has [baseSha256], the hash its [ReadEditable] read. The
+/// plan backs the target up first, writes a temp file beside it, carries
+/// its owner, mode, ACL and xattrs over (D67) and renames it over the
+/// target; a crontab goes through `crontab -`.
+final class EditFile extends ActionIntent {
+  const EditFile(
+    super.serverId, {
+    required this.target,
+    required this.text,
+    required this.baseSha256,
+  });
+
+  final EditTarget target;
+  final String text;
+  final String baseSha256;
+}
+
+/// Whose backups a footprint action or row is (03 §8.11): the login
+/// user's, under its home, or root's under `/var/lib`, which needs admin
+/// mode.
+enum FootprintScope { user, root }
+
+/// Keeps the newest [count] backups of each file in [scope]'s backup
+/// directory and removes the rest, with their index lines (SAF-14,
+/// "keep last N"; tier 1).
+final class KeepLastBackups extends ActionIntent {
+  const KeepLastBackups(super.serverId, {required this.scope, this.count = 5})
+    : assert(count >= 1, 'keep at least one');
+
+  final FootprintScope scope;
+  final int count;
+}
+
+/// Removes every backup of [source], a path or `crontab:<user>`, from
+/// [scope]'s backup directory (SAF-14). They are the only undo of the
+/// edits they back up, so this needs the typed confirmation.
+final class RemoveBackups extends ActionIntent {
+  const RemoveBackups(
+    super.serverId, {
+    required this.scope,
+    required this.source,
+  });
+
+  final FootprintScope scope;
+  final String source;
 }
 
 /// The app's safety preferences (M4 plan M4, SAF-01, SAF-06): per server,

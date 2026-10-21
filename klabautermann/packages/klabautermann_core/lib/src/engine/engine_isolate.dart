@@ -42,6 +42,8 @@ import '../links/prompt_broker.dart';
 import '../logs/log_stream_router.dart';
 import '../operations/confirmation.dart';
 import '../operations/detached_runner.dart';
+import '../operations/edit_reader.dart';
+import '../operations/footprint.dart';
 import '../operations/operation_plan.dart'
     show DockerTargetUnchanged, PlanAttempt, StackConfigUnchanged;
 import '../operations/operation_runner.dart';
@@ -49,7 +51,9 @@ import '../operations/operation_tracker.dart';
 import '../operations/operations_shown.dart';
 import '../operations/plan_registry.dart';
 import '../operations/plan_types.dart' show RequiredLevel;
+import '../operations/plans/backup_plans.dart';
 import '../operations/plans/docker_plans.dart';
+import '../operations/plans/edit_plan.dart';
 import '../jobs/job_history_query.dart';
 import '../operations/plans/host_plans.dart';
 import '../operations/plans/redeploy_plan.dart';
@@ -388,6 +392,26 @@ void engineMain(
   var monitored = const <String>{};
   final viewed = <String>{};
 
+  // Verifies a server's footprint (SAF-14, P13) and sends what it found:
+  // on every connect, when admin mode turns on (root's part), after an
+  // edit or a backup removal, and on request. readFootprint answers
+  // rather than throws.
+  void verifyFootprint(String serverId) {
+    final link = links?.link(serverId);
+    final profile = profiles[serverId];
+    if (link == null || profile == null) return;
+    unawaited(
+      lendSession(
+        serverId,
+        () => readFootprint(serverId, (
+          link: link,
+          profile: profile,
+          admin: admin?.session(serverId),
+        )),
+      ).then(uiPort.send),
+    );
+  }
+
   if (links != null) {
     admin = AdminModeController(
       linkFor: links.link,
@@ -406,6 +430,7 @@ void engineMain(
         // A sudo relay and an elevated follow live only while admin mode
         // does (plan M7, LOG-22).
         docker?.adminChanged(event.serverId);
+        if (event.phase == AdminModePhase.on) verifyFootprint(event.serverId);
         logs?.adminChanged(event.serverId);
         if (event.phase != AdminModePhase.on) {
           terminals?.adminEnded(event.serverId);
@@ -514,6 +539,10 @@ void engineMain(
       // started detached operation is audited with its result, once the
       // app has shown it (03 §7.17).
       finished: (result) {
+        if (result.plan.intent
+            case EditFile() || KeepLastBackups() || RemoveBackups()) {
+          verifyFootprint(result.plan.intent.serverId);
+        }
         if (result.plan.detached &&
             result.finished.outcome == ActionOutcome.succeeded) {
           return;
@@ -530,6 +559,7 @@ void engineMain(
       probed: (serverId, profile) {
         profiles[serverId] = profile;
         admin?.probed(serverId, profile);
+        verifyFootprint(serverId);
         unawaited(capabilities?.probed(serverId, profile));
         docker?.probed(serverId, profile);
       },
@@ -1157,6 +1187,26 @@ void engineMain(
                     refusal: ActionRefusalReason.engineUnavailable,
                   ),
                 );
+          case KeepLastBackups() || RemoveBackups():
+            attempt = lendSession(
+              serverId,
+              () => planBackupRemoval(intent, (
+                link: link,
+                profile: profile,
+                admin: admin?.session(serverId),
+              )),
+            );
+          case EditFile():
+            // Planning reads the target again over the link, through admin
+            // mode where it needs root, as the run will.
+            attempt = lendSession(
+              serverId,
+              () => planEdit(intent, (
+                link: link,
+                profile: profile,
+                admin: admin?.session(serverId),
+              )),
+            );
         }
         // Not awaited: planning reads over the link, and the queue keeps
         // serving the app meanwhile.
@@ -1170,6 +1220,43 @@ void engineMain(
             final planId = plans.hold(plan, linkGeneration: generation);
             uiPort.send(ActionPlanned(planId, plan.preview));
           }),
+        );
+      case FootprintQuery(:final serverId):
+        if (!fleetIds.contains(serverId)) {
+          reject(message, 'no fleet server $serverId');
+        } else if (links?.link(serverId) == null ||
+            profiles[serverId] == null) {
+          reject(message, 'no connection to $serverId');
+        } else {
+          verifyFootprint(serverId);
+        }
+      case ReadEditable(:final serverId, :final requestId, :final target):
+        void answer(EditReadResult result) => uiPort.send(
+          EditRead(serverId: serverId, requestId: requestId, result: result),
+        );
+        final link = links?.link(serverId);
+        final profile = profiles[serverId];
+        if (!fleetIds.contains(serverId) || link == null || profile == null) {
+          answer(const EditReadFailed(EditReadFailure.noLink));
+          return;
+        }
+        // Not awaited: the read waits on the host while the queue serves
+        // the app. readEditable answers rather than throws; a lend that
+        // fails still answers, so the editor never waits on nothing.
+        unawaited(
+          lendSession(
+            serverId,
+            () => readEditable(target, (
+              link: link,
+              profile: profile,
+              admin: admin?.session(serverId),
+            )),
+          ).then(
+            answer,
+            onError: (Object error) => answer(
+              EditReadFailed(EditReadFailure.failed, detail: '$error'),
+            ),
+          ),
         );
       case AuditQuery(:final serverId, :final before, :final limit):
         final (:records, :more) = await audit.query(

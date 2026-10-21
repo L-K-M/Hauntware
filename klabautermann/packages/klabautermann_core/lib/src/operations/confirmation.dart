@@ -35,7 +35,16 @@ enum OperationKind {
   forceRemoveImageInUse(ConfirmationTier.typedPhrase),
   prune(ConfirmationTier.typedPhrase),
   composeDown(ConfirmationTier.typedPhrase),
+
+  /// An edit of a file the user reviewed in the diff (SAF-12).
+  editFile(ConfirmationTier.acknowledge),
   crontabOverwrite(ConfirmationTier.typedPhrase),
+
+  /// Keep the newest backups of each file, removing older ones (Q11).
+  keepLastBackups(ConfirmationTier.acknowledge),
+
+  /// Remove every backup of one file: its edits' only undo (Q11).
+  removeAllBackups(ConfirmationTier.typedPhrase),
   reboot(ConfirmationTier.typedPhrase),
   packageUpgrade(ConfirmationTier.typedPhrase);
 

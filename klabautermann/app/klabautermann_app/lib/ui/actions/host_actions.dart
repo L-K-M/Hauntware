@@ -207,7 +207,7 @@ class CronRunButton extends StatelessWidget {
         onPressed: () => startAction(
           context,
           RunCronJob(serverId, source: source, raw: raw),
-          onRunPlan: onRun,
+          onRun: onRun,
         ),
         icon: const Icon(Icons.play_arrow),
         label: Text(AppLocalizations.of(context).jobsRunNow),
@@ -234,7 +234,7 @@ List<SidebarMenuEntry> cronActionEntries(
       onSelected: () => startAction(
         context,
         RunCronJob(serverId, source: source, raw: raw),
-        onRunPlan: onRun,
+        onRun: onRun,
       ),
     ),
   ];
@@ -297,7 +297,7 @@ void _runTimer(
 ) => startAction(
   context,
   StartTimer(serverId, timer: timer),
-  onRun: (preview) {
+  onRun: (_, preview) {
     if (preview.followUnit case final unit?) onRun(unit);
   },
 );

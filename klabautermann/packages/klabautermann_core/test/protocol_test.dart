@@ -8,11 +8,14 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
     show groupComposeProjects;
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
+        BackupEntry,
         CoreCpuTimes,
         CronDst,
         CronExpression,
         CronJob,
         CronJobEntry,
+        FootprintKind,
+        FootprintRow,
         FsMount,
         ServerZone,
         SystemdTimer,
@@ -110,6 +113,19 @@ void main() {
           ),
         ),
         const CloseStream('stream-1'),
+        const ReadEditable(
+          serverId: 'srv-1',
+          requestId: 'e-1',
+          target: FileTarget('/etc/hosts'),
+        ),
+        const PlanAction(
+          EditFile(
+            'srv-1',
+            target: CrontabTarget(user: 'www-data'),
+            text: '* * * * * true\n',
+            baseSha256: 'abc',
+          ),
+        ),
         const DockerQuery(
           serverId: 'srv-1',
           queryId: 'q-1',
@@ -133,6 +149,17 @@ void main() {
           serverId: 'srv-1',
           requestId: 'h-3',
           query: CronRunsQuery(lines: 20),
+        ),
+        const FootprintQuery('srv-1'),
+        const PlanAction(
+          KeepLastBackups('srv-1', scope: FootprintScope.user, count: 3),
+        ),
+        const PlanAction(
+          RemoveBackups(
+            'srv-1',
+            scope: FootprintScope.root,
+            source: '/etc/hosts',
+          ),
         ),
         const DockerWatch(
           serverId: 'srv-1',
@@ -272,6 +299,46 @@ void main() {
           serverId: 'srv-1',
           queryId: 'q-1',
           payload: DockerImagesPayload([]),
+        ),
+        const EditRead(
+          serverId: 'srv-1',
+          requestId: 'e-1',
+          result: EditContent(
+            text: 'a=1\n',
+            sha256: 'abc',
+            privileged: true,
+            uid: 0,
+            gid: 0,
+            mode: 420,
+          ),
+        ),
+        const EditRead(
+          serverId: 'srv-1',
+          requestId: 'e-2',
+          result: EditReadFailed(EditReadFailure.adminRequired),
+        ),
+        FootprintState(
+          'srv-1',
+          files: const [
+            FootprintFile(
+              FootprintScope.user,
+              FootprintRow('/b', FootprintKind.backupDirectory),
+              present: true,
+            ),
+          ],
+          backups: [
+            FootprintBackup(
+              FootprintScope.user,
+              BackupEntry(
+                savedAt: DateTime.utc(2026, 10, 20),
+                sha256: 'a' * 64,
+                source: '/etc/hosts',
+              ),
+              FootprintBackupStatus.modified,
+            ),
+          ],
+          rootUnchecked: true,
+          warnings: const ['w'],
         ),
         const DockerEndpointState(
           serverId: 'srv-1',
