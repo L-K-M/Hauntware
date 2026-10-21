@@ -75,8 +75,31 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The not-saved diagnostic; the Safety tab and the header's Safety menu
   // print it and show their own ARB text (settingsSafetyNotSaved).
+  // The host syslog line's device name, written into host journals in
+  // one form (M5 plan Q6).
+  'lib/controllers/device_name.dart': {
+    r"'Klabautermann on $name'",
+    "'Android'",
+    "'Fuchsia'",
+    "'iOS'",
+    "'Linux'",
+    "'macOS'",
+    "'Windows'",
+  },
   'lib/controllers/safety_controller.dart': {
     r"'The safety settings were not saved: $error'",
+    // A migration the engine refused, printed; it is tried again.
+    r"'Safety preferences of $serverId stay on this device: $error'",
+  },
+  // A pref write's request id, never shown, and its refusal's diagnostic.
+  'lib/controllers/server_prefs_controller.dart': {
+    r"'prefs-${_count++}'",
+    r"'ServerPrefsNotSavedException: $failure, $detail'",
+  },
+  // The not-saved diagnostic; the Sync tab prints it and shows its own
+  // ARB text (settingsSyncSecretsNotSaved).
+  'lib/controllers/sync_secrets_controller.dart': {
+    r"'The sync passwords setting was not saved: $error'",
   },
   // A caller error's diagnostic: the preview is modal, so no screen ever
   // shows it.

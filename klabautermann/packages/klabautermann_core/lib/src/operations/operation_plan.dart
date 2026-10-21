@@ -90,6 +90,26 @@ final class OperationPlan {
   /// The tier [RunAction]'s confirmation must satisfy (03 §8.6).
   final ConfirmationTier tier;
 
+  /// This plan with [argv], the host syslog line (SAF-13), as a last
+  /// best-effort step and its row under the host writes.
+  OperationPlan withAuditLine(List<String> argv) => OperationPlan(
+    intent: intent,
+    kind: kind,
+    targetName: targetName,
+    steps: [...steps, ShellStep(argv, bestEffort: true)],
+    requiredLevel: requiredLevel,
+    runner: runner,
+    hostWrites: [...hostWrites, HostWriteRow.auditSyslog],
+    detachedRunner: detachedRunner,
+    impact: impact,
+    ownership: ownership,
+    protected: protected,
+    followUnit: followUnit,
+    orphans: orphans,
+    warnings: warnings,
+    revalidate: revalidate,
+  );
+
   /// What [ActionPlanned] carries: the same step, host-write and finding
   /// lists, never copies.
   ActionPreview get preview => ActionPreview(

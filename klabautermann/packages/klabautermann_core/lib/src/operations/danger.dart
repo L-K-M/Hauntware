@@ -10,6 +10,8 @@ import 'plan_types.dart';
 List<DangerFinding> lintSteps(Iterable<PlanStep> steps) => [
   for (final step in steps)
     ...switch (step) {
+      // The syslog line only quotes the action and its target.
+      ShellStep(bestEffort: true) => const <DangerFinding>[],
       // The exact command line quotes every word behind its locale
       // wrapper, which the linter's patterns cannot see through, so it
       // reads the argv joined by spaces: the same words.

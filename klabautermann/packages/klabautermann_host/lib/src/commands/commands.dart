@@ -13,6 +13,12 @@ import 'proc_stat.dart';
 /// `--iterations`; older ones print one elapse per expression (03 §7.7).
 const int kCalendarIterationsSystemd = 242;
 
+/// The longest each part of [HostCommands.auditLine] may be [E].
+const int kAuditLinePartMax = 200;
+
+/// C0 controls and DEL, which a syslog line must not carry.
+final _controlCharacters = RegExp(r'[\x00-\x1f\x7f]');
+
 /// A command refused before building: an argument failed its validator
 /// (03 §8.8).
 final class HostCommandError implements Exception {
@@ -460,6 +466,34 @@ abstract final class HostCommands {
   /// changed layout in 2.40. It prints the whole ring buffer: dmesg takes
   /// no record count, so the reader keeps the newest itself.
   static List<String> dmesgJson() => const ['dmesg', '--json', '--decode'];
+
+  /// The host's syslog line for one action (SAF-13, 03 §8.10):
+  /// `logger -t klabautermann -- '<action> <target> by <device>'`, without
+  /// "by" when [device] is blank. Each part loses its control characters
+  /// and is capped at [kAuditLinePartMax] characters, so a target name
+  /// cannot forge a second line or flood the journal; `--` keeps a part
+  /// that starts with `-` a message.
+  static List<String> auditLine(String action, String target, String device) {
+    String clean(String part) {
+      final text = part.replaceAll(_controlCharacters, ' ').trim();
+      return text.length > kAuditLinePartMax
+          ? text.substring(0, kAuditLinePartMax)
+          : text;
+    }
+
+    final words = [clean(action), clean(target)];
+    if (words.any((word) => word.isEmpty)) {
+      throw HostCommandError('an empty audit line part');
+    }
+    final by = clean(device);
+    return [
+      'logger',
+      '-t',
+      'klabautermann',
+      '--',
+      by.isEmpty ? words.join(' ') : '${words.join(' ')} by $by',
+    ];
+  }
 
   /// `tail -n <lines> [-F] -- <path>` for one file (LOG-22, 03 §7.6): its
   /// last [lines] lines, then with [follow] each appended line, following

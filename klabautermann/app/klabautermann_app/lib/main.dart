@@ -12,6 +12,7 @@ import 'app.dart';
 import 'controllers/admin_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/coverage_controller.dart';
+import 'controllers/device_name.dart';
 import 'controllers/docker_endpoint_choices.dart';
 import 'controllers/docker_notice_controller.dart';
 import 'controllers/fleet_controller.dart';
@@ -19,7 +20,9 @@ import 'controllers/monitor_set.dart';
 import 'controllers/monitoring_controller.dart';
 import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
+import 'controllers/server_prefs_controller.dart';
 import 'controllers/sync_controller.dart';
+import 'controllers/sync_secrets_controller.dart';
 import 'services/app_version.dart';
 import 'services/engine_keystore.dart';
 import 'services/instance_guard.dart';
@@ -214,9 +217,14 @@ Future<void> main(List<String> args) async {
     save: settings.setAnnounceThresholdBands,
   );
 
-  // The safety preferences (M4 plan M4), device-local in settings.json and
-  // applied to the engine now, since it starts with every server
-  // observe-only, and on every change.
+  // The synced servers' preferences (03 §4.8), as the engine reports their
+  // `pref` records.
+  final serverPrefs = ServerPrefsController(engine);
+
+  // The safety preferences (M4 plan M4), in settings.json and, for synced
+  // servers, their read-only switches and marks in their `pref` records
+  // (M5 plan M06); applied to the engine now, since it starts with every
+  // server observe-only, and on every change.
   final safety = safetyFromSettings(
     settings,
     engine,
@@ -226,6 +234,26 @@ Future<void> main(List<String> args) async {
             .firstOrNull
             ?.displayName ??
         serverId,
+    prefs: serverPrefs,
+  );
+
+  // The device name the host syslog line gives (SAF-13, M5 plan Q6),
+  // until the user can name the device.
+  engine.send(SetDeviceName(defaultDeviceName(defaultTargetPlatform)));
+
+  // The "sync passwords" switch (SYN-02), device-local in settings.json
+  // and applied to the engine now, since it starts with the switch off.
+  final syncSecrets = SyncSecretsController(
+    syncSecrets: settings.syncSecrets,
+    apply: (enabled) {
+      try {
+        engine.send(SetSyncSecrets(enabled: enabled));
+      } on StateError {
+        // A stopped engine syncs nothing; the next one gets the switch at
+        // its spawn.
+      }
+    },
+    save: settings.setSyncSecrets,
   );
 
   // SAF-08's notice heads the Docker tab until dismissed on this device,
@@ -247,6 +275,7 @@ Future<void> main(List<String> args) async {
     appVersion: appVersion,
     monitorSet: fleet.monitorSettings,
     safety: safety,
+    syncSecrets: syncSecrets,
   );
 
   runApp(
@@ -258,6 +287,7 @@ Future<void> main(List<String> args) async {
       coverage: coverage,
       announcements: announcements,
       safety: safety,
+      syncSecrets: syncSecrets,
       admin: admin,
       operations: operations,
       dockerNotice: dockerNotice,

@@ -2652,6 +2652,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAnnounceNotChanged => 'The setting could not be changed.';
 
   @override
+  String get settingsSyncSecretsTitle => 'Passwords and keys';
+
+  @override
+  String get settingsSyncSecrets => 'Sync saved passwords & keys';
+
+  @override
+  String get settingsSyncSecretsDetail =>
+      'Only includes servers where credential sync is also enabled.';
+
+  @override
+  String get settingsSyncSecretsNotSaved =>
+      'The setting changed, but it could not be saved, so it will not be kept after a restart.';
+
+  @override
+  String get settingsSyncSecretsNotChanged =>
+      'The setting could not be changed.';
+
+  @override
   String get settingsAboutTitle => 'About';
 
   @override
@@ -2957,8 +2975,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'Your encryption passphrase opens the records of every app on this account, Séance and Poltergeist included.';
 
   @override
-  String get syncDisclosurePullOnly =>
-      'Klabautermann only reads this account. It publishes nothing: no servers, host keys or passwords.';
+  String get syncDisclosure =>
+      'Klabautermann keeps its own settings in this account: each server\'s read-only switch and marks. It publishes no servers, host keys or passwords.';
 
   @override
   String get syncSignInAction => 'Sign in';
@@ -3103,12 +3121,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get serverReadOnly => 'Read-only';
 
   @override
+  String get serverHostAuditLine => 'Log actions on the server';
+
+  @override
   String get serverObserveOnly =>
       'Observe only: Klabautermann reads this server and changes nothing. To act on it, turn on Allow actions in the Safety menu.';
 
   @override
   String get serverReadOnlyNotice =>
       'Read-only: actions on this server are hidden.';
+
+  @override
+  String credentialTitle(String label) {
+    return 'Password for $label';
+  }
+
+  @override
+  String get credentialExplanation =>
+      'Saved only if you choose to: on this device, in its encrypted vault, and used for this server from now on.';
+
+  @override
+  String get credentialPassword => 'Password';
+
+  @override
+  String get credentialSaveInVault => 'Save in vault';
+
+  @override
+  String get credentialCancel => 'Cancel';
+
+  @override
+  String get credentialConnect => 'Connect';
 
   @override
   String elevationTitle(String host) {
@@ -3243,6 +3285,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'userBackups': 'A backup in your Klabautermann backups folder',
       'rootBackups': 'A backup under /var/lib/klabautermann/backups',
       'footprintManifest': 'The list of what Klabautermann keeps on the server',
+      'auditSyslog':
+          'One line in the system log naming this action and this device',
       'other': 'A change on the server',
     });
     return '$_temp0';

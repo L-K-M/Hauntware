@@ -84,6 +84,7 @@ void main() {
 
       commands
         ..send(const Hello())
+        ..send(const SetDeviceName('Klabautermann on Linux'))
         ..send(
           const SetSafetyPolicy(
             SafetyPolicy(servers: {_web: ServerSafety(management: true)}),
@@ -121,6 +122,31 @@ void main() {
       expect(planned.preview.targetName, 'sleep');
       expect(planned.preview.requiredLevel, RequiredLevel.login);
       expect(planned.preview.requiredTier, ConfirmationTier.acknowledge);
+      // The engine ends the plan with the host syslog line (SAF-13).
+      final line = planned.preview.steps.last as ShellStep;
+      expect(line.bestEffort, isTrue);
+      expect(line.argv.last, 'kill sleep by Klabautermann on Linux');
+
+      // With the server's switch off, a plan holds the action alone.
+      commands
+        ..send(
+          const SetSafetyPolicy(
+            SafetyPolicy(
+              servers: {
+                _web: ServerSafety(management: true, hostAuditLine: false),
+              },
+            ),
+          ),
+        )
+        ..send(
+          PlanAction(KillProcess(_web, pid: target.pid, startTicks: ticks)),
+        );
+      final quiet = await until<ActionPlanned>();
+      expect(quiet.preview.steps, hasLength(planned.preview.steps.length - 1));
+      expect(
+        quiet.preview.hostWrites,
+        isNot(contains(HostWriteRow.auditSyslog)),
+      );
 
       commands.send(
         RunAction(

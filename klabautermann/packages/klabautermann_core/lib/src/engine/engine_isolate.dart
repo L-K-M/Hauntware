@@ -12,11 +12,13 @@ import 'package:seance_core/seance_core.dart'
 
 import '../admin/admin_mode.dart';
 import '../audit/audit_log.dart';
+import '../audit/host_audit_line.dart';
 import '../admin/safety_policy.dart';
 import '../admin/user_crontabs.dart';
 import '../capabilities/capability_cache.dart';
 import '../catalog/engine_sync.dart';
 import '../catalog/engine_vault.dart';
+import '../catalog/klabautermann_records.dart' show diffServerPrefs;
 import '../catalog/keystore_channel.dart';
 import '../docker/docker_router.dart';
 import '../fleet/endpoint_pins.dart';
@@ -135,8 +137,8 @@ final class EngineStart {
 /// (03 §5.8, §5.9), [DockerWatch] and [DockerUnwatch] go to that session,
 /// which follows the engine's events into [DockerListChanged] lists
 /// (03 §7.12), [SetDockerEndpoint] sets the socket it tries first
-/// (CN-09), [EnrollSync] and [RunSyncRound] run pull-only sync
-/// one at a time beside the request queue (03 §4.3, D63), answered by
+/// (CN-09), [EnrollSync] and [RunSyncRound] run sync one at a time
+/// beside the request queue (03 §4.3, D63), answered by
 /// [SyncStatus] and, when they succeed, the fleet, after an
 /// [EndpointChanged] for each confirmed endpoint a round changed (03
 /// §4.7), [ConfirmEndpoints] pins synced endpoints and answers with the
@@ -201,6 +203,7 @@ void engineMain(
   // while links are off. It opens with the support directory's files.
   OperationTracker? operations;
   var safetyPolicy = const SafetyPolicy();
+  var deviceName = '';
   // Previewed plans and the runner of confirmed ones (03 §8.5). A plan
   // runs only on the link generation it was planned on: each server's
   // generation counts the times its link became ready.
@@ -267,7 +270,7 @@ void engineMain(
         access: start.supportDirectoryAccess,
       );
 
-  // The OS keystore, which the app answers (D62), and pull-only sync,
+  // The OS keystore, which the app answers (D62), and sync,
   // opened with the import store.
   final keystore = ChannelSyncKeystore(uiPort.send);
   late final EngineSync sync;
@@ -587,6 +590,19 @@ void engineMain(
   // Whether the app has had a fleet. Probing waits for it, since the app
   // keeps answers only for servers its fleet lists.
   var fleetSent = false;
+
+  // The synced preferences the app last heard, so a round sends only
+  // what changed.
+  var prefsSent = <String, String>{};
+  Future<void> sendServerPrefs() async {
+    final (changes, sent) = diffServerPrefs(
+      prefsSent,
+      await sync.serverPrefs(),
+    );
+    changes.forEach(uiPort.send);
+    prefsSent = sent;
+  }
+
   void probeFleet() {
     if (!fleetSent) return;
     reachability?.update(probeTargets(fleetEntries(), configOf));
@@ -756,7 +772,7 @@ void engineMain(
     }
   }
 
-  // Pull-only sync, one operation at a time in request order, beside the
+  // Sync, one operation at a time in request order, beside the
   // request queue rather than in it: an enrollment waits on the network,
   // a key derivation and the app's keystore answers, which arrive as
   // requests, and links, sampling and imports go on meanwhile.
@@ -795,8 +811,54 @@ void engineMain(
       }
       if (status.phase == SyncPhase.succeeded) {
         uiPort.send(CatalogReplaced(fleetEntries()));
+        await sendServerPrefs();
       }
       uiPort.send(status);
+    });
+  }
+
+  // A catalog write runs on the sync chain too, so it never overlaps a
+  // round. One that took shows in the fleet and the preferences before
+  // its answer, and a round queued behind it pushes it. A saved server's
+  // endpoint counts as confirmed on this device: the user typed it (M5
+  // plan P16).
+  void runWrite(
+    String requestId,
+    Future<EngineEvent> Function() body, {
+    String? confirm,
+  }) {
+    syncTail = syncTail.then((_) async {
+      final EngineEvent answer;
+      try {
+        answer = await body();
+        if (answer is CatalogWritten) {
+          syncedServers = await sync.servers();
+          await relistSynced();
+          if (confirm != null) {
+            for (final pin in synced.pinsFor([confirm], DateTime.now())) {
+              await endpointPins.confirm(pin);
+            }
+            await relistSynced();
+          }
+        }
+      } on Object catch (error) {
+        // EngineSync answers every refusal itself; this keeps the chain
+        // alive should the fleet refresh or a pin's save throw.
+        uiPort.send(
+          CatalogWriteRefused(
+            requestId: requestId,
+            failure: CatalogWriteFailure.other,
+            detail: '$error',
+          ),
+        );
+        return;
+      }
+      if (answer is CatalogWritten) {
+        uiPort.send(CatalogReplaced(fleetEntries()));
+        await sendServerPrefs();
+      }
+      uiPort.send(answer);
+      if (answer is CatalogWritten) runSync(SyncOperation.round, sync.runRound);
     });
   }
 
@@ -828,6 +890,7 @@ void engineMain(
         // anything.
         uiPort.send(CatalogReplaced(fleetEntries()));
         fleetSent = true;
+        await sendServerPrefs();
         probeFleet();
       case Connect(:final serverId):
         sendCachedProfile(serverId);
@@ -1027,6 +1090,23 @@ void engineMain(
         runSync(SyncOperation.enroll, () => sync.enroll(message));
       case RunSyncRound():
         runSync(SyncOperation.round, sync.runRound);
+      case ReadServerDraft(:final requestId, :final serverId):
+        uiPort.send(
+          ServerDraftRead(
+            requestId: requestId,
+            draft: await sync.serverDraft(serverId),
+          ),
+        );
+      case SaveServer(:final requestId, :final draft):
+        runWrite(requestId, () => sync.saveServer(message), confirm: draft.id);
+      case DeleteServer(:final requestId):
+        runWrite(requestId, () => sync.deleteServer(message));
+      case SetServerPrefs(:final requestId):
+        runWrite(requestId, () => sync.setServerPrefs(message));
+      case PutRule(:final requestId):
+        runWrite(requestId, () => sync.putRule(message));
+      case RemoveRule(:final requestId):
+        runWrite(requestId, () => sync.removeRule(message));
       case PlanAction(:final intent):
         void refuse(ActionRefusalReason reason) =>
             uiPort.send(ActionRefused(reason, intent: intent));
@@ -1169,8 +1249,15 @@ void engineMain(
               refuse(attempt.refusal!);
               return;
             }
-            final planId = plans.hold(plan, linkGeneration: generation);
-            uiPort.send(ActionPlanned(planId, plan.preview));
+            // The switch and name as they are now, when the user sees
+            // the plan; the preview lists the line among the steps.
+            final held = withHostAuditLine(
+              plan,
+              enabled: safetyPolicy.servers[serverId]?.hostAuditLine ?? true,
+              deviceName: deviceName,
+            );
+            final planId = plans.hold(held, linkGeneration: generation);
+            uiPort.send(ActionPlanned(planId, held.preview));
           }),
         );
       case FootprintQuery(:final serverId):
@@ -1279,6 +1366,8 @@ void engineMain(
         for (final serverId in [...?admin?.servers]) {
           if (adminRefusal(policy, serverId) != null) admin?.disable(serverId);
         }
+      case SetDeviceName(:final name):
+        deviceName = name;
       case SetSyncSecrets(:final enabled):
         // Behind any sync operation already queued, which runs under the
         // switch as it was when it was asked for.

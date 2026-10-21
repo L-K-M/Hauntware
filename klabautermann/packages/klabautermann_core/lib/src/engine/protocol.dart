@@ -20,6 +20,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         ProcsSelection,
         SystemdUnit,
         SystemctlVerb,
+        ThresholdRule,
         TimersSnapshot,
         UnitsSnapshot,
         EngineMode,
@@ -205,6 +206,15 @@ import '../operations/plan_types.dart';
 /// [FootprintQuery], answered by [FootprintState], which the engine also
 /// sends unasked; the [KeepLastBackups] and [RemoveBackups] intents plan
 /// backup removal.
+///
+/// Synced settings then joined v3 the same way (03 §4.8, M5 plan M04):
+/// [ServerPrefsChanged] carries a server's pulled `pref` record as
+/// [ServerPrefs], and [SyncStatus] gained [SyncStatus.prefixBudget].
+///
+/// Catalog writes then joined v3 the same way (03 §4.4, M5 plan M05):
+/// [ReadServerDraft], [SaveServer], [DeleteServer], [SetServerPrefs],
+/// [PutRule] and [RemoveRule], answered by [ServerDraftRead],
+/// [CatalogWritten] and [CatalogWriteRefused].
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -235,8 +245,9 @@ final class Shutdown extends EngineRequest {
 /// Signs this device in to the user's Séance sync account (03 §4.3 step
 /// 1, §10.1): the shared enrollment (prelogin, KDF-downgrade refusal,
 /// login, a full pull and the passphrase trial), the vault re-key through
-/// its journal, then the pulled records applied. Pull-only under D14: the
-/// catalog applies pulled records and never seals dirty ones. Answered by
+/// its journal, then the pulled records applied. Since v1 (D14's end, M5
+/// plan M05) the catalog seals local edits; enrollment itself pushes
+/// nothing. Answered by
 /// [SyncStatus] events for [SyncOperation.enroll], and the fleet in a
 /// [CatalogReplaced] when it succeeds.
 ///
@@ -263,8 +274,9 @@ final class EnrollSync extends EngineRequest {
   final String encryptionPassphrase;
 }
 
-/// Runs one sync round on the enrolled account: a pull, applied under
-/// D14's push policy, which seals and pushes nothing in the MVP. Answered
+/// Runs one sync round on the enrolled account: a pull, applied, then a
+/// push of every record this device sealed since, in batches the server
+/// allows (03 §4.4; pull-only until v1, D14). Answered
 /// by [SyncStatus] events for [SyncOperation.round], and the fleet in a
 /// [CatalogReplaced] when it succeeds. Alert inbox fetches ride inside it
 /// (v1.x, D42).
@@ -593,6 +605,198 @@ final class SetSyncSecrets extends EngineRequest {
   final bool enabled;
 }
 
+/// The name the host syslog line gives this device (SAF-13, M5 plan Q6),
+/// sent at spawn and on every change. Until it arrives, or while blank,
+/// the line names no device.
+final class SetDeviceName extends EngineRequest {
+  const SetDeviceName(this.name);
+
+  final String name;
+}
+
+/// How a [ServerDraft]'s server signs in, as the server editor offers it
+/// (`GhostAuthMethod`, ghost-servers-part2.md section 3).
+enum ServerDraftAuth { agent, password, privateKey }
+
+/// A synced server as the server editor shows it (FL-03,
+/// ghost-servers-part2.md section 3): the shown fields of its
+/// `ServerConfig`, in their stored forms, with colour and icon as the
+/// protocol's enum names. [SaveServer] maps it onto the stored config, so
+/// a field the editor does not show, such as the jump route, the
+/// credential reference or the creation time, keeps its stored value
+/// (03 §4.4, "Write semantics").
+@immutable
+final class ServerDraft {
+  const ServerDraft({
+    required this.id,
+    required this.label,
+    required this.host,
+    required this.port,
+    required this.username,
+    required this.auth,
+    this.syncSecret = false,
+    this.excludeFromSync = false,
+    this.identityFilePath,
+    this.group,
+    this.colorName,
+    this.customColor,
+    this.iconName,
+    this.iconEmoji,
+    this.iconImage,
+    this.loginScript,
+    this.startDirectory,
+  });
+
+  /// The server's id: a stored server's, or a new UUID for one to add.
+  final String id;
+  final String label, host, username;
+  final int port;
+  final ServerDraftAuth auth;
+
+  /// Whether the server's credential syncs with it (SYN-02).
+  final bool syncSecret;
+
+  /// Whether the server stays on this device only: a save retracts it
+  /// from the account.
+  final bool excludeFromSync;
+
+  /// A private key file on this device, read by its path.
+  final String? identityFilePath;
+  final String? group, colorName, customColor;
+  final String? iconName, iconEmoji, iconImage;
+  final String? loginScript, startDirectory;
+
+  List<Object?> get _fields => [
+    id,
+    label,
+    host,
+    port,
+    username,
+    auth,
+    syncSecret,
+    excludeFromSync,
+    identityFilePath,
+    group,
+    colorName,
+    customColor,
+    iconName,
+    iconEmoji,
+    iconImage,
+    loginScript,
+    startDirectory,
+  ];
+
+  @override
+  bool operator ==(Object other) =>
+      other is ServerDraft && _sameItems(_fields, other._fields);
+
+  @override
+  int get hashCode => Object.hashAll(_fields);
+}
+
+/// A [SaveServer]'s credential boxes as the user typed them
+/// (`GhostCredentialEntry`, ghost-servers-part2.md section 3). The engine
+/// plans the vault entry from them with `seance_protocol`'s
+/// `plannedCredential`, reading the stored entry where a referenced key
+/// keeps it, so a stored private key never crosses to the UI isolate.
+/// Blank boxes keep what is stored.
+final class ServerCredentialEntry {
+  const ServerCredentialEntry({
+    this.referenceKeyFile = false,
+    this.password = '',
+    this.keyPem = '',
+    this.keyPassphrase = '',
+  });
+
+  /// Whether the key is read from [ServerDraft.identityFilePath] rather
+  /// than pasted.
+  final bool referenceKeyFile;
+  final String password, keyPem, keyPassphrase;
+}
+
+/// Reads the synced server [serverId] as the editor shows it, answered by
+/// [ServerDraftRead] (FL-03).
+final class ReadServerDraft extends EngineRequest {
+  const ReadServerDraft({required this.requestId, required this.serverId});
+
+  final String requestId;
+  final String serverId;
+}
+
+/// Saves [draft] as a synced server and seals its `serverConfig` record,
+/// with the credential [credential] plans, for the next round to push
+/// (03 §4.4, FL-03). The saved endpoint counts as confirmed on this
+/// device (M5 plan P16). Answered by [CatalogWritten] or
+/// [CatalogWriteRefused], then the fleet, then a round's [SyncStatus].
+final class SaveServer extends EngineRequest {
+  const SaveServer({
+    required this.requestId,
+    required this.draft,
+    this.credential,
+  });
+
+  final String requestId;
+  final ServerDraft draft;
+
+  /// The boxes as typed; null writes no credential.
+  final ServerCredentialEntry? credential;
+}
+
+/// Deletes the synced server [serverId]: its tombstone is persisted
+/// before its row drops, and its credential's record is retracted unless
+/// another synced server shares it (03 §4.4). Answered as [SaveServer].
+final class DeleteServer extends EngineRequest {
+  const DeleteServer({required this.requestId, required this.serverId});
+
+  final String requestId;
+  final String serverId;
+}
+
+/// Sets the synced server [serverId]'s preferences and seals its `pref`
+/// record (03 §4.8, SYN-04); null seals a removal, so every device falls
+/// back to its defaults. Answered as [SaveServer], and with a
+/// [ServerPrefsChanged].
+final class SetServerPrefs extends EngineRequest {
+  const SetServerPrefs({
+    required this.requestId,
+    required this.serverId,
+    required this.prefs,
+  });
+
+  final String requestId;
+  final String serverId;
+  final ServerPrefs? prefs;
+}
+
+/// Seals the alert rule [ruleId] as its `rule` record (03 §4.8); no
+/// surface sends it yet. Answered as [SaveServer].
+final class PutRule extends EngineRequest {
+  const PutRule({
+    required this.requestId,
+    required this.ruleId,
+    required this.rule,
+    this.target,
+  });
+
+  final String requestId;
+
+  /// The rule's UUID.
+  final String ruleId;
+  final ThresholdRule rule;
+
+  /// The server id or group name a `server` or `group` scoped rule names.
+  final String? target;
+}
+
+/// Seals the removal of the alert rule [ruleId] (03 §4.8). Answered as
+/// [SaveServer].
+final class RemoveRule extends EngineRequest {
+  const RemoveRule({required this.requestId, required this.ruleId});
+
+  final String requestId;
+  final String ruleId;
+}
+
 /// Turns admin mode on or off for [serverId] (03 §8.2, SAF-02). Turning
 /// it on detects how to elevate and asks for the password only when that
 /// needs one; [AdminModeState] reports each step.
@@ -783,6 +987,7 @@ final class SyncStatus extends EngineEvent {
     this.failure,
     this.passphraseUnverified = false,
     this.detail,
+    this.prefixBudget,
   });
 
   final SyncPhase phase;
@@ -801,6 +1006,181 @@ final class SyncStatus extends EngineEvent {
   final bool passphraseUnverified;
 
   /// The failure behind [failure], for diagnostics only.
+  final String? detail;
+
+  /// How much of the account the `klabautermann:` records take, after a
+  /// succeeded operation; null otherwise.
+  final SyncPrefixBudget? prefixBudget;
+}
+
+/// The account budget of the `klabautermann:` records (03 §4.8): at most
+/// [kSyncPrefixBudgetBytes] of sealed blobs, with a warning from
+/// [kSyncPrefixWarnFraction] of it (SYN-09's account size view).
+@immutable
+final class SyncPrefixBudget {
+  const SyncPrefixBudget(this.usedBytes);
+
+  /// The sealed blobs of every live `klabautermann:` record the account
+  /// holds, as this device last pulled them.
+  final int usedBytes;
+
+  /// Whether the records take [kSyncPrefixWarnFraction] of the budget or
+  /// more.
+  bool get warns =>
+      usedBytes >= kSyncPrefixBudgetBytes * kSyncPrefixWarnFraction;
+
+  /// Whether the records take the whole budget or more.
+  bool get full => usedBytes >= kSyncPrefixBudgetBytes;
+}
+
+/// The `klabautermann:` prefix's account budget [E] (03 §4.8).
+const int kSyncPrefixBudgetBytes = 1024 * 1024;
+
+/// The share of [kSyncPrefixBudgetBytes] from which the budget warns [E]
+/// (03 §4.8).
+const double kSyncPrefixWarnFraction = 0.8;
+
+/// One server's synced preferences, its `pref` record (03 §4.8, SYN-04).
+/// Every field defaults to what a server without a record has.
+@immutable
+final class ServerPrefs {
+  const ServerPrefs({
+    this.readOnly = false,
+    this.cadence,
+    this.pinnedUnits = const [],
+    this.pinnedContainers = const [],
+    this.marks = const {},
+    this.panelOrder = const [],
+    this.hostAuditLine = true,
+    this.stackScanDirs = const [],
+  });
+
+  /// The server's own read-only switch (SAF-06).
+  final bool readOnly;
+
+  /// The cadence preset chosen for the server; null leaves the device's.
+  final CadenceProfile? cadence;
+
+  /// Units and containers pinned to the top of their lists, by name.
+  final List<String> pinnedUnits, pinnedContainers;
+
+  /// Targets the user marked protected (SAF-22): unit, container and
+  /// stack names.
+  final Set<String> marks;
+
+  /// The server's panels in the user's order, by name; a panel it does
+  /// not name keeps its place after them.
+  final List<String> panelOrder;
+
+  /// Whether a run writes its syslog line on the host (SAF-13).
+  final bool hostAuditLine;
+
+  /// Absolute directories the stack scan looks in (STK-01).
+  final List<String> stackScanDirs;
+
+  /// These preferences with the safety fields replaced (M5 plan M06,
+  /// M19).
+  ServerPrefs copyWith({
+    bool? readOnly,
+    Set<String>? marks,
+    bool? hostAuditLine,
+  }) => ServerPrefs(
+    readOnly: readOnly ?? this.readOnly,
+    cadence: cadence,
+    pinnedUnits: pinnedUnits,
+    pinnedContainers: pinnedContainers,
+    marks: marks ?? this.marks,
+    panelOrder: panelOrder,
+    hostAuditLine: hostAuditLine ?? this.hostAuditLine,
+    stackScanDirs: stackScanDirs,
+  );
+}
+
+/// The synced preferences of the fleet server [serverId] changed (03
+/// §4.8): a pulled `pref` record applied, was removed, or its server
+/// arrived or left. [prefs] is null when the server has no record, or a
+/// sealed removal dropped it, so the device's defaults apply. The engine
+/// sends every server's after [EngineReady] and then only changes.
+final class ServerPrefsChanged extends EngineEvent {
+  const ServerPrefsChanged(this.serverId, this.prefs);
+
+  final String serverId;
+  final ServerPrefs? prefs;
+}
+
+/// The answer to a [ReadServerDraft]: [draft] is null when the fleet
+/// has no synced server by that id, or the catalog cannot be read.
+final class ServerDraftRead extends EngineEvent {
+  const ServerDraftRead({required this.requestId, required this.draft});
+
+  final String requestId;
+  final ServerDraft? draft;
+}
+
+/// A catalog write ([SaveServer], [DeleteServer], [SetServerPrefs],
+/// [PutRule], [RemoveRule]) is sealed on this device; the round the
+/// engine runs next pushes it.
+final class CatalogWritten extends EngineEvent {
+  const CatalogWritten({
+    required this.requestId,
+    this.serverId,
+    this.credentialWritten = false,
+  });
+
+  final String requestId;
+
+  /// The server written, or null for a rule.
+  final String? serverId;
+
+  /// Whether a [SaveServer] stored a credential in the vault, which the
+  /// editor's recovery offer needs.
+  final bool credentialWritten;
+}
+
+/// Why a catalog write was refused (03 §4.4).
+enum CatalogWriteFailure {
+  /// Another process may hold the support directory (D63), or this
+  /// session has no device id.
+  directoryShared,
+
+  /// No sync account is enrolled: editing needs one (M5 plan P16).
+  notEnrolled,
+
+  /// The keystore holds no account key, or could not answer.
+  keystoreUnavailable,
+
+  /// The fleet has no synced server, or the account no rule, by that id;
+  /// or the server is excluded from sync, so its preferences stay local.
+  unknownTarget,
+
+  /// A field is missing or out of range, such as a blank host or a port
+  /// outside 1 to 65535.
+  invalidDraft,
+
+  /// The account holds as many records of the type as 03 §4.8 allows.
+  tooMany,
+
+  /// The sealed record would be larger than 03 §4.8 allows its type.
+  tooLarge,
+
+  /// A sync state file is left as it is this session (D62), so the write
+  /// could not be saved.
+  storeUnavailable,
+
+  /// Anything else; [CatalogWriteRefused.detail] says what.
+  other,
+}
+
+/// A catalog write was refused, and nothing was written.
+final class CatalogWriteRefused extends EngineEvent {
+  const CatalogWriteRefused({
+    required this.requestId,
+    required this.failure,
+    this.detail,
+  });
+
+  final String requestId;
+  final CatalogWriteFailure failure;
   final String? detail;
 }
 
@@ -1272,6 +1652,7 @@ final class ActionFinished extends EngineEvent {
     this.httpStatus,
     this.revalidation,
     this.operationId,
+    this.skippedSteps = const [],
   });
 
   final String planId;
@@ -1297,6 +1678,10 @@ final class ActionFinished extends EngineEvent {
   /// The detached operation a started plan runs as, which
   /// [OperationsChanged] lists.
   final String? operationId;
+
+  /// The indexes of best-effort steps that failed without failing the
+  /// run, such as the host syslog line (SAF-13).
+  final List<int> skippedSteps;
 }
 
 /// Why a plan failed.
@@ -1625,7 +2010,9 @@ final class AuditRecord {
     this.failedStep,
     this.exitCode,
     this.httpStatus,
-  }) : steps = List.unmodifiable(steps);
+    Iterable<int> skippedSteps = const [],
+  }) : steps = List.unmodifiable(steps),
+       skippedSteps = List.unmodifiable(skippedSteps);
 
   final String serverId;
 
@@ -1645,6 +2032,9 @@ final class AuditRecord {
   final int? exitCode;
   final int? httpStatus;
 
+  /// The best-effort steps that failed without failing the run (SAF-13).
+  final List<int> skippedSteps;
+
   /// The record as the Activity page's export carries it (SAF-11): every
   /// field, its steps redacted as stored, times in UTC.
   Map<String, Object?> toJson() => {
@@ -1661,6 +2051,7 @@ final class AuditRecord {
     'failedStep': ?failedStep,
     'exitCode': ?exitCode,
     'httpStatus': ?httpStatus,
+    if (skippedSteps.isNotEmpty) 'skippedSteps': skippedSteps,
   };
 }
 
@@ -1838,8 +2229,8 @@ const int kSshDefaultPort = 22;
 /// Where a [FleetEntry] came from, which decides what may happen to it.
 enum FleetEntryOrigin {
   /// A `serverConfig` record pulled from the shared Séance sync account
-  /// (D13); read-only in the MVP (D14). None arrive until the catalog
-  /// library lands (F3).
+  /// (D13); read-only in the MVP (D14), edited through [SaveServer] and
+  /// [DeleteServer] since v1.
   synced,
 
   /// Imported on this device from an OpenSSH client config (FL-02, 03
@@ -1867,6 +2258,7 @@ final class FleetEntry {
     this.searchText,
     this.locatorConflict,
     this.endpoint,
+    this.excludedFromSync = false,
   });
 
   /// The id every per-server request carries: a synced record's bare
@@ -1921,6 +2313,10 @@ final class FleetEntry {
   /// imported it.
   final EndpointConfirmation? endpoint;
 
+  /// Whether a synced server stays on this device only, so its
+  /// preferences do not sync (03 §4.8); false for an import.
+  final bool excludedFromSync;
+
   // By value: every CatalogReplaced copies its entries across the isolate
   // boundary, so identity would make an unchanged entry look changed.
   @override
@@ -1937,7 +2333,8 @@ final class FleetEntry {
       authKind == other.authKind &&
       searchText == other.searchText &&
       _sameItems(locatorConflict, other.locatorConflict) &&
-      endpoint == other.endpoint;
+      endpoint == other.endpoint &&
+      excludedFromSync == other.excludedFromSync;
 
   @override
   int get hashCode => Object.hash(
@@ -1953,6 +2350,7 @@ final class FleetEntry {
     searchText,
     locatorConflict == null ? null : Object.hashAll(locatorConflict!),
     endpoint,
+    excludedFromSync,
   );
 }
 
@@ -3427,15 +3825,32 @@ final class ServerSafety {
     this.management = false,
     this.readOnly = false,
     this.marks = const {},
+    this.hostAuditLine = true,
   });
 
   final bool management;
   final bool readOnly;
 
+  /// Whether a run writes the host syslog line (SAF-13): on by default,
+  /// and the synced `pref` record's value for a synced server.
+  final bool hostAuditLine;
+
   /// Targets the user marked protected on this device (SAF-22): unit,
   /// container and stack names. They stay device-local until v1's `pref`
   /// records (M4 plan Q1).
   final Set<String> marks;
+
+  ServerSafety copyWith({
+    bool? management,
+    bool? readOnly,
+    Set<String>? marks,
+    bool? hostAuditLine,
+  }) => ServerSafety(
+    management: management ?? this.management,
+    readOnly: readOnly ?? this.readOnly,
+    marks: marks ?? this.marks,
+    hostAuditLine: hostAuditLine ?? this.hostAuditLine,
+  );
 }
 
 /// Admin mode's default inactivity expiry [E] (03 §8.2).

@@ -6,15 +6,26 @@ import 'support/fake_ssh_config.dart';
 import 'support/sync_sign_in.dart';
 import 'support/harness.dart';
 
-/// Whether [request] could push catalog records or write server-side
-/// state. Pull-only from the start (03 D14): the catalog applies pulled
-/// records and never seals dirty ones, so no UI path may send these.
-bool _pushesOrWrites(EngineRequest request) => switch (request) {
-  // Enrollment and sync rounds are allowed only while the engine's
-  // coordinator runs under PushPolicy.none: it then applies pulled
-  // records and seals, writes back and pushes none (D14). Should the
-  // policy open, they would push.
-  EnrollSync() || RunSyncRound() => engineSyncPushPolicy != PushPolicy.none,
+/// The only requests that write to the sync account (03 §4.4, M5 plan
+/// P9): a catalog write seals records, and a round pushes what was sealed.
+/// Enrollment pulls and pushes nothing.
+const _accountWrites = {
+  SaveServer,
+  DeleteServer,
+  SetServerPrefs,
+  PutRule,
+  RemoveRule,
+  RunSyncRound,
+};
+
+/// Whether [request] writes to the sync account or to a host.
+bool _writes(EngineRequest request) => switch (request) {
+  SaveServer() ||
+  DeleteServer() ||
+  SetServerPrefs() ||
+  PutRule() ||
+  RemoveRule() ||
+  RunSyncRound() => true,
   // Endpoint confirmation writes the device-local endpoint_pins.json,
   // which never syncs (03 §4.9).
   ConfirmEndpoints() => false,
@@ -27,8 +38,8 @@ bool _pushesOrWrites(EngineRequest request) => switch (request) {
 };
 
 void main() {
-  testWidgets('no surface sends a request that pushes or writes server '
-      'records', (tester) async {
+  testWidgets('every request a surface sends that writes is one the '
+      'allowlist names', (tester) async {
     final harness = await pumpApp(
       tester,
       size: const Size(1280, 800),
@@ -110,12 +121,13 @@ void main() {
     // Prove the drive reached the engine, then judge every request.
     expect(harness.engine.sent, isNotEmpty);
     for (final request in harness.engine.sent) {
+      if (!_writes(request)) continue;
       expect(
-        _pushesOrWrites(request),
-        isFalse,
+        _accountWrites,
+        contains(request.runtimeType),
         reason:
-            'the app sent $request, which can push or write records '
-            '(D14 pull-only)',
+            'the app sent $request, which writes but is not a catalog write '
+            '(M5 plan P9)',
       );
     }
   });

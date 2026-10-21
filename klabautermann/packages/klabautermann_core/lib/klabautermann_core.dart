@@ -145,6 +145,9 @@ export 'package:seance_core/seance_core.dart' show quoteShellWord;
 export 'package:seance_core/catalog.dart' show PushPolicy;
 export 'package:seance_core/seance_core.dart'
     show SyncEnrollmentIssue, SyncEnrollmentMode, validateSyncEnrollment;
+// The login password prompt (03 §4.5) hands ghost_servers' credential
+// dialog the auth method it asks for.
+export 'package:seance_core/seance_core.dart' show AuthMethod;
 // A process row's masked arguments (03 §8.9): the Processes panel shows
 // their display and reveals one on request.
 export 'package:klabautermann_docker/klabautermann_docker.dart'

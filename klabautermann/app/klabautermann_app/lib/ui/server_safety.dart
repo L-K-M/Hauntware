@@ -47,8 +47,8 @@ List<String> serverSafetyNotices(BuildContext context, String serverId) {
 }
 
 /// The server header's Safety menu: the per-server Allow actions switch
-/// (management, SAF-01) and Read-only switch (SAF-06). Nothing without a
-/// [SafetyScope].
+/// (management, SAF-01), Read-only switch (SAF-06) and host log switch
+/// (SAF-13). Nothing without a [SafetyScope].
 class ServerSafetyMenu extends StatelessWidget {
   const ServerSafetyMenu({super.key, required this.serverId, this.serverName});
 
@@ -64,17 +64,10 @@ class ServerSafetyMenu extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final current = serverSafetyIn(safety.value, serverId);
 
-    void set({bool? management, bool? readOnly}) => unawaited(
+    void set(ServerSafety next) => unawaited(
       changeSafetyWithFeedback(
         context,
-        () => safety.setServerSafety(
-          serverId,
-          ServerSafety(
-            management: management ?? current.management,
-            readOnly: readOnly ?? current.readOnly,
-            marks: current.marks,
-          ),
-        ),
+        () => safety.setServerSafety(serverId, next),
       ),
     );
 
@@ -82,13 +75,18 @@ class ServerSafetyMenu extends StatelessWidget {
       menuChildren: [
         CheckboxMenuButton(
           value: current.management,
-          onChanged: (on) => set(management: on ?? false),
+          onChanged: (on) => set(current.copyWith(management: on ?? false)),
           child: Text(l10n.serverAllowActions),
         ),
         CheckboxMenuButton(
           value: current.readOnly,
-          onChanged: (on) => set(readOnly: on ?? false),
+          onChanged: (on) => set(current.copyWith(readOnly: on ?? false)),
           child: Text(l10n.serverReadOnly),
+        ),
+        CheckboxMenuButton(
+          value: current.hostAuditLine,
+          onChanged: (on) => set(current.copyWith(hostAuditLine: on ?? false)),
+          child: Text(l10n.serverHostAuditLine),
         ),
         if (OperationsScope.maybeOf(context) case final operations?)
           MenuItemButton(

@@ -3574,6 +3574,36 @@ abstract class AppLocalizations {
   /// **'The setting could not be changed.'**
   String get settingsAnnounceNotChanged;
 
+  /// Section heading on the Sync settings tab over the sync passwords switch (SYN-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Passwords and keys'**
+  String get settingsSyncSecretsTitle;
+
+  /// Switch on the Sync settings tab (SYN-02): whether passwords and keys other devices synced are added to this device's vault. Séance's wording.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync saved passwords & keys'**
+  String get settingsSyncSecrets;
+
+  /// Explanation under the sync passwords switch, Séance's subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Only includes servers where credential sync is also enabled.'**
+  String get settingsSyncSecretsDetail;
+
+  /// Toast when the sync passwords switch applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The setting changed, but it could not be saved, so it will not be kept after a restart.'**
+  String get settingsSyncSecretsNotSaved;
+
+  /// Toast when the app did not take a change of the sync passwords switch.
+  ///
+  /// In en, this message translates to:
+  /// **'The setting could not be changed.'**
+  String get settingsSyncSecretsNotChanged;
+
   /// Heading of the about row on the General settings tab, which shows the app's title and version and opens the About dialog.
   ///
   /// In en, this message translates to:
@@ -3916,11 +3946,11 @@ abstract class AppLocalizations {
   /// **'Your encryption passphrase opens the records of every app on this account, Séance and Poltergeist included.'**
   String get syncDisclosureAccountKey;
 
-  /// Disclosure on the sign-in's second step: the app is pull-only and writes nothing to the account.
+  /// Disclosure on the sign-in's second step: what the app writes to the account, and what it does not.
   ///
   /// In en, this message translates to:
-  /// **'Klabautermann only reads this account. It publishes nothing: no servers, host keys or passwords.'**
-  String get syncDisclosurePullOnly;
+  /// **'Klabautermann keeps its own settings in this account: each server\'s read-only switch and marks. It publishes no servers, host keys or passwords.'**
+  String get syncDisclosure;
 
   /// The button that sends the sign-in, enabled once the fleet assertion is ticked.
   ///
@@ -4144,6 +4174,12 @@ abstract class AppLocalizations {
   /// **'Read-only'**
   String get serverReadOnly;
 
+  /// Switch in the server header's safety menu (SAF-13): after each action, write one line naming the action, its target and this device to the server's system log.
+  ///
+  /// In en, this message translates to:
+  /// **'Log actions on the server'**
+  String get serverHostAuditLine;
+
   /// Notice in the server header while management is off for the server (03 §4.3 step 5, SAF-01).
   ///
   /// In en, this message translates to:
@@ -4155,6 +4191,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Read-only: actions on this server are hidden.'**
   String get serverReadOnlyNotice;
+
+  /// Title of the login password dialog shown on connect when the vault holds no password for the server (03 §4.5); label is the server's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Password for {label}'**
+  String credentialTitle(String label);
+
+  /// Line under the login password dialog's title when the password can be saved in the vault.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved only if you choose to: on this device, in its encrypted vault, and used for this server from now on.'**
+  String get credentialExplanation;
+
+  /// Label of the password field in the login password dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get credentialPassword;
+
+  /// Checkbox in the login password dialog that keeps the password in this device's vault once the server accepts it.
+  ///
+  /// In en, this message translates to:
+  /// **'Save in vault'**
+  String get credentialSaveInVault;
+
+  /// Button that closes the login password dialog without connecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get credentialCancel;
+
+  /// Button that connects with the typed password.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect'**
+  String get credentialConnect;
 
   /// Title of the admin mode password dialog (SAF-02); host is the server's address.
   ///
@@ -4291,7 +4363,7 @@ abstract class AppLocalizations {
   /// One host write in the action preview; row is the engine's HostWriteRow name.
   ///
   /// In en, this message translates to:
-  /// **'{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine\'s own state} loginRecords{Login records, as every SSH command leaves} editTarget{The file or crontab you edited} editTempFile{A temporary copy beside the file, renamed over it or removed} userBackups{A backup in your Klabautermann backups folder} rootBackups{A backup under /var/lib/klabautermann/backups} footprintManifest{The list of what Klabautermann keeps on the server} other{A change on the server}}'**
+  /// **'{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine\'s own state} loginRecords{Login records, as every SSH command leaves} editTarget{The file or crontab you edited} editTempFile{A temporary copy beside the file, renamed over it or removed} userBackups{A backup in your Klabautermann backups folder} rootBackups{A backup under /var/lib/klabautermann/backups} footprintManifest{The list of what Klabautermann keeps on the server} auditSyslog{One line in the system log naming this action and this device} other{A change on the server}}'**
   String actionPreviewHostWrite(String row);
 
   /// The action's impact in the preview; kind is the engine's ImpactKind name and count a number of containers.

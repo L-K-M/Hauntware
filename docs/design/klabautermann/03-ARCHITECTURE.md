@@ -419,7 +419,14 @@ Proposals awaiting the owner close the section; they are not decisions.
   shared handlers and never seals a dirty record; a test proves it. Writes
   arrive in v1 with the shared editor and the record kind. Accepted by the
   owner on 2026-10-10. *Rejected:* MVP writes (fleet-corruption risk while
-  the extraction matures).
+  the extraction matures). *As built in v1 (M5 plan M05), pull-only ends:*
+  `engineSyncPushPolicy` is `PushPolicy.normal`. The catalog writes
+  (`SaveServer`, `DeleteServer`, `SetServerPrefs`, `PutRule`,
+  `RemoveRule`, 10.1) run on the engine's sync chain with the vault held,
+  answer `CatalogWritten` or `CatalogWriteRefused`, and queue a round,
+  which pushes the sealed records in batches within the limits the pull
+  advertised. The app's `catalog_writes_test.dart` replaced the pull-only
+  test: it names the requests that write.
 - **D15. Host keys: quarantine; publication once Séance #56 is fixed.**
   `TofuVerifier` never auto-repins. Pulled pins go through the quarantine
   handler. Séance's missing conflict check for pulled pins (#56) is fixed in F3
@@ -2308,6 +2315,28 @@ list says so. The `sender` and `alertstatus` records of a server are
 removed with sealed `removed` records when alerting is removed for that
 server.
 
+As built in M5 (M04): the engine's coordinator applies `pref` and `rule`
+records through `klabautermann_core`'s `KlabautermannRecordHandler` into
+`klabautermann_records.json` (4.10), still pull-only. A payload's `id`
+is the whole record id and its `type` the id's second segment. A `pref`
+holds `readOnly`, `cadence` (a 6.4 column), `pinnedUnits`,
+`pinnedContainers`, `protectedTargets`, `panelOrder`, `hostAuditLine`
+and `stackScanDirs` (absolute paths); a cadence this build does not know
+leaves the device's. A `rule` holds the rule model's fields (7.19) under
+their model names, so `evalScope` reads `client` for this device, plus a
+`target` (the server id or group name a `server` or `group` scope names).
+A record over its blob or count cap, of another kind, or whose `id` or
+`type` disagrees with its envelope trips and is skipped; a `v` above 1 is
+kept like an unknown type. The handler applies in the coordinator's last
+phase, so an excluded server is judged against the round's final server
+set, and it never opens records for the passphrase trial, since the v1.x
+`sudo` and `registry` types carry credentials. The engine sends each
+server's preferences as `ServerPrefsChanged` after its fleet, then only
+changes, a null for a removal, and every succeeded sync status carries
+the prefix budget. Since M05, `SetServerPrefs` seals a `pref` record or
+its removal, kept in the record store at once; saving a server newly
+excluded from sync, or deleting one, seals its `pref` removal.
+
 ### 4.9 What never syncs
 
 Metrics, history, logs, inspect output, `docker compose config` output,
@@ -2337,6 +2366,7 @@ platform identities in 04, section 12.3):
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
 | `capabilities/<name>.json` | Cached probe results, 24 h TTL; named, written only by a process that holds the directory alone, and purged as D59 decides | `klabautermann_core` | MVP |
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
+| `klabautermann_records.json` [E] | The `klabautermann:` records the coordinator applied (4.8, M5, M04): per record id, the `(updatedAt, deviceId)` it won with and its sealed payload, sealed removals, unknown types and newer versions included, so the tuple guard holds across restarts and §3.1's recovery re-seals them verbatim. A `pref` whose server is absent waits here. Kept like the sync state files. Never pushed while sync is pull-only | `klabautermann_core` | v1 |
 | `operations_shown.json` [E] | Detached operations this device remembers (M4, E17b, 7.17): per server and operation id, the operation's directory, whether its result was shown and audited here, and, for one this device launched, the audit record's facts (action, target, redacted steps, tier, start). An entry goes once the operation's files are gone. Kept like the sync state files: written only with exclusive access, a damaged file set aside; losing it costs a result's launch facts and the reminder of a root cleanup, which the 7-day prune covers. Never synced | `klabautermann_core` | MVP |
 | `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample) | `klabautermann_core` | v1 |
 | `alerts.jsonl` | In-app alert history, 30 days [E]; from v1.x also host alerts fetched from the inbox or read from a host spool, with source tier, server item ids and status (D42) | `klabautermann_core` | v1 |
@@ -4676,7 +4706,16 @@ As built in M4 (E10, `KC/lib/src/operations/`):
 - A container is protected when it publishes that port, port 22, or a
   VPN port (51820/udp, 1194, 41641/udp [guess list]).
 - User marks are `ServerSafety.marks` in `SetSafetyPolicy`, which stay on
-  the device until v1's `pref` records (M4 plan Q1).
+  the device until v1's `pref` records (M4 plan Q1). As built in M5
+  (M06): a synced server's marks and read-only switch live in its `pref`
+  record, written with `SetServerPrefs` and read from
+  `ServerPrefsChanged`, so a mark removed on one device is a sealed
+  removal on every other; management, global read-only and the admin
+  expiry stay on the device. The app moves a stored switch and marks
+  into the record once, merged with what it holds, counting both until
+  the write lands, and a server that stops syncing keeps its record's
+  switch and marks on the device. Imported servers keep theirs on the
+  device.
 - Any protection reason raises the tier to typed. A target another
   manager owns does the same: `ownership.dart` reads 8.7's markers
   through `detectOwnership`.
@@ -4800,6 +4839,25 @@ CI.
     `AuditRecords(records, more)`.
   - The log stores redacted steps only, so E24's export has nothing
     secret to include.
+
+As built in M5 (M19), the host line:
+- The engine ends each inline plan with
+  `logger -t klabautermann -- '<kind> <target> by <device>'`
+  (`HostCommands.auditLine`), at delivery, so the preview lists it among
+  the steps and `auditSyslog` among the host writes. Each part loses its
+  control characters and is capped at 200 characters [E].
+- The step is best-effort: a failure, even a lost channel, leaves the
+  run's outcome as it was, and `ActionFinished.skippedSteps` and the
+  device record name it. The danger linter skips it. A run that fails
+  stops before it, so the line marks completed actions only.
+- The switch is `ServerSafety.hostAuditLine`, on by default, in the
+  server header's Safety menu. A synced server keeps it in its `pref`
+  record; merged with a stored one, off wins, as read-only does.
+- The device is named by `SetDeviceName`; until Settings names it
+  (M19b), the app sends "Klabautermann on <platform>" (Q6), never the
+  hostname.
+- Detached plans carry no line yet: their steps run on the host past the
+  session, where no step is best-effort.
 
 As built in M4 (E24), the server header's Safety menu opens Activity: a
 sortable table of each record's time, target, action, confirmation and
@@ -5413,6 +5471,7 @@ shows there.
 | Requests (UI to engine) | Events (engine to UI) |
 |---|---|
 | `EnrollSync(baseUrl, username, password, encryptionPassphrase)`, `RunSyncRound` | `CatalogReplaced(entries)`, `SyncStatus(phase, operation, account, failure, passphraseUnverified)` |
+| `ReadServerDraft(requestId, serverId)`; `SaveServer(requestId, draft, credential?)`, `DeleteServer(requestId, serverId)`, `SetServerPrefs(requestId, serverId, prefs?)`, `PutRule(requestId, ruleId, rule, target?)`, `RemoveRule(requestId, ruleId)` (M05) | `ServerDraftRead(requestId, draft?)`; `CatalogReplaced`, then `CatalogWritten(requestId, serverId?, credentialWritten)` or `CatalogWriteRefused(requestId, failure, detail?)`, then the round's `SyncStatus` |
 | `AnswerKeystore(requestId, result)` (D62) | `KeystoreRequest(requestId, operation)`: the engine asks the app for the OS keystore |
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)` (K41, 4.7) | `CatalogReplaced(entries)` with each synced entry's `endpoint`, after `RequestRejected` when a pin could not be saved; `EndpointChanged(serverId)` when a sync changes a confirmed endpoint |

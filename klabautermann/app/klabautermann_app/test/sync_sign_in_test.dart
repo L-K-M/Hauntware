@@ -44,7 +44,7 @@ void main() {
 
     expect(find.text('Before you sign in'), findsOneWidget);
     expect(
-      find.textContaining('Klabautermann only reads this account.'),
+      find.textContaining('It publishes no servers, host keys or passwords.'),
       findsOneWidget,
     );
     expect(
