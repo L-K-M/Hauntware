@@ -2,7 +2,8 @@
 // intent, built in the engine. Its preview and its execution read the same
 // steps, so what the user confirmed is what runs; the danger findings come
 // from the same steps' words.
-import 'package:klabautermann_host/klabautermann_host.dart' show DetachedRunner;
+import 'package:klabautermann_host/klabautermann_host.dart'
+    show DetachedRunner, UnitManager;
 import 'package:meta/meta.dart';
 import 'package:seance_core/seance_core.dart' show DangerFinding;
 
@@ -114,11 +115,12 @@ sealed class Revalidation {
   const Revalidation();
 }
 
-/// The unit still loads.
+/// The unit still loads, in [manager].
 final class UnitLoaded extends Revalidation {
-  const UnitLoaded(this.unit);
+  const UnitLoaded(this.unit, {this.manager = const UnitManager.system()});
 
   final String unit;
+  final UnitManager manager;
 }
 
 /// Process [pid] is still the one that started at [startTicks].
