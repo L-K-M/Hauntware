@@ -325,6 +325,19 @@ bool isSleeper(int pid) {
   }
 }
 
+/// [pid]'s parent pid from `/proc/<pid>/stat`, or null once it is gone.
+int? _parentOf(int pid) {
+  try {
+    final stat = File('/proc/$pid/stat').readAsStringSync();
+    // The fields after the parenthesised comm: state, then the ppid.
+    return int.tryParse(
+      stat.substring(stat.lastIndexOf(')') + 2).split(' ')[1],
+    );
+  } on FileSystemException {
+    return null;
+  }
+}
+
 /// Sleeping processes that pad the process list for [measureProcs]. They
 /// are children of one spawner shell that waits for them, so a killed
 /// sleeper is reaped and leaves `/proc` whether or not this machine's
@@ -365,9 +378,16 @@ final class Sleepers {
     final started = Stopwatch()..start();
     while (!pids.every(isSleeper)) {
       if (started.elapsed > _sleeperStartWait) {
-        pids.forEach(Process.killPid);
+        // Only the spawner's children: a child that ended early may have
+        // been reaped and its pid given to an unrelated process.
+        final stuck = pids.where((pid) => !isSleeper(pid)).toList();
+        for (final child in stuck) {
+          if (_parentOf(child) == p.pid) Process.killPid(child);
+        }
         await sleepers.kill();
-        throw StateError('sleepers did not exec within $_sleeperStartWait');
+        throw StateError(
+          'sleepers did not exec within $_sleeperStartWait: $stuck',
+        );
       }
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
