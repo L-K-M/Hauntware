@@ -532,8 +532,13 @@ final class CorpusManifest {
       '${const JsonEncoder.withIndent('  ').convert(toJson())}\n';
 }
 
+/// A path segment that is an object id the daemon chose, such as an
+/// exec's: 64 lower-case hex digits.
+final _idSegment = RegExp(r'/[0-9a-f]{64}(?=/|$)');
+
 /// What check mode compares for one exchange: never IDs, timestamps or
-/// other values, which change with every run.
+/// other values, which change with every run. An id in the request path
+/// reads as `<id>`.
 final class ExchangeShape {
   ExchangeShape._({
     required this.name,
@@ -575,7 +580,7 @@ final class ExchangeShape {
     return ExchangeShape._(
       name: entry.name,
       method: entry.method,
-      path: entry.target.path,
+      path: entry.target.path.replaceAll(_idSegment, '/<id>'),
       queryKeys: entry.target.queryParameters.keys.toList()..sort(),
       status: response.statusCode,
       mediaType: response.mediaType,
