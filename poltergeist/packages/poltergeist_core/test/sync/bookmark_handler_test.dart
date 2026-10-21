@@ -402,6 +402,7 @@ void main() {
     for (final entry in const {
       RecordKind.inboxApp: 'inboxapp:client',
       RecordKind.inboxStatus: 'inboxstatus:client:proposal',
+      RecordKind.klabautermann: 'klabautermann:pref:server-1',
     }.entries) {
       test(
         '${entry.key.name} survives backup and reopen byte-identical',
