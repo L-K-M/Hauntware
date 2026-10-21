@@ -51,8 +51,10 @@ env:
 # that need Docker (the self-hosted runners have no daemon; contracts'
 # actionlint is a container action), seance_dart (pinned sudo texts),
 # klabautermann_dart (its host-sampling and owner-only file tests need
-# a VM with systemd and a non-root user) and the timing measurements,
-# whose budgets assume GitHub's runner images.
+# a VM with systemd and a non-root user), poltergeist_dart (its native
+# archive I/O binds fstat, a symbol glibc exports only from 2.33 and
+# the runner images lack) and the timing measurements, whose budgets
+# assume GitHub's runner images.
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -313,7 +315,7 @@ jobs:
     name: Poltergeist pure-Dart packages (${{ matrix.os }})
     needs: affected
     if: needs.affected.outputs.poltergeist == 'true'
-    runs-on: ${{ matrix.os == 'ubuntu-latest' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
