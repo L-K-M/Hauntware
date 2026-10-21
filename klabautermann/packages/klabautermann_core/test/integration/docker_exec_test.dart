@@ -102,14 +102,15 @@ void main() {
     FixtureEngine engine,
     String serverId,
   ) async {
+    final queryId = 'engine-${terminals++}';
     engine.send(
       DockerQuery(
         serverId: serverId,
-        queryId: 'engine-${terminals++}',
+        queryId: queryId,
         query: const DockerEngineQuery(),
       ),
     );
-    await engine.until<DockerResult>((r) => r.serverId == serverId);
+    await engine.until<DockerResult>((r) => r.queryId == queryId);
     return engine.seen.whereType<DockerEndpointState>().lastWhere(
       (e) => e.serverId == serverId && e.phase != DockerEndpointPhase.resolving,
     );
@@ -215,7 +216,10 @@ void main() {
       ),
     );
     expect(planned.preview.requiredTier, ConfirmationTier.acknowledge);
-    final finished = await run(engine, planned) as ActionFinished;
+    final finished = await run(engine, planned);
+    if (finished is! ActionFinished) {
+      fail('the one-off did not finish: $finished');
+    }
 
     // A command that ran reports its exit code whether it failed or not.
     expect(finished.exitCode, 5);
