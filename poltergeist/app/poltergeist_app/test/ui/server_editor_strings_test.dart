@@ -79,6 +79,13 @@ void main() {
         strings.customColourValue('#1E90FF'),
         l10n.serverEditorCustomColourValue('#1E90FF'),
       );
+      expect(strings.testStrings.succeeded, l10n.connectionTestSucceeded);
+      expect(strings.testStrings.failed, l10n.connectionTestFailed);
+      expect(strings.logStrings.title, l10n.connectionLogTitle);
+      expect(strings.logStrings.copy, l10n.connectionLogCopy);
+      expect(strings.logStrings.copied, l10n.connectionLogCopied);
+      expect(strings.logStrings.copyFailed, l10n.connectionLogCopyFailed);
+      expect(strings.logStrings.empty, l10n.connectionLogEmpty);
       expect(strings.colorPickerStrings, isA<PoltergeistColorPickerStrings>());
       expect(
         strings.colorPickerStrings.hexLabel,

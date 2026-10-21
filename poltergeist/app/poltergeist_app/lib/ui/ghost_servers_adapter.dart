@@ -223,6 +223,8 @@ GhostServerEditorStrings poltergeistServerEditorStrings(
   saveFailed: l10n.serverEditorSaveFailed,
   customColourValue: l10n.serverEditorCustomColourValue,
   colorPickerStrings: PoltergeistColorPickerStrings(l10n),
+  testStrings: poltergeistConnectionTestStrings(l10n),
+  logStrings: poltergeistConnectionLogStrings(l10n),
 );
 
 /// The connection log view's words in ARB.
