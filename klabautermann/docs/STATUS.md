@@ -1868,7 +1868,8 @@ is on main:
   working directory as `cwd` (Séance types the `cd` and does not run
   it), and "Open in Poltergeist", a `poltergeist://browse` link to the
   folder, each where its app takes links and the builders can name the
-  folder. The `/var/log` browser follows.
+  folder. The `/var/log` browser (LOG-08) offers the same two for the
+  folder, and each file a compact "Open in Poltergeist" beside it.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container
