@@ -145,6 +145,20 @@ void main() {
     expect(path, contains('/usr/bin'));
   });
 
+  test('the Docker host installs crontabs and keeps a syslog', () {
+    // BusyBox's crontab needs setuid for `crontab -` as the fixture user,
+    // and the edit suite reads the SAF-13 line in syslogd's file (M5
+    // M20a).
+    expect(
+      read('klabautermann/test/integration/sshd/Dockerfile.docker'),
+      contains('install -m 4755 /bin/busybox /usr/bin/crontab'),
+    );
+    expect(
+      read('klabautermann/test/integration/sshd/docker-setup.sh'),
+      contains(RegExp(r'^syslogd$', multiLine: true)),
+    );
+  });
+
   test('the jump host forwards ahead of the common config', () {
     // sshd keeps the first value it reads (sshd_config(5)): the common
     // config's refusal would win over a later line.
@@ -320,6 +334,8 @@ void main() {
       'override',
       'profiled',
       'idle',
+      // The edit suite's (M5 M20a).
+      'edits',
     ]) {
       expect(seed, contains('"\$stacks/$stack/compose.yaml"'), reason: stack);
     }

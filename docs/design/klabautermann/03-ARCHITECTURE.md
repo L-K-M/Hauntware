@@ -4920,7 +4920,8 @@ a container's log. It runs every MVP container, image and stack
 action, signals the user's own process, and runs a detached redeploy
 that outlives a dropped link, re-attaches and is acknowledged.
 `inventory.dart` diffs the snapshots and checks each change against
-`inventory_allowlist.txt`, which encodes this table's MVP rows once.
+`inventory_allowlist.txt`, which encodes this table's MVP rows once
+(v1's rows joined in M5 M20a, 11.3).
 A change no row covers fails the run, and the report goes to the
 evidence. The runner VM's snapshot, which needs runner_vm.sh's own
 files left out, follows as a separate change.
@@ -7269,6 +7270,32 @@ through the API, recreates it as a detached compose operation under
 both recorded files in every step, reads `profiled`'s profile, finds
 `idle` only through a folder scan, and takes `downable` down once its
 typed name is given, with `--host` in every step and never `-v`.
+
+As built in M5 (M20a), `seed_docker.sh` adds the stack `edits`, whose
+compose file carries a comment and whose `.env` sets a variable no
+service reads, so its edits keep `config --hash` and the stack
+verified, and the plain file `~/edits/app.conf`. The Docker host's
+image makes BusyBox's `crontab` setuid, as Alpine's busybox-suid
+does, and `docker-setup.sh` starts BusyBox `syslogd`, which writes
+`/var/log/messages`; the host has no journal.
+`klabautermann_core/test/integration/edit_pipeline_test.dart` (tags
+`integration` and `docker`) reads the stack's compose file over SFTP,
+plans its edit with the `compose config -q` check on the temp file and
+the syslog line, and replaces it with owner and mode kept and no temp
+file left, the line in `/var/log/messages`; a candidate compose cannot
+read fails that check and replaces nothing. A file changed between
+plan and run fails the hash check and keeps the outside change, and a
+plan from the old read is refused. It edits the stack's `.env`, and
+pauses and resumes a line of the fixture user's crontab through
+`crontab -` with its comments and environment kept, the resumed table
+byte for byte the first. A new engine's connect then verifies every
+backup those edits made, reports one changed on the host as modified,
+keeps the newest of each file, and removes the compose file's backups
+once its path is typed. The inventory session edits `~/edits/app.conf`
+and removes its backups, and `inventory_allowlist.txt` gains the v1
+rows it writes: the edit target, the user's backups and their index,
+the manifest, and the syslog file, which on this host also takes
+sshd's login lines.
 
 ### 11.4 Performance budgets (gated from M2)
 
