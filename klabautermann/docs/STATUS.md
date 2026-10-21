@@ -1857,6 +1857,13 @@ is on main:
   ghost_theme's shared editor (presets, mode, colours, font, corners,
   copy, paste and reset), in the app and in the desktop settings window,
   in Klabautermann's words.
+- X-03 hand-off (M5 M31a): the server header's "Open terminal in
+  Séance" opens a catalog server in Séance through a `seance://connect`
+  link built by `buildSeanceConnect`, which carries the server id only.
+  It shows where Séance takes links (Android, iOS and macOS, until its
+  Linux and Windows registration lands) and the OS reports a handler,
+  and never for an ssh_config import, whose id Séance cannot know. The
+  folder hand-offs (X-04, X-10) follow with the stack and log views.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container
