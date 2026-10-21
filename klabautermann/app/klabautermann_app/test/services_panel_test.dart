@@ -9,6 +9,7 @@ import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/actions/action_entry.dart';
 import 'package:klabautermann_app/ui/logs/log_view.dart';
+import 'package:klabautermann_app/ui/processes_panel.dart' show kRevealDuration;
 import 'package:klabautermann_app/ui/server_safety.dart';
 import 'package:klabautermann_app/ui/services_panel.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -912,9 +913,39 @@ void main() {
       await tester.tap(find.text('Reveal values'));
       await tester.pumpAndSettle();
       expect(text(), '[Service]\nEnvironment=TOKEN=abc\n');
+
+      // The reveal ends by itself after kRevealDuration.
+      await tester.pump(kRevealDuration);
+      await tester.pumpAndSettle();
+      expect(text(), '[Service]\nEnvironment=********\n');
+      expect(find.text('Reveal values'), findsOneWidget);
+
+      await tester.tap(find.text('Reveal values'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Hide values'));
       await tester.pumpAndSettle();
       expect(text(), '[Service]\nEnvironment=********\n');
+    });
+
+    testWidgets('the unit file dialog fits a window narrower than its size', (
+      tester,
+    ) async {
+      const window = Size(700, 560);
+      final panel = await _pump(tester, size: window);
+      await panel.sample(tester);
+      await _open(tester, 'nginx.service');
+
+      await tester.tap(find.byTooltip('Show unit file'));
+      await tester.pumpAndSettle();
+      await panel.answerUnit(
+        tester,
+        UnitFilePayload([MaskedValue.plain('[Service]\n')]),
+      );
+      expect(tester.takeException(), isNull);
+      final dialog = tester.getRect(find.byType(Dialog));
+      expect(Offset.zero & window, _contains(dialog));
+      final close = tester.getRect(find.byTooltip('Close'));
+      expect(dialog, _contains(close));
     });
 
     testWidgets('"More" plans the v1 verbs where actions are allowed', (
@@ -1054,3 +1085,13 @@ void main() {
     });
   });
 }
+
+/// Matches a [Rect] that lies wholly inside the expected one.
+Matcher _contains(Rect inner) => predicate<Rect>(
+  (outer) =>
+      outer.left <= inner.left &&
+      outer.top <= inner.top &&
+      outer.right >= inner.right &&
+      outer.bottom >= inner.bottom,
+  'contains $inner',
+);
