@@ -7180,6 +7180,18 @@ unix:///var/run/docker.sock`. A refused `RunAction` takes its plan, so a
 second run of it reads `unknownPlan`. Locally the suite takes about 90 s,
 40 s of it the stack stop waiting out each container's grace period.
 
+As built in M5 (M29), `seed_docker.sh` adds the v1 stacks: `services`
+(`app` and `worker`), `downable`, `override` (deployed from
+`compose.yaml` and `compose.override.yaml`), `profiled` (a `debug`
+service behind a profile) and the folder `idle`, whose compose file
+never ran. `klabautermann_core/test/integration/stack_v1_test.dart`
+(tags `integration` and `docker`) stops and restarts `worker` alone
+through the API, recreates it as a detached compose operation under
+`setsid` that leaves `app` as it was, plans the override stack with
+both recorded files in every step, reads `profiled`'s profile, finds
+`idle` only through a folder scan, and takes `downable` down once its
+typed name is given, with `--host` in every step and never `-v`.
+
 ### 11.4 Performance budgets (gated from M2)
 
 - Fast tick at most 2.5 KB, plus 30 B for each CPU beyond 32 (D48), and
