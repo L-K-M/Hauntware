@@ -328,8 +328,11 @@ class _RemoteEditorState extends State<RemoteEditor> {
       case _ConflictChoice.discard:
         await _read(keepMine: false);
       case _ConflictChoice.compare:
+        // A read that failed leaves the base the save was refused for, and
+        // a review against it would only be refused again.
+        final refused = _base;
         await _read(keepMine: true);
-        if (mounted && _dirty) await _review();
+        if (mounted && _dirty && !identical(_base, refused)) await _review();
     }
   }
 
@@ -699,6 +702,7 @@ class _DiffBody extends StatelessWidget {
           .toList(),
     );
     final lines = result.text.split('\n');
+    if (lines.last.isEmpty) lines.removeLast();
     return DecoratedBox(
       decoration: BoxDecoration(
         border: Border.all(color: scheme.outlineVariant),
@@ -713,7 +717,10 @@ class _DiffBody extends StatelessWidget {
             itemCount: lines.length,
             itemBuilder: (context, index) {
               final line = lines[index];
-              final header = line.startsWith('+++') || line.startsWith('---');
+              // Only the two label lines; an added '++x' line is content.
+              final header =
+                  index < 2 &&
+                  (line.startsWith('+++') || line.startsWith('---'));
               final tint = header
                   ? null
                   : line.startsWith('+')
@@ -728,7 +735,6 @@ class _DiffBody extends StatelessWidget {
                   style: line.startsWith('@@') || header
                       ? mono?.copyWith(color: scheme.onSurfaceVariant)
                       : mono,
-                  softWrap: false,
                 ),
               );
             },
