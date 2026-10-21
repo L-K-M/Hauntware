@@ -21,8 +21,9 @@ and root tooling that only the shared, ungated jobs read.
 prints ``<product>=true|false`` lines for ``$GITHUB_OUTPUT`` and, on
 stderr, why each product was selected. ``--all`` selects every product
 (main pushes and manual runs). ``--check-references`` fails when a
-product file names another product's path by relative path that
-neither the dependency graph nor ``_FILE_READERS`` covers.
+product file names another product's path, relative or quoted from
+the repo root, that neither the dependency graph nor ``_FILE_READERS``
+covers.
 ``--self-test`` checks the rules against a synthetic graph.
 """
 
@@ -46,14 +47,18 @@ _FILE_READERS = {
     "poltergeist/test/integration/": ("klabautermann",),
 }
 
-# `../../seance/packages/seance_core` in a product file.
-_RELATIVE_REFERENCE = re.compile(
-    r"(?:\.\./)+((?:%s)/[^\s'\"`:,;)\]}]*)" % "|".join(PRODUCTS)
+# `../../seance/packages/seance_core` or `'poltergeist/test/x'` in a
+# product file.
+_PRODUCT_REFERENCE = re.compile(
+    r"(?:(?:\.\./)+|['\"])((?:%s)/[^\s'\"`:,;)\]}]*)" % "|".join(PRODUCTS)
 )
 
-# A pubspec `path:` key. A dependency *named* path (`path: ^1.9.1`)
-# matches too; its value is a version, never a relative path.
-_PATH_KEY = re.compile(r"^\s+path:\s*['\"]?([^'\"\s#]+)", re.M)
+# A pubspec `path:` key, block or flow style (`b: {path: ../b}`). A
+# dependency *named* path (`path: ^1.9.1`) matches too; its value is a
+# version, never a relative path.
+_PATH_KEY = re.compile(
+    r"(?:^[ \t]+|[{,][ \t]*)path[ \t]*:[ \t]*['\"]?([^'\"\s#,}]+)", re.M
+)
 
 
 def _normalize(path: str) -> str:
@@ -165,7 +170,7 @@ def check_references() -> int:
     grep = subprocess.run(
         (
             "git", "grep", "-I", "-z", "-E",
-            r"(\.\./)+(%s)/" % "|".join(PRODUCTS),
+            r"(\.\./|['\"])(%s)/" % "|".join(PRODUCTS),
             "--", *PRODUCTS, ":!*.md",
         ),
         capture_output=True,
@@ -178,7 +183,7 @@ def check_references() -> int:
     for line in grep.stdout.splitlines():
         source, text = line.split("\0", 1)
         reader = _product(source)
-        for match in _RELATIVE_REFERENCE.finditer(text):
+        for match in _PRODUCT_REFERENCE.finditer(text):
             target = match.group(1).rstrip("/")
             if _product(target) == reader:
                 continue
@@ -259,6 +264,27 @@ def self_test() -> int:
     if unresolved != ["a/pubspec.yaml: ../b"]:
         print(f"FAIL unknown target not reported: {unresolved}", file=sys.stderr)
         failures += 1
+
+    flow, _ = path_dependencies(
+        {
+            "a/pubspec.yaml": "dependencies:\n  b: {path: ../b}\n  c:\n    path : ../c\n",
+            "b/pubspec.yaml": "",
+            "c/pubspec.yaml": "",
+        }
+    )
+    if flow["a"] != {"b", "c"}:
+        print(f"FAIL flow-style path keys: {sorted(flow['a'])}", file=sys.stderr)
+        failures += 1
+
+    references = {
+        "import '../../../seance/packages/x/lib/a.dart';": "seance/packages/x/lib/a.dart",
+        "read('poltergeist/test/integration/c.dart')": "poltergeist/test/integration/c.dart",
+    }
+    for line, want in references.items():
+        got = [m.group(1) for m in _PRODUCT_REFERENCE.finditer(line)]
+        if got != [want]:
+            print(f"FAIL reference in {line!r}: got {got}", file=sys.stderr)
+            failures += 1
 
     if failures:
         print(f"self-test: {failures} failure(s)", file=sys.stderr)
