@@ -4217,6 +4217,128 @@
   "@dockerActions": {
     "description": "Tooltip of the button that opens a container's or image's actions in the phone list."
   },
+  "jobsBadged": "{text}, {badge}",
+  "@jobsBadged": {
+    "description": "A jobs table cell as a screen reader hears it: the job's name, then a badge such as jobsPaused.",
+    "placeholders": {
+      "text": {
+        "type": "String"
+      },
+      "badge": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsPaused": "Paused",
+  "@jobsPaused": {
+    "description": "Screen-reader name of the icon on a paused cron line's row (JOB-07)."
+  },
+  "jobsPausedDetail": "Paused: cron skips this line until it is resumed.",
+  "@jobsPausedDetail": {
+    "description": "Note in a paused cron line's details (JOB-07)."
+  },
+  "jobsManagedBy": "{manager, select, dokku{Managed by Dokku} coolify{Managed by Coolify} dokploy{Managed by Dokploy} runtipi{Managed by Runtipi} other{Managed by another tool}}",
+  "@jobsManagedBy": {
+    "description": "Screen-reader name of the icon on a cron line another manager owns (JOB-09); manager is the engine's CrontabManager name.",
+    "placeholders": {
+      "manager": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsManagedDetail": "{manager, select, dokku{Dokku} coolify{Coolify} dokploy{Dokploy} runtipi{Runtipi} other{Another tool}} manages this line. Change it there; a change here may be overwritten.",
+  "@jobsManagedDetail": {
+    "description": "Note in the details of a cron line another manager owns (JOB-09); manager is the engine's CrontabManager name.",
+    "placeholders": {
+      "manager": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsLastRun": "Last run",
+  "@jobsLastRun": {
+    "description": "Label of a job's last run in its details (JOB-05)."
+  },
+  "jobsLastRunReading": "Reading…",
+  "@jobsLastRunReading": {
+    "description": "A job's last run while it is being read."
+  },
+  "jobsLastRunNever": "Never triggered.",
+  "@jobsLastRunNever": {
+    "description": "A timer's last run when it never triggered."
+  },
+  "jobsLastRunSucceeded": "It succeeded.",
+  "@jobsLastRunSucceeded": {
+    "description": "Note under a timer's last run when its service succeeded."
+  },
+  "jobsLastRunExited": "It ended as {result}, exit status {status}.",
+  "@jobsLastRunExited": {
+    "description": "Note under a timer's last run when its service failed; result is systemd's Result word, such as exit-code.",
+    "placeholders": {
+      "result": {
+        "type": "String"
+      },
+      "status": {
+        "type": "int"
+      }
+    }
+  },
+  "jobsLastRunEnded": "It ended as {result}.",
+  "@jobsLastRunEnded": {
+    "description": "Note under a timer's last run when its service ended without an exit status; result is systemd's Result word.",
+    "placeholders": {
+      "result": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsLastRunNoStatus": "When cron started it; cron logs no exit status.",
+  "@jobsLastRunNoStatus": {
+    "description": "Note under a cron line's last run (JOB-05)."
+  },
+  "jobsLastRunNotLogged": "{count, plural, =0{cron logged no job starts that can be read.} =1{Not among the 1 newest job start cron logged.} other{Not among the {count} newest job starts cron logged.}}",
+  "@jobsLastRunNotLogged": {
+    "description": "A cron line's last run when the log holds no start of it.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "jobsLastRunFailed": "{failure, select, noLink{Connect to the server to read the last run.} invalidTarget{This job's last run cannot be read.} other{The last run could not be read.}}",
+  "@jobsLastRunFailed": {
+    "description": "A job's last run when its read failed; failure is the engine's JobHistoryFailure name.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsCronRunRunning": "Running…",
+  "@jobsCronRunRunning": {
+    "description": "Status in a cron line's run output sheet while it runs (JOB-19)."
+  },
+  "jobsCronRunSucceeded": "It finished with exit status 0.",
+  "@jobsCronRunSucceeded": {
+    "description": "Status in a cron line's run output sheet when the command succeeded."
+  },
+  "jobsCronRunExited": "It finished with exit status {status}.",
+  "@jobsCronRunExited": {
+    "description": "Status in a cron line's run output sheet when the command exited non-zero.",
+    "placeholders": {
+      "status": {
+        "type": "int"
+      }
+    }
+  },
+  "jobsCronRunNoOutput": "It printed nothing.",
+  "@jobsCronRunNoOutput": {
+    "description": "A cron line's run output when the command printed nothing."
+  },
+  "jobsCronRunTruncated": "The output was longer than this; the rest was dropped.",
+  "@jobsCronRunTruncated": {
+    "description": "Note under a cron line's run output when the engine capped it."
+  },
   "jobsRunNow": "Run now",
   "@jobsRunNow": {
     "description": "Timer action (JOB-08): starts the unit the timer activates now."

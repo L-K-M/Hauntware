@@ -17,8 +17,14 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
         CronDirEntry,
+        CronExpression,
+        CronJob,
         CronPeriod,
+        CronSnapshot,
+        CrontabManager,
+        LoggedCronRun,
         MonotonicBase,
+        TimerLastRun,
         OnCalendarElapse,
         mergeJobs,
         parseUserCrontab;
@@ -991,15 +997,9 @@ void main() {
       expect(panel.engine.sentOfType<CloseStream>(), hasLength(1));
     });
 
-    testWidgets('a timer\'s details run it too; cron rows offer nothing', (
-      tester,
-    ) async {
+    testWidgets('a timer\'s details run it too', (tester) async {
       final panel = await _pump(tester, safety: managed);
       await panel.all(tester);
-      expect(
-        find.byKey(const ValueKey('jobs.rowActions.cron|crontab|0')),
-        findsNothing,
-      );
       await tester.tap(_row('timer|certbot.timer'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(OutlinedButton, 'Run now'));
@@ -1014,6 +1014,240 @@ void main() {
         find.byKey(const ValueKey('jobs.rowActions.timer|certbot.timer')),
         findsNothing,
       );
+    });
+  });
+
+  group('cron lines (JOB-05, JOB-07, JOB-09, JOB-19, M5 plan M27c)', () {
+    const managed = SafetyPolicy(
+      servers: {_serverId: ServerSafety(management: true)},
+    );
+
+    /// The login user's crontab: a line, a paused one and Dokku's.
+    CronResult lines() => cronResultOf(
+      CronSnapshot(
+        jobs: [
+          cronLine('crontab', '*/15 * * * *', '/home/deploy/bin/sync-assets'),
+          CronJob(
+            source: 'crontab',
+            schedule: '0 3 * * *',
+            command: '/home/deploy/bin/backup',
+            raw:
+                '# klabautermann:paused 2026-10-20T00:00:00Z 0 3 * * * '
+                '/home/deploy/bin/backup',
+            expression: CronExpression.parse('0 3 * * *'),
+            paused: true,
+          ),
+          CronJob(
+            source: 'crontab',
+            schedule: '0 4 * * *',
+            command: 'dokku ps:report',
+            raw: '0 4 * * * dokku ps:report',
+            expression: CronExpression.parse('0 4 * * *'),
+            managedBy: CrontabManager.dokku,
+          ),
+        ],
+        ownCrontabPresent: true,
+      ),
+    );
+
+    ActionPreview preview() => ActionPreview(
+      intent: const RunCronJob(
+        _serverId,
+        source: 'crontab',
+        raw: '*/15 * * * *  /home/deploy/bin/sync-assets',
+      ),
+      targetName: '/home/deploy/bin/sync-assets',
+      steps: [
+        ShellStep(['sh', '-c', '/home/deploy/bin/sync-assets']),
+      ],
+      requiredLevel: RequiredLevel.login,
+      runner: const RunnerFacts(identity: 'deploy'),
+      requiredTier: ConfirmationTier.acknowledge,
+    );
+
+    testWidgets('a line runs now from its row and shows what it printed', (
+      tester,
+    ) async {
+      final panel = await _pump(tester, safety: managed);
+      await panel.emit(tester, HostProfileChanged(_serverId, jobsProfile));
+      await panel.sample(tester, SampleStream.cron, lines());
+
+      await tester.tap(
+        find.byKey(const ValueKey('jobs.rowActions.cron|crontab|0')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Run now'));
+      await tester.pumpAndSettle();
+      final intent =
+          (panel.engine.sentOfType<PlanAction>().single as PlanAction).intent
+              as RunCronJob;
+      expect(
+        (intent.source, intent.raw),
+        ('crontab', '*/15 * * * *  /home/deploy/bin/sync-assets'),
+      );
+
+      await panel.emit(tester, ActionPlanned('plan-1', preview()));
+      await tester.tap(find.text('Run'));
+      await tester.pumpAndSettle();
+      expect(find.text('Running…'), findsOneWidget);
+
+      await panel.emit(
+        tester,
+        const ActionFinished(
+          planId: 'plan-1',
+          outcome: ActionOutcome.succeeded,
+          output: ExecOutput(stdout: 'synced 3 files\n', stderr: ''),
+        ),
+      );
+      expect(find.text('It finished with exit status 0.'), findsOneWidget);
+      expect(find.text('synced 3 files\n'), findsOneWidget);
+    });
+
+    testWidgets('on a phone the details run a line and its output follows', (
+      tester,
+    ) async {
+      final panel = await _pump(tester, size: _phone, safety: managed);
+      await panel.emit(tester, HostProfileChanged(_serverId, jobsProfile));
+      await panel.sample(tester, SampleStream.cron, lines());
+
+      await tester.tap(_row('cron|crontab|0'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Run now'));
+      await tester.pumpAndSettle();
+      await panel.emit(tester, ActionPlanned('plan-1', preview()));
+      await tester.tap(find.text('Run'));
+      await tester.pumpAndSettle();
+      await panel.emit(
+        tester,
+        const ActionFinished(
+          planId: 'plan-1',
+          outcome: ActionOutcome.failed,
+          failure: ActionFailure.stepFailed,
+          exitCode: 3,
+          output: ExecOutput(stdout: '', stderr: 'no route to host\n'),
+        ),
+      );
+      expect(find.text('It finished with exit status 3.'), findsOneWidget);
+      expect(find.text('no route to host\n'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets("a paused line says so and reads no last run; Dokku's line "
+        'is badged and offers no run', (tester) async {
+      final panel = await _pump(tester, safety: managed);
+      await panel.emit(tester, HostProfileChanged(_serverId, jobsProfile));
+      await panel.sample(tester, SampleStream.cron, lines());
+
+      expect(find.byIcon(Icons.pause_circle_outline), findsOneWidget);
+      expect(find.byIcon(Icons.lock_outline), findsOneWidget);
+      // The cells say what the icons show.
+      final labels = [
+        for (final e in find.byType(Semantics).evaluate())
+          ?(e.widget as Semantics).properties.label,
+      ];
+      expect(labels, contains('Job: /home/deploy/bin/backup, Paused'));
+      expect(labels, contains('Job: dokku ps:report, Managed by Dokku'));
+      expect(
+        find.byKey(const ValueKey('jobs.rowActions.cron|crontab|2')),
+        findsNothing,
+      );
+
+      await tester.tap(_row('cron|crontab|1'));
+      await tester.pumpAndSettle();
+      expect(
+        _inSheet('Paused: cron skips this line until it is resumed.'),
+        findsOneWidget,
+      );
+      expect(panel.engine.sentOfType<JobHistoryQuery>(), isEmpty);
+      await tester.tapAt(Offset.zero);
+      await tester.pumpAndSettle();
+
+      await tester.tap(_row('cron|crontab|2'));
+      await tester.pumpAndSettle();
+      expect(
+        _inSheet(
+          'Dokku manages this line. Change it there; a change here may be '
+          'overwritten.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.widgetWithText(OutlinedButton, 'Run now'), findsNothing);
+    });
+
+    testWidgets("a line's details read the newest start cron logged for it", (
+      tester,
+    ) async {
+      final panel = await _pump(tester);
+      await panel.emit(tester, HostProfileChanged(_serverId, jobsProfile));
+      await panel.sample(tester, SampleStream.cron, lines());
+
+      await tester.tap(_row('cron|crontab|0'));
+      await tester.pumpAndSettle();
+      expect(_inSheet('Reading…'), findsOneWidget);
+      final query =
+          panel.engine.sentOfType<JobHistoryQuery>().single as JobHistoryQuery;
+      expect(query.query, isA<CronRunsQuery>());
+
+      await panel.emit(
+        tester,
+        JobHistoryResult(
+          serverId: _serverId,
+          requestId: query.requestId,
+          payload: CronRunsPayload([
+            LoggedCronRun(
+              at: DateTime.utc(2026, 10, 24, 11, 45),
+              user: 'deploy',
+              command: '/home/deploy/bin/sync-assets',
+            ),
+            LoggedCronRun(
+              at: DateTime.utc(2026, 10, 24, 11, 30),
+              user: 'deploy',
+              command: '/home/deploy/bin/sync-assets',
+            ),
+          ]),
+        ),
+      );
+      expect(
+        _inSheet(clock('Sat, Oct 24, 2026 1:45 PM UTC+02:00')),
+        findsOneWidget,
+      );
+      expect(
+        _inSheet('When cron started it; cron logs no exit status.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets("a timer's details read its last trigger and result", (
+      tester,
+    ) async {
+      final panel = await _pump(tester);
+      await panel.all(tester);
+
+      await tester.tap(_row('timer|apt-daily.timer'));
+      await tester.pumpAndSettle();
+      final query =
+          panel.engine.sentOfType<JobHistoryQuery>().single as JobHistoryQuery;
+      final spec = query.query as TimerLastRunQuery;
+      expect(
+        (spec.timer, spec.service),
+        ('apt-daily.timer', 'apt-daily.service'),
+      );
+
+      await panel.emit(
+        tester,
+        JobHistoryResult(
+          serverId: _serverId,
+          requestId: query.requestId,
+          payload: TimerLastRunPayload(
+            TimerLastRun(
+              lastTrigger: DateTime.utc(2026, 10, 24, 6, 10),
+              result: 'exit-code',
+              exitStatus: 2,
+            ),
+          ),
+        ),
+      );
+      expect(_inSheet('It ended as exit-code, exit status 2.'), findsOneWidget);
     });
   });
 

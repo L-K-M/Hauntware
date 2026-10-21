@@ -75,6 +75,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The not-saved diagnostic; the Safety tab and the header's Safety menu
   // print it and show their own ARB text (settingsSafetyNotSaved).
+  // A job history read's request id, matched in the engine's answer.
+  'lib/controllers/job_history_reads.dart': {r"'history-${_count++}'"},
   'lib/controllers/safety_controller.dart': {
     r"'The safety settings were not saved: $error'",
   },
@@ -461,6 +463,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'crontab'",
     // The other users' table's key prefix, never shown.
     r"'${ServerPanel.jobs.name}.others'",
+    // systemd's Result word for a service that succeeded, matched in
+    // its answer (JOB-05); the details word it themselves.
+    "'success'",
   },
   'lib/ui/logs/log_query.dart': {
     // The path rule's separators and dot parts (03 §8.8), and the empty
