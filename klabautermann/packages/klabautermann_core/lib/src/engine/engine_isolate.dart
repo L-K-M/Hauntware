@@ -16,6 +16,7 @@ import '../admin/safety_policy.dart';
 import '../admin/user_crontabs.dart';
 import '../capabilities/capability_cache.dart';
 import '../catalog/engine_sync.dart';
+import '../catalog/engine_vault.dart';
 import '../catalog/keystore_channel.dart';
 import '../docker/docker_router.dart';
 import '../fleet/endpoint_pins.dart';
@@ -266,6 +267,17 @@ void engineMain(
   // opened with the import store.
   final keystore = ChannelSyncKeystore(uiPort.send);
   late final EngineSync sync;
+  var syncOpened = false;
+
+  // The one vault over `vault.json` (03 §4.5), which links read and sync
+  // re-keys. Until sync has opened, the account is unknown, so the vault
+  // mints no master key.
+  final vault = EngineVault(
+    Directory(start.supportDirectory),
+    access: start.supportDirectoryAccess,
+    keystore: keystore,
+    enrolled: () => !syncOpened || sync.account != null,
+  );
 
   // What the engine asks the user while it connects, keyed by prompt id
   // (03 §10.1).
@@ -291,7 +303,9 @@ void engineMain(
           connect: LinkConnector(
             credentials: EngineCredentialSource(
               identityAuditLogIn(start.supportDirectory),
+              vault: vault.read,
             ),
+            saveSecret: vault.save,
             hostKeys: hostKeys,
             prompts: prompts,
             hopConfig: configOf,
@@ -1017,7 +1031,7 @@ void engineMain(
                     refusal: ActionRefusalReason.engineUnavailable,
                   ),
                 );
-          case RedeployStack():
+          case RedeployStack() || StackComposeAction():
             final router = docker;
             if (router == null) {
               refuse(ActionRefusalReason.engineUnavailable);
@@ -1028,9 +1042,8 @@ void engineMain(
             attempt =
                 lendSession(
                   serverId,
-                  () => router.useStacks(
-                    serverId,
-                    (client, route, stacks) => planRedeploy(intent, (
+                  () => router.useStacks(serverId, (client, route, stacks) {
+                    final RedeployPlanContext context = (
                       client: client,
                       route: route,
                       stacks: stacks,
@@ -1048,8 +1061,21 @@ void engineMain(
                       },
                       protection: protection,
                       loginUser: profile.user ?? 'login user',
-                    )),
-                  ),
+                    );
+                    return switch (intent) {
+                      final RedeployStack redeploy => planRedeploy(
+                        redeploy,
+                        context,
+                      ),
+                      final StackComposeAction compose => planStackCompose(
+                        compose,
+                        context,
+                      ),
+                      _ => throw StateError(
+                        'not a compose intent: ${intent.runtimeType}',
+                      ),
+                    };
+                  }),
                 ).catchError(
                   (Object _) => (
                     plan: null,
@@ -1166,6 +1192,10 @@ void engineMain(
         for (final serverId in [...?admin?.servers]) {
           if (adminRefusal(policy, serverId) != null) admin?.disable(serverId);
         }
+      case SetSyncSecrets(:final enabled):
+        // Behind any sync operation already queued, which runs under the
+        // switch as it was when it was asked for.
+        syncTail = syncTail.then((_) => sync.setSyncSecrets(enabled: enabled));
       case SetAdminMode(:final serverId, :final enabled):
         if (!fleetIds.contains(serverId)) {
           reject(message, 'no fleet server $serverId');
@@ -1280,8 +1310,10 @@ void engineMain(
           deviceId: start.deviceId,
           hostKeys: hostKeys,
           keystore: keystore,
+          vault: vault,
           transport: syncTransport,
         );
+        syncOpened = true;
         syncedServers = await sync.servers();
         synced = await listSynced(syncedServers);
         trustedIds = {...synced.confirmedIds, ...synced.unreadableIds};

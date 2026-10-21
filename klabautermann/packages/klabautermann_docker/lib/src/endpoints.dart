@@ -2,14 +2,18 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'api_version.dart';
 import 'docker_client.dart';
 import 'docker_parse_result.dart';
+import 'duplex.dart';
+import 'errors.dart';
 import 'http_types.dart';
 import 'log_resume.dart';
 import 'log_time.dart';
 import 'models/container.dart';
 import 'models/engine_info.dart';
 import 'models/events.dart';
+import 'models/exec.dart';
 import 'models/image.dart';
 import 'models/network.dart';
 import 'models/pull.dart';
@@ -294,6 +298,104 @@ extension DockerEndpoints on DockerClient {
     cancelToken: cancelToken,
   );
 
+  // --- exec ------------------------------------------------------------
+
+  /// `POST /containers/{id}/exec` (03 §5.7, §7.13 CTX-07, CTX-08):
+  /// creates an exec of [cmd] with stdout and stderr attached, stdin too
+  /// when [stdin] is set, and returns its id. [consoleSize] is sent from
+  /// API 1.42, where exec create gained it; below, the caller resizes
+  /// after the start.
+  Future<String> createExec(
+    String containerId,
+    List<String> cmd, {
+    bool tty = false,
+    bool stdin = true,
+    String? user,
+    String? workingDir,
+    ExecConsoleSize? consoleSize,
+    Duration? timeout,
+    DockerCancelToken? cancelToken,
+  }) async {
+    if (cmd.isEmpty) throw ArgumentError.value(cmd, 'cmd', 'is empty');
+    final res = await request(
+      'POST',
+      '/containers/${_seg(containerId)}/exec',
+      json: {
+        'AttachStdin': stdin,
+        'AttachStdout': true,
+        'AttachStderr': true,
+        'Tty': tty,
+        'Cmd': cmd,
+        'User': ?user,
+        'WorkingDir': ?workingDir,
+        if (consoleSize != null && apiVersion >= _execConsoleSizeSince)
+          'ConsoleSize': [consoleSize.rows, consoleSize.columns],
+      },
+      timeout: timeout,
+      cancelToken: cancelToken,
+    );
+    final decoded = _decodeBuffered(res.body, 'exec create').value;
+    final id = decoded is Map ? decoded['Id'] : null;
+    if (id is! String || id.isEmpty) {
+      throw const DockerProtocolException('exec create returned no id');
+    }
+    return id;
+  }
+
+  /// `POST /exec/{id}/start` (03 §5.7): hijacks the connection with
+  /// `Upgrade: tcp`. With [tty] the duplex carries raw terminal bytes;
+  /// without it the daemon multiplexes stdout and stderr, which
+  /// `demuxStdcopy` splits. Stdin EOF is the duplex's half-close.
+  Future<DockerResponse<HijackedDuplex>> startExec(
+    String execId, {
+    bool tty = false,
+    ExecConsoleSize? consoleSize,
+    Duration? timeout,
+    DockerCancelToken? cancelToken,
+  }) => requestHijack(
+    'POST',
+    '/exec/${_seg(execId)}/start',
+    json: {
+      'Detach': false,
+      'Tty': tty,
+      if (consoleSize != null && apiVersion >= _execConsoleSizeSince)
+        'ConsoleSize': [consoleSize.rows, consoleSize.columns],
+    },
+    timeout: timeout,
+    cancelToken: cancelToken,
+  );
+
+  /// `POST /exec/{id}/resize?h=<rows>&w=<columns>` (03 §5.7): rows first,
+  /// as Docker takes them (c2 R15).
+  Future<void> resizeExec(
+    String execId,
+    ExecConsoleSize size, {
+    Duration? timeout,
+    DockerCancelToken? cancelToken,
+  }) => _action(
+    'POST',
+    '/exec/${_seg(execId)}/resize',
+    query: {'h': '${size.rows}', 'w': '${size.columns}'},
+    timeout: timeout,
+    cancelToken: cancelToken,
+  );
+
+  /// `GET /exec/{id}/json` (03 §5.7): whether the exec runs, and its exit
+  /// code once it has ended.
+  Future<DockerParseResult<ExecInspect>> inspectExec(
+    String execId, {
+    Duration? timeout,
+    DockerCancelToken? cancelToken,
+  }) async {
+    final res = await request(
+      'GET',
+      '/exec/${_seg(execId)}/json',
+      timeout: timeout,
+      cancelToken: cancelToken,
+    );
+    return parseExecInspect(_decodeBuffered(res.body, 'exec inspect').value);
+  }
+
   // --- images ----------------------------------------------------------
 
   /// `GET /images/json` (03 §7.14 IMG-01). The `Containers` count is read
@@ -518,6 +620,9 @@ enum DockerSignal {
   sigstop,
   sigcont,
 }
+
+/// The first API whose exec create and start take `ConsoleSize`.
+const _execConsoleSizeSince = ApiVersion(1, 42);
 
 String _seg(String value) => Uri.encodeComponent(value);
 
