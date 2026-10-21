@@ -222,9 +222,11 @@ final class EngineSync {
   /// server is absent stays stored, pending, and shows once the server
   /// arrives.
   Future<Map<String, ServerPrefs>> serverPrefs() async {
+    // The servers first: a round applied while they load is then in prefs.
+    final synced = await servers();
     final prefs = _klabautermannRecords.prefs();
     return {
-      for (final server in await servers())
+      for (final server in synced)
         if (!server.excludeFromSync)
           if (prefs[server.id] case final serverPrefs?) server.id: serverPrefs,
     };

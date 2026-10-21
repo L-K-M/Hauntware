@@ -238,13 +238,14 @@ void main() {
   group('apply (03 §4.8)', () {
     test('a pref and a rule apply under their envelope ids', () async {
       await device.pullServer(_server('srv-a'));
-      final report = await device.pull(
+      final prefReport = await device.pull(
         prefId,
         encodeServerPrefs('srv-a', _prefs),
       );
-      await device.pull(ruleId, encodeSyncedRule(_rule));
+      final ruleReport = await device.pull(ruleId, encodeSyncedRule(_rule));
 
-      expect(report.appliedIds, contains(prefId));
+      expect(prefReport.appliedIds, contains(prefId));
+      expect(ruleReport.appliedIds, contains(ruleId));
       expect(device.store.prefs()['srv-a']?.marks, {'postgresql.service'});
       expect([for (final r in device.store.rules()) r.id], [_ruleId]);
       expect(await device.tripwires.trippedIds(), isEmpty);
@@ -351,6 +352,34 @@ void main() {
 
       expect(device.store.isLive(excludedId), isFalse);
       expect(device.store.prefs().keys, ['srv-later']);
+    });
+
+    test('a sealed removal of an excluded server\'s pref still lands, so '
+        'no stale pref is re-sealed after store loss', () async {
+      final excludedId = KlabautermannRecordType.pref.idOf('srv-x');
+      // Stored while its server is unknown, then the server arrives
+      // excluded and the account retracts the pref.
+      await device.pull(excludedId, encodeServerPrefs('srv-x', _prefs));
+      expect(device.store.isLive(excludedId), isTrue);
+      await device.pullServer(_server('srv-x', excluded: true));
+
+      await device.pull(excludedId, removedPayload(excludedId), updatedAt: 20);
+      expect(device.store.isLive(excludedId), isFalse);
+      expect(device.store.tupleOf(excludedId)?.updatedAt, 20);
+    });
+
+    test('a newer version is still held to its type\'s caps, and a version '
+        'below 1 trips', () async {
+      final big = ServerPrefs(
+        pinnedUnits: [for (var i = 0; i < 600; i++) 'unit-$i.service'],
+      );
+      await device.pull(prefId, {...encodeServerPrefs('srv-a', big), 'v': 2});
+      expect(device.store.sealable(prefId), isNull);
+      expect(await device.tripwires.trippedIds(), {prefId});
+
+      await device.pull(ruleId, {...encodeSyncedRule(_rule), 'v': 0});
+      expect(device.store.sealable(ruleId), isNull);
+      expect(await device.tripwires.trippedIds(), {prefId, ruleId});
     });
 
     test(

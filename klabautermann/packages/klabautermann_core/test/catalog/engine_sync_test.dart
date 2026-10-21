@@ -235,7 +235,8 @@ void main() {
         removedPayload(KlabautermannRecordType.pref.idOf('srv-b')),
         updatedAt: 2,
       );
-      await sync.runRound();
+      final removal = await sync.runRound();
+      expect(removal.phase, SyncPhase.succeeded, reason: removal.detail);
       expect(await sync.serverPrefs(), isEmpty);
     });
 

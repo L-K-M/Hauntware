@@ -420,8 +420,21 @@ final class KlabautermannRecordHandler implements RecordHandler {
 
     final type = KlabautermannRecordType.named(parsed.type);
     final version = payload[_versionKey]! as int;
-    if (type == null || version > _payloadVersion) {
+    if (version < 1) {
+      await context.tripwires.trip(record.id);
+      return ApplyOutcome.skipped;
+    }
+    if (type == null) {
       // Kept verbatim for the build that knows it, and skipped.
+      return _materialize(record, payload, ApplyOutcome.skipped);
+    }
+    if (version > _payloadVersion) {
+      // Kept verbatim too, but a known type's caps hold whatever its
+      // version, so a newer shape cannot outgrow them.
+      if (!await _withinCaps(record, type, payload[_removedKey] == true)) {
+        await context.tripwires.trip(record.id);
+        return ApplyOutcome.skipped;
+      }
       return _materialize(record, payload, ApplyOutcome.skipped);
     }
 
@@ -437,7 +450,11 @@ final class KlabautermannRecordHandler implements RecordHandler {
     }
     await context.tripwires.clear(record.id);
 
+    // An excluded server's synced preferences are not read, but a sealed
+    // removal still lands: a stale live pref left stored would be
+    // re-sealed after a store loss, undoing the retraction.
     if (type == KlabautermannRecordType.pref &&
+        removed != true &&
         (await _servers.byId(parsed.key))?.excludeFromSync == true) {
       return ApplyOutcome.skipped;
     }
