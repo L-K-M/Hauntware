@@ -15,6 +15,8 @@ import 'package:klabautermann_host/klabautermann_host.dart'
     show
         EditCommands,
         EditExit,
+        FootprintKind,
+        FootprintRow,
         HostProfile,
         backupFootprint,
         encodeFootprintManifest,
@@ -207,7 +209,7 @@ void main() {
       expect(temp, startsWith('/home/deploy/app/..env.klabautermann-tmp-'));
       expect(argvs(p), [
         EditCommands.backupFile(path, _home),
-        EditCommands.manifestWrite(kHostUserManifest),
+        EditCommands.manifestWrite(kHostUserManifest, _sha('')),
         EditCommands.writeTemp(temp),
         EditCommands.copyAttributes(path, temp),
         EditCommands.replaceIfHash(path, temp, _sha('TOKEN=a\n')),
@@ -217,6 +219,11 @@ void main() {
         encodeFootprintManifest(backupFootprint(_home)),
       );
       expect(utf8.decode((p.steps[2] as ShellStep).input!), 'TOKEN=b\n');
+      // The manifest is swapped only while it still matches the read the
+      // new rows came from.
+      expect((p.steps[1] as ShellStep).exitMeanings, {
+        EditExit.hashMismatch: RevalidationFailure.contentChanged,
+      });
       expect((p.steps.last as ShellStep).exitMeanings, {
         EditExit.hashMismatch: RevalidationFailure.contentChanged,
       });
@@ -260,18 +267,55 @@ void main() {
           text: 'x\n',
           rootOnly: false,
         );
-        host.readable[kHostUserManifest] = '{not json';
-
-        expect(
-          (await plan(
-            const FileTarget('/home/deploy/a'),
-            'y\n',
-            _sha('x\n'),
-          )).refusal,
-          ActionRefusalReason.invalidTarget,
-        );
+        // Not JSON; and rows the parser would skip, which a rewrite of the
+        // rows it kept would drop.
+        for (final manifest in [
+          '{not json',
+          jsonEncode({
+            'v': 1,
+            'rows': [
+              {'path': '/home/deploy/.local/share/x', 'kind': 'backupIndex'},
+              {'path': '/home/deploy/y', 'kind': 'fromANewerVersion'},
+            ],
+          }),
+        ]) {
+          host.readable[kHostUserManifest] = manifest;
+          expect(
+            (await plan(
+              const FileTarget('/home/deploy/a'),
+              'y\n',
+              _sha('x\n'),
+            )).refusal,
+            ActionRefusalReason.invalidTarget,
+            reason: manifest,
+          );
+        }
       },
     );
+
+    test('the manifest write is against the manifest the plan read', () async {
+      host.files['/home/deploy/a'] = (
+        uid: 1000,
+        mode: '644',
+        text: 'x\n',
+        rootOnly: false,
+      );
+      final listed = encodeFootprintManifest([
+        const FootprintRow('/home/deploy/other', FootprintKind.backupIndex),
+      ]);
+      host.readable[kHostUserManifest] = listed;
+
+      final p = (await plan(
+        const FileTarget('/home/deploy/a'),
+        'y\n',
+        _sha('x\n'),
+      )).plan!;
+
+      expect(
+        argvs(p)[1],
+        EditCommands.manifestWrite(kHostUserManifest, _sha(listed)),
+      );
+    });
 
     test("root's file needs admin mode even to plan; then every step runs "
         'elevated and backs up under /var/lib', () async {
@@ -301,7 +345,7 @@ void main() {
       expect(p.cleanup.single.elevated, isTrue);
       expect(argvs(p).take(2), [
         EditCommands.backupFile('/etc/app.conf', kRootBackupsDir),
-        EditCommands.manifestWrite(kRootManifestPath),
+        EditCommands.manifestWrite(kRootManifestPath, _sha('')),
       ]);
       expect(p.requiredLevel, RequiredLevel.admin);
       expect(p.runner.identity, 'root');
@@ -398,7 +442,7 @@ void main() {
       expect(p.targetName, 'crontab:deploy');
       expect(argvs(p), [
         EditCommands.crontabBackup(_home, indexName: 'crontab:deploy'),
-        EditCommands.manifestWrite(kHostUserManifest),
+        EditCommands.manifestWrite(kHostUserManifest, _sha('')),
         EditCommands.crontabWriteIfHash(
           _sha('0 3 * * * /usr/local/bin/backup\n'),
         ),
