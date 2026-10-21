@@ -1096,9 +1096,6 @@ final class ActionProgress extends EngineEvent {
   final String? message;
 }
 
-/// A plan finished, one way or another (03 §10.1). A failed plan says
-/// why in typed facts the app words (D35): which step, its exit status or
-/// HTTP status, and what re-validation found.
 /// The answer to the [ReadEditable] with [requestId].
 final class EditRead extends EngineEvent {
   const EditRead({
@@ -1170,6 +1167,9 @@ enum EditReadFailure {
   failed,
 }
 
+/// A plan finished, one way or another (03 §10.1). A failed plan says
+/// why in typed facts the app words (D35): which step, its exit status or
+/// HTTP status, and what re-validation found.
 final class ActionFinished extends EngineEvent {
   const ActionFinished({
     required this.planId,
