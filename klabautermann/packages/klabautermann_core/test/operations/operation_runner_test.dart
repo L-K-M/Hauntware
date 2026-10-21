@@ -277,6 +277,10 @@ void main() {
     expect(stdins.last, '$_password\nnew: content\n');
     expect(link.commands.join(), isNot(contains(_password)));
     expect(plan.steps.first.display, endsWith('< new content (13 bytes)'));
+    expect(
+      ShellStep(['cat'], input: utf8.encode('x')).display,
+      endsWith(' < new content (1 byte)'),
+    );
   });
 
   test('a failed step runs the cleanup; a step exit can mean the content '
