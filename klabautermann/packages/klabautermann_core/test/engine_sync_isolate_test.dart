@@ -132,7 +132,7 @@ void main() {
   });
 
   test('an enrollment lists the synced servers before it answers, and a '
-      'later round pushes nothing', () async {
+      'later round succeeds', () async {
     final server = await FakeSyncServer.create();
     await server.seedServer(fakeServer('srv-a', 'alpha'));
     final (client, events) = await spawn(
@@ -161,11 +161,68 @@ void main() {
     expect(status.account, _account);
     expect(keystore.apiKeys['sync.token'], 'token-1');
 
-    // The fake server throws on any push, which would fail the round.
     client.send(const RunSyncRound());
     final round = await untilSyncEnds(client, events, keystore);
     final roundStatus = round.last as SyncStatus;
     expect(roundStatus.phase, SyncPhase.succeeded, reason: roundStatus.detail);
+  });
+
+  test('a saved server shows in the fleet, confirmed on this device, '
+      'before the answer, and a round pushes it', () async {
+    final server = await FakeSyncServer.create();
+    await server.seedServer(fakeServer('srv-a', 'alpha'));
+    final (client, events) = await spawn(
+      entryPoint: (start) => engineMain(start, syncTransport: server.transport),
+    );
+    final keystore = MemoryKeystore();
+    client.send(
+      const EnrollSync(
+        baseUrl: 'https://sync.example.com',
+        username: fakeSyncUser,
+        password: fakeSyncPassword,
+        encryptionPassphrase: fakeSyncPassword,
+      ),
+    );
+    await untilSyncEnds(client, events, keystore);
+
+    client.send(
+      const SaveServer(
+        requestId: 'save-1',
+        draft: ServerDraft(
+          id: 'srv-new',
+          label: 'web-3',
+          host: 'web-3.example.com',
+          port: 22,
+          username: 'deploy',
+          auth: ServerDraftAuth.agent,
+        ),
+      ),
+    );
+    final seen = await untilSyncEnds(client, events, keystore);
+
+    final fleet = seen.whereType<CatalogReplaced>().first;
+    final written = seen.whereType<CatalogWritten>().single;
+    expect(seen.indexOf(fleet), lessThan(seen.indexOf(written)));
+    expect(written.requestId, 'save-1');
+    final saved = fleet.entries.singleWhere((e) => e.serverId == 'srv-new');
+    expect(saved.endpoint, EndpointConfirmation.confirmed);
+    expect(
+      fleet.entries.singleWhere((e) => e.serverId == 'srv-a').endpoint,
+      EndpointConfirmation.unconfirmed,
+    );
+    final round = seen.last as SyncStatus;
+    expect(round.operation, SyncOperation.round);
+    expect(round.phase, SyncPhase.succeeded, reason: round.detail);
+
+    client.send(
+      const ReadServerDraft(requestId: 'read-1', serverId: 'srv-new'),
+    );
+    while (await events.moveNext()) {
+      if (events.current case ServerDraftRead(:final draft)) {
+        expect(draft?.host, 'web-3.example.com');
+        break;
+      }
+    }
   });
 
   test('synced preferences go out after the fleet, then only when they '

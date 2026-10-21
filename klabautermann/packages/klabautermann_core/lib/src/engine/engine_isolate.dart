@@ -131,8 +131,8 @@ final class EngineStart {
 /// (03 §5.8, §5.9), [DockerWatch] and [DockerUnwatch] go to that session,
 /// which follows the engine's events into [DockerListChanged] lists
 /// (03 §7.12), [SetDockerEndpoint] sets the socket it tries first
-/// (CN-09), [EnrollSync] and [RunSyncRound] run pull-only sync
-/// one at a time beside the request queue (03 §4.3, D63), answered by
+/// (CN-09), [EnrollSync] and [RunSyncRound] run sync one at a time
+/// beside the request queue (03 §4.3, D63), answered by
 /// [SyncStatus] and, when they succeed, the fleet, after an
 /// [EndpointChanged] for each confirmed endpoint a round changed (03
 /// §4.7), [ConfirmEndpoints] pins synced endpoints and answers with the
@@ -263,7 +263,7 @@ void engineMain(
         access: start.supportDirectoryAccess,
       );
 
-  // The OS keystore, which the app answers (D62), and pull-only sync,
+  // The OS keystore, which the app answers (D62), and sync,
   // opened with the import store.
   final keystore = ChannelSyncKeystore(uiPort.send);
   late final EngineSync sync;
@@ -712,7 +712,7 @@ void engineMain(
     }
   }
 
-  // Pull-only sync, one operation at a time in request order, beside the
+  // Sync, one operation at a time in request order, beside the
   // request queue rather than in it: an enrollment waits on the network,
   // a key derivation and the app's keystore answers, which arrive as
   // requests, and links, sampling and imports go on meanwhile.
@@ -754,6 +754,51 @@ void engineMain(
         await sendServerPrefs();
       }
       uiPort.send(status);
+    });
+  }
+
+  // A catalog write runs on the sync chain too, so it never overlaps a
+  // round. One that took shows in the fleet and the preferences before
+  // its answer, and a round queued behind it pushes it. A saved server's
+  // endpoint counts as confirmed on this device: the user typed it (M5
+  // plan P16).
+  void runWrite(
+    String requestId,
+    Future<EngineEvent> Function() body, {
+    String? confirm,
+  }) {
+    syncTail = syncTail.then((_) async {
+      final EngineEvent answer;
+      try {
+        answer = await body();
+        if (answer is CatalogWritten) {
+          syncedServers = await sync.servers();
+          await relistSynced();
+          if (confirm != null) {
+            for (final pin in synced.pinsFor([confirm], DateTime.now())) {
+              await endpointPins.confirm(pin);
+            }
+            await relistSynced();
+          }
+        }
+      } on Object catch (error) {
+        // EngineSync answers every refusal itself; this keeps the chain
+        // alive should the fleet refresh or a pin's save throw.
+        uiPort.send(
+          CatalogWriteRefused(
+            requestId: requestId,
+            failure: CatalogWriteFailure.other,
+            detail: '$error',
+          ),
+        );
+        return;
+      }
+      if (answer is CatalogWritten) {
+        uiPort.send(CatalogReplaced(fleetEntries()));
+        await sendServerPrefs();
+      }
+      uiPort.send(answer);
+      if (answer is CatalogWritten) runSync(SyncOperation.round, sync.runRound);
     });
   }
 
@@ -985,6 +1030,23 @@ void engineMain(
         runSync(SyncOperation.enroll, () => sync.enroll(message));
       case RunSyncRound():
         runSync(SyncOperation.round, sync.runRound);
+      case ReadServerDraft(:final requestId, :final serverId):
+        uiPort.send(
+          ServerDraftRead(
+            requestId: requestId,
+            draft: await sync.serverDraft(serverId),
+          ),
+        );
+      case SaveServer(:final requestId, :final draft):
+        runWrite(requestId, () => sync.saveServer(message), confirm: draft.id);
+      case DeleteServer(:final requestId):
+        runWrite(requestId, () => sync.deleteServer(message));
+      case SetServerPrefs(:final requestId):
+        runWrite(requestId, () => sync.setServerPrefs(message));
+      case PutRule(:final requestId):
+        runWrite(requestId, () => sync.putRule(message));
+      case RemoveRule(:final requestId):
+        runWrite(requestId, () => sync.removeRule(message));
       case PlanAction(:final intent):
         void refuse(ActionRefusalReason reason) =>
             uiPort.send(ActionRefused(reason, intent: intent));

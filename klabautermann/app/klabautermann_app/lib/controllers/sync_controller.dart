@@ -4,9 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 /// The sync account concern (03 §4.3, §10.1): the account this device is
-/// enrolled in, the sign-in, and the rounds the user asks for. Pull-only
-/// (D14): the engine's coordinator runs under [engineSyncPushPolicy], so
-/// neither request it sends seals or pushes a record.
+/// enrolled in, the sign-in, and the rounds the user asks for. A round
+/// pushes what the engine sealed since (03 §4.4, [engineSyncPushPolicy]);
+/// a sign-in pushes nothing.
 final class SyncController extends ChangeNotifier {
   /// [account] is the one the engine started with
   /// ([EngineReady.syncAccount]).
@@ -58,7 +58,7 @@ final class SyncController extends ChangeNotifier {
     ),
   );
 
-  /// Runs one pull-only round and completes with the engine's answer.
+  /// Runs one round and completes with the engine's answer.
   Future<SyncStatus> syncNow() =>
       _send(SyncOperation.round, const RunSyncRound());
 
