@@ -3121,6 +3121,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get serverReadOnly => 'Read-only';
 
   @override
+  String get serverHostAuditLine => 'Log actions on the server';
+
+  @override
   String get serverObserveOnly =>
       'Observe only: Klabautermann reads this server and changes nothing. To act on it, turn on Allow actions in the Safety menu.';
 
@@ -3276,6 +3279,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'transientUnit': 'A transient systemd unit, gone when it ends',
       'engineState': 'The container engine\'s own state',
       'loginRecords': 'Login records, as every SSH command leaves',
+      'auditSyslog':
+          'One line in the system log naming this action and this device',
       'other': 'A change on the server',
     });
     return '$_temp0';

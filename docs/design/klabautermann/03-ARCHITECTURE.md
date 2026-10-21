@@ -4773,6 +4773,25 @@ CI.
   - The log stores redacted steps only, so E24's export has nothing
     secret to include.
 
+As built in M5 (M19), the host line:
+- The engine ends each inline plan with
+  `logger -t klabautermann -- '<kind> <target> by <device>'`
+  (`HostCommands.auditLine`), at delivery, so the preview lists it among
+  the steps and `auditSyslog` among the host writes. Each part loses its
+  control characters and is capped at 200 characters [E].
+- The step is best-effort: a failure, even a lost channel, leaves the
+  run's outcome as it was, and `ActionFinished.skippedSteps` and the
+  device record name it. The danger linter skips it. A run that fails
+  stops before it, so the line marks completed actions only.
+- The switch is `ServerSafety.hostAuditLine`, on by default, in the
+  server header's Safety menu. A synced server keeps it in its `pref`
+  record; merged with a stored one, off wins, as read-only does.
+- The device is named by `SetDeviceName`; until Settings names it
+  (M19b), the app sends "Klabautermann on <platform>" (Q6), never the
+  hostname.
+- Detached plans carry no line yet: their steps run on the host past the
+  session, where no step is best-effort.
+
 As built in M4 (E24), the server header's Safety menu opens Activity: a
 sortable table of each record's time, target, action, confirmation and
 result, newest first, whose rows open the run's redacted steps and how

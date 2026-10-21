@@ -3824,6 +3824,10 @@
   "@serverReadOnly": {
     "description": "Switch in the server header's safety menu (SAF-06): hides every action on this server."
   },
+  "serverHostAuditLine": "Log actions on the server",
+  "@serverHostAuditLine": {
+    "description": "Switch in the server header's safety menu (SAF-13): after each action, write one line naming the action, its target and this device to the server's system log."
+  },
   "serverObserveOnly": "Observe only: Klabautermann reads this server and changes nothing. To act on it, turn on Allow actions in the Safety menu.",
   "@serverObserveOnly": {
     "description": "Notice in the server header while management is off for the server (03 §4.3 step 5, SAF-01)."
@@ -3997,7 +4001,7 @@
   "@actionPreviewHostWrites": {
     "description": "Heading above the host writes the action causes (03 §8.11)."
   },
-  "actionPreviewHostWrite": "{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine's own state} loginRecords{Login records, as every SSH command leaves} other{A change on the server}}",
+  "actionPreviewHostWrite": "{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine's own state} loginRecords{Login records, as every SSH command leaves} auditSyslog{One line in the system log naming this action and this device} other{A change on the server}}",
   "@actionPreviewHostWrite": {
     "description": "One host write in the action preview; row is the engine's HostWriteRow name.",
     "placeholders": {

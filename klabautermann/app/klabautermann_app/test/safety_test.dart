@@ -212,6 +212,32 @@ void main() {
       expect(prefs.writes, hasLength(1));
     });
 
+    test('the syslog line switch syncs, and off wins over a record or a '
+        'stored switch left on (SAF-13)', () async {
+      prefs
+        ..syncing.addAll({'srv-1', 'srv-2'})
+        ..records['srv-1'] = const ServerPrefs(hostAuditLine: false);
+      final gate = prefs.gate = Completer<void>();
+      final safety = controller(
+        initial: const SafetyPolicy(
+          servers: {'srv-2': ServerSafety(hostAuditLine: false)},
+        ),
+      );
+
+      expect(safety.value.servers['srv-1']!.hostAuditLine, isFalse);
+      expect(applied.last.servers['srv-2']!.hostAuditLine, isFalse);
+      final (id, moved) = prefs.writes.single;
+      expect((id, moved?.hostAuditLine), ('srv-2', false));
+      gate.complete();
+      await pumpEventQueue();
+      expect(saved.last.servers, isEmpty);
+
+      await safety.setServerSafety('srv-1', const ServerSafety());
+      final (_, turnedOn) = prefs.writes.last;
+      expect(turnedOn, isNull, reason: 'a record back at the defaults goes');
+      expect(safety.value.servers['srv-1'], isNull);
+    });
+
     test('a server that stops syncing keeps its switch and marks here', () {
       prefs
         ..syncing.add('srv-1')
@@ -246,12 +272,32 @@ void main() {
         'management': true,
         'readOnly': true,
         'marks': ['db-1', 'web-1'],
+        'hostAuditLine': true,
       });
       final back = decodeStoredSafety(json);
       expect(back.globalReadOnly, isTrue);
       expect(back.adminExpiry, const Duration(minutes: 30));
       expect(back.servers['srv-1']?.marks, {'web-1', 'db-1'});
       expect(back.servers['srv-1']?.readOnly, isTrue);
+    });
+
+    test('the syslog line switch is off only when stored as false '
+        '(SAF-13)', () {
+      final json = encodeStoredSafety(
+        const SafetyPolicy(
+          servers: {'srv-1': ServerSafety(hostAuditLine: false)},
+        ),
+      );
+      expect(decodeStoredSafety(json).servers['srv-1']?.hostAuditLine, isFalse);
+
+      final older = decodeStoredSafety({
+        'servers': {
+          'srv-1': {'management': true},
+          'srv-2': {'management': true, 'hostAuditLine': 'no'},
+        },
+      });
+      expect(older.servers['srv-1']?.hostAuditLine, isTrue);
+      expect(older.servers['srv-2']?.hostAuditLine, isTrue);
     });
 
     test('anything unreadable reads as the safe default', () {
@@ -340,6 +386,28 @@ void main() {
       await safety.setGlobalReadOnly(true);
       await tester.pumpAndSettle();
       expect(inHeader(find.text(_readOnly)), findsOneWidget);
+    });
+
+    testWidgets('the Safety menu turns the host syslog line off, keeping '
+        'the other switches (SAF-13)', (tester) async {
+      final safety = await openWeb1(
+        tester,
+        initial: const SafetyPolicy(
+          servers: {
+            'srv-1': ServerSafety(management: true, marks: {'db'}),
+          },
+        ),
+      );
+
+      await tester.tap(inHeader(find.byTooltip('Safety')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Log actions on the server'));
+      await tester.pumpAndSettle();
+
+      final changed = safety.value.servers['srv-1']!;
+      expect(changed.hostAuditLine, isFalse);
+      expect(changed.management, isTrue);
+      expect(changed.marks, {'db'});
     });
 
     testWidgets('without safety preferences there is no Safety menu', (

@@ -27,8 +27,8 @@ abstract interface class SafetySettings
   /// Sets admin mode's inactivity expiry, one of [kAdminExpiryChoices].
   Future<void> setAdminExpiry(Duration expiry);
 
-  /// Replaces [serverId]'s preferences: management (SAF-01), read-only
-  /// and the user's marks (SAF-22).
+  /// Replaces [serverId]'s preferences: management (SAF-01), read-only,
+  /// the user's marks (SAF-22) and the host syslog line (SAF-13).
   Future<void> setServerSafety(String serverId, ServerSafety safety);
 }
 
@@ -45,8 +45,9 @@ final class SafetyNotSavedException implements Exception {
 }
 
 /// The synced side of the safety preferences (03 §4.8, M5 plan M06):
-/// which servers keep their read-only switch and marks in their `pref`
-/// record, what the records hold, and the write that changes one.
+/// which servers keep their read-only switch, marks and syslog line switch
+/// in their `pref` record, what the records hold, and the write that
+/// changes one.
 abstract interface class ServerPrefsSource implements Listenable {
   /// Whether [serverId]'s preferences sync: a synced server, not excluded.
   bool syncs(String serverId);
@@ -60,20 +61,23 @@ abstract interface class ServerPrefsSource implements Listenable {
 }
 
 /// The app's safety concern (03 §10.1): this device's safety preferences,
-/// which `settings.json` keeps, and the synced servers' read-only switches
-/// and marks, which their `pref` records keep ([ServerPrefsSource], M5
-/// plan M06); management, global read-only and the admin expiry stay on
-/// this device. The engine enforces the two merged ([value]). Each change
-/// goes to the engine through [apply] before it is saved, as the
-/// appearance repaints before it is saved, so the engine never enforces
-/// less than the screen shows; the composition root also applies the
-/// restored policy once at spawn, since the engine starts observe-only.
+/// which `settings.json` keeps, and the synced servers' read-only switches,
+/// marks and syslog line switches, which their `pref` records keep
+/// ([ServerPrefsSource], M5 plan M06, M19); management, global read-only
+/// and the admin expiry stay on this device. The engine enforces the two
+/// merged ([value]). Each change goes to the engine through [apply]
+/// before it is saved, as the appearance repaints before it is saved, so
+/// the engine never enforces less than the screen shows; the composition
+/// root also applies the restored policy once at spawn, since the engine
+/// starts observe-only.
 ///
-/// A syncing server's read-only switch or marks still stored on this
-/// device, from before M06 or from before its server synced, move to its
-/// `pref` record once, merged with what the record holds; until then they
-/// count beside it. A server that stops syncing keeps what its record
-/// held, on this device.
+/// A syncing server's read-only switch, marks or syslog line switch still
+/// stored on this device, from before M06 or from before its server
+/// synced, move to its `pref` record once, merged with what the record
+/// holds; until then they count beside it. Merged, a read-only switch on
+/// and a syslog line off win, each being the user's choice against the
+/// default. A server that stops syncing keeps what its record held, on
+/// this device.
 final class SafetyController extends ChangeNotifier implements SafetySettings {
   SafetyController({
     SafetyPolicy initial = const SafetyPolicy(),
@@ -154,6 +158,7 @@ final class SafetyController extends ChangeNotifier implements SafetySettings {
     final next = (base ?? const ServerPrefs()).copyWith(
       readOnly: safety.readOnly,
       marks: safety.marks,
+      hostAuditLine: safety.hostAuditLine,
     );
     _pending[serverId] = _isDefault(next) ? null : next;
     final local = _local.servers[serverId];
@@ -162,10 +167,8 @@ final class SafetyController extends ChangeNotifier implements SafetySettings {
         : _change(
             _withLocal(
               serverId,
-              ServerSafety(
+              (local ?? const ServerSafety()).copyWith(
                 management: safety.management,
-                readOnly: local?.readOnly ?? false,
-                marks: local?.marks ?? const {},
               ),
             ),
           );
@@ -220,6 +223,8 @@ final class SafetyController extends ChangeNotifier implements SafetySettings {
         management: local?.management ?? false,
         readOnly: (synced?.readOnly ?? false) || (stored?.readOnly ?? false),
         marks: Set.unmodifiable({...?synced?.marks, ...?stored?.marks}),
+        hostAuditLine:
+            (synced?.hostAuditLine ?? true) && (stored?.hostAuditLine ?? true),
       );
       if (_isDefaultSafety(safety)) {
         servers.remove(id);
@@ -253,7 +258,14 @@ final class SafetyController extends ChangeNotifier implements SafetySettings {
     final prefs = _prefs!;
     var kept = false;
     for (final MapEntry(key: id, value: synced) in prefs.prefs.entries) {
-      if (prefs.syncs(id) || (!synced.readOnly && synced.marks.isEmpty)) {
+      if (prefs.syncs(id) ||
+          !_holdsSynced(
+            ServerSafety(
+              readOnly: synced.readOnly,
+              marks: synced.marks,
+              hostAuditLine: synced.hostAuditLine,
+            ),
+          )) {
         continue;
       }
       final stored = _local.servers[id];
@@ -261,9 +273,11 @@ final class SafetyController extends ChangeNotifier implements SafetySettings {
         management: stored?.management ?? false,
         readOnly: synced.readOnly || (stored?.readOnly ?? false),
         marks: Set.unmodifiable({...synced.marks, ...?stored?.marks}),
+        hostAuditLine: synced.hostAuditLine && (stored?.hostAuditLine ?? true),
       );
       if (stored?.readOnly == safety.readOnly &&
-          setEquals(stored?.marks, safety.marks)) {
+          setEquals(stored?.marks, safety.marks) &&
+          stored?.hostAuditLine == safety.hostAuditLine) {
         continue;
       }
       _local = _withLocal(id, safety);
@@ -273,7 +287,7 @@ final class SafetyController extends ChangeNotifier implements SafetySettings {
     if (kept) _persistQuietly();
   }
 
-  /// Moves each syncing server's stored switch and marks into its record,
+  /// Moves each syncing server's stored switches and marks into its record,
   /// once, merged with what the record holds. One that is refused stays
   /// stored, counted beside the record, and is tried again on the next
   /// change.
@@ -284,13 +298,14 @@ final class SafetyController extends ChangeNotifier implements SafetySettings {
       if (!prefs.syncs(id) ||
           _migrating.contains(id) ||
           _pending.containsKey(id) ||
-          (!stored.readOnly && stored.marks.isEmpty)) {
+          !_holdsSynced(stored)) {
         continue;
       }
       final base = prefs.prefs[id] ?? const ServerPrefs();
       final merged = base.copyWith(
         readOnly: base.readOnly || stored.readOnly,
         marks: {...base.marks, ...stored.marks},
+        hostAuditLine: base.hostAuditLine && stored.hostAuditLine,
       );
       _migrating.add(id);
       unawaited(_moveToRecord(id, merged));
@@ -308,11 +323,11 @@ final class SafetyController extends ChangeNotifier implements SafetySettings {
     }
   }
 
-  /// Drops [serverId]'s stored switch and marks, which its record now
+  /// Drops [serverId]'s stored switches and marks, which its record now
   /// holds, keeping management.
   Future<void> _forgetStored(String serverId) async {
     final stored = _local.servers[serverId];
-    if (stored == null || (!stored.readOnly && stored.marks.isEmpty)) return;
+    if (stored == null || !_holdsSynced(stored)) return;
     _local = _withLocal(serverId, ServerSafety(management: stored.management));
     _refresh();
     await _persist();
@@ -340,7 +355,12 @@ final class SafetyController extends ChangeNotifier implements SafetySettings {
   }
 
   static bool _isDefaultSafety(ServerSafety safety) =>
-      !safety.management && !safety.readOnly && safety.marks.isEmpty;
+      !safety.management && !_holdsSynced(safety);
+
+  /// Whether [safety] holds anything a synced server keeps in its record:
+  /// a field away from its default.
+  static bool _holdsSynced(ServerSafety safety) =>
+      safety.readOnly || safety.marks.isNotEmpty || !safety.hostAuditLine;
 
   /// Whether [prefs] says nothing a missing record does not.
   static bool _isDefault(ServerPrefs prefs) =>

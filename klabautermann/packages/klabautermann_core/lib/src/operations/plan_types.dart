@@ -7,7 +7,7 @@ import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
 import 'package:meta/meta.dart';
 import 'package:seance_core/seance_core.dart' show quoteShellWord;
 
-import '../engine/protocol.dart' show RevalidationFailure;
+import '../engine/protocol.dart' show ActionFinished, RevalidationFailure;
 
 /// One step a plan runs: an exact shell command or an exact Docker API
 /// request. The preview renders these and the runner executes these; no
@@ -28,6 +28,7 @@ final class ShellStep extends PlanStep {
     Iterable<String> argv, {
     this.elevated = false,
     this.discardOutput = false,
+    this.bestEffort = false,
     Map<int, RevalidationFailure> exitMeanings = const {},
   }) : argv = List.unmodifiable(argv),
        exitMeanings = Map.unmodifiable(exitMeanings),
@@ -44,6 +45,11 @@ final class ShellStep extends PlanStep {
 
   /// The step runs through the elevation prelude (8.3).
   final bool elevated;
+
+  /// The step's failure leaves the run as it was: the runner records it
+  /// in [ActionFinished.skippedSteps] and goes on. Only the host syslog
+  /// line is one (SAF-13).
+  final bool bestEffort;
 
   /// Exit statuses by which the step itself reports that its target
   /// changed, such as the guarded kill's 4 for a reused PID: the run then
@@ -97,6 +103,10 @@ enum HostWriteRow {
 
   /// wtmp, lastlog and the auth log, from the SSH connection itself.
   loginRecords,
+
+  /// The `logger -t klabautermann` line in the host's journal or syslog
+  /// after each run (SAF-13, v1).
+  auditSyslog,
 }
 
 /// How the steps reach their target.

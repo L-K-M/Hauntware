@@ -3,11 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart' show showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show
-        MonitorEligibility,
-        ServerSafety,
-        kAdminExpiryChoices,
-        kMonitorSetLimit;
+    show MonitorEligibility, kAdminExpiryChoices, kMonitorSetLimit;
 
 import '../controllers/announcement_controller.dart';
 import '../controllers/appearance_controller.dart';
@@ -449,11 +445,7 @@ class SafetyTab extends StatelessWidget {
                       context,
                       () => safety.setServerSafety(
                         serverId,
-                        ServerSafety(
-                          management: server.management,
-                          readOnly: server.readOnly,
-                          marks: {...server.marks}..remove(mark),
-                        ),
+                        server.copyWith(marks: {...server.marks}..remove(mark)),
                       ),
                     ),
                   ),
