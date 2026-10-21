@@ -10,8 +10,10 @@ const _rulesHeader = 'may run the following commands';
 /// sudo's answer for a user with no rule at all.
 const _noRules = 'is not allowed to run sudo';
 
-/// The tags before a rule's commands, such as `NOPASSWD:` or `SETENV:`.
-final _tags = RegExp(r'^(?:[A-Z_]+:\s*)+');
+/// The options and tags before a rule's commands, such as `CWD=/srv`,
+/// `TIMEOUT=5m`, `NOPASSWD:` or `SETENV:`; `sudo -l` lists the options
+/// first (sudoers(5), "Cmnd_Spec").
+final _tags = RegExp(r'^(?:[A-Z_]+(?::|=\S*)\s*)+');
 
 /// A comma between commands; sudoers escapes one inside a command.
 final _commandSeparator = RegExp(r'(?<!\\),');
@@ -104,24 +106,42 @@ bool? sudoListAllows(String output, String program) {
   final negate = i < pattern.length && (pattern[i] == '!' || pattern[i] == '^');
   if (negate) i++;
 
-  final members = StringBuffer();
+  // Each member as its literal character; a range joins two of them.
+  final members = <String>[];
   // A `]` first in the set is a member, not its end.
   if (i < pattern.length && pattern[i] == ']') {
-    members.write(r'\]');
+    members.add(']');
     i++;
   }
+  final ranges = StringBuffer();
   for (; i < pattern.length; i++) {
     final c = pattern[i];
     if (c == ']') {
-      return (regex: '[${negate ? '^' : ''}$members]', end: i);
+      final set = '${members.map(_classLiteral).join()}$ranges';
+      // A set left with no members, such as `[z-a]`, matches nothing.
+      final regex = set.isEmpty
+          ? (negate ? '[^]' : '[]')
+          : '[${negate ? '^' : ''}$set]';
+      return (regex: regex, end: i);
     }
-    if (c == r'\' && i + 1 < pattern.length) {
-      members.write(_classLiteral(pattern[++i]));
-    } else if (c == r'\' || c == '^' || c == '[') {
-      members.write(_classLiteral(c));
-    } else {
-      members.write(c);
+    // A `-` between two members makes a range; first or last in the set,
+    // it is a member.
+    final range =
+        c == '-' &&
+        members.isNotEmpty &&
+        i + 1 < pattern.length &&
+        pattern[i + 1] != ']';
+    if (range) {
+      final first = members.removeLast();
+      var last = pattern[++i];
+      if (last == r'\' && i + 1 < pattern.length) last = pattern[++i];
+      // fnmatch(3) reads a reversed range as empty; a regex rejects it.
+      if (first.compareTo(last) <= 0) {
+        ranges.write('${_classLiteral(first)}-${_classLiteral(last)}');
+      }
+      continue;
     }
+    members.add(c == r'\' && i + 1 < pattern.length ? pattern[++i] : c);
   }
   return null;
 }

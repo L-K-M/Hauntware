@@ -95,6 +95,19 @@ void main() {
       },
     );
 
+    test('a time in the first millisecond keeps its microseconds', () {
+      final precise = DateTime.utc(2026, 10, 20, 16, 30, 0, 0, 500);
+      final line = CrontabDocument.parse(
+        _crontab,
+      ).pause(5, at: precise).lines[5];
+
+      expect(
+        line.text,
+        startsWith('# klabautermann:paused 2026-10-20T16:30:00.000500Z '),
+      );
+      expect(line.pausedAt, precise);
+    });
+
     test('both are idempotent', () {
       final paused = CrontabDocument.parse(_crontab).pause(4, at: at);
       expect(
