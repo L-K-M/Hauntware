@@ -110,6 +110,103 @@ void main() {
     );
   });
 
+  test('a negated glob that matches the program denies it', () {
+    for (final negated in [
+      '!/usr/bin/systemd-run*',
+      '!/usr/bin/systemd-?un',
+      '!/usr/bin/systemd-[rx]un',
+      '!/usr/bin/*',
+      '!/usr/*/systemd-run',
+    ]) {
+      expect(
+        sudoListAllows(_listing(['(ALL) ALL, $negated']), 'systemd-run'),
+        isFalse,
+        reason: negated,
+      );
+    }
+    expect(
+      sudoListAllows(_listing(['(ALL) ALL, !/usr/bin/su*']), 'systemd-run'),
+      isTrue,
+    );
+    expect(
+      sudoListAllows(_listing(['(ALL) ALL, !/usr/bin/[!s]*']), 'systemd-run'),
+      isTrue,
+    );
+  });
+
+  test("a bracket's leading ], ^ negation and escapes read as fnmatch "
+      'reads them', () {
+    bool allows(String negated) =>
+        sudoListAllows(_listing(['(ALL) ALL, $negated']), 'systemd-run')!;
+
+    // `[!]]` is "anything but ]", which `s` is.
+    expect(allows('!/usr/bin/[!]]ystemd-run'), isFalse);
+    expect(allows('!/usr/bin/[^x]ystemd-run'), isFalse);
+    // `[]s]` holds `]` and `s`.
+    expect(allows('!/usr/bin/[]s]ystemd-run'), isFalse);
+    // `[\d]` is the letter d, not a digit class.
+    expect(allows(r'!/usr/bin/systemd-run[\d]'), isTrue);
+    // An escaped `*` is a literal star, which the name lacks.
+    expect(allows(r'!/usr/bin/systemd-run\*'), isTrue);
+    // A bracket that never closes is a literal `[`.
+    expect(allows('!/usr/bin/systemd-run[*'), isTrue);
+  });
+
+  test('a negated directory denies every program in it', () {
+    expect(
+      sudoListAllows(_listing(['(ALL) ALL, !/usr/bin/']), 'systemd-run'),
+      isFalse,
+    );
+    expect(
+      sudoListAllows(_listing(['(root) /usr/bin/']), 'systemd-run'),
+      isFalse,
+      reason:
+          'a directory never allows, since the program may live '
+          'elsewhere',
+    );
+  });
+
+  test('a later allow wins over an earlier negated glob', () {
+    expect(
+      sudoListAllows(
+        _listing([
+          '(ALL) ALL, !/usr/bin/systemd-*',
+          '(root) /usr/bin/systemd-run',
+        ]),
+        'systemd-run',
+      ),
+      isTrue,
+    );
+  });
+
+  test('a glob that would allow the program does not count', () {
+    // Only the base name is known, not where the program lives, so a
+    // glob allows nothing; sudo would refuse a runner it does not cover.
+    expect(
+      sudoListAllows(_listing(['(root) /usr/bin/systemd-*']), 'systemd-run'),
+      isFalse,
+    );
+  });
+
+  test("each command's own tags are read past", () {
+    expect(
+      sudoListAllows(
+        _listing([
+          '(root) NOPASSWD: /usr/bin/ls, NOEXEC: /usr/bin/systemd-run',
+        ]),
+        'systemd-run',
+      ),
+      isTrue,
+    );
+    expect(
+      sudoListAllows(
+        _listing(['(ALL) ALL, NOPASSWD: !/usr/bin/systemd-run']),
+        'systemd-run',
+      ),
+      isFalse,
+    );
+  });
+
   test('a user with no rule may run nothing', () {
     expect(
       sudoListAllows(
