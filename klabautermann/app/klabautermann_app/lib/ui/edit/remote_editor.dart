@@ -185,10 +185,11 @@ class _RemoteEditorState extends State<RemoteEditor> {
   /// Reads the target again. The server's text replaces the editor's
   /// unless [keepMine], which only moves the base under the user's text;
   /// a read that fails then says why in a toast and leaves the user's
-  /// text where it is, rather than trading it for the notice.
-  Future<void> _read({required bool keepMine}) async {
+  /// text where it is, rather than trading it for the notice. Answers
+  /// whether the read became the new base.
+  Future<bool> _read({required bool keepMine}) async {
     final operations = _operations;
-    if (operations == null) return;
+    if (operations == null) return false;
 
     final read = ++_reads;
     if (!keepMine) setState(() => _answer = null);
@@ -196,7 +197,7 @@ class _RemoteEditorState extends State<RemoteEditor> {
       widget.serverId,
       widget.target,
     );
-    if (!mounted || read != _reads) return;
+    if (!mounted || read != _reads) return false;
 
     if (answer is EditReadFailed && keepMine && _editor != null) {
       showTopToast(
@@ -205,7 +206,7 @@ class _RemoteEditorState extends State<RemoteEditor> {
           context,
         ).editReadFailed(answer.failure.name),
       );
-      return;
+      return false;
     }
     setState(() {
       _answer = answer;
@@ -214,6 +215,7 @@ class _RemoteEditorState extends State<RemoteEditor> {
       if (!keepMine || _editor == null) _showText(answer.text);
       _dirty = _editor!.text.text != answer.text;
     });
+    return answer is EditContent;
   }
 
   /// Shows [text] in a new editor and lets the old one go once the frame
@@ -307,9 +309,7 @@ class _RemoteEditorState extends State<RemoteEditor> {
       case _ConflictChoice.compare:
         // A read that failed leaves the base the save was refused for, and
         // a review against it would only be refused again.
-        final refused = _base;
-        await _read(keepMine: true);
-        if (mounted && _dirty && !identical(_base, refused)) await _review();
+        if (await _read(keepMine: true) && mounted && _dirty) await _review();
     }
   }
 

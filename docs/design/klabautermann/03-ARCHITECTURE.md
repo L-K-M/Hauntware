@@ -4658,7 +4658,9 @@ not block, since the host's own checks run at planning. Saving plans an
 as every action. A plan refused as `targetChanged`, or a run that ends
 with `contentChanged`, opens the conflict sheet. "Reload and compare"
 reads the server's text as the new base, keeps the user's and opens the
-review again; "Discard mine" takes the server's. A finished save reads
+review again; a reload that fails says why and opens nothing, since a
+review against the refused base would be refused again. "Discard mine"
+takes the server's. A finished save reads
 the target again for its new base. The stack file view and the Jobs
 tab, for the login user's crontab, open it through the `fileEdit`
 entry point. The text lives only in the editor's state.
