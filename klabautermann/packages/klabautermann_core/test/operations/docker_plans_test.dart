@@ -442,6 +442,35 @@ void main() {
       },
     );
 
+    test('one service acts on its own containers alone (STK-23)', () async {
+      final engine = shop();
+      final restart = _planned(
+        await _plan(
+          const StackAction(
+            _server,
+            project: 'shop',
+            verb: StackVerb.restart,
+            service: 'db',
+          ),
+          engine,
+        ),
+      );
+      expect(targets(restart, engine), ['shop-db-1']);
+      expect(restart.kind, OperationKind.stackRestart);
+      expect(restart.targetName, 'shop/db');
+
+      final missing = await _plan(
+        const StackAction(
+          _server,
+          project: 'shop',
+          verb: StackVerb.stop,
+          service: 'mail',
+        ),
+        engine,
+      );
+      expect(missing.refusal, ActionRefusalReason.invalidTarget);
+    });
+
     test('a dependency cycle is refused', () async {
       final attempt = await _plan(
         const StackAction(_server, project: 'shop', verb: StackVerb.restart),

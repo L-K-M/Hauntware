@@ -899,7 +899,10 @@ class SyncCoordinator {
             }
             if (status.updatedAt < _statusCutoff()) continue;
             await store.putStatus(status);
+          // Poltergeist's bookmarks and Klabautermann's settings belong to
+          // the sibling apps: kept as pulled, never applied or rewritten.
           case RecordKind.bookmark:
+          case RecordKind.klabautermann:
           case RecordKind.unknown:
             continue;
         }

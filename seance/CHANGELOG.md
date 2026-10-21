@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Séance recognises the settings Klabautermann will sync to the same
+  account and leaves them alone: it never applies, rewrites or deletes
+  them, and names one as a "Klabautermann setting" if the server ever
+  refuses it as too large.
 - A host key pulled through sync no longer replaces a different key
   this device already trusts for the same address. Sync keeps your key,
   and Settings ▸ Sync shows both fingerprints with **Keep this device's
