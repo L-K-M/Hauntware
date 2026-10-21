@@ -3946,11 +3946,11 @@ abstract class AppLocalizations {
   /// **'Your encryption passphrase opens the records of every app on this account, Séance and Poltergeist included.'**
   String get syncDisclosureAccountKey;
 
-  /// Disclosure on the sign-in's second step: the app is pull-only and writes nothing to the account.
+  /// Disclosure on the sign-in's second step: what the app writes to the account, and what it does not.
   ///
   /// In en, this message translates to:
-  /// **'Klabautermann only reads this account. It publishes nothing: no servers, host keys or passwords.'**
-  String get syncDisclosurePullOnly;
+  /// **'Klabautermann keeps its own settings in this account: each server\'s read-only switch and marks. It publishes no servers, host keys or passwords.'**
+  String get syncDisclosure;
 
   /// The button that sends the sign-in, enabled once the fleet assertion is ticked.
   ///

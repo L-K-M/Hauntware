@@ -2975,8 +2975,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'Your encryption passphrase opens the records of every app on this account, Séance and Poltergeist included.';
 
   @override
-  String get syncDisclosurePullOnly =>
-      'Klabautermann only reads this account. It publishes nothing: no servers, host keys or passwords.';
+  String get syncDisclosure =>
+      'Klabautermann keeps its own settings in this account: each server\'s read-only switch and marks. It publishes no servers, host keys or passwords.';
 
   @override
   String get syncSignInAction => 'Sign in';

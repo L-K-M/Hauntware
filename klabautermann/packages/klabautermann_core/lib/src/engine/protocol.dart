@@ -1025,6 +1025,18 @@ final class ServerPrefs {
 
   /// Absolute directories the stack scan looks in (STK-01).
   final List<String> stackScanDirs;
+
+  /// These preferences with the safety fields replaced (M5 plan M06).
+  ServerPrefs copyWith({bool? readOnly, Set<String>? marks}) => ServerPrefs(
+    readOnly: readOnly ?? this.readOnly,
+    cadence: cadence,
+    pinnedUnits: pinnedUnits,
+    pinnedContainers: pinnedContainers,
+    marks: marks ?? this.marks,
+    panelOrder: panelOrder,
+    hostAuditLine: hostAuditLine,
+    stackScanDirs: stackScanDirs,
+  );
 }
 
 /// The synced preferences of the fleet server [serverId] changed (03
@@ -2047,6 +2059,7 @@ final class FleetEntry {
     this.searchText,
     this.locatorConflict,
     this.endpoint,
+    this.excludedFromSync = false,
   });
 
   /// The id every per-server request carries: a synced record's bare
@@ -2101,6 +2114,10 @@ final class FleetEntry {
   /// imported it.
   final EndpointConfirmation? endpoint;
 
+  /// Whether a synced server stays on this device only, so its
+  /// preferences do not sync (03 §4.8); false for an import.
+  final bool excludedFromSync;
+
   // By value: every CatalogReplaced copies its entries across the isolate
   // boundary, so identity would make an unchanged entry look changed.
   @override
@@ -2117,7 +2134,8 @@ final class FleetEntry {
       authKind == other.authKind &&
       searchText == other.searchText &&
       _sameItems(locatorConflict, other.locatorConflict) &&
-      endpoint == other.endpoint;
+      endpoint == other.endpoint &&
+      excludedFromSync == other.excludedFromSync;
 
   @override
   int get hashCode => Object.hash(
@@ -2133,6 +2151,7 @@ final class FleetEntry {
     searchText,
     locatorConflict == null ? null : Object.hashAll(locatorConflict!),
     endpoint,
+    excludedFromSync,
   );
 }
 

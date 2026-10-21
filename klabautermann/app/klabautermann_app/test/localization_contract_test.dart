@@ -77,6 +77,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // print it and show their own ARB text (settingsSafetyNotSaved).
   'lib/controllers/safety_controller.dart': {
     r"'The safety settings were not saved: $error'",
+    // A migration the engine refused, printed; it is tried again.
+    r"'Safety preferences of $serverId stay on this device: $error'",
+  },
+  // A pref write's request id, never shown, and its refusal's diagnostic.
+  'lib/controllers/server_prefs_controller.dart': {
+    r"'prefs-${_count++}'",
+    r"'ServerPrefsNotSavedException: $failure, $detail'",
   },
   // The not-saved diagnostic; the Sync tab prints it and shows its own
   // ARB text (settingsSyncSecretsNotSaved).

@@ -18,10 +18,12 @@ enum _ServerKey { management, readOnly, marks }
 
 /// The app's safety preferences over [settings], applied to [engine] at
 /// once and on every change, and saved on every change.
+/// [prefs] carries the synced servers' switches and marks (M5 plan M06).
 SafetyController safetyFromSettings(
   DeviceSettingsStore settings,
   EngineClient engine, {
   String Function(String serverId)? labelOf,
+  ServerPrefsSource? prefs,
 }) => SafetyController(
   initial: decodeStoredSafety(settings.safety),
   apply: (policy) {
@@ -34,6 +36,7 @@ SafetyController safetyFromSettings(
   },
   labelOf: labelOf,
   save: (policy) => settings.setSafety(encodeStoredSafety(policy)),
+  prefs: prefs,
 );
 
 /// The policy [json] holds, leniently: anything unreadable reads as the
