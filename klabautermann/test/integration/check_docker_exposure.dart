@@ -14,7 +14,11 @@
 // - a registry service that publishes a port or leaves the default
 //   Compose network: the fixture's registry speaks plain HTTP and serves
 //   that network only (M4 E27), and dind may trust no other registry over
-//   plain HTTP.
+//   plain HTTP;
+// - a sync service (M5 plan M08a) that publishes anything but its one
+//   port on loopback, mounts a volume, or keeps its storage on disk: it
+//   is Séance's sync server with open registration, for the fixture's
+//   convergence suite only.
 import 'dart:convert';
 import 'dart:io';
 
@@ -36,6 +40,11 @@ const _rootlessSocketRoots = ['/var/run/user', '/run/user'];
 const _socketName = 'docker.sock';
 const _dindService = 'dind';
 const _registryService = 'registry';
+const _syncService = 'sync';
+
+/// The port the sync server listens on in its container.
+const _syncPort = 8787;
+const _loopback = '127.0.0.1';
 
 /// The one registry dind may reach over plain HTTP: the fixture's, by its
 /// Compose service name.
@@ -73,6 +82,7 @@ List<String> findDockerExposureErrors(Map<String, Object?> config) {
     if (name == _registryService || _isRegistryImage('${value['image']}')) {
       errors.addAll(_registryErrors(name, value));
     }
+    if (name == _syncService) errors.addAll(_syncErrors(name, value));
   }
   return errors;
 }
@@ -269,4 +279,24 @@ Future<void> main() async {
     stderr.writeln('unsafe Compose config: $error');
   }
   exitCode = 1;
+}
+
+Iterable<String> _syncErrors(String name, Map<Object?, Object?> service) sync* {
+  final ports = service['ports'];
+  for (final port in ports is List ? ports : const []) {
+    if (port is! Map) continue;
+    if ('${port['target']}' != '$_syncPort') {
+      yield '$name publishes container port ${port['target']}';
+    }
+    if (port['host_ip'] != _loopback) {
+      yield '$name publishes beyond loopback';
+    }
+  }
+  final volumes = service['volumes'];
+  if (volumes is List && volumes.isNotEmpty) yield '$name mounts a volume';
+  final environment = service['environment'];
+  if (environment is Map &&
+      '${environment['SEANCE_DB_PATH'] ?? ''}'.isNotEmpty) {
+    yield '$name keeps its storage on disk';
+  }
 }

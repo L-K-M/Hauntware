@@ -1857,6 +1857,15 @@ is on main:
   ghost_theme's shared editor (presets, mode, colours, font, corners,
   copy, paste and reset), in the app and in the desktop settings window,
   in Klabautermann's words.
+- Sync convergence (M5 M08a): the fixture runs Séance's sync server as
+  a `sync` service, in memory with open registration and published on
+  loopback only, and `sync_convergence_test.dart` signs a Séance
+  `SyncCoordinator` and the engine's sync into one account on it. Server
+  edits, deletes and exclusions converge both ways; Klabautermann's
+  `pref` and `rule` records reach Séance, which neither applies nor
+  re-pushes them; an unsealed forged tombstone is ignored and a sealed
+  removal applied (X3); a first-seen pin installs on Séance and a
+  conflicting one is reported and left out (X4).
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container

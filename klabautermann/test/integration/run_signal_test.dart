@@ -27,7 +27,8 @@ const _lockLine = "readonly lock_file='/tmp/klabautermann-fixture.lock'";
 /// `--tags inventory`, `dart test` plays the inventory session and exits
 /// at once with `$STUB_INVENTORY_EXIT` (default 0); `dart run` of
 /// inventory.dart plays its check, exiting with
-/// `$STUB_INVENTORY_CHECK_EXIT` (default 0).
+/// `$STUB_INVENTORY_CHECK_EXIT` (default 0). `curl` plays the sync
+/// service answering its readiness probe.
 const _stubs = {
   'docker': r'''
 echo "docker $*" >>"$STUB_LOG"
@@ -48,6 +49,10 @@ echo "ssh-agent $*" >>"$STUB_LOG"
 if [[ "$1" == -s ]]; then echo 'SSH_AGENT_PID=0; export SSH_AGENT_PID;'; fi
 ''',
   'ssh-add': '',
+  'curl': r'''
+echo "curl $*" >>"$STUB_LOG"
+echo 404
+''',
   'ssh': r'''
 echo "ssh $*" >>"$STUB_LOG"
 cat >/dev/null
