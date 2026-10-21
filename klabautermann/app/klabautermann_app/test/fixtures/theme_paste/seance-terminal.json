@@ -1,0 +1,40 @@
+{
+  "name": "Terminal",
+  "accent": "#33FF73",
+  "surface": "#050D08",
+  "sidebar": "#030805",
+  "raised": "#0A1A10",
+  "text": "#C7FFD1",
+  "secondaryText": "#6BBD80",
+  "hairline": "#1A4D2B",
+  "selection": "#1F7A3D",
+  "online": "#33FF73",
+  "offline": "#FF4747",
+  "connecting": "#FFDB33",
+  "unknown": "#73B8D9",
+  "terminal": {
+    "background": "#050D08",
+    "foreground": "#4DFF88",
+    "cursor": "#33FF73",
+    "selection": "#33FF7340",
+    "ansi": [
+      "#0A1A10",
+      "#FF6E5E",
+      "#33FF73",
+      "#D7FF5C",
+      "#4DC3FF",
+      "#E07CFF",
+      "#3DFFD8",
+      "#C7FFD1",
+      "#2E6B40",
+      "#FF9488",
+      "#80FFA8",
+      "#E6FF99",
+      "#8AD8FF",
+      "#EBA8FF",
+      "#8AFFE6",
+      "#EFFFF2"
+    ]
+  },
+  "cornerScale": 0.0
+}

@@ -12,7 +12,6 @@ import 'package:seance_core/catalog.dart'
         CatalogMode,
         ConflictAwareHostKeyStore,
         FileServerConfigStore,
-        FileVaultStore,
         HostKeyMutationGate,
         KdfDowngradeException,
         PersistentLocalRecordStore,
@@ -28,6 +27,7 @@ import 'package:seance_core/seance_core.dart'
         ApiError,
         HttpSyncClient,
         RecordCodec,
+        SecretVault,
         ServerConfig,
         SyncEnrollmentMode,
         validateSyncEnrollment;
@@ -35,6 +35,7 @@ import 'package:seance_core/seance_core.dart'
 import '../engine/protocol.dart';
 import 'klabautermann_records.dart';
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
+import 'engine_vault.dart';
 import 'keystore_channel.dart';
 import 'sync_credentials.dart';
 import 'sync_enrollment_file.dart';
@@ -48,10 +49,10 @@ const PushPolicy engineSyncPushPolicy = PushPolicy.none;
 
 /// The catalog library's files under the support directory (03 §4.10).
 /// `host_keys.json` is not among them: the engine opens its one host-key
-/// store with `openHostKeyPins` and hands it in (D61, D63).
+/// store with `openHostKeyPins` and hands it in (D61, D63), and
+/// `vault.json` is [EngineVault]'s.
 const String _syncRecordsFileName = 'sync_records.json';
 const String _serversFileName = 'servers.json';
-const String _vaultFileName = 'vault.json';
 
 /// The sync server as enrollment and rounds reach it: the shared
 /// `SyncEnrollmentApi` seam, which the app owns (catalog-library.md
@@ -95,16 +96,16 @@ final class EngineSync {
     required this._tripwires,
     required this._hostKeys,
     required this._keystore,
+    required this._vault,
     required this._transport,
-    required this._path,
+    required String Function(String name) path,
     required this._account,
     required this._klabautermannRecords,
-  }) : _records = PersistentLocalRecordStore(path: _path(_syncRecordsFileName)),
+  }) : _records = PersistentLocalRecordStore(path: path(_syncRecordsFileName)),
        _servers = FileServerConfigStore(
-         path: _path(_serversFileName),
+         path: path(_serversFileName),
          syncDeviceId: () => _deviceId,
-       ),
-       _vault = FileVaultStore(File(_path(_vaultFileName))) {
+       ) {
     _handler = KlabautermannRecordHandler(
       store: _klabautermannRecords,
       servers: _servers,
@@ -115,14 +116,15 @@ final class EngineSync {
   /// library's files is read before an operation needs it). [deviceId] is
   /// `settings.json`'s; without one, enrollment state is not opened and
   /// every operation is refused. [hostKeys] is the engine's one host-key
-  /// store, which its links share, and [keystore] the app's
-  /// keystore. Never throws.
+  /// store, which its links share, [keystore] the app's keystore, and
+  /// [vault] the engine's one vault over `vault.json`. Never throws.
   static Future<EngineSync> open({
     required Directory supportDirectory,
     required SupportDirectoryAccess access,
     required String? deviceId,
     required ConflictAwareHostKeyStore hostKeys,
     required SyncKeystore keystore,
+    required EngineVault vault,
     SyncTransportFactory transport = httpSyncTransport,
   }) async {
     final usableId = deviceId == null || deviceId.isEmpty ? null : deviceId;
@@ -148,6 +150,7 @@ final class EngineSync {
       ),
       hostKeys: hostKeys,
       keystore: keystore,
+      vault: vault,
       transport: transport,
       path: (name) => '${supportDirectory.path}${Platform.pathSeparator}$name',
       account: _info(account),
@@ -170,14 +173,41 @@ final class EngineSync {
   final ConflictAwareHostKeyStore _hostKeys;
   final SyncKeystore _keystore;
   final SyncTransportFactory _transport;
-  final String Function(String name) _path;
   final PersistentLocalRecordStore _records;
   final FileServerConfigStore _servers;
-  final FileVaultStore _vault;
+  final EngineVault _vault;
   final KlabautermannRecordStore _klabautermannRecords;
   late final KlabautermannRecordHandler _handler;
   final HostKeyMutationGate _hostKeyMutations = HostKeyMutationGate();
   SyncAccountInfo? _account;
+
+  /// The device's "sync passwords" switch (03 §4.5, SYN-02), which the
+  /// app keeps in `settings.json` as `klabautermann.sync.secrets` and
+  /// sends with [SetSyncSecrets]. Off until it says otherwise: while off,
+  /// a round applies no pulled `secret:` record.
+  bool get syncSecrets => _syncSecrets;
+  var _syncSecrets = false;
+
+  /// Sets [syncSecrets]. Turning it on applies the stored `secret:`
+  /// records rounds skipped while it was off, which no later pull
+  /// delivers again (`RecordCoordinator.catchUpSecrets`). Never throws: a
+  /// catch-up that fails, or finds no key, leaves them for the next
+  /// switch-on, which every engine start is.
+  Future<void> setSyncSecrets({required bool enabled}) async {
+    final turnedOn = enabled && !_syncSecrets;
+    _syncSecrets = enabled;
+    if (!turnedOn ||
+        _account == null ||
+        _refusal(SyncOperation.round) != null) {
+      return;
+    }
+    try {
+      final key = await _keystore.readMasterKey();
+      if (key != null) await _coordinator(key).catchUpSecrets();
+    } on Object {
+      // Left for the next switch-on, as documented above.
+    }
+  }
 
   /// The enrolled account, or null.
   SyncAccountInfo? get account => _account;
@@ -264,27 +294,29 @@ final class EngineSync {
       return _failedWith(operation, error);
     }
     try {
-      final credentials = KeystoreSyncCredentialStore(
-        keystore: _keystore,
-        // Nothing to re-seal without a vault file (K49a's contract): a
-        // first enrollment then installs the account key directly, where
-        // staging would need a master key no install has yet.
-        vaultJournal: await _vaultExists() ? _vault : null,
-      );
-      final result =
-          await SyncEnrollment(
-            credentials: credentials,
-            state: enrollment,
-            records: _records,
-            handlers: [_handler],
-          ).login(
-            api: api,
-            baseUrl: baseUrl,
-            username: username,
-            password: request.password,
-            encryptionPassphrase: request.encryptionPassphrase,
-            mode: SyncAccountMode.shared,
-          );
+      // No save runs between the look for a vault and the key's install.
+      final result = await _vault.exclusive(() async {
+        final credentials = KeystoreSyncCredentialStore(
+          keystore: _keystore,
+          // Nothing to re-seal without a vault file (K49a's contract): a
+          // first enrollment then installs the account key directly, where
+          // staging would need a master key no install has yet.
+          vaultJournal: await _vault.exists() ? _vault.store : null,
+        );
+        return SyncEnrollment(
+          credentials: credentials,
+          state: enrollment,
+          records: _records,
+          handlers: [_handler],
+        ).login(
+          api: api,
+          baseUrl: baseUrl,
+          username: username,
+          password: request.password,
+          encryptionPassphrase: request.encryptionPassphrase,
+          mode: SyncAccountMode.shared,
+        );
+      });
       _account = SyncAccountInfo(baseUrl: baseUrl, username: username);
       await _coordinator(result.vaultKey).applyPulled();
       return _status(
@@ -364,9 +396,9 @@ final class EngineSync {
   /// A pull-only, shared-mode coordinator over the account key [key]
   /// (03 §4.2, §4.4): it materializes pulled `serverConfig` records into
   /// `servers.json`, quarantines pulled pins against the engine's host-key
-  /// store, materializes `klabautermann:` records (4.8), and applies no
-  /// `secret:` record, since no vault and no `syncSecrets` switch is
-  /// wired yet (03 §4.5).
+  /// store, materializes `klabautermann:` records (4.8), and applies
+  /// pulled `secret:` records into the vault only while [syncSecrets] is
+  /// on (03 §4.5); the vault's key is the account key.
   RecordCoordinator _coordinator(List<int> key) => RecordCoordinator(
     records: _records,
     handlers: [_handler],
@@ -380,11 +412,9 @@ final class EngineSync {
     pushPolicy: engineSyncPushPolicy,
     servers: _servers,
     enrollment: _enrollment,
+    secrets: _syncSecrets ? SecretVault(_vault.store, key) : null,
+    syncSecrets: _syncSecrets,
   );
-
-  Future<bool> _vaultExists() async =>
-      await File(_path(_vaultFileName)).exists() ||
-      await File('${_path(_vaultFileName)}.rekey').exists();
 
   SyncStatus _status(
     SyncOperation operation,
