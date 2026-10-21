@@ -26,6 +26,7 @@ class TerminalGestureHandler extends StatefulWidget {
     this.onTertiaryTapDown,
     this.onTertiaryTapUp,
     this.onLongPressEnd,
+    this.claimPressForLink,
     this.readOnly = false,
   });
 
@@ -54,6 +55,11 @@ class TerminalGestureHandler extends StatefulWidget {
   /// [seance fork] A touch long-press (with or without a drag) has finished
   /// selecting.
   final GestureLongPressEndCallback? onLongPressEnd;
+
+  /// [seance fork] Asked as every primary press goes down, with its local
+  /// position and multi-click count: true claims the press for opening a
+  /// link, and it is then not reported to a mouse-reporting remote.
+  final bool Function(Offset localPosition, int tapCount)? claimPressForLink;
 
   final bool readOnly;
 
@@ -198,15 +204,22 @@ class _TerminalGestureHandlerState extends State<TerminalGestureHandler> {
   bool _leftDownSentToTerminal = false;
 
   void onTapDown(TapDownDetails details, int tapCount) {
-    _leftDownSentToTerminal = _shouldSendTapEvent;
+    // [seance fork] A press that opens a link is not reported: the remote
+    // must see neither its down nor its up.
+    final opensLink =
+        widget.claimPressForLink?.call(details.localPosition, tapCount) ??
+            false;
+    _leftDownSentToTerminal = _shouldSendTapEvent && !opensLink;
+    if (_leftDownSentToTerminal) {
+      renderTerminal.mouseEvent(
+        TerminalMouseButton.left,
+        TerminalMouseButtonState.down,
+        details.localPosition,
+      );
+    }
     // onTapDown is special, as it will always call the supplied callback.
     // The TerminalView depends on it to bring the terminal into focus.
-    _tapDown(
-      (details) => widget.onTapDown?.call(details, tapCount),
-      details,
-      TerminalMouseButton.left,
-      forceCallback: true,
-    );
+    widget.onTapDown?.call(details, tapCount);
   }
 
   /// [seance fork] Button-up used to be reported only for *single* taps

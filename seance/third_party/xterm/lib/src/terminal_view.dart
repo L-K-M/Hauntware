@@ -186,6 +186,11 @@ class TerminalViewState extends State<TerminalView> {
   String? _composingText;
 
   int _tapCount = 0;
+
+  /// [seance fork] Whether the press now down opens a link instead of
+  /// reaching a mouse-reporting remote; see [_claimPressForLink].
+  bool _pressOpensLink = false;
+
   Uri? _hoveredLink;
   bool _hoverInvalidationPending = false;
 
@@ -395,6 +400,7 @@ class TerminalViewState extends State<TerminalView> {
       onSecondaryTapUp:
           widget.onSecondaryTapUp != null ? _onSecondaryTapUp : null,
       onLongPressEnd: (_) => _onTouchSelectionEnd(),
+      claimPressForLink: _claimPressForLink,
       readOnly: widget.readOnly,
       child: child,
     );
@@ -438,9 +444,10 @@ class TerminalViewState extends State<TerminalView> {
     final offset = renderTerminal.getCellOffset(
       renderTerminal.globalToLocal(event.position),
     );
-    _setHoveredLink(_remoteOwnsTapAt(offset)
-        ? null
-        : widget.terminal.buffer.getLinkAt(offset));
+    _setHoveredLink(
+        _remoteOwnsTapAt(offset) && !_linkModifierOutranksRemote
+            ? null
+            : widget.terminal.buffer.getLinkAt(offset));
   }
 
   bool _remoteOwnsTapAt(CellOffset offset) =>
@@ -448,6 +455,39 @@ class TerminalViewState extends State<TerminalView> {
       _controller.shouldSendPointerInput(PointerInput.tap) &&
       widget.terminal.mouseMode != MouseMode.none &&
       offset.y >= widget.terminal.buffer.scrollBack;
+
+  bool get _isApplePlatform =>
+      defaultTargetPlatform == TargetPlatform.macOS ||
+      defaultTargetPlatform == TargetPlatform.iOS;
+
+  /// [seance fork] Cmd has no bit in the mouse protocol, so a remote that
+  /// reports clicks (tmux with `mouse on`, a TUI) would read a Cmd-click as a
+  /// plain one. On Apple platforms the link modifier outranks mouse reporting,
+  /// as in other macOS terminals. Ctrl, the link modifier elsewhere, is a
+  /// reportable modifier, so there the remote keeps the click.
+  bool get _linkModifierOutranksRemote {
+    final keys = HardwareKeyboard.instance;
+    return _isApplePlatform &&
+        keys.isMetaPressed &&
+        !keys.isShiftPressed &&
+        !keys.isAltPressed;
+  }
+
+  /// [seance fork] Decides, as a primary press goes down at [localPosition],
+  /// whether it opens a link instead of reaching a mouse-reporting remote.
+  /// The gesture handler asks before reporting the press, so a claimed press
+  /// reaches the remote neither down nor up, and the release honours the
+  /// same decision: Cmd pressed only after a reported press opens nothing.
+  bool _claimPressForLink(Offset localPosition, int tapCount) {
+    _pressOpensLink = widget.onLinkTap != null &&
+        tapCount == 1 &&
+        _linkModifierOutranksRemote &&
+        widget.terminal.buffer.getLinkAt(
+              renderTerminal.getCellOffset(localPosition),
+            ) !=
+            null;
+    return _pressOpensLink;
+  }
 
   void _invalidateLinkHover() {
     if (_hoveredLink == null || _hoverInvalidationPending) return;
@@ -469,12 +509,9 @@ class TerminalViewState extends State<TerminalView> {
   void _onTapUp(TapUpDetails details) {
     final offset = renderTerminal.getCellOffset(details.localPosition);
     final keys = HardwareKeyboard.instance;
-    final apple =
-        defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.iOS;
     final linkGesture =
         details.kind == PointerDeviceKind.touch ||
-        (apple ? keys.isMetaPressed : keys.isControlPressed);
+        (_isApplePlatform ? keys.isMetaPressed : keys.isControlPressed);
 
     // Click-only mouse reporting consumes DOWN but not UP. Keep that release
     // from opening a browser even when the gesture handler passes it through.
@@ -483,7 +520,7 @@ class TerminalViewState extends State<TerminalView> {
         linkGesture &&
         !keys.isShiftPressed &&
         !keys.isAltPressed &&
-        !_remoteOwnsTapAt(offset)) {
+        (_pressOpensLink || !_remoteOwnsTapAt(offset))) {
       final link = widget.terminal.buffer.getLinkAt(offset);
       if (link != null) widget.onLinkTap!(link);
     }
