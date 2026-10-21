@@ -766,6 +766,11 @@ jobs:
               - 'poltergeist/test/integration/check_config.dart'
               - 'poltergeist/test/integration/sshd-modern/Dockerfile'
               - 'poltergeist/test/integration/sshd-common/**'
+              # Séance's sync server, which the fixture's sync service
+              # builds from its Dockerfile in the Séance workspace.
+              - 'seance/packages/seance_sync_server/**'
+              - 'seance/pubspec.yaml'
+              - 'seance/pubspec.lock'
               - '.github/workflows/ci.yml'
       # Main pushes and dispatch always check; PRs when a path matches.
       - name: Find committed entry points
