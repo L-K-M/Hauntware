@@ -5088,6 +5088,8 @@ class AppLocalizationsEn extends AppLocalizations {
           'Only root can read this file. Turn on admin mode to edit it.',
       'tooLarge': 'This file is too large for the editor.',
       'notText': 'This file is not text.',
+      'stackUnverified':
+          'This stack\'s files are not its verified source, so Klabautermann does not edit them.',
       'failed': 'The file could not be read.',
       'other': 'The file could not be read.',
     });
@@ -5182,6 +5184,48 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get editDiffLabel => 'Changes to the file';
+
+  @override
+  String dockerStackServiceActions(String service) {
+    return 'Actions for $service';
+  }
+
+  @override
+  String get dockerStackServicePull => 'Pull image';
+
+  @override
+  String get dockerStackServiceRecreate => 'Recreate';
+
+  @override
+  String get dockerStackServiceScale => 'Scale';
+
+  @override
+  String dockerStackScaleTitle(String service) {
+    return 'Scale $service';
+  }
+
+  @override
+  String get dockerStackScaleLabel => 'Containers';
+
+  @override
+  String dockerStackScaleRange(int max) {
+    return 'Enter a number from 0 to $max.';
+  }
+
+  @override
+  String get dockerStackScaleCancel => 'Cancel';
+
+  @override
+  String get dockerStackDown => 'Down';
+
+  @override
+  String get dockerStackProfiles => 'Profiles';
+
+  @override
+  String get dockerStackProfilesReading => 'Reading…';
+
+  @override
+  String get dockerStackProfilesFailed => 'The profiles could not be listed.';
 
   @override
   String get dockerStackFileEdit => 'Edit';

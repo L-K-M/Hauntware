@@ -35,7 +35,7 @@ const Size _dialogSize = Size(960, 720);
 
 /// The path the editor highlights [target] as, and validates it by.
 String editTargetPath(EditTarget target) => switch (target) {
-  FileTarget(:final path) => path,
+  FileTarget(:final path) || StackFileTarget(:final path) => path,
   CrontabTarget() => 'crontab',
 };
 
@@ -109,7 +109,8 @@ Future<void> openRemoteEditor(
 }
 
 String _title(AppLocalizations l10n, EditTarget target) => switch (target) {
-  FileTarget(:final path) => l10n.editTitleFile(path.split('/').last),
+  FileTarget(:final path) ||
+  StackFileTarget(:final path) => l10n.editTitleFile(path.split('/').last),
   CrontabTarget(:final user?) => l10n.editTitleCrontab(user),
   CrontabTarget() => l10n.editTitleOwnCrontab,
 };
@@ -353,7 +354,7 @@ class _RemoteEditorState extends State<RemoteEditor> {
     final theme = Theme.of(context);
     final pathLine = Text(
       switch (widget.target) {
-        FileTarget(:final path) => path,
+        FileTarget(:final path) || StackFileTarget(:final path) => path,
         final target => _title(l10n, target),
       },
       style: theme.textTheme.bodySmall?.copyWith(

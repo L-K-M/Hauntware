@@ -31,6 +31,13 @@ enum ActionEntryPoint {
   /// A stack's pull and redeploy (STK-06).
   stackRedeploy,
 
+  /// One service's start, stop, restart, pull, recreate and scale
+  /// (STK-23).
+  stackService,
+
+  /// Taking a whole stack down, never with its volumes (STK-23).
+  stackDown,
+
   /// Editing a file or a crontab (SAF-12, X-05).
   fileEdit,
 }

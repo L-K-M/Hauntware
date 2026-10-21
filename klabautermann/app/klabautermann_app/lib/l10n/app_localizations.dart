@@ -6655,7 +6655,7 @@ abstract class AppLocalizations {
   /// Remote editor: why the engine read nothing. reason is the engine's EditReadFailure name.
   ///
   /// In en, this message translates to:
-  /// **'{reason, select, noLink{There is no connection to this server.} invalidTarget{Klabautermann does not edit this path.} notFound{There is no file at this path on the host.} adminRequired{Only root can read this file. Turn on admin mode to edit it.} tooLarge{This file is too large for the editor.} notText{This file is not text.} failed{The file could not be read.} other{The file could not be read.}}'**
+  /// **'{reason, select, noLink{There is no connection to this server.} invalidTarget{Klabautermann does not edit this path.} notFound{There is no file at this path on the host.} adminRequired{Only root can read this file. Turn on admin mode to edit it.} tooLarge{This file is too large for the editor.} notText{This file is not text.} stackUnverified{This stack\'s files are not its verified source, so Klabautermann does not edit them.} failed{The file could not be read.} other{The file could not be read.}}'**
   String editReadFailed(String reason);
 
   /// Remote editor: chip on a file only root may write; saving it runs through admin mode.
@@ -6765,6 +6765,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Changes to the file'**
   String get editDiffLabel;
+
+  /// Tooltip of a compose service's action menu on the stack overview (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Actions for {service}'**
+  String dockerStackServiceActions(String service);
+
+  /// Service menu item that pulls the service's image (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Pull image'**
+  String get dockerStackServicePull;
+
+  /// Service menu item that recreates the service's containers even when unchanged (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Recreate'**
+  String get dockerStackServiceRecreate;
+
+  /// Service menu item, and the scale dialog's confirm button, that sets the service's container count (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Scale'**
+  String get dockerStackServiceScale;
+
+  /// Title of the dialog that asks how many containers a service runs (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Scale {service}'**
+  String dockerStackScaleTitle(String service);
+
+  /// Label of the scale dialog's container count field (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Containers'**
+  String get dockerStackScaleLabel;
+
+  /// Error under the scale dialog's field when it is not a whole number in range (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a number from 0 to {max}.'**
+  String dockerStackScaleRange(int max);
+
+  /// Scale dialog button that scales nothing (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get dockerStackScaleCancel;
+
+  /// Stack overview button that takes the whole stack down, its containers and networks but never its volumes; the preview asks for the typed confirmation (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Down'**
+  String get dockerStackDown;
+
+  /// Label over the profiles a verified stack's compose files name (STK-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Profiles'**
+  String get dockerStackProfiles;
+
+  /// Shown under Profiles while the engine lists them (STK-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Reading…'**
+  String get dockerStackProfilesReading;
+
+  /// Shown under Profiles when compose could not list them (STK-09).
+  ///
+  /// In en, this message translates to:
+  /// **'The profiles could not be listed.'**
+  String get dockerStackProfilesFailed;
 
   /// Stack file view: opens the file shown in the editor (STK-07).
   ///
