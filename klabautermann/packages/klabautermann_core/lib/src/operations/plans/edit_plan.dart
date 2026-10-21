@@ -6,6 +6,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
         EditCommands,
@@ -256,16 +257,26 @@ Future<_Manifest> _manifestStep(
     return const _ManifestRefused(ActionRefusalReason.noLink);
   }
   final parsed = parseFootprintManifest(read.stdout);
-  if (parsed.value.isEmpty && read.stdout.trim().isNotEmpty) {
+  // The rewrite keeps only the rows the parser understood, so a manifest
+  // with any it skipped is refused rather than shortened, as the backup
+  // index is.
+  if (parsed.warnings.isNotEmpty ||
+      (parsed.value.isEmpty && read.stdout.trim().isNotEmpty)) {
     return const _ManifestRefused(ActionRefusalReason.invalidTarget);
   }
   final rows = manifestWithBackups(parsed.value, backups);
   if (rows == null) return const _ManifestListed();
   return _ManifestWrite(
     ShellStep(
-      EditCommands.manifestWrite(path),
+      // Against the read above: a manifest another run changed since is
+      // never overwritten with rows built from the old one.
+      EditCommands.manifestWrite(
+        path,
+        sha256.convert(utf8.encode(read.stdout)).toString(),
+      ),
       elevated: root,
       input: utf8.encode(encodeFootprintManifest(rows)),
+      exitMeanings: _contentChanged,
     ),
   );
 }

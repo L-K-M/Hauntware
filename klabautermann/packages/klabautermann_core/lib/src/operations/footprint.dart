@@ -90,9 +90,13 @@ Future<void> _readScope(
   if (rows.value.isEmpty) return;
 
   final listed = [for (final row in rows.value) row.path];
-  final present = (await run(
-    EditCommands.existingPaths(listed),
-  )).stdout.split('\n').toSet();
+  // A failed check would read as every row gone, so it only warns.
+  final existing = await run(EditCommands.existingPaths(listed));
+  if (existing.exitCode != 0) {
+    warnings.add('${scope.name} paths: exit ${existing.exitCode}');
+    return;
+  }
+  final present = existing.stdout.split('\n').toSet();
   for (final row in rows.value) {
     files.add(FootprintFile(scope, row, present: present.contains(row.path)));
   }
@@ -108,13 +112,17 @@ Future<void> _readScope(
     final entries = parseBackupIndex(index.stdout);
     warnings.addAll(entries.warnings);
     if (entries.value.isEmpty) continue;
-    final sums = parseSha256List(
-      (await run(
-        EditCommands.sha256List([
-          for (final entry in entries.value) '${row.path}/${entry.name}',
-        ]),
-      )).stdout,
+    // As above: an incomplete list would read as backups missing.
+    final hashed = await run(
+      EditCommands.sha256List([
+        for (final entry in entries.value) '${row.path}/${entry.name}',
+      ]),
     );
+    if (hashed.exitCode != 0) {
+      warnings.add('${scope.name} backup hashes: exit ${hashed.exitCode}');
+      continue;
+    }
+    final sums = parseSha256List(hashed.stdout);
     for (final entry in entries.value) {
       backups.add(
         FootprintBackup(

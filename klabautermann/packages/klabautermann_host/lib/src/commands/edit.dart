@@ -67,6 +67,10 @@ abstract final class EditExit {
   /// [EditCommands.copyAttributes]: as [aclNotCarried], for extended
   /// attributes other than the SELinux label.
   static const int xattrNotCarried = 103;
+
+  /// [EditCommands.sha256List]: a path exists but `sha256sum` could not
+  /// read it, so the list is incomplete.
+  static const int unreadable = 104;
 }
 
 /// What [EditCommands.readFile]'s first line says of the file: its
@@ -215,10 +219,14 @@ cat > "$1.klabautermann-tmp" && mv -f -- "$1.klabautermann-tmp" "$1" ||
   { s=$?; rm -f -- "$1.klabautermann-tmp"; exit "$s"; }''';
 
 /// Writes stdin to the manifest through a temp file beside it, creating
-/// its directory 0700.
+/// its directory 0700, while the manifest still hashes to the read the
+/// plan rewrote (an absent one hashes as empty); otherwise exits
+/// [EditExit.hashMismatch].
 const String _kManifestWriteScript = r'''
 umask 077
 mkdir -p -- "${1%/*}" || exit
+c=$( { cat -- "$1" 2>/dev/null || :; } | sha256sum) || exit
+if [ "${c%% *}" != "$2" ]; then exit 101; fi
 x=$1.klabautermann-tmp.$$
 cat > "$x" && mv -f -- "$x" "$1" || { s=$?; rm -f -- "$x"; exit "$s"; }''';
 
@@ -400,10 +408,23 @@ abstract final class EditCommands {
     return _readIfPresent(path);
   }
 
-  /// Replaces the footprint manifest at [path] with stdin, atomically.
-  static List<String> manifestWrite(String path) {
+  /// Replaces the footprint manifest at [path] with stdin, atomically,
+  /// while it still hashes to [baseSha256], the SHA-256 of the read the
+  /// new rows were built from; otherwise exits [EditExit.hashMismatch]
+  /// and leaves it as it was.
+  static List<String> manifestWrite(String path, String baseSha256) {
     _checkManifest(path);
-    return ['sh', '-c', _kManifestWriteScript, 'klabautermann-manifest', path];
+    if (!_sha256.hasMatch(baseSha256)) {
+      throw HostCommandError('not a SHA-256', argument: baseSha256);
+    }
+    return [
+      'sh',
+      '-c',
+      _kManifestWriteScript,
+      'klabautermann-manifest',
+      path,
+      baseSha256,
+    ];
   }
 
   /// Prints the index of backup directory [dir], or nothing when it has
@@ -465,13 +486,22 @@ abstract final class EditCommands {
     path,
   ];
 
-  /// `sha256sum` of each of [paths], for the footprint's verification;
-  /// [parseSha256List] reads the output, which leaves out a path that is
-  /// gone.
+  /// `sha256sum` of each of [paths] that exists, for the footprint's
+  /// verification; [parseSha256List] reads the output, which leaves out a
+  /// path that is gone. A gone path is not a failure, so any other exit
+  /// than 0 means the list is incomplete: a path that exists but could
+  /// not be read exits [EditExit.unreadable].
   static List<String> sha256List(List<String> paths) {
     if (paths.isEmpty) throw const HostCommandError('no paths');
     paths.forEach(_checkPath);
-    return ['sha256sum', '--', ...paths];
+    return [
+      'sh',
+      '-c',
+      'for p; do [ ! -e "\$p" ] || sha256sum -- "\$p" || '
+          'exit ${EditExit.unreadable}; done',
+      'klabautermann-sha256',
+      ...paths,
+    ];
   }
 
   /// [path] is absolute and normalized (03 §8.8), and holds no control
