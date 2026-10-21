@@ -1,7 +1,8 @@
 // ghost_marks' server mark picker (shared with Séance since 2026-10-08), in
-// this app's ARB strings (D20).
+// this app's ARB strings (D20), reading images through ghost_marks_picker.
 import 'package:flutter/material.dart';
 import 'package:ghost_marks/ghost_marks.dart' as marks;
+import 'package:ghost_marks_picker/ghost_marks_picker.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../l10n/app_localizations.dart';
@@ -19,4 +20,5 @@ Future<ServerMark?> showServerMarkPicker(
   current: current,
   accent: accent,
   strings: PoltergeistServerAppearanceStrings(AppLocalizations.of(context)),
+  readImage: pickServerMarkImage,
 );

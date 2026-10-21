@@ -22,6 +22,9 @@ dependencies:
     path: ../../../planchette/packages/ghost_fonts
   ghost_marks:
     path: ../../../planchette/packages/ghost_marks
+  # The mark picker's image reader, over file_picker.
+  ghost_marks_picker:
+    path: ../../../planchette/packages/ghost_marks_picker
   # The server list's sectioning, shared with Poltergeist.
   ghost_servers:
     path: ../../../planchette/packages/ghost_servers

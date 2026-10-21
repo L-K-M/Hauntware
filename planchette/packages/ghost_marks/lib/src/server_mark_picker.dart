@@ -1,15 +1,9 @@
 import 'dart:typed_data';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart'
-    show
-        SelectedTabView,
-        encodeBadgeImage,
-        kBadgeImageAppleExtensions,
-        kBadgeImageExtensions,
-        kBadgeImageSide;
+    show SelectedTabView, encodeBadgeImage, kBadgeImageSide;
 import 'package:seance_protocol/seance_protocol.dart';
 
 import 'server_appearance.dart';
@@ -109,6 +103,13 @@ const List<String> kCuratedServerEmoji = [
   '\u{1F340}',
 ];
 
+/// Reads the bytes of an image the user chose for a server's mark, or null
+/// when they cancelled. Each app supplies its own, so this package holds no
+/// platform picker: `package:ghost_marks_picker` is Séance's and
+/// Poltergeist's, over file_picker, and an app on another picker passes its
+/// own (M5 plan F5a-2a).
+typedef ServerMarkImageReader = Future<Uint8List?> Function();
+
 /// Picks what a server is marked with: a built-in glyph, an emoji, or an
 /// imported image.
 ///
@@ -121,9 +122,8 @@ Future<ServerMark?> showServerMarkPicker(
   required ServerTint accent,
   ServerAppearanceStrings strings = const ServerAppearanceStrings(),
 
-  /// Test seam: reads the bytes of an image the user chose. Defaults to the
-  /// platform file picker, which a widget test cannot drive.
-  @visibleForTesting Future<Uint8List?> Function()? readImage,
+  /// Reads the bytes of an image the user chose for the image tab.
+  required ServerMarkImageReader readImage,
 }) {
   return showDialog<ServerMark>(
     context: context,
@@ -131,59 +131,16 @@ Future<ServerMark?> showServerMarkPicker(
       current: current,
       accent: accent,
       strings: strings,
-      readImage: readImage ?? _pickImageBytes,
+      readImage: readImage,
     ),
   );
-}
-
-/// The bytes of an image chosen from the platform picker, or null if the user
-/// cancelled. `withData` because the bytes are re-encoded rather than kept:
-/// there is nothing to stream to, and on Android a document provider may have
-/// no path at all (see AGENTS.md on file_picker).
-///
-/// Desktop pickers get an explicit extension list, because the plugin's own
-/// image type is a fixed list without SVG on Linux and Windows. Mobile keeps
-/// the platform image type: on Android that is `image/*`, which SVG's MIME
-/// type already matches, and on iOS it is the photo picker, which an
-/// extension list would replace with the document browser.
-Future<Uint8List?> _pickImageBytes() async {
-  final desktop =
-      !kIsWeb &&
-      switch (defaultTargetPlatform) {
-        TargetPlatform.linux ||
-        TargetPlatform.macOS ||
-        TargetPlatform.windows => true,
-        _ => false,
-      };
-  final result = await FilePicker.pickFiles(
-    type: desktop ? FileType.custom : FileType.image,
-    allowedExtensions: desktop
-        ? [
-            ...kBadgeImageExtensions,
-            if (defaultTargetPlatform == TargetPlatform.macOS)
-              ...kBadgeImageAppleExtensions,
-          ]
-        : null,
-    withData: true,
-  );
-  final files = result?.files ?? const [];
-  if (files.isEmpty) return null;
-  final bytes = files.first.bytes;
-  if (bytes == null) {
-    // `withData` was asked for and the picker produced a file without any:
-    // reported on some Android document providers. Returning null here would
-    // be read as a cancel and the dialog would sit there having silently done
-    // nothing, so it is raised for the caller's handler to show.
-    throw Exception('the file picker returned no image bytes');
-  }
-  return bytes;
 }
 
 class _MarkPickerDialog extends StatelessWidget {
   final ServerMark current;
   final ServerTint accent;
   final ServerAppearanceStrings strings;
-  final Future<Uint8List?> Function() readImage;
+  final ServerMarkImageReader readImage;
 
   const _MarkPickerDialog({
     required this.current,
@@ -552,7 +509,7 @@ class _ImageTab extends StatefulWidget {
   final ServerTint accent;
   final ServerMark current;
   final ServerAppearanceStrings strings;
-  final Future<Uint8List?> Function() readImage;
+  final ServerMarkImageReader readImage;
 
   const _ImageTab({
     required this.accent,
@@ -679,8 +636,9 @@ class _ImageTabState extends State<_ImageTab> {
           ],
           const Divider(height: 24),
           Text(
-            // iOS gets the photo picker (see `_pickImageBytes`), and there
-            // are no SVGs in a photo library, so it is not promised there.
+            // iOS gets the photo picker (see ghost_marks_picker's
+            // `pickServerMarkImage`), and there are no SVGs in a photo
+            // library, so it is not promised there.
             strings.imageExplanation(
               !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS
                   ? strings.imageFormatsIos
