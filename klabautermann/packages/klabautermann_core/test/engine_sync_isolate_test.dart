@@ -270,4 +270,69 @@ void main() {
     final again = restarted.current as ServerPrefsChanged;
     expect(again.prefs?.marks, {'nginx'});
   });
+
+  group('pin publication (D15, M5 plan M07)', () {
+    const enroll = EnrollSync(
+      baseUrl: 'https://sync.example.com',
+      username: fakeSyncUser,
+      password: fakeSyncPassword,
+      encryptionPassphrase: fakeSyncPassword,
+    );
+
+    test('an offered release is reported after the startup fleet, and an '
+        'assertion is reported back', () async {
+      final server = await FakeSyncServer.create();
+      final (client, events) = await spawn(
+        entryPoint: (start) => engineMain(
+          EngineStart(
+            uiPort: start.uiPort,
+            supportDirectory: start.supportDirectory,
+            supportDirectoryAccess: start.supportDirectoryAccess,
+            deviceId: start.deviceId,
+            pinPublicationRelease: '2026.11.0',
+          ),
+          syncTransport: server.transport,
+        ),
+      );
+      // After the startup fleet, before anything is asked.
+      expect(await events.moveNext(), isTrue);
+      final state = events.current as PinPublicationState;
+      expect((state.release, state.asserted), ('2026.11.0', false));
+      client.send(enroll);
+      await untilSyncEnds(client, events, MemoryKeystore());
+
+      client.send(const SetPinPublication(asserted: true));
+      while (await events.moveNext()) {
+        if (events.current case PinPublicationState(:final asserted)) {
+          expect(asserted, isTrue);
+          break;
+        }
+      }
+      expect(
+        File('${support.path}/sync_enrollment.json').readAsStringSync(),
+        contains('"seance56Asserted":"2026.11.0"'),
+      );
+    });
+
+    test('with no release offered, nothing is reported and an assertion '
+        'is refused', () async {
+      final server = await FakeSyncServer.create();
+      final (client, events) = await spawn(
+        entryPoint: (start) =>
+            engineMain(start, syncTransport: server.transport),
+      );
+      client.send(enroll);
+      final opened = await untilSyncEnds(client, events, MemoryKeystore());
+      expect(opened.whereType<PinPublicationState>(), isEmpty);
+
+      client.send(const SetPinPublication(asserted: true));
+      expect(await events.moveNext(), isTrue);
+      final refused = events.current as RequestRejected;
+      expect(refused.requestName, 'SetPinPublication');
+      expect(
+        File('${support.path}/sync_enrollment.json').readAsStringSync(),
+        isNot(contains('seance56Asserted')),
+      );
+    });
+  });
 }

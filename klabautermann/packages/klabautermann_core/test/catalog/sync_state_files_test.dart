@@ -275,6 +275,34 @@ void main() {
       expect(await (await openEnrollment()).account(), isNull);
     });
 
+    test('the pin publication assertion round-trips, and a withdrawal '
+        'drops it from the file', () async {
+      final state = await openEnrollment();
+      expect(state.pinPublicationAssertion, isNull);
+
+      await state.setPinPublicationAssertion('2026.11.0');
+      expect(
+        await fileIn(syncEnrollmentFileName).readAsString(),
+        '{"version":1,"passphraseUnverified":false,"notices":[],'
+        '"seance56Asserted":"2026.11.0"}',
+      );
+      expect((await openEnrollment()).pinPublicationAssertion, '2026.11.0');
+
+      await state.setPinPublicationAssertion(null);
+      expect((await openEnrollment()).pinPublicationAssertion, isNull);
+    });
+
+    test('an assertion that names no release is a damaged file', () async {
+      for (final value in ['""', 'true', '["2026.11.0"]']) {
+        await fileIn(
+          syncEnrollmentFileName,
+        ).writeAsString('{"version":1,"seance56Asserted":$value}');
+        final state = await openEnrollment();
+        expect(state.issue?.kind, SyncStateIssueKind.recovered, reason: value);
+        expect(state.pinPublicationAssertion, isNull, reason: value);
+      }
+    });
+
     test('an unknown account mode is a damaged file, never a guess', () async {
       await fileIn(syncEnrollmentFileName).writeAsString(
         '{"version":1,"account":{"baseUrl":"https://s","username":"u",'

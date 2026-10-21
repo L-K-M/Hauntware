@@ -2141,6 +2141,19 @@ re-push (c1 §2.4).
   device runs a Séance release with the fix. Publication waits for that
   assertion (4.3), because older Séance releases apply pulled pins
   unchecked.
+  As built (M5 plan M07): the assertion is stored in
+  `sync_enrollment.json` as `seance56Asserted: <release>` and names the
+  release in `kPinPublicationRelease`, which stays null until a suite
+  release carries the fix (M5 plan Q1). While it is null the engine
+  offers no assertion, refuses `SetPinPublication` and publishes
+  nothing. With the assertion, each pin the user confirms on a link (a
+  first-seen key accepted, or a changed key trusted) is published on the
+  sync operation chain, once stored. Pins learned before the assertion
+  stay local until the user confirms them again. A pin publishes only
+  when a synced server that is not excluded reaches its address, itself
+  or as a hop of its route; a pin only excluded servers use stays on
+  this device (`catalog-library.md` divergence 1). A withdrawal stops
+  publication, and pins already sent stay.
 - Known limitation: pins are keyed by `host:port`, so identical private
   addresses behind different jump routes collide (c2 R8). The app warns
   when two servers in the list share a locator with different routes. For

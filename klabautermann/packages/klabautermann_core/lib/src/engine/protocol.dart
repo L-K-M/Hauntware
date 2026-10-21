@@ -562,6 +562,23 @@ final class SetSyncSecrets extends EngineRequest {
   final bool enabled;
 }
 
+/// The suite release whose Séance carries the #56 fix (D15, FL-22): the
+/// release a pin publication assertion names. Null until a suite release
+/// carries the fix (M5 plan Q1), so no assertion is offered and the
+/// engine publishes no pin.
+const String? kPinPublicationRelease = null;
+
+/// Asserts that every device on the account runs the release
+/// [PinPublicationState.release] names or later, or withdraws that with
+/// [asserted] false (D15, M5 plan M07). While asserted, a pin the user
+/// confirms is published; a withdrawal stops publication, and pins sent
+/// stay. Refused while no release is offered.
+final class SetPinPublication extends EngineRequest {
+  const SetPinPublication({required this.asserted});
+
+  final bool asserted;
+}
+
 /// How a [ServerDraft]'s server signs in, as the server editor offers it
 /// (`GhostAuthMethod`, ghost-servers-part2.md section 3).
 enum ServerDraftAuth { agent, password, privateKey }
@@ -1025,6 +1042,18 @@ final class ServerPrefs {
 
   /// Absolute directories the stack scan looks in (STK-01).
   final List<String> stackScanDirs;
+}
+
+/// Whether pins the user confirms publish (D15, M5 plan M07): [release]
+/// is the release an assertion names, null while none is offered, and
+/// [asserted] whether this device's enrollment holds the assertion for
+/// it. Sent after the startup fleet and after each [SetPinPublication]
+/// while a release is offered; never otherwise.
+final class PinPublicationState extends EngineEvent {
+  const PinPublicationState({this.release, this.asserted = false});
+
+  final String? release;
+  final bool asserted;
 }
 
 /// The synced preferences of the fleet server [serverId] changed (03
