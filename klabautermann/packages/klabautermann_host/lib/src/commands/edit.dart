@@ -81,8 +81,8 @@ ReadHeader? parseReadHeader(String line) {
 
 /// Reads `sha256sum` output, as [EditCommands.sha256List] prints it, into
 /// a hash per path. Lines it does not recognise are skipped. GNU marks a
-/// line whose path holds a backslash with a leading `\` and escapes the
-/// path; BusyBox prints the path as it is.
+/// line whose path holds a backslash or a newline with a leading `\` and
+/// escapes the path; BusyBox prints the path as it is.
 Map<String, String> parseSha256List(String output) => {
   for (final line in output.split('\n'))
     if (_sha256Line.firstMatch(line) case final m?)
