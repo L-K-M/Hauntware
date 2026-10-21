@@ -1,9 +1,12 @@
-import 'package:flutter_test/flutter_test.dart';
-import 'package:seance_app/ui/server_editor.dart';
-import 'package:seance_core/seance_core.dart';
+// The server editor's save rules (docs/design/ghost-servers-part2.md
+// section 3, F5a-1a): what a Save writes for the credential boxes, when it
+// reads the stored entry, and the `updatedAt` stamp. The cases come from
+// Séance's planned_credential_test.dart and server_exclude_from_sync_test.dart
+// and from Poltergeist's server_editor_test.dart, where each app tested its
+// own copy.
+import 'package:seance_protocol/seance_protocol.dart';
+import 'package:test/test.dart';
 
-/// What a Save writes for the credential boxes, decided away from the widget
-/// so each combination can be asserted directly.
 void main() {
   group('plannedCredential', () {
     Secret? plan({
@@ -198,6 +201,168 @@ void main() {
           }
         }
       }
+    });
+
+    const storedPem = Secret(
+      id: 'sec-1',
+      kind: SecretKind.privateKey,
+      value: 'STORED-PEM',
+      keyPassphrase: 'old-phrase',
+    );
+
+    test('password auth writes a password only when typed', () {
+      expect(
+        plannedCredential(
+          auth: AuthMethod.password,
+          referenceKeyFile: false,
+          password: '',
+          keyPem: '',
+          keyPassphrase: '',
+          secretId: 's',
+        ),
+        isNull,
+      );
+      final secret = plannedCredential(
+        auth: AuthMethod.password,
+        referenceKeyFile: false,
+        password: 'hunter2',
+        keyPem: '',
+        keyPassphrase: '',
+        secretId: 's',
+      )!;
+      expect(secret.kind, SecretKind.password);
+      expect(secret.value, 'hunter2');
+    });
+
+    test('agent auth never writes a credential', () {
+      expect(
+        plannedCredential(
+          auth: AuthMethod.agent,
+          referenceKeyFile: false,
+          password: 'stray',
+          keyPem: 'stray',
+          keyPassphrase: 'stray',
+          secretId: 's',
+        ),
+        isNull,
+      );
+    });
+
+    test('a typed PEM writes the key, blank passphrase dropping the old one',
+        () {
+      final secret = plannedCredential(
+        auth: AuthMethod.privateKey,
+        referenceKeyFile: false,
+        password: '',
+        keyPem: 'PEM-BYTES',
+        keyPassphrase: '',
+        secretId: 's',
+        stored: storedPem,
+      )!;
+      expect(secret.kind, SecretKind.privateKey);
+      expect(secret.value, 'PEM-BYTES');
+      // A re-pasted key brings its own passphrase — the stored one must not
+      // silently apply to new material.
+      expect(secret.keyPassphrase, isNull);
+    });
+
+    test('a referenced key writes only its passphrase, carrying the PEM', () {
+      // Blank passphrase in reference mode plans nothing — the stored entry
+      // is the credential already.
+      expect(
+        plannedCredential(
+          auth: AuthMethod.privateKey,
+          referenceKeyFile: true,
+          password: '',
+          keyPem: '',
+          keyPassphrase: '',
+          secretId: 's',
+          stored: storedPem,
+        ),
+        isNull,
+      );
+      final secret = plannedCredential(
+        auth: AuthMethod.privateKey,
+        referenceKeyFile: true,
+        password: '',
+        keyPem: '',
+        keyPassphrase: 'file-phrase',
+        secretId: 's',
+        stored: storedPem,
+      )!;
+      // The file's passphrase, not the stored PEM's, and the stored key
+      // material carried so the entry stays a key.
+      expect(secret.keyPassphrase, 'file-phrase');
+      expect(secret.value, 'STORED-PEM');
+    });
+
+    test('a referenced key over a password-kind entry stores an empty PEM',
+        () {
+      final secret = plannedCredential(
+        auth: AuthMethod.privateKey,
+        referenceKeyFile: true,
+        password: '',
+        keyPem: '',
+        keyPassphrase: 'file-phrase',
+        secretId: 's',
+        stored: const Secret(
+          id: 'sec-1',
+          kind: SecretKind.password,
+          value: 'hunter2',
+        ),
+      )!;
+      // The entry under this id belongs to whatever auth last wrote it — a
+      // password must not be carried into a private-key slot.
+      expect(secret.kind, SecretKind.privateKey);
+      expect(secret.value, '');
+    });
+
+    test('reads the stored entry only on the carry-over branch', () {
+      // The guard is where "fetch the vault entry first" is decided: wherever
+      // it says no read happens, the plan must be identical with and without
+      // one in hand.
+      bool reads(AuthMethod auth, bool ref, String pass) =>
+          plannedCredentialReadsStored(
+            auth: auth,
+            referenceKeyFile: ref,
+            keyPassphrase: pass,
+          );
+      expect(reads(AuthMethod.privateKey, true, 'x'), isTrue);
+      expect(reads(AuthMethod.privateKey, true, ''), isFalse);
+      expect(reads(AuthMethod.privateKey, false, 'x'), isFalse);
+      expect(reads(AuthMethod.password, true, 'x'), isFalse);
+      expect(reads(AuthMethod.agent, true, 'x'), isFalse);
+    });
+  });
+
+  group('nextUpdatedAt', () {
+    test('uses the wall clock when it is already ahead', () {
+      expect(nextUpdatedAt(100, now: 5000), 5000);
+    });
+
+    test('a new server has nothing to outrank', () {
+      expect(nextUpdatedAt(null, now: 5000), 5000);
+    });
+
+    test('a clock behind the stored stamp still moves the record forward', () {
+      // The case that matters: this device pulled a record another device
+      // wrote under a faster clock. Stamping an honest "now" would tie with or
+      // lose to it, so the edit — an exclusion, most expensively — would take
+      // here and nowhere else.
+      expect(nextUpdatedAt(5000, now: 100), 5001);
+    });
+
+    test('a tie is not good enough', () {
+      // Last-write-wins breaks a tie by device id and sequence, not in the
+      // editing device's favour, so an equal stamp is a coin flip.
+      expect(nextUpdatedAt(5000, now: 5000), 5001);
+    });
+
+    test('advances past both the clock and the record', () {
+      expect(nextUpdatedAt(100, now: 200), 200);
+      // A fast peer's record this device pulled: the stamp has to beat it.
+      expect(nextUpdatedAt(2000000000, now: 200), (2000000000) + 1);
+      expect(nextUpdatedAt(null, now: 200), 200);
     });
   });
 }
