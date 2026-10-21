@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Text printed after Claude Code exits is no longer underlined. The
+  terminal read keyboard-mode requests and other sequences it does not
+  support as text styles, scrolling or cursor moves; it now ignores them.
 - Séance recognises the settings Klabautermann will sync to the same
   account and leaves them alone: it never applies, rewrites or deletes
   them, and names one as a "Klabautermann setting" if the server ever
