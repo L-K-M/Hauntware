@@ -53,6 +53,9 @@ env:
 # klabautermann_dart (its host-sampling and owner-only file tests need
 # a VM with systemd and a non-root user) and the timing measurements,
 # whose budgets assume GitHub's runner images.
+# Self-hosted runners keep the Flutter SDK and pub cache on disk, so
+# flutter-action's actions/cache, which downloads the 1.6 GB SDK
+# archive on every hit, runs on GitHub-hosted runners only.
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -887,7 +890,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}
       # klabautermann_client's GTK toolchain and keyring libraries, plus
       # xvfb and the Mesa stack for a headless display with real GLES
       # (llvmpipe through LIBGL_ALWAYS_SOFTWARE).
@@ -1033,7 +1036,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}
       # GTK toolchain for the embedder build; xvfb plus the Mesa stack for
       # a headless display with real GLES (llvmpipe via
       # LIBGL_ALWAYS_SOFTWARE) so Impeller produces genuine raster timings.
@@ -1328,7 +1331,7 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}
       # Formatting needs each package's language version resolved first —
       # unresolved, the formatter guesses and reports phantom diffs.
       - name: Resolve packages
@@ -1416,7 +1419,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}
       - name: Resolve app dependencies
         working-directory: seance/app/seance_app
         run: flutter pub get
@@ -1445,7 +1448,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}
       - name: Resolve app dependencies
         working-directory: poltergeist/app/poltergeist_app
         run: flutter pub get
@@ -1467,7 +1470,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}
       - name: Resolve app dependencies
         working-directory: klabautermann/app/klabautermann_app
         run: flutter pub get
@@ -1526,7 +1529,7 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}
       - name: Resolve app
         working-directory: planchette/app/planchette_app
         run: flutter pub get
@@ -1646,7 +1649,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}
       # Same ad-hoc switch as the release build: the committed project signs
       # Release with the owner's "Apple Development" identity, which no runner
       # has — and CI must exercise the exact signing path the release uses.
@@ -1788,7 +1791,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}
       # If the committed project signs Release with a developer identity the
       # runner doesn't have, switch to ad-hoc — CI must exercise the exact
       # signing path the release uses. Harmless when the project already
@@ -1919,7 +1922,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}
       # The committed project already signs ad-hoc, so today this step
       # (Poltergeist's) only switches the signing style to manual; it keeps
       # CI on the release leg's signing path if a developer identity is
