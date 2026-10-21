@@ -12,8 +12,8 @@
   and types the `cd` at the first prompt without pressing Enter, which
   needs shell integration; otherwise it says so and offers to copy the
   path. Up to 16 links wait behind the one under review, and the review
-  says how many more were ignored. The operating systems learn the
-  scheme in a following release.
+  says how many more were ignored. Android, iOS and macOS open these
+  links in Séance; Linux and Windows follow in a later release.
 - Séance recognises the settings Klabautermann will sync to the same
   account and leaves them alone: it never applies, rewrites or deletes
   them, and names one as a "Klabautermann setting" if the server ever
