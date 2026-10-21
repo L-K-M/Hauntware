@@ -51,6 +51,8 @@ const _lockLine = "readonly lock_file='/tmp/klabautermann-runner-vm.lock'";
 const _sudoersLine =
     "readonly sudoers_file='/etc/sudoers.d/klabautermann-runner-vm'";
 const _rootOpsLine = "readonly root_ops_parent='/var/lib/klabautermann'";
+const _rotatedLogLine =
+    "readonly rotated_log='/var/log/klabautermann-vm.log.1.gz'";
 const _rootDockerLine = "readonly root_docker_dir='/root/.docker'";
 const _unitDirLine = "readonly unit_dir='/etc/systemd/system'";
 
@@ -357,6 +359,7 @@ void main() {
         _lockLine,
         _sudoersLine,
         _rootOpsLine,
+        _rotatedLogLine,
         _rootDockerLine,
         _unitDirLine,
       ]) {
@@ -430,6 +433,10 @@ void main() {
               .replaceFirst(
                 _rootOpsLine,
                 "readonly root_ops_parent='${sandbox.path}/var-lib'",
+              )
+              .replaceFirst(
+                _rotatedLogLine,
+                "readonly rotated_log='${sandbox.path}/rotated.log.1.gz'",
               )
               .replaceFirst(
                 _rootDockerLine,

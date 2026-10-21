@@ -20,7 +20,11 @@
 # the runner's own engine (runner_vm_docker_test.dart, M4 E30): rank 3
 # through the password prelude, a root redeploy under systemd-run that
 # outlives a forced reconnect and whose root files go once admin mode is
-# back, and the login user's under systemd-run --uid and --user.
+# back, and the login user's under systemd-run --uid and --user; and the
+# v1 host rows (runner_vm_v1_test.dart, M5 M28): unit enable, disable,
+# mask, unmask and reset-failed, the linger account's own units, unit
+# files and resources, the journal's boots and -g, a rotated .gz, anacron
+# and a cron line run now.
 #
 # run.sh calls it after the fixture suites. It creates accounts and runs
 # a root sshd, so it runs only on a GitHub-hosted runner, the ephemeral
@@ -44,6 +48,7 @@
 # homes of klab-vm-sudo and klab-vm-linger; the sshd on 127.0.0.1:2243 with its
 # root-owned directory under /tmp; a transient system timer; the
 # operation units and the root operation directory the S4 suite leaves;
+# the system unit and rotated log the v1 host suite seeds;
 # and its key and capture directories. klab-vm-sudo's password is made
 # at job start, as are klab-vm-linger's and klab-vm-nocache's, each kept
 # in a 0600 file in the
@@ -112,6 +117,11 @@ readonly sudoers_file='/etc/sudoers.d/klabautermann-runner-vm'
 # What root-run operations create: the wrapper makes
 # /var/lib/klabautermann/ops (03 §7.17), and teardown removes it all.
 readonly root_ops_parent='/var/lib/klabautermann'
+# What the v1 host suite seeds and removes itself (M5 M28): a system unit
+# and a rotated log under /var/log; teardown removes both should a run
+# end part-way.
+readonly v1_unit='klabautermann-vm-v1.service'
+readonly rotated_log='/var/log/klabautermann-vm.log.1.gz'
 # Root's Docker CLI directory, which the leg creates for the dead
 # default context and removes; one the image has is moved aside into the
 # sshd's root-owned directory meanwhile and put back.
@@ -187,7 +197,8 @@ for user in "${users[@]}"; do
     die "$user exists; this leg removes only accounts it created"
   fi
 done
-for path in "$sudoers_file" "$root_ops_parent" "${test_units[@]/#/$unit_dir/}"; do
+for path in "$sudoers_file" "$root_ops_parent" "$unit_dir/$v1_unit" \
+  "$rotated_log" "${test_units[@]/#/$unit_dir/}"; do
   if sudo -n test -e "$path"; then
     die "$path exists; this leg removes only what it created"
   fi
@@ -302,6 +313,9 @@ on_exit() {
     sudo -n systemctl stop "$op_units" 2>/dev/null || true
     sudo -n systemctl reset-failed "$op_units" 2>/dev/null || true
     sudo -n rm -rf -- "$root_ops_parent" || cleanup=1
+    sudo -n systemctl unmask -- "$v1_unit" 2>/dev/null || true
+    sudo -n systemctl disable -- "$v1_unit" 2>/dev/null || true
+    sudo -n rm -f -- "$unit_dir/$v1_unit" "$rotated_log" || cleanup=1
   fi
   if ((units_installed)); then
     sudo -n systemctl stop "${test_units[@]}" 2>/dev/null || true

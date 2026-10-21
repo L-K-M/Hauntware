@@ -7062,6 +7062,22 @@ timer and the directories; the system sshd, its config and port 22 stay
 untouched. The accounts with sudo, `systemd-run`, linger, the elevation
 prelude and the detached runners remain for later legs.
 
+As built in M5 (M28), `klabautermann_core/test/integration/
+runner_vm_v1_test.dart` (tag `runner-vm`) runs the v1 host rows. A
+seeded system unit is enabled, disabled, masked, unmasked and, once
+failed, reset through elevation, and disabling or masking `ssh.service`
+asks for its typed name. The linger account starts its own service and
+runs its own timer through `systemctl --user`, unelevated. A unit's
+file and resources read as the login user. The journal lists the
+current boot, last at offset 0, and a `-g` search returns only the
+record it names. A rotated `.gz` under `/var/log` is listed as gzip and
+read through `zcat`. Anacron's jobs match `/etc/anacrontab` where the
+image has one, and its absence reads as not installed otherwise. A cron
+line is run now: the login user's own over the link, and another
+account's through elevation as that account. Each test seeds what it
+acts on and removes it; runner_vm.sh removes the system unit and the
+rotated log on every exit.
+
 As built in M3 (D10), the Docker host's image
 (`klabautermann/test/integration/sshd/Dockerfile.docker`) builds `FROM`
 the same Poltergeist base and copies the static `docker` CLI and its
