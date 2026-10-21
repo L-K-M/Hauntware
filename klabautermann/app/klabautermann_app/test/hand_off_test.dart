@@ -160,7 +160,7 @@ void main() {
     });
   });
 
-  group('folders (X-04)', () {
+  group('folders (X-04, X-10)', () {
     testWidgets('open a terminal there in Séance and the folder in '
         'Poltergeist', (tester) async {
       final launcher = _Launcher({
