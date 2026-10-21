@@ -182,6 +182,11 @@ import '../operations/plan_types.dart';
 /// Disk use then joined v3 the same way (03 §7.1 OV-05): a
 /// [DockerSystemDfQuery] reads `/system/df` on demand, answered by a
 /// [DockerSystemDfPayload] of per-type totals.
+///
+/// The vault then joined v3 the same way (03 §4.5, SYN-02, FL-03):
+/// [SetSyncSecrets] carries the device's "sync passwords" switch,
+/// [CredentialPromptRequest] gained `canSave` and [PromptSecretAnswer]
+/// `save`, which keeps a login password in the vault.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -533,6 +538,16 @@ final class SetSafetyPolicy extends EngineRequest {
   const SetSafetyPolicy(this.policy);
 
   final SafetyPolicy policy;
+}
+
+/// The device's "sync passwords" switch (03 §4.5, SYN-02), which the app
+/// keeps in `settings.json` as `klabautermann.sync.secrets`, sent at spawn
+/// and on every change. Until it arrives the switch is off: sync rounds
+/// apply no pulled `secret:` record to the vault.
+final class SetSyncSecrets extends EngineRequest {
+  const SetSyncSecrets({required this.enabled});
+
+  final bool enabled;
 }
 
 /// Turns admin mode on or off for [serverId] (03 §8.2, SAF-02). Turning
@@ -3258,14 +3273,23 @@ final class KeyboardInteractivePromptRequest extends PromptRequest {
   PromptKind get kind => PromptKind.keyboardInteractive;
 }
 
-/// The login password for [user] (03 §4.5).
+/// The login password for [user] (03 §4.5): asked on a connect the user
+/// started, for a server whose password the vault does not hold.
 final class CredentialPromptRequest extends PromptRequest {
-  const CredentialPromptRequest({required this.user, this.retry = false});
+  const CredentialPromptRequest({
+    required this.user,
+    this.retry = false,
+    this.canSave = false,
+  });
 
   final String user;
 
   /// Whether the server refused the previous answer to this question.
   final bool retry;
+
+  /// Whether the answer can be kept in the vault ([PromptSecretAnswer.save]):
+  /// the server names a vault entry and the engine may write the vault.
+  final bool canSave;
 
   @override
   PromptKind get kind => PromptKind.credential;
@@ -3310,9 +3334,13 @@ final class PromptTrustAnswer extends PromptAnswer {
 /// One secret for [PromptKind.credential] and [PromptKind.elevation];
 /// null dismisses the prompt without answering.
 final class PromptSecretAnswer extends PromptAnswer {
-  const PromptSecretAnswer(this.secret);
+  const PromptSecretAnswer(this.secret, {this.save = false});
 
   final String? secret;
+
+  /// Keep [secret] in the vault once the server accepts it; honoured only
+  /// for a [CredentialPromptRequest] whose `canSave` is set.
+  final bool save;
 }
 
 /// The ordered responses for [PromptKind.keyboardInteractive].
