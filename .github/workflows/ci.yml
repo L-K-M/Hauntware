@@ -43,6 +43,15 @@ env:
 # status (masking breakage and putting holes in CI-status bisection). GitHub can
 # still supersede a *queued* main run with a newer queued one — only the running
 # run is protected.
+# Self-hosted Linux: setting the CI_LINUX_RUNNER repository variable
+# (e.g. truenas) moves the Linux test and build jobs of pushes and
+# same-repo PRs to runners with that label; unset, GitHub hosts them.
+# Fork PRs never reach the self-hosted runners: this repo is public.
+# GitHub-hosted on purpose: macOS, Windows and Android legs, the Docker
+# jobs (one shared daemon would collide on fixed container names and
+# ports), seance_dart (pinned sudo texts) and the timing measurements,
+# whose budgets assume GitHub's runner images.
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -55,7 +64,7 @@ jobs:
   # or an asset glob must not merge green.
   contracts:
     name: Workflow and tool contracts
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -80,7 +89,7 @@ jobs:
   # the tool's own tests prove the contract itself.
   suite_tool:
     name: Suite release tool
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -107,7 +116,7 @@ jobs:
   # are not gated.
   affected:
     name: Detect affected products
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 5
     outputs:
       planchette: ${{ steps.select.outputs.planchette }}
@@ -136,7 +145,7 @@ jobs:
     name: Planchette core (${{ matrix.os }})
     needs: affected
     if: needs.affected.outputs.planchette == 'true'
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os == 'ubuntu-latest' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -302,7 +311,7 @@ jobs:
     name: Poltergeist pure-Dart packages (${{ matrix.os }})
     needs: affected
     if: needs.affected.outputs.poltergeist == 'true'
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os == 'ubuntu-latest' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -360,7 +369,7 @@ jobs:
     name: Klabautermann pure-Dart packages (Ubuntu)
     needs: affected
     if: needs.affected.outputs.klabautermann == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 15
     defaults:
       run:
@@ -520,7 +529,7 @@ jobs:
 
   seance_pin_audit:
     name: Séance pin audit
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 15
     permissions:
       contents: read
@@ -573,7 +582,7 @@ jobs:
 
   detect_integration:
     name: Detect SSH integration changes
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 5
     permissions:
       contents: read
@@ -726,7 +735,7 @@ jobs:
   # reads the first-parent history of HEAD, hence the full clone.
   detect_klabautermann_integration:
     name: Detect Klabautermann integration changes
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 5
     permissions:
       contents: read
@@ -904,7 +913,7 @@ jobs:
 
   detect_bench:
     name: Detect bench-relevant changes
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 5
     permissions:
       contents: read
@@ -1309,7 +1318,7 @@ jobs:
     name: Planchette editor and app (analyze + test)
     needs: affected
     if: needs.affected.outputs.planchette == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
@@ -1398,7 +1407,7 @@ jobs:
     name: Séance app (analyze + test)
     needs: affected
     if: needs.affected.outputs.seance == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 30   # first run downloads the Flutter toolchain
     steps:
       - uses: actions/checkout@v7
@@ -1427,7 +1436,7 @@ jobs:
     name: Poltergeist app (analyze + test)
     needs: affected
     if: needs.affected.outputs.poltergeist == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 30   # first run downloads the Flutter toolchain
     steps:
       - uses: actions/checkout@v7
@@ -1449,7 +1458,7 @@ jobs:
     name: Klabautermann app (analyze + test)
     needs: affected
     if: needs.affected.outputs.klabautermann == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 30   # first run downloads the Flutter toolchain
     steps:
       - uses: actions/checkout@v7
@@ -1480,7 +1489,7 @@ jobs:
     name: Planchette client (${{ matrix.target }})
     needs: affected
     if: needs.affected.outputs.planchette == 'true'
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
     timeout-minutes: 35
     strategy:
       fail-fast: false
@@ -1587,7 +1596,7 @@ jobs:
     name: Séance client (${{ matrix.target }})
     needs: affected
     if: needs.affected.outputs.seance == 'true'
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
     timeout-minutes: 45   # first run downloads the Flutter toolchain
     strategy:
       fail-fast: false
@@ -1727,7 +1736,7 @@ jobs:
     name: Poltergeist client (${{ matrix.target }})
     needs: affected
     if: needs.affected.outputs.poltergeist == 'true'
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
     timeout-minutes: 45   # first run downloads the Flutter toolchain
     strategy:
       fail-fast: false
@@ -1860,7 +1869,7 @@ jobs:
     name: Klabautermann client (${{ matrix.target }})
     needs: affected
     if: needs.affected.outputs.klabautermann == 'true'
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
     timeout-minutes: 45   # first run downloads the Flutter toolchain
     strategy:
       fail-fast: false
