@@ -3,19 +3,24 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import 'pin_publication_controller.dart' show PinPublicationSettings;
+
 /// The sync account concern (03 §4.3, §10.1): the account this device is
 /// enrolled in, the sign-in, and the rounds the user asks for. A round
 /// pushes what the engine sealed since (03 §4.4, [engineSyncPushPolicy]);
 /// a sign-in pushes nothing.
 final class SyncController extends ChangeNotifier {
   /// [account] is the one the engine started with
-  /// ([EngineReady.syncAccount]).
-  SyncController(this._engine, {this._account}) {
+  /// ([EngineReady.syncAccount]). [pinPublication] is what the sign-in
+  /// offers to assert, when a release is named (M5 plan M07).
+  SyncController(this._engine, {this._account, this.pinPublication}) {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
   }
 
   final EngineClient _engine;
   late final StreamSubscription<EngineEvent> _events;
+
+  final PinPublicationSettings? pinPublication;
 
   SyncAccountInfo? _account;
   bool _passphraseUnverified = false;

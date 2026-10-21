@@ -3604,6 +3604,30 @@ abstract class AppLocalizations {
   /// **'The setting could not be changed.'**
   String get settingsSyncSecretsNotChanged;
 
+  /// Heading of the Sync tab's host key sharing section, shown once a Séance release with the shared host key fix is named.
+  ///
+  /// In en, this message translates to:
+  /// **'Host keys'**
+  String get settingsPinPublicationTitle;
+
+  /// Switch asserting that every device on the account runs a Séance release that checks shared host keys; while on, host keys the user confirms are shared.
+  ///
+  /// In en, this message translates to:
+  /// **'Every device runs Séance {release} or later'**
+  String settingsPinPublication(String release);
+
+  /// What the host key sharing switch does, under it.
+  ///
+  /// In en, this message translates to:
+  /// **'While on, host keys you confirm are shared with your other devices, so they can check a server the first time they connect. Turning it off stops sharing; keys already shared stay.'**
+  String get settingsPinPublicationDetail;
+
+  /// Toast when the engine did not take or keep a change of the host key sharing switch.
+  ///
+  /// In en, this message translates to:
+  /// **'The host key setting could not be changed.'**
+  String get settingsPinPublicationNotChanged;
+
   /// Heading of the about row on the General settings tab, which shows the app's title and version and opens the About dialog.
   ///
   /// In en, this message translates to:
@@ -3939,6 +3963,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Older Séance releases can mistake records from other apps for servers.'**
   String get syncFleetAssertionDetail;
+
+  /// Optional checkbox at sign-in asserting the release that checks shared host keys; ticked, host keys the user confirms are shared.
+  ///
+  /// In en, this message translates to:
+  /// **'Every device on this account runs Séance {release} or later'**
+  String syncPinPublicationAssertion(String release);
+
+  /// Why the host key assertion matters, under its checkbox.
+  ///
+  /// In en, this message translates to:
+  /// **'Then host keys you confirm are shared with them. Older releases accept a shared key without checking it.'**
+  String get syncPinPublicationAssertionDetail;
 
   /// Disclosure on the sign-in's second step: the account key decrypts every app's records. Séance and Poltergeist are the sibling apps.
   ///

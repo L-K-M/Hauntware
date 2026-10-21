@@ -12,6 +12,7 @@ import 'app.dart';
 import 'controllers/admin_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/coverage_controller.dart';
+import 'controllers/pin_publication_controller.dart';
 import 'controllers/docker_endpoint_choices.dart';
 import 'controllers/docker_notice_controller.dart';
 import 'controllers/fleet_controller.dart';
@@ -196,7 +197,17 @@ Future<void> main(List<String> args) async {
   // Pull-only sync (03 §4.3, D14): the sign-in and rounds the user asks
   // for, and the OS keystore the engine's sync reaches through this
   // isolate, which alone can call the keystore plugin (D62).
-  final sync = SyncController(engine, account: engine.ready.syncAccount);
+  // Pin publication (D15, M5 plan M07): offered only once a release with
+  // Séance's #56 fix is named, which the engine reports at start.
+  final pinPublication = PinPublicationController(
+    engine,
+    initial: engine.ready.pinPublication,
+  );
+  final sync = SyncController(
+    engine,
+    account: engine.ready.syncAccount,
+    pinPublication: pinPublication,
+  );
   EngineKeystoreResponder(engine, klabautermannMasterKeyManager());
   for (final issue in engine.ready.syncStoreIssues) {
     debugPrint('${issue.fileName}: ${issue.kind.name} ${issue.detail ?? ''}');
@@ -264,6 +275,7 @@ Future<void> main(List<String> args) async {
     monitorSet: fleet.monitorSettings,
     safety: safety,
     syncSecrets: syncSecrets,
+    pinPublication: pinPublication,
   );
 
   runApp(
@@ -276,6 +288,7 @@ Future<void> main(List<String> args) async {
       announcements: announcements,
       safety: safety,
       syncSecrets: syncSecrets,
+      pinPublication: pinPublication,
       admin: admin,
       operations: operations,
       dockerNotice: dockerNotice,

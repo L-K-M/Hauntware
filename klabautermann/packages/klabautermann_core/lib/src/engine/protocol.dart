@@ -862,6 +862,7 @@ final class EngineReady extends EngineEvent {
     this.syncAccount,
     this.syncStoreIssues = const [],
     this.auditInMemory = false,
+    this.pinPublication,
   });
 
   final int protocolVersion;
@@ -883,6 +884,11 @@ final class EngineReady extends EngineEvent {
   /// support directory (03 §4.10), so this one writes no audit file. The
   /// app says so once (M4 plan M12).
   final bool auditInMemory;
+
+  /// The pin publication state the engine started with (D15, M5 plan
+  /// M07), or null while no release is offered. Later changes arrive in
+  /// [PinPublicationState].
+  final PinPublicationState? pinPublication;
 }
 
 /// The engine refused a request it does not serve (yet). The 03 §10.1 table
@@ -1047,8 +1053,8 @@ final class ServerPrefs {
 /// Whether pins the user confirms publish (D15, M5 plan M07): [release]
 /// is the release an assertion names, null while none is offered, and
 /// [asserted] whether this device's enrollment holds the assertion for
-/// it. Sent after the startup fleet and after each [SetPinPublication]
-/// while a release is offered; never otherwise.
+/// it. [EngineReady.pinPublication] holds the state at start; this is
+/// sent after each [SetPinPublication] while a release is offered.
 final class PinPublicationState extends EngineEvent {
   const PinPublicationState({this.release, this.asserted = false});
 

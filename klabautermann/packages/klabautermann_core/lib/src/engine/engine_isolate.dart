@@ -734,15 +734,13 @@ void engineMain(
       (_) => sync.publishPin(pin, release: start.pinPublicationRelease),
     );
   };
-  // Nothing while no release is offered: the app's default state says so.
-  void sendPinPublication() {
+  // Null while no release is offered: the app's default state says so.
+  PinPublicationState? pinPublicationState() {
     final release = start.pinPublicationRelease;
-    if (release == null) return;
-    uiPort.send(
-      PinPublicationState(
-        release: release,
-        asserted: sync.pinPublicationAsserted(release),
-      ),
+    if (release == null) return null;
+    return PinPublicationState(
+      release: release,
+      asserted: sync.pinPublicationAsserted(release),
     );
   }
 
@@ -851,6 +849,7 @@ void engineMain(
             syncAccount: sync.account,
             syncStoreIssues: sync.issues,
             auditInMemory: audit.storage == AuditStorage.memory,
+            pinPublication: pinPublicationState(),
           ),
         );
         // The fleet as the engine starts: the servers the last sync left
@@ -860,7 +859,6 @@ void engineMain(
         uiPort.send(CatalogReplaced(fleetEntries()));
         fleetSent = true;
         await sendServerPrefs();
-        sendPinPublication();
         probeFleet();
       case Connect(:final serverId):
         sendCachedProfile(serverId);
@@ -1284,7 +1282,7 @@ void engineMain(
           } on Object {
             // The file kept its last state, which the event reports.
           }
-          sendPinPublication();
+          if (pinPublicationState() case final state?) uiPort.send(state);
         });
       case SetSyncSecrets(:final enabled):
         // Behind any sync operation already queued, which runs under the

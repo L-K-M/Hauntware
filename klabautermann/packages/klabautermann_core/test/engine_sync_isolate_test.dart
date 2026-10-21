@@ -279,8 +279,8 @@ void main() {
       encryptionPassphrase: fakeSyncPassword,
     );
 
-    test('an offered release is reported after the startup fleet, and an '
-        'assertion is reported back', () async {
+    test('an offered release is reported at start, and an assertion is '
+        'reported back', () async {
       final server = await FakeSyncServer.create();
       final (client, events) = await spawn(
         entryPoint: (start) => engineMain(
@@ -294,9 +294,7 @@ void main() {
           syncTransport: server.transport,
         ),
       );
-      // After the startup fleet, before anything is asked.
-      expect(await events.moveNext(), isTrue);
-      final state = events.current as PinPublicationState;
+      final state = client.ready.pinPublication!;
       expect((state.release, state.asserted), ('2026.11.0', false));
       client.send(enroll);
       await untilSyncEnds(client, events, MemoryKeystore());
@@ -322,6 +320,7 @@ void main() {
             engineMain(start, syncTransport: server.transport),
       );
       client.send(enroll);
+      expect(client.ready.pinPublication, isNull);
       final opened = await untilSyncEnds(client, events, MemoryKeystore());
       expect(opened.whereType<PinPublicationState>(), isEmpty);
 

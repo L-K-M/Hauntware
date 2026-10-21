@@ -83,6 +83,16 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/sync_secrets_controller.dart': {
     r"'The sync passwords setting was not saved: $error'",
   },
+  // The host key assertion's diagnostics, which Settings words in ARB, and
+  // the request name a refusal carries.
+  'lib/controllers/pin_publication_controller.dart': {
+    "'No release is offered for pin publication'",
+    "'The engine stopped'",
+    "'The pin publication assertion was not saved'",
+    "'SetPinPublication'",
+  },
+  // A failed host key assertion's diagnostic; the toast is ARB's.
+  'lib/ui/sync_sign_in.dart': {r"'$error'"},
   // A caller error's diagnostic: the preview is modal, so no screen ever
   // shows it.
   'lib/controllers/operations_controller.dart': {
@@ -207,6 +217,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   'lib/services/settings_window/settings_window_host.dart': {
     r"'No settings window method $name'",
+    "'No pin publication settings'",
   },
   'lib/services/settings_window/remote_settings.dart': {
     "'Settings link closed'",

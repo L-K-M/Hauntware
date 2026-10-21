@@ -2154,6 +2154,11 @@ re-push (c1 §2.4).
   or as a hop of its route; a pin only excluded servers use stays on
   this device (`catalog-library.md` divergence 1). A withdrawal stops
   publication, and pins already sent stay.
+  The engine reports the state at start in `EngineReady.pinPublication`
+  and after each `SetPinPublication` in a `PinPublicationState`; both stay
+  silent while no release is offered. The app then offers the assertion
+  as an optional tick in the sign-in's second step and as a switch under
+  "Host keys" in Settings > Sync, in the settings window too.
 - Known limitation: pins are keyed by `host:port`, so identical private
   addresses behind different jump routes collide (c2 R8). The app warns
   when two servers in the list share a locator with different routes. For
