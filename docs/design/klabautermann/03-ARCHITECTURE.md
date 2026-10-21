@@ -7183,6 +7183,22 @@ installed through `putIfNoConflict` and a conflicting one reported in
 `pinConflicts` and left out of the store (X4). The v1.x alert delivery
 still adds TLS and reachability from the sshd host to this service.
 
+As built in M5 (M08b), 11.2 item 2's previous-release skip runs on the
+same service. `test/integration/previous_release.sh` takes the highest
+`vMAJOR.MINOR.PATCH` tag on origin, extracts that release's
+`seance_core`, `seance_protocol`, `poltergeist_core` and
+`planchette_core` with `git archive`, and compiles
+`previous_release_harness/bin/harness.dart` against them with a pubspec
+it writes (the analyzer excludes the harness, which is not a package of
+the checkout). `run.sh` builds it after the sync service answers and
+exports its path as `KLABAUTERMANN_PREVIOUS_RELEASE_HARNESS`. The
+convergence suite writes Klabautermann's `pref` and `rule` records, runs
+the harness, which signs in as that release's Séance and Poltergeist and
+pushes a server and a bookmark of their own, and then reads from the
+server that every `klabautermann:` record keeps its sequence number and
+blob and is not deleted, and that Klabautermann still syncs. Against
+v1.9.2, which predates the kind, Séance decodes it as `unknown`.
+
 ### 11.4 Performance budgets (gated from M2)
 
 - Fast tick at most 2.5 KB, plus 30 B for each CPU beyond 32 (D48), and

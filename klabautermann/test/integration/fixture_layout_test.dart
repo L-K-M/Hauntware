@@ -357,6 +357,64 @@ void main() {
     expect(suite, contains("@Tags(['integration', 'sync'])"));
   });
 
+  test('run.sh builds the previous-release harness from packages the '
+      'harness pubspec names, outside the analyzed workspace (M08b)', () {
+    final run = read('klabautermann/test/integration/run.sh');
+    expect(
+      run.indexOf('\nwait_for_sync\n'),
+      lessThan(run.indexOf(r'"$previous_release_script"')),
+    );
+    expect(run, contains('export KLABAUTERMANN_PREVIOUS_RELEASE_HARNESS\n'));
+    final suite = read(
+      'klabautermann/packages/klabautermann_core/test/integration/'
+      'sync_convergence_test.dart',
+    );
+    expect(
+      suite,
+      contains("_harnessVariable = 'KLABAUTERMANN_PREVIOUS_RELEASE_HARNESS'"),
+    );
+
+    // Every archived package exists today, and the harness imports only
+    // the ones its generated pubspec depends on.
+    final script = read('klabautermann/test/integration/previous_release.sh');
+    final archived = RegExp(
+      r'^  (\w+/packages/\w+)$',
+      multiLine: true,
+    ).allMatches(script).map((m) => m[1]!).toList();
+    expect(archived, hasLength(4));
+    for (final package in archived) {
+      expect(
+        File('${root.path}$package/pubspec.yaml').existsSync(),
+        isTrue,
+        reason: package,
+      );
+    }
+    final dependencies = RegExp(
+      r'^  (\w+):\n    path: \$work_dir/src/',
+      multiLine: true,
+    ).allMatches(script).map((m) => m[1]!).toSet();
+    expect(dependencies, {
+      'seance_core',
+      'seance_protocol',
+      'poltergeist_core',
+    });
+    final harness = read(
+      'klabautermann/test/integration/previous_release_harness/bin/'
+      'harness.dart',
+    );
+    final imported = RegExp(
+      r"^import 'package:(\w+)/",
+      multiLine: true,
+    ).allMatches(harness).map((m) => m[1]!).toSet();
+    expect(dependencies, containsAll(imported));
+
+    final analysis = loadYaml(read('klabautermann/analysis_options.yaml'));
+    expect(
+      (analysis['analyzer']['exclude'] as YamlList),
+      contains('test/integration/previous_release_harness/**'),
+    );
+  });
+
   test('dind listens on its Unix socket only, on the shared volume', () {
     // A command that names dockerd keeps the image's entrypoint from
     // adding its TCP listener (check_docker_exposure.dart).
