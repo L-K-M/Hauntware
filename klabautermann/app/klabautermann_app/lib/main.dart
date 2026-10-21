@@ -19,6 +19,7 @@ import 'controllers/monitor_set.dart';
 import 'controllers/monitoring_controller.dart';
 import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
+import 'controllers/stack_folders.dart';
 import 'controllers/sync_controller.dart';
 import 'services/app_version.dart';
 import 'services/engine_keystore.dart';
@@ -176,9 +177,16 @@ Future<void> main(List<String> args) async {
   // Spawned once per launch: a restarted engine would be a new client
   // with new controllers over it, whose seq floors start empty (D44), and
   // KlabautermannApp remounts its tree when handed them.
+  // STK-08's scan folders per server, device-local in settings.json until
+  // the pref record syncs them (M5 plan M05).
+  final stackFolders = StackFolders(
+    stored: settings.stackFolders,
+    save: settings.setStackFolders,
+  );
   final monitoring = MonitoringController(
     engine,
     dockerEndpointChoices: dockerEndpointChoices,
+    stackFolders: stackFolders,
   );
   // The host-key and keyboard-interactive prompts the engine raises while
   // it connects, shown one at a time over every route.

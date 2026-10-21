@@ -15,6 +15,7 @@ import 'containers_panel.dart'
 import 'containers_view.dart';
 import 'stack_file_view.dart' show openStackFiles;
 import 'stacks_view.dart';
+import 'unlisted_stacks.dart';
 
 /// The panel width from which the stacks show as a list beside the
 /// selected one's overview; narrower, as on a phone, the list shows alone
@@ -216,9 +217,14 @@ class _StacksPanelState extends State<StacksPanel> {
     final l10n = AppLocalizations.of(context);
     final projects = stacks.grouping.projects;
     if (projects.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(16),
-        child: Text(l10n.dockerStacksEmpty),
+      return ListView(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(l10n.dockerStacksEmpty),
+          ),
+          _unlisted(projects),
+        ],
       );
     }
 
@@ -256,6 +262,13 @@ class _StacksPanelState extends State<StacksPanel> {
     );
   }
 
+  Widget _unlisted(List<ComposeProject> projects) => UnlistedStacks(
+    key: ValueKey('stacks.unlisted.${widget.serverId}'),
+    monitoring: widget.monitoring,
+    serverId: widget.serverId,
+    projects: projects,
+  );
+
   /// The stacks by name, [selected] marked in the wide layout.
   Widget _list(
     DockerStacksPayload stacks, {
@@ -268,9 +281,11 @@ class _StacksPanelState extends State<StacksPanel> {
     return Material(
       type: MaterialType.transparency,
       child: ListView.separated(
-        itemCount: projects.length,
+        // The stacks, then the ones without containers (STK-08).
+        itemCount: projects.length + 1,
         separatorBuilder: (context, _) => const Divider(height: 1),
         itemBuilder: (context, index) {
+          if (index == projects.length) return _unlisted(projects);
           final project = projects[index];
           return _StackTile(
             key: ValueKey('stacks.row.${project.name}'),

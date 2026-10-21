@@ -359,6 +359,11 @@ final class DockerController {
     required String project,
   }) => _ask(serverId, DockerStackProfilesQuery(project));
 
+  /// The compose files in [folders] on [serverId] and the folders below
+  /// them (STK-08): a [DockerStackScanPayload] or a [DockerQueryFailed].
+  Future<DockerPayload> scanStacks(String serverId, List<String> folders) =>
+      _ask(serverId, DockerStackScanQuery(folders));
+
   /// Sends [spec] once and completes with the engine's answer, as
   /// [readStackFile] describes.
   Future<DockerPayload> _ask(String serverId, DockerQuerySpec spec) {

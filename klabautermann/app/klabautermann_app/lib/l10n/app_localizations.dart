@@ -6838,6 +6838,96 @@ abstract class AppLocalizations {
   /// **'The profiles could not be listed.'**
   String get dockerStackProfilesFailed;
 
+  /// Heading of the section listing compose files found in the chosen folders that no running or stopped stack accounts for (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Stacks without containers'**
+  String get dockerStacksUnlisted;
+
+  /// Shown when no scan folders are chosen for this server (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Name the folders your stacks live in, such as /opt/stacks, to find stacks that have no containers.'**
+  String get dockerStackFoldersNone;
+
+  /// The scan folders chosen for this server (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Folders: {folders}'**
+  String dockerStackFoldersList(String folders);
+
+  /// Button that opens the dialog naming the folders to scan for stacks (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Choose folders'**
+  String get dockerStackFoldersChoose;
+
+  /// Button that scans the chosen folders again (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Scan again'**
+  String get dockerStackFoldersScanAgain;
+
+  /// Shown while the folders are scanned (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Scanning the folders…'**
+  String get dockerStackFoldersScanning;
+
+  /// Shown when the scan could not run (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'The folders could not be scanned.'**
+  String get dockerStackFoldersScanFailed;
+
+  /// Shown when the scan found no compose file that a listed stack does not account for (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Every stack in these folders has containers.'**
+  String get dockerStackFoldersNoneFound;
+
+  /// Shown under the scan's results when a folder could not be read (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'A folder could not be read, so some stacks may be missing.'**
+  String get dockerStackFoldersIncomplete;
+
+  /// Title of the dialog naming the folders to scan for stacks on this server (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Stack folders'**
+  String get dockerStackFoldersTitle;
+
+  /// Helper under the stack folders field (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'One absolute path per line, at most {max}. The folders and the folders right below them are searched for compose files. Kept on this device.'**
+  String dockerStackFoldersHelper(int max);
+
+  /// Error under the stack folders field (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'{problem, select, notAbsolute{Each folder must be an absolute path, such as /opt/stacks.} tooMany{Name at most {max} folders.} other{These folders cannot be scanned.}}'**
+  String dockerStackFoldersProblem(String problem, int max);
+
+  /// Stack folders dialog button that keeps the folders as they were (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get dockerStackFoldersCancel;
+
+  /// Stack folders dialog button that keeps the folders on this device and scans them (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get dockerStackFoldersSave;
+
+  /// Toast when settings.json could not be written; the folders hold in memory (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'The folders could not be saved on this device. They apply until the app quits.'**
+  String get dockerStackFoldersNotSaved;
+
   /// Stack file view: opens the file shown in the editor (STK-07).
   ///
   /// In en, this message translates to:

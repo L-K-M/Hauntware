@@ -6371,6 +6371,88 @@
   "@dockerStackProfilesFailed": {
     "description": "Shown under Profiles when compose could not list them (STK-09)."
   },
+  "dockerStacksUnlisted": "Stacks without containers",
+  "@dockerStacksUnlisted": {
+    "description": "Heading of the section listing compose files found in the chosen folders that no running or stopped stack accounts for (STK-08)."
+  },
+  "dockerStackFoldersNone": "Name the folders your stacks live in, such as /opt/stacks, to find stacks that have no containers.",
+  "@dockerStackFoldersNone": {
+    "description": "Shown when no scan folders are chosen for this server (STK-08)."
+  },
+  "dockerStackFoldersList": "Folders: {folders}",
+  "@dockerStackFoldersList": {
+    "description": "The scan folders chosen for this server (STK-08).",
+    "placeholders": {
+      "folders": {
+        "type": "String",
+        "example": "/opt/stacks, /srv/apps"
+      }
+    }
+  },
+  "dockerStackFoldersChoose": "Choose folders",
+  "@dockerStackFoldersChoose": {
+    "description": "Button that opens the dialog naming the folders to scan for stacks (STK-08)."
+  },
+  "dockerStackFoldersScanAgain": "Scan again",
+  "@dockerStackFoldersScanAgain": {
+    "description": "Button that scans the chosen folders again (STK-08)."
+  },
+  "dockerStackFoldersScanning": "Scanning the folders…",
+  "@dockerStackFoldersScanning": {
+    "description": "Shown while the folders are scanned (STK-08)."
+  },
+  "dockerStackFoldersScanFailed": "The folders could not be scanned.",
+  "@dockerStackFoldersScanFailed": {
+    "description": "Shown when the scan could not run (STK-08)."
+  },
+  "dockerStackFoldersNoneFound": "Every stack in these folders has containers.",
+  "@dockerStackFoldersNoneFound": {
+    "description": "Shown when the scan found no compose file that a listed stack does not account for (STK-08)."
+  },
+  "dockerStackFoldersIncomplete": "A folder could not be read, so some stacks may be missing.",
+  "@dockerStackFoldersIncomplete": {
+    "description": "Shown under the scan's results when a folder could not be read (STK-08)."
+  },
+  "dockerStackFoldersTitle": "Stack folders",
+  "@dockerStackFoldersTitle": {
+    "description": "Title of the dialog naming the folders to scan for stacks on this server (STK-08)."
+  },
+  "dockerStackFoldersHelper": "One absolute path per line, at most {max}. The folders and the folders right below them are searched for compose files. Kept on this device.",
+  "@dockerStackFoldersHelper": {
+    "description": "Helper under the stack folders field (STK-08).",
+    "placeholders": {
+      "max": {
+        "type": "int",
+        "example": "16"
+      }
+    }
+  },
+  "dockerStackFoldersProblem": "{problem, select, notAbsolute{Each folder must be an absolute path, such as /opt/stacks.} tooMany{Name at most {max} folders.} other{These folders cannot be scanned.}}",
+  "@dockerStackFoldersProblem": {
+    "description": "Error under the stack folders field (STK-08).",
+    "placeholders": {
+      "problem": {
+        "type": "String",
+        "example": "notAbsolute"
+      },
+      "max": {
+        "type": "int",
+        "example": "16"
+      }
+    }
+  },
+  "dockerStackFoldersCancel": "Cancel",
+  "@dockerStackFoldersCancel": {
+    "description": "Stack folders dialog button that keeps the folders as they were (STK-08)."
+  },
+  "dockerStackFoldersSave": "Save",
+  "@dockerStackFoldersSave": {
+    "description": "Stack folders dialog button that keeps the folders on this device and scans them (STK-08)."
+  },
+  "dockerStackFoldersNotSaved": "The folders could not be saved on this device. They apply until the app quits.",
+  "@dockerStackFoldersNotSaved": {
+    "description": "Toast when settings.json could not be written; the folders hold in memory (STK-08)."
+  },
   "dockerStackFileEdit": "Edit",
   "@dockerStackFileEdit": {
     "description": "Stack file view: opens the file shown in the editor (STK-07)."

@@ -5228,6 +5228,68 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerStackProfilesFailed => 'The profiles could not be listed.';
 
   @override
+  String get dockerStacksUnlisted => 'Stacks without containers';
+
+  @override
+  String get dockerStackFoldersNone =>
+      'Name the folders your stacks live in, such as /opt/stacks, to find stacks that have no containers.';
+
+  @override
+  String dockerStackFoldersList(String folders) {
+    return 'Folders: $folders';
+  }
+
+  @override
+  String get dockerStackFoldersChoose => 'Choose folders';
+
+  @override
+  String get dockerStackFoldersScanAgain => 'Scan again';
+
+  @override
+  String get dockerStackFoldersScanning => 'Scanning the folders…';
+
+  @override
+  String get dockerStackFoldersScanFailed =>
+      'The folders could not be scanned.';
+
+  @override
+  String get dockerStackFoldersNoneFound =>
+      'Every stack in these folders has containers.';
+
+  @override
+  String get dockerStackFoldersIncomplete =>
+      'A folder could not be read, so some stacks may be missing.';
+
+  @override
+  String get dockerStackFoldersTitle => 'Stack folders';
+
+  @override
+  String dockerStackFoldersHelper(int max) {
+    return 'One absolute path per line, at most $max. The folders and the folders right below them are searched for compose files. Kept on this device.';
+  }
+
+  @override
+  String dockerStackFoldersProblem(String problem, int max) {
+    String _temp0 = intl.Intl.selectLogic(problem, {
+      'notAbsolute':
+          'Each folder must be an absolute path, such as /opt/stacks.',
+      'tooMany': 'Name at most $max folders.',
+      'other': 'These folders cannot be scanned.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerStackFoldersCancel => 'Cancel';
+
+  @override
+  String get dockerStackFoldersSave => 'Save';
+
+  @override
+  String get dockerStackFoldersNotSaved =>
+      'The folders could not be saved on this device. They apply until the app quits.';
+
+  @override
   String get dockerStackFileEdit => 'Edit';
 
   @override
