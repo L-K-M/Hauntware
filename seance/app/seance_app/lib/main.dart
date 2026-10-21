@@ -8,6 +8,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'app_state.dart';
 import 'services/app_services.dart';
 import 'services/app_lock.dart';
+import 'services/link_intake.dart';
 import 'services/macos_titlebar.dart';
 import 'services/secure_master_key.dart';
 import 'services/settings_window.dart';
@@ -19,10 +20,17 @@ import 'ui/adaptive_shell.dart';
 import 'ui/app_menus.dart';
 import 'ui/host_key_dialog.dart';
 import 'ui/keyboard_interactive_dialog.dart';
+import 'ui/link_review_dialog.dart';
 import 'ui/macos_toolbar_band.dart';
 import 'ui/top_toast.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+/// `seance://connect` links (docs/design/suite-links.md section 6). Links
+/// queue here from launch and are reviewed once the app has loaded; the OS
+/// delivery that feeds [SeanceLinkIntake.add] arrives with the scheme
+/// registration.
+final SeanceLinkIntake linkIntake = SeanceLinkIntake();
 
 /// Opens Settings in its own window, on desktop once the app has started.
 /// Null on mobile, where Settings is a route, and before bootstrap finishes.
@@ -101,6 +109,7 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   AppState? _state;
   AppState? _loadingState;
   Object? _error;
+  SeanceLinkHandler? _linkHandler;
 
   /// The theme until the state exists to say otherwise: the settings are
   /// read during bootstrap, so the spinner is drawn in the default theme.
@@ -118,6 +127,8 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    final linkHandler = _linkHandler;
+    if (linkHandler != null) linkIntake.deactivate(linkHandler);
     _bootAppearance.dispose();
     super.dispose();
   }
@@ -132,7 +143,15 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   Future<void> _start() async {
     try {
       final state = await (widget.initOverride ?? _init)();
-      if (mounted) setState(() => _state = state);
+      if (!mounted) return;
+      setState(() => _state = state);
+      // Bound only once the app's own window can carry the review.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final handler = SeanceAppLinkHandler(state, navigatorKey);
+        _linkHandler = handler;
+        linkIntake.activate(handler);
+      });
     } catch (e) {
       if (mounted) setState(() => _error = e);
     }
