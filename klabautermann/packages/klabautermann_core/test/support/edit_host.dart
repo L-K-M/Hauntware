@@ -36,6 +36,10 @@ final class EditHost extends TestLinkBase {
   final commands = <String>[];
   bool enforcing = false;
 
+  /// Script names whose runs fail, as a lost elevation or a broken shell
+  /// would, with no output.
+  final failing = <String>{};
+
   @override
   Future<RemoteCommandResult> run(
     String command, {
@@ -59,6 +63,9 @@ final class EditHost extends TestLinkBase {
     if (command.contains("'crontab' '-l'")) return _crontab(command);
     if (command.contains('XDG_CONFIG_HOME')) return _ok('$kHostUserManifest\n');
     if (command.contains('XDG_STATE_HOME')) return _ok('$kHostUserBackups\n');
+    if (failing.any(command.contains)) {
+      return const RemoteCommandResult(exitCode: 1);
+    }
     if (command.contains('klabautermann-exists')) {
       return _ok(
         [
@@ -67,7 +74,7 @@ final class EditHost extends TestLinkBase {
         ].join(),
       );
     }
-    if (command.contains("'sha256sum'")) {
+    if (command.contains('klabautermann-sha256')) {
       return _ok(
         [
           for (final MapEntry(key: path, value: content) in blobs.entries)

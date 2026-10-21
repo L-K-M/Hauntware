@@ -374,6 +374,8 @@ void main() {
         final sums = await run(
           EditCommands.sha256List([manifest, '${dir.path}/gone']),
         );
+        // A gone path is left out, not a failure.
+        expect(sums.exitCode, 0);
         expect(parseSha256List(sums.stdout as String), {
           manifest: _sha256Of(manifest),
         });

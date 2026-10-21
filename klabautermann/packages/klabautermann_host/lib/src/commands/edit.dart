@@ -67,6 +67,10 @@ abstract final class EditExit {
   /// [EditCommands.copyAttributes]: as [aclNotCarried], for extended
   /// attributes other than the SELinux label.
   static const int xattrNotCarried = 103;
+
+  /// [EditCommands.sha256List]: a path exists but `sha256sum` could not
+  /// read it, so the list is incomplete.
+  static const int unreadable = 104;
 }
 
 /// What [EditCommands.readFile]'s first line says of the file: its
@@ -465,13 +469,22 @@ abstract final class EditCommands {
     path,
   ];
 
-  /// `sha256sum` of each of [paths], for the footprint's verification;
-  /// [parseSha256List] reads the output, which leaves out a path that is
-  /// gone.
+  /// `sha256sum` of each of [paths] that exists, for the footprint's
+  /// verification; [parseSha256List] reads the output, which leaves out a
+  /// path that is gone. A gone path is not a failure, so any other exit
+  /// than 0 means the list is incomplete: a path that exists but could
+  /// not be read exits [EditExit.unreadable].
   static List<String> sha256List(List<String> paths) {
     if (paths.isEmpty) throw const HostCommandError('no paths');
     paths.forEach(_checkPath);
-    return ['sha256sum', '--', ...paths];
+    return [
+      'sh',
+      '-c',
+      'for p; do [ ! -e "\$p" ] || sha256sum -- "\$p" || '
+          'exit ${EditExit.unreadable}; done',
+      'klabautermann-sha256',
+      ...paths,
+    ];
   }
 
   /// [path] is absolute and normalized (03 §8.8), and holds no control

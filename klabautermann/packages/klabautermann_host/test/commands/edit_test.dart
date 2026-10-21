@@ -51,7 +51,14 @@ void main() {
       _target,
       kRootBackupsDir,
     ]);
-    expect(EditCommands.sha256List([_target]), ['sha256sum', '--', _target]);
+    expect(EditCommands.sha256List([_target]).sublist(3), [
+      'klabautermann-sha256',
+      _target,
+    ]);
+    expect(
+      EditCommands.sha256List([_target])[2],
+      contains('exit ${EditExit.unreadable};'),
+    );
   });
 
   test('crontab writes take stdin, for the login user or a named one', () {
