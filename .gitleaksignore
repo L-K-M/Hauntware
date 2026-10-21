@@ -16,6 +16,8 @@ b5d86dd228f24c21e3866e732640325ef04d2d03:klabautermann/packages/klabautermann_co
 b5d86dd228f24c21e3866e732640325ef04d2d03:klabautermann/packages/klabautermann_core/test/logs/log_service_test.dart:generic-api-key:81
 # Synthetic temp-file id in the Klabautermann edit tests (renamed
 # _tempId since); no credential.
+773cd45f1527fc1a763fa8dbf211678336dac32f:klabautermann/packages/klabautermann_host/test/commands/edit_test.dart:generic-api-key:7
+773cd45f1527fc1a763fa8dbf211678336dac32f:klabautermann/packages/klabautermann_host/test/integration/edit_shell_test.dart:generic-api-key:29
 210b5398951f7c97754fe489f54b088235a9f9d2:klabautermann/packages/klabautermann_host/test/commands/edit_test.dart:generic-api-key:8
 210b5398951f7c97754fe489f54b088235a9f9d2:klabautermann/packages/klabautermann_host/test/integration/edit_shell_test.dart:generic-api-key:30
 # Public loopback-only SSH fixture host keys; scope is separately gated.
