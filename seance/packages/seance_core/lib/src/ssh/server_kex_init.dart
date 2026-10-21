@@ -179,6 +179,12 @@ final class ServerKexTap {
   bool get serverDisconnected => _serverDisconnected;
   var _serverDisconnected = false;
 
+  /// Whether any byte of a binary packet arrived after the server's
+  /// identification line, readable or not: a server that closes before one
+  /// never began its side of the key exchange.
+  bool get packetStarted => _packetStarted;
+  var _packetStarted = false;
+
   /// [socket] with every byte the server sends shown to this tap as well.
   SSHSocket observe(SSHSocket socket) => _TappedSocket(socket, this);
 
@@ -234,6 +240,7 @@ final class ServerKexTap {
   /// Reads one unencrypted binary packet (RFC 4253 §6), keeping it only if
   /// it is the first KEXINIT, and returns where reading stopped in [chunk].
   int _readPacket(List<int> chunk, int offset) {
+    _packetStarted = true;
     if (_skipping > 0) {
       final skipped = min(_skipping, chunk.length - offset);
       _skipping -= skipped;
