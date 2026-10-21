@@ -181,7 +181,11 @@ void main() {
         OperationKind.stackStart,
         OperationKind.stackStop,
         OperationKind.stackRestart,
+        OperationKind.containerExec,
         OperationKind.redeploy,
+        OperationKind.stackServicePull,
+        OperationKind.stackServiceRecreate,
+        OperationKind.stackServiceScale,
         OperationKind.removeContainer,
         OperationKind.removeUnusedImage,
       };

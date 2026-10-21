@@ -186,10 +186,30 @@ import '../operations/plan_types.dart';
 /// [DockerSystemDfQuery] reads `/system/df` on demand, answered by a
 /// [DockerSystemDfPayload] of per-type totals.
 ///
+/// The vault then joined v3 the same way (03 §4.5, SYN-02, FL-03):
+/// [SetSyncSecrets] carries the device's "sync passwords" switch,
+/// [CredentialPromptRequest] gained `canSave` and [PromptSecretAnswer]
+/// `save`, which keeps a login password in the vault.
+///
+/// Container shells then joined v3 the same way (03 §7.13 CTX-07):
+/// [OpenTerminal], [TerminalInput], [TerminalResize], [TerminalEndInput]
+/// and [CloseTerminal] run one, answered by [TerminalOpened],
+/// [TerminalBytes] and [TerminalClosed]. One-off commands joined next
+/// (CTX-08): [ContainerExec] is planned as an action, and
+/// [ActionFinished] gained the [ExecOutput] it captured.
+///
 /// Job history then joined v3 the same way (03 §7.7, JOB-04, JOB-05):
 /// [JobHistoryQuery], answered by [JobHistoryResult], reads anacron's
 /// jobs and stamps, a timer's last run, or the runs cron logged.
 const int kEngineProtocolVersion = 3;
+
+/// The most container shells one server holds open at once [E]: each on a
+/// relay holds a session channel (03 §5.2).
+const int kTerminalsPerServerMax = 4;
+
+/// The largest terminal [OpenTerminal] and [TerminalResize] take, in
+/// either dimension.
+const int kTerminalDimensionMax = 1000;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
 /// only: no function-typed fields, no Futures, no `dartssh2` or `seance_core`
@@ -587,6 +607,84 @@ final class SetSafetyPolicy extends EngineRequest {
   final SafetyPolicy policy;
 }
 
+/// Opens a shell in [containerId] on [serverId] (03 §7.13, CTX-07): an
+/// exec with a TTY over the API upgrade (03 §5.7). [shell] null runs
+/// `/bin/bash` where the container has it and `/bin/sh` otherwise;
+/// [user] null runs as the container's user. Refused, as an action is,
+/// on an observe-only or read-only server. Answered by [TerminalOpened],
+/// then [TerminalBytes], and by [TerminalClosed] once, also when the
+/// shell never starts. The id is the app's and must be new.
+final class OpenTerminal extends EngineRequest {
+  const OpenTerminal({
+    required this.terminalId,
+    required this.serverId,
+    required this.containerId,
+    this.shell,
+    this.user,
+    required this.columns,
+    required this.rows,
+  });
+
+  final String terminalId;
+  final String serverId;
+  final String containerId;
+  final String? shell;
+  final String? user;
+
+  /// The terminal's size, at most [kTerminalDimensionMax] each.
+  final int columns;
+  final int rows;
+}
+
+/// Keystrokes and pastes for [terminalId]'s shell, as the terminal
+/// encoded them.
+final class TerminalInput extends EngineRequest {
+  const TerminalInput(this.terminalId, this.bytes);
+
+  final String terminalId;
+  final Uint8List bytes;
+}
+
+/// [terminalId]'s terminal changed size. The engine passes each size on
+/// in the order it came, columns as Docker's `w` and rows as its `h`.
+final class TerminalResize extends EngineRequest {
+  const TerminalResize(
+    this.terminalId, {
+    required this.columns,
+    required this.rows,
+  });
+
+  final String terminalId;
+  final int columns;
+  final int rows;
+}
+
+/// Ends [terminalId]'s input: stdin EOF as a half-close (03 §5.7), while
+/// its output keeps coming until the shell exits.
+final class TerminalEndInput extends EngineRequest {
+  const TerminalEndInput(this.terminalId);
+
+  final String terminalId;
+}
+
+/// Closes [terminalId]'s shell; [TerminalClosed] follows with
+/// [TerminalCloseReason.closed]. An id with no open shell does nothing.
+final class CloseTerminal extends EngineRequest {
+  const CloseTerminal(this.terminalId);
+
+  final String terminalId;
+}
+
+/// The device's "sync passwords" switch (03 §4.5, SYN-02), which the app
+/// keeps in `settings.json` as `klabautermann.sync.secrets`, sent at spawn
+/// and on every change. Until it arrives the switch is off: sync rounds
+/// apply no pulled `secret:` record to the vault.
+final class SetSyncSecrets extends EngineRequest {
+  const SetSyncSecrets({required this.enabled});
+
+  final bool enabled;
+}
+
 /// Turns admin mode on or off for [serverId] (03 §8.2, SAF-02). Turning
 /// it on detects how to elevate and asks for the password only when that
 /// needs one; [AdminModeState] reports each step.
@@ -655,18 +753,6 @@ final class HandleAlert extends EngineRequest {
 
   final String alertRef;
   final AlertAction action;
-}
-
-/// Opens a container or host shell stream (v1, 03 §10.1); bytes arrive as
-/// [TerminalBytes] until [TerminalClosed].
-final class OpenTerminal extends EngineRequest {
-  const OpenTerminal({required this.serverId, this.containerId, this.shell});
-
-  final String serverId;
-
-  /// Null means the host shell, not a container.
-  final String? containerId;
-  final String? shell;
 }
 
 /// Every message the engine sends the UI isolate (03 §10.1, D18). Same plain
@@ -1205,6 +1291,7 @@ final class ActionFinished extends EngineEvent {
     this.httpStatus,
     this.revalidation,
     this.operationId,
+    this.output,
   });
 
   final String planId;
@@ -1217,8 +1304,8 @@ final class ActionFinished extends EngineEvent {
   /// The index of the step that failed, in the preview's steps.
   final int? failedStep;
 
-  /// A failed shell step's exit status; null when the channel ended
-  /// without one.
+  /// A failed shell step's exit status, or a [ContainerExec]'s whether
+  /// it failed or not; null when the channel ended without one.
   final int? exitCode;
 
   /// A failed API step's HTTP status.
@@ -1230,7 +1317,31 @@ final class ActionFinished extends EngineEvent {
   /// The detached operation a started plan runs as, which
   /// [OperationsChanged] lists.
   final String? operationId;
+
+  /// What a [ContainerExec] printed, whether it succeeded or failed.
+  final ExecOutput? output;
 }
+
+/// A one-off command's output (CTX-08), with secrets redacted as the
+/// audit log redacts them, at most [kExecOutputMax] bytes in all.
+@immutable
+final class ExecOutput {
+  const ExecOutput({
+    required this.stdout,
+    required this.stderr,
+    this.truncated = false,
+  });
+
+  final String stdout;
+  final String stderr;
+
+  /// Whether the command printed more than [kExecOutputMax] bytes, the
+  /// rest of which was read and dropped.
+  final bool truncated;
+}
+
+/// The most a one-off command's output keeps [E] (CTX-08).
+const int kExecOutputMax = 1024 * 1024;
 
 /// Why a plan failed.
 enum ActionFailure {
@@ -1592,6 +1703,85 @@ final class AuditRecord {
   };
 }
 
+/// [terminalId]'s shell started: [command] is what runs, as the exec
+/// was created.
+final class TerminalOpened extends EngineEvent {
+  TerminalOpened(this.terminalId, Iterable<String> command)
+    : command = List.unmodifiable(command);
+
+  final String terminalId;
+  final List<String> command;
+}
+
+/// Output of [terminalId]'s shell, raw as the TTY wrote it, in order.
+/// The engine sends at most 20 a second, as it does [LogBatch]es.
+final class TerminalBytes extends EngineEvent {
+  const TerminalBytes(this.terminalId, this.bytes);
+
+  final String terminalId;
+  final Uint8List bytes;
+}
+
+/// [terminalId]'s shell ended, or never started, and why. Sent once;
+/// the id may be used again after it.
+final class TerminalClosed extends EngineEvent {
+  const TerminalClosed(
+    this.terminalId,
+    this.reason, {
+    this.exitCode,
+    this.detail,
+  });
+
+  final String terminalId;
+  final TerminalCloseReason reason;
+
+  /// The shell's exit code, with [TerminalCloseReason.exited] when the
+  /// daemon reported one.
+  final int? exitCode;
+
+  /// The daemon's message or the error, for the app to show as is.
+  final String? detail;
+}
+
+/// Why a container shell ended or never started.
+enum TerminalCloseReason {
+  /// The shell exited; [TerminalClosed.exitCode] says how.
+  exited,
+
+  /// [CloseTerminal] closed it.
+  closed,
+
+  /// The server is observe-only (SAF-01).
+  observeOnly,
+
+  /// Read-only mode is on (SAF-06).
+  readOnly,
+
+  /// The server is not in the fleet.
+  notInFleet,
+
+  /// The server's Docker endpoint could not be reached.
+  endpointUnavailable,
+
+  /// No session channel was free on the server's relay (03 §5.2).
+  noChannel,
+
+  /// The server already holds [kTerminalsPerServerMax] shells.
+  tooMany,
+
+  /// The container is gone, or the daemon refused the exec.
+  refused,
+
+  /// The server's link was lost.
+  linkLost,
+
+  /// Admin mode ended, and with it the sudo relay the shell ran over.
+  adminEnded,
+
+  /// Anything else; [TerminalClosed.detail] says what.
+  failed,
+}
+
 /// Where admin mode stands on [serverId] (03 §8.2, M4 plan M5). The app
 /// shows the chip and its countdown from [expiresAt] while [phase] is
 /// [AdminModePhase.on]. No field ever holds the password.
@@ -1742,22 +1932,6 @@ final class AlertStatusChanged extends EngineEvent {
 
   final String alertRef;
   final AlertStatus status;
-}
-
-/// Output bytes from an [OpenTerminal] stream (v1, 03 §10.1).
-final class TerminalBytes extends EngineEvent {
-  const TerminalBytes(this.terminalId, this.bytes);
-
-  final String terminalId;
-  final Uint8List bytes;
-}
-
-/// The terminal stream ended (v1, 03 §10.1).
-final class TerminalClosed extends EngineEvent {
-  const TerminalClosed(this.terminalId, {this.reason});
-
-  final String terminalId;
-  final String? reason;
 }
 
 /// The port SSH uses when a config names none (RFC 4253, section 4.1).
@@ -3079,6 +3253,22 @@ final class ContainerAction extends ActionIntent {
   final KillSignal? signal;
 }
 
+/// Runs [argv] once in [containerId] without a TTY (03 §7.13, CTX-08), as
+/// [user] where set, and reports its output and exit code in
+/// [ActionFinished.output] and [ActionFinished.exitCode].
+final class ContainerExec extends ActionIntent {
+  ContainerExec(
+    super.serverId, {
+    required this.containerId,
+    required Iterable<String> argv,
+    this.user,
+  }) : argv = List.unmodifiable(argv);
+
+  final String containerId;
+  final List<String> argv;
+  final String? user;
+}
+
 /// Removes a container (CTR-05), its anonymous volumes with [volumes],
 /// a running one with [force].
 final class RemoveContainer extends ActionIntent {
@@ -3106,19 +3296,56 @@ final class RemoveImage extends ActionIntent {
 /// What [StackAction] does to a Compose project (STK-03).
 enum StackVerb { start, stop, restart }
 
-/// Starts, stops or restarts a Compose project's containers (STK-03).
-/// [actAnyway] confirms acting on a stack another manager owns (03 §8.7).
+/// Starts, stops or restarts a Compose project's containers (STK-03), or
+/// only [service]'s (STK-23). [actAnyway] confirms acting on a stack
+/// another manager owns (03 §8.7).
 final class StackAction extends ActionIntent {
   const StackAction(
     super.serverId, {
     required this.project,
     required this.verb,
+    this.service,
     this.actAnyway = false,
   });
 
   final String project;
   final StackVerb verb;
+  final String? service;
   final bool actAnyway;
+}
+
+/// What [StackComposeAction] runs on a Compose project (STK-23).
+enum StackComposeVerb {
+  /// Pull one service's image.
+  pullService,
+
+  /// Recreate one service's containers even when unchanged.
+  recreateService,
+
+  /// Set one service's replica count.
+  scaleService,
+
+  /// Take the whole stack down, never with its volumes.
+  down,
+}
+
+/// A compose operation on a verified, unmanaged stack (STK-23), run as
+/// one detached operation as STK-06's redeploy is: [service] for every
+/// verb but [StackComposeVerb.down], and [replicas] for
+/// [StackComposeVerb.scaleService].
+final class StackComposeAction extends ActionIntent {
+  const StackComposeAction(
+    super.serverId, {
+    required this.project,
+    required this.verb,
+    this.service,
+    this.replicas,
+  });
+
+  final String project;
+  final StackComposeVerb verb;
+  final String? service;
+  final int? replicas;
 }
 
 /// Pulls a verified, unmanaged stack's images and recreates it (STK-06),
@@ -3338,14 +3565,23 @@ final class KeyboardInteractivePromptRequest extends PromptRequest {
   PromptKind get kind => PromptKind.keyboardInteractive;
 }
 
-/// The login password for [user] (03 §4.5).
+/// The login password for [user] (03 §4.5): asked on a connect the user
+/// started, for a server whose password the vault does not hold.
 final class CredentialPromptRequest extends PromptRequest {
-  const CredentialPromptRequest({required this.user, this.retry = false});
+  const CredentialPromptRequest({
+    required this.user,
+    this.retry = false,
+    this.canSave = false,
+  });
 
   final String user;
 
   /// Whether the server refused the previous answer to this question.
   final bool retry;
+
+  /// Whether the answer can be kept in the vault ([PromptSecretAnswer.save]):
+  /// the server names a vault entry and the engine may write the vault.
+  final bool canSave;
 
   @override
   PromptKind get kind => PromptKind.credential;
@@ -3390,9 +3626,13 @@ final class PromptTrustAnswer extends PromptAnswer {
 /// One secret for [PromptKind.credential] and [PromptKind.elevation];
 /// null dismisses the prompt without answering.
 final class PromptSecretAnswer extends PromptAnswer {
-  const PromptSecretAnswer(this.secret);
+  const PromptSecretAnswer(this.secret, {this.save = false});
 
   final String? secret;
+
+  /// Keep [secret] in the vault once the server accepts it; honoured only
+  /// for a [CredentialPromptRequest] whose `canSave` is set.
+  final bool save;
 }
 
 /// The ordered responses for [PromptKind.keyboardInteractive].

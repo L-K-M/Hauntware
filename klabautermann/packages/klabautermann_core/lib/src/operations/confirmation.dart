@@ -17,9 +17,15 @@ enum OperationKind {
   stackStop(ConfirmationTier.acknowledge),
   stackRestart(ConfirmationTier.acknowledge),
 
+  /// A one-off command in a container (CTX-08).
+  containerExec(ConfirmationTier.acknowledge),
+
   /// Pull and redeploy, keeping orphans.
   redeploy(ConfirmationTier.acknowledge),
   redeployRemovingOrphans(ConfirmationTier.typedPhrase),
+  stackServicePull(ConfirmationTier.acknowledge),
+  stackServiceRecreate(ConfirmationTier.acknowledge),
+  stackServiceScale(ConfirmationTier.acknowledge),
   removeContainer(ConfirmationTier.acknowledge),
   removeContainerWithVolumes(ConfirmationTier.typedPhrase),
   removeUnusedImage(ConfirmationTier.acknowledge),
