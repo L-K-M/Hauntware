@@ -1074,7 +1074,7 @@ void engineMain(
                     refusal: ActionRefusalReason.engineUnavailable,
                   ),
                 );
-          case RedeployStack():
+          case RedeployStack() || StackComposeAction():
             final router = docker;
             if (router == null) {
               refuse(ActionRefusalReason.engineUnavailable);
@@ -1085,9 +1085,8 @@ void engineMain(
             attempt =
                 lendSession(
                   serverId,
-                  () => router.useStacks(
-                    serverId,
-                    (client, route, stacks) => planRedeploy(intent, (
+                  () => router.useStacks(serverId, (client, route, stacks) {
+                    final RedeployPlanContext context = (
                       client: client,
                       route: route,
                       stacks: stacks,
@@ -1105,8 +1104,21 @@ void engineMain(
                       },
                       protection: protection,
                       loginUser: profile.user ?? 'login user',
-                    )),
-                  ),
+                    );
+                    return switch (intent) {
+                      final RedeployStack redeploy => planRedeploy(
+                        redeploy,
+                        context,
+                      ),
+                      final StackComposeAction compose => planStackCompose(
+                        compose,
+                        context,
+                      ),
+                      _ => throw StateError(
+                        'not a compose intent: ${intent.runtimeType}',
+                      ),
+                    };
+                  }),
                 ).catchError(
                   (Object _) => (
                     plan: null,

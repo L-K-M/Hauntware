@@ -3213,19 +3213,56 @@ final class RemoveImage extends ActionIntent {
 /// What [StackAction] does to a Compose project (STK-03).
 enum StackVerb { start, stop, restart }
 
-/// Starts, stops or restarts a Compose project's containers (STK-03).
-/// [actAnyway] confirms acting on a stack another manager owns (03 §8.7).
+/// Starts, stops or restarts a Compose project's containers (STK-03), or
+/// only [service]'s (STK-23). [actAnyway] confirms acting on a stack
+/// another manager owns (03 §8.7).
 final class StackAction extends ActionIntent {
   const StackAction(
     super.serverId, {
     required this.project,
     required this.verb,
+    this.service,
     this.actAnyway = false,
   });
 
   final String project;
   final StackVerb verb;
+  final String? service;
   final bool actAnyway;
+}
+
+/// What [StackComposeAction] runs on a Compose project (STK-23).
+enum StackComposeVerb {
+  /// Pull one service's image.
+  pullService,
+
+  /// Recreate one service's containers even when unchanged.
+  recreateService,
+
+  /// Set one service's replica count.
+  scaleService,
+
+  /// Take the whole stack down, never with its volumes.
+  down,
+}
+
+/// A compose operation on a verified, unmanaged stack (STK-23), run as
+/// one detached operation as STK-06's redeploy is: [service] for every
+/// verb but [StackComposeVerb.down], and [replicas] for
+/// [StackComposeVerb.scaleService].
+final class StackComposeAction extends ActionIntent {
+  const StackComposeAction(
+    super.serverId, {
+    required this.project,
+    required this.verb,
+    this.service,
+    this.replicas,
+  });
+
+  final String project;
+  final StackComposeVerb verb;
+  final String? service;
+  final int? replicas;
 }
 
 /// Pulls a verified, unmanaged stack's images and recreates it (STK-06),
