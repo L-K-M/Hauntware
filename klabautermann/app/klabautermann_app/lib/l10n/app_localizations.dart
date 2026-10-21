@@ -6627,6 +6627,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Séance did not open the link.'**
   String get handOffSeanceNotOpened;
+
+  /// Hand-off (X-04): opens Séance on this server with a cd to this folder typed at the prompt, which the user runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Open terminal here'**
+  String get handOffOpenTerminalHere;
+
+  /// Hand-off (X-04, X-10): opens this folder or file on this server in Poltergeist, the suite's file transfer app.
+  ///
+  /// In en, this message translates to:
+  /// **'Open in Poltergeist'**
+  String get handOffOpenInPoltergeist;
+
+  /// Toast when the operating system refused to open a poltergeist:// hand-off link.
+  ///
+  /// In en, this message translates to:
+  /// **'Poltergeist did not open the link.'**
+  String get handOffPoltergeistNotOpened;
 }
 
 class _AppLocalizationsDelegate
