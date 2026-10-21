@@ -26,6 +26,9 @@ enum ActionEntryPoint {
   /// root-equivalent engine).
   containerShell,
 
+  /// A one-off command in a container (CTX-08).
+  containerCommand,
+
   /// Removing an image (IMG-02).
   imageRemove,
 

@@ -20,7 +20,7 @@ const double _sheetBelowWidth = 600;
 void startAction(
   BuildContext context,
   ActionIntent intent, {
-  void Function(ActionPreview preview)? onRun,
+  void Function(String planId, ActionPreview preview)? onRun,
 }) {
   final operations = OperationsScope.maybeOf(context);
   if (operations == null || operations.planning) return;
@@ -30,15 +30,15 @@ void startAction(
 /// Plans [intent] through [operations], shows the preview, and runs the
 /// plan once the user confirms (SAF-04, SAF-05). A refused plan says why
 /// in a toast; the run's progress and end come as toasts from
-/// [ActionResultToasts]. [onRun] hears of the preview once its plan runs,
-/// as JOB-08's output sheet does. A preview that offers another intent
+/// [ActionResultToasts]. [onRun] hears of the plan and its preview once
+/// it runs, as JOB-08's and CTX-08's output sheets do. A preview that offers another intent
 /// (STK-06's orphan removal) plans that one and shows it instead.
 /// Returns once the preview is closed.
 Future<void> previewAndRun(
   BuildContext context,
   OperationsController operations,
   ActionIntent intent, {
-  void Function(ActionPreview preview)? onRun,
+  void Function(String planId, ActionPreview preview)? onRun,
 }) async {
   final overlay = Overlay.of(context, rootOverlay: true);
   final l10n = AppLocalizations.of(context);
@@ -65,7 +65,7 @@ Future<void> previewAndRun(
         }
         if (confirmation == null) return;
         operations.run(planId, confirmation);
-        onRun?.call(preview);
+        onRun?.call(planId, preview);
         if (overlay.mounted) {
           showTopToast(
             overlay,

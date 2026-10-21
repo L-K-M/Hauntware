@@ -6340,6 +6340,72 @@ abstract class AppLocalizations {
   /// **'Show logs'**
   String get dockerLogsShow;
 
+  /// Tooltip of the button on a container's details that opens the one-off command sheet (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Run a command'**
+  String get dockerCommandOpen;
+
+  /// Title of the one-off command sheet (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Run a command in {container}'**
+  String dockerCommandTitle(String container);
+
+  /// Label of the one-off command's field (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Command'**
+  String get dockerCommandLabel;
+
+  /// Helper under the command field: the words run as typed, without a shell expanding them (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Runs without a shell or terminal. Quote words as in a shell; for pipes and variables, run sh -c \'…\'.'**
+  String get dockerCommandHelper;
+
+  /// Error under the command field when it is empty or a quote is left open (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a command, and close any open quote.'**
+  String get dockerCommandUnparsed;
+
+  /// Button that plans the one-off command, shows its preview and runs it once confirmed (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Run'**
+  String get dockerCommandRun;
+
+  /// Status of the one-off command sheet while the command runs (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Running…'**
+  String get dockerCommandRunning;
+
+  /// Label over the command's standard output (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Output'**
+  String get dockerCommandStdout;
+
+  /// Label over the command's standard error (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Errors'**
+  String get dockerCommandStderr;
+
+  /// Shown when the finished command wrote nothing to stdout or stderr (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'The command printed nothing.'**
+  String get dockerCommandNoOutput;
+
+  /// Shown when the command's output exceeded the kept maximum (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'The output was longer than 1 MiB; the rest was dropped.'**
+  String get dockerCommandTruncated;
+
   /// Tooltip of the button on a container's details that opens a shell in the container (CTX-07).
   ///
   /// In en, this message translates to:
