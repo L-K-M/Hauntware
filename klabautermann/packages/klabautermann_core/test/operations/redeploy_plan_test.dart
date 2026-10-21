@@ -163,6 +163,34 @@ Future<PlanAttempt> _plan({
   ),
 );
 
+Future<PlanAttempt> _composeOp(
+  StackComposeVerb verb, {
+  String? service,
+  int? replicas,
+  String project = 'shop',
+}) => planStackCompose(
+  StackComposeAction(
+    _server,
+    project: project,
+    verb: verb,
+    service: service,
+    replicas: replicas,
+  ),
+  (
+    client: DockerClient(
+      DockerHttpClient(() async => _engine.connect().client),
+      apiVersion: ApiVersion.tryParse('1.52')!,
+    ),
+    route: _route,
+    stacks: _host.sources(),
+    profile: _profile(),
+    adminMode: false,
+    sudoAllows: (_) async => true,
+    protection: const ProtectionContext(),
+    loginUser: 'deploy',
+  ),
+);
+
 OperationPlan _planned(PlanAttempt attempt) {
   expect(attempt.refusal, isNull);
   return attempt.plan!;
@@ -405,6 +433,130 @@ void main() {
         expect(plan.warnings, {PlanWarning.profilesUnknown});
       },
     );
+  });
+
+  group('STK-23 compose operations', () {
+    List<String> tail(OperationPlan plan) =>
+        _argv(plan, 1).sublist(_argv(plan, 1).indexOf('--env-file') + 2);
+
+    test('each runs config -q, then its one compose step through the '
+        'endpoint', () async {
+      final pull = _planned(
+        await _composeOp(StackComposeVerb.pullService, service: 'web'),
+      );
+      expect(pull.kind, OperationKind.stackServicePull);
+      expect(pull.tier, ConfirmationTier.acknowledge);
+      expect(pull.targetName, 'shop/web');
+      expect(pull.steps, hasLength(2));
+      expect(_argv(pull, 0).sublist(_argv(pull, 0).length - 2), [
+        'config',
+        '-q',
+      ]);
+      expect(tail(pull), [
+        '--progress',
+        'plain',
+        '--ansi',
+        'never',
+        'pull',
+        'web',
+      ]);
+      expect(_argv(pull, 1), containsAllInOrder(['--host', 'unix://$_socket']));
+      expect(pull.detachedRunner, DetachedRunner.loginSetsid);
+
+      final recreate = _planned(
+        await _composeOp(StackComposeVerb.recreateService, service: 'db'),
+      );
+      expect(recreate.kind, OperationKind.stackServiceRecreate);
+      expect(tail(recreate), [
+        '--progress',
+        'plain',
+        '--ansi',
+        'never',
+        'up',
+        '-d',
+        '--force-recreate',
+        '--no-deps',
+        'db',
+      ]);
+
+      final scale = _planned(
+        await _composeOp(
+          StackComposeVerb.scaleService,
+          service: 'web',
+          replicas: 3,
+        ),
+      );
+      expect(scale.kind, OperationKind.stackServiceScale);
+      expect(tail(scale), [
+        '--progress',
+        'plain',
+        '--ansi',
+        'never',
+        'up',
+        '-d',
+        '--no-deps',
+        '--scale',
+        'web=3',
+        'web',
+      ]);
+    });
+
+    test('down takes the whole stack, needs its name typed, and never '
+        'removes volumes', () async {
+      final down = _planned(await _composeOp(StackComposeVerb.down));
+      expect(down.kind, OperationKind.composeDown);
+      expect(down.tier, ConfirmationTier.typedPhrase);
+      expect(down.targetName, 'shop');
+      expect(tail(down), ['down']);
+      expect(_argv(down, 1), isNot(contains('-v')));
+      expect(_argv(down, 1), isNot(contains('--volumes')));
+    });
+
+    test('each re-validates the stack and its config hashes', () async {
+      final plan = _planned(
+        await _composeOp(StackComposeVerb.pullService, service: 'web'),
+      );
+      final [_, config] = plan.revalidate;
+      expect((config as StackConfigUnchanged).hashes, {
+        'web': 'aa11',
+        'db': 'bb22',
+      });
+    });
+
+    test('a missing or extra service, or a bad replica count, is no '
+        'target', () async {
+      for (final attempt in [
+        _composeOp(StackComposeVerb.pullService),
+        _composeOp(StackComposeVerb.down, service: 'web'),
+        _composeOp(StackComposeVerb.pullService, service: 'cache'),
+        _composeOp(StackComposeVerb.scaleService, service: 'web'),
+        _composeOp(StackComposeVerb.scaleService, service: 'web', replicas: -1),
+        _composeOp(
+          StackComposeVerb.scaleService,
+          service: 'web',
+          replicas: kComposeMaxScale + 1,
+        ),
+        _composeOp(
+          StackComposeVerb.recreateService,
+          service: 'web',
+          replicas: 2,
+        ),
+      ]) {
+        expect((await attempt).refusal, ActionRefusalReason.invalidTarget);
+      }
+    });
+
+    test('they share the redeploy refusals', () async {
+      _engine.containers
+        ..clear()
+        ..add(
+          _container('shop-web-1', 'web', extra: {'coolify.managed': 'true'}),
+        );
+      expect(
+        (await _composeOp(StackComposeVerb.down)).refusal,
+        ActionRefusalReason.stackManaged,
+      );
+    });
   });
 
   group('refusals', () {

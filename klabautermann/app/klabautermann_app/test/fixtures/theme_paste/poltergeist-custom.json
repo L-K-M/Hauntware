@@ -1,0 +1,17 @@
+{
+  "name": "Custom",
+  "accent": "#66ADFF",
+  "surface": "#0E131F",
+  "sidebar": "#0A0E18",
+  "raised": "#151C2B",
+  "text": "#E6EDFA",
+  "secondaryText": "#9EADC7",
+  "hairline": "#26314A",
+  "selection": "#2A5DA8",
+  "online": "#4DD18C",
+  "offline": "#FF6B73",
+  "connecting": "#FFC252",
+  "unknown": "#8CA3CC",
+  "fontFamily": "Fira Code",
+  "cornerScale": 1.5
+}

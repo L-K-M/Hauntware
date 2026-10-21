@@ -1,0 +1,16 @@
+{
+  "name": "Vapor",
+  "accent": "#FF4CD9",
+  "surface": "#170A29",
+  "sidebar": "#12071F",
+  "raised": "#200F38",
+  "text": "#EDE6FF",
+  "secondaryText": "#99D9F2",
+  "hairline": "#3A2466",
+  "selection": "#8C1FA3",
+  "online": "#4DFFCC",
+  "offline": "#FF4073",
+  "connecting": "#FFCC4D",
+  "unknown": "#8CB3FF",
+  "cornerScale": 1.4
+}
