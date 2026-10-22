@@ -116,6 +116,19 @@ void main() {
       'Restart=always\n',
     );
     expect(_revealed(text), file);
+
+    const crlf =
+        'Environment=TOKEN=hunter2\r\n'
+        'ExecStart=/usr/bin/app \\\r\n'
+        '    --db-password=hunter2\r\n';
+    final crlfText = maskUnitFile(crlf);
+    expect(
+      _shown(crlfText),
+      'Environment=********\r\n'
+      'ExecStart=/usr/bin/app \\\r\n'
+      '********\r\n',
+    );
+    expect(_revealed(crlfText), crlf);
   });
 
   test("a user unit reads in the user's manager", () async {

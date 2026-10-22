@@ -134,8 +134,11 @@ List<MaskedValue> maskUnitFile(String text) {
   // masked whole.
   var continuesSecret = false;
   final lines = text.split('\n');
-  for (final (index, line) in lines.indexed) {
-    final last = index == lines.length - 1;
+  for (final (index, raw) in lines.indexed) {
+    // A CRLF file's '\r' stays out of the match and the mask.
+    final cr = raw.endsWith('\r');
+    final line = cr ? raw.substring(0, raw.length - 1) : raw;
+    final end = '${cr ? '\r' : ''}${index == lines.length - 1 ? '' : '\n'}';
     if (continuesSecret) {
       continuesSecret = line.endsWith('\\');
       if (line.isEmpty) {
@@ -144,7 +147,7 @@ List<MaskedValue> maskUnitFile(String text) {
         flush();
         spans.add(MaskedValue.secret(line));
       }
-      if (!last) plain.write('\n');
+      plain.write(end);
       continue;
     }
     final environment = _environment.firstMatch(line);
@@ -168,7 +171,7 @@ List<MaskedValue> maskUnitFile(String text) {
       }
       continuesSecret = value.endsWith('\\');
     }
-    if (!last) plain.write('\n');
+    plain.write(end);
   }
   flush();
   return spans;
