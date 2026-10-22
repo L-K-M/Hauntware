@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- A double-click in the Files pane opens its row even while the machine
+  is busy. The pane timed the two presses against the wall clock as it
+  handled them, so a stalled moment in between lost the double-click and
+  left you with two single clicks; it now times the presses themselves.
 - Text printed after Claude Code exits is no longer underlined. The
   terminal read keyboard-mode requests and other sequences it does not
   support as text styles, scrolling or cursor moves; it now ignores them.

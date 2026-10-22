@@ -150,7 +150,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
   /// The pane's double-click window (the pane state times it itself, as
   /// Poltergeist's `_RowGestures` does): a second primary press on the
   /// same row inside it opens the entry.
-  DateTime _lastPrimaryDownAt = DateTime.fromMillisecondsSinceEpoch(0);
+  Duration _lastPrimaryDownAt = Duration.zero;
   String? _lastPrimaryDownPath;
 
   final FocusNode _listFocus = FocusNode();
@@ -562,11 +562,13 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
       controller.toggleSelection(entry.path);
       return;
     }
-    final now = DateTime.now();
+    // The window runs on the press's own stamp, not on when this handler
+    // got scheduled: a stalled main thread between two quick clicks must
+    // not split them, and two slow clicks must not merge.
     final doubleClick =
         _lastPrimaryDownPath == entry.path &&
-        now.difference(_lastPrimaryDownAt) <= kDoubleTapTimeout;
-    _lastPrimaryDownAt = now;
+        event.timeStamp - _lastPrimaryDownAt <= kDoubleTapTimeout;
+    _lastPrimaryDownAt = event.timeStamp;
     _lastPrimaryDownPath = entry.path;
     controller.selectOnly(entry.path);
     if (doubleClick) {
