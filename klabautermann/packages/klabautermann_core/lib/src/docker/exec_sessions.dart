@@ -20,12 +20,14 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:klabautermann_docker/klabautermann_docker.dart';
 
 import '../admin/safety_policy.dart';
 import '../engine/protocol.dart';
+import '../operations/plan_types.dart' show ExecStep;
 import 'docker_ladder.dart' show DockerRank;
 import 'docker_router.dart'
     show DockerChannelUnavailable, DockerEndpointUnavailable;
@@ -70,6 +72,78 @@ typedef ExecControl =
       String serverId,
       Future<T> Function(DockerClient client) call,
     );
+
+/// How long a one-off command may run before the engine gives up on it
+/// and closes its connection [E] (CTX-08).
+const Duration kExecOneOffTimeout = Duration(minutes: 10);
+
+/// Runs [step], a one-off command (CTX-08), without a TTY: the create
+/// and the exit code over [control], the hijacked start over a connection
+/// [open] gives, which closes when the command ends. Keeps at most
+/// [kExecOutputMax] bytes of stdout and stderr together, reading and
+/// dropping the rest, and hands both through [redact]. A command that
+/// outlives [timeout] ends as a [DockerTransportException]; the Engine
+/// API has no call that stops an exec, so a command that ignores its
+/// closed streams keeps running in the container until it ends.
+Future<({int? exitCode, ExecOutput output})> runOneOffExec(
+  ExecStep step, {
+  required Future<({DockerStreamLease lease, DockerRank rank})> Function() open,
+  required Future<T> Function<T>(Future<T> Function(DockerClient client) call)
+  control,
+  required String Function(String text) redact,
+  Duration timeout = kExecOneOffTimeout,
+}) async {
+  final execId = await control(
+    (client) => client.createExec(
+      step.containerId,
+      step.argv,
+      stdin: false,
+      user: step.user,
+    ),
+  );
+
+  final stdout = BytesBuilder(copy: false);
+  final stderr = BytesBuilder(copy: false);
+  var kept = 0;
+  var truncated = false;
+  final (:lease, rank: _) = await open();
+  try {
+    final response = await lease.client.startExec(execId);
+    try {
+      await demuxStdcopy(response.body.stream)
+          .forEach((frame) {
+            final room = kExecOutputMax - kept;
+            final bytes = frame.bytes;
+            if (bytes.length > room) truncated = true;
+            if (room <= 0) return;
+            final take = bytes.length > room ? bytes.sublist(0, room) : bytes;
+            kept += take.length;
+            (frame.stream == StdcopyKind.stderr ? stderr : stdout).add(take);
+          })
+          .timeout(timeout);
+    } on TimeoutException {
+      throw DockerTransportException(
+        'one-off command still running after ${timeout.inMinutes} min',
+      );
+    } finally {
+      await _quietly(response.body.close());
+    }
+  } finally {
+    await lease.close();
+  }
+
+  final inspect = await control((client) => client.inspectExec(execId));
+  String text(BytesBuilder bytes) =>
+      redact(utf8.decode(bytes.takeBytes(), allowMalformed: true));
+  return (
+    exitCode: inspect.value.exitCode,
+    output: ExecOutput(
+      stdout: text(stdout),
+      stderr: text(stderr),
+      truncated: truncated,
+    ),
+  );
+}
 
 /// The engine's container shells, owned by the engine isolate.
 final class ExecSessions {

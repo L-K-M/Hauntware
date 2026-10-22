@@ -8,7 +8,13 @@ import 'package:meta/meta.dart';
 import 'package:seance_core/catalog.dart'
     show EndpointPin, EndpointPinStore, endpointPinsFileName;
 import 'package:seance_core/seance_core.dart'
-    show ImportedHost, Prober, ServerConfig, SshLink, TcpBannerProber;
+    show
+        ImportedHost,
+        Prober,
+        SecretRedactor,
+        ServerConfig,
+        SshLink,
+        TcpBannerProber;
 
 import '../admin/admin_mode.dart';
 import '../audit/audit_log.dart';
@@ -409,6 +415,9 @@ void engineMain(
         }
       },
     );
+    // One-off commands' output is redacted as the audit log redacts the
+    // steps (CTX-08, 03 §8.10).
+    final execRedactor = SecretRedactor();
     runner = OperationRunner(
       linkFor: links.link,
       emit: uiPort.send,
@@ -427,6 +436,19 @@ void engineMain(
           router.actionRan(serverId, containers: {?container}, images: images);
         }
         return status;
+      },
+      exec: (serverId, step) {
+        final router = docker;
+        if (router == null) {
+          throw const DockerEndpointUnavailable(DockerQueryFailure.cancelled);
+        }
+        return runOneOffExec(
+          step,
+          open: () => router.openExec(serverId),
+          control: <T>(call) =>
+              router.useEndpoint(serverId, (client, _) => call(client)),
+          redact: execRedactor.redact,
+        );
       },
       docker: (serverId, check) async {
         final router = docker;
@@ -1050,7 +1072,8 @@ void engineMain(
           case ContainerAction() ||
               RemoveContainer() ||
               RemoveImage() ||
-              StackAction():
+              StackAction() ||
+              ContainerExec():
             final router = docker;
             if (router == null) {
               refuse(ActionRefusalReason.engineUnavailable);

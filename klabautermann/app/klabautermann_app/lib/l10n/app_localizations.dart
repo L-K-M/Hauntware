@@ -4759,7 +4759,7 @@ abstract class AppLocalizations {
   /// An activity log row's action; action is the engine's intent type name.
   ///
   /// In en, this message translates to:
-  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} StackAction{Stack action} RedeployStack{Redeploy stack} other{Action}}'**
+  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} other{Action}}'**
   String activityAction(String action);
 
   /// An activity log row's confirmation; tier is the engine's ConfirmationTier name.

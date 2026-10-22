@@ -3622,6 +3622,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'RemoveImage': 'Remove image',
       'StackAction': 'Stack action',
       'RedeployStack': 'Redeploy stack',
+      'ContainerExec': 'Run command',
+      'ContainerShell': 'Container shell',
       'other': 'Action',
     });
     return '$_temp0';
