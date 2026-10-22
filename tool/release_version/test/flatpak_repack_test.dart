@@ -125,6 +125,51 @@ void main() {
     });
   });
 
+  // The Flathub runtimes are gigabytes; where their download lands decides
+  // whether every job pays for it or one job per runner does.
+  group('flatpak user installation', () {
+    Future<String> userInstall(Map<String, String> environment) async {
+      // The harness runs on CI itself, so drop the runner's own values
+      // before setting the ones under test.
+      final base = Map<String, String>.of(Platform.environment)
+        ..remove('RUNNER_TOOL_CACHE')
+        ..remove('FLATPAK_USER_DIR');
+      final result = await Process.run(
+        'bash',
+        [
+          '-c',
+          r'source "$1"; printf %s "${FLATPAK_USER_DIR:-}"',
+          '_',
+          _repackScript,
+        ],
+        environment: {...base, ...environment},
+      );
+      expect(result.exitCode, 0, reason: result.stderr as String);
+      return result.stdout as String;
+    }
+
+    test('rides the runner tool cache', () async {
+      expect(
+        await userInstall({'RUNNER_TOOL_CACHE': '/opt/toolcache'}),
+        '/opt/toolcache/flatpak-user',
+      );
+    });
+
+    test('leaves a local build to the flatpak default', () async {
+      expect(await userInstall({}), isEmpty);
+    });
+
+    test('respects a caller-chosen installation', () async {
+      expect(
+        await userInstall({
+          'RUNNER_TOOL_CACHE': '/opt/toolcache',
+          'FLATPAK_USER_DIR': '/elsewhere',
+        }),
+        '/elsewhere',
+      );
+    });
+  });
+
   final dpkgDeb = Process.runSync('bash', ['-c', 'command -v dpkg-deb']);
   group(
     'staging a .deb',

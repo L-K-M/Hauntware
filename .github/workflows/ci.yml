@@ -1492,7 +1492,7 @@ jobs:
     needs: affected
     if: needs.affected.outputs.planchette == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    timeout-minutes: 35
+    timeout-minutes: 75   # first run downloads the Flutter toolchain and, cold, the Flatpak runtimes
     strategy:
       fail-fast: false
       matrix:
@@ -1599,7 +1599,7 @@ jobs:
     needs: affected
     if: needs.affected.outputs.seance == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    timeout-minutes: 45   # first run downloads the Flutter toolchain
+    timeout-minutes: 75   # first run downloads the Flutter toolchain and, cold, the Flatpak runtimes
     strategy:
       fail-fast: false
       matrix:
@@ -1739,7 +1739,7 @@ jobs:
     needs: affected
     if: needs.affected.outputs.poltergeist == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    timeout-minutes: 45   # first run downloads the Flutter toolchain
+    timeout-minutes: 75   # first run downloads the Flutter toolchain and, cold, the Flatpak runtimes
     strategy:
       fail-fast: false
       matrix:
@@ -1872,7 +1872,7 @@ jobs:
     needs: affected
     if: needs.affected.outputs.klabautermann == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    timeout-minutes: 45   # first run downloads the Flutter toolchain
+    timeout-minutes: 75   # first run downloads the Flutter toolchain and, cold, the Flatpak runtimes
     strategy:
       fail-fast: false
       matrix:

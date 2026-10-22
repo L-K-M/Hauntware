@@ -21,6 +21,16 @@
 # links must resolve. ldd on the wrapper itself proves nothing — it is not
 # an ELF.
 # shellcheck disable=SC2016  # expanded by the sandbox's sh, not here
+# The Flathub runtimes this pulls (org.gnome.Sdk and the GL extension,
+# ~2 GB) make the bundle the longest step of a CI job. Keep the flatpak
+# user installation on the runner's tool cache — the durable volume the
+# Flutter toolchain and pub cache already use — so one download serves
+# every later job on that runner instead of one per job. A local build
+# has no tool cache and keeps flatpak's own default.
+if [[ -z "${FLATPAK_USER_DIR:-}" && -n "${RUNNER_TOOL_CACHE:-}" ]]; then
+  export FLATPAK_USER_DIR="$RUNNER_TOOL_CACHE/flatpak-user"
+fi
+
 FLATPAK_SMOKE_CHECK='
 fail() { echo "flatpak smoke check: $*" >&2; exit 1; }
 bin="$2/bin/$1"
