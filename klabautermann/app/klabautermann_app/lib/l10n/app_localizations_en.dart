@@ -3457,6 +3457,8 @@ class AppLocalizationsEn extends AppLocalizations {
           'The compose CLI could not list every profile\'s services, so some of these containers may belong to a service a profile enables.',
       'mayDieAtLogout':
           'This server ends your processes when you log out, which can stop the operation before it finishes.',
+      'unitNotVerified':
+          'This server\'s systemd is not known to be version 250 or later, so the unit file is not checked before it is replaced.',
       'other': '',
     });
     return '$_temp0';

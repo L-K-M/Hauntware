@@ -4537,7 +4537,7 @@ abstract class AppLocalizations {
   /// A warning in the action preview; warning is the engine's PlanWarning name.
   ///
   /// In en, this message translates to:
-  /// **'{warning, select, profileGatedServices{Some running services are enabled only by a compose profile, which Klabautermann cannot see. The redeploy leaves them as they are.} profilesUnknown{The compose CLI could not list every profile\'s services, so some of these containers may belong to a service a profile enables.} mayDieAtLogout{This server ends your processes when you log out, which can stop the operation before it finishes.} other{}}'**
+  /// **'{warning, select, profileGatedServices{Some running services are enabled only by a compose profile, which Klabautermann cannot see. The redeploy leaves them as they are.} profilesUnknown{The compose CLI could not list every profile\'s services, so some of these containers may belong to a service a profile enables.} mayDieAtLogout{This server ends your processes when you log out, which can stop the operation before it finishes.} unitNotVerified{This server\'s systemd is not known to be version 250 or later, so the unit file is not checked before it is replaced.} other{}}'**
   String actionPreviewWarning(String warning);
 
   /// Toast when a detached operation started on the server; its result shows under Operations.
