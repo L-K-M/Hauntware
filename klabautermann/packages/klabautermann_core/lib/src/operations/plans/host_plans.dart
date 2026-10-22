@@ -9,6 +9,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         HostCommands,
         HostProfile,
         SystemctlVerb,
+        UnitManager,
         kGuardedKillGone,
         kGuardedKillReused,
         kOwnCrontabSource,
@@ -35,13 +36,27 @@ typedef HostPlanContext = ({
   bool adminMode,
 });
 
-/// The verbs SVC-03 offers in the MVP (03 §7.5); enable, disable and the
-/// rest are v1.
+/// The verbs SVC-03 (MVP), SVC-05 and SVC-06 (v1) offer (03 §7.5).
 const _unitVerbs = {
   SystemctlVerb.start: OperationKind.start,
   SystemctlVerb.stop: OperationKind.stop,
   SystemctlVerb.restart: OperationKind.restart,
   SystemctlVerb.reload: OperationKind.reload,
+  SystemctlVerb.enable: OperationKind.enable,
+  SystemctlVerb.disable: OperationKind.disable,
+  SystemctlVerb.mask: OperationKind.mask,
+  SystemctlVerb.unmask: OperationKind.unmask,
+  SystemctlVerb.resetFailed: OperationKind.resetFailed,
+};
+
+/// The verbs that change what a unit does now, so the preview names the
+/// impact; the others change only what happens at the next boot or
+/// start, or clear a failed state.
+const _impactVerbs = {
+  SystemctlVerb.stop,
+  SystemctlVerb.restart,
+  SystemctlVerb.reload,
+  SystemctlVerb.mask,
 };
 
 /// The guarded kill's statuses that mean its target changed (03 §7.2).
@@ -123,52 +138,77 @@ Future<PlanAttempt> _planKill(KillProcess intent, HostPlanContext c) async {
   );
 }
 
-/// SVC-03 (M13): through elevation in admin mode, otherwise unelevated
-/// with `--no-ask-password`, in case polkit grants the verb.
+/// SVC-03, SVC-05 and SVC-06 (M13, M22): a system unit's verb runs
+/// through elevation in admin mode, otherwise unelevated with
+/// `--no-ask-password`, in case polkit grants it. A user unit's (SVC-09)
+/// always runs as the login user, admin mode or not. Protected targets
+/// apply in both managers.
 Future<PlanAttempt> _planUnit(UnitAction intent, HostPlanContext c) async {
   final kind = _unitVerbs[intent.verb];
   if (kind == null) return _refused(ActionRefusalReason.invalidTarget);
-  final argv = HostCommands.systemctl(intent.verb, intent.unit);
+  final manager = _manager(intent.scope, c);
+  final elevated = c.adminMode && !manager.isUser;
+  final argv = HostCommands.systemctl(
+    intent.verb,
+    intent.unit,
+    manager: manager,
+  );
   final protected = unitProtection(intent.unit, c.protection);
   return _planned(
     OperationPlan(
       intent: intent,
       kind: kind,
       targetName: intent.unit,
-      steps: [ShellStep(argv, elevated: c.adminMode)],
-      requiredLevel: c.adminMode ? RequiredLevel.admin : RequiredLevel.login,
-      runner: _runner(c, elevated: c.adminMode),
+      steps: [ShellStep(argv, elevated: elevated)],
+      requiredLevel: elevated ? RequiredLevel.admin : RequiredLevel.login,
+      runner: _runner(c, elevated: elevated),
       hostWrites: const [HostWriteRow.loginRecords],
-      impact: intent.verb == SystemctlVerb.start
-          ? null
-          : unitImpact(intent.unit, protected: protected),
+      impact: _impactVerbs.contains(intent.verb)
+          ? unitImpact(intent.unit, protected: protected)
+          : null,
       protected: protected,
-      revalidate: [UnitLoaded(intent.unit)],
+      revalidate: [UnitLoaded(intent.unit, manager: manager)],
     ),
   );
 }
 
+/// The manager [scope] addresses on the host [c] probed.
+UnitManager _manager(UnitScope scope, HostPlanContext c) => switch (scope) {
+  UnitScope.system => const UnitManager.system(),
+  UnitScope.user => UnitManager.userFor(
+    uid: c.profile.uid,
+    xdgRuntimeDir: c.profile.xdgRuntimeDir,
+  ),
+};
+
 /// JOB-08 (M13): starts the unit the timer activates with SVC-03's
 /// guards, and names it for the journal follow.
 Future<PlanAttempt> _planTimer(StartTimer intent, HostPlanContext c) async {
-  final unit = await _read(c.link, HostCommands.timerActivates(intent.timer));
+  final manager = _manager(intent.scope, c);
+  final elevated = c.adminMode && !manager.isUser;
+  final unit = await _read(
+    c.link,
+    HostCommands.timerActivates(intent.timer, manager: manager),
+  );
   if (unit == null || unit.isEmpty) {
     return _refused(ActionRefusalReason.invalidTarget);
   }
-  final argv = HostCommands.timerStart(unit);
+  final argv = HostCommands.timerStart(unit, manager: manager);
   final protected = unitProtection(unit, c.protection);
   return _planned(
     OperationPlan(
       intent: intent,
       kind: OperationKind.runTimerNow,
       targetName: intent.timer,
-      steps: [ShellStep(argv, elevated: c.adminMode)],
-      requiredLevel: c.adminMode ? RequiredLevel.admin : RequiredLevel.login,
-      runner: _runner(c, elevated: c.adminMode),
+      steps: [ShellStep(argv, elevated: elevated)],
+      requiredLevel: elevated ? RequiredLevel.admin : RequiredLevel.login,
+      runner: _runner(c, elevated: elevated),
       hostWrites: const [HostWriteRow.loginRecords],
       protected: protected,
-      followUnit: unit,
-      revalidate: [UnitLoaded(unit)],
+      // The output follow reads the system journal by unit, where a user
+      // unit's lines are not found under that name.
+      followUnit: manager.isUser ? null : unit,
+      revalidate: [UnitLoaded(unit, manager: manager)],
     ),
   );
 }

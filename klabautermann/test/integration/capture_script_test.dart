@@ -2,7 +2,9 @@
 // and userland captures (03 §6.5, §11.3; K28c), and the recorded Docker
 // API corpora of its sourced capture_docker_api.sh (03 §11.1, D21), and
 // spike S3's elevation matrix of its sourced capture_elevation.sh (03
-// §8.3, M4 E01), which only --elevation-only runs. CI
+// §8.3, M4 E01), which only --elevation-only runs, and spike S6's
+// privileged-file recipes of its sourced capture_privileged.sh (03
+// §5.11, §8.5, M5 M01), which only --privileged-files-only runs. CI
 // runs the script in `klabautermann_integration` with Docker; these
 // tests read both files and run the `--list` mode, which needs neither
 // Docker nor the network, so the pins, the teardown, where it writes
@@ -46,6 +48,9 @@ void main() {
   late String apiFixturesRoot;
   late String elevation;
   late String elevationEvidence;
+  late String privileged;
+  late String recipes;
+  late String privilegedEvidence;
 
   setUpAll(() async {
     final workspace = await Isolate.resolvePackageUri(
@@ -65,6 +70,13 @@ void main() {
       '${klab.path}test/integration/capture_elevation.sh',
     ).readAsString();
     elevationEvidence = '${klab.path}docs/evidence/s3';
+    privileged = await File(
+      '${klab.path}test/integration/capture_privileged.sh',
+    ).readAsString();
+    recipes = await File(
+      '${klab.path}test/integration/privileged_recipes.sh',
+    ).readAsString();
+    privilegedEvidence = '${klab.path}docs/evidence/s6';
   });
 
   /// Runs `capture.sh --list` (plus [extra]) from [workingDirectory] with
@@ -393,6 +405,7 @@ void main() {
         ['--update', '--list'],
         ['--docker-api-only', '--docker-api-only'],
         ['--docker-api-only', '--elevation-only'],
+        ['--elevation-only', '--privileged-files-only'],
         ['--docker-api'],
       ]) {
         final result = await Process.run('bash', [scriptPath, ...bad]);
@@ -781,6 +794,122 @@ void main() {
         expect(
           text,
           isNot(matches(RegExp(r'(?<![0-9a-f])[0-9a-f]{48}(?![0-9a-f])'))),
+          reason: name,
+        );
+      }
+    }, testOn: 'linux');
+  });
+
+  group('privileged files', () {
+    /// The `privileged <case> <image> [packages...]` lines of `--list`.
+    Future<List<List<String>>> cases() async {
+      final result = await list(extra: ['--privileged-files-only']);
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      final lines = '${result.stdout}'.trim().split('\n');
+      expect(lines.first, startsWith('evidence '));
+      expect(lines.skip(1), everyElement(startsWith('privileged ')));
+      return [for (final line in lines.skip(1)) line.split(' ').sublist(1)];
+    }
+
+    test('is sourced and runs only with --privileged-files-only', () async {
+      expect(
+        script,
+        contains(r'source "$klab_dir/test/integration/capture_privileged.sh"'),
+      );
+      expect(privileged.split('\n').first, '# shellcheck shell=bash');
+      final all = await list();
+      expect('${all.stdout}', isNot(contains('\nprivileged ')));
+      expect(
+        script,
+        contains('elif [[ "\$scope" == privileged ]]; then\n  priv_captures'),
+      );
+    }, testOn: 'linux');
+
+    test('runs GNU coreutils, BusyBox and UBI 9 as M01 names', () async {
+      final listed = await cases();
+      expect(
+        {for (final c in listed) c[0]},
+        {'debian-13-coreutils', 'alpine-322-busybox', 'rhel-9-coreutils'},
+      );
+      for (final [_, image, ...] in listed) {
+        final match = _pinnedImage.firstMatch(image);
+        expect(match, isNotNull, reason: image);
+        expect(_registries, contains(match![1]), reason: image);
+      }
+      expect(privileged, contains("readonly priv_reader='klab'"));
+    }, testOn: 'linux');
+
+    test('pins its packages', () {
+      final packages = _array(privileged, 'priv_debs');
+      expect(packages.keys, {'acl', 'attr'});
+      for (final MapEntry(key: name, value: pin) in packages.entries) {
+        expect(pin, matches(_pinnedDeb), reason: name);
+      }
+      expect(
+        _function(privileged, 'priv_prepare'),
+        contains('sha256sum --check'),
+      );
+    });
+
+    test('labels each container, publishes and mounts nothing, and removes '
+        'it', () {
+      final starts = [
+        for (final command in _commands(privileged))
+          if (_startsContainer.hasMatch(command) &&
+              !command.contains('docker pull'))
+            command,
+      ];
+      expect(starts, hasLength(1));
+      final command = starts.single;
+      expect(command, contains(r'--label "$run_label"'));
+      expect(command, contains('--network none'));
+      expect(command, isNot(contains('--privileged')));
+      expect(command, isNot(matches(RegExp(r'\s(-p|--publish)\b'))));
+      expect(command, isNot(matches(RegExp(r'\s(-v|--volume|--mount)\b'))));
+      expect(
+        _function(privileged, 'priv_case_one'),
+        contains(r'docker rm -f "$cid"'),
+      );
+    });
+
+    test('the recipes are POSIX sh and delete nothing', () {
+      expect(recipes.split('\n').first, '# shellcheck shell=sh');
+      for (final command in _commands(recipes)) {
+        expect(command, isNot(matches(RegExp(r'(^|[;&|(]\s*)rm\b'))));
+      }
+      expect(
+        _function(privileged, 'priv_case_in'),
+        contains(r"""'umask 022 && exec sh -s -- "$@"'"""),
+      );
+    });
+
+    test('--update writes only the committed evidence copy', () {
+      final update = _function(privileged, 'priv_update');
+      final copies = [
+        for (final command in _commands(update))
+          if (command.startsWith('cp ')) command,
+      ];
+      expect(copies, hasLength(1));
+      expect(copies.single, endsWith(r'"$priv_committed/"'));
+      expect(
+        privileged,
+        contains(r'readonly priv_committed="$klab_dir/docs/evidence/s6"'),
+      );
+    });
+
+    test('the committed evidence covers every case and names its '
+        'image', () async {
+      for (final [name, image, ...] in await cases()) {
+        final file = File('$privilegedEvidence/$name.txt');
+        expect(file.existsSync(), isTrue, reason: name);
+        final lines = await file.readAsLines();
+        expect(lines.first, contains(image), reason: name);
+        expect(
+          lines,
+          contains(
+            '## recipe d: umask 077 tee, chown and chmod '
+            'from stat, mv',
+          ),
           reason: name,
         );
       }

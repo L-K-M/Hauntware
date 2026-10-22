@@ -162,4 +162,31 @@ void main() {
       RulePhase.ok,
     );
   });
+
+  test('a rule reads back from its JSON, and a malformed one is refused', () {
+    final rule = _rule(
+      raiseFor: const Duration(minutes: 5),
+      clearFor: const Duration(seconds: 30),
+    );
+    expect(ThresholdRule.fromJson(rule.toJson()).toJson(), rule.toJson());
+
+    for (final change in <Map<String, Object?>>[
+      {'metric': ''},
+      {'op': 'between'},
+      {'severity': null},
+      {
+        'raise': {'value': double.infinity, 'for': 0},
+      },
+      {
+        'clear': {'value': 1, 'for': -1},
+      },
+      {'clear': 'soon'},
+    ]) {
+      expect(
+        () => ThresholdRule.fromJson({...rule.toJson(), ...change}),
+        throwsFormatException,
+        reason: '$change',
+      );
+    }
+  });
 }

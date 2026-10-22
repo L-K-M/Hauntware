@@ -1219,6 +1219,63 @@ Proposals awaiting the owner close the section; they are not decisions.
   - `nohup ... &` or a plain `&` as the launcher: both survived on the
     fixture too, but stay in the launching shell's process group and
     session, which `setsid` leaves.
+- **D67. Spike S6 settles the privileged write (M5 M01).** The spike ran
+  four recipes for replacing a root-owned file as root in digest-pinned
+  Debian 13 (GNU coreutils with acl and attr), Alpine 3.22 (BusyBox) and
+  UBI 9 containers, and through the elevation prelude on the
+  GitHub-hosted Ubuntu runner's ext4 (evidence and table in
+  `klabautermann/docs/evidence/s6/`). Each target was `root:adm`, mode
+  0640, with a POSIX ACL entry and a `user.*` xattr where the tools
+  exist.
+
+  What it showed:
+  - The temp file is a new inode, so `chown --reference` and
+    `chmod --reference` carry the owner and mode but drop ACL entries
+    and xattrs.
+  - GNU `cp --attributes-only --preserve=mode,ownership,xattr <target>
+    <temp>` carries all four: GNU's `mode` includes the ACL, and
+    `--attributes-only` leaves the temp's content alone.
+  - `getfacl | setfacl --set-file=-` restores ACL entries but not xattrs.
+  - BusyBox refuses `--reference` and `cp --attributes-only` and ships no
+    ACL or xattr tools. With those steps refused, the temp keeps the
+    session umask's mode: a 0640 file became 0644, readable by every
+    account. Numeric `chown` and `chmod` from `stat -c '%u:%g'` and
+    `stat -c '%a'` keep owner and mode.
+  - `sha256sum` and `stat -c` are present in all three. No container
+    sees SELinux, so labels stay a manual check on RHEL 9.
+
+  The write (5.11, 8.5):
+  1. the temp, `.<name>.klabautermann-tmp-<random>` in the target's
+     directory, is created under `umask 077`, so no other account can
+     read it before its mode is set;
+  2. its attributes come from the target with `cp --attributes-only
+     --preserve=mode,ownership,xattr` where the host's `cp` accepts it;
+  3. elsewhere (BusyBox) they come from `stat` through numeric `chown`
+     and `chmod`, which cannot copy ACLs or xattrs. Where `getfacl` or
+     `getfattr` is present, a target carrying extended ACL entries
+     (`getfacl` lists more than the three base entries) or xattrs
+     (`getfattr -d -m -` lists any but `security.selinux`) is refused,
+     naming what this path would drop, rather than written without
+     them. What a missing tool cannot check is taken to be absent, an
+     accepted risk: attributes set from elsewhere (an image built on
+     another host, shared storage) would be dropped. A host with
+     neither tool writes ahead unchecked;
+  4. the hash re-check runs right before `mv`, and `restorecon` runs on
+     the target after it when SELinux enforces;
+  5. any failed step removes the temp and leaves the target as it was.
+
+  An elevated `sftp-server` over an exec channel is recorded in the
+  evidence, but seance_core opens SFTP only as the subsystem; using it
+  needs an `SshLink` API that runs an SFTP client over a
+  `RemoteProcess`, an optional follow-up. v1 writes through the commands
+  above.
+
+  *Rejected:*
+  - `--reference` alone, which loses ACLs and xattrs and, on BusyBox,
+    leaves a world-readable copy;
+  - writing in place with `tee <target>`, which keeps every attribute but
+    leaves a half-written file when the link drops, and no hash
+    re-check can make it atomic.
 
 ### Persistence, alerts and tiers
 
@@ -2251,6 +2308,27 @@ list says so. The `sender` and `alertstatus` records of a server are
 removed with sealed `removed` records when alerting is removed for that
 server.
 
+As built in M5 (M04): the engine's coordinator applies `pref` and `rule`
+records through `klabautermann_core`'s `KlabautermannRecordHandler` into
+`klabautermann_records.json` (4.10), still pull-only. A payload's `id`
+is the whole record id and its `type` the id's second segment. A `pref`
+holds `readOnly`, `cadence` (a 6.4 column), `pinnedUnits`,
+`pinnedContainers`, `protectedTargets`, `panelOrder`, `hostAuditLine`
+and `stackScanDirs` (absolute paths); a cadence this build does not know
+leaves the device's. A `rule` holds the rule model's fields (7.19) under
+their model names, so `evalScope` reads `client` for this device, plus a
+`target` (the server id or group name a `server` or `group` scope names).
+A record over its blob or count cap, of another kind, or whose `id` or
+`type` disagrees with its envelope trips and is skipped; a `v` above 1 is
+kept like an unknown type. The handler applies in the coordinator's last
+phase, so an excluded server is judged against the round's final server
+set, and it never opens records for the passphrase trial, since the v1.x
+`sudo` and `registry` types carry credentials. The engine sends each
+server's preferences as `ServerPrefsChanged` after its fleet, then only
+changes, a null for a removal, and every succeeded sync status carries
+the prefix budget. Retracting an excluded server's `pref` is written but
+refused until pushes are on (M05).
+
 ### 4.9 What never syncs
 
 Metrics, history, logs, inspect output, `docker compose config` output,
@@ -2280,6 +2358,7 @@ platform identities in 04, section 12.3):
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
 | `capabilities/<name>.json` | Cached probe results, 24 h TTL; named, written only by a process that holds the directory alone, and purged as D59 decides | `klabautermann_core` | MVP |
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
+| `klabautermann_records.json` [E] | The `klabautermann:` records the coordinator applied (4.8, M5, M04): per record id, the `(updatedAt, deviceId)` it won with and its sealed payload, sealed removals, unknown types and newer versions included, so the tuple guard holds across restarts and §3.1's recovery re-seals them verbatim. A `pref` whose server is absent waits here. Kept like the sync state files. Never pushed while sync is pull-only | `klabautermann_core` | v1 |
 | `operations_shown.json` [E] | Detached operations this device remembers (M4, E17b, 7.17): per server and operation id, the operation's directory, whether its result was shown and audited here, and, for one this device launched, the audit record's facts (action, target, redacted steps, tier, start). An entry goes once the operation's files are gone. Kept like the sync state files: written only with exclusive access, a damaged file set aside; losing it costs a result's launch facts and the reminder of a root cleanup, which the 7-day prune covers. Never synced | `klabautermann_core` | MVP |
 | `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample) | `klabautermann_core` | v1 |
 | `alerts.jsonl` | In-app alert history, 30 days [E]; from v1.x also host alerts fetched from the inbox or read from a host spool, with source tier, server item ids and status (D42) | `klabautermann_core` | v1 |
@@ -2727,8 +2806,11 @@ c2 found these defects in 3.0.2. The last column gives their state on the
 - **Privileged files (SAF-12, v1).** SFTP runs as the login user. Root-owned
   files use the elevation prelude in front of commands (`cat`, temp file plus
   `tee` in the same directory, `chown --reference`, `chmod --reference`,
-  `restorecon` when SELinux enforces, hash re-check, `mv`), or an elevated
-  `sftp-server` on an exec channel if spike S6 proves it [U].
+  `restorecon` when SELinux enforces, hash re-check, `mv`), with D67's
+  attribute recipe: `cp --attributes-only` where `cp` accepts it, `stat`
+  with numeric `chown` and `chmod` elsewhere, and a temp made under
+  `umask 077`. An elevated `sftp-server` needs an SFTP client over a
+  process that seance_core lacks (D67).
 
 ### 5.12 Connection etiquette
 
@@ -3329,6 +3411,38 @@ a polkit refusal (`Interactive authentication required` or
 `Access denied` on stderr) ends the run as needing admin mode rather
 than as a failed step. Every unit action re-validates that the unit
 still loads, and only start reports no impact.
+
+As built in M5 (M22), `UnitAction` also takes enable, disable, mask,
+unmask and reset-failed (SVC-05, SVC-06), each tier 1, and tier 2 on a
+protected unit. Stop, restart, reload and mask name the impact; the
+others change only the next boot or start, or clear a failed state. A
+`UnitScope.user` action or `StartTimer` (SVC-09, JOB-08) addresses
+`systemctl --user` and runs as the login user even in admin mode. It
+sets `XDG_RUNTIME_DIR=/run/user/<uid>` where the probe found the
+session without one, and its re-validation reads the same manager. A
+user timer's run follows no journal unit, since the follow reads the
+system journal by unit. `UnitQuery` reads a unit's file (SVC-07), its
+resources (SVC-08) or the sockets (SVC-10), JSON from systemd 246,
+always as the login user. The file masks every `Environment=` value
+and the secrets of `Exec*=` lines, as process arguments are masked
+(8.9). A user manager without a session or linger answers
+`managerUnavailable`.
+
+The unit page (plan M27a) offers the v1 verbs behind "More", on the
+page and in the row menu. Its name row opens the unit file read-only in
+Planchette's editor, masked, with a timed reveal as the stack file view
+has. Its states line also carries the unit's resources, read when the
+page opens and again when its active or sub state changes. The "Yours"
+switch for user units and the per-type tabs follow in a later change.
+
+The slow sampler's `user_units` and `user_timers` collectors (collector
+set version 9) read `systemctl --user list-units` and `list-timers` in
+the system collectors' block shapes, crossing as the `userUnits` and
+`userTimers` streams with the `units` and `timers` cadences. Where the
+session has no `XDG_RUNTIME_DIR` they set systemd's own
+`/run/user/<uid>` first. Without a user session or linger the bus is
+missing and the section reports an error. The capture tool records no
+fixture for them, since a capture container has no login session.
 
 As built in M4 (E21a), where actions are allowed the Services table's
 row menu and a unit's page offer Start, Stop, Restart and Reload; the
@@ -4099,7 +4213,9 @@ each server's operations. Decisions:
 
 - The slow sampler reads `ops` once on each link, right after the probe,
   and again when the engine asks: after a launch, and every 15 s [E]
-  while an operation runs. Each read becomes an `OperationsChanged` with
+  while an operation runs or one this device launched within the last
+  minute [E] is not listed yet, since its wrapper writes the record only
+  after the launch returns. Each read becomes an `OperationsChanged` with
   the server's full list and how far each directory was read, or the
   collector's failure.
 - A running record is checked by its wrapper's PID and start ticks with
@@ -4579,10 +4695,24 @@ OperationPlan {
   on the host (`docker compose config -q`, the cron parser,
   `systemd-analyze verify`, `visudo -c`); show the diff and the host writes;
   back up into the central backup directory (8.11); write a temp file in the
-  same directory, re-check the target hash, rename (user-owned files over
-  SFTP `posix-rename`; root-owned files through the prelude with
-  `chown --reference`, `chmod --reference`, `restorecon` when SELinux
-  enforces [U: ACL and label details, spike S6]).
+  same directory, re-check the target hash, rename (D67's commands, run
+  as the login user for its own files and through the prelude for
+  root's, with `restorecon` when SELinux enforces; SELinux labels are a
+  manual check on RHEL 9). As built in M5 (M15), one path serves both
+  owners, so both get the hash re-check right before the rename, which
+  an SFTP upload, comparing only size and times, lacks. The read runs the
+  same way and returns size, owner, mode and hash with the content.
+  Planning reads `/sys/fs/selinux/enforce` along with the target, rather
+  than adding it to the probe, to decide the `restorecon` step. A
+  crontab is backed up from `crontab -l` and replaced with `crontab -`
+  while `crontab -l` still hashes to the edit's base. A unit file (a
+  unit name directly in a `systemd/system` or `systemd/user` directory;
+  a drop-in is not one) is checked with `systemd-analyze verify
+  --man=no -- <temp>:<unit>` before the rename, in system mode, which
+  needs no user manager; `--man=no` keeps a host without the unit's
+  man pages from failing a valid unit. Only systemd 250 and later load a file under another unit
+  name, so on an older host the step is left out and the preview warns
+  that the unit file goes unchecked (M5 M15c).
 
 As built in M4 (E20, `app/klabautermann_app/lib/ui/actions/`), the app
 asks for one preview at a time through `OperationsController`: the
@@ -4600,6 +4730,25 @@ run starts and how it ended. `ActionEntry` wraps every action control
 by its `ActionEntryPoint`, hiding it unless the server's actions are
 allowed and nothing is read-only, which one test checks for every
 point.
+
+As built in M5 (M17, `app/klabautermann_app/lib/ui/edit/`), the editor
+reads its target through `OperationsController.readEditable`, which
+pairs each `ReadEditable` with its `EditRead` by request id, and edits
+it in `planchette_editor`, unlocked. It is a dialog on wide windows and
+a full-screen page below 600 dp, and closing it with unsaved text asks
+first. "Review changes" shows `boundedUnifiedDiff` of the server's text
+against the user's, with `validateText`'s problems as warnings that do
+not block, since the host's own checks run at planning. Saving plans an
+`EditFile` against the hash the read returned, through the same preview
+as every action. A plan refused as `targetChanged`, or a run that ends
+with `contentChanged`, opens the conflict sheet. "Reload and compare"
+reads the server's text as the new base, keeps the user's and opens the
+review again; a reload that fails says why and opens nothing, since a
+review against the refused base would be refused again. "Discard mine"
+takes the server's. A finished save reads
+the target again for its new base. The stack file view and the Jobs
+tab, for the login user's crontab, open it through the `fileEdit`
+entry point. The text lives only in the editor's state.
 
 ### 8.6 Confirmation tiers and protected targets (SAF-05, SAF-22)
 
@@ -4781,10 +4930,10 @@ state) before and after a scripted MVP session; only MVP rows may appear.
 | Login records | Every SSH connection | wtmp, lastlog, auth log, journal | Host retention; one long-lived connection keeps it low | MVP |
 | The edit itself | Explicit edit with diff | Target file | User-owned | v1 |
 | Atomic-replace temp file | During a write | Same directory, `.<name>.klabautermann-tmp-<rand>` | Renamed over the target or removed in a `finally` path | v1 |
-| Backups (files the user owns, crontabs) | Every edit | `~/.local/state/klabautermann/backups/` with an index (original path, hash, time), 0700 | "Keep last N" in the footprint view | v1 |
+| Backups (files the user owns, crontabs) | Every edit | `~/.local/state/klabautermann/backups/` with an index (original path, hash, time), 0700 | "Keep last N" in the footprint view, or remove every backup of one file (typed confirmation) | v1 |
 | Backups (root-owned files) | Every privileged edit | `/var/lib/klabautermann/backups/`, root 0700, with an index | Same, in admin mode | v1 |
 | Audit syslog line | Each mutation | journald or syslog through `logger -t klabautermann` | Host retention | v1 |
-| Footprint manifest | First persistent host write | `~/.config/klabautermann/manifest.json`, `/etc/klabautermann/manifest.json` | Lists every persistent row above with path, sha256, owner, mode, kind, template version | v1 |
+| Footprint manifest | First persistent host write | `~/.config/klabautermann/manifest.json`, `/etc/klabautermann/manifest.json` | Lists every persistent row above with path, sha256, owner, mode, kind, template version (v1 as built: path and kind, below) | v1 |
 | Database dumps and volume archives | BAK-01; "back up this volume now" (VOL-05 export, 1.4) | `~/.local/state/klabautermann/dumps/` | Manifest row; user deletes | v1.x |
 | Multi-device lock | Deploys and edits | `~/.local/state/klabautermann/locks/` | TTL | v1.x |
 | Deploy history | Safe update, redeploy | `~/.local/state/klabautermann/deploys/<project>.jsonl`, capped | Manifest row | v1.x |
@@ -4821,6 +4970,21 @@ that outlives a dropped link, re-attaches and is acknowledged.
 A change no row covers fails the run, and the report goes to the
 evidence. The runner VM's snapshot, which needs runner_vm.sh's own
 files left out, follows as a separate change.
+
+As built in v1 (plan M16), the manifest lists each backup directory
+and its index by path and kind, written by the edit that makes the
+scope's first backup, as one more step of its plan. Its rows carry no
+hash: the index changes with every edit, and each backup is verified
+against the hash the index records for it instead. The engine reads
+the login user's part on every connect, root's part when admin mode
+turns on, both after each edit or backup removal and on
+`FootprintQuery`; `FootprintState` reports each row as present or
+absent and each backup as intact, modified or missing. A manifest the
+engine cannot parse is refused rather than written over. "Keep last
+N" (tier 1, N = 5 by default) and removing every backup of one file
+(tier 2, Q11) name each file they delete and rewrite the index only
+while it still hashes to what planning read. Rows for v1.x writes join
+the manifest with those writes.
 
 ### 8.12 Threat model
 

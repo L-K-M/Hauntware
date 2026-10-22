@@ -162,6 +162,30 @@ void main() {
       expect(answer.more, isFalse);
     });
 
+    test('an export redacts its lines in the engine (LOG-10)', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+
+      client.send(
+        const RedactLines('r-1', ['plain', 'token ghp_A1b2C3d4E5f6G7h8I9j0K1']),
+      );
+      final answer = (await next(events)) as RedactedLines;
+      expect(answer.requestId, 'r-1');
+      expect(answer.text, startsWith('plain\ntoken '));
+      expect(answer.text, isNot(contains('ghp_A1b2C3d4E5f6G7h8I9j0K1')));
+    });
+
+    test('a host query needs links', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+
+      client.send(
+        const HostQuery(serverId: 'nope', queryId: 'h-1', query: VarLogQuery()),
+      );
+      final answer = (await next(events)) as RequestRejected;
+      expect(answer.reason, 'links are off in this engine');
+    });
+
     test('the safety policy refuses plans and admin mode in the engine '
         '(SAF-01, SAF-06)', () async {
       final client = await spawnEngine();
@@ -259,6 +283,25 @@ void main() {
       );
     });
 
+    test('a unit query without a link answers noLink (SVC-07)', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+
+      client.send(
+        const UnitQuery(
+          serverId: 'srv-1',
+          requestId: 'u-1',
+          query: UnitFileQuery('app.service'),
+        ),
+      );
+      final answer = (await next(events)) as UnitQueryResult;
+      expect(answer.requestId, 'u-1');
+      expect(
+        (answer.payload as UnitQueryFailed).failure,
+        UnitQueryFailure.noLink,
+      );
+    });
+
     test(
       'a job history query without a link answers noLink (JOB-04)',
       () async {
@@ -280,6 +323,28 @@ void main() {
         );
       },
     );
+
+    test('a footprint query needs a fleet server with a link '
+        '(SAF-14)', () async {
+      final client = await IsolateEngineClient.spawn(
+        supportDirectory: support.path,
+        linksEnabled: true,
+      );
+      addTearDown(client.shutdown);
+      final (:events, fleet: _) = await started(client);
+      client.send(const ImportSshConfig('Host web\n  HostName 192.0.2.10\n'));
+      expect(await next(events), isA<CatalogReplaced>());
+      expect(await next(events), isA<SshConfigImported>());
+
+      client.send(const FootprintQuery('srv-x'));
+      final unknown = (await next(events)) as RequestRejected;
+      expect(unknown.requestName, 'FootprintQuery');
+      expect(unknown.reason, 'no fleet server srv-x');
+
+      client.send(const FootprintQuery('ssh-config:web'));
+      final unlinked = (await next(events)) as RequestRejected;
+      expect(unlinked.reason, 'no connection to ssh-config:web');
+    });
 
     test('an endpoint choice is rejected while links are off', () async {
       final client = await spawnEngine();
