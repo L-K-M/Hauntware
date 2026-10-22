@@ -982,6 +982,108 @@ void main() {
       );
     });
   });
+
+  group('your own units (SVC-09)', () {
+    testWidgets('"Yours" reads the user manager while it shows, and its '
+        'unit acts and reads in that manager', (tester) async {
+      final panel = await _pump(
+        tester,
+        safety: const SafetyPolicy(
+          servers: {'srv-1': ServerSafety(management: true)},
+        ),
+      );
+      await panel.sample(tester);
+
+      await tester.tap(find.text('Yours'));
+      await tester.pumpAndSettle();
+      final subscribe = panel.engine
+          .sentOfType<Subscribe>()
+          .cast<Subscribe>()
+          .last;
+      expect(subscribe.streams, {SampleStream.userUnits});
+      // The panel's own id, so another panel on the server cannot end it.
+      expect(subscribe.subscriptionId, startsWith('services.user-'));
+      expect(find.text('Waiting for the first list of units…'), findsOneWidget);
+
+      await panel.emit(
+        tester,
+        Sample(
+          serverId: 'srv-1',
+          stream: SampleStream.userUnits,
+          seq: 9,
+          at: DateTime.utc(2026, 10, 15, 12),
+          result: _result(
+            units: [
+              _unit('syncthing.service', 'active', 'running', 'Syncthing'),
+            ],
+          ),
+        ),
+      );
+      expect(_row('syncthing.service'), findsOneWidget);
+      expect(_row('cron.service'), findsNothing);
+
+      await _open(tester, 'syncthing.service');
+      final query = panel.engine.sentOfType<UnitQuery>().cast<UnitQuery>();
+      expect(query.last.query.scope, UnitScope.user);
+      expect(
+        find.text('The logs of your own units are not shown here yet.'),
+        findsOneWidget,
+      );
+      expect(panel.opens, isEmpty);
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Restart'));
+      await tester.pump();
+      final plan = panel.engine.sentOfType<PlanAction>().cast<PlanAction>();
+      expect((plan.single.intent as UnitAction).scope, UnitScope.user);
+      panel.engine.emit(
+        ActionRefused(ActionRefusalReason.noLink, intent: plan.single.intent),
+      );
+      await tester.pumpAndSettle();
+
+      // Back to the system's units: the user manager is read no more.
+      await tester.tap(find.text('System'));
+      await tester.pumpAndSettle();
+      expect(
+        panel.engine
+            .sentOfType<Unsubscribe>()
+            .cast<Unsubscribe>()
+            .last
+            .subscriptionId,
+        subscribe.subscriptionId,
+      );
+      expect(_row('cron.service'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 10));
+    });
+
+    testWidgets('a user manager that cannot be reached says why', (
+      tester,
+    ) async {
+      final panel = await _pump(tester);
+      await tester.tap(find.text('Yours'));
+      await tester.pumpAndSettle();
+      await panel.emit(
+        tester,
+        Sample(
+          serverId: 'srv-1',
+          stream: SampleStream.userUnits,
+          seq: 9,
+          at: DateTime.utc(2026, 10, 15, 12),
+          result: const CollectorUnavailable(
+            CollectorUnavailableReason.error,
+            detail: 'Failed to connect to bus: No medium found',
+          ),
+        ),
+      );
+      expect(
+        find.textContaining('Your own units could not be read.'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Failed to connect to bus', findRichText: true),
+        findsOneWidget,
+      );
+    });
+  });
 }
 
 /// Matches a [Rect] that lies wholly inside the expected one.

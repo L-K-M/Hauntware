@@ -217,7 +217,9 @@ import '../operations/plan_types.dart';
 /// The v1 unit rows then joined v3 the same way (03 §7.5, SVC-05 to
 /// SVC-10): [UnitAction] and [StartTimer] gained a [UnitScope], and
 /// [UnitQuery], answered by [UnitQueryResult], reads a unit's file, its
-/// resources or the sockets.
+/// resources or the sockets. [SampleStream] gained `userUnits` and
+/// `userTimers`, the login user's own manager's units and timers, which
+/// cross as [UnitsResult] and [TimersResult].
 ///
 /// Job history then joined v3 the same way (03 §7.7, JOB-04, JOB-05):
 /// [JobHistoryQuery], answered by [JobHistoryResult], reads anacron's
@@ -1164,7 +1166,9 @@ final class Sample extends EngineEvent {
              (stream == SampleStream.failedUnits &&
                  result is FailedUnitsResult) ||
              (stream == SampleStream.timers && result is TimersResult) ||
-             (stream == SampleStream.cron && result is CronResult),
+             (stream == SampleStream.cron && result is CronResult) ||
+             (stream == SampleStream.userUnits && result is UnitsResult) ||
+             (stream == SampleStream.userTimers && result is TimersResult),
          'result must be the variant for stream, or CollectorUnavailable',
        );
 
@@ -4506,6 +4510,13 @@ enum SampleStream {
 
   /// Cron jobs ([CronResult]).
   cron,
+
+  /// The login user's own systemd units, from its user manager
+  /// ([UnitsResult], 7.5, SVC-09).
+  userUnits,
+
+  /// The login user's own systemd timers ([TimersResult], 7.7, JOB-08).
+  userTimers,
 }
 
 /// The 03 §6.4 cadence columns [SetCadenceProfile] picks among.

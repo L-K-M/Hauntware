@@ -88,6 +88,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The display path that picks the unit file view's INI highlighting,
   // never shown.
   'lib/ui/unit_details.dart': {"'unit.service'"},
+  // The subscription id the Services tab reads the user manager under,
+  // never shown.
+  'lib/ui/services_panel.dart': {r"'${ServerPanel.services.name}.user'"},
   'lib/controllers/operations_controller.dart': {
     "'a preview is already pending'",
   },

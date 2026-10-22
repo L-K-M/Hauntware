@@ -6468,5 +6468,21 @@
         "type": "String"
       }
     }
+  },
+  "servicesScopeSystem": "System",
+  "@servicesScopeSystem": {
+    "description": "Services tab: lists the system manager's units."
+  },
+  "servicesScopeUser": "Yours",
+  "@servicesScopeUser": {
+    "description": "Services tab: lists the login user's own units (SVC-09)."
+  },
+  "servicesUserLogsAbsent": "The logs of your own units are not shown here yet.",
+  "@servicesUserLogsAbsent": {
+    "description": "Unit page of a user unit: its journal lines are not read (SVC-09)."
+  },
+  "servicesUserUnavailable": "Your own units could not be read. Your user manager runs only while you are logged in, or with lingering enabled.",
+  "@servicesUserUnavailable": {
+    "description": "Services tab, Yours: the user manager could not be reached (SVC-09)."
   }
 }
