@@ -558,6 +558,36 @@ void main() {
     );
   });
 
+  test("a user timer's reads and start address the user's manager "
+      '(SVC-09, JOB-08)', () {
+    const manager = UnitManager.user(runtimeDir: '/run/user/1000');
+    const head = [
+      'env',
+      'XDG_RUNTIME_DIR=/run/user/1000',
+      'systemctl',
+      '--user',
+    ];
+    expect(HostCommands.timerActivates('backup.timer', manager: manager), [
+      ...head,
+      'show',
+      '--property=Unit',
+      '--value',
+      '--',
+      'backup.timer',
+    ]);
+    expect(HostCommands.timerStart('backup.service', manager: manager), [
+      ...head,
+      '--no-ask-password',
+      'start',
+      '--',
+      'backup.service',
+    ]);
+    expect(
+      HostCommands.unitLoadState('backup.service', manager: manager).take(5),
+      [...head, 'show'],
+    );
+  });
+
   group('log sources', () {
     test('the boot list asks for JSON only where journalctl has it', () {
       expect(HostCommands.journalBoots(JournalBootsFormat.json), [

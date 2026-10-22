@@ -116,6 +116,10 @@ export 'package:klabautermann_host/klabautermann_host.dart'
 // Job history (JOB-04, JOB-05): what a JobHistoryResult carries.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show AnacronJob, AnacronPeriod, LoggedCronRun, TimerLastRun;
+// The v1 unit reads (SVC-08, SVC-10): the resources and sockets a
+// UnitQueryResult carries.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show UnitResources, UnitSocket;
 // The Logs panel's LOG-04 notice: the access check's journal row (K04)
 // over the probe's HostProfile.
 export 'package:klabautermann_host/klabautermann_host.dart'
