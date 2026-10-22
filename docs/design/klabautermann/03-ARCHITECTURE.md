@@ -1219,6 +1219,63 @@ Proposals awaiting the owner close the section; they are not decisions.
   - `nohup ... &` or a plain `&` as the launcher: both survived on the
     fixture too, but stay in the launching shell's process group and
     session, which `setsid` leaves.
+- **D67. Spike S6 settles the privileged write (M5 M01).** The spike ran
+  four recipes for replacing a root-owned file as root in digest-pinned
+  Debian 13 (GNU coreutils with acl and attr), Alpine 3.22 (BusyBox) and
+  UBI 9 containers, and through the elevation prelude on the
+  GitHub-hosted Ubuntu runner's ext4 (evidence and table in
+  `klabautermann/docs/evidence/s6/`). Each target was `root:adm`, mode
+  0640, with a POSIX ACL entry and a `user.*` xattr where the tools
+  exist.
+
+  What it showed:
+  - The temp file is a new inode, so `chown --reference` and
+    `chmod --reference` carry the owner and mode but drop ACL entries
+    and xattrs.
+  - GNU `cp --attributes-only --preserve=mode,ownership,xattr <target>
+    <temp>` carries all four: GNU's `mode` includes the ACL, and
+    `--attributes-only` leaves the temp's content alone.
+  - `getfacl | setfacl --set-file=-` restores ACL entries but not xattrs.
+  - BusyBox refuses `--reference` and `cp --attributes-only` and ships no
+    ACL or xattr tools. With those steps refused, the temp keeps the
+    session umask's mode: a 0640 file became 0644, readable by every
+    account. Numeric `chown` and `chmod` from `stat -c '%u:%g'` and
+    `stat -c '%a'` keep owner and mode.
+  - `sha256sum` and `stat -c` are present in all three. No container
+    sees SELinux, so labels stay a manual check on RHEL 9.
+
+  The write (5.11, 8.5):
+  1. the temp, `.<name>.klabautermann-tmp-<random>` in the target's
+     directory, is created under `umask 077`, so no other account can
+     read it before its mode is set;
+  2. its attributes come from the target with `cp --attributes-only
+     --preserve=mode,ownership,xattr` where the host's `cp` accepts it;
+  3. elsewhere (BusyBox) they come from `stat` through numeric `chown`
+     and `chmod`, which cannot copy ACLs or xattrs. Where `getfacl` or
+     `getfattr` is present, a target carrying extended ACL entries
+     (`getfacl` lists more than the three base entries) or xattrs
+     (`getfattr -d -m -` lists any but `security.selinux`) is refused,
+     naming what this path would drop, rather than written without
+     them. What a missing tool cannot check is taken to be absent, an
+     accepted risk: attributes set from elsewhere (an image built on
+     another host, shared storage) would be dropped. A host with
+     neither tool writes ahead unchecked;
+  4. the hash re-check runs right before `mv`, and `restorecon` runs on
+     the target after it when SELinux enforces;
+  5. any failed step removes the temp and leaves the target as it was.
+
+  An elevated `sftp-server` over an exec channel is recorded in the
+  evidence, but seance_core opens SFTP only as the subsystem; using it
+  needs an `SshLink` API that runs an SFTP client over a
+  `RemoteProcess`, an optional follow-up. v1 writes through the commands
+  above.
+
+  *Rejected:*
+  - `--reference` alone, which loses ACLs and xattrs and, on BusyBox,
+    leaves a world-readable copy;
+  - writing in place with `tee <target>`, which keeps every attribute but
+    leaves a half-written file when the link drops, and no hash
+    re-check can make it atomic.
 
 ### Persistence, alerts and tiers
 
@@ -2727,8 +2784,11 @@ c2 found these defects in 3.0.2. The last column gives their state on the
 - **Privileged files (SAF-12, v1).** SFTP runs as the login user. Root-owned
   files use the elevation prelude in front of commands (`cat`, temp file plus
   `tee` in the same directory, `chown --reference`, `chmod --reference`,
-  `restorecon` when SELinux enforces, hash re-check, `mv`), or an elevated
-  `sftp-server` on an exec channel if spike S6 proves it [U].
+  `restorecon` when SELinux enforces, hash re-check, `mv`), with D67's
+  attribute recipe: `cp --attributes-only` where `cp` accepts it, `stat`
+  with numeric `chown` and `chmod` elsewhere, and a temp made under
+  `umask 077`. An elevated `sftp-server` needs an SFTP client over a
+  process that seance_core lacks (D67).
 
 ### 5.12 Connection etiquette
 
@@ -4565,9 +4625,9 @@ OperationPlan {
   `systemd-analyze verify`, `visudo -c`); show the diff and the host writes;
   back up into the central backup directory (8.11); write a temp file in the
   same directory, re-check the target hash, rename (user-owned files over
-  SFTP `posix-rename`; root-owned files through the prelude with
-  `chown --reference`, `chmod --reference`, `restorecon` when SELinux
-  enforces [U: ACL and label details, spike S6]).
+  SFTP `posix-rename`; root-owned files through the prelude with D67's
+  attribute recipe and `restorecon` when SELinux enforces; SELinux
+  labels are a manual check on RHEL 9).
 
 As built in M4 (E20, `app/klabautermann_app/lib/ui/actions/`), the app
 asks for one preview at a time through `OperationsController`: the

@@ -3249,6 +3249,26 @@
   "@settingsAnnounceNotChanged": {
     "description": "Toast when the app did not take a change of the threshold announcement switch."
   },
+  "settingsSyncSecretsTitle": "Passwords and keys",
+  "@settingsSyncSecretsTitle": {
+    "description": "Section heading on the Sync settings tab over the sync passwords switch (SYN-02)."
+  },
+  "settingsSyncSecrets": "Sync saved passwords & keys",
+  "@settingsSyncSecrets": {
+    "description": "Switch on the Sync settings tab (SYN-02): whether passwords and keys other devices synced are added to this device's vault. Séance's wording."
+  },
+  "settingsSyncSecretsDetail": "Only includes servers where credential sync is also enabled.",
+  "@settingsSyncSecretsDetail": {
+    "description": "Explanation under the sync passwords switch, Séance's subtitle."
+  },
+  "settingsSyncSecretsNotSaved": "The setting changed, but it could not be saved, so it will not be kept after a restart.",
+  "@settingsSyncSecretsNotSaved": {
+    "description": "Toast when the sync passwords switch applied but settings.json could not be written."
+  },
+  "settingsSyncSecretsNotChanged": "The setting could not be changed.",
+  "@settingsSyncSecretsNotChanged": {
+    "description": "Toast when the app did not take a change of the sync passwords switch."
+  },
   "settingsAboutTitle": "About",
   "@settingsAboutTitle": {
     "description": "Heading of the about row on the General settings tab, which shows the app's title and version and opens the About dialog."
@@ -3812,6 +3832,35 @@
   "@serverReadOnlyNotice": {
     "description": "Notice in the server header while the server, or every server, is read-only (SAF-06)."
   },
+  "credentialTitle": "Password for {label}",
+  "@credentialTitle": {
+    "description": "Title of the login password dialog shown on connect when the vault holds no password for the server (03 §4.5); label is the server's name.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "credentialExplanation": "Saved only if you choose to: on this device, in its encrypted vault, and used for this server from now on.",
+  "@credentialExplanation": {
+    "description": "Line under the login password dialog's title when the password can be saved in the vault."
+  },
+  "credentialPassword": "Password",
+  "@credentialPassword": {
+    "description": "Label of the password field in the login password dialog."
+  },
+  "credentialSaveInVault": "Save in vault",
+  "@credentialSaveInVault": {
+    "description": "Checkbox in the login password dialog that keeps the password in this device's vault once the server accepts it."
+  },
+  "credentialCancel": "Cancel",
+  "@credentialCancel": {
+    "description": "Button that closes the login password dialog without connecting."
+  },
+  "credentialConnect": "Connect",
+  "@credentialConnect": {
+    "description": "Button that connects with the typed password."
+  },
   "elevationTitle": "Admin password for {host}",
   "@elevationTitle": {
     "description": "Title of the admin mode password dialog (SAF-02); host is the server's address.",
@@ -4335,7 +4384,7 @@
   "@activityColumnResult": {
     "description": "Column of the activity log: how the run ended."
   },
-  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} StackAction{Stack action} RedeployStack{Redeploy stack} other{Action}}",
+  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} other{Action}}",
   "@activityAction": {
     "description": "An activity log row's action; action is the engine's intent type name.",
     "placeholders": {
