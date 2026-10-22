@@ -283,6 +283,25 @@ void main() {
       );
     });
 
+    test('a unit query without a link answers noLink (SVC-07)', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+
+      client.send(
+        const UnitQuery(
+          serverId: 'srv-1',
+          requestId: 'u-1',
+          query: UnitFileQuery('app.service'),
+        ),
+      );
+      final answer = (await next(events)) as UnitQueryResult;
+      expect(answer.requestId, 'u-1');
+      expect(
+        (answer.payload as UnitQueryFailed).failure,
+        UnitQueryFailure.noLink,
+      );
+    });
+
     test('an endpoint choice is rejected while links are off', () async {
       final client = await spawnEngine();
       final (:events, fleet: _) = await started(client);
