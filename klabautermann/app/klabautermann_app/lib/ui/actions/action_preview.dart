@@ -206,7 +206,7 @@ class ActionPreviewView extends StatelessWidget {
                 Expanded(
                   child: SelectableText(switch (step) {
                     ShellStep(:final commandLine) => commandLine,
-                    ApiStep() => step.display,
+                    ApiStep() || ExecStep() => step.display,
                   }, style: mono),
                 ),
               ],

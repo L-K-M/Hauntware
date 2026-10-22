@@ -4,7 +4,7 @@ Recorded by `klabautermann_docker/tool/capture_api.dart` (03 §11.1, D21)
 from Docker Engine 20.10.24, API 1.41 (minimum 1.12), running rootful in
 a privileged container of
 `mirror.gcr.io/library/docker:20.10.24-dind@sha256:af96c680a7e1f853ebdd50c1e0577e5df4089b033102546dd6417419564df3b5`,
-through its Unix socket, on 2026-10-17T16:13:19.385998Z (a local run).
+through its Unix socket, on 2026-10-20T17:13:51.200157Z (a local run).
 The daemon reported Alpine Linux v3.18, kernel 6.18.44-fc-v139 and
 cgroup v1.
 
@@ -50,13 +50,17 @@ value.
 | `logs-tail` | `GET /v1.41/containers/job/logs?stdout=1&stderr=1&timestamps=1&tail=20` | 200 |
 | `logs-tail-tty` | `GET /v1.41/containers/tty/logs?stdout=1&stderr=1&timestamps=1&tail=20` | 200 |
 | `logs-follow` | `GET /v1.41/containers/job/logs?stdout=1&stderr=1&timestamps=1&follow=1` | 200 |
-| `logs-since` | `GET /v1.41/containers/job/logs?stdout=1&stderr=1&timestamps=1&since=1792253592.412304505` | 200 |
+| `logs-since` | `GET /v1.41/containers/job/logs?stdout=1&stderr=1&timestamps=1&since=1792516424.853151782` | 200 |
 | `images` | `GET /v1.41/images/json` | 200 |
 | `image-inspect` | `GET /v1.41/images/mirror.gcr.io/library/busybox:1.37.0/json` | 200 |
 | `networks` | `GET /v1.41/networks` | 200 |
 | `volumes` | `GET /v1.41/volumes` | 200 |
 | `system-df` | `GET /v1.41/system/df` | 200 |
-| `events` | `GET /v1.41/events?since=1792253583&until=1792253597` | 200 |
+| `events` | `GET /v1.41/events?since=1792516418&until=1792516429` | 200 |
 | `below-min` | `GET /v1.11/info` | 400 |
 | `above-max` | `GET /v1.42/info` | 400 |
 | `floor-1.41` | `GET /v1.41/info` | 200 |
+| `exec-create` | `POST /v1.41/containers/web/exec` | 201 |
+| `exec-start` | `POST /v1.41/exec/7950dddd07b397da52cb1fbe6dc400d454ccd0a9bceaa08d8dd20b8f4e42daea/start` | 101 |
+| `exec-inspect` | `GET /v1.41/exec/7950dddd07b397da52cb1fbe6dc400d454ccd0a9bceaa08d8dd20b8f4e42daea/json` | 200 |
+| `exec-resize` | `POST /v1.41/exec/58ecf641032d77a84ee5eb7619f6f57c570cccb9277cf4784d927d5cd6f36643/resize?h=40&w=120` | 200 |
