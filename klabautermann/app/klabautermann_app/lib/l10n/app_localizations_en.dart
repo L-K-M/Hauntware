@@ -3394,6 +3394,7 @@ class AppLocalizationsEn extends AppLocalizations {
           'A temporary copy beside the file, renamed over it or removed',
       'userBackups': 'A backup in your Klabautermann backups folder',
       'rootBackups': 'A backup under /var/lib/klabautermann/backups',
+      'footprintManifest': 'The list of what Klabautermann keeps on the server',
       'other': 'A change on the server',
     });
     return '$_temp0';
@@ -3743,6 +3744,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'ContainerExec': 'Run command',
       'ContainerShell': 'Container shell',
       'EditFile': 'Edit',
+      'KeepLastBackups': 'Keep recent backups',
+      'RemoveBackups': 'Remove backups',
       'other': 'Action',
     });
     return '$_temp0';

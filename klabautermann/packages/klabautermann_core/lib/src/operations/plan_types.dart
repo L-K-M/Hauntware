@@ -148,6 +148,11 @@ enum HostWriteRow {
 
   /// `/var/lib/klabautermann/backups/`, root 0700, and its index (v1).
   rootBackups,
+
+  /// `~/.config/klabautermann/manifest.json` or
+  /// `/etc/klabautermann/manifest.json`, written with the first backup
+  /// (v1, SAF-14).
+  footprintManifest,
 }
 
 /// How the steps reach their target.

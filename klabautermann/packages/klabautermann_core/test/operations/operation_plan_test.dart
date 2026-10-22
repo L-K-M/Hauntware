@@ -194,6 +194,7 @@ void main() {
         OperationKind.removeContainer,
         OperationKind.removeUnusedImage,
         OperationKind.editFile,
+        OperationKind.keepLastBackups,
       };
       for (final kind in OperationKind.values) {
         expect(

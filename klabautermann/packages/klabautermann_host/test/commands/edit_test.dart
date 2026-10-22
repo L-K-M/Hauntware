@@ -51,7 +51,14 @@ void main() {
       _target,
       kRootBackupsDir,
     ]);
-    expect(EditCommands.sha256List([_target]), ['sha256sum', '--', _target]);
+    expect(EditCommands.sha256List([_target]).sublist(3), [
+      'klabautermann-sha256',
+      _target,
+    ]);
+    expect(
+      EditCommands.sha256List([_target])[2],
+      contains('exit ${EditExit.unreadable};'),
+    );
   });
 
   test('crontab writes take stdin, for the login user or a named one', () {
@@ -95,6 +102,50 @@ void main() {
       () => EditCommands.crontabBackup(kRootBackupsDir, indexName: 'x'),
       _refused('not a crontab index name'),
     );
+  });
+
+  test('footprint builders read, write and remove only their own '
+      'files', () {
+    expect(
+      EditCommands.manifestRead(kRootManifestPath).last,
+      kRootManifestPath,
+    );
+    expect(
+      () => EditCommands.manifestWrite('/etc/passwd', _hash),
+      _refused('not a manifest path'),
+    );
+    expect(
+      () => EditCommands.manifestWrite(kRootManifestPath, 'nope'),
+      _refused('not a SHA-256'),
+    );
+    expect(EditCommands.manifestWrite(kRootManifestPath, _hash).sublist(3), [
+      'klabautermann-manifest',
+      kRootManifestPath,
+      _hash,
+    ]);
+    expect(EditCommands.backupIndexWrite(kRootBackupsDir, _hash).sublist(3), [
+      'klabautermann-index',
+      '$kRootBackupsDir/index',
+      _hash,
+    ]);
+    expect(EditCommands.removeBackups(kRootBackupsDir, ['$_hash-17']), [
+      'rm',
+      '-f',
+      '--',
+      '$kRootBackupsDir/$_hash-17',
+    ]);
+    for (final bad in ['../index', 'index', '$_hash-x']) {
+      expect(
+        () => EditCommands.removeBackups(kRootBackupsDir, [bad]),
+        _refused('not a backup name'),
+        reason: bad,
+      );
+    }
+    expect(EditCommands.existingPaths(['/a', '/b']).sublist(3), [
+      'klabautermann-exists',
+      '/a',
+      '/b',
+    ]);
   });
 
   test('paths must be absolute, normalized files without control '

@@ -4132,7 +4132,7 @@
   "@actionPreviewHostWrites": {
     "description": "Heading above the host writes the action causes (03 §8.11)."
   },
-  "actionPreviewHostWrite": "{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine's own state} loginRecords{Login records, as every SSH command leaves} editTarget{The file or crontab you edited} editTempFile{A temporary copy beside the file, renamed over it or removed} userBackups{A backup in your Klabautermann backups folder} rootBackups{A backup under /var/lib/klabautermann/backups} other{A change on the server}}",
+  "actionPreviewHostWrite": "{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine's own state} loginRecords{Login records, as every SSH command leaves} editTarget{The file or crontab you edited} editTempFile{A temporary copy beside the file, renamed over it or removed} userBackups{A backup in your Klabautermann backups folder} rootBackups{A backup under /var/lib/klabautermann/backups} footprintManifest{The list of what Klabautermann keeps on the server} other{A change on the server}}",
   "@actionPreviewHostWrite": {
     "description": "One host write in the action preview; row is the engine's HostWriteRow name.",
     "placeholders": {
@@ -4519,7 +4519,7 @@
   "@activityColumnResult": {
     "description": "Column of the activity log: how the run ended."
   },
-  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} other{Action}}",
+  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
   "@activityAction": {
     "description": "An activity log row's action; action is the engine's intent type name.",
     "placeholders": {

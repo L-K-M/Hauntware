@@ -33,6 +33,10 @@ const _tempId = 'feedfacefeedface';
 String _mode(String path) =>
     (File(path).statSync().mode & 0x1ff).toRadixString(8);
 
+/// SHA-256 of the empty text: what an absent file reads as.
+const _emptySha256 =
+    'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+
 String _sha256Of(String path) =>
     (Process.runSync('sha256sum', [path]).stdout as String).split(' ').first;
 
@@ -318,18 +322,85 @@ void main() {
         );
       });
 
+      test('an index is rewritten only while its hash holds; presence and '
+          'an absent manifest read cleanly', () async {
+        final backups = '${dir.path}/state$kBackupsDirSuffix';
+        Directory(backups).createSync(recursive: true);
+        final index = File('$backups/$kEditBackupIndexName')
+          ..writeAsStringSync('1\ta\t/x\n');
+
+        final stale = await run(
+          EditCommands.backupIndexWrite(backups, _sha256Of(target)),
+          stdin: '',
+        );
+        expect(stale.exitCode, EditExit.hashMismatch);
+        expect(index.readAsStringSync(), '1\ta\t/x\n');
+
+        final fresh = await run(
+          EditCommands.backupIndexWrite(backups, _sha256Of(index.path)),
+          stdin: '2\tb\t/y\n',
+        );
+        expect(fresh.exitCode, 0, reason: '${fresh.stderr}');
+        expect(index.readAsStringSync(), '2\tb\t/y\n');
+
+        final present = await run(
+          EditCommands.existingPaths([backups, '${dir.path}/gone', index.path]),
+        );
+        expect(present.exitCode, 0);
+        expect((present.stdout as String).trim().split('\n'), [
+          backups,
+          index.path,
+        ]);
+
+        final manifest = await run(
+          EditCommands.manifestRead('${dir.path}/c$kManifestSuffix'),
+        );
+        expect(manifest.exitCode, 0);
+        expect(manifest.stdout, '');
+      });
+
       test('the manifest is written whole and verified by sha256sum', () async {
         final manifest = '${dir.path}/config/klabautermann/manifest.json';
+        // An absent manifest hashes as the empty read.
         final write = await run(
-          EditCommands.manifestWrite(manifest),
+          EditCommands.manifestWrite(manifest, _emptySha256),
           stdin: '{"v":1}',
         );
         expect(write.exitCode, 0, reason: '${write.stderr}');
+        expect(File(manifest).readAsStringSync(), '{"v":1}');
+
+        // A manifest that changed since the read is left as it is.
+        final stale = await run(
+          EditCommands.manifestWrite(manifest, _emptySha256),
+          stdin: '{"v":2}',
+        );
+        expect(stale.exitCode, EditExit.hashMismatch);
         expect(File(manifest).readAsStringSync(), '{"v":1}');
         expect(
           File(manifest).parent.listSync().map((e) => e.path),
           isNot(contains(contains('klabautermann-tmp'))),
         );
+
+        // One that exists but cannot be read never passes for absent: a
+        // directory at the path once hashed as empty and took the file.
+        final blockedManifest =
+            '${dir.path}/blocked/config/klabautermann/manifest.json';
+        final blockedBackups = '${dir.path}/blocked$kBackupsDirSuffix';
+        final targets = {
+          blockedManifest: EditCommands.manifestWrite(
+            blockedManifest,
+            _emptySha256,
+          ),
+          '$blockedBackups/$kEditBackupIndexName':
+              EditCommands.backupIndexWrite(blockedBackups, _emptySha256),
+        };
+        for (final MapEntry(key: path, value: write) in targets.entries) {
+          Directory(path).createSync(recursive: true);
+          final refused = await run(write, stdin: '{"v":3}');
+          expect(refused.exitCode, isNot(0), reason: path);
+          expect(refused.exitCode, isNot(EditExit.hashMismatch), reason: path);
+          expect(Directory(path).listSync(), isEmpty, reason: path);
+        }
 
         final read = await run(EditCommands.manifestRead(manifest));
         expect(read.stdout, '{"v":1}');
@@ -337,6 +408,8 @@ void main() {
         final sums = await run(
           EditCommands.sha256List([manifest, '${dir.path}/gone']),
         );
+        // A gone path is left out, not a failure.
+        expect(sums.exitCode, 0);
         expect(parseSha256List(sums.stdout as String), {
           manifest: _sha256Of(manifest),
         });
