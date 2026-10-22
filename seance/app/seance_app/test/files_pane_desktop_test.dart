@@ -471,6 +471,41 @@ void main() {
     },
   );
 
+  platformTest(
+    'a press sharing its predecessor\'s stamp still double-clicks',
+    TargetPlatform.linux,
+    (tester) async {
+      final files = await pumpFilesPane(tester, _ListFileSystem());
+      final docs = tester.getCenter(find.text('docs'));
+
+      // Zero counts as inside the window: taps from tests carry the zero
+      // stamp, and coarsely stamped synthetic input (remote input,
+      // automation) legitimately shares one. Only a negative gap — an
+      // out-of-order stamp — is not a double-click.
+      for (var i = 0; i < 2; i++) {
+        await tester.sendEventToBinding(
+          PointerDownEvent(
+            pointer: 1,
+            position: docs,
+            timeStamp: kDoubleTapTimeout,
+            buttons: kPrimaryButton,
+          ),
+        );
+        await tester.sendEventToBinding(
+          PointerUpEvent(
+            pointer: 1,
+            position: docs,
+            timeStamp: kDoubleTapTimeout,
+          ),
+        );
+        await tester.pump();
+      }
+      await tester.runAsync(() async {});
+      await tester.pump();
+      expect(files.currentPath, '$_home/docs');
+    },
+  );
+
   // The first click selects; nothing the selection shows may move the
   // rows, or the second click lands on a different one.
   // The double-click window runs on the presses' own event stamps, not on

@@ -566,8 +566,11 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     // The window runs on the press's own stamp, not on when this handler
     // got scheduled: a stalled main thread between two quick clicks must
     // not split them, and two slow clicks must not merge.
-    // Only a positive gap counts: a mis-stamped or synthetic press (remote
-    // input, automation) can carry an earlier stamp than its predecessor.
+    // The gap must be non-negative: a mis-stamped or synthetic press
+    // (remote input, automation) can carry an earlier stamp than its
+    // predecessor, and the negative gap would read as a double-click. Zero
+    // counts as inside — taps from tests and coarsely stamped synthetic
+    // input share a stamp.
     final sinceLast = event.timeStamp - _lastPrimaryDownAt;
     final doubleClick =
         _lastPrimaryDownPath == entry.path &&
