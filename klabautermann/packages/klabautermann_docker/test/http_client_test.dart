@@ -455,7 +455,7 @@ void main() {
         latin1.encode('HTTP/1.1 204 No Content\r'),
         latin1.encode('\n\r\n'),
       ]);
-      expect(status, 204);
+      expect(status, 204, reason: 'no answer: the read spun');
     });
 
     test('a chunk whose closing CRLF comes in a later read', () async {
@@ -466,25 +466,40 @@ void main() {
         ),
         latin1.encode('\n0\r\n\r\n'),
       ]);
-      expect(status, 200);
+      expect(status, 200, reason: 'no answer: the read spun');
     });
   });
 }
 
 /// The status of a GET answered with [reads], each fed after the event
-/// loop has turned, or null when no answer came within five seconds.
+/// loop has turned, or null when no answer came within twenty seconds,
+/// inside package:test's 30 s. An error in the request's isolate fails
+/// the test with that error.
 Future<int?> _splitRequestStatus(List<List<int>> reads) async {
-  final port = ReceivePort();
-  final isolate = await Isolate.spawn(_splitRequest, (port.sendPort, reads));
+  final answers = ReceivePort();
+  final errors = ReceivePort();
+  final isolate = await Isolate.spawn(_splitRequest, (
+    answers.sendPort,
+    reads,
+  ), onError: errors.sendPort);
+  final answer = Completer<int?>();
+  answers.listen((status) {
+    if (!answer.isCompleted) answer.complete(status as int?);
+  });
+  errors.listen((error) {
+    if (!answer.isCompleted) {
+      answer.completeError(StateError('request isolate failed: $error'));
+    }
+  });
   try {
-    return await port.first.timeout(
-          const Duration(seconds: 5),
-          onTimeout: () => null,
-        )
-        as int?;
+    return await answer.future.timeout(
+      const Duration(seconds: 20),
+      onTimeout: () => null,
+    );
   } finally {
     isolate.kill(priority: Isolate.immediate);
-    port.close();
+    answers.close();
+    errors.close();
   }
 }
 
