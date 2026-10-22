@@ -1857,6 +1857,12 @@ is on main:
   ghost_theme's shared editor (presets, mode, colours, font, corners,
   copy, paste and reset), in the app and in the desktop settings window,
   in Klabautermann's words.
+- X-01 theme paste (M5 M32): complete. Themes copied in Séance and
+  Poltergeist paste into the Appearance tab and keep their name,
+  colours, font and corners; Séance's terminal colours, which
+  Klabautermann's palettes do not carry, are dropped.
+  `theme_paste_fixtures_test.dart` replays each app's exact Copy theme
+  text from `test/fixtures/theme_paste/`.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container
@@ -1973,6 +1979,10 @@ is not a device smoke test:
   preview, confirmation tiers and protected targets on a phone (PLT-03);
   admin mode ending when iOS backgrounds the app (PLT-04); and the
   activity log afterwards.
+- Privileged file writes under SELinux (M5 M01, D67), on RHEL 9 with
+  SELinux enforcing: a root-owned file the engine edits keeps its label
+  (`ls -Z` before and after the write, which runs `restorecon`). The
+  spike's containers cannot observe labels.
 - The 24 h soak (03 §11.4) against ten hosts, which CI runs only for
   minutes.
 

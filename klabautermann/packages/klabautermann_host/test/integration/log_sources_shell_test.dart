@@ -62,6 +62,7 @@ void main() {
         expect(r.exitCode, 0, reason: '${r.stderr}');
         final parsed = parseLogFiles(r.stdout as String);
         expect(parsed.warnings, isEmpty);
+        expect(parsed.value, isNotEmpty, reason: 'nothing listed');
         for (final f in parsed.value) {
           expect(f.path, startsWith('/var/log/'));
         }

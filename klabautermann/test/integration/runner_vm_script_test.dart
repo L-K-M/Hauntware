@@ -300,7 +300,8 @@ void main() {
         lines(script).join('\n'),
         contains(
           'run_child "\$dart_binary" test --concurrency=1 '
-          "--tags 'runner-vm || runner-vm-s4' \"\${reporter[@]}\" "
+          "--tags 'runner-vm || runner-vm-s4 || runner-vm-s6' "
+          '"\${reporter[@]}" '
           'packages/klabautermann_core/test/integration',
         ),
       );
@@ -309,7 +310,7 @@ void main() {
         'packages/klabautermann_core/dart_test.yaml',
       ]) {
         final tags = loadYaml(File('${root.path}$path').readAsStringSync());
-        for (final tag in ['runner-vm', 'runner-vm-s4']) {
+        for (final tag in ['runner-vm', 'runner-vm-s4', 'runner-vm-s6']) {
           expect((tags['tags'] as YamlMap).containsKey(tag), isTrue);
         }
       }
@@ -464,9 +465,16 @@ void main() {
         includeParentEnvironment: false,
       );
       final output = StringBuffer();
-      process.stdout.transform(utf8.decoder).listen(output.write);
-      process.stderr.transform(utf8.decoder).listen(output.write);
-      return (process: process, exitCode: process.exitCode, output: output);
+      final drained = [
+        process.stdout.transform(utf8.decoder).listen(output.write).asFuture(),
+        process.stderr.transform(utf8.decoder).listen(output.write).asFuture(),
+      ];
+      // The exit can arrive before the last output does, and a test reads
+      // the output once the exit code is in.
+      final exitCode = process.exitCode.then(
+        (code) => Future.wait(drained).then((_) => code),
+      );
+      return (process: process, exitCode: exitCode, output: output);
     }
 
     const onRunner = {

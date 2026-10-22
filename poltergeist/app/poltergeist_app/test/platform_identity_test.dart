@@ -152,6 +152,43 @@ void main() {
       ),
     );
 
+    // Phones hand the link to app_links; Flutter's own deep linking would
+    // push it as a route ahead of the trust review, so it stays off.
+    final iosInfo = _read('ios/Runner/Info.plist');
+    expect(
+      iosInfo,
+      allOf(
+        contains('<key>CFBundleURLTypes</key>'),
+        contains('<key>CFBundleURLSchemes</key>'),
+        contains('<string>poltergeist</string>'),
+        matches(RegExp(r'<key>FlutterDeepLinkingEnabled</key>\s*<false/>')),
+      ),
+    );
+    final androidManifest = _read('android/app/src/main/AndroidManifest.xml');
+    final viewFilter = RegExp(
+      r'<intent-filter>\s*'
+      r'<action android:name="android\.intent\.action\.VIEW"/>\s*'
+      r'<category android:name="android\.intent\.category\.DEFAULT"/>\s*'
+      r'<category android:name="android\.intent\.category\.BROWSABLE"/>\s*'
+      r'<data android:scheme="poltergeist"/>\s*'
+      r'</intent-filter>',
+    );
+    expect(androidManifest, matches(viewFilter));
+    expect(
+      androidManifest,
+      matches(
+        RegExp(
+          r'android:name="flutter_deeplinking_enabled"\s*'
+          r'android:value="false"',
+        ),
+      ),
+    );
+    // The filter belongs to the launcher activity, which app_links reads.
+    final activity = RegExp(
+      r'<activity\b[\s\S]*?</activity>',
+    ).firstMatch(androidManifest)!.group(0)!;
+    expect(activity, matches(viewFilter));
+
     final packaging = _read('../../scripts/package-linux.sh');
     expect(
       packaging,

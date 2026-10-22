@@ -132,6 +132,29 @@ void main() {
           query: DockerContainersQuery(),
         ),
         const PlanAction(KillProcess('srv-1', pid: 42, startTicks: 9001)),
+        const PlanAction(
+          UnitAction(
+            'srv-1',
+            unit: 'syncthing.service',
+            verb: SystemctlVerb.mask,
+            scope: UnitScope.user,
+          ),
+        ),
+        const UnitQuery(
+          serverId: 'srv-1',
+          requestId: 'u-1',
+          query: UnitFileQuery('app.service'),
+        ),
+        const UnitQuery(
+          serverId: 'srv-1',
+          requestId: 'u-2',
+          query: UnitResourcesQuery('app.service', scope: UnitScope.user),
+        ),
+        const UnitQuery(
+          serverId: 'srv-1',
+          requestId: 'u-3',
+          query: SocketsQuery(),
+        ),
         const DockerWatch(
           serverId: 'srv-1',
           watchId: 'w-1',
@@ -195,10 +218,18 @@ void main() {
         const AnswerPrompt('prompt-2', PromptCancelAnswer()),
         const HandleAlert('alert-1', AlertAction.acknowledge),
         const OpenTerminal(
+          terminalId: 't-1',
           serverId: 'srv-1',
           containerId: 'abc123',
           shell: '/bin/sh',
+          user: 'app',
+          columns: 120,
+          rows: 40,
         ),
+        TerminalInput('t-1', Uint8List.fromList(const [0x6c, 0x73])),
+        const TerminalResize('t-1', columns: 80, rows: 24),
+        const TerminalEndInput('t-1'),
+        const CloseTerminal('t-1'),
       ];
 
       for (final request in requests) {
@@ -413,6 +444,39 @@ void main() {
             CollectorUnavailableReason.timeout,
           ),
         ),
+        UnitQueryResult(
+          serverId: 'srv-1',
+          requestId: 'u-1',
+          payload: UnitFilePayload([
+            MaskedValue.plain('Environment='),
+            MaskedValue.secret('A=1'),
+          ]),
+        ),
+        UnitQueryResult(
+          serverId: 'srv-1',
+          requestId: 'u-2',
+          payload: const UnitResourcesPayload(UnitResources(tasks: 3)),
+          warnings: const ['w'],
+        ),
+        UnitQueryResult(
+          serverId: 'srv-1',
+          requestId: 'u-3',
+          payload: UnitSocketsPayload([
+            UnitSocket(
+              listen: '/run/docker.sock',
+              unit: 'docker.socket',
+              activates: ['docker.service'],
+            ),
+          ]),
+        ),
+        UnitQueryResult(
+          serverId: 'srv-1',
+          requestId: 'u-4',
+          payload: const UnitQueryFailed(
+            UnitQueryFailure.failed,
+            detail: 'boom',
+          ),
+        ),
         const ActionProgress(planId: 'plan-1', stepIndex: 1, stepCount: 3),
         const ActionFinished(
           planId: 'plan-1',
@@ -451,7 +515,8 @@ void main() {
         ]),
         const AlertStatusChanged('a-1', AlertStatus.acknowledged),
         TerminalBytes('t-1', Uint8List.fromList(const [1, 2, 3])),
-        const TerminalClosed('t-1'),
+        TerminalOpened('t-1', const ['/bin/sh']),
+        const TerminalClosed('t-1', TerminalCloseReason.exited, exitCode: 3),
       ];
 
       for (final event in events) {

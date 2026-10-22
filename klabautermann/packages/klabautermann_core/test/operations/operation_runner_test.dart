@@ -8,6 +8,8 @@ import 'package:klabautermann_core/src/admin/admin_mode.dart';
 import 'package:klabautermann_core/src/operations/confirmation.dart';
 import 'package:klabautermann_core/src/operations/operation_plan.dart';
 import 'package:klabautermann_core/src/operations/operation_runner.dart';
+import 'package:klabautermann_docker/klabautermann_docker.dart'
+    show DockerConflictException;
 import 'package:seance_core/seance_core.dart'
     show
         ChannelOpenException,
@@ -72,10 +74,15 @@ void main() {
     results = [];
   });
 
-  OperationRunner runner(_Link? link, {ApiStepRunner? api}) => OperationRunner(
+  OperationRunner runner(
+    _Link? link, {
+    ApiStepRunner? api,
+    ExecStepRunner? exec,
+  }) => OperationRunner(
     linkFor: (_) => link,
     emit: events.add,
     api: api,
+    exec: exec,
     finished: results.add,
   );
 
@@ -269,6 +276,51 @@ void main() {
     expect(answers.first.outcome, ActionOutcome.succeeded);
     expect(answers.last.failure, ActionFailure.stepFailed);
     expect(answers.last.httpStatus, 404);
+  });
+
+  test('an exec step needs the exec runner; its output comes back with '
+      'the exit code, succeeded or not (CTX-08)', () async {
+    final link = _Link((_, _) => _ok);
+    final plan = _plan([
+      ExecStep(
+        path: '/v1.44/containers/abc/exec',
+        containerId: 'abc',
+        argv: const ['ls'],
+      ),
+    ]);
+    expect(
+      (await runner(link).run('plan-1', plan)).failure,
+      ActionFailure.unsupportedStep,
+    );
+
+    const output = ExecOutput(stdout: 'a\n', stderr: 'warn\n');
+    final done = await runner(
+      link,
+      exec: (_, step) async => (exitCode: 0, output: output),
+    ).run('plan-1', plan);
+    expect(done.outcome, ActionOutcome.succeeded);
+    expect(done.exitCode, 0);
+    expect(done.output, same(output));
+
+    final failed = await runner(
+      link,
+      exec: (_, step) async => (exitCode: 2, output: output),
+    ).run('plan-1', plan);
+    expect(failed.failure, ActionFailure.stepFailed);
+    expect((failed.failedStep, failed.exitCode), (0, 2));
+    expect(failed.output, same(output));
+
+    // A daemon that refuses the exec answered: the step failed, not the
+    // transport.
+    final refused = await runner(
+      link,
+      exec: (_, step) async => throw const DockerConflictException(
+        409,
+        'container abc is not running',
+      ),
+    ).run('plan-1', plan);
+    expect(refused.failure, ActionFailure.stepFailed);
+    expect((refused.failedStep, refused.httpStatus), (0, 409));
   });
 
   test('without a link, or when it fails, nothing is claimed to run', () async {
