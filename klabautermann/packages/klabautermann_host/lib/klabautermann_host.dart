@@ -38,6 +38,7 @@ export 'src/parse/ops.dart';
 export 'src/parse/parse_result.dart';
 export 'src/parse/procs.dart';
 export 'src/parse/timers.dart';
+export 'src/parse/unit_details.dart';
 export 'src/parse/units.dart';
 export 'src/probe/host_profile.dart';
 export 'src/probe/probe_parse.dart';
