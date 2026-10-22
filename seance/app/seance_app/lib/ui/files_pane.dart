@@ -79,7 +79,8 @@ class FilesPane extends StatelessWidget {
         if (session.isLocal) {
           return const _FilesUnavailable(
             icon: Icons.folder_off_outlined,
-            message: 'This shell is already on this device — use the terminal, '
+            message:
+                'This shell is already on this device — use the terminal, '
                 'or open a server session to browse its files.',
           );
         }
@@ -565,9 +566,13 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     // The window runs on the press's own stamp, not on when this handler
     // got scheduled: a stalled main thread between two quick clicks must
     // not split them, and two slow clicks must not merge.
+    // Only a positive gap counts: a mis-stamped or synthetic press (remote
+    // input, automation) can carry an earlier stamp than its predecessor.
+    final sinceLast = event.timeStamp - _lastPrimaryDownAt;
     final doubleClick =
         _lastPrimaryDownPath == entry.path &&
-        event.timeStamp - _lastPrimaryDownAt <= kDoubleTapTimeout;
+        !sinceLast.isNegative &&
+        sinceLast <= kDoubleTapTimeout;
     _lastPrimaryDownAt = event.timeStamp;
     _lastPrimaryDownPath = entry.path;
     controller.selectOnly(entry.path);
@@ -2718,9 +2723,7 @@ class _RecoveredLocalEdits extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                onTap: copy.missing
-                    ? null
-                    : () => _open(context, copy),
+                onTap: copy.missing ? null : () => _open(context, copy),
                 trailing: Wrap(
                   children: [
                     PopupMenuButton<String>(
