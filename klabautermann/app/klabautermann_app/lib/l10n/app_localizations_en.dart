@@ -3458,7 +3458,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'mayDieAtLogout':
           'This server ends your processes when you log out, which can stop the operation before it finishes.',
       'unitNotVerified':
-          'This server\'s systemd is older than version 250, so it cannot check the unit file before it is replaced.',
+          'This server\'s systemd is not known to be version 250 or later, so the unit file is not checked before it is replaced.',
       'other': '',
     });
     return '$_temp0';

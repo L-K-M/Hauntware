@@ -4692,9 +4692,10 @@ OperationPlan {
   crontab is backed up from `crontab -l` and replaced with `crontab -`
   while `crontab -l` still hashes to the edit's base. A unit file (a
   unit name directly in a `systemd/system` or `systemd/user` directory;
-  a drop-in is not one) is checked with `systemd-analyze verify --
-  <temp>:<unit>` before the rename, in system mode, which needs no user
-  manager. Only systemd 250 and later load a file under another unit
+  a drop-in is not one) is checked with `systemd-analyze verify
+  --man=no -- <temp>:<unit>` before the rename, in system mode, which
+  needs no user manager; `--man=no` keeps a host without the unit's
+  man pages from failing a valid unit. Only systemd 250 and later load a file under another unit
   name, so on an older host the step is left out and the preview warns
   that the unit file goes unchecked (M5 M15c).
 

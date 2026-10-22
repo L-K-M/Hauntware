@@ -142,7 +142,7 @@ void main() {
     expect(find.textContaining('enabled only by a compose profile'), findsOne);
     expect(find.textContaining('could not list every profile'), findsOne);
     expect(find.textContaining('when you log out'), findsOneWidget);
-    expect(find.textContaining('cannot check the unit file'), findsOneWidget);
+    expect(find.textContaining('the unit file is not checked'), findsOneWidget);
   });
 
   testWidgets('without orphans there is no switch', (tester) async {

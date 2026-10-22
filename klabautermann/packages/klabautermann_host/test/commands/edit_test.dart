@@ -54,6 +54,7 @@ void main() {
     expect(EditCommands.verifyUnit(temp, 'app.service'), [
       'systemd-analyze',
       'verify',
+      '--man=no',
       '--',
       '$temp:app.service',
     ]);
