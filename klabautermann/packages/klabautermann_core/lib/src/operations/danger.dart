@@ -13,7 +13,8 @@ List<DangerFinding> lintSteps(Iterable<PlanStep> steps) => [
       // The exact command line quotes every word behind its locale
       // wrapper, which the linter's patterns cannot see through, so it
       // reads the argv joined by spaces: the same words.
-      ShellStep(:final argv) => DangerLinter.scan(argv.join(' ')),
+      ShellStep(:final argv) ||
+      ExecStep(:final argv) => DangerLinter.scan(argv.join(' ')),
       final ApiStep api => switch (cliEquivalent(api)) {
         final cli? => DangerLinter.scan(cli),
         null => const <DangerFinding>[],

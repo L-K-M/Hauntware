@@ -24,6 +24,8 @@ Collector sampleStreamCollector(SampleStream stream) => switch (stream) {
   SampleStream.units || SampleStream.failedUnits => Collector.units,
   SampleStream.timers => Collector.timers,
   SampleStream.cron => Collector.cron,
+  SampleStream.userUnits => Collector.userUnits,
+  SampleStream.userTimers => Collector.userTimers,
 };
 
 /// K04's external-monitor rule over a `units` reading (03 §9.5 item 3).
