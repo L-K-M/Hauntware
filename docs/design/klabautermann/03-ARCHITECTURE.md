@@ -4175,7 +4175,9 @@ each server's operations. Decisions:
 
 - The slow sampler reads `ops` once on each link, right after the probe,
   and again when the engine asks: after a launch, and every 15 s [E]
-  while an operation runs. Each read becomes an `OperationsChanged` with
+  while an operation runs or one this device launched within the last
+  minute [E] is not listed yet, since its wrapper writes the record only
+  after the launch returns. Each read becomes an `OperationsChanged` with
   the server's full list and how far each directory was read, or the
   collector's failure.
 - A running record is checked by its wrapper's PID and start ticks with
