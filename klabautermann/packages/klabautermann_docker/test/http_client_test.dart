@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:klabautermann_docker/klabautermann_docker.dart';
@@ -443,4 +444,61 @@ void main() {
       expect(e.maxBytes, 4);
     });
   });
+
+  group('a line split across socket reads', () {
+    // A real socket delivers its next read as an event, not a microtask,
+    // so a partial line must wait for the event loop instead of spinning.
+    // A spinning read also starves timers, so each request runs in an
+    // isolate of its own and this one keeps the time.
+    test('a status line whose LF comes in a later read', () async {
+      final status = await _splitRequestStatus([
+        latin1.encode('HTTP/1.1 204 No Content\r'),
+        latin1.encode('\n\r\n'),
+      ]);
+      expect(status, 204);
+    });
+
+    test('a chunk whose closing CRLF comes in a later read', () async {
+      final status = await _splitRequestStatus([
+        latin1.encode(
+          'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n'
+          '3\r\nabc\r',
+        ),
+        latin1.encode('\n0\r\n\r\n'),
+      ]);
+      expect(status, 200);
+    });
+  });
+}
+
+/// The status of a GET answered with [reads], each fed after the event
+/// loop has turned, or null when no answer came within five seconds.
+Future<int?> _splitRequestStatus(List<List<int>> reads) async {
+  final port = ReceivePort();
+  final isolate = await Isolate.spawn(_splitRequest, (port.sendPort, reads));
+  try {
+    return await port.first.timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => null,
+        )
+        as int?;
+  } finally {
+    isolate.kill(priority: Isolate.immediate);
+    port.close();
+  }
+}
+
+Future<void> _splitRequest((SendPort, List<List<int>>) args) async {
+  final (reply, reads) = args;
+  final daemon = FakeDaemon();
+  final client = DockerHttpClient(() async => daemon.pair.client);
+  final response = client.sendBuffered(
+    const DockerHttpRequest(method: 'GET', path: '/x'),
+  );
+  await daemon.gotBytes(1);
+  for (final read in reads) {
+    daemon.feed(read);
+    await Future<void>.delayed(Duration.zero);
+  }
+  reply.send((await response).statusCode);
 }

@@ -661,9 +661,12 @@ final class _Connection {
     if (c != null && !c.isCompleted) c.complete();
   }
 
-  /// Waits for buffered bytes. Returns false at remote EOF.
-  Future<bool> _fill() async {
-    while (_available == 0) {
+  /// Waits until more than [have] bytes are buffered. Returns false at
+  /// remote EOF. A caller holding a partial line or field passes what it
+  /// has: the bytes it lacks arrive with a later socket event, and
+  /// returning at once would spin in microtasks that starve that event.
+  Future<bool> _fill([int have = 0]) async {
+    while (_available <= have) {
       final err = _abortError ?? _readError;
       if (err != null) {
         throw err is DockerException
@@ -722,8 +725,8 @@ final class _Connection {
       if (_available > maxBytes) {
         throw DockerProtocolException('$what exceeds $maxBytes bytes');
       }
-      if (!await _fill()) return null;
-      if (_eof) {
+      if (!await _fill(_available)) {
+        if (_available == 0) return null;
         // The peer is gone: the buffered tail can never gain a CRLF.
         throw DockerProtocolException('connection closed mid-$what');
       }
@@ -733,7 +736,7 @@ final class _Connection {
   /// Exactly [n] bytes; null at EOF-short so callers decide truncation.
   Future<Uint8List?> _readBytes(int n) async {
     while (_available < n) {
-      if (_eof || !await _fill()) return null;
+      if (!await _fill(_available)) return null;
     }
     return _take(n);
   }
