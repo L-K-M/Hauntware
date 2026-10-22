@@ -437,6 +437,10 @@ final class _Session {
   Future<void> close() => _http.close();
 }
 
+/// How long a hijacked exchange is read for before the recorder closes
+/// it: well past an exec that prints two lines and exits.
+const Duration _hijackDrainLimit = Duration(seconds: 30);
+
 /// Records exchanges, each on a connection of its own so that the tap
 /// holds exactly one response.
 final class _Recorder {
@@ -470,7 +474,15 @@ final class _Recorder {
       final lines = spec.lines;
       if (spec.hijack) {
         final res = await http.sendHijack(request);
-        await res.body.stream.drain<void>();
+        // The daemon has been seen to keep a finished exec's hijacked
+        // stream open; the client's timeout only covers the response
+        // head, so an unbounded drain hung the whole capture. The output
+        // frames come before the exit, and _waitForExec and exec-inspect
+        // confirm the exit, so stopping here loses nothing they record.
+        // Ignored so that a stream ending in an error after the timeout
+        // and the close below is not reported as unhandled.
+        final drained = res.body.stream.drain<void>()..ignore();
+        await drained.timeout(_hijackDrainLimit, onTimeout: () {});
         await res.body.close();
       } else if (lines == null) {
         await http.sendBuffered(request, maxBytes: 64 * 1024 * 1024);

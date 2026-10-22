@@ -302,6 +302,28 @@ void main() {
       );
     });
 
+    test(
+      'a job history query without a link answers noLink (JOB-04)',
+      () async {
+        final client = await spawnEngine();
+        final (:events, fleet: _) = await started(client);
+
+        client.send(
+          const JobHistoryQuery(
+            serverId: 'srv-1',
+            requestId: 'h-1',
+            query: AnacronQuery(),
+          ),
+        );
+        final answer = (await next(events)) as JobHistoryResult;
+        expect(answer.requestId, 'h-1');
+        expect(
+          (answer.payload as JobHistoryFailed).failure,
+          JobHistoryFailure.noLink,
+        );
+      },
+    );
+
     test('an endpoint choice is rejected while links are off', () async {
       final client = await spawnEngine();
       final (:events, fleet: _) = await started(client);

@@ -117,6 +117,9 @@ export 'src/sampling/sample_results.dart' show kCronLinesEvaluated;
 // in, and how far each directory's listing got.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show OpDirectoryKind, OpDirectoryListing, OpDirectoryState;
+// Job history (JOB-04, JOB-05): what a JobHistoryResult carries.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show AnacronJob, AnacronPeriod, LoggedCronRun, TimerLastRun;
 // The v1 unit reads (SVC-08, SVC-10): the resources and sockets a
 // UnitQueryResult carries.
 export 'package:klabautermann_host/klabautermann_host.dart'
