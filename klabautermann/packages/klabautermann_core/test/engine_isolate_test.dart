@@ -87,11 +87,11 @@ void main() {
       final client = await spawnEngine();
       final (:events, fleet: _) = await started(client);
 
-      client.send(const OpenTerminal(serverId: 'srv-1'));
+      client.send(const HandleAlert('a-1', AlertAction.acknowledge));
 
       expect(
         ((await next(events)) as RequestRejected).requestName,
-        'OpenTerminal',
+        'HandleAlert',
       );
     });
 

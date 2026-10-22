@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -271,6 +272,46 @@ void main() {
       await sync.runRound();
       expect((await vault.read('secret-a'))?.value, 'from-seance');
     });
+  });
+
+  test('a save asked for during a round waits for it, so a pulled secret '
+      'and a typed one never interleave on the vault file', () async {
+    final sync = await open();
+    await sync.setSyncSecrets(enabled: true);
+    await sync.enroll(_enroll);
+    await server.seedServer(
+      fakeServer(
+        'srv-a',
+        'alpha',
+      ).copyWith(secretRef: 'secret-a', syncSecret: true),
+    );
+    await server.seedSecret(
+      const Secret(
+        id: 'secret-a',
+        kind: SecretKind.password,
+        value: 'from-seance',
+      ),
+      updatedAt: 1,
+    );
+
+    // The save is asked for while the round waits on its pull, inside
+    // the round's turn on the vault.
+    final order = <String>[];
+    final gate = server.pullGate = Completer<void>();
+    final held = server.pullHeld = Completer<void>();
+    final round = sync.runRound().then((_) => order.add('round'));
+    await held.future;
+    final saving = vault
+        .save(Secret(id: 'secret-b', kind: SecretKind.password, value: 'typed'))
+        .then((_) => order.add('save'));
+    await pumpEventQueue();
+    expect(order, isEmpty);
+    gate.complete();
+    await Future.wait([round, saving]);
+
+    expect(order, ['round', 'save']);
+    expect((await vault.read('secret-a'))?.value, 'from-seance');
+    expect((await vault.read('secret-b'))?.value, 'typed');
   });
 
   group('rounds (03 §4.4, D14)', () {
