@@ -3,7 +3,9 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
-const _readyTimeout = Duration(seconds: 10);
+// The holder runs a fresh `dart` on a source script, so start-up includes
+// a JIT compile; under a loaded full suite that has passed 10 s.
+const _readyTimeout = Duration(seconds: 60);
 const _exitTimeout = Duration(seconds: 10);
 const _pollInterval = Duration(milliseconds: 10);
 const _lockAcquiredExitCode = 0;
