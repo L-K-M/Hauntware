@@ -51,6 +51,8 @@ const _lockLine = "readonly lock_file='/tmp/klabautermann-runner-vm.lock'";
 const _sudoersLine =
     "readonly sudoers_file='/etc/sudoers.d/klabautermann-runner-vm'";
 const _rootOpsLine = "readonly root_ops_parent='/var/lib/klabautermann'";
+const _rootManifestLine = "readonly root_manifest_dir='/etc/klabautermann'";
+const _editDirLine = "readonly edit_dir='/etc/klabautermann-vm-edit'";
 const _rootDockerLine = "readonly root_docker_dir='/root/.docker'";
 const _unitDirLine = "readonly unit_dir='/etc/systemd/system'";
 
@@ -150,6 +152,9 @@ echo "$2:x:4242:4242::$STUB_STATE/home/$2:/bin/sh"
   'pgrep': 'exit 1\n',
   // Found on PATH, so the copy installs no cron; sudo runs it.
   'crontab': 'exit 99\n',
+  // As crontab, so the copy installs no acl or attr.
+  'setfacl': 'exit 99\n',
+  'setfattr': 'exit 99\n',
   'docker':
       r'echo "docker $*" >>"$STUB_LOG"'
       '\n',
@@ -358,6 +363,8 @@ void main() {
         _lockLine,
         _sudoersLine,
         _rootOpsLine,
+        _rootManifestLine,
+        _editDirLine,
         _rootDockerLine,
         _unitDirLine,
       ]) {
@@ -431,6 +438,14 @@ void main() {
               .replaceFirst(
                 _rootOpsLine,
                 "readonly root_ops_parent='${sandbox.path}/var-lib'",
+              )
+              .replaceFirst(
+                _rootManifestLine,
+                "readonly root_manifest_dir='${sandbox.path}/etc-klab'",
+              )
+              .replaceFirst(
+                _editDirLine,
+                "readonly edit_dir='${sandbox.path}/edit'",
               )
               .replaceFirst(
                 _rootDockerLine,
