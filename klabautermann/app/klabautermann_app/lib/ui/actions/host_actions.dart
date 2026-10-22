@@ -115,11 +115,27 @@ const _unitVerbs = [
   SystemctlVerb.reload,
 ];
 
+/// SVC-05's and SVC-06's verbs (v1), behind "More" on the page and in the
+/// row menu: they change the next boot or a unit's state rather than run
+/// it.
+const _moreUnitVerbs = [
+  SystemctlVerb.enable,
+  SystemctlVerb.disable,
+  SystemctlVerb.mask,
+  SystemctlVerb.unmask,
+  SystemctlVerb.resetFailed,
+];
+
 String _verbLabel(AppLocalizations l10n, SystemctlVerb verb) => switch (verb) {
   SystemctlVerb.start => l10n.unitStart,
   SystemctlVerb.stop => l10n.unitStop,
   SystemctlVerb.restart => l10n.unitRestart,
   SystemctlVerb.reload => l10n.unitReload,
+  SystemctlVerb.enable => l10n.unitEnable,
+  SystemctlVerb.disable => l10n.unitDisable,
+  SystemctlVerb.mask => l10n.unitMask,
+  SystemctlVerb.unmask => l10n.unitUnmask,
+  SystemctlVerb.resetFailed => l10n.unitResetFailed,
   _ => verb.name,
 };
 
@@ -134,13 +150,17 @@ List<SidebarMenuEntry> unitActionEntries(
     return const [];
   }
   final l10n = AppLocalizations.of(context);
+  SidebarMenuAction act(SystemctlVerb verb) => SidebarMenuAction(
+    label: _verbLabel(l10n, verb),
+    onSelected: () =>
+        startAction(context, UnitAction(serverId, unit: unit, verb: verb)),
+  );
   return [
-    for (final verb in _unitVerbs)
-      SidebarMenuAction(
-        label: _verbLabel(l10n, verb),
-        onSelected: () =>
-            startAction(context, UnitAction(serverId, unit: unit, verb: verb)),
-      ),
+    for (final verb in _unitVerbs) act(verb),
+    SidebarMenuSubmenu(
+      label: l10n.unitMoreActions,
+      children: [for (final verb in _moreUnitVerbs) act(verb)],
+    ),
   ];
 }
 
@@ -173,6 +193,24 @@ class UnitActionButtons extends StatelessWidget {
               ),
               child: Text(_verbLabel(l10n, verb)),
             ),
+          MenuAnchor(
+            menuChildren: [
+              for (final verb in _moreUnitVerbs)
+                MenuItemButton(
+                  onPressed: () => startAction(
+                    context,
+                    UnitAction(serverId, unit: unit, verb: verb),
+                  ),
+                  child: Text(_verbLabel(l10n, verb)),
+                ),
+            ],
+            builder: (context, controller, _) => OutlinedButton.icon(
+              onPressed: () =>
+                  controller.isOpen ? controller.close() : controller.open(),
+              icon: const Icon(Icons.arrow_drop_down),
+              label: Text(l10n.unitMoreActions),
+            ),
+          ),
         ],
       ),
     );

@@ -85,6 +85,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // A caller error's diagnostic: the preview is modal, so no screen ever
   // shows it.
+  // The display path that picks the unit file view's INI highlighting,
+  // never shown.
+  'lib/ui/unit_details.dart': {"'unit.service'"},
   'lib/controllers/operations_controller.dart': {
     "'a preview is already pending'",
   },
@@ -170,6 +173,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'$surface-${_subscriptionCount++}'",
     // A host query's id, which its HostResult answers by (LOG-08, LOG-09).
     r"'host-${_nextHostQuery++}'",
+    // A unit read's request id, never shown.
+    r"'unit-${_nextUnitQuery++}'",
   },
   // Services panel (SVC-01 to SVC-04, CN-10).
   'lib/controllers/log_reads.dart': {

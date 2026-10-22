@@ -6813,6 +6813,138 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server\'s capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} daemonError{The engine refused or failed to list the stack\'s containers.} connectionFailed{The connection to the engine failed while reading the file.} cancelled{The read stopped before it ran.} other{The file could not be read.}}'**
   String dockerStackFileQueryFailed(String reason);
+
+  /// Unit action (SVC-05): starts the unit at boot.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable'**
+  String get unitEnable;
+
+  /// Unit action (SVC-05): stops starting the unit at boot.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable'**
+  String get unitDisable;
+
+  /// Unit action (SVC-06): prevents the unit from being started at all.
+  ///
+  /// In en, this message translates to:
+  /// **'Mask'**
+  String get unitMask;
+
+  /// Unit action (SVC-06): lets a masked unit start again.
+  ///
+  /// In en, this message translates to:
+  /// **'Unmask'**
+  String get unitUnmask;
+
+  /// Unit action (SVC-06): clears the unit's failed state.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset failed state'**
+  String get unitResetFailed;
+
+  /// Unit page and row menu: the v1 unit actions (SVC-05, SVC-06).
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get unitMoreActions;
+
+  /// Unit page: why a unit read found nothing. reason is the engine's UnitQueryFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{There is no connection to this server.} invalidUnit{This is not a unit name.} notFound{The manager has no such unit.} managerUnavailable{Your user manager cannot be reached: you need a login session or lingering.} failed{The read failed.} other{The read failed.}}'**
+  String unitQueryFailed(String reason);
+
+  /// Unit page: the unit's current memory use.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get unitResourcesMemory;
+
+  /// Unit page: the CPU time the unit used.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU time'**
+  String get unitResourcesCpu;
+
+  /// Unit page: CPU time in seconds. seconds is formatted with one decimal.
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds} s'**
+  String unitResourcesCpuSeconds(String seconds);
+
+  /// Unit page: the unit's current tasks.
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks'**
+  String get unitResourcesTasks;
+
+  /// Unit page: how often systemd restarted the unit.
+  ///
+  /// In en, this message translates to:
+  /// **'Restarts'**
+  String get unitResourcesRestarts;
+
+  /// Unit page: the unit's main process ID.
+  ///
+  /// In en, this message translates to:
+  /// **'Main PID'**
+  String get unitResourcesMainPid;
+
+  /// Unit page: when the unit last became active.
+  ///
+  /// In en, this message translates to:
+  /// **'Active since'**
+  String get unitResourcesActiveSince;
+
+  /// Unit page: opens the unit file and its drop-ins (SVC-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Show unit file'**
+  String get unitFileShow;
+
+  /// Unit file view title. unit is the unit name.
+  ///
+  /// In en, this message translates to:
+  /// **'{unit} file'**
+  String unitFileTitle(String unit);
+
+  /// Unit file view: closes the dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get unitFileClose;
+
+  /// Unit file view: shown while the file is read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the unit file…'**
+  String get unitFileReading;
+
+  /// Unit file view: how many values the engine masked, and how long a reveal lasts.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 value is masked.} other{{count} values are masked.}} Reveal shows them for {seconds} seconds.'**
+  String unitFileMasked(int count, int seconds);
+
+  /// Unit file view: shows the masked values for a while.
+  ///
+  /// In en, this message translates to:
+  /// **'Reveal values'**
+  String get unitFileReveal;
+
+  /// Unit file view: masks the revealed values again.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide values'**
+  String get unitFileHide;
+
+  /// Unit file view: accessibility label of the read-only editor.
+  ///
+  /// In en, this message translates to:
+  /// **'File of {unit}'**
+  String unitFileEditorLabel(String unit);
 }
 
 class _AppLocalizationsDelegate
