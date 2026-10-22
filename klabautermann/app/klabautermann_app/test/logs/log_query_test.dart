@@ -87,12 +87,17 @@ void main() {
   });
 
   group('server search and boots (LOG-06, LOG-09)', () {
-    test('serverLogPattern escapes plain text and ignores case by (?i)', () {
+    test('serverLogPattern escapes plain text and pins case with (?i) or '
+        '(?-i)', () {
       expect(
         serverLogPattern('a.b (c)', regex: false, caseSensitive: false),
         r'(?i)a\.b \(c\)',
       );
-      expect(serverLogPattern('a.b', regex: true, caseSensitive: true), 'a.b');
+      // journalctl would ignore case for an all-lower-case pattern.
+      expect(
+        serverLogPattern('a.b', regex: true, caseSensitive: true),
+        '(?-i)a.b',
+      );
     });
 
     final past = JournalBootEntry(offset: -1, id: 'a' * 32);

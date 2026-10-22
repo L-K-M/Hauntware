@@ -78,10 +78,39 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/safety_controller.dart': {
     r"'The safety settings were not saved: $error'",
   },
+  // The not-saved diagnostic; the Sync tab prints it and shows its own
+  // ARB text (settingsSyncSecretsNotSaved).
+  'lib/controllers/sync_secrets_controller.dart': {
+    r"'The sync passwords setting was not saved: $error'",
+  },
   // A caller error's diagnostic: the preview is modal, so no screen ever
   // shows it.
+  // The display path that picks the unit file view's INI highlighting,
+  // never shown.
+  'lib/ui/unit_details.dart': {"'unit.service'"},
+  // The subscription id the Services tab reads the user manager under,
+  // never shown.
+  'lib/ui/services_panel.dart': {r"'${ServerPanel.services.name}.user'"},
   'lib/controllers/operations_controller.dart': {
     "'a preview is already pending'",
+    // An edit read's request id, never shown.
+    r"'edit-${_nextEditRead++}'",
+  },
+  'lib/ui/edit/remote_editor.dart': {
+    // A crontab's highlighting and validation key, never shown.
+    "'crontab'",
+    // The path separator a file's title takes its name after.
+    "'/'",
+    // A problem without a subject or detail fills its slot with nothing.
+    "''",
+    // The unified diff's line break and its line markers, which pick a
+    // row's tint; the rows show the diff's own text.
+    r"'\n'",
+    "'+++'",
+    "'---'",
+    "'+'",
+    "'-'",
+    "'@@'",
   },
   // The Activity table's key prefix, never shown, and the copied log's
   // line break between JSON records.
@@ -165,6 +194,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'$surface-${_subscriptionCount++}'",
     // A host query's id, which its HostResult answers by (LOG-08, LOG-09).
     r"'host-${_nextHostQuery++}'",
+    // A unit read's request id, never shown.
+    r"'unit-${_nextUnitQuery++}'",
   },
   // Services panel (SVC-01 to SVC-04, CN-10).
   'lib/controllers/log_reads.dart': {
@@ -469,8 +500,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "''",
   },
   'lib/ui/logs/log_query.dart': {
-    // PCRE2's inline flag that makes journalctl's pattern ignore case
-    // (LOG-06): sent to the server, shown only as the pattern sent.
+    // PCRE2's inline flags that pin journalctl's case rule (LOG-06):
+    // sent to the server, shown only as the pattern sent.
+    r"'(?-i)$pattern'",
     r"'(?i)$pattern'",
     "'/'",
     "'..'",

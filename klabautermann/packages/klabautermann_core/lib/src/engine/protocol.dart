@@ -4,9 +4,12 @@ import 'dart:typed_data';
 // `Collector` (its argument validators) and `ServerZone` (`offsetAt`) do.
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
+        AnacronJob,
+        BackupEntry,
         CpuPercentages,
         CronSnapshot,
         DiskRate,
+        FootprintRow,
         FsSnapshot,
         HostProfile,
         JobEntry,
@@ -15,13 +18,17 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         KillSignal,
         LoadAvg,
         LogFileEntry,
+        LoggedCronRun,
         NetRate,
         OpDirectoryKind,
         OpDirectoryListing,
         ProcsSelection,
         SystemdUnit,
         SystemctlVerb,
+        TimerLastRun,
         TimersSnapshot,
+        UnitResources,
+        UnitSocket,
         UnitsSnapshot,
         EngineMode,
         EngineRuntime;
@@ -186,13 +193,58 @@ import '../operations/plan_types.dart';
 /// [DockerSystemDfQuery] reads `/system/df` on demand, answered by a
 /// [DockerSystemDfPayload] of per-type totals.
 ///
+/// The vault then joined v3 the same way (03 §4.5, SYN-02, FL-03):
+/// [SetSyncSecrets] carries the device's "sync passwords" switch,
+/// [CredentialPromptRequest] gained `canSave` and [PromptSecretAnswer]
+/// `save`, which keeps a login password in the vault.
+///
+/// Container shells then joined v3 the same way (03 §7.13 CTX-07):
+/// [OpenTerminal], [TerminalInput], [TerminalResize], [TerminalEndInput]
+/// and [CloseTerminal] run one, answered by [TerminalOpened],
+/// [TerminalBytes] and [TerminalClosed]. One-off commands joined next
+/// (CTX-08): [ContainerExec] is planned as an action, and
+/// [ActionFinished] gained the [ExecOutput] it captured.
+///
+/// Synced settings then joined v3 the same way (03 §4.8, M5 plan M04):
+/// [ServerPrefsChanged] carries a server's pulled `pref` record as
+/// [ServerPrefs], and [SyncStatus] gained [SyncStatus.prefixBudget].
+///
 /// The v1 log sources then joined v3 the same way (03 §7.6, LOG-06 to
 /// LOG-10): [JournalLogSource] gained `grep` and `boot`,
 /// [KernelLogSource] `boot`, [FileLogSource] `compressed`, and
 /// [LogStreamEndReason] `searchUnsupported`; [HostQuery], answered by
 /// [HostResult], lists `/var/log` and the journal's boots; and
 /// [RedactLines], answered by [RedactedLines], redacts an export.
+///
+/// The v1 unit rows then joined v3 the same way (03 §7.5, SVC-05 to
+/// SVC-10): [UnitAction] and [StartTimer] gained a [UnitScope], and
+/// [UnitQuery], answered by [UnitQueryResult], reads a unit's file, its
+/// resources or the sockets. [SampleStream] gained `userUnits` and
+/// `userTimers`, the login user's own manager's units and timers, which
+/// cross as [UnitsResult] and [TimersResult].
+///
+/// Job history then joined v3 the same way (03 §7.7, JOB-04, JOB-05):
+/// [JobHistoryQuery], answered by [JobHistoryResult], reads anacron's
+/// jobs and stamps, a timer's last run, or the runs cron logged.
+///
+/// The edit pipeline then joined v3 the same way (03 §8.5, SAF-12):
+/// [ReadEditable], answered by [EditRead], reads an [EditTarget] for the
+/// editor; the [EditFile] intent plans its write; [RevalidationFailure]
+/// gained `contentChanged` for a target changed under the write.
+///
+/// The footprint then joined v3 the same way (03 §8.11, SAF-14):
+/// [FootprintQuery], answered by [FootprintState], which the engine also
+/// sends unasked; the [KeepLastBackups] and [RemoveBackups] intents plan
+/// backup removal.
 const int kEngineProtocolVersion = 3;
+
+/// The most container shells one server holds open at once [E]: each on a
+/// relay holds a session channel (03 §5.2).
+const int kTerminalsPerServerMax = 4;
+
+/// The largest terminal [OpenTerminal] and [TerminalResize] take, in
+/// either dimension.
+const int kTerminalDimensionMax = 1000;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
 /// only: no function-typed fields, no Futures, no `dartssh2` or `seance_core`
@@ -437,6 +489,121 @@ final class CloseStream extends EngineRequest {
   final String streamId;
 }
 
+/// Reads one unit's details, or the sockets, on [serverId] (03 §7.5,
+/// SVC-07, SVC-08, SVC-10), answered by one [UnitQueryResult] with
+/// [requestId]. Each reads as the login user, never through sudo.
+final class UnitQuery extends EngineRequest {
+  const UnitQuery({
+    required this.serverId,
+    required this.requestId,
+    required this.query,
+  });
+
+  final String serverId;
+  final String requestId;
+  final UnitQuerySpec query;
+}
+
+/// What a [UnitQuery] reads.
+@immutable
+sealed class UnitQuerySpec {
+  const UnitQuerySpec({this.scope = UnitScope.system});
+
+  final UnitScope scope;
+}
+
+/// [unit]'s file and drop-ins (`systemctl cat`, SVC-07), answered by
+/// [UnitFilePayload].
+final class UnitFileQuery extends UnitQuerySpec {
+  const UnitFileQuery(this.unit, {super.scope});
+
+  final String unit;
+}
+
+/// [unit]'s resources (`systemctl show`, SVC-08), answered by
+/// [UnitResourcesPayload].
+final class UnitResourcesQuery extends UnitQuerySpec {
+  const UnitResourcesQuery(this.unit, {super.scope});
+
+  final String unit;
+}
+
+/// The manager's sockets (`systemctl list-sockets`, SVC-10), answered by
+/// [UnitSocketsPayload].
+final class SocketsQuery extends UnitQuerySpec {
+  const SocketsQuery({super.scope});
+}
+
+/// Reads one piece of [serverId]'s job history (03 §7.7, JOB-04, JOB-05),
+/// answered by one [JobHistoryResult] with [requestId]. Each reads as the
+/// login user, or through admin mode when it is on, which the journal of
+/// cron's runs may need.
+final class JobHistoryQuery extends EngineRequest {
+  const JobHistoryQuery({
+    required this.serverId,
+    required this.requestId,
+    required this.query,
+  });
+
+  final String serverId;
+  final String requestId;
+  final JobHistorySpec query;
+}
+
+/// What a [JobHistoryQuery] reads.
+@immutable
+sealed class JobHistorySpec {
+  const JobHistorySpec();
+}
+
+/// `/etc/anacrontab` with each job's stamp (JOB-04), answered by
+/// [AnacronPayload].
+final class AnacronQuery extends JobHistorySpec {
+  const AnacronQuery();
+}
+
+/// [timer]'s last trigger and how [service]'s run ended (JOB-05),
+/// answered by [TimerLastRunPayload].
+final class TimerLastRunQuery extends JobHistorySpec {
+  const TimerLastRunQuery({required this.timer, required this.service});
+
+  final String timer;
+  final String service;
+}
+
+/// The newest [lines] job starts cron logged (JOB-05), answered by
+/// [CronRunsPayload].
+final class CronRunsQuery extends JobHistorySpec {
+  const CronRunsQuery({this.lines = 50});
+
+  final int lines;
+}
+
+/// Reads [target] on [serverId] for an edit (03 §8.5, SAF-12), answered
+/// by one [EditRead] with [requestId]: the content and its SHA-256,
+/// which an [EditFile] names, and who owns it. A file the login user
+/// cannot read is read through admin mode when it is on.
+final class ReadEditable extends EngineRequest {
+  const ReadEditable({
+    required this.serverId,
+    required this.requestId,
+    required this.target,
+  });
+
+  final String serverId;
+  final String requestId;
+  final EditTarget target;
+}
+
+/// Verifies [serverId]'s footprint again (SAF-14, P13): answered by a
+/// [FootprintState]. The engine also verifies it on every connect, and
+/// root's part when admin mode turns on.
+final class FootprintQuery extends EngineRequest {
+  const FootprintQuery(this.serverId);
+
+  final String serverId;
+}
+
 /// Runs one read-only Docker Engine query on [serverId]'s engine (03
 /// §7.12 to §7.14, §10.1), answered by one [DockerResult] with [queryId].
 /// The first query for a server has the engine find its route and
@@ -592,6 +759,84 @@ final class SetSafetyPolicy extends EngineRequest {
   final SafetyPolicy policy;
 }
 
+/// Opens a shell in [containerId] on [serverId] (03 §7.13, CTX-07): an
+/// exec with a TTY over the API upgrade (03 §5.7). [shell] null runs
+/// `/bin/bash` where the container has it and `/bin/sh` otherwise;
+/// [user] null runs as the container's user. Refused, as an action is,
+/// on an observe-only or read-only server. Answered by [TerminalOpened],
+/// then [TerminalBytes], and by [TerminalClosed] once, also when the
+/// shell never starts. The id is the app's and must be new.
+final class OpenTerminal extends EngineRequest {
+  const OpenTerminal({
+    required this.terminalId,
+    required this.serverId,
+    required this.containerId,
+    this.shell,
+    this.user,
+    required this.columns,
+    required this.rows,
+  });
+
+  final String terminalId;
+  final String serverId;
+  final String containerId;
+  final String? shell;
+  final String? user;
+
+  /// The terminal's size, at most [kTerminalDimensionMax] each.
+  final int columns;
+  final int rows;
+}
+
+/// Keystrokes and pastes for [terminalId]'s shell, as the terminal
+/// encoded them.
+final class TerminalInput extends EngineRequest {
+  const TerminalInput(this.terminalId, this.bytes);
+
+  final String terminalId;
+  final Uint8List bytes;
+}
+
+/// [terminalId]'s terminal changed size. The engine passes each size on
+/// in the order it came, columns as Docker's `w` and rows as its `h`.
+final class TerminalResize extends EngineRequest {
+  const TerminalResize(
+    this.terminalId, {
+    required this.columns,
+    required this.rows,
+  });
+
+  final String terminalId;
+  final int columns;
+  final int rows;
+}
+
+/// Ends [terminalId]'s input: stdin EOF as a half-close (03 §5.7), while
+/// its output keeps coming until the shell exits.
+final class TerminalEndInput extends EngineRequest {
+  const TerminalEndInput(this.terminalId);
+
+  final String terminalId;
+}
+
+/// Closes [terminalId]'s shell; [TerminalClosed] follows with
+/// [TerminalCloseReason.closed]. An id with no open shell does nothing.
+final class CloseTerminal extends EngineRequest {
+  const CloseTerminal(this.terminalId);
+
+  final String terminalId;
+}
+
+/// The device's "sync passwords" switch (03 §4.5, SYN-02), which the app
+/// keeps in `settings.json` as `klabautermann.sync.secrets`, sent at spawn
+/// and on every change. Until it arrives the switch is off: sync rounds
+/// apply no pulled `secret:` record to the vault.
+final class SetSyncSecrets extends EngineRequest {
+  const SetSyncSecrets({required this.enabled});
+
+  final bool enabled;
+}
+
 /// Turns admin mode on or off for [serverId] (03 §8.2, SAF-02). Turning
 /// it on detects how to elevate and asks for the password only when that
 /// needs one; [AdminModeState] reports each step.
@@ -660,18 +905,6 @@ final class HandleAlert extends EngineRequest {
 
   final String alertRef;
   final AlertAction action;
-}
-
-/// Opens a container or host shell stream (v1, 03 §10.1); bytes arrive as
-/// [TerminalBytes] until [TerminalClosed].
-final class OpenTerminal extends EngineRequest {
-  const OpenTerminal({required this.serverId, this.containerId, this.shell});
-
-  final String serverId;
-
-  /// Null means the host shell, not a container.
-  final String? containerId;
-  final String? shell;
 }
 
 /// Every message the engine sends the UI isolate (03 §10.1, D18). Same plain
@@ -782,6 +1015,7 @@ final class SyncStatus extends EngineEvent {
     this.failure,
     this.passphraseUnverified = false,
     this.detail,
+    this.prefixBudget,
   });
 
   final SyncPhase phase;
@@ -801,6 +1035,88 @@ final class SyncStatus extends EngineEvent {
 
   /// The failure behind [failure], for diagnostics only.
   final String? detail;
+
+  /// How much of the account the `klabautermann:` records take, after a
+  /// succeeded operation; null otherwise.
+  final SyncPrefixBudget? prefixBudget;
+}
+
+/// The account budget of the `klabautermann:` records (03 §4.8): at most
+/// [kSyncPrefixBudgetBytes] of sealed blobs, with a warning from
+/// [kSyncPrefixWarnFraction] of it (SYN-09's account size view).
+@immutable
+final class SyncPrefixBudget {
+  const SyncPrefixBudget(this.usedBytes);
+
+  /// The sealed blobs of every live `klabautermann:` record the account
+  /// holds, as this device last pulled them.
+  final int usedBytes;
+
+  /// Whether the records take [kSyncPrefixWarnFraction] of the budget or
+  /// more.
+  bool get warns =>
+      usedBytes >= kSyncPrefixBudgetBytes * kSyncPrefixWarnFraction;
+
+  /// Whether the records take the whole budget or more.
+  bool get full => usedBytes >= kSyncPrefixBudgetBytes;
+}
+
+/// The `klabautermann:` prefix's account budget [E] (03 §4.8).
+const int kSyncPrefixBudgetBytes = 1024 * 1024;
+
+/// The share of [kSyncPrefixBudgetBytes] from which the budget warns [E]
+/// (03 §4.8).
+const double kSyncPrefixWarnFraction = 0.8;
+
+/// One server's synced preferences, its `pref` record (03 §4.8, SYN-04).
+/// Every field defaults to what a server without a record has.
+@immutable
+final class ServerPrefs {
+  const ServerPrefs({
+    this.readOnly = false,
+    this.cadence,
+    this.pinnedUnits = const [],
+    this.pinnedContainers = const [],
+    this.marks = const {},
+    this.panelOrder = const [],
+    this.hostAuditLine = true,
+    this.stackScanDirs = const [],
+  });
+
+  /// The server's own read-only switch (SAF-06).
+  final bool readOnly;
+
+  /// The cadence preset chosen for the server; null leaves the device's.
+  final CadenceProfile? cadence;
+
+  /// Units and containers pinned to the top of their lists, by name.
+  final List<String> pinnedUnits, pinnedContainers;
+
+  /// Targets the user marked protected (SAF-22): unit, container and
+  /// stack names.
+  final Set<String> marks;
+
+  /// The server's panels in the user's order, by name; a panel it does
+  /// not name keeps its place after them.
+  final List<String> panelOrder;
+
+  /// Whether a run writes its syslog line on the host (SAF-13).
+  final bool hostAuditLine;
+
+  /// Absolute directories the stack scan looks in (STK-01).
+  final List<String> stackScanDirs;
+}
+
+/// The synced preferences of the fleet server [serverId] changed (03
+/// §4.8): a pulled `pref` record applied, was removed, or its server
+/// arrived or left. [prefs] is null when the server has no record, or a
+/// sealed removal dropped it, so the device's defaults apply. The engine
+/// sends every server's after [EngineReady] and then only changes.
+final class ServerPrefsChanged extends EngineEvent {
+  const ServerPrefsChanged(this.serverId, this.prefs);
+
+  final String serverId;
+  final ServerPrefs? prefs;
 }
 
 /// A sync changed the endpoint of the synced server [serverId], which was
@@ -887,7 +1203,9 @@ final class Sample extends EngineEvent {
              (stream == SampleStream.failedUnits &&
                  result is FailedUnitsResult) ||
              (stream == SampleStream.timers && result is TimersResult) ||
-             (stream == SampleStream.cron && result is CronResult),
+             (stream == SampleStream.cron && result is CronResult) ||
+             (stream == SampleStream.userUnits && result is UnitsResult) ||
+             (stream == SampleStream.userTimers && result is TimersResult),
          'result must be the variant for stream, or CollectorUnavailable',
        );
 
@@ -1017,6 +1335,143 @@ final class LogStreamState extends EngineEvent {
   final LogStreamStatus status;
 }
 
+/// The answer to the [UnitQuery] [requestId] on [serverId]: what it read,
+/// or [UnitQueryFailed] with why, plus the parser's warnings.
+final class UnitQueryResult extends EngineEvent {
+  UnitQueryResult({
+    required this.serverId,
+    required this.requestId,
+    required this.payload,
+    Iterable<String> warnings = const [],
+  }) : warnings = List.unmodifiable(warnings);
+
+  final String serverId;
+  final String requestId;
+  final UnitPayload payload;
+  final List<String> warnings;
+}
+
+/// What a [UnitQuery] found.
+@immutable
+sealed class UnitPayload {
+  const UnitPayload();
+}
+
+/// A unit's file and drop-ins as `systemctl cat` prints them, each after
+/// a `# <path>` line, with `Environment=` values and secrets in `Exec`
+/// lines masked (03 §8.9).
+final class UnitFilePayload extends UnitPayload {
+  UnitFilePayload(Iterable<MaskedValue> text) : text = List.unmodifiable(text);
+
+  final List<MaskedValue> text;
+}
+
+final class UnitResourcesPayload extends UnitPayload {
+  const UnitResourcesPayload(this.resources);
+
+  final UnitResources resources;
+}
+
+final class UnitSocketsPayload extends UnitPayload {
+  UnitSocketsPayload(Iterable<UnitSocket> sockets)
+    : sockets = List.unmodifiable(sockets);
+
+  final List<UnitSocket> sockets;
+}
+
+/// Why a [UnitQuery] read nothing.
+enum UnitQueryFailure {
+  /// The server is not in the fleet, or has no ready link or probe.
+  noLink,
+
+  /// The unit name is not a unit's (03 §8.8).
+  invalidUnit,
+
+  /// The manager has no such unit.
+  notFound,
+
+  /// The login user's manager could not be reached: no user session and
+  /// no linger (SVC-09).
+  managerUnavailable,
+
+  /// The command failed otherwise; the detail says how.
+  failed,
+}
+
+final class UnitQueryFailed extends UnitPayload {
+  const UnitQueryFailed(this.failure, {this.detail});
+
+  final UnitQueryFailure failure;
+
+  /// The host's error text, for [UnitQueryFailure.failed].
+  final String? detail;
+}
+
+/// The answer to the [JobHistoryQuery] [requestId] on [serverId]: what
+/// it read, or [JobHistoryFailed] with why, plus the parser's warnings.
+final class JobHistoryResult extends EngineEvent {
+  JobHistoryResult({
+    required this.serverId,
+    required this.requestId,
+    required this.payload,
+    Iterable<String> warnings = const [],
+  }) : warnings = List.unmodifiable(warnings);
+
+  final String serverId;
+  final String requestId;
+  final JobHistoryPayload payload;
+  final List<String> warnings;
+}
+
+/// What a [JobHistoryQuery] found.
+@immutable
+sealed class JobHistoryPayload {
+  const JobHistoryPayload();
+}
+
+/// anacron's jobs, their commands masked (03 §8.9).
+final class AnacronPayload extends JobHistoryPayload {
+  AnacronPayload(Iterable<AnacronJob> jobs) : jobs = List.unmodifiable(jobs);
+
+  final List<AnacronJob> jobs;
+}
+
+final class TimerLastRunPayload extends JobHistoryPayload {
+  const TimerLastRunPayload(this.lastRun);
+
+  final TimerLastRun lastRun;
+}
+
+/// cron's logged job starts, newest first, their commands masked.
+final class CronRunsPayload extends JobHistoryPayload {
+  CronRunsPayload(Iterable<LoggedCronRun> runs)
+    : runs = List.unmodifiable(runs);
+
+  final List<LoggedCronRun> runs;
+}
+
+/// Why a [JobHistoryQuery] read nothing.
+enum JobHistoryFailure {
+  /// The server is not in the fleet, or has no ready link.
+  noLink,
+
+  /// A timer or unit name is not a unit's (03 §8.8).
+  invalidTarget,
+
+  /// The host has no `/etc/anacrontab`, so anacron is not installed.
+  notInstalled,
+
+  /// The command failed otherwise; the detail says how.
+  failed,
+}
+
+final class JobHistoryFailed extends JobHistoryPayload {
+  const JobHistoryFailed(this.failure, {this.detail});
+
+  final JobHistoryFailure failure;
+  final String? detail;
+}
+
 /// The answer to the [DockerQuery] [queryId] on [serverId] (03 §10.1):
 /// what it read, or [DockerQueryFailed] with why, plus the parser's
 /// warnings (03 §3.4's ParseResult convention).
@@ -1070,7 +1525,8 @@ final class JournalBoots extends HostPayload {
   final List<JournalBootEntry> boots;
 }
 
-/// A [HostQuery] that read nothing; [detail] is the end of its stderr.
+/// A [HostQuery] that read nothing; [detail] is the end of its stderr,
+/// or the text of an error the read threw (a timeout or a lost link).
 final class HostQueryFailed extends HostPayload {
   const HostQueryFailed(this.failure, {this.detail});
 
@@ -1200,6 +1656,129 @@ final class ActionProgress extends EngineEvent {
   final String? message;
 }
 
+/// The answer to the [ReadEditable] with [requestId].
+final class EditRead extends EngineEvent {
+  const EditRead({
+    required this.serverId,
+    required this.requestId,
+    required this.result,
+  });
+
+  final String serverId;
+  final String requestId;
+  final EditReadResult result;
+}
+
+/// What an [EditRead] carries.
+@immutable
+sealed class EditReadResult {
+  const EditReadResult();
+}
+
+/// The target's [text], whose UTF-8 bytes hash to [sha256]. A file has
+/// its numeric [uid], [gid] and permission [mode]; a crontab has none.
+/// [privileged] says a write needs admin mode: the file belongs to
+/// another account, or the crontab is another account's.
+final class EditContent extends EditReadResult {
+  const EditContent({
+    required this.text,
+    required this.sha256,
+    required this.privileged,
+    this.uid,
+    this.gid,
+    this.mode,
+  });
+
+  final String text;
+  final String sha256;
+  final bool privileged;
+  final int? uid, gid, mode;
+}
+
+/// A [ReadEditable] that read nothing; [detail] is the end of stderr.
+final class EditReadFailed extends EditReadResult {
+  const EditReadFailed(this.failure, {this.detail});
+
+  final EditReadFailure failure;
+  final String? detail;
+}
+
+/// Why a [ReadEditable] read nothing.
+enum EditReadFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// The engine refused the target before reading (03 §8.8).
+  invalidTarget,
+
+  /// The file does not exist.
+  notFound,
+
+  /// Only root may read it, and admin mode is off.
+  adminRequired,
+
+  /// The file is larger than the editor takes (`kEditReadCap`).
+  tooLarge,
+
+  /// The file is not UTF-8 text.
+  notText,
+
+  /// The read failed otherwise.
+  failed,
+}
+
+/// What Klabautermann keeps on [serverId] (SAF-14, 03 §8.11, P13): the
+/// manifest rows and whether each is there, and every backup the indexes
+/// record with whether its content still has the recorded hash. Root's
+/// part is [rootUnchecked] until admin mode reads it.
+final class FootprintState extends EngineEvent {
+  const FootprintState(
+    this.serverId, {
+    this.files = const [],
+    this.backups = const [],
+    this.rootUnchecked = false,
+    this.warnings = const [],
+  });
+
+  final String serverId;
+  final List<FootprintFile> files;
+  final List<FootprintBackup> backups;
+  final bool rootUnchecked;
+  final List<String> warnings;
+}
+
+/// One manifest row and whether its path exists.
+@immutable
+final class FootprintFile {
+  const FootprintFile(this.scope, this.row, {required this.present});
+
+  final FootprintScope scope;
+  final FootprintRow row;
+  final bool present;
+}
+
+/// One backup an index records, and what verification found.
+@immutable
+final class FootprintBackup {
+  const FootprintBackup(this.scope, this.entry, this.status);
+
+  final FootprintScope scope;
+  final BackupEntry entry;
+  final FootprintBackupStatus status;
+}
+
+/// What verification found of a backup.
+enum FootprintBackupStatus {
+  /// Its content has the hash its index records.
+  intact,
+
+  /// Its content changed on the host ("modified on host").
+  modified,
+
+  /// The index records it, but the file is gone.
+  missing,
+}
+
 /// A plan finished, one way or another (03 §10.1). A failed plan says
 /// why in typed facts the app words (D35): which step, its exit status or
 /// HTTP status, and what re-validation found.
@@ -1213,6 +1792,7 @@ final class ActionFinished extends EngineEvent {
     this.httpStatus,
     this.revalidation,
     this.operationId,
+    this.output,
   });
 
   final String planId;
@@ -1225,8 +1805,8 @@ final class ActionFinished extends EngineEvent {
   /// The index of the step that failed, in the preview's steps.
   final int? failedStep;
 
-  /// A failed shell step's exit status; null when the channel ended
-  /// without one.
+  /// A failed shell step's exit status, or a [ContainerExec]'s whether
+  /// it failed or not; null when the channel ended without one.
   final int? exitCode;
 
   /// A failed API step's HTTP status.
@@ -1238,7 +1818,31 @@ final class ActionFinished extends EngineEvent {
   /// The detached operation a started plan runs as, which
   /// [OperationsChanged] lists.
   final String? operationId;
+
+  /// What a [ContainerExec] printed, whether it succeeded or failed.
+  final ExecOutput? output;
 }
+
+/// A one-off command's output (CTX-08), with secrets redacted as the
+/// audit log redacts them, at most [kExecOutputMax] bytes in all.
+@immutable
+final class ExecOutput {
+  const ExecOutput({
+    required this.stdout,
+    required this.stderr,
+    this.truncated = false,
+  });
+
+  final String stdout;
+  final String stderr;
+
+  /// Whether the command printed more than [kExecOutputMax] bytes, the
+  /// rest of which was read and dropped.
+  final bool truncated;
+}
+
+/// The most a one-off command's output keeps [E] (CTX-08).
+const int kExecOutputMax = 1024 * 1024;
 
 /// Why a plan failed.
 enum ActionFailure {
@@ -1287,6 +1891,11 @@ enum RevalidationFailure {
 
   /// The container id or the stack's configuration changed.
   targetChanged,
+
+  /// An edited file or crontab no longer has the hash the edit started
+  /// from: someone else changed it (03 §8.5). The app reads it again and
+  /// shows the difference.
+  contentChanged,
 
   /// The check could not read what it compares.
   unreadable,
@@ -1600,6 +2209,85 @@ final class AuditRecord {
   };
 }
 
+/// [terminalId]'s shell started: [command] is what runs, as the exec
+/// was created.
+final class TerminalOpened extends EngineEvent {
+  TerminalOpened(this.terminalId, Iterable<String> command)
+    : command = List.unmodifiable(command);
+
+  final String terminalId;
+  final List<String> command;
+}
+
+/// Output of [terminalId]'s shell, raw as the TTY wrote it, in order.
+/// The engine sends at most 20 a second, as it does [LogBatch]es.
+final class TerminalBytes extends EngineEvent {
+  const TerminalBytes(this.terminalId, this.bytes);
+
+  final String terminalId;
+  final Uint8List bytes;
+}
+
+/// [terminalId]'s shell ended, or never started, and why. Sent once;
+/// the id may be used again after it.
+final class TerminalClosed extends EngineEvent {
+  const TerminalClosed(
+    this.terminalId,
+    this.reason, {
+    this.exitCode,
+    this.detail,
+  });
+
+  final String terminalId;
+  final TerminalCloseReason reason;
+
+  /// The shell's exit code, with [TerminalCloseReason.exited] when the
+  /// daemon reported one.
+  final int? exitCode;
+
+  /// The daemon's message or the error, for the app to show as is.
+  final String? detail;
+}
+
+/// Why a container shell ended or never started.
+enum TerminalCloseReason {
+  /// The shell exited; [TerminalClosed.exitCode] says how.
+  exited,
+
+  /// [CloseTerminal] closed it.
+  closed,
+
+  /// The server is observe-only (SAF-01).
+  observeOnly,
+
+  /// Read-only mode is on (SAF-06).
+  readOnly,
+
+  /// The server is not in the fleet.
+  notInFleet,
+
+  /// The server's Docker endpoint could not be reached.
+  endpointUnavailable,
+
+  /// No session channel was free on the server's relay (03 §5.2).
+  noChannel,
+
+  /// The server already holds [kTerminalsPerServerMax] shells.
+  tooMany,
+
+  /// The container is gone, or the daemon refused the exec.
+  refused,
+
+  /// The server's link was lost.
+  linkLost,
+
+  /// Admin mode ended, and with it the sudo relay the shell ran over.
+  adminEnded,
+
+  /// Anything else; [TerminalClosed.detail] says what.
+  failed,
+}
+
 /// Where admin mode stands on [serverId] (03 §8.2, M4 plan M5). The app
 /// shows the chip and its countdown from [expiresAt] while [phase] is
 /// [AdminModePhase.on]. No field ever holds the password.
@@ -1750,22 +2438,6 @@ final class AlertStatusChanged extends EngineEvent {
 
   final String alertRef;
   final AlertStatus status;
-}
-
-/// Output bytes from an [OpenTerminal] stream (v1, 03 §10.1).
-final class TerminalBytes extends EngineEvent {
-  const TerminalBytes(this.terminalId, this.bytes);
-
-  final String terminalId;
-  final Uint8List bytes;
-}
-
-/// The terminal stream ended (v1, 03 §10.1).
-final class TerminalClosed extends EngineEvent {
-  const TerminalClosed(this.terminalId, {this.reason});
-
-  final String terminalId;
-  final String? reason;
 }
 
 /// The port SSH uses when a config names none (RFC 4253, section 4.1).
@@ -3084,17 +3756,41 @@ final class KillProcess extends ActionIntent {
 
 /// Starts, stops, restarts or reloads a system unit (SVC-03).
 final class UnitAction extends ActionIntent {
-  const UnitAction(super.serverId, {required this.unit, required this.verb});
+  const UnitAction(
+    super.serverId, {
+    required this.unit,
+    required this.verb,
+    this.scope = UnitScope.system,
+  });
 
   final String unit;
   final SystemctlVerb verb;
+  final UnitScope scope;
 }
 
-/// Runs a system timer's service now (JOB-08).
+/// Runs a timer's service now (JOB-08), the system's or the login
+/// user's.
 final class StartTimer extends ActionIntent {
-  const StartTimer(super.serverId, {required this.timer});
+  const StartTimer(
+    super.serverId, {
+    required this.timer,
+    this.scope = UnitScope.system,
+  });
 
   final String timer;
+  final UnitScope scope;
+}
+
+/// Which systemd manager a unit action or query addresses (03 §7.5,
+/// SVC-09).
+enum UnitScope {
+  /// The system manager.
+  system,
+
+  /// The login user's own manager (`systemctl --user`). Its actions run
+  /// as the login user, never through sudo, which would address root's
+  /// manager instead.
+  user,
 }
 
 /// What [ContainerAction] does to a container (CTR-02).
@@ -3113,6 +3809,22 @@ final class ContainerAction extends ActionIntent {
   final String containerId;
   final ContainerVerb verb;
   final KillSignal? signal;
+}
+
+/// Runs [argv] once in [containerId] without a TTY (03 §7.13, CTX-08), as
+/// [user] where set, and reports its output and exit code in
+/// [ActionFinished.output] and [ActionFinished.exitCode].
+final class ContainerExec extends ActionIntent {
+  ContainerExec(
+    super.serverId, {
+    required this.containerId,
+    required Iterable<String> argv,
+    this.user,
+  }) : argv = List.unmodifiable(argv);
+
+  final String containerId;
+  final List<String> argv;
+  final String? user;
 }
 
 /// Removes a container (CTR-05), its anonymous volumes with [volumes],
@@ -3142,19 +3854,56 @@ final class RemoveImage extends ActionIntent {
 /// What [StackAction] does to a Compose project (STK-03).
 enum StackVerb { start, stop, restart }
 
-/// Starts, stops or restarts a Compose project's containers (STK-03).
-/// [actAnyway] confirms acting on a stack another manager owns (03 §8.7).
+/// Starts, stops or restarts a Compose project's containers (STK-03), or
+/// only [service]'s (STK-23). [actAnyway] confirms acting on a stack
+/// another manager owns (03 §8.7).
 final class StackAction extends ActionIntent {
   const StackAction(
     super.serverId, {
     required this.project,
     required this.verb,
+    this.service,
     this.actAnyway = false,
   });
 
   final String project;
   final StackVerb verb;
+  final String? service;
   final bool actAnyway;
+}
+
+/// What [StackComposeAction] runs on a Compose project (STK-23).
+enum StackComposeVerb {
+  /// Pull one service's image.
+  pullService,
+
+  /// Recreate one service's containers even when unchanged.
+  recreateService,
+
+  /// Set one service's replica count.
+  scaleService,
+
+  /// Take the whole stack down, never with its volumes.
+  down,
+}
+
+/// A compose operation on a verified, unmanaged stack (STK-23), run as
+/// one detached operation as STK-06's redeploy is: [service] for every
+/// verb but [StackComposeVerb.down], and [replicas] for
+/// [StackComposeVerb.scaleService].
+final class StackComposeAction extends ActionIntent {
+  const StackComposeAction(
+    super.serverId, {
+    required this.project,
+    required this.verb,
+    this.service,
+    this.replicas,
+  });
+
+  final String project;
+  final StackComposeVerb verb;
+  final String? service;
+  final int? replicas;
 }
 
 /// Pulls a verified, unmanaged stack's images and recreates it (STK-06),
@@ -3168,6 +3917,88 @@ final class RedeployStack extends ActionIntent {
 
   final String project;
   final bool removeOrphans;
+}
+
+/// What an edit reads and writes (03 §8.5, SAF-12, X-05).
+@immutable
+sealed class EditTarget {
+  const EditTarget();
+}
+
+/// A file by its absolute, normalized path (03 §8.8).
+final class FileTarget extends EditTarget {
+  const FileTarget(this.path);
+
+  final String path;
+
+  @override
+  bool operator ==(Object other) => other is FileTarget && other.path == path;
+
+  @override
+  int get hashCode => path.hashCode;
+}
+
+/// A crontab (JOB-04 to JOB-07): the login user's, or [user]'s, which
+/// another account's needs admin mode.
+final class CrontabTarget extends EditTarget {
+  const CrontabTarget({this.user});
+
+  final String? user;
+
+  @override
+  bool operator ==(Object other) =>
+      other is CrontabTarget && other.user == user;
+
+  @override
+  int get hashCode => Object.hash(CrontabTarget, user);
+}
+
+/// Replaces [target]'s content with [text] (SAF-12, X-05), only while the
+/// target still has [baseSha256], the hash its [ReadEditable] read. The
+/// plan backs the target up first, writes a temp file beside it, carries
+/// its owner, mode, ACL and xattrs over (D67) and renames it over the
+/// target; a crontab goes through `crontab -`.
+final class EditFile extends ActionIntent {
+  const EditFile(
+    super.serverId, {
+    required this.target,
+    required this.text,
+    required this.baseSha256,
+  });
+
+  final EditTarget target;
+  final String text;
+  final String baseSha256;
+}
+
+/// Whose backups a footprint action or row is (03 §8.11): the login
+/// user's, under its home, or root's under `/var/lib`, which needs admin
+/// mode.
+enum FootprintScope { user, root }
+
+/// Keeps the newest [count] backups of each file in [scope]'s backup
+/// directory and removes the rest, with their index lines (SAF-14,
+/// "keep last N"; tier 1).
+final class KeepLastBackups extends ActionIntent {
+  const KeepLastBackups(super.serverId, {required this.scope, this.count = 5})
+    : assert(count >= 1, 'keep at least one');
+
+  final FootprintScope scope;
+  final int count;
+}
+
+/// Removes every backup of [source], a path or `crontab:<user>`, from
+/// [scope]'s backup directory (SAF-14). They are the only undo of the
+/// edits they back up, so this needs the typed confirmation.
+final class RemoveBackups extends ActionIntent {
+  const RemoveBackups(
+    super.serverId, {
+    required this.scope,
+    required this.source,
+  });
+
+  final FootprintScope scope;
+  final String source;
 }
 
 /// The app's safety preferences (M4 plan M4, SAF-01, SAF-06): per server,
@@ -3374,14 +4205,23 @@ final class KeyboardInteractivePromptRequest extends PromptRequest {
   PromptKind get kind => PromptKind.keyboardInteractive;
 }
 
-/// The login password for [user] (03 §4.5).
+/// The login password for [user] (03 §4.5): asked on a connect the user
+/// started, for a server whose password the vault does not hold.
 final class CredentialPromptRequest extends PromptRequest {
-  const CredentialPromptRequest({required this.user, this.retry = false});
+  const CredentialPromptRequest({
+    required this.user,
+    this.retry = false,
+    this.canSave = false,
+  });
 
   final String user;
 
   /// Whether the server refused the previous answer to this question.
   final bool retry;
+
+  /// Whether the answer can be kept in the vault ([PromptSecretAnswer.save]):
+  /// the server names a vault entry and the engine may write the vault.
+  final bool canSave;
 
   @override
   PromptKind get kind => PromptKind.credential;
@@ -3426,9 +4266,13 @@ final class PromptTrustAnswer extends PromptAnswer {
 /// One secret for [PromptKind.credential] and [PromptKind.elevation];
 /// null dismisses the prompt without answering.
 final class PromptSecretAnswer extends PromptAnswer {
-  const PromptSecretAnswer(this.secret);
+  const PromptSecretAnswer(this.secret, {this.save = false});
 
   final String? secret;
+
+  /// Keep [secret] in the vault once the server accepts it; honoured only
+  /// for a [CredentialPromptRequest] whose `canSave` is set.
+  final bool save;
 }
 
 /// The ordered responses for [PromptKind.keyboardInteractive].
@@ -3913,6 +4757,13 @@ enum SampleStream {
 
   /// Cron jobs ([CronResult]).
   cron,
+
+  /// The login user's own systemd units, from its user manager
+  /// ([UnitsResult], 7.5, SVC-09).
+  userUnits,
+
+  /// The login user's own systemd timers ([TimersResult], 7.7, JOB-08).
+  userTimers,
 }
 
 /// The 03 §6.4 cadence columns [SetCadenceProfile] picks among.

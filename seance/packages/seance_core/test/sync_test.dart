@@ -580,6 +580,13 @@ void main() {
         ], outcome: outcome);
         expect(two.toString(), startsWith('2 records are too large'));
         expect(two.toString(), contains(': server "prod", record (secret:k).'));
+
+        final setting = SyncRecordsRefused([
+          const RefusedRecord('klabautermann:pref:p',
+              kind: RecordKind.klabautermann),
+        ], outcome: outcome);
+        expect(setting.toString(),
+            startsWith('Klabautermann setting (klabautermann:pref:p) is too'));
       });
 
       test('a batch refused whole still ends the run', () async {

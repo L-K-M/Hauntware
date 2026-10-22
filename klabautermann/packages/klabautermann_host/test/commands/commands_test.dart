@@ -11,11 +11,88 @@ void main() {
         expect(HostCommands.systemctl(v, 'nginx.service'), [
           'systemctl',
           '--no-ask-password',
-          v.name,
+          v.wireName,
           '--',
           'nginx.service',
         ]);
       }
+      expect(SystemctlVerb.resetFailed.wireName, 'reset-failed');
+    });
+
+    test('the user manager adds --user, and XDG_RUNTIME_DIR only when the '
+        'session lacks it', () {
+      expect(
+        HostCommands.systemctl(
+          SystemctlVerb.enable,
+          'sync.service',
+          manager: UnitManager.userFor(uid: 1000, xdgRuntimeDir: null),
+        ),
+        [
+          'env',
+          'XDG_RUNTIME_DIR=/run/user/1000',
+          'systemctl',
+          '--user',
+          '--no-ask-password',
+          'enable',
+          '--',
+          'sync.service',
+        ],
+      );
+      expect(
+        HostCommands.unitFile(
+          'sync.service',
+          manager: UnitManager.userFor(
+            uid: 1000,
+            xdgRuntimeDir: '/run/user/1000',
+          ),
+        ),
+        ['systemctl', '--user', 'cat', '--', 'sync.service'],
+      );
+      expect(
+        UnitManager.userFor(uid: null, xdgRuntimeDir: '').runtimeDir,
+        isNull,
+        reason: 'without a uid there is no directory to name',
+      );
+      expect(
+        () => HostCommands.unitFile(
+          'sync.service',
+          manager: const UnitManager.user(runtimeDir: 'run/user/1000'),
+        ),
+        throwsA(isA<HostCommandError>()),
+      );
+    });
+
+    test('the unit file, resources and sockets reads', () {
+      expect(HostCommands.unitFile('nginx.service'), [
+        'systemctl',
+        'cat',
+        '--',
+        'nginx.service',
+      ]);
+      expect(HostCommands.unitResources('nginx.service'), [
+        'systemctl',
+        'show',
+        '--property=MemoryCurrent,CPUUsageNSec,TasksCurrent,NRestarts,'
+            'MainPID,ActiveEnterTimestamp',
+        '--',
+        'nginx.service',
+      ]);
+      expect(HostCommands.unitSockets(UnitTableFormat.json), [
+        'systemctl',
+        'list-sockets',
+        '--all',
+        '--output=json',
+      ]);
+      expect(HostCommands.unitSockets(UnitTableFormat.text), [
+        'systemctl',
+        'list-sockets',
+        '--all',
+        '--no-legend',
+      ]);
+      expect(
+        () => HostCommands.unitResources('nginx; id'),
+        throwsA(isA<HostCommandError>()),
+      );
     });
 
     test('an invalid unit name is refused with the offending argument', () {
@@ -478,6 +555,36 @@ void main() {
     expect(
       () => HostCommands.unitLoadState('-x'),
       throwsA(isA<HostCommandError>()),
+    );
+  });
+
+  test("a user timer's reads and start address the user's manager "
+      '(SVC-09, JOB-08)', () {
+    const manager = UnitManager.user(runtimeDir: '/run/user/1000');
+    const head = [
+      'env',
+      'XDG_RUNTIME_DIR=/run/user/1000',
+      'systemctl',
+      '--user',
+    ];
+    expect(HostCommands.timerActivates('backup.timer', manager: manager), [
+      ...head,
+      'show',
+      '--property=Unit',
+      '--value',
+      '--',
+      'backup.timer',
+    ]);
+    expect(HostCommands.timerStart('backup.service', manager: manager), [
+      ...head,
+      '--no-ask-password',
+      'start',
+      '--',
+      'backup.service',
+    ]);
+    expect(
+      HostCommands.unitLoadState('backup.service', manager: manager).take(5),
+      [...head, 'show'],
     );
   });
 

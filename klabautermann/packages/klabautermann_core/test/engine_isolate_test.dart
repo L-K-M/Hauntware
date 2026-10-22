@@ -87,11 +87,11 @@ void main() {
       final client = await spawnEngine();
       final (:events, fleet: _) = await started(client);
 
-      client.send(const OpenTerminal(serverId: 'srv-1'));
+      client.send(const HandleAlert('a-1', AlertAction.acknowledge));
 
       expect(
         ((await next(events)) as RequestRejected).requestName,
-        'OpenTerminal',
+        'HandleAlert',
       );
     });
 
@@ -281,6 +281,69 @@ void main() {
         (state.status as LogStreamEnded).reason,
         LogStreamEndReason.invalid,
       );
+    });
+
+    test('a unit query without a link answers noLink (SVC-07)', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+
+      client.send(
+        const UnitQuery(
+          serverId: 'srv-1',
+          requestId: 'u-1',
+          query: UnitFileQuery('app.service'),
+        ),
+      );
+      final answer = (await next(events)) as UnitQueryResult;
+      expect(answer.requestId, 'u-1');
+      expect(
+        (answer.payload as UnitQueryFailed).failure,
+        UnitQueryFailure.noLink,
+      );
+    });
+
+    test(
+      'a job history query without a link answers noLink (JOB-04)',
+      () async {
+        final client = await spawnEngine();
+        final (:events, fleet: _) = await started(client);
+
+        client.send(
+          const JobHistoryQuery(
+            serverId: 'srv-1',
+            requestId: 'h-1',
+            query: AnacronQuery(),
+          ),
+        );
+        final answer = (await next(events)) as JobHistoryResult;
+        expect(answer.requestId, 'h-1');
+        expect(
+          (answer.payload as JobHistoryFailed).failure,
+          JobHistoryFailure.noLink,
+        );
+      },
+    );
+
+    test('a footprint query needs a fleet server with a link '
+        '(SAF-14)', () async {
+      final client = await IsolateEngineClient.spawn(
+        supportDirectory: support.path,
+        linksEnabled: true,
+      );
+      addTearDown(client.shutdown);
+      final (:events, fleet: _) = await started(client);
+      client.send(const ImportSshConfig('Host web\n  HostName 192.0.2.10\n'));
+      expect(await next(events), isA<CatalogReplaced>());
+      expect(await next(events), isA<SshConfigImported>());
+
+      client.send(const FootprintQuery('srv-x'));
+      final unknown = (await next(events)) as RequestRejected;
+      expect(unknown.requestName, 'FootprintQuery');
+      expect(unknown.reason, 'no fleet server srv-x');
+
+      client.send(const FootprintQuery('ssh-config:web'));
+      final unlinked = (await next(events)) as RequestRejected;
+      expect(unlinked.reason, 'no connection to ssh-config:web');
     });
 
     test('an endpoint choice is rejected while links are off', () async {

@@ -102,6 +102,8 @@ final class _Spec {
     this.query,
     this.expect = _Expect.success,
     this.lines,
+    this.json,
+    this.hijack = false,
   });
 
   final String name;
@@ -109,6 +111,13 @@ final class _Spec {
   final String path;
   final Map<String, String>? query;
   final _Expect expect;
+
+  /// The request's JSON body, if any.
+  final Object? json;
+
+  /// Hijack the connection (exec start) and record until the daemon
+  /// closes it.
+  final bool hijack;
 
   /// Keep only this many body lines, then close the stream.
   final int? lines;
@@ -260,6 +269,7 @@ Future<void> runCapture(CaptureOptions options) async {
     for (final spec in specs) {
       entries.add(prerecorded[spec.name] ?? await recorder.record(spec));
     }
+    entries.addAll(await _recordExec(session, recorder, v, options));
 
     final manifest = CorpusManifest(
       corpus: corpus,
@@ -427,6 +437,10 @@ final class _Session {
   Future<void> close() => _http.close();
 }
 
+/// How long a hijacked exchange is read for before the recorder closes
+/// it: well past an exec that prints two lines and exits.
+const Duration _hijackDrainLimit = Duration(seconds: 30);
+
 /// Records exchanges, each on a connection of its own so that the tap
 /// holds exactly one response.
 final class _Recorder {
@@ -453,10 +467,24 @@ final class _Recorder {
       method: spec.method,
       path: spec.path,
       query: spec.query,
+      json: spec.json,
+      upgrade: spec.hijack,
     );
     try {
       final lines = spec.lines;
-      if (lines == null) {
+      if (spec.hijack) {
+        final res = await http.sendHijack(request);
+        // The daemon has been seen to keep a finished exec's hijacked
+        // stream open; the client's timeout only covers the response
+        // head, so an unbounded drain hung the whole capture. The output
+        // frames come before the exit, and _waitForExec and exec-inspect
+        // confirm the exit, so stopping here loses nothing they record.
+        // Ignored so that a stream ending in an error after the timeout
+        // and the close below is not reported as unhandled.
+        final drained = res.body.stream.drain<void>()..ignore();
+        await drained.timeout(_hijackDrainLimit, onTimeout: () {});
+        await res.body.close();
+      } else if (lines == null) {
         await http.sendBuffered(request, maxBytes: 64 * 1024 * 1024);
       } else {
         final res = await http.sendLines(request);
@@ -486,7 +514,8 @@ final class _Recorder {
       headRequest: spec.method == 'HEAD',
     );
     final status = response.statusCode;
-    final ok = status ~/ 100 == 2;
+    // A hijacked request succeeds by switching protocols.
+    final ok = status ~/ 100 == 2 || (spec.hijack && status == 101);
     if (spec.expect == _Expect.success && !ok) {
       throw CaptureException(
         '${spec.request}: $status '
@@ -508,6 +537,98 @@ final class _Recorder {
     stdout.writeln('  ${entry.name}: $status ${spec.request}');
     return entry;
   }
+}
+
+/// The exec exchanges (03 §5.7, CTX-07, CTX-08), last so that nothing
+/// recorded before them carries an exec: a non-TTY exec on `web`
+/// created, started over the hijacked connection until its process
+/// exits, and inspected once it has; then the resize of a TTY exec
+/// started detached.
+Future<List<ExchangeEntry>> _recordExec(
+  _Session s,
+  _Recorder recorder,
+  String v,
+  CaptureOptions options,
+) async {
+  final create = _Spec(
+    'exec-create',
+    'POST',
+    '$v/containers/web/exec',
+    json: const {
+      'AttachStdin': false,
+      'AttachStdout': true,
+      'AttachStderr': true,
+      'Tty': false,
+      'Cmd': ['sh', '-c', 'echo out; echo err >&2; exit 3'],
+    },
+  );
+  final createRaw = await recorder._exchange(create);
+  final createEntry = recorder._store(create, createRaw);
+  final id = _execId(createRaw);
+
+  final start = await recorder.record(
+    _Spec(
+      'exec-start',
+      'POST',
+      '$v/exec/$id/start',
+      json: const {'Detach': false, 'Tty': false},
+      hijack: true,
+    ),
+  );
+  await _waitForExec(s, id, options);
+  final inspect = await recorder.record(
+    _Spec('exec-inspect', 'GET', '$v/exec/$id/json'),
+  );
+
+  final tty =
+      await s.json(
+            'POST',
+            '/containers/web/exec',
+            body: const {
+              'AttachStdin': false,
+              'AttachStdout': false,
+              'AttachStderr': false,
+              'Tty': true,
+              'Cmd': ['sleep', '60'],
+            },
+          )
+          as Map;
+  final ttyId = '${tty['Id']}';
+  await s.json(
+    'POST',
+    '/exec/$ttyId/start',
+    body: const {'Detach': true, 'Tty': true},
+  );
+  final resize = await recorder.record(
+    _Spec(
+      'exec-resize',
+      'POST',
+      '$v/exec/$ttyId/resize',
+      query: const {'h': '40', 'w': '120'},
+      expect: _Expect.any,
+    ),
+  );
+  return [createEntry, start, inspect, resize];
+}
+
+String _execId(Uint8List raw) {
+  final body = jsonDecode(utf8.decode(parseRecordedResponse(raw).body));
+  final id = body is Map ? body['Id'] : null;
+  if (id is! String || id.isEmpty) {
+    throw CaptureException('exec-create: no Id in $body');
+  }
+  return id;
+}
+
+/// Waits until exec [id]'s process has exited.
+Future<void> _waitForExec(_Session s, String id, CaptureOptions options) async {
+  final deadline = DateTime.now().add(options.wait);
+  while (DateTime.now().isBefore(deadline)) {
+    final inspect = await s.json('GET', '/exec/$id/json') as Map;
+    if (inspect['Running'] == false) return;
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+  }
+  throw CaptureException('exec $id still runs after ${options.wait}');
 }
 
 /// What seeding leaves for the recording.

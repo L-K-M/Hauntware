@@ -5,7 +5,7 @@
 // plan's steps run on the host instead, as one operation the runner
 // launches (03 §7.17, M4 E18).
 import 'package:klabautermann_docker/klabautermann_docker.dart'
-    show DockerException;
+    show DockerApiException, DockerException;
 import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
 import 'package:seance_core/seance_core.dart'
     show
@@ -27,6 +27,17 @@ import 'plan_types.dart';
 /// status (M4 E15). A [DockerException] or [DockerEndpointUnavailable]
 /// it throws ends the run as a transport failure.
 typedef ApiStepRunner = Future<int> Function(String serverId, ApiStep step);
+
+/// Runs one [ExecStep] on [serverId]'s engine (CTX-08) and returns the
+/// command's exit code, null when the daemon reported none, and its
+/// redacted output. A [DockerApiException] it throws, the daemon's
+/// refusal, fails the step; any other [DockerException] or a
+/// [DockerEndpointUnavailable] ends the run as a transport failure.
+typedef ExecStepRunner =
+    Future<({int? exitCode, ExecOutput output})> Function(
+      String serverId,
+      ExecStep step,
+    );
 
 /// Checks a [DockerTargetUnchanged] or a [StackConfigUnchanged] on
 /// [serverId] through its Docker endpoint: null when unchanged.
@@ -65,6 +76,7 @@ final class OperationRunner {
     required this._linkFor,
     required this._emit,
     this._api,
+    this._exec,
     this._docker,
     this._launch,
     this._finished,
@@ -75,6 +87,7 @@ final class OperationRunner {
   final SshLink? Function(String serverId) _linkFor;
   final void Function(EngineEvent event) _emit;
   final ApiStepRunner? _api;
+  final ExecStepRunner? _exec;
   final DockerRevalidator? _docker;
   final DetachedLauncher? _launch;
   final void Function(OperationResult result)? _finished;
@@ -120,6 +133,7 @@ final class OperationRunner {
       int? exitCode,
       int? httpStatus,
       RevalidationFailure? revalidation,
+      ExecOutput? output,
     }) => ActionFinished(
       planId: planId,
       outcome: ActionOutcome.failed,
@@ -128,7 +142,12 @@ final class OperationRunner {
       exitCode: exitCode,
       httpStatus: httpStatus,
       revalidation: revalidation,
+      output: output,
     );
+
+    // What a one-off command printed, for the answer.
+    ExecOutput? output;
+    int? exitCode;
 
     final serverId = plan.intent.serverId;
     final link = _linkFor(serverId);
@@ -183,13 +202,9 @@ final class OperationRunner {
         );
         switch (plan.steps[i]) {
           case final ShellStep step:
-            final result = step.elevated
-                ? await session!.executor.run(
-                    step.argv,
-                    password: session.password,
-                  )
-                : await link.run(step.commandLine, stdin: const []);
+            final result = await _runShell(link, step, session);
             if (result.exitCode != 0) {
+              await _cleanUp(link, plan, session);
               if (step.exitMeanings[result.exitCode] case final changed?) {
                 return failed(
                   ActionFailure.revalidation,
@@ -213,27 +228,95 @@ final class OperationRunner {
             }
             final status = await api(serverId, step);
             if (status < _httpOk || status >= _httpMultipleChoices) {
+              await _cleanUp(link, plan, session);
               return failed(
                 ActionFailure.stepFailed,
                 step: i,
                 httpStatus: status,
               );
             }
+          case final ExecStep step:
+            final exec = _exec;
+            if (exec == null) {
+              return failed(ActionFailure.unsupportedStep, step: i);
+            }
+            final ({int? exitCode, ExecOutput output}) result;
+            try {
+              result = await exec(serverId, step);
+            } on DockerApiException catch (e) {
+              // The daemon answered and refused, as for a container that
+              // stopped: the step failed, as an API step's error does.
+              return failed(
+                ActionFailure.stepFailed,
+                step: i,
+                httpStatus: e.statusCode,
+              );
+            }
+            output = result.output;
+            exitCode = result.exitCode;
+            if (exitCode != 0) {
+              return failed(
+                ActionFailure.stepFailed,
+                step: i,
+                exitCode: exitCode,
+                output: output,
+              );
+            }
         }
       }
     } on ElevationException {
+      await _cleanUp(link, plan, session);
       return failed(ActionFailure.elevationRefused);
     } on RemoteCommandException {
+      await _cleanUp(link, plan, session);
       return failed(ActionFailure.transport);
     } on DockerException {
       return failed(ActionFailure.transport);
     } on DockerEndpointUnavailable {
       return failed(ActionFailure.transport);
     } on ChannelOpenException {
-      // The link refused the channel, at its session limit or closing.
+      // The link refused the channel, at its session limit or closing. A
+      // later channel may still open, so the cleanup is tried.
+      await _cleanUp(link, plan, session);
       return failed(ActionFailure.transport);
     }
-    return ActionFinished(planId: planId, outcome: ActionOutcome.succeeded);
+    return ActionFinished(
+      planId: planId,
+      outcome: ActionOutcome.succeeded,
+      exitCode: exitCode,
+      output: output,
+    );
+  }
+
+  /// Runs [step] over [link], or through [session]'s elevation, with its
+  /// input on stdin.
+  Future<RemoteCommandResult> _runShell(
+    SshLink link,
+    ShellStep step,
+    AdminSession? session,
+  ) => step.elevated
+      ? session!.executor.run(
+          step.argv,
+          password: session.password,
+          stdin: step.input,
+        )
+      : link.run(step.commandLine, stdin: step.input ?? const []);
+
+  /// Runs [plan]'s cleanup steps after a failure, best effort: a cleanup
+  /// that fails, or a link that is gone, leaves what 03 §8.11's rows say
+  /// the next run or the footprint view removes.
+  Future<void> _cleanUp(
+    SshLink link,
+    OperationPlan plan,
+    AdminSession? session,
+  ) async {
+    for (final step in plan.cleanup) {
+      try {
+        await _runShell(link, step, session);
+      } on Object {
+        return;
+      }
+    }
   }
 
   Future<RevalidationFailure?> _revalidate(
@@ -242,8 +325,11 @@ final class OperationRunner {
     Revalidation check,
   ) async {
     switch (check) {
-      case UnitLoaded(:final unit):
-        final result = await _read(link, HostCommands.unitLoadState(unit));
+      case UnitLoaded(:final unit, :final manager):
+        final result = await _read(
+          link,
+          HostCommands.unitLoadState(unit, manager: manager),
+        );
         if (result.exitCode != 0) return RevalidationFailure.unreadable;
         return result.stdout.trim() == 'loaded'
             ? null
