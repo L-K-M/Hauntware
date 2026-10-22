@@ -2230,6 +2230,61 @@
   "@logsPanelCommonPaths": {
     "description": "Tooltip of the button beside the file path field that lists common log files, such as the syslog and web server logs."
   },
+  "logsPanelBrowseFiles": "Browse /var/log",
+  "@logsPanelBrowseFiles": {
+    "description": "Button beside the file path field that lists the server's log files under /var/log (LOG-08)."
+  },
+  "logsPanelFiles": "Files in /var/log",
+  "@logsPanelFiles": {
+    "description": "Title of the sheet listing the server's log files under /var/log."
+  },
+  "logsPanelFilesFilter": "Filter by name",
+  "@logsPanelFilesFilter": {
+    "description": "Label of the field that narrows the /var/log listing to paths containing its text."
+  },
+  "logsPanelFilesLoading": "Listing the server's log files…",
+  "@logsPanelFilesLoading": {
+    "description": "Shown in the /var/log browser while the server lists its files."
+  },
+  "logsPanelFilesFailed": "{failure, select, noLink{Not connected to the server.} denied{The server denied access to /var/log.} missing{The server cannot list /var/log.} other{Listing the server's log files failed.}}",
+  "@logsPanelFilesFailed": {
+    "description": "Shown in the /var/log browser when the server's files could not be listed.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelFilesEmpty": "The server has no files under /var/log.",
+  "@logsPanelFilesEmpty": {
+    "description": "Shown in the /var/log browser when the listing is empty."
+  },
+  "logsPanelFilesNoMatch": "No file path contains this text.",
+  "@logsPanelFilesNoMatch": {
+    "description": "Shown in the /var/log browser when the filter matches no file."
+  },
+  "logsPanelFileDetails": "{size}, changed {modified}",
+  "@logsPanelFileDetails": {
+    "description": "Under a file's path in the /var/log browser: its size and when it last changed.",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "12 KiB"
+      },
+      "modified": {
+        "type": "String",
+        "example": "12 Oct, 08:14"
+      }
+    }
+  },
+  "logsPanelFileCompressed": "Compressed: reads its last lines, without following",
+  "@logsPanelFileCompressed": {
+    "description": "Under a rotated .gz or .xz file in the /var/log browser."
+  },
+  "logsPanelFileUnreadable": "Your account cannot read it; admin mode can",
+  "@logsPanelFileUnreadable": {
+    "description": "Under a file in the /var/log browser that the server account may not read."
+  },
   "logsPanelApply": "Apply",
   "@logsPanelApply": {
     "description": "Button that reads the log again with the filters or path entered."
@@ -2260,6 +2315,10 @@
   "logsPanelLivePastBoot": "A past boot has no new entries to follow",
   "@logsPanelLivePastBoot": {
     "description": "Tooltip of the Logs panel's Live chip while it is off because a past boot is shown."
+  },
+  "logsPanelLiveCompressed": "A compressed file has no new lines to follow",
+  "@logsPanelLiveCompressed": {
+    "description": "Tooltip of the Logs panel's Live chip while it is off because a compressed rotated file is shown."
   },
   "logsPanelJournalLimited": "Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The server's Access section shows how to add it.",
   "@logsPanelJournalLimited": {

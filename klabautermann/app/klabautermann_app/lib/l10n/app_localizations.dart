@@ -2680,6 +2680,66 @@ abstract class AppLocalizations {
   /// **'Common paths'**
   String get logsPanelCommonPaths;
 
+  /// Button beside the file path field that lists the server's log files under /var/log (LOG-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Browse /var/log'**
+  String get logsPanelBrowseFiles;
+
+  /// Title of the sheet listing the server's log files under /var/log.
+  ///
+  /// In en, this message translates to:
+  /// **'Files in /var/log'**
+  String get logsPanelFiles;
+
+  /// Label of the field that narrows the /var/log listing to paths containing its text.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter by name'**
+  String get logsPanelFilesFilter;
+
+  /// Shown in the /var/log browser while the server lists its files.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing the server\'s log files…'**
+  String get logsPanelFilesLoading;
+
+  /// Shown in the /var/log browser when the server's files could not be listed.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected to the server.} denied{The server denied access to /var/log.} missing{The server cannot list /var/log.} other{Listing the server\'s log files failed.}}'**
+  String logsPanelFilesFailed(String failure);
+
+  /// Shown in the /var/log browser when the listing is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'The server has no files under /var/log.'**
+  String get logsPanelFilesEmpty;
+
+  /// Shown in the /var/log browser when the filter matches no file.
+  ///
+  /// In en, this message translates to:
+  /// **'No file path contains this text.'**
+  String get logsPanelFilesNoMatch;
+
+  /// Under a file's path in the /var/log browser: its size and when it last changed.
+  ///
+  /// In en, this message translates to:
+  /// **'{size}, changed {modified}'**
+  String logsPanelFileDetails(String size, String modified);
+
+  /// Under a rotated .gz or .xz file in the /var/log browser.
+  ///
+  /// In en, this message translates to:
+  /// **'Compressed: reads its last lines, without following'**
+  String get logsPanelFileCompressed;
+
+  /// Under a file in the /var/log browser that the server account may not read.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account cannot read it; admin mode can'**
+  String get logsPanelFileUnreadable;
+
   /// Button that reads the log again with the filters or path entered.
   ///
   /// In en, this message translates to:
@@ -2709,6 +2769,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'A past boot has no new entries to follow'**
   String get logsPanelLivePastBoot;
+
+  /// Tooltip of the Logs panel's Live chip while it is off because a compressed rotated file is shown.
+  ///
+  /// In en, this message translates to:
+  /// **'A compressed file has no new lines to follow'**
+  String get logsPanelLiveCompressed;
 
   /// Notice above the journal when the server shows the signed-in account only its own entries. The group names are names on the server and stay as they are.
   ///

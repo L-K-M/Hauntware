@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ghost_ui/ghost_ui.dart' show ghostFormatBinarySize;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../../controllers/monitoring_controller.dart';
@@ -323,6 +324,7 @@ class _LogsPanelState extends State<LogsPanel> {
             query: query,
             sheet: false,
             onApply: _panel.apply,
+            onBrowse: _browseFiles,
           ),
         if (query.source != LogSourceKind.file)
           OutlinedButton.icon(
@@ -456,6 +458,15 @@ class _LogsPanelState extends State<LogsPanel> {
         Navigator.pop(context);
         _panel.apply(query);
       },
+      onBrowse: _browseFiles,
+    ),
+  );
+
+  /// LOG-08's `/var/log` browser: the path picked, or null.
+  Future<String?> _browseFiles() => _sheet<String>(
+    (context) => LogFilePicker(
+      files: widget.monitoring.queryHost(widget.serverId, const VarLogQuery()),
+      selected: _panel.query.path,
     ),
   );
 }
@@ -469,11 +480,15 @@ class _FilterForm extends StatefulWidget {
     required this.query,
     required this.sheet,
     required this.onApply,
+    required this.onBrowse,
   });
 
   final LogQuery query;
   final bool sheet;
   final ValueChanged<LogQuery> onApply;
+
+  /// Opens LOG-08's `/var/log` browser, completing with the path picked.
+  final Future<String?> Function() onBrowse;
 
   @override
   State<_FilterForm> createState() => _FilterFormState();
@@ -504,6 +519,13 @@ class _FilterFormState extends State<_FilterForm> {
     if (draft.ready) widget.onApply(draft);
   }
 
+  Future<void> _browse() async {
+    final path = await widget.onBrowse();
+    if (!mounted || path == null) return;
+    setState(() => _path.text = path);
+    _apply();
+  }
+
   @override
   void dispose() {
     _unit.dispose();
@@ -523,9 +545,14 @@ class _FilterFormState extends State<_FilterForm> {
         widget.sheet ? field : SizedBox(width: width * factor, child: field);
 
     final fields = <Widget>[
-      if (file)
-        sized(_pathField(l10n), factor: 2)
-      else ...[
+      if (file) ...[
+        sized(_pathField(l10n), factor: 2),
+        OutlinedButton.icon(
+          onPressed: _browse,
+          icon: const Icon(Icons.folder_open),
+          label: Text(l10n.logsPanelBrowseFiles),
+        ),
+      ] else ...[
         sized(_textField(_unit, l10n.logsPanelUnit)),
         sized(_textField(_identifier, l10n.logsPanelIdentifier)),
         sized(
@@ -651,6 +678,8 @@ class LogLiveChip extends StatelessWidget {
       label: Text(l10n.logsPanelLiveState(word.name)),
       tooltip: panel.canFollow
           ? l10n.logsPanelLiveTooltip
+          : panel.query.source == LogSourceKind.file
+          ? l10n.logsPanelLiveCompressed
           : l10n.logsPanelLivePastBoot,
       onSelected: panel.canFollow ? panel.setLive : null,
     );
@@ -870,7 +899,7 @@ class LogBootPicker extends StatelessWidget {
         FutureBuilder(
           future: boots,
           builder: (context, snapshot) => switch (snapshot.data?.payload) {
-            null => _note(context, l10n.logsPanelBootsLoading),
+            null => _sheetNote(context, l10n.logsPanelBootsLoading),
             JournalBoots(:final boots) => Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -885,11 +914,11 @@ class LogBootPicker extends StatelessWidget {
                   ),
               ],
             ),
-            HostQueryFailed(:final failure) => _note(
+            HostQueryFailed(:final failure) => _sheetNote(
               context,
               l10n.logsPanelBootsFailed(failure.name),
             ),
-            _ => _note(
+            _ => _sheetNote(
               context,
               l10n.logsPanelBootsFailed(HostQueryFailure.failed.name),
             ),
@@ -898,11 +927,6 @@ class LogBootPicker extends StatelessWidget {
       ],
     );
   }
-
-  static Widget _note(BuildContext context, String text) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-    child: Text(text, style: Theme.of(context).textTheme.bodyMedium),
-  );
 
   /// When [boot]'s entries start and end, in local time; null when the
   /// server did not say.
@@ -913,17 +937,146 @@ class LogBootPicker extends StatelessWidget {
   ) {
     final first = boot.firstEntry, last = boot.lastEntry;
     if (first == null || last == null) return null;
-    final localizations = MaterialLocalizations.of(context);
-    String format(DateTime time) {
-      final local = time.toLocal();
-      return l10n.activityTime(
-        localizations.formatShortDate(local),
-        localizations.formatTimeOfDay(TimeOfDay.fromDateTime(local)),
-      );
-    }
-
-    return l10n.logsPanelBootSpan(format(first), format(last));
+    return l10n.logsPanelBootSpan(
+      _localTime(context, l10n, first),
+      _localTime(context, l10n, last),
+    );
   }
+}
+
+/// LOG-08's `/var/log` browser over a [VarLogQuery]'s [files]: each
+/// file's path, size and last change, with rotated archives marked
+/// compressed and the files the login user may not read marked as
+/// needing admin mode, in words beside the icon. A filter narrows a long
+/// listing by path; picking a file pops its path.
+class LogFilePicker extends StatefulWidget {
+  const LogFilePicker({super.key, required this.files, required this.selected});
+
+  final Future<HostResult> files;
+
+  /// The path the panel reads now, marked in the list.
+  final String selected;
+
+  @override
+  State<LogFilePicker> createState() => _LogFilePickerState();
+}
+
+class _LogFilePickerState extends State<LogFilePicker> {
+  final _filter = TextEditingController();
+
+  @override
+  void dispose() {
+    _filter.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          l10n.logsPanelFiles,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _filter,
+          autocorrect: false,
+          decoration: InputDecoration(
+            isDense: true,
+            border: const OutlineInputBorder(),
+            labelText: l10n.logsPanelFilesFilter,
+            prefixIcon: const Icon(Icons.search),
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+        FutureBuilder(
+          future: widget.files,
+          builder: (context, snapshot) => switch (snapshot.data?.payload) {
+            null => _sheetNote(context, l10n.logsPanelFilesLoading),
+            VarLogFiles(:final files) => _list(context, l10n, files),
+            HostQueryFailed(:final failure) => _sheetNote(
+              context,
+              l10n.logsPanelFilesFailed(failure.name),
+            ),
+            _ => _sheetNote(
+              context,
+              l10n.logsPanelFilesFailed(HostQueryFailure.failed.name),
+            ),
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _list(
+    BuildContext context,
+    AppLocalizations l10n,
+    List<LogFileEntry> files,
+  ) {
+    if (files.isEmpty) return _sheetNote(context, l10n.logsPanelFilesEmpty);
+    final filter = _filter.text.trim().toLowerCase();
+    final shown = [
+      for (final file in files)
+        if (file.path.toLowerCase().contains(filter)) file,
+    ];
+    if (shown.isEmpty) return _sheetNote(context, l10n.logsPanelFilesNoMatch);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [for (final file in shown) _row(context, l10n, file)],
+    );
+  }
+
+  Widget _row(BuildContext context, AppLocalizations l10n, LogFileEntry file) {
+    final compressed = file.compression != LogCompression.none;
+    final selected = file.path == widget.selected;
+    return ListTile(
+      leading: Icon(
+        !file.readable
+            ? Icons.lock_outline
+            : compressed
+            ? Icons.folder_zip_outlined
+            : Icons.description_outlined,
+      ),
+      title: Text(file.path),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.logsPanelFileDetails(
+              ghostFormatBinarySize(file.bytes),
+              _localTime(context, l10n, file.modified),
+            ),
+          ),
+          if (compressed) Text(l10n.logsPanelFileCompressed),
+          if (!file.readable) Text(l10n.logsPanelFileUnreadable),
+        ],
+      ),
+      selected: selected,
+      trailing: selected ? const Icon(Icons.check) : null,
+      onTap: () => Navigator.pop(context, file.path),
+    );
+  }
+}
+
+/// A picker sheet's line of state: loading, empty or failed.
+Widget _sheetNote(BuildContext context, String text) => Padding(
+  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+  child: Text(text, style: Theme.of(context).textTheme.bodyMedium),
+);
+
+/// [time] as a short date and a time of day, in local time.
+String _localTime(BuildContext context, AppLocalizations l10n, DateTime time) {
+  final localizations = MaterialLocalizations.of(context);
+  final local = time.toLocal();
+  return l10n.activityTime(
+    localizations.formatShortDate(local),
+    localizations.formatTimeOfDay(TimeOfDay.fromDateTime(local)),
+  );
 }
 
 /// A line of state above the log: an icon, the words, and optionally the

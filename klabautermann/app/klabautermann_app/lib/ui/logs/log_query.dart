@@ -111,7 +111,12 @@ final class LogQuery {
   /// [serverLogPattern]; empty for none. Only the journal reads it.
   final String grep;
 
+  /// The file LOG-22 tails, typed, picked from [kCommonLogPaths] or from
+  /// LOG-08's `/var/log` browser.
   final String path;
+
+  /// [path] is a rotated `.gz` or `.xz` file (LOG-08), read as a window.
+  bool get _compressed => LogCompression.of(path) != LogCompression.none;
 
   LogQuery withSource(LogSourceKind source) => _copy(source: source);
 
@@ -150,8 +155,10 @@ final class LogQuery {
   bool get ready =>
       source != LogSourceKind.file || logPathProblem(path) == null;
 
-  /// Whether the source can be followed: a past boot only has a window.
-  bool get followable => source == LogSourceKind.file || pastBoot == null;
+  /// Whether the source can be followed: a past boot and a compressed
+  /// file only have a window.
+  bool get followable =>
+      source == LogSourceKind.file ? !_compressed : pastBoot == null;
 
   /// The filters narrowing [source], for the phone's Filters button.
   int get filterCount => switch (source) {
@@ -182,6 +189,6 @@ final class LogQuery {
       grep: grep.isEmpty ? null : grep,
     ),
     LogSourceKind.kernel => KernelLogSource(boot: _boot),
-    LogSourceKind.file => FileLogSource(path),
+    LogSourceKind.file => FileLogSource(path, compressed: _compressed),
   };
 }
