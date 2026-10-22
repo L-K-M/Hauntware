@@ -410,6 +410,7 @@ void main() {
       final verify = argvs(
         verified,
       ).indexWhere((argv) => argv.first == 'systemd-analyze');
+      expect(verify, isNonNegative);
       expect(
         argvs(verified)[verify],
         EditCommands.verifyUnit(temp, 'app.service'),
@@ -428,6 +429,15 @@ void main() {
         isNot(contains('systemd-analyze')),
       );
       expect(unverified.warnings, {PlanWarning.unitNotVerified});
+
+      // A host whose systemd version is unknown is not assumed new enough.
+      profile = HostProfile(uid: 1000, user: 'deploy');
+      final unknown = await planned();
+      expect(
+        argvs(unknown).map((argv) => argv.first),
+        isNot(contains('systemd-analyze')),
+      );
+      expect(unknown.warnings, {PlanWarning.unitNotVerified});
     });
 
     test('a drop-in or any other file gets no unit check', () async {

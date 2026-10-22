@@ -352,7 +352,9 @@ abstract final class EditCommands {
   /// before it replaces the unit file (03 §8.5): `FILE:UNIT` loads the
   /// temp under the unit's name, which needs systemd
   /// [kVerifyAsUnitSystemd] or later. It runs in system mode, which
-  /// needs no user manager, for user units too.
+  /// needs no user manager, for user units too. `--man=no` skips the
+  /// lookup of `Documentation=` man pages, which fails the check on a
+  /// host without them although the unit is valid.
   static List<String> verifyUnit(String temp, String unit) {
     _checkTemp(temp);
     if (temp.contains(':')) {
@@ -364,7 +366,7 @@ abstract final class EditCommands {
     if (unitFileName('/etc/systemd/system/$unit') != unit) {
       throw HostCommandError('not a unit file name', argument: unit);
     }
-    return ['systemd-analyze', 'verify', '--', '$temp:$unit'];
+    return ['systemd-analyze', 'verify', '--man=no', '--', '$temp:$unit'];
   }
 
   /// Prints `1` while SELinux enforces; fails where the host has no
