@@ -3428,6 +3428,13 @@ and the secrets of `Exec*=` lines, as process arguments are masked
 (8.9). A user manager without a session or linger answers
 `managerUnavailable`.
 
+The unit page (plan M27a) offers the v1 verbs behind "More", on the
+page and in the row menu. Its name row opens the unit file read-only in
+Planchette's editor, masked, with a timed reveal as the stack file view
+has. Its states line also carries the unit's resources, read when the
+page opens and again when its active or sub state changes. The "Yours"
+switch for user units and the per-type tabs follow in a later change.
+
 As built in M4 (E21a), where actions are allowed the Services table's
 row menu and a unit's page offer Start, Stop, Restart and Reload; the
 table keeps no action slot otherwise, so its layout does not change.
@@ -3627,6 +3634,13 @@ answers each open with a `LogStreamState` before it returns, and
   prelude for other users, whose stdin handling 8.3 verifies); pause with a
   marker comment; managed-crontab detection; run a cron command now (JOB-19:
   `sh -c` as the job user, danger-linted, detached when long).
+- **As built in M5 (M24, first part).** `JobHistoryQuery` reads
+  anacron's table with each job's stamp (JOB-04), a timer's last trigger
+  with its service's result, and the job starts cron logged (JOB-05).
+  Each runs as the login user, or through admin mode when it is on,
+  which a journal the login user cannot read needs. Commands cross
+  masked, as the cron rows' do. A host without `/etc/anacrontab`
+  answers `notInstalled`.
 - **v1.x.** Timer creator, output capture, dead-man pings (T1, +E), missed
   runs, fleet jobs overview.
 
@@ -4175,7 +4189,9 @@ each server's operations. Decisions:
 
 - The slow sampler reads `ops` once on each link, right after the probe,
   and again when the engine asks: after a launch, and every 15 s [E]
-  while an operation runs. Each read becomes an `OperationsChanged` with
+  while an operation runs or one this device launched within the last
+  minute [E] is not listed yet, since its wrapper writes the record only
+  after the launch returns. Each read becomes an `OperationsChanged` with
   the server's full list and how far each directory was read, or the
   collector's failure.
 - A running record is checked by its wrapper's PID and start ticks with

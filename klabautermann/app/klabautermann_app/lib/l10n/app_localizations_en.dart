@@ -1789,7 +1789,51 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get logsPanelCurrentBoot => 'Current boot only';
+  String get logsPanelBoot => 'Boot';
+
+  @override
+  String logsPanelBootChoice(String choice) {
+    String _temp0 = intl.Intl.selectLogic(choice, {
+      'all': 'All boots',
+      'current': 'This boot',
+      'other': 'Boot',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String logsPanelBootPast(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString boots ago',
+      one: 'Previous boot',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String logsPanelBootSpan(String start, String end) {
+    return '$start to $end';
+  }
+
+  @override
+  String get logsPanelBootsLoading => 'Reading the server\'s boots…';
+
+  @override
+  String logsPanelBootsFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server denied access to its boot list.',
+      'missing': 'The server has no journal to list boots from.',
+      'other': 'Reading the server\'s boots failed.',
+    });
+    return '$_temp0';
+  }
 
   @override
   String get logsPanelTimeRange => 'Time range';
@@ -1824,6 +1868,48 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get logsPanelCommonPaths => 'Common paths';
+
+  @override
+  String get logsPanelBrowseFiles => 'Browse /var/log';
+
+  @override
+  String get logsPanelFiles => 'Files in /var/log';
+
+  @override
+  String get logsPanelFilesFilter => 'Filter by name';
+
+  @override
+  String get logsPanelFilesLoading => 'Listing the server\'s log files…';
+
+  @override
+  String logsPanelFilesFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server denied access to /var/log.',
+      'missing': 'The server cannot list /var/log.',
+      'other': 'Listing the server\'s log files failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsPanelFilesEmpty => 'The server has no files under /var/log.';
+
+  @override
+  String get logsPanelFilesNoMatch => 'No file path contains this text.';
+
+  @override
+  String logsPanelFileDetails(String size, String modified) {
+    return '$size, changed $modified';
+  }
+
+  @override
+  String get logsPanelFileCompressed =>
+      'Compressed: reads its last lines, without following';
+
+  @override
+  String get logsPanelFileUnreadable =>
+      'Your account cannot read it; admin mode can';
 
   @override
   String get logsPanelApply => 'Apply';
@@ -1861,6 +1947,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'Follow new entries as the server writes them';
 
   @override
+  String get logsPanelLivePastBoot =>
+      'A past boot has no new entries to follow';
+
+  @override
+  String get logsPanelLiveCompressed =>
+      'A compressed file has no new lines to follow';
+
+  @override
   String get logsPanelJournalLimited =>
       'Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The server\'s Access section shows how to add it.';
 
@@ -1883,6 +1977,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'denied': 'The server denied access to this log.',
       'failed': 'Reading the log failed.',
       'rejected': 'The engine did not open this log.',
+      'searchUnsupported':
+          'This server\'s journal cannot search. Clear the server search to read the log.',
       'other': 'Choose or type the absolute path of a file to tail.',
     });
     return '$_temp0';
@@ -1905,6 +2001,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get logsPanelSearchCase => 'Match case';
+
+  @override
+  String get logsPanelSearchRegex => 'Regular expression';
+
+  @override
+  String get logsPanelSearchInvalid => 'Not a valid regular expression';
+
+  @override
+  String get logsPanelSearchServer => 'Search the whole journal on the server';
+
+  @override
+  String logsPanelServerMatch(String pattern) {
+    return 'Server search: $pattern';
+  }
+
+  @override
+  String get logsPanelServerMatchClear => 'Clear the server search';
 
   @override
   String logsPanelSearchMatches(int total) {
@@ -5092,5 +5205,96 @@ class AppLocalizationsEn extends AppLocalizations {
       'other': 'The file could not be read.',
     });
     return '$_temp0';
+  }
+
+  @override
+  String get unitEnable => 'Enable';
+
+  @override
+  String get unitDisable => 'Disable';
+
+  @override
+  String get unitMask => 'Mask';
+
+  @override
+  String get unitUnmask => 'Unmask';
+
+  @override
+  String get unitResetFailed => 'Reset failed state';
+
+  @override
+  String get unitMoreActions => 'More';
+
+  @override
+  String unitQueryFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noLink': 'There is no connection to this server.',
+      'invalidUnit': 'This is not a unit name.',
+      'notFound': 'The manager has no such unit.',
+      'managerUnavailable':
+          'Your user manager cannot be reached: you need a login session or lingering.',
+      'failed': 'The read failed.',
+      'other': 'The read failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get unitResourcesMemory => 'Memory';
+
+  @override
+  String get unitResourcesCpu => 'CPU time';
+
+  @override
+  String unitResourcesCpuSeconds(String seconds) {
+    return '$seconds s';
+  }
+
+  @override
+  String get unitResourcesTasks => 'Tasks';
+
+  @override
+  String get unitResourcesRestarts => 'Restarts';
+
+  @override
+  String get unitResourcesMainPid => 'Main PID';
+
+  @override
+  String get unitResourcesActiveSince => 'Active since';
+
+  @override
+  String get unitFileShow => 'Show unit file';
+
+  @override
+  String unitFileTitle(String unit) {
+    return '$unit file';
+  }
+
+  @override
+  String get unitFileClose => 'Close';
+
+  @override
+  String get unitFileReading => 'Reading the unit file…';
+
+  @override
+  String unitFileMasked(int count, int seconds) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count values are masked.',
+      one: '1 value is masked.',
+    );
+    return '$_temp0 Reveal shows them for $seconds seconds.';
+  }
+
+  @override
+  String get unitFileReveal => 'Reveal values';
+
+  @override
+  String get unitFileHide => 'Hide values';
+
+  @override
+  String unitFileEditorLabel(String unit) {
+    return 'File of $unit';
   }
 }

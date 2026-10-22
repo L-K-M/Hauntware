@@ -16,6 +16,7 @@ import 'logs/log_view.dart';
 import 'logs/log_view_controller.dart';
 import 'services_view.dart';
 import 'sortable_table.dart';
+import 'unit_details.dart';
 
 /// The panel width from which the unit table adds its load and description
 /// columns and a unit's page opens under the table instead of in its
@@ -489,16 +490,32 @@ class _UnitPage extends StatelessWidget {
               child: Text(name, style: theme.textTheme.titleMedium),
             ),
           ),
+          // SVC-07 (v1): the unit's file and drop-ins.
+          IconButton(
+            tooltip: l10n.unitFileShow,
+            icon: const Icon(Icons.description_outlined),
+            onPressed: () => unawaited(
+              openUnitFile(
+                context,
+                monitoring: monitoring,
+                serverId: serverId,
+                unit: name,
+              ),
+            ),
+          ),
         ],
       ),
       if (description != null) Text(description),
       // Only where actions show, so the page keeps its layout otherwise.
       if (actionsAllowedAt(context, serverId, ActionEntryPoint.unitVerb))
         UnitActionButtons(serverId: serverId, unit: name),
-      Wrap(
-        spacing: 24,
-        runSpacing: 4,
-        children: [
+      // SVC-08 (v1): what the unit uses now, after its states.
+      UnitResourcesView(
+        monitoring: monitoring,
+        serverId: serverId,
+        unit: name,
+        revision: (states?.active, states?.sub),
+        leading: [
           for (final (label, value) in [
             (l10n.servicesColumnLoad, states?.load),
             (l10n.servicesColumnActive, states?.active?.name),

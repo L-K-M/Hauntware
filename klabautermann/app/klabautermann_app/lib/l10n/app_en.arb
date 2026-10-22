@@ -2146,9 +2146,55 @@
       }
     }
   },
-  "logsPanelCurrentBoot": "Current boot only",
-  "@logsPanelCurrentBoot": {
-    "description": "Toggle of the Logs panel's journal filters that shows only entries since the server last started."
+  "logsPanelBoot": "Boot",
+  "@logsPanelBoot": {
+    "description": "Tooltip and title of the Logs panel's boot picker, which chooses the server start whose journal or kernel entries are shown."
+  },
+  "logsPanelBootChoice": "{choice, select, all{All boots} current{This boot} other{Boot}}",
+  "@logsPanelBootChoice": {
+    "description": "The boot picker's choice: every boot the journal keeps, or only the one since the server last started.",
+    "placeholders": {
+      "choice": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelBootPast": "{count, plural, =1{Previous boot} other{{count} boots ago}}",
+  "@logsPanelBootPast": {
+    "description": "A past boot in the boot picker, counted back from the current one.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "logsPanelBootSpan": "{start} to {end}",
+  "@logsPanelBootSpan": {
+    "description": "When a boot's first and last journal entries were written, under its name in the boot picker.",
+    "placeholders": {
+      "start": {
+        "type": "String",
+        "example": "12 Oct, 08:14"
+      },
+      "end": {
+        "type": "String",
+        "example": "14 Oct, 23:02"
+      }
+    }
+  },
+  "logsPanelBootsLoading": "Reading the server's boots…",
+  "@logsPanelBootsLoading": {
+    "description": "Shown in the boot picker while the server lists its boots."
+  },
+  "logsPanelBootsFailed": "{failure, select, noLink{Not connected to the server.} denied{The server denied access to its boot list.} missing{The server has no journal to list boots from.} other{Reading the server's boots failed.}}",
+  "@logsPanelBootsFailed": {
+    "description": "Shown in the boot picker when the server's boots could not be listed.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
   },
   "logsPanelTimeRange": "Time range",
   "@logsPanelTimeRange": {
@@ -2184,6 +2230,61 @@
   "@logsPanelCommonPaths": {
     "description": "Tooltip of the button beside the file path field that lists common log files, such as the syslog and web server logs."
   },
+  "logsPanelBrowseFiles": "Browse /var/log",
+  "@logsPanelBrowseFiles": {
+    "description": "Button beside the file path field that lists the server's log files under /var/log (LOG-08)."
+  },
+  "logsPanelFiles": "Files in /var/log",
+  "@logsPanelFiles": {
+    "description": "Title of the sheet listing the server's log files under /var/log."
+  },
+  "logsPanelFilesFilter": "Filter by name",
+  "@logsPanelFilesFilter": {
+    "description": "Label of the field that narrows the /var/log listing to paths containing its text."
+  },
+  "logsPanelFilesLoading": "Listing the server's log files…",
+  "@logsPanelFilesLoading": {
+    "description": "Shown in the /var/log browser while the server lists its files."
+  },
+  "logsPanelFilesFailed": "{failure, select, noLink{Not connected to the server.} denied{The server denied access to /var/log.} missing{The server cannot list /var/log.} other{Listing the server's log files failed.}}",
+  "@logsPanelFilesFailed": {
+    "description": "Shown in the /var/log browser when the server's files could not be listed.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelFilesEmpty": "The server has no files under /var/log.",
+  "@logsPanelFilesEmpty": {
+    "description": "Shown in the /var/log browser when the listing is empty."
+  },
+  "logsPanelFilesNoMatch": "No file path contains this text.",
+  "@logsPanelFilesNoMatch": {
+    "description": "Shown in the /var/log browser when the filter matches no file."
+  },
+  "logsPanelFileDetails": "{size}, changed {modified}",
+  "@logsPanelFileDetails": {
+    "description": "Under a file's path in the /var/log browser: its size and when it last changed.",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "12 KiB"
+      },
+      "modified": {
+        "type": "String",
+        "example": "12 Oct, 08:14"
+      }
+    }
+  },
+  "logsPanelFileCompressed": "Compressed: reads its last lines, without following",
+  "@logsPanelFileCompressed": {
+    "description": "Under a rotated .gz or .xz file in the /var/log browser."
+  },
+  "logsPanelFileUnreadable": "Your account cannot read it; admin mode can",
+  "@logsPanelFileUnreadable": {
+    "description": "Under a file in the /var/log browser that the server account may not read."
+  },
   "logsPanelApply": "Apply",
   "@logsPanelApply": {
     "description": "Button that reads the log again with the filters or path entered."
@@ -2211,6 +2312,14 @@
   "@logsPanelLiveTooltip": {
     "description": "Tooltip of the Logs panel's Live chip."
   },
+  "logsPanelLivePastBoot": "A past boot has no new entries to follow",
+  "@logsPanelLivePastBoot": {
+    "description": "Tooltip of the Logs panel's Live chip while it is off because a past boot is shown."
+  },
+  "logsPanelLiveCompressed": "A compressed file has no new lines to follow",
+  "@logsPanelLiveCompressed": {
+    "description": "Tooltip of the Logs panel's Live chip while it is off because a compressed rotated file is shown."
+  },
   "logsPanelJournalLimited": "Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The server's Access section shows how to add it.",
   "@logsPanelJournalLimited": {
     "description": "Notice above the journal when the server shows the signed-in account only its own entries. The group names are names on the server and stay as they are."
@@ -2219,7 +2328,7 @@
   "@logsPanelKernelLimited": {
     "description": "Notice above the kernel log when the server's journal shows the signed-in account only its own entries, which never include kernel messages. The group names are names on the server and stay as they are."
   },
-  "logsPanelStatus": "{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} gap{Following again. Lines written while it was paused or disconnected may be missing.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} other{Choose or type the absolute path of a file to tail.}}",
+  "logsPanelStatus": "{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} gap{Following again. Lines written while it was paused or disconnected may be missing.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} searchUnsupported{This server's journal cannot search. Clear the server search to read the log.} other{Choose or type the absolute path of a file to tail.}}",
   "@logsPanelStatus": {
     "description": "Status line above the log saying what reading it is doing or why it stopped.",
     "placeholders": {
@@ -2251,6 +2360,32 @@
   "logsPanelSearchCase": "Match case",
   "@logsPanelSearchCase": {
     "description": "Tooltip of the toggle that makes the log search tell upper from lower case."
+  },
+  "logsPanelSearchRegex": "Regular expression",
+  "@logsPanelSearchRegex": {
+    "description": "Tooltip of the toggle that makes the log search read its text as a regular expression."
+  },
+  "logsPanelSearchInvalid": "Not a valid regular expression",
+  "@logsPanelSearchInvalid": {
+    "description": "Error under the log search field when its text, read as a regular expression, does not compile."
+  },
+  "logsPanelSearchServer": "Search the whole journal on the server",
+  "@logsPanelSearchServer": {
+    "description": "Tooltip of the button that reads only the journal entries matching the search, matched by the server, rather than searching the entries already shown."
+  },
+  "logsPanelServerMatch": "Server search: {pattern}",
+  "@logsPanelServerMatch": {
+    "description": "Chip above the log while the server reads only the journal entries matching a pattern; the pattern is shown as sent.",
+    "placeholders": {
+      "pattern": {
+        "type": "String",
+        "example": "(?i)timeout"
+      }
+    }
+  },
+  "logsPanelServerMatchClear": "Clear the server search",
+  "@logsPanelServerMatchClear": {
+    "description": "Tooltip of the button on the server-search chip that reads the whole journal again."
   },
   "logsPanelSearchMatches": "{total, plural, =0{No matches} =1{1 match} other{{total} matches}}",
   "@logsPanelSearchMatches": {
@@ -6214,6 +6349,122 @@
     "description": "Stack file view: why the read could not run. reason is the engine's failure name.",
     "placeholders": {
       "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "unitEnable": "Enable",
+  "@unitEnable": {
+    "description": "Unit action (SVC-05): starts the unit at boot."
+  },
+  "unitDisable": "Disable",
+  "@unitDisable": {
+    "description": "Unit action (SVC-05): stops starting the unit at boot."
+  },
+  "unitMask": "Mask",
+  "@unitMask": {
+    "description": "Unit action (SVC-06): prevents the unit from being started at all."
+  },
+  "unitUnmask": "Unmask",
+  "@unitUnmask": {
+    "description": "Unit action (SVC-06): lets a masked unit start again."
+  },
+  "unitResetFailed": "Reset failed state",
+  "@unitResetFailed": {
+    "description": "Unit action (SVC-06): clears the unit's failed state."
+  },
+  "unitMoreActions": "More",
+  "@unitMoreActions": {
+    "description": "Unit page and row menu: the v1 unit actions (SVC-05, SVC-06)."
+  },
+  "unitQueryFailed": "{reason, select, noLink{There is no connection to this server.} invalidUnit{This is not a unit name.} notFound{The manager has no such unit.} managerUnavailable{Your user manager cannot be reached: you need a login session or lingering.} failed{The read failed.} other{The read failed.}}",
+  "@unitQueryFailed": {
+    "description": "Unit page: why a unit read found nothing. reason is the engine's UnitQueryFailure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "unitResourcesMemory": "Memory",
+  "@unitResourcesMemory": {
+    "description": "Unit page: the unit's current memory use."
+  },
+  "unitResourcesCpu": "CPU time",
+  "@unitResourcesCpu": {
+    "description": "Unit page: the CPU time the unit used."
+  },
+  "unitResourcesCpuSeconds": "{seconds} s",
+  "@unitResourcesCpuSeconds": {
+    "description": "Unit page: CPU time in seconds. seconds is formatted with one decimal.",
+    "placeholders": {
+      "seconds": {
+        "type": "String"
+      }
+    }
+  },
+  "unitResourcesTasks": "Tasks",
+  "@unitResourcesTasks": {
+    "description": "Unit page: the unit's current tasks."
+  },
+  "unitResourcesRestarts": "Restarts",
+  "@unitResourcesRestarts": {
+    "description": "Unit page: how often systemd restarted the unit."
+  },
+  "unitResourcesMainPid": "Main PID",
+  "@unitResourcesMainPid": {
+    "description": "Unit page: the unit's main process ID."
+  },
+  "unitResourcesActiveSince": "Active since",
+  "@unitResourcesActiveSince": {
+    "description": "Unit page: when the unit last became active."
+  },
+  "unitFileShow": "Show unit file",
+  "@unitFileShow": {
+    "description": "Unit page: opens the unit file and its drop-ins (SVC-07)."
+  },
+  "unitFileTitle": "{unit} file",
+  "@unitFileTitle": {
+    "description": "Unit file view title. unit is the unit name.",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "unitFileClose": "Close",
+  "@unitFileClose": {
+    "description": "Unit file view: closes the dialog."
+  },
+  "unitFileReading": "Reading the unit file…",
+  "@unitFileReading": {
+    "description": "Unit file view: shown while the file is read."
+  },
+  "unitFileMasked": "{count, plural, =1{1 value is masked.} other{{count} values are masked.}} Reveal shows them for {seconds} seconds.",
+  "@unitFileMasked": {
+    "description": "Unit file view: how many values the engine masked, and how long a reveal lasts.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "unitFileReveal": "Reveal values",
+  "@unitFileReveal": {
+    "description": "Unit file view: shows the masked values for a while."
+  },
+  "unitFileHide": "Hide values",
+  "@unitFileHide": {
+    "description": "Unit file view: masks the revealed values again."
+  },
+  "unitFileEditorLabel": "File of {unit}",
+  "@unitFileEditorLabel": {
+    "description": "Unit file view: accessibility label of the read-only editor.",
+    "placeholders": {
+      "unit": {
         "type": "String"
       }
     }
