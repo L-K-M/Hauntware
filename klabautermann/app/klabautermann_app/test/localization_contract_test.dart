@@ -78,6 +78,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/safety_controller.dart': {
     r"'The safety settings were not saved: $error'",
   },
+  // The not-saved diagnostic; the Sync tab prints it and shows its own
+  // ARB text (settingsSyncSecretsNotSaved).
+  'lib/controllers/sync_secrets_controller.dart': {
+    r"'The sync passwords setting was not saved: $error'",
+  },
   // A caller error's diagnostic: the preview is modal, so no screen ever
   // shows it.
   // The display path that picks the unit file view's INI highlighting,
@@ -169,6 +174,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'leaveServer without openServer for $serverId'",
     // A subscription id the engine keys a surface's streams by (D45).
     r"'$surface-${_subscriptionCount++}'",
+    // A host query's id, which its HostResult answers by (LOG-08, LOG-09).
+    r"'host-${_nextHostQuery++}'",
     // A unit read's request id, never shown.
     r"'unit-${_nextUnitQuery++}'",
   },
@@ -470,9 +477,15 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The other users' table's key prefix, never shown.
     r"'${ServerPanel.jobs.name}.others'",
   },
+  'lib/ui/logs/logs_panel.dart': {
+    // The empty server pattern, which reads the whole journal again.
+    "''",
+  },
   'lib/ui/logs/log_query.dart': {
-    // The path rule's separators and dot parts (03 §8.8), and the empty
-    // defaults of the text filters.
+    // PCRE2's inline flags that pin journalctl's case rule (LOG-06):
+    // sent to the server, shown only as the pattern sent.
+    r"'(?-i)$pattern'",
+    r"'(?i)$pattern'",
     "'/'",
     "'..'",
     "'/.'",

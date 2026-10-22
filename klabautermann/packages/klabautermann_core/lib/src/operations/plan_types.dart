@@ -3,6 +3,8 @@
 // writes from 8.11, who runs the steps, and the typed facts the app words
 // itself (D35). Engine-side plans (operation_plan.dart) are built from
 // these, so the preview and the executed steps are one object.
+import 'dart:convert';
+
 import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
 import 'package:meta/meta.dart';
 import 'package:seance_core/seance_core.dart' show quoteShellWord;
@@ -73,6 +75,30 @@ final class ApiStep extends PlanStep {
   String get display => query.isEmpty
       ? '$method $path'
       : '$method $path?${Uri(queryParameters: query).query}';
+}
+
+/// A one-off command in a container (CTX-08): `POST
+/// /containers/{id}/exec` with [argv] and [user] at [path], then the
+/// exec's start, whose output the runner captures.
+final class ExecStep extends PlanStep {
+  ExecStep({
+    required this.path,
+    required this.containerId,
+    required Iterable<String> argv,
+    this.user,
+  }) : argv = List.unmodifiable(argv);
+
+  /// The create request's versioned path.
+  final String path;
+  final String containerId;
+  final List<String> argv;
+  final String? user;
+
+  /// The create request and its body, as the API sends them.
+  @override
+  String get display =>
+      'POST $path '
+      '${jsonEncode({'Cmd': argv, if (user != null) 'User': user, 'Tty': false})}';
 }
 
 /// What a plan needs of the session (03 §8.2): the login user's own
