@@ -130,7 +130,9 @@ void main() {
   group('flatpak user installation', () {
     Future<String> userInstall(Map<String, String> environment) async {
       // The harness runs on CI itself, so drop the runner's own values
-      // before setting the ones under test.
+      // before setting the ones under test. Without
+      // includeParentEnvironment: false the parent leaks them back in and
+      // the scrub is a no-op.
       final base = Map<String, String>.of(Platform.environment)
         ..remove('RUNNER_TOOL_CACHE')
         ..remove('FLATPAK_USER_DIR');
@@ -143,6 +145,7 @@ void main() {
           _repackScript,
         ],
         environment: {...base, ...environment},
+        includeParentEnvironment: false,
       );
       expect(result.exitCode, 0, reason: result.stderr as String);
       return result.stdout as String;
