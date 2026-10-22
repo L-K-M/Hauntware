@@ -2652,6 +2652,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAnnounceNotChanged => 'The setting could not be changed.';
 
   @override
+  String get settingsSyncSecretsTitle => 'Passwords and keys';
+
+  @override
+  String get settingsSyncSecrets => 'Sync saved passwords & keys';
+
+  @override
+  String get settingsSyncSecretsDetail =>
+      'Only includes servers where credential sync is also enabled.';
+
+  @override
+  String get settingsSyncSecretsNotSaved =>
+      'The setting changed, but it could not be saved, so it will not be kept after a restart.';
+
+  @override
+  String get settingsSyncSecretsNotChanged =>
+      'The setting could not be changed.';
+
+  @override
   String get settingsAboutTitle => 'About';
 
   @override
@@ -3109,6 +3127,27 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get serverReadOnlyNotice =>
       'Read-only: actions on this server are hidden.';
+
+  @override
+  String credentialTitle(String label) {
+    return 'Password for $label';
+  }
+
+  @override
+  String get credentialExplanation =>
+      'Saved only if you choose to: on this device, in its encrypted vault, and used for this server from now on.';
+
+  @override
+  String get credentialPassword => 'Password';
+
+  @override
+  String get credentialSaveInVault => 'Save in vault';
+
+  @override
+  String get credentialCancel => 'Cancel';
+
+  @override
+  String get credentialConnect => 'Connect';
 
   @override
   String elevationTitle(String host) {
@@ -3583,6 +3622,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'RemoveImage': 'Remove image',
       'StackAction': 'Stack action',
       'RedeployStack': 'Redeploy stack',
+      'ContainerExec': 'Run command',
+      'ContainerShell': 'Container shell',
       'other': 'Action',
     });
     return '$_temp0';
