@@ -186,6 +186,62 @@ void main() {
     }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
   }
 
+  // The press decides: a claimed press reaches the remote neither down nor
+  // up, so the release must open the link whatever the modifiers do in
+  // between — otherwise the click is lost entirely.
+  testWidgets('a claimed press opens its link when Cmd rises before mouse-up',
+      (tester) async {
+    final terminal = Terminal();
+    final controller = TerminalController();
+    addTearDown(controller.dispose);
+    final opened = <Uri>[];
+    final point = await pumpTerminal(tester, terminal, controller, opened);
+    terminal.write('\x1b[?1000h$sgrMouse');
+    final output = <String>[];
+    terminal.onOutput = output.add;
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    final press = await tester.startGesture(
+      point,
+      kind: PointerDeviceKind.mouse,
+    );
+    // Past the tap's deadline, so the press is claimed while Cmd is held.
+    await tester.pump(kPressTimeout * 2);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await press.up();
+    await tester.pump(gestureTimeout);
+
+    expect(opened, [url]);
+    expect(output, isEmpty);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('a claimed press opens its link when Shift falls before mouse-up',
+      (tester) async {
+    final terminal = Terminal();
+    final controller = TerminalController();
+    addTearDown(controller.dispose);
+    final opened = <Uri>[];
+    final point = await pumpTerminal(tester, terminal, controller, opened);
+    terminal.write('\x1b[?1000h$sgrMouse');
+    final output = <String>[];
+    terminal.onOutput = output.add;
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    final press = await tester.startGesture(
+      point,
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump(kPressTimeout * 2);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await press.up();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pump(gestureTimeout);
+
+    expect(opened, [url]);
+    expect(output, isEmpty);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
   testWidgets('Cmd pressed after a reported press leaves the link closed',
       (tester) async {
     final terminal = Terminal();

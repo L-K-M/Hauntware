@@ -198,9 +198,10 @@ class TerminalViewState extends State<TerminalView> {
 
   int _tapCount = 0;
 
-  /// [seance fork] Whether the press now down opens a link instead of
-  /// reaching a mouse-reporting remote; see [_claimPressForLink].
-  bool _pressOpensLink = false;
+  /// [seance fork] The link the press now down opens instead of reaching a
+  /// mouse-reporting remote, captured at mouse-down, or null when that press
+  /// reaches the remote; see [_claimPressForLink].
+  Uri? _pressOpensLink;
 
   Uri? _hoveredLink;
   bool _hoverInvalidationPending = false;
@@ -516,16 +517,18 @@ class TerminalViewState extends State<TerminalView> {
   /// whether it opens a link instead of reaching a mouse-reporting remote.
   /// The gesture handler asks before reporting the press, so a claimed press
   /// reaches the remote neither down nor up, and the release honours the
-  /// same decision: Cmd pressed only after a reported press opens nothing.
+  /// same decision: Cmd pressed only after a reported press opens nothing,
+  /// and a claimed press opens its link even when the modifiers change
+  /// before its release.
   bool _claimPressForLink(Offset localPosition, int tapCount) {
     _pressOpensLink = widget.onLinkTap != null &&
-        tapCount == 1 &&
-        _linkModifierOutranksRemote &&
-        widget.terminal.buffer.getLinkAt(
-              renderTerminal.getCellOffset(localPosition),
-            ) !=
-            null;
-    return _pressOpensLink;
+            tapCount == 1 &&
+            _linkModifierOutranksRemote
+        ? widget.terminal.buffer.getLinkAt(
+            renderTerminal.getCellOffset(localPosition),
+          )
+        : null;
+    return _pressOpensLink != null;
   }
 
   void _invalidateLinkHover() {
@@ -547,21 +550,32 @@ class TerminalViewState extends State<TerminalView> {
 
   void _onTapUp(TapUpDetails details) {
     final offset = renderTerminal.getCellOffset(details.localPosition);
-    final keys = HardwareKeyboard.instance;
-    final linkGesture =
-        details.kind == PointerDeviceKind.touch ||
-        (_isApplePlatform ? keys.isMetaPressed : keys.isControlPressed);
+    // [seance fork] The press decides: a claimed press opens its link even
+    // when the link modifier is gone (or Shift/Alt is down) at mouse-up.
+    // The remote never saw that press, so a release that opens nothing here
+    // would lose the click entirely.
+    final claimedLink = _pressOpensLink;
+    _pressOpensLink = null;
+    if (claimedLink != null) {
+      widget.onLinkTap?.call(claimedLink);
+    } else {
+      final keys = HardwareKeyboard.instance;
+      final linkGesture =
+          details.kind == PointerDeviceKind.touch ||
+          (_isApplePlatform ? keys.isMetaPressed : keys.isControlPressed);
 
-    // Click-only mouse reporting consumes DOWN but not UP. Keep that release
-    // from opening a browser even when the gesture handler passes it through.
-    if (widget.onLinkTap != null &&
-        _tapCount == 1 &&
-        linkGesture &&
-        !keys.isShiftPressed &&
-        !keys.isAltPressed &&
-        (_pressOpensLink || !_remoteOwnsTapAt(offset))) {
-      final link = widget.terminal.buffer.getLinkAt(offset);
-      if (link != null) widget.onLinkTap!(link);
+      // Click-only mouse reporting consumes DOWN but not UP. Keep that
+      // release from opening a browser even when the gesture handler passes
+      // it through.
+      if (widget.onLinkTap != null &&
+          _tapCount == 1 &&
+          linkGesture &&
+          !keys.isShiftPressed &&
+          !keys.isAltPressed &&
+          !_remoteOwnsTapAt(offset)) {
+        final link = widget.terminal.buffer.getLinkAt(offset);
+        if (link != null) widget.onLinkTap!(link);
+      }
     }
     widget.onTapUp?.call(details, offset);
 

@@ -565,8 +565,13 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     goes down or up. Cmd-clicks elsewhere, plain clicks and the Ctrl link
     modifier on other platforms (a reportable modifier) still go to the
     remote. The press decides: one already reported stays the remote's even
-    if Cmd goes down before its release. Only single clicks are claimed, so
-    the later presses of a Cmd-multi-click still reach the remote.
+    if Cmd goes down before its release, and one claimed opens its link even
+    when Cmd rises or Shift falls before that release — the remote never saw
+    the press, so a release that opened nothing would lose the click
+    entirely. The claimed link is captured at mouse-down, so a release
+    shifted within tap slop cannot pick another cell. Only single clicks
+    are claimed, so the later presses of a Cmd-multi-click still reach the
+    remote.
 
 ### App-layer notes (outside this package)
 
