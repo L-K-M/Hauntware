@@ -80,6 +80,15 @@ const _answerTimeout = Duration(seconds: 10);
 /// (M9 [E]): it holds a session channel.
 const _relayIdle = Duration(seconds: 30);
 
+/// [DockerRouter.openExec] found no free session channel on the server's
+/// relay (03 §5.2).
+final class DockerChannelUnavailable implements Exception {
+  const DockerChannelUnavailable();
+
+  @override
+  String toString() => 'DockerChannelUnavailable';
+}
+
 /// Why [DockerRouter.useEndpoint] had no endpoint to run on.
 final class DockerEndpointUnavailable implements Exception {
   const DockerEndpointUnavailable(this.failure);
@@ -193,6 +202,36 @@ final class DockerRouter {
     String serverId,
     Future<T> Function(DockerClient client, DockerEndpointRoute route) body,
   ) => _use(serverId, (endpoint) => body(endpoint.client, endpoint.route));
+
+  /// A connection of its own to [serverId]'s endpoint for one exec
+  /// session (03 §7.13, CTX-07), and the rank it runs over. On a relay it
+  /// holds a follower's slot until the lease closes; streamlocal costs
+  /// none (03 §5.2). Throws [DockerEndpointUnavailable] when the endpoint
+  /// cannot be reached and [DockerChannelUnavailable] when no slot is
+  /// free.
+  Future<({DockerStreamLease lease, DockerRank rank})> openExec(
+    String serverId,
+  ) => _use(serverId, (endpoint) async {
+    final rank = endpoint.route.rank;
+    if (rank == DockerRank.streamlocal) {
+      return (lease: DockerStreamLease(endpoint.openStream()), rank: rank);
+    }
+    final session = _session(serverId);
+    final quota = session.quota;
+    if (!quota.take(
+      ChannelShare.follower,
+      learnedSessionLimit: session.link?.seen.learnedSessionLimit,
+    )) {
+      throw const DockerChannelUnavailable();
+    }
+    return (
+      lease: DockerStreamLease(
+        endpoint.openStream(),
+        release: () => quota.give(ChannelShare.follower),
+      ),
+      rank: rank,
+    );
+  });
 
   /// [useEndpoint] with the endpoint's [StackSources] too (M4 E18: the
   /// redeploy planner and its re-validation).

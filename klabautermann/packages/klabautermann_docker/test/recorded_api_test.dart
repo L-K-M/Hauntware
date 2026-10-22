@@ -4,6 +4,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:klabautermann_docker/klabautermann_docker.dart';
@@ -396,6 +397,48 @@ void main() {
           expect(delta.cpuPercent, greaterThanOrEqualTo(0));
         });
       });
+
+      test(
+        'a non-TTY exec streams to its exit code; a TTY exec resizes',
+        () async {
+          // The capture's exec ids, from the paths it recorded.
+          String execId(String exchange) => corpus[exchange].path.split('/')[3];
+
+          for (final chunking in RecordedChunking.values) {
+            await replay((client, _) async {
+              final id = await client.createExec('web', [
+                'sh',
+                '-c',
+                'echo out; echo err >&2; exit 3',
+              ], stdin: false);
+              expect(id, execId('exec-start'));
+
+              final res = await client.startExec(id);
+              expect(res.statusCode, 101);
+              final out = StringBuffer();
+              final err = StringBuffer();
+              await demuxStdcopy(res.body.stream).forEach((f) {
+                (f.stream == StdcopyKind.stderr ? err : out).write(
+                  utf8.decode(f.bytes),
+                );
+              });
+              await res.body.close();
+              expect(out.toString(), 'out\n');
+              expect(err.toString(), 'err\n');
+
+              final inspect = await client.inspectExec(id);
+              expect(inspect.warnings, isEmpty);
+              expect(inspect.value.running, isFalse);
+              expect(inspect.value.exitCode, 3);
+
+              await client.resizeExec(
+                execId('exec-resize'),
+                const ExecConsoleSize(rows: 40, columns: 120),
+              );
+            }, chunking: chunking);
+          }
+        },
+      );
     });
   }
 }

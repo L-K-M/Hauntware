@@ -192,10 +192,18 @@ void main() {
         const AnswerPrompt('prompt-2', PromptCancelAnswer()),
         const HandleAlert('alert-1', AlertAction.acknowledge),
         const OpenTerminal(
+          terminalId: 't-1',
           serverId: 'srv-1',
           containerId: 'abc123',
           shell: '/bin/sh',
+          user: 'app',
+          columns: 120,
+          rows: 40,
         ),
+        TerminalInput('t-1', Uint8List.fromList(const [0x6c, 0x73])),
+        const TerminalResize('t-1', columns: 80, rows: 24),
+        const TerminalEndInput('t-1'),
+        const CloseTerminal('t-1'),
       ];
 
       for (final request in requests) {
@@ -447,7 +455,8 @@ void main() {
         ]),
         const AlertStatusChanged('a-1', AlertStatus.acknowledged),
         TerminalBytes('t-1', Uint8List.fromList(const [1, 2, 3])),
-        const TerminalClosed('t-1'),
+        TerminalOpened('t-1', const ['/bin/sh']),
+        const TerminalClosed('t-1', TerminalCloseReason.exited, exitCode: 3),
       ];
 
       for (final event in events) {

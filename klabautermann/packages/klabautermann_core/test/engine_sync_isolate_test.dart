@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/catalog/klabautermann_records.dart';
 import 'package:klabautermann_core/src/engine/engine_isolate.dart';
 import 'package:test/test.dart';
 
@@ -165,5 +166,51 @@ void main() {
     final round = await untilSyncEnds(client, events, keystore);
     final roundStatus = round.last as SyncStatus;
     expect(roundStatus.phase, SyncPhase.succeeded, reason: roundStatus.detail);
+  });
+
+  test('synced preferences go out after the fleet, then only when they '
+      'change', () async {
+    final server = await FakeSyncServer.create();
+    final prefId = KlabautermannRecordType.pref.idOf('srv-a');
+    await server.seedServer(fakeServer('srv-a', 'alpha'));
+    await server.seedKlabautermann(
+      prefId,
+      encodeServerPrefs('srv-a', const ServerPrefs(marks: {'nginx'})),
+    );
+    final (client, events) = await spawn(
+      entryPoint: (start) => engineMain(start, syncTransport: server.transport),
+    );
+    final keystore = MemoryKeystore();
+    const enroll = EnrollSync(
+      baseUrl: 'https://sync.example.com',
+      username: fakeSyncUser,
+      password: fakeSyncPassword,
+      encryptionPassphrase: fakeSyncPassword,
+    );
+
+    client.send(enroll);
+    final enrolled = await untilSyncEnds(client, events, keystore);
+    final changed = enrolled.whereType<ServerPrefsChanged>().single;
+    expect(
+      enrolled.indexOf(changed),
+      greaterThan(
+        enrolled.indexOf(enrolled.whereType<CatalogReplaced>().single),
+      ),
+    );
+    expect(changed.serverId, 'srv-a');
+    expect(changed.prefs?.marks, {'nginx'});
+
+    // Nothing changed: nothing goes out.
+    client.send(const RunSyncRound());
+    final quiet = await untilSyncEnds(client, events, keystore);
+    expect(quiet.whereType<ServerPrefsChanged>(), isEmpty);
+
+    // A restarted engine sends them after its startup fleet.
+    await events.cancel();
+    await client.shutdown();
+    final (_, restarted) = await spawn();
+    expect(await restarted.moveNext(), isTrue);
+    final again = restarted.current as ServerPrefsChanged;
+    expect(again.prefs?.marks, {'nginx'});
   });
 }

@@ -5,7 +5,7 @@
 // plan's steps run on the host instead, as one operation the runner
 // launches (03 §7.17, M4 E18).
 import 'package:klabautermann_docker/klabautermann_docker.dart'
-    show DockerException;
+    show DockerApiException, DockerException;
 import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
 import 'package:seance_core/seance_core.dart'
     show
@@ -27,6 +27,17 @@ import 'plan_types.dart';
 /// status (M4 E15). A [DockerException] or [DockerEndpointUnavailable]
 /// it throws ends the run as a transport failure.
 typedef ApiStepRunner = Future<int> Function(String serverId, ApiStep step);
+
+/// Runs one [ExecStep] on [serverId]'s engine (CTX-08) and returns the
+/// command's exit code, null when the daemon reported none, and its
+/// redacted output. A [DockerApiException] it throws, the daemon's
+/// refusal, fails the step; any other [DockerException] or a
+/// [DockerEndpointUnavailable] ends the run as a transport failure.
+typedef ExecStepRunner =
+    Future<({int? exitCode, ExecOutput output})> Function(
+      String serverId,
+      ExecStep step,
+    );
 
 /// Checks a [DockerTargetUnchanged] or a [StackConfigUnchanged] on
 /// [serverId] through its Docker endpoint: null when unchanged.
@@ -65,6 +76,7 @@ final class OperationRunner {
     required this._linkFor,
     required this._emit,
     this._api,
+    this._exec,
     this._docker,
     this._launch,
     this._finished,
@@ -75,6 +87,7 @@ final class OperationRunner {
   final SshLink? Function(String serverId) _linkFor;
   final void Function(EngineEvent event) _emit;
   final ApiStepRunner? _api;
+  final ExecStepRunner? _exec;
   final DockerRevalidator? _docker;
   final DetachedLauncher? _launch;
   final void Function(OperationResult result)? _finished;
@@ -120,6 +133,7 @@ final class OperationRunner {
       int? exitCode,
       int? httpStatus,
       RevalidationFailure? revalidation,
+      ExecOutput? output,
     }) => ActionFinished(
       planId: planId,
       outcome: ActionOutcome.failed,
@@ -128,7 +142,12 @@ final class OperationRunner {
       exitCode: exitCode,
       httpStatus: httpStatus,
       revalidation: revalidation,
+      output: output,
     );
+
+    // What a one-off command printed, for the answer.
+    ExecOutput? output;
+    int? exitCode;
 
     final serverId = plan.intent.serverId;
     final link = _linkFor(serverId);
@@ -216,6 +235,33 @@ final class OperationRunner {
                 httpStatus: status,
               );
             }
+          case final ExecStep step:
+            final exec = _exec;
+            if (exec == null) {
+              return failed(ActionFailure.unsupportedStep, step: i);
+            }
+            final ({int? exitCode, ExecOutput output}) result;
+            try {
+              result = await exec(serverId, step);
+            } on DockerApiException catch (e) {
+              // The daemon answered and refused, as for a container that
+              // stopped: the step failed, as an API step's error does.
+              return failed(
+                ActionFailure.stepFailed,
+                step: i,
+                httpStatus: e.statusCode,
+              );
+            }
+            output = result.output;
+            exitCode = result.exitCode;
+            if (exitCode != 0) {
+              return failed(
+                ActionFailure.stepFailed,
+                step: i,
+                exitCode: exitCode,
+                output: output,
+              );
+            }
         }
       }
     } on ElevationException {
@@ -232,7 +278,12 @@ final class OperationRunner {
       // The link refused the channel, at its session limit or closing.
       return failed(ActionFailure.transport);
     }
-    return ActionFinished(planId: planId, outcome: ActionOutcome.succeeded);
+    return ActionFinished(
+      planId: planId,
+      outcome: ActionOutcome.succeeded,
+      exitCode: exitCode,
+      output: output,
+    );
   }
 
   /// Runs [step] over [link], or through [session]'s elevation, with its
