@@ -203,7 +203,9 @@ final class EngineSync {
     }
     try {
       final key = await _keystore.readMasterKey();
-      if (key != null) await _coordinator(key).catchUpSecrets();
+      if (key != null) {
+        await _vault.exclusive(() => _coordinator(key).catchUpSecrets());
+      }
     } on Object {
       // Left for the next switch-on, as documented above.
     }
@@ -318,7 +320,7 @@ final class EngineSync {
         );
       });
       _account = SyncAccountInfo(baseUrl: baseUrl, username: username);
-      await _coordinator(result.vaultKey).applyPulled();
+      await _vault.exclusive(() => _coordinator(result.vaultKey).applyPulled());
       return _status(
         operation,
         SyncPhase.succeeded,
@@ -365,7 +367,11 @@ final class EngineSync {
     }
 
     try {
-      final result = await coordinator.runRound(api);
+      // The coordinator writes pulled secrets through the vault's store,
+      // so the round holds the vault as a save does: a save's read and
+      // write would otherwise interleave with a pulled secret's and drop
+      // one. A save asked for meanwhile waits for the round.
+      final result = await _vault.exclusive(() => coordinator.runRound(api));
       if (result.authFailed) {
         return _failed(operation, SyncFailure.sessionRejected, null);
       }

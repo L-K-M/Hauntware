@@ -78,6 +78,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/safety_controller.dart': {
     r"'The safety settings were not saved: $error'",
   },
+  // The not-saved diagnostic; the Sync tab prints it and shows its own
+  // ARB text (settingsSyncSecretsNotSaved).
+  'lib/controllers/sync_secrets_controller.dart': {
+    r"'The sync passwords setting was not saved: $error'",
+  },
   // A caller error's diagnostic: the preview is modal, so no screen ever
   // shows it.
   'lib/controllers/operations_controller.dart': {
