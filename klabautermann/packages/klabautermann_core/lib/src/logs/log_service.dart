@@ -5,8 +5,9 @@
 ///
 /// A read runs one host command at a time through
 /// [HostCommands.commandLine]: `journalctl -o json -r -n <window>` for the
-/// journal and the kernel log, `dmesg --json --decode` as the kernel log's
-/// fallback, `tail -n <window> --` for a file. It sends
+/// journal and the kernel log, `dmesg --json --decode` as the current
+/// boot's kernel log fallback, `tail -n <window> --` for a file, and
+/// `zcat` or `xzcat` into `tail` for a compressed one. It sends
 /// [LogStreamRunning] as it opens, then the window as one [LogBatch],
 /// newest first, then a [LogStreamEnded]:
 ///
@@ -179,8 +180,10 @@ final class LogService {
   // -- reads ----------------------------------------------------------
 
   /// The first command [spec] runs. Refused with [HostCommandError]: a
-  /// window outside 1 to [kLogWindowMax], a file with a cursor, and what
-  /// the validated builders refuse (03 §8.8).
+  /// window outside 1 to [kLogWindowMax], a file with a cursor, a
+  /// compressed file without a `.gz` or `.xz` name, and what the
+  /// validated builders refuse (03 §8.8), such as two boots or a pattern
+  /// with control bytes.
   static List<String> _primaryCommand(LogStreamSpec spec) {
     if (spec.window < 1 || spec.window > kLogWindowMax) {
       throw const HostCommandError('window outside 1 to $kLogWindowMax');
@@ -194,6 +197,7 @@ final class LogService {
         unit: s.unit,
         identifier: s.identifier,
         currentBoot: s.currentBootOnly,
+        boot: s.boot,
         priority: switch (s.priority) {
           final priority? => '${priority.index}',
           null => null,
@@ -203,17 +207,23 @@ final class LogService {
         cursor: cursor,
         lines: spec.window,
         order: JournalOrder.newestFirst,
+        grep: s.grep,
       ),
-      KernelLogSource() => HostCommands.journalctl(
+      KernelLogSource(:final boot) => HostCommands.journalctl(
         kernel: true,
+        boot: boot,
         cursor: cursor,
         lines: spec.window,
         order: JournalOrder.newestFirst,
       ),
-      FileLogSource(:final path) =>
-        cursor == null
-            ? HostCommands.tail(path, lines: spec.window)
-            : throw const HostCommandError('a file has no cursor'),
+      FileLogSource() when cursor != null => throw const HostCommandError(
+        'a file has no cursor',
+      ),
+      FileLogSource(:final path, compressed: true) => HostCommands.rotatedTail(
+        path,
+        lines: spec.window,
+      ),
+      FileLogSource(:final path) => HostCommands.tail(path, lines: spec.window),
       OperationLogSource() => throw const HostCommandError(
         'the engine reads an operation log as its file',
       ),
@@ -236,18 +246,38 @@ final class LogService {
       case JournalLogSource(:final since):
         final after = spec.afterCursor == null ? null : since;
         _deliver(read, out, _journalWindow(out, spec.window, since: after));
-      case FileLogSource(:final redacted):
-        _deliver(read, out, _fileWindow(out, spec.window, redacted: redacted));
+      case FileLogSource(:final redacted, :final compressed):
+        // tail's status is the pipeline's, so the decompressor reports
+        // its own failure on stderr; the lines it wrote before still go.
+        final status = compressed ? rotatedTailFailure(out.stderr) : null;
+        _deliver(
+          read,
+          out,
+          _fileWindow(out, spec.window, redacted: redacted),
+          end: switch (status) {
+            null => null,
+            127 => LogStreamEnded(
+              LogStreamEndReason.missing,
+              detail: logEndDetail(out.stderr),
+            ),
+            _ => LogStreamEnded(
+              LogStreamEndReason.failed,
+              detail: logEndDetail(out.stderr),
+            ),
+          },
+        );
       // Refused on opening: its command throws.
       case OperationLogSource():
       // Refused by accepts: the Docker router reads them.
       case ContainerLogSource():
         break;
-      case KernelLogSource():
+      case KernelLogSource(:final boot):
         final journal = _journalWindow(out, spec.window);
         // Without an exit code journalctl did not run to its end: a cut,
-        // a signal or a lost link, which _failure reads.
+        // a signal or a lost link, which _failure reads. dmesg holds the
+        // current boot alone.
         if (spec.afterCursor != null ||
+            boot != null ||
             out.exit?.exitCode == null ||
             journal.records.isNotEmpty) {
           return _deliver(read, out, journal);
@@ -302,8 +332,14 @@ final class LogService {
     }
   }
 
-  /// Sends [window], read by [out], then the read's end.
-  void _deliver(_Read read, _Output out, _Window window) {
+  /// Sends [window], read by [out], then the read's end: [end] when
+  /// given, else what [out]'s exit asks for.
+  void _deliver(
+    _Read read,
+    _Output out,
+    _Window window, {
+    LogStreamEnded? end,
+  }) {
     if (window.records.isNotEmpty || window.dropped > 0) {
       _emit(
         LogBatch(
@@ -313,7 +349,7 @@ final class LogService {
         ),
       );
     }
-    _end(read, _failure(out) ?? LogStreamEnded(window.end));
+    _end(read, end ?? _failure(out) ?? LogStreamEnded(window.end));
   }
 
   /// Ends [read] with [status], its last event, or with none when null
@@ -605,6 +641,9 @@ LogStreamEnded? logExitEnd(RemoteExit exit, String stderr) {
     // The shell's `exec` found no such command, or could not run it.
     127 => LogStreamEndReason.missing,
     126 => LogStreamEndReason.denied,
+    // Only `journalctl -g` prints it, so no other read mistakes it.
+    _ when journalGrepUnsupported(stderr) =>
+      LogStreamEndReason.searchUnsupported,
     _ => logRefusal(stderr) ?? LogStreamEndReason.failed,
   };
   return LogStreamEnded(reason, detail: logEndDetail(stderr));

@@ -8,10 +8,12 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
-import 'actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
+import 'actions/action_entry.dart'
+    show ActionEntry, ActionEntryPoint, actionsAllowedAt;
 import 'admin_mode_chip.dart' show AdminScope;
 import 'actions/host_actions.dart';
 import 'actions/run_output_sheet.dart';
+import 'edit/remote_editor.dart';
 import 'freshness.dart';
 import 'jobs_view.dart';
 import 'server_surfaces.dart' show ServerPanel;
@@ -430,6 +432,26 @@ class _JobsPanelState extends State<JobsPanel> {
         PanelNotice(icon: Icons.info_outline, text: l10n.jobsNoSystemd),
       if (cron != null && ownCrontab == _Answer.unread)
         PanelNotice(icon: Icons.info_outline, text: l10n.jobsOwnCrontabUnknown),
+      // JOB-04: the login user's crontab, wherever the command is.
+      if (profile?.toolPresent(_crontabTool) == true)
+        ActionEntry(
+          serverId: widget.serverId,
+          point: ActionEntryPoint.fileEdit,
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton.icon(
+              onPressed: () => unawaited(
+                openRemoteEditor(
+                  context,
+                  serverId: widget.serverId,
+                  target: const CrontabTarget(),
+                ),
+              ),
+              icon: const Icon(Icons.edit_calendar_outlined),
+              label: Text(l10n.jobsEditOwnCrontab),
+            ),
+          ),
+        ),
       ?_cronZone(l10n, cron, serverOffset),
       if (timed)
         PanelNotice(

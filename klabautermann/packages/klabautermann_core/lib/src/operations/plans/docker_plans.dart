@@ -56,6 +56,7 @@ Future<PlanAttempt> planDockerAction(
       RemoveContainer() => await _planRemoveContainer(intent, context),
       RemoveImage() => await _planRemoveImage(intent, context),
       StackAction() => await _planStack(intent, context),
+      ContainerExec() => await _planExec(intent, context),
       _ => _refused(ActionRefusalReason.notImplemented),
     };
   } on DockerNotFoundException {
@@ -103,6 +104,52 @@ Future<PlanAttempt> _planContainer(
       impact: interrupts ? _containerImpact(protected) : null,
       ownership: containerOwnership(container.labels),
       protected: protected,
+      revalidate: [
+        DockerTargetUnchanged(DockerTargetKind.container, name, container.id),
+      ],
+    ),
+  );
+}
+
+/// CTX-08: a one-off command in the running container the id names now.
+/// A protected container, or one another manager owns, needs the typed
+/// confirmation, as any action on it does.
+Future<PlanAttempt> _planExec(ContainerExec intent, DockerPlanContext c) async {
+  if (intent.argv.isEmpty || intent.argv.first.isEmpty) {
+    return _refused(ActionRefusalReason.invalidTarget);
+  }
+  if (intent.user?.isEmpty ?? false) {
+    return _refused(ActionRefusalReason.invalidTarget);
+  }
+  final container = await _container(c.client, intent.containerId);
+  if (container == null) return _refused(ActionRefusalReason.targetChanged);
+  // The daemon refuses an exec in a container that is not running.
+  if (container.state != _running) {
+    return _refused(ActionRefusalReason.invalidTarget);
+  }
+  final name = _nameOf(container);
+  return _planned(
+    OperationPlan(
+      intent: intent,
+      kind: OperationKind.containerExec,
+      targetName: name,
+      steps: [
+        ExecStep(
+          path: _path(c, '/containers/${container.id}/exec'),
+          containerId: container.id,
+          argv: intent.argv,
+          user: intent.user,
+        ),
+      ],
+      requiredLevel: _level(c),
+      runner: _runner(c),
+      hostWrites: const [HostWriteRow.engineState],
+      ownership: containerOwnership(container.labels),
+      protected: containerProtection(
+        name: name,
+        ports: container.ports,
+        context: c.protection,
+      ),
       revalidate: [
         DockerTargetUnchanged(DockerTargetKind.container, name, container.id),
       ],
@@ -213,8 +260,18 @@ Future<PlanAttempt> _planStack(StackAction intent, DockerPlanContext c) async {
   }
   final order = dependencyOrder(dependsOn);
   if (order == null) return _refused(ActionRefusalReason.dependencyCycle);
+  // One service (STK-23) acts on its own containers alone: compose's
+  // per-service restart and stop leave its dependencies running.
+  final only = intent.service;
+  if (only != null && !byService.containsKey(only)) {
+    return _refused(ActionRefusalReason.invalidTarget);
+  }
 
-  final services = intent.verb == StackVerb.stop ? order.reversed : order;
+  final ordered = intent.verb == StackVerb.stop ? order.reversed : order;
+  final services = [
+    for (final s in ordered)
+      if (only == null || s == only) s,
+  ];
   final steps = [
     for (final service in services)
       for (final container in byService[service]!..sort(_byName))
@@ -237,7 +294,7 @@ Future<PlanAttempt> _planStack(StackAction intent, DockerPlanContext c) async {
     OperationPlan(
       intent: intent,
       kind: _stackKinds[intent.verb]!,
-      targetName: intent.project,
+      targetName: only == null ? intent.project : '${intent.project}/$only',
       steps: steps,
       requiredLevel: _level(c),
       runner: _runner(c),
