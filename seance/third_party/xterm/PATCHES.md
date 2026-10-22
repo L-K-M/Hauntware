@@ -550,6 +550,24 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     C0 controls are still skipped, not executed. Colon sub-parameters are
     still not parsed: `CSI 4:3 m` reads as SGR 43.
 
+### Cmd-click over mouse reporting (regressions: `test/src/ui/link_gesture_test.dart`)
+
+42. **On Apple platforms a Cmd-click opens a link even while the remote
+    reports clicks** (`terminal_view.dart#_linkModifierOutranksRemote`,
+    `#_claimPressForLink`, `ui/gesture/gesture_handler.dart#onTapDown`):
+    amends patch 26, which gave every click on the screen to a remote with
+    mouse reporting on (tmux with `mouse on`, TUIs, or a TUI that exited
+    without turning it off). Links there showed no hand and Cmd-click did
+    nothing. Cmd has no bit in the
+    mouse protocol, so the remote only ever saw a plain click. Now the press
+    is not reported when Cmd is held over a link, the link opens, and
+    holding Cmd shows the hand there, also when the pointer rests while Cmd
+    goes down or up. Cmd-clicks elsewhere, plain clicks and the Ctrl link
+    modifier on other platforms (a reportable modifier) still go to the
+    remote. The press decides: one already reported stays the remote's even
+    if Cmd goes down before its release. Only single clicks are claimed, so
+    the later presses of a Cmd-multi-click still reach the remote.
+
 ### App-layer notes (outside this package)
 
 - The app passes `shortcuts: {}` and instead routes ⌘C/⌘V/⌘A on
