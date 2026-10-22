@@ -24,6 +24,11 @@
 #                                          matrix (capture_elevation.sh,
 #                                          sourced below), which no other
 #                                          mode runs
+#   test/integration/capture.sh --privileged-files-only [--update]
+#                                          only spike S6's privileged-file
+#                                          recipes (capture_privileged.sh,
+#                                          sourced below), which no other
+#                                          mode runs
 #
 # Needs Linux on x86_64 (the pinned packages and the fixtures are amd64),
 # Docker, curl, sha256sum, realpath and the Dart SDK with the klabautermann
@@ -44,6 +49,8 @@
 #                     logs as logs/docker-api-<corpus>*.log
 #   elevation/        spike S3's case files and printf record, with logs
 #                     as logs/elevation-<case>.log
+#   privileged/       spike S6's case files, with logs as
+#                     logs/privileged-<case>.log
 #
 # The tool only ever writes redacted, reviewed files; the unredacted
 # sections never leave the container. Only --update writes inside the
@@ -147,9 +154,12 @@ source "$klab_dir/test/integration/capture_docker_api.sh"
 # Spike S3's elevation matrix: its pins, cases and steps.
 # shellcheck source=capture_elevation.sh
 source "$klab_dir/test/integration/capture_elevation.sh"
+# Spike S6's privileged-file recipes: their pins, cases and steps.
+# shellcheck source=capture_privileged.sh
+source "$klab_dir/test/integration/capture_privileged.sh"
 
 usage() {
-  echo 'usage: capture.sh [--update | --list] [--docker-api-only | --elevation-only]' >&2
+  echo 'usage: capture.sh [--update | --list] [--docker-api-only | --elevation-only | --privileged-files-only]' >&2
   exit 2
 }
 
@@ -166,6 +176,7 @@ for arg in "$@"; do
     --list) [[ "$mode" == check ]] || usage; mode=list ;;
     --docker-api-only) [[ "$scope" == all ]] || usage; scope=docker-api ;;
     --elevation-only) [[ "$scope" == all ]] || usage; scope=elevation ;;
+    --privileged-files-only) [[ "$scope" == all ]] || usage; scope=privileged ;;
     *) usage ;;
   esac
 done
@@ -173,8 +184,8 @@ readonly mode scope
 
 # The shell captures and images this run needs; --docker-api-only runs
 # none of the captures and needs only the image its tool runs in, and
-# --elevation-only only the images its cases run in (Alpine's comes
-# from capture_elevation.sh).
+# --elevation-only and --privileged-files-only only the images their
+# cases run in (Alpine's comes from capture_elevation.sh).
 selected=("${captures[@]}")
 image_keys=("${!images[@]}")
 if [[ "$scope" == docker-api ]]; then
@@ -183,6 +194,9 @@ if [[ "$scope" == docker-api ]]; then
 elif [[ "$scope" == elevation ]]; then
   selected=()
   image_keys=(debian-13 ubuntu-2604)
+elif [[ "$scope" == privileged ]]; then
+  selected=()
+  image_keys=(debian-13 ubi-9)
 fi
 readonly selected image_keys
 
@@ -206,6 +220,8 @@ if [[ "$mode" == list ]]; then
   done
   if [[ "$scope" == elevation ]]; then
     elev_list
+  elif [[ "$scope" == privileged ]]; then
+    priv_list
   else
     api_list
   fi
@@ -265,6 +281,9 @@ fi
 if [[ "$scope" == elevation ]]; then
   echo '== Compiling the elevation tool, fetching its packages'
   elev_prepare
+elif [[ "$scope" == privileged ]]; then
+  echo '== Fetching the privileged-file packages'
+  priv_prepare
 else
   echo '== Compiling the Docker API capture tool, pulling its daemons'
   api_prepare
@@ -400,6 +419,9 @@ done
 if [[ "$scope" == elevation ]]; then
   elev_captures
   total=$((${#elev_cases[@]} + 1))
+elif [[ "$scope" == privileged ]]; then
+  priv_captures
+  total=${#priv_cases[@]}
 else
   api_captures
   total=$((${#selected[@]} + ${#api_targets[@]}))
@@ -411,6 +433,9 @@ fi
 if [[ "$mode" == update && "$scope" == elevation ]]; then
   echo '== Replacing the committed elevation evidence'
   elev_update
+elif [[ "$mode" == update && "$scope" == privileged ]]; then
+  echo '== Replacing the committed privileged-file evidence'
+  priv_update
 elif [[ "$mode" == update ]]; then
   echo '== Replacing the committed Docker API corpora'
   api_update
