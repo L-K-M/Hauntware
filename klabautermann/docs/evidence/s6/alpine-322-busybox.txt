@@ -1,0 +1,76 @@
+# privileged_recipes.sh as root in mirror.gcr.io/library/alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
+## tools
+tee: present
+chown: present
+chmod: present
+mv: present
+cp: present
+stat: present
+sha256sum: present
+getfacl: absent
+setfacl: absent
+getfattr: absent
+setfattr: absent
+restorecon: absent
+getenforce: absent
+## options
+umask: 0022
+chown --reference: exit 1
+chmod --reference: exit 1
+cp --attributes-only --preserve=mode,ownership,xattr: exit 1
+mv -f: exit 0
+## selinux
+getenforce: absent
+/sys/fs/selinux/enforce: unreadable
+## baseline
+owner: root:adm
+mode: 640
+acl: (no getfacl)
+xattr user.klab: (no getfattr)
+content: 25718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218
+temp: gone
+## recipe a: tee, chown --reference, chmod --reference, mv
+tee: exit 0
+chown: exit 1
+chmod: exit 1
+mv: exit 0
+owner: root:root
+mode: 644
+acl: (no getfacl)
+xattr user.klab: (no getfattr)
+content: 68f01b289aedcf28e96fce1f9444365e83b9bfc7e1bf32df20f1f15966835316
+temp: gone
+## recipe b: tee, cp --attributes-only --preserve=mode,ownership,xattr, mv
+tee: exit 0
+cp: exit 1
+mv: exit 0
+owner: root:root
+mode: 644
+acl: (no getfacl)
+xattr user.klab: (no getfattr)
+content: 68f01b289aedcf28e96fce1f9444365e83b9bfc7e1bf32df20f1f15966835316
+temp: gone
+## recipe c: recipe a, then getfacl | setfacl --set-file=- before mv
+tee: exit 0
+chown: exit 1
+chmod: exit 1
+getfacl | setfacl: exit 127
+mv: exit 0
+owner: root:root
+mode: 644
+acl: (no getfacl)
+xattr user.klab: (no getfattr)
+content: 68f01b289aedcf28e96fce1f9444365e83b9bfc7e1bf32df20f1f15966835316
+temp: gone
+## recipe d: umask 077 tee, chown and chmod from stat, mv
+tee: exit 0
+temp mode: 600
+chown: exit 0
+chmod: exit 0
+mv: exit 0
+owner: root:adm
+mode: 640
+acl: (no getfacl)
+xattr user.klab: (no getfattr)
+content: 68f01b289aedcf28e96fce1f9444365e83b9bfc7e1bf32df20f1f15966835316
+temp: gone

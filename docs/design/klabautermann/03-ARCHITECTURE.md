@@ -1219,6 +1219,63 @@ Proposals awaiting the owner close the section; they are not decisions.
   - `nohup ... &` or a plain `&` as the launcher: both survived on the
     fixture too, but stay in the launching shell's process group and
     session, which `setsid` leaves.
+- **D67. Spike S6 settles the privileged write (M5 M01).** The spike ran
+  four recipes for replacing a root-owned file as root in digest-pinned
+  Debian 13 (GNU coreutils with acl and attr), Alpine 3.22 (BusyBox) and
+  UBI 9 containers, and through the elevation prelude on the
+  GitHub-hosted Ubuntu runner's ext4 (evidence and table in
+  `klabautermann/docs/evidence/s6/`). Each target was `root:adm`, mode
+  0640, with a POSIX ACL entry and a `user.*` xattr where the tools
+  exist.
+
+  What it showed:
+  - The temp file is a new inode, so `chown --reference` and
+    `chmod --reference` carry the owner and mode but drop ACL entries
+    and xattrs.
+  - GNU `cp --attributes-only --preserve=mode,ownership,xattr <target>
+    <temp>` carries all four: GNU's `mode` includes the ACL, and
+    `--attributes-only` leaves the temp's content alone.
+  - `getfacl | setfacl --set-file=-` restores ACL entries but not xattrs.
+  - BusyBox refuses `--reference` and `cp --attributes-only` and ships no
+    ACL or xattr tools. With those steps refused, the temp keeps the
+    session umask's mode: a 0640 file became 0644, readable by every
+    account. Numeric `chown` and `chmod` from `stat -c '%u:%g'` and
+    `stat -c '%a'` keep owner and mode.
+  - `sha256sum` and `stat -c` are present in all three. No container
+    sees SELinux, so labels stay a manual check on RHEL 9.
+
+  The write (5.11, 8.5):
+  1. the temp, `.<name>.klabautermann-tmp-<random>` in the target's
+     directory, is created under `umask 077`, so no other account can
+     read it before its mode is set;
+  2. its attributes come from the target with `cp --attributes-only
+     --preserve=mode,ownership,xattr` where the host's `cp` accepts it;
+  3. elsewhere (BusyBox) they come from `stat` through numeric `chown`
+     and `chmod`, which cannot copy ACLs or xattrs. Where `getfacl` or
+     `getfattr` is present, a target carrying extended ACL entries
+     (`getfacl` lists more than the three base entries) or xattrs
+     (`getfattr -d -m -` lists any but `security.selinux`) is refused,
+     naming what this path would drop, rather than written without
+     them. What a missing tool cannot check is taken to be absent, an
+     accepted risk: attributes set from elsewhere (an image built on
+     another host, shared storage) would be dropped. A host with
+     neither tool writes ahead unchecked;
+  4. the hash re-check runs right before `mv`, and `restorecon` runs on
+     the target after it when SELinux enforces;
+  5. any failed step removes the temp and leaves the target as it was.
+
+  An elevated `sftp-server` over an exec channel is recorded in the
+  evidence, but seance_core opens SFTP only as the subsystem; using it
+  needs an `SshLink` API that runs an SFTP client over a
+  `RemoteProcess`, an optional follow-up. v1 writes through the commands
+  above.
+
+  *Rejected:*
+  - `--reference` alone, which loses ACLs and xattrs and, on BusyBox,
+    leaves a world-readable copy;
+  - writing in place with `tee <target>`, which keeps every attribute but
+    leaves a half-written file when the link drops, and no hash
+    re-check can make it atomic.
 
 ### Persistence, alerts and tiers
 
@@ -2251,6 +2308,27 @@ list says so. The `sender` and `alertstatus` records of a server are
 removed with sealed `removed` records when alerting is removed for that
 server.
 
+As built in M5 (M04): the engine's coordinator applies `pref` and `rule`
+records through `klabautermann_core`'s `KlabautermannRecordHandler` into
+`klabautermann_records.json` (4.10), still pull-only. A payload's `id`
+is the whole record id and its `type` the id's second segment. A `pref`
+holds `readOnly`, `cadence` (a 6.4 column), `pinnedUnits`,
+`pinnedContainers`, `protectedTargets`, `panelOrder`, `hostAuditLine`
+and `stackScanDirs` (absolute paths); a cadence this build does not know
+leaves the device's. A `rule` holds the rule model's fields (7.19) under
+their model names, so `evalScope` reads `client` for this device, plus a
+`target` (the server id or group name a `server` or `group` scope names).
+A record over its blob or count cap, of another kind, or whose `id` or
+`type` disagrees with its envelope trips and is skipped; a `v` above 1 is
+kept like an unknown type. The handler applies in the coordinator's last
+phase, so an excluded server is judged against the round's final server
+set, and it never opens records for the passphrase trial, since the v1.x
+`sudo` and `registry` types carry credentials. The engine sends each
+server's preferences as `ServerPrefsChanged` after its fleet, then only
+changes, a null for a removal, and every succeeded sync status carries
+the prefix budget. Retracting an excluded server's `pref` is written but
+refused until pushes are on (M05).
+
 ### 4.9 What never syncs
 
 Metrics, history, logs, inspect output, `docker compose config` output,
@@ -2280,6 +2358,7 @@ platform identities in 04, section 12.3):
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
 | `capabilities/<name>.json` | Cached probe results, 24 h TTL; named, written only by a process that holds the directory alone, and purged as D59 decides | `klabautermann_core` | MVP |
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
+| `klabautermann_records.json` [E] | The `klabautermann:` records the coordinator applied (4.8, M5, M04): per record id, the `(updatedAt, deviceId)` it won with and its sealed payload, sealed removals, unknown types and newer versions included, so the tuple guard holds across restarts and §3.1's recovery re-seals them verbatim. A `pref` whose server is absent waits here. Kept like the sync state files. Never pushed while sync is pull-only | `klabautermann_core` | v1 |
 | `operations_shown.json` [E] | Detached operations this device remembers (M4, E17b, 7.17): per server and operation id, the operation's directory, whether its result was shown and audited here, and, for one this device launched, the audit record's facts (action, target, redacted steps, tier, start). An entry goes once the operation's files are gone. Kept like the sync state files: written only with exclusive access, a damaged file set aside; losing it costs a result's launch facts and the reminder of a root cleanup, which the 7-day prune covers. Never synced | `klabautermann_core` | MVP |
 | `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample) | `klabautermann_core` | v1 |
 | `alerts.jsonl` | In-app alert history, 30 days [E]; from v1.x also host alerts fetched from the inbox or read from a host spool, with source tier, server item ids and status (D42) | `klabautermann_core` | v1 |
@@ -2727,8 +2806,11 @@ c2 found these defects in 3.0.2. The last column gives their state on the
 - **Privileged files (SAF-12, v1).** SFTP runs as the login user. Root-owned
   files use the elevation prelude in front of commands (`cat`, temp file plus
   `tee` in the same directory, `chown --reference`, `chmod --reference`,
-  `restorecon` when SELinux enforces, hash re-check, `mv`), or an elevated
-  `sftp-server` on an exec channel if spike S6 proves it [U].
+  `restorecon` when SELinux enforces, hash re-check, `mv`), with D67's
+  attribute recipe: `cp --attributes-only` where `cp` accepts it, `stat`
+  with numeric `chown` and `chmod` elsewhere, and a temp made under
+  `umask 077`. An elevated `sftp-server` needs an SFTP client over a
+  process that seance_core lacks (D67).
 
 ### 5.12 Connection etiquette
 
@@ -3552,6 +3634,13 @@ answers each open with a `LogStreamState` before it returns, and
   prelude for other users, whose stdin handling 8.3 verifies); pause with a
   marker comment; managed-crontab detection; run a cron command now (JOB-19:
   `sh -c` as the job user, danger-linted, detached when long).
+- **As built in M5 (M24, first part).** `JobHistoryQuery` reads
+  anacron's table with each job's stamp (JOB-04), a timer's last trigger
+  with its service's result, and the job starts cron logged (JOB-05).
+  Each runs as the login user, or through admin mode when it is on,
+  which a journal the login user cannot read needs. Commands cross
+  masked, as the cron rows' do. A host without `/etc/anacrontab`
+  answers `notInstalled`.
 - **v1.x.** Timer creator, output capture, dead-man pings (T1, +E), missed
   runs, fleet jobs overview.
 
@@ -4100,7 +4189,9 @@ each server's operations. Decisions:
 
 - The slow sampler reads `ops` once on each link, right after the probe,
   and again when the engine asks: after a launch, and every 15 s [E]
-  while an operation runs. Each read becomes an `OperationsChanged` with
+  while an operation runs or one this device launched within the last
+  minute [E] is not listed yet, since its wrapper writes the record only
+  after the launch returns. Each read becomes an `OperationsChanged` with
   the server's full list and how far each directory was read, or the
   collector's failure.
 - A running record is checked by its wrapper's PID and start ticks with
@@ -4581,9 +4672,9 @@ OperationPlan {
   `systemd-analyze verify`, `visudo -c`); show the diff and the host writes;
   back up into the central backup directory (8.11); write a temp file in the
   same directory, re-check the target hash, rename (user-owned files over
-  SFTP `posix-rename`; root-owned files through the prelude with
-  `chown --reference`, `chmod --reference`, `restorecon` when SELinux
-  enforces [U: ACL and label details, spike S6]).
+  SFTP `posix-rename`; root-owned files through the prelude with D67's
+  attribute recipe and `restorecon` when SELinux enforces; SELinux
+  labels are a manual check on RHEL 9).
 
 As built in M4 (E20, `app/klabautermann_app/lib/ui/actions/`), the app
 asks for one preview at a time through `OperationsController`: the

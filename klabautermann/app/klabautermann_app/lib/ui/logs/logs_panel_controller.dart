@@ -85,7 +85,12 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
   /// a [query] that is ready.
   bool get ready => containerId != null || _source != null || _query.ready;
 
-  bool get live => _live;
+  /// Whether the stream follows: [setLive]'s choice, while the query can
+  /// be followed ([LogQuery.followable]).
+  bool get live => _live && (containerId != null || _query.followable);
+
+  /// Whether [setLive] can follow the query.
+  bool get canFollow => containerId != null || _query.followable;
 
   /// Sent, with no answer yet.
   bool get opening => _opening;
@@ -150,22 +155,23 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
       final container? => ContainerLogSource(container),
       null => _source,
     };
+    final follow = live;
     final resume =
-        _live && source == null && _query.source != LogSourceKind.file
+        follow && source == null && _query.source != LogSourceKind.file
         ? _cursor
         : null;
     if (resume == null) {
       logs.clear();
       _cursor = null;
     }
-    _following = _live;
+    _following = follow;
     _opening = true;
     _stream = _streams.open(
       LogStreamSpec(
         serverId: serverId,
         source: source ?? _query.toSource(_now()),
         window: kLogsPanelWindow,
-        follow: _live,
+        follow: follow,
         afterCursor: resume,
       ),
       this,

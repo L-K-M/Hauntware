@@ -14,6 +14,8 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         CronJob,
         CronJobEntry,
         FsMount,
+        JournalBoot,
+        JournalBootEntry,
         ServerZone,
         SystemdTimer,
         mergeJobs,
@@ -110,12 +112,44 @@ void main() {
           ),
         ),
         const CloseStream('stream-1'),
+        OpenLogStream(
+          streamId: 'stream-3',
+          spec: LogStreamSpec(
+            serverId: 'srv-1',
+            source: const JournalLogSource(
+              boot: JournalBoot.offset(-1),
+              grep: 'oom',
+            ),
+            window: 100,
+            follow: false,
+          ),
+        ),
+        const HostQuery(serverId: 'srv-1', queryId: 'h-1', query: BootsQuery()),
+        const RedactLines('r-1', ['a', 'b']),
         const DockerQuery(
           serverId: 'srv-1',
           queryId: 'q-1',
           query: DockerContainersQuery(),
         ),
         const PlanAction(KillProcess('srv-1', pid: 42, startTicks: 9001)),
+        const JobHistoryQuery(
+          serverId: 'srv-1',
+          requestId: 'h-1',
+          query: AnacronQuery(),
+        ),
+        const JobHistoryQuery(
+          serverId: 'srv-1',
+          requestId: 'h-2',
+          query: TimerLastRunQuery(
+            timer: 'backup.timer',
+            service: 'backup.service',
+          ),
+        ),
+        const JobHistoryQuery(
+          serverId: 'srv-1',
+          requestId: 'h-3',
+          query: CronRunsQuery(lines: 20),
+        ),
         const PlanAction(
           UnitAction(
             'srv-1',
@@ -202,10 +236,18 @@ void main() {
         const AnswerPrompt('prompt-2', PromptCancelAnswer()),
         const HandleAlert('alert-1', AlertAction.acknowledge),
         const OpenTerminal(
+          terminalId: 't-1',
           serverId: 'srv-1',
           containerId: 'abc123',
           shell: '/bin/sh',
+          user: 'app',
+          columns: 120,
+          rows: 40,
         ),
+        TerminalInput('t-1', Uint8List.fromList(const [0x6c, 0x73])),
+        const TerminalResize('t-1', columns: 80, rows: 24),
+        const TerminalEndInput('t-1'),
+        const CloseTerminal('t-1'),
       ];
 
       for (final request in requests) {
@@ -270,6 +312,24 @@ void main() {
           queryId: 'q-1',
           payload: DockerImagesPayload([]),
         ),
+        HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-1',
+          payload: JournalBoots([
+            JournalBootEntry(
+              offset: -1,
+              id: '0123456789abcdef0123456789abcdef',
+              firstEntry: DateTime.utc(2026, 10, 19),
+            ),
+          ]),
+          warnings: const ['list-boots: row skipped'],
+        ),
+        const HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-2',
+          payload: HostQueryFailed(HostQueryFailure.noLink),
+        ),
+        const RedactedLines('r-1', 'a\nb'),
         const DockerEndpointState(
           serverId: 'srv-1',
           phase: DockerEndpointPhase.waiting,
@@ -435,6 +495,43 @@ void main() {
             detail: 'boom',
           ),
         ),
+        JobHistoryResult(
+          serverId: 'srv-1',
+          requestId: 'h-1',
+          payload: AnacronPayload([
+            AnacronJob(
+              period: const AnacronPeriod.days(1),
+              delayMinutes: 5,
+              identifier: 'cron.daily',
+              command: 'run-parts /etc/cron.daily',
+              lastRun: DateTime.utc(2026, 10, 20),
+            ),
+          ]),
+          warnings: const ['w'],
+        ),
+        JobHistoryResult(
+          serverId: 'srv-1',
+          requestId: 'h-2',
+          payload: TimerLastRunPayload(
+            TimerLastRun(lastTrigger: DateTime.utc(2026, 10, 20, 3)),
+          ),
+        ),
+        JobHistoryResult(
+          serverId: 'srv-1',
+          requestId: 'h-3',
+          payload: CronRunsPayload([
+            LoggedCronRun(
+              at: DateTime.utc(2026, 10, 20),
+              user: 'root',
+              command: 'true',
+            ),
+          ]),
+        ),
+        JobHistoryResult(
+          serverId: 'srv-1',
+          requestId: 'h-4',
+          payload: const JobHistoryFailed(JobHistoryFailure.notInstalled),
+        ),
         const ActionProgress(planId: 'plan-1', stepIndex: 1, stepCount: 3),
         const ActionFinished(
           planId: 'plan-1',
@@ -473,7 +570,8 @@ void main() {
         ]),
         const AlertStatusChanged('a-1', AlertStatus.acknowledged),
         TerminalBytes('t-1', Uint8List.fromList(const [1, 2, 3])),
-        const TerminalClosed('t-1'),
+        TerminalOpened('t-1', const ['/bin/sh']),
+        const TerminalClosed('t-1', TerminalCloseReason.exited, exitCode: 3),
       ];
 
       for (final event in events) {

@@ -1,0 +1,151 @@
+// HostQueries against a link whose one-shot runs the test answers (03
+// §7.6): each query runs its validated command and answers once, with
+// the parsed rows or why it read none.
+import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/logs/host_queries.dart';
+import 'package:klabautermann_host/klabautermann_host.dart';
+import 'package:seance_core/seance_core.dart'
+    show RemoteCommandException, RemoteCommandResult, quoteShellWord;
+import 'package:test/test.dart';
+
+import '../support/scripted_link.dart';
+
+const _boot = '0123456789abcdef0123456789abcdef';
+
+/// Answers each run with [answer]'s result, or throws what it throws.
+final class _RunLink extends TestLinkBase {
+  _RunLink(this.answer);
+
+  final RemoteCommandResult Function(String command) answer;
+  final commands = <String>[];
+
+  @override
+  Future<RemoteCommandResult> run(
+    String command, {
+    Duration? timeout,
+    int maxOutputBytes = 256 * 1024,
+    List<int>? stdin,
+  }) async {
+    commands.add(command);
+    return answer(command);
+  }
+}
+
+RemoteCommandResult _ok(String stdout) =>
+    RemoteCommandResult(exitCode: 0, stdout: stdout, stderr: '');
+
+void main() {
+  late List<EngineEvent> events;
+  _RunLink? link;
+  int? systemd;
+
+  HostQueries queries() => HostQueries(
+    linkFor: (_) => link,
+    systemdVersionOf: (_) => systemd,
+    emit: events.add,
+  );
+
+  Future<HostResult> ask(HostQuerySpec query) async {
+    await queries().query(
+      HostQuery(serverId: 'srv-1', queryId: 'q-1', query: query),
+    );
+    final result = events.single as HostResult;
+    expect((result.serverId, result.queryId), ('srv-1', 'q-1'));
+    return result;
+  }
+
+  setUp(() {
+    events = [];
+    link = null;
+    systemd = null;
+  });
+
+  test('the files under /var/log come back sorted, with warnings', () async {
+    link = _RunLink(
+      (_) => _ok(
+        '1 120 1760000000 /var/log/syslog\n'
+        '0 4096 1760000000 /var/log/auth.log.2.gz\n'
+        'garbage\n',
+      ),
+    );
+
+    final result = await ask(const VarLogQuery());
+
+    expect(
+      link!.commands.single,
+      HostCommands.commandLine(HostCommands.logFiles(), quote: quoteShellWord),
+    );
+    final files = (result.payload as VarLogFiles).files;
+    expect(files.map((f) => f.path), [
+      '/var/log/auth.log.2.gz',
+      '/var/log/syslog',
+    ]);
+    expect(files.first.readable, isFalse);
+    expect(files.first.compression, LogCompression.gzip);
+    expect(result.warnings, ['log files: row skipped']);
+  });
+
+  test('boots read as JSON from systemd 251, as text before and when the '
+      'version is unknown', () async {
+    final json =
+        '[{"index":0,"boot_id":"$_boot",'
+        '"first_entry":1760000000000000,"last_entry":1760003600000000}]';
+    const text =
+        '  0 $_boot Thu 2025-10-09 08:53:20 UTC Thu 2025-10-09 09:53:20 UTC\n';
+    link = _RunLink((command) => _ok(command.contains("'json'") ? json : text));
+
+    for (final version in [251, 250, null]) {
+      events.clear();
+      systemd = version;
+      final boots =
+          ((await ask(const BootsQuery())).payload as JournalBoots).boots;
+      expect(boots.single.id, _boot, reason: '$version');
+      expect(boots.single.offset, 0);
+      expect(boots.single.firstEntry, isNotNull, reason: '$version');
+    }
+    expect(link!.commands.map((c) => c.contains("'json'")), [
+      true,
+      false,
+      false,
+    ]);
+  });
+
+  test('a server without a ready link is answered at once', () async {
+    final payload = (await ask(const BootsQuery())).payload as HostQueryFailed;
+    expect(payload.failure, HostQueryFailure.noLink);
+  });
+
+  test(
+    'a refusal, a missing tool and a lost link answer as failures',
+    () async {
+      final answers = <RemoteCommandResult Function()>[
+        () => const RemoteCommandResult(
+          exitCode: 1,
+          stdout: '',
+          stderr: 'Failed to open journal: Permission denied\n',
+        ),
+        () => const RemoteCommandResult(
+          exitCode: 127,
+          stdout: '',
+          stderr: 'sh: 1: exec: journalctl: not found\n',
+        ),
+        () => throw const RemoteCommandException('The link closed.'),
+      ];
+      final failures = <(HostQueryFailure, String?)>[];
+      for (final answer in answers) {
+        events.clear();
+        link = _RunLink((_) => answer());
+        final payload =
+            (await ask(const BootsQuery())).payload as HostQueryFailed;
+        failures.add((payload.failure, payload.detail));
+      }
+      expect(failures.map((f) => f.$1), [
+        HostQueryFailure.denied,
+        HostQueryFailure.missing,
+        HostQueryFailure.failed,
+      ]);
+      expect(failures.first.$2, contains('Permission denied'));
+      expect(failures.last.$2, contains('The link closed.'));
+    },
+  );
+}

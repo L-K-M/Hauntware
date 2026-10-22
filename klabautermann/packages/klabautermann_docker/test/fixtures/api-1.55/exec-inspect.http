@@ -1,0 +1,10 @@
+HTTP/1.1 200 OK
+Api-Version: 1.55
+Content-Type: application/json
+Docker-Experimental: false
+Ostype: linux
+Server: Docker/29.7.2 (linux)
+Date: Tue, 20 Oct 2026 17:14:28 GMT
+Content-Length: 401
+
+{"ID":"abf5ba78e8e9ac18e2083091be734ed9f6196121763bf85dde10e8bb40e9257b","Running":false,"ExitCode":3,"ProcessConfig":{"tty":false,"entrypoint":"sh","arguments":["-c","echo out; echo err >&2; exit 3"],"privileged":false},"OpenStdin":false,"OpenStderr":true,"OpenStdout":true,"CanRemove":false,"ContainerID":"a42c8fc08ea57dacc11990d3c19695089ce85d57c34d6a2f1eb0dcb708e4485d","DetachKeys":"","Pid":871}

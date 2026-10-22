@@ -251,6 +251,100 @@ enum JournalOrder {
   follow,
 }
 
+/// One boot of the journal (LOG-09, 03 §7.6): an offset from the
+/// current boot (0, -1 for the one before) or a boot ID, which stays
+/// put when the host boots again.
+final class JournalBoot {
+  /// The boot [offset] boots before the current one; 0 is the current.
+  const JournalBoot.offset(int offset) : _offset = offset, _id = null;
+
+  /// The boot whose ID is [id], 32 lower-case hex digits.
+  const JournalBoot.id(String id) : _offset = null, _id = id;
+
+  final int? _offset;
+  final String? _id;
+
+  /// The offset, or null for a boot named by [id].
+  int? get offset => _offset;
+
+  /// The boot ID, or null for a boot named by [offset].
+  String? get id => _id;
+
+  @override
+  bool operator ==(Object other) =>
+      other is JournalBoot && other._offset == _offset && other._id == _id;
+
+  @override
+  int get hashCode => Object.hash(_offset, _id);
+
+  @override
+  String toString() => 'JournalBoot(${_id ?? _offset})';
+
+  /// The `-b` argument, after validating it.
+  String get _wire {
+    final id = _id;
+    if (id != null) {
+      if (!_bootId.hasMatch(id)) {
+        throw HostCommandError('not a boot ID', argument: id);
+      }
+      return id;
+    }
+    final offset = _offset!;
+    if (offset > 0) {
+      throw HostCommandError('a boot offset counts back', argument: '$offset');
+    }
+    return '$offset';
+  }
+
+  static final _bootId = RegExp(r'^[0-9a-f]{32}$');
+}
+
+/// The first systemd whose `journalctl --list-boots` takes `-o json`
+/// (03 §7.6).
+const int kListBootsJsonSystemd = 251;
+
+/// How [HostCommands.journalBoots] asks for the boot list: JSON on
+/// systemd [kListBootsJsonSystemd] and later, the text table below.
+enum JournalBootsFormat { json, text }
+
+/// How a rotated log under `/var/log` is compressed (LOG-08, 03 §7.6),
+/// from its name.
+enum LogCompression {
+  none,
+  gzip,
+  xz;
+
+  /// The compression [path]'s suffix names.
+  static LogCompression of(String path) {
+    if (path.endsWith('.gz')) return gzip;
+    if (path.endsWith('.xz')) return xz;
+    return none;
+  }
+}
+
+/// The marker [HostCommands.rotatedTail] writes to stderr when the
+/// decompressor fails, followed by its exit status (127: not installed).
+const String kDecompressFailedMarker = 'klabautermann-decompress-failed';
+
+/// Reads the tail of a compressed log: the decompressor's failure is
+/// reported on stderr, since the pipeline's status is `tail`'s.
+const String _kRotatedTailScript =
+    '{ "\$1" -- "\$2" || echo "$kDecompressFailedMarker \$?" >&2; } '
+    '| tail -n "\$3"';
+
+/// Lists the regular files under `/var/log`, two levels deep (LOG-08,
+/// 03 §7.6): `<readable> <bytes> <mtime> <path>` per file, where
+/// readable is 1 or 0. `stat -c` and `find -maxdepth` work under GNU
+/// and BusyBox alike, unlike `find -printf`. A name holding a newline
+/// is not listed.
+const String _kLogFilesScript = r'''
+find /var/log -maxdepth 2 -type f 2>/dev/null | while IFS= read -r f; do
+  if [ -r "$f" ]; then r=1; else r=0; fi
+  s=$(stat -c '%s %Y' -- "$f" 2>/dev/null) || continue
+  printf '%s %s %s
+' "$r" "$s" "$f"
+done''';
+
 /// [HostCommands.anacron]'s exit when it printed the table and stamps.
 const int kAnacronListed = 0;
 
@@ -517,8 +611,8 @@ abstract final class HostCommands {
   }
 
   /// `journalctl -o json` with the log view's filters (03 §7.6, §10.1):
-  /// the kernel log (`-k -b`), unit, identifier, the current boot,
-  /// priority floor, time range, resume cursor, window size ([lines]),
+  /// the kernel log (`-k -b`), unit, identifier, the current boot or
+  /// another [boot], priority floor, time range, resume cursor, window size ([lines]),
   /// [order] and a grep pattern. Every supplied filter is validated.
   /// Refused here are what journalctl refuses, `--since` with a cursor
   /// (it takes one starting point) and a range that ends before it
@@ -535,6 +629,7 @@ abstract final class HostCommands {
     String? unit,
     String? identifier,
     bool currentBoot = false,
+    JournalBoot? boot,
     String? priority,
     DateTime? since,
     DateTime? until,
@@ -553,6 +648,10 @@ abstract final class HostCommands {
     if (lines != null && lines < 0) {
       throw const HostCommandError('negative line count');
     }
+    if (boot != null && currentBoot) {
+      throw const HostCommandError('two boots named');
+    }
+    final bootArg = boot?._wire;
     if (since != null && cursor != null) {
       throw const HostCommandError('--since and a cursor exclude each other');
     }
@@ -572,7 +671,11 @@ abstract final class HostCommands {
       'json',
       '--no-pager',
       if (kernel) '-k',
-      if (kernel || currentBoot) '-b',
+      if (bootArg != null) ...[
+        '-b',
+        bootArg,
+      ] else if (kernel || currentBoot)
+        '-b',
       if (unit != null) ...['-u', unit],
       if (identifier != null) ...['-t', identifier],
       if (priority != null) ...['-p', priority],
@@ -609,6 +712,50 @@ abstract final class HostCommands {
     _check(ArgValidators.absolutePath, path);
     if (lines < 0) throw const HostCommandError('negative line count');
     return ['tail', '-n', '$lines', if (follow) '-F', '--', path];
+  }
+
+  /// `journalctl --list-boots` (LOG-09, 03 §7.6), as JSON on systemd
+  /// [kListBootsJsonSystemd] and later, else the text table;
+  /// `parseJournalBoots` reads either.
+  static List<String> journalBoots(JournalBootsFormat format) => [
+    'journalctl',
+    '--list-boots',
+    '--no-pager',
+    if (format == JournalBootsFormat.json) ...['-o', 'json'],
+  ];
+
+  /// The files under `/var/log` (LOG-08, 03 §7.6); `parseLogFiles`
+  /// reads the output.
+  static List<String> logFiles() => const [
+    'sh',
+    '-c',
+    _kLogFilesScript,
+    'klabautermann-logs',
+  ];
+
+  /// The last [lines] lines of a compressed rotated log (LOG-08, 03
+  /// §7.6), through `zcat` or `xzcat`; never followed, since a rotated
+  /// file no longer grows. An uncompressed file reads through [tail].
+  static List<String> rotatedTail(String path, {required int lines}) {
+    _check(ArgValidators.absolutePath, path);
+    if (lines < 0) throw const HostCommandError('negative line count');
+    final tool = switch (LogCompression.of(path)) {
+      LogCompression.gzip => 'zcat',
+      LogCompression.xz => 'xzcat',
+      LogCompression.none => throw HostCommandError(
+        'not a compressed log',
+        argument: path,
+      ),
+    };
+    return [
+      'sh',
+      '-c',
+      _kRotatedTailScript,
+      'klabautermann-rotated',
+      tool,
+      path,
+      '$lines',
+    ];
   }
 
   /// anacron's table and job stamps (JOB-04, 03 §7.7); the exit codes are

@@ -97,6 +97,40 @@ void main() {
     expect(_revealed(text), file);
   });
 
+  test('a backslash continuation of a masked assignment is masked whole', () {
+    const file =
+        'ExecStart=/usr/bin/app \\\n'
+        '    --db-password=hunter2\n'
+        'Environment=A=1 \\\n'
+        '    B=hunter2\n'
+        'Restart=always\n';
+
+    final text = maskUnitFile(file);
+
+    expect(
+      _shown(text),
+      'ExecStart=/usr/bin/app \\\n'
+      '********\n'
+      'Environment=********\n'
+      '********\n'
+      'Restart=always\n',
+    );
+    expect(_revealed(text), file);
+
+    const crlf =
+        'Environment=TOKEN=hunter2\r\n'
+        'ExecStart=/usr/bin/app \\\r\n'
+        '    --db-password=hunter2\r\n';
+    final crlfText = maskUnitFile(crlf);
+    expect(
+      _shown(crlfText),
+      'Environment=********\r\n'
+      'ExecStart=/usr/bin/app \\\r\n'
+      '********\r\n',
+    );
+    expect(_revealed(crlfText), crlf);
+  });
+
   test("a user unit reads in the user's manager", () async {
     final link = _Link(_out('[Unit]\n'));
 
@@ -170,6 +204,10 @@ void main() {
 
     expect(
       (await failed(_err('No files found for app.service.\n'))).failure,
+      UnitQueryFailure.notFound,
+    );
+    expect(
+      (await failed(_err('Unit app.service could not be found.\n'))).failure,
       UnitQueryFailure.notFound,
     );
     expect(

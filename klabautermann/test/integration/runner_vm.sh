@@ -11,6 +11,9 @@
 # and spike S4's detached runners (runner_vm_s4_test.dart, tag
 # runner-vm-s4): systemd-run system, --user and --uid, linger, logout,
 # --collect, root-run files, --host and sudo -n -l (03 §7.17, M4 E02);
+# and spike S6's privileged-file recipes on ext4 with ACLs and an
+# elevated sftp-server (runner_vm_s6_test.dart, tag runner-vm-s6, M5
+# M01), in a root-owned directory under /var/tmp each case removes;
 # and the engine's admin mode and host actions
 # (runner_vm_actions_test.dart, M4 E29): a wrong password and its retry,
 # rung 4 under timestamp_timeout=0, admin mode ending with the link, unit
@@ -71,6 +74,8 @@
 #   engine-tests.json     the suites' results, and an .events log per test
 #   s4/                   spike S4's evidence, one JSON file per case
 #                         (klabautermann/docs/evidence/s4/README.md)
+#   s6/                   spike S6's evidence, one JSON file per case
+#                         (klabautermann/docs/evidence/s6/README.md)
 set -euo pipefail
 
 integration_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -801,7 +806,7 @@ cd "$klabautermann_dir"
 suite_status=0
 suite_started=1
 run_child "$dart_binary" test --concurrency=1 \
-  --tags 'runner-vm || runner-vm-s4' "${reporter[@]}" \
+  --tags 'runner-vm || runner-vm-s4 || runner-vm-s6' "${reporter[@]}" \
   packages/klabautermann_core/test/integration || suite_status="$?"
 
 if ((suite_status != 0)); then
