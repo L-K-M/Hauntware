@@ -23,6 +23,7 @@ import '../admin/user_crontabs.dart';
 import '../capabilities/capability_cache.dart';
 import '../catalog/engine_sync.dart';
 import '../catalog/engine_vault.dart';
+import '../catalog/klabautermann_records.dart' show diffServerPrefs;
 import '../catalog/keystore_channel.dart';
 import '../docker/docker_router.dart';
 import '../docker/exec_sessions.dart';
@@ -39,6 +40,7 @@ import '../links/channel_quota.dart';
 import '../links/link_connector.dart';
 import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
+import '../logs/host_queries.dart';
 import '../logs/log_stream_router.dart';
 import '../operations/confirmation.dart';
 import '../operations/detached_runner.dart';
@@ -58,6 +60,10 @@ import '../sampling/sampling_scheduler.dart';
 import '../sampling/subscriptions.dart';
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
 import 'protocol.dart';
+
+/// Redacts the lines an export carries (LOG-10, 03 §8.9), as the audit
+/// log and operation output are.
+final _exportRedactor = SecretRedactor();
 
 /// How long a shutdown waits for open shells to end and write their
 /// audit records; a link that went silent cannot hold the quit longer.
@@ -200,6 +206,9 @@ void engineMain(
   // none while links are off. It follows every LinkState and probe
   // answer.
   DockerRouter? docker;
+  // One-shot host reads over each server's ready link (03 §7.6); none
+  // while links are off.
+  HostQueries? hostQueries;
   // Container shells over the Docker endpoints (03 §7.13); none while
   // links are off.
   ExecSessions? terminals;
@@ -536,6 +545,11 @@ void engineMain(
       opsRead: (serverId, section) =>
           unawaited(operations?.listed(serverId, section)),
     );
+    hostQueries = HostQueries(
+      linkFor: links.link,
+      systemdVersionOf: (serverId) => profiles[serverId]?.systemdVersion,
+      emit: uiPort.send,
+    );
     logs = LogStreamRouter(
       linkFor: links.link,
       emit: uiPort.send,
@@ -573,6 +587,19 @@ void engineMain(
   // Whether the app has had a fleet. Probing waits for it, since the app
   // keeps answers only for servers its fleet lists.
   var fleetSent = false;
+
+  // The synced preferences the app last heard, so a round sends only
+  // what changed.
+  var prefsSent = <String, String>{};
+  Future<void> sendServerPrefs() async {
+    final (changes, sent) = diffServerPrefs(
+      prefsSent,
+      await sync.serverPrefs(),
+    );
+    changes.forEach(uiPort.send);
+    prefsSent = sent;
+  }
+
   void probeFleet() {
     if (!fleetSent) return;
     reachability?.update(probeTargets(fleetEntries(), configOf));
@@ -782,6 +809,7 @@ void engineMain(
       }
       if (status.phase == SyncPhase.succeeded) {
         uiPort.send(CatalogReplaced(fleetEntries()));
+        await sendServerPrefs();
       }
       uiPort.send(status);
     });
@@ -815,6 +843,7 @@ void engineMain(
         // anything.
         uiPort.send(CatalogReplaced(fleetEntries()));
         fleetSent = true;
+        await sendServerPrefs();
         probeFleet();
       case Connect(:final serverId):
         sendCachedProfile(serverId);
@@ -939,6 +968,23 @@ void engineMain(
         }
       case DockerUnwatch():
         docker?.unwatch(message);
+      case HostQuery(:final serverId):
+        switch (hostQueries) {
+          case null:
+            reject(message, 'links are off in this engine');
+          case _ when !fleetIds.contains(serverId):
+            reject(message, 'no fleet server $serverId');
+          case final queries:
+            // Not awaited: the queue keeps serving while the host answers.
+            unawaited(queries.query(message));
+        }
+      case RedactLines(:final requestId, :final lines):
+        uiPort.send(
+          RedactedLines(
+            requestId,
+            lines.map(_exportRedactor.redact).join('\n'),
+          ),
+        );
       case OpenTerminal():
         switch (terminals) {
           case null:

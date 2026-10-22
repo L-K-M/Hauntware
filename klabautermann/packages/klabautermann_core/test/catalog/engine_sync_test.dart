@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/catalog/engine_sync.dart';
 import 'package:klabautermann_core/src/catalog/engine_vault.dart';
+import 'package:klabautermann_core/src/catalog/klabautermann_records.dart';
 import 'package:seance_core/catalog.dart'
     show FileVaultStore, InMemoryConflictAwareHostKeyStore;
 import 'package:seance_core/seance_core.dart'
@@ -330,6 +331,38 @@ void main() {
         ['alpha', 'bravo'],
       );
       expect(server.pushes, 0);
+    });
+
+    test('a pulled pref shows for its server once the server is in the '
+        'catalog, and the status carries the prefix budget', () async {
+      await server.seedKlabautermann(
+        KlabautermannRecordType.pref.idOf('srv-b'),
+        encodeServerPrefs('srv-b', const ServerPrefs(readOnly: true)),
+      );
+      await server.seedServer(fakeServer('srv-a', 'alpha'));
+      final sync = await open();
+
+      final enrolled = await sync.enroll(_enroll);
+      expect(enrolled.phase, SyncPhase.succeeded, reason: enrolled.detail);
+      // srv-b is absent: its pref waits.
+      expect(await sync.serverPrefs(), isEmpty);
+      expect(enrolled.prefixBudget?.usedBytes, greaterThan(0));
+      expect(enrolled.prefixBudget?.warns, isFalse);
+
+      await server.seedServer(fakeServer('srv-b', 'bravo'));
+      final round = await sync.runRound();
+      expect(round.phase, SyncPhase.succeeded, reason: round.detail);
+      expect((await sync.serverPrefs())['srv-b']?.readOnly, isTrue);
+      expect(file(klabautermannRecordsFileName).existsSync(), isTrue);
+
+      await server.seedKlabautermann(
+        KlabautermannRecordType.pref.idOf('srv-b'),
+        removedPayload(KlabautermannRecordType.pref.idOf('srv-b')),
+        updatedAt: 2,
+      );
+      final removal = await sync.runRound();
+      expect(removal.phase, SyncPhase.succeeded, reason: removal.detail);
+      expect(await sync.serverPrefs(), isEmpty);
     });
 
     test('a session the server rejects fails the round', () async {
