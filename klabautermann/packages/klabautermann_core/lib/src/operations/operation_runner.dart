@@ -275,7 +275,9 @@ final class OperationRunner {
     } on DockerEndpointUnavailable {
       return failed(ActionFailure.transport);
     } on ChannelOpenException {
-      // The link refused the channel, at its session limit or closing.
+      // The link refused the channel, at its session limit or closing. A
+      // later channel may still open, so the cleanup is tried.
+      await _cleanUp(link, plan, session);
       return failed(ActionFailure.transport);
     }
     return ActionFinished(

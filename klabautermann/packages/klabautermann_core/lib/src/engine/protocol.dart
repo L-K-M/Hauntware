@@ -1697,7 +1697,7 @@ enum EditReadFailure {
   /// Only root may read it, and admin mode is off.
   adminRequired,
 
-  /// The file is larger than the editor takes (`kEditReadMaxBytes`).
+  /// The file is larger than the editor takes (`kEditReadCap`).
   tooLarge,
 
   /// The file is not UTF-8 text.

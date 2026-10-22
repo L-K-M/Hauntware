@@ -51,6 +51,7 @@ OperationPlan _plan(
   List<PlanStep> steps, {
   RequiredLevel level = RequiredLevel.login,
   List<Revalidation> revalidate = const [],
+  List<ShellStep> cleanup = const [],
 }) => OperationPlan(
   intent: const UnitAction(
     _server,
@@ -63,6 +64,7 @@ OperationPlan _plan(
   requiredLevel: level,
   runner: const RunnerFacts(identity: 'deploy'),
   revalidate: revalidate,
+  cleanup: cleanup,
 );
 
 void main() {
@@ -325,6 +327,40 @@ void main() {
     expect(finished.failure, ActionFailure.revalidation);
     expect(finished.revalidation, RevalidationFailure.contentChanged);
     expect(finished.failedStep, 1);
+    expect(link.commands.map((c) => c.split(' ').last), [
+      "'write'",
+      "'replace'",
+      "'cleanup'",
+    ]);
+  });
+
+  test('a refused channel mid-plan still runs the cleanup', () async {
+    // The link refuses the second step's channel, at its session limit;
+    // the temporary file the first step wrote is still removed.
+    var refused = false;
+    final link = _Link((command, _) {
+      if (command.contains('replace') && !refused) {
+        refused = true;
+        throw const ChannelOpenException(
+          ChannelRefusal.sessionLimit,
+          'no session channel',
+        );
+      }
+      return _ok;
+    });
+    final plan = _plan(
+      [
+        ShellStep(['write']),
+        ShellStep(['replace']),
+      ],
+      cleanup: [
+        ShellStep(['cleanup']),
+      ],
+    );
+
+    final finished = await runner(link).run('plan-1', plan);
+
+    expect(finished.failure, ActionFailure.transport);
     expect(link.commands.map((c) => c.split(' ').last), [
       "'write'",
       "'replace'",
