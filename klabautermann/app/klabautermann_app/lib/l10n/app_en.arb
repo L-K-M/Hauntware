@@ -6536,6 +6536,10 @@
   "@footprintChecking": {
     "description": "Footprint page: shown until the engine answers."
   },
+  "footprintUnavailable": "Klabautermann cannot check what it keeps on this server without a connection. Connect, then check again.",
+  "@footprintUnavailable": {
+    "description": "Footprint page: the engine refused the check, as for a server with no connection."
+  },
   "footprintRootUnchecked": "Root's backups and manifest are checked in admin mode.",
   "@footprintRootUnchecked": {
     "description": "Footprint page: root's part is not read without admin mode."

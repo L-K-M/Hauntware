@@ -50,6 +50,10 @@ class FootprintPage extends StatefulWidget {
 }
 
 class _FootprintPageState extends State<FootprintPage> {
+  /// A restore is reading its backup: a second tap would open a second
+  /// editor over the first.
+  bool _restoring = false;
+
   @override
   void initState() {
     super.initState();
@@ -74,17 +78,25 @@ class _FootprintPageState extends State<FootprintPage> {
         child: ListenableBuilder(
           listenable: widget.operations,
           builder: (context, _) {
-            final state = widget.operations.footprintOf(widget.serverId);
+            final operations = widget.operations;
+            final state = operations.footprintOf(widget.serverId);
             return ListView(
               padding: const EdgeInsets.all(16),
-              children: state == null
-                  ? [
-                      PanelNotice(
-                        icon: Icons.hourglass_empty,
-                        text: l10n.footprintChecking,
-                      ),
-                    ]
-                  : _sections(context, l10n, state),
+              children: switch (state) {
+                null when operations.footprintRefused(widget.serverId) => [
+                  PanelNotice(
+                    icon: Icons.link_off,
+                    text: l10n.footprintUnavailable,
+                  ),
+                ],
+                null => [
+                  PanelNotice(
+                    icon: Icons.hourglass_empty,
+                    text: l10n.footprintChecking,
+                  ),
+                ],
+                final state => _sections(context, l10n, state),
+              },
             );
           },
         ),
@@ -252,12 +264,19 @@ class _FootprintPageState extends State<FootprintPage> {
     String directory,
     BackupEntry entry,
   ) async {
+    if (_restoring) return;
     final overlay = Overlay.of(context, rootOverlay: true);
     final l10n = AppLocalizations.of(context);
-    final read = await widget.operations.readEditable(
-      widget.serverId,
-      FileTarget('$directory/${entry.name}'),
-    );
+    _restoring = true;
+    final EditReadResult read;
+    try {
+      read = await widget.operations.readEditable(
+        widget.serverId,
+        FileTarget('$directory/${entry.name}'),
+      );
+    } finally {
+      _restoring = false;
+    }
     if (!mounted) return;
 
     switch (read) {

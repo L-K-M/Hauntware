@@ -79,6 +79,13 @@ final class OperationsController extends ChangeNotifier {
   /// Each server's footprint as the engine last verified it (SAF-14).
   final Map<String, FootprintState> _footprints = {};
 
+  /// Servers with a [FootprintQuery] out and no answer yet.
+  final Set<String> _footprintAsked = {};
+
+  /// Servers whose last [FootprintQuery] the engine refused: no link, or
+  /// not in the fleet.
+  final Set<String> _footprintRefused = {};
+
   /// Edit reads waiting on the engine, by request id.
   final Map<String, Completer<EditReadResult>> _editReads = {};
   int _nextEditRead = 0;
@@ -176,7 +183,16 @@ final class OperationsController extends ChangeNotifier {
 
   /// Asks the engine to verify [serverId]'s footprint again; the answer
   /// replaces [footprintOf].
-  void verifyFootprint(String serverId) => _send(FootprintQuery(serverId));
+  void verifyFootprint(String serverId) {
+    _footprintAsked.add(serverId);
+    if (_footprintRefused.remove(serverId)) notifyListeners();
+    _send(FootprintQuery(serverId));
+  }
+
+  /// Whether the engine refused [serverId]'s last [verifyFootprint], so
+  /// no answer will come until it is asked again.
+  bool footprintRefused(String serverId) =>
+      _footprintRefused.contains(serverId);
 
   /// What a request the engine cannot take gets: no engine means no link.
   static const _noEngine = PlanRefused(ActionRefusalReason.noLink);
@@ -221,6 +237,20 @@ final class OperationsController extends ChangeNotifier {
         notifyListeners();
       case FootprintState(:final serverId):
         _footprints[serverId] = event;
+        _footprintAsked.remove(serverId);
+        _footprintRefused.remove(serverId);
+        notifyListeners();
+      case RequestRejected(:final requestName, :final reason)
+          when requestName == '$FootprintQuery':
+        // A rejection names no request, but the engine's reasons for this
+        // one end with the server it was for (engine_isolate.dart).
+        final refused = [
+          for (final id in _footprintAsked)
+            if (reason.endsWith(' $id')) id,
+        ];
+        if (refused.isEmpty) return;
+        _footprintAsked.removeAll(refused);
+        _footprintRefused.addAll(refused);
         notifyListeners();
       case EditRead(:final requestId, :final result):
         _editReads.remove(requestId)?.complete(result);

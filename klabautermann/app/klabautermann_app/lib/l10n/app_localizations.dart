@@ -7012,6 +7012,12 @@ abstract class AppLocalizations {
   /// **'Checking what Klabautermann keeps on this server…'**
   String get footprintChecking;
 
+  /// Footprint page: the engine refused the check, as for a server with no connection.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann cannot check what it keeps on this server without a connection. Connect, then check again.'**
+  String get footprintUnavailable;
+
   /// Footprint page: root's part is not read without admin mode.
   ///
   /// In en, this message translates to:

@@ -5369,6 +5369,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Checking what Klabautermann keeps on this server…';
 
   @override
+  String get footprintUnavailable =>
+      'Klabautermann cannot check what it keeps on this server without a connection. Connect, then check again.';
+
+  @override
   String get footprintRootUnchecked =>
       'Root\'s backups and manifest are checked in admin mode.';
 

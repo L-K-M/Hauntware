@@ -332,6 +332,46 @@ void main() {
     expect(find.textContaining('Keep the newest'), findsNothing);
   });
 
+  testWidgets('a server the engine cannot check says so instead of '
+      'waiting, and Refresh asks again', (tester) async {
+    final page = await _pump(tester);
+    await page.emit(
+      tester,
+      const RequestRejected('FootprintQuery', 'no connection to $_serverId'),
+    );
+
+    expect(find.textContaining('Checking'), findsNothing);
+    expect(find.textContaining('without a connection'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Check again'));
+    await tester.pump();
+    expect(page.engine.sentOfType<FootprintQuery>(), hasLength(2));
+    expect(find.textContaining('Checking'), findsOneWidget);
+  });
+
+  testWidgets('a second tap on Restore while the backup reads opens '
+      'nothing more', (tester) async {
+    final page = await _pump(tester);
+    await page.emit(
+      tester,
+      _state(
+        backups: [
+          FootprintBackup(
+            FootprintScope.user,
+            _entry(_hashA, 18),
+            FootprintBackupStatus.intact,
+          ),
+        ],
+      ),
+    );
+
+    await tester.tap(find.text('Restore…'));
+    await tester.pump();
+    await tester.tap(find.text('Restore…'));
+    await tester.pump();
+    expect(page.reads, hasLength(1));
+  });
+
   testWidgets('a host without a footprint says so', (tester) async {
     final page = await _pump(tester);
     await page.emit(
