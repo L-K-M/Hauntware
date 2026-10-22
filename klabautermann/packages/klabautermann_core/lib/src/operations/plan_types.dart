@@ -24,14 +24,18 @@ sealed class PlanStep {
 
 /// A shell command, [argv] quoted word by word into [commandLine] under
 /// the C locale, the line the login shell (or, when [elevated], the
-/// elevation prelude) runs.
+/// elevation prelude) runs. [input], an edit's new content, goes to the
+/// command's stdin (after the password line when elevated); the preview
+/// shows its size, not the text, which the app's diff shows.
 final class ShellStep extends PlanStep {
   ShellStep(
     Iterable<String> argv, {
     this.elevated = false,
     this.discardOutput = false,
+    List<int>? input,
     Map<int, RevalidationFailure> exitMeanings = const {},
   }) : argv = List.unmodifiable(argv),
+       input = input == null ? null : List.unmodifiable(input),
        exitMeanings = Map.unmodifiable(exitMeanings),
        commandLine =
            HostCommands.commandLine(List.of(argv), quote: quoteShellWord) +
@@ -39,6 +43,9 @@ final class ShellStep extends PlanStep {
 
   final List<String> argv;
   final String commandLine;
+
+  /// What the command reads on stdin, or null for nothing.
+  final List<int>? input;
 
   /// The step's output goes to `/dev/null`, so only its exit status is
   /// read: `config -q`'s errors can quote interpolated secrets (STK-06).
@@ -53,7 +60,12 @@ final class ShellStep extends PlanStep {
   final Map<int, RevalidationFailure> exitMeanings;
 
   @override
-  String get display => elevated ? 'sudo: $commandLine' : commandLine;
+  String get display {
+    final line = elevated ? 'sudo: $commandLine' : commandLine;
+    final bytes = input?.length;
+    if (bytes == null) return line;
+    return '$line < new content ($bytes ${bytes == 1 ? 'byte' : 'bytes'})';
+  }
 }
 
 const _discarded = ' >/dev/null 2>&1';
@@ -123,6 +135,19 @@ enum HostWriteRow {
 
   /// wtmp, lastlog and the auth log, from the SSH connection itself.
   loginRecords,
+
+  /// The edited file or crontab itself (v1, SAF-12).
+  editTarget,
+
+  /// `.<name>.klabautermann-tmp-<token>` beside the target, renamed over
+  /// it or removed (v1).
+  editTempFile,
+
+  /// `~/.local/state/klabautermann/backups/` and its index (v1).
+  userBackups,
+
+  /// `/var/lib/klabautermann/backups/`, root 0700, and its index (v1).
+  rootBackups,
 }
 
 /// How the steps reach their target.

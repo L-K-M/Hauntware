@@ -112,6 +112,19 @@ void main() {
           ),
         ),
         const CloseStream('stream-1'),
+        const ReadEditable(
+          serverId: 'srv-1',
+          requestId: 'e-1',
+          target: FileTarget('/etc/hosts'),
+        ),
+        const PlanAction(
+          EditFile(
+            'srv-1',
+            target: CrontabTarget(user: 'www-data'),
+            text: '* * * * * true\n',
+            baseSha256: 'abc',
+          ),
+        ),
         OpenLogStream(
           streamId: 'stream-3',
           spec: LogStreamSpec(
@@ -311,6 +324,23 @@ void main() {
           serverId: 'srv-1',
           queryId: 'q-1',
           payload: DockerImagesPayload([]),
+        ),
+        const EditRead(
+          serverId: 'srv-1',
+          requestId: 'e-1',
+          result: EditContent(
+            text: 'a=1\n',
+            sha256: 'abc',
+            privileged: true,
+            uid: 0,
+            gid: 0,
+            mode: 420,
+          ),
+        ),
+        const EditRead(
+          serverId: 'srv-1',
+          requestId: 'e-2',
+          result: EditReadFailed(EditReadFailure.adminRequired),
         ),
         HostResult(
           serverId: 'srv-1',

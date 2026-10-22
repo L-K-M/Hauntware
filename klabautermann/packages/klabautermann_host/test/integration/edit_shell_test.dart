@@ -251,6 +251,73 @@ void main() {
         );
       });
 
+      test(
+        'a crontab is swapped only while its hash holds, and backed up',
+        () async {
+          // A stand-in crontab keeping its table in a file: `-l` prints it
+          // or fails as an absent crontab does, `-` replaces it from stdin.
+          final table = '${dir.path}/crontab';
+          shim(
+            'crontab',
+            'f=${dir.path}/crontab; '
+                r'for a in "$@"; do case $a in '
+                r'-l) [ -f "$f" ] && exec cat "$f"; echo "no crontab" >&2; exit 1;; '
+                r'-) exec cat > "$f";; esac; done; exit 2',
+          );
+          String sha(String text) =>
+              (Process.runSync('sh', [
+                        '-c',
+                        'printf %s "\$1" | sha256sum',
+                        'sh',
+                        text,
+                      ]).stdout
+                      as String)
+                  .split(' ')
+                  .first;
+
+          final first = await run(
+            EditCommands.crontabWriteIfHash(sha('')),
+            stdin: '0 3 * * * a\n',
+          );
+          expect(first.exitCode, 0, reason: '${first.stderr}');
+          expect(File(table).readAsStringSync(), '0 3 * * * a\n');
+
+          final stale = await run(
+            EditCommands.crontabWriteIfHash(sha('')),
+            stdin: 'lost\n',
+          );
+          expect(stale.exitCode, EditExit.hashMismatch);
+          expect(File(table).readAsStringSync(), '0 3 * * * a\n');
+
+          final backups = '${dir.path}/state$kBackupsDirSuffix';
+          final backup = await run(
+            EditCommands.crontabBackup(backups, indexName: 'crontab:deploy'),
+          );
+          expect(backup.exitCode, 0, reason: '${backup.stderr}');
+          final copy = (backup.stdout as String).trim();
+          expect(File(copy).readAsStringSync(), '0 3 * * * a\n');
+          expect(
+            File('$backups/$kEditBackupIndexName').readAsStringSync(),
+            endsWith('\t${sha('0 3 * * * a\n')}\tcrontab:deploy\n'),
+          );
+
+          final next = await run(
+            EditCommands.crontabWriteIfHash(sha('0 3 * * * a\n')),
+            stdin: '0 4 * * * a\n',
+          );
+          expect(next.exitCode, 0, reason: '${next.stderr}');
+          expect(File(table).readAsStringSync(), '0 4 * * * a\n');
+        },
+      );
+
+      test('the user backup directory resolves under XDG_STATE_HOME', () async {
+        final resolved = await run(EditCommands.userBackupsDir());
+        expect(
+          (resolved.stdout as String).trim(),
+          endsWith('/.local/state/klabautermann/backups'),
+        );
+      });
+
       test('the manifest is written whole and verified by sha256sum', () async {
         final manifest = '${dir.path}/config/klabautermann/manifest.json';
         final write = await run(

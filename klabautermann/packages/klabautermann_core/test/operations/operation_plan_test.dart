@@ -193,6 +193,7 @@ void main() {
         OperationKind.stackServiceScale,
         OperationKind.removeContainer,
         OperationKind.removeUnusedImage,
+        OperationKind.editFile,
       };
       for (final kind in OperationKind.values) {
         expect(
