@@ -77,6 +77,24 @@ final class FakeSyncServer {
     _records[server.id] = sealed.withSeq(++_seq);
   }
 
+  /// Seals [data] as a `klabautermann:` record under [id] and seeds it.
+  Future<void> seedKlabautermann(
+    String id,
+    Map<String, Object?> data, {
+    int updatedAt = 1,
+  }) async {
+    final sealed = await RecordCrypto(RecordCodec(keys.vaultKey)).seal(
+      DecryptedRecord(
+        id: id,
+        kind: RecordKind.klabautermann,
+        updatedAt: updatedAt,
+        deviceId: 'klabautermann-device',
+        data: data,
+      ),
+    );
+    _records[id] = sealed.withSeq(++_seq);
+  }
+
   /// Seals [secret] as its `secret:` record under the account key and
   /// seeds it, stamped [updatedAt].
   Future<void> seedSecret(Secret secret, {int updatedAt = 1}) async {

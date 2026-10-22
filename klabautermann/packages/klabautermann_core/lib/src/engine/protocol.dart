@@ -198,6 +198,10 @@ import '../operations/plan_types.dart';
 /// (CTX-08): [ContainerExec] is planned as an action, and
 /// [ActionFinished] gained the [ExecOutput] it captured.
 ///
+/// Synced settings then joined v3 the same way (03 §4.8, M5 plan M04):
+/// [ServerPrefsChanged] carries a server's pulled `pref` record as
+/// [ServerPrefs], and [SyncStatus] gained [SyncStatus.prefixBudget].
+///
 /// The v1 log sources then joined v3 the same way (03 §7.6, LOG-06 to
 /// LOG-10): [JournalLogSource] gained `grep` and `boot`,
 /// [KernelLogSource] `boot`, [FileLogSource] `compressed`, and
@@ -868,6 +872,7 @@ final class SyncStatus extends EngineEvent {
     this.failure,
     this.passphraseUnverified = false,
     this.detail,
+    this.prefixBudget,
   });
 
   final SyncPhase phase;
@@ -887,6 +892,88 @@ final class SyncStatus extends EngineEvent {
 
   /// The failure behind [failure], for diagnostics only.
   final String? detail;
+
+  /// How much of the account the `klabautermann:` records take, after a
+  /// succeeded operation; null otherwise.
+  final SyncPrefixBudget? prefixBudget;
+}
+
+/// The account budget of the `klabautermann:` records (03 §4.8): at most
+/// [kSyncPrefixBudgetBytes] of sealed blobs, with a warning from
+/// [kSyncPrefixWarnFraction] of it (SYN-09's account size view).
+@immutable
+final class SyncPrefixBudget {
+  const SyncPrefixBudget(this.usedBytes);
+
+  /// The sealed blobs of every live `klabautermann:` record the account
+  /// holds, as this device last pulled them.
+  final int usedBytes;
+
+  /// Whether the records take [kSyncPrefixWarnFraction] of the budget or
+  /// more.
+  bool get warns =>
+      usedBytes >= kSyncPrefixBudgetBytes * kSyncPrefixWarnFraction;
+
+  /// Whether the records take the whole budget or more.
+  bool get full => usedBytes >= kSyncPrefixBudgetBytes;
+}
+
+/// The `klabautermann:` prefix's account budget [E] (03 §4.8).
+const int kSyncPrefixBudgetBytes = 1024 * 1024;
+
+/// The share of [kSyncPrefixBudgetBytes] from which the budget warns [E]
+/// (03 §4.8).
+const double kSyncPrefixWarnFraction = 0.8;
+
+/// One server's synced preferences, its `pref` record (03 §4.8, SYN-04).
+/// Every field defaults to what a server without a record has.
+@immutable
+final class ServerPrefs {
+  const ServerPrefs({
+    this.readOnly = false,
+    this.cadence,
+    this.pinnedUnits = const [],
+    this.pinnedContainers = const [],
+    this.marks = const {},
+    this.panelOrder = const [],
+    this.hostAuditLine = true,
+    this.stackScanDirs = const [],
+  });
+
+  /// The server's own read-only switch (SAF-06).
+  final bool readOnly;
+
+  /// The cadence preset chosen for the server; null leaves the device's.
+  final CadenceProfile? cadence;
+
+  /// Units and containers pinned to the top of their lists, by name.
+  final List<String> pinnedUnits, pinnedContainers;
+
+  /// Targets the user marked protected (SAF-22): unit, container and
+  /// stack names.
+  final Set<String> marks;
+
+  /// The server's panels in the user's order, by name; a panel it does
+  /// not name keeps its place after them.
+  final List<String> panelOrder;
+
+  /// Whether a run writes its syslog line on the host (SAF-13).
+  final bool hostAuditLine;
+
+  /// Absolute directories the stack scan looks in (STK-01).
+  final List<String> stackScanDirs;
+}
+
+/// The synced preferences of the fleet server [serverId] changed (03
+/// §4.8): a pulled `pref` record applied, was removed, or its server
+/// arrived or left. [prefs] is null when the server has no record, or a
+/// sealed removal dropped it, so the device's defaults apply. The engine
+/// sends every server's after [EngineReady] and then only changes.
+final class ServerPrefsChanged extends EngineEvent {
+  const ServerPrefsChanged(this.serverId, this.prefs);
+
+  final String serverId;
+  final ServerPrefs? prefs;
 }
 
 /// A sync changed the endpoint of the synced server [serverId], which was
