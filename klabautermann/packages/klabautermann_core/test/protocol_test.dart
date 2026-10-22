@@ -145,6 +145,29 @@ void main() {
           query: DockerContainersQuery(),
         ),
         const PlanAction(KillProcess('srv-1', pid: 42, startTicks: 9001)),
+        const PlanAction(
+          UnitAction(
+            'srv-1',
+            unit: 'syncthing.service',
+            verb: SystemctlVerb.mask,
+            scope: UnitScope.user,
+          ),
+        ),
+        const UnitQuery(
+          serverId: 'srv-1',
+          requestId: 'u-1',
+          query: UnitFileQuery('app.service'),
+        ),
+        const UnitQuery(
+          serverId: 'srv-1',
+          requestId: 'u-2',
+          query: UnitResourcesQuery('app.service', scope: UnitScope.user),
+        ),
+        const UnitQuery(
+          serverId: 'srv-1',
+          requestId: 'u-3',
+          query: SocketsQuery(),
+        ),
         const DockerWatch(
           serverId: 'srv-1',
           watchId: 'w-1',
@@ -449,6 +472,39 @@ void main() {
           'srv-1',
           unavailable: const CollectorUnavailable(
             CollectorUnavailableReason.timeout,
+          ),
+        ),
+        UnitQueryResult(
+          serverId: 'srv-1',
+          requestId: 'u-1',
+          payload: UnitFilePayload([
+            MaskedValue.plain('Environment='),
+            MaskedValue.secret('A=1'),
+          ]),
+        ),
+        UnitQueryResult(
+          serverId: 'srv-1',
+          requestId: 'u-2',
+          payload: const UnitResourcesPayload(UnitResources(tasks: 3)),
+          warnings: const ['w'],
+        ),
+        UnitQueryResult(
+          serverId: 'srv-1',
+          requestId: 'u-3',
+          payload: UnitSocketsPayload([
+            UnitSocket(
+              listen: '/run/docker.sock',
+              unit: 'docker.socket',
+              activates: ['docker.service'],
+            ),
+          ]),
+        ),
+        UnitQueryResult(
+          serverId: 'srv-1',
+          requestId: 'u-4',
+          payload: const UnitQueryFailed(
+            UnitQueryFailure.failed,
+            detail: 'boom',
           ),
         ),
         const ActionProgress(planId: 'plan-1', stepIndex: 1, stepCount: 3),

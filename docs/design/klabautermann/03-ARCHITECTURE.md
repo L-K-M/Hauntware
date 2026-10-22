@@ -3412,6 +3412,22 @@ a polkit refusal (`Interactive authentication required` or
 than as a failed step. Every unit action re-validates that the unit
 still loads, and only start reports no impact.
 
+As built in M5 (M22), `UnitAction` also takes enable, disable, mask,
+unmask and reset-failed (SVC-05, SVC-06), each tier 1, and tier 2 on a
+protected unit. Stop, restart, reload and mask name the impact; the
+others change only the next boot or start, or clear a failed state. A
+`UnitScope.user` action or `StartTimer` (SVC-09, JOB-08) addresses
+`systemctl --user` and runs as the login user even in admin mode. It
+sets `XDG_RUNTIME_DIR=/run/user/<uid>` where the probe found the
+session without one, and its re-validation reads the same manager. A
+user timer's run follows no journal unit, since the follow reads the
+system journal by unit. `UnitQuery` reads a unit's file (SVC-07), its
+resources (SVC-08) or the sockets (SVC-10), JSON from systemd 246,
+always as the login user. The file masks every `Environment=` value
+and the secrets of `Exec*=` lines, as process arguments are masked
+(8.9). A user manager without a session or linger answers
+`managerUnavailable`.
+
 As built in M4 (E21a), where actions are allowed the Services table's
 row menu and a unit's page offer Start, Stop, Restart and Reload; the
 table keeps no action slot otherwise, so its layout does not change.
