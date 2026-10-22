@@ -102,7 +102,9 @@ UnitQueryFailed _failure(RemoteCommandResult result) {
       stderr.contains('XDG_RUNTIME_DIR')) {
     return const UnitQueryFailed(UnitQueryFailure.managerUnavailable);
   }
-  if (stderr.contains('No files found') || stderr.contains('not found')) {
+  if (stderr.contains('No files found') ||
+      stderr.contains('could not be found') ||
+      stderr.contains('not found')) {
     return const UnitQueryFailed(UnitQueryFailure.notFound);
   }
   return UnitQueryFailed(
@@ -127,9 +129,24 @@ List<MaskedValue> maskUnitFile(String text) {
     plain.clear();
   }
 
+  // A line ending in a backslash continues its assignment on the next
+  // line (systemd.unit(5)), so a masked assignment's continuations are
+  // masked whole.
+  var continuesSecret = false;
   final lines = text.split('\n');
   for (final (index, line) in lines.indexed) {
     final last = index == lines.length - 1;
+    if (continuesSecret) {
+      continuesSecret = line.endsWith('\\');
+      if (line.isEmpty) {
+        plain.write(line);
+      } else {
+        flush();
+        spans.add(MaskedValue.secret(line));
+      }
+      if (!last) plain.write('\n');
+      continue;
+    }
     final environment = _environment.firstMatch(line);
     final exec = environment == null ? _exec.firstMatch(line) : null;
     final match = environment ?? exec;
@@ -149,6 +166,7 @@ List<MaskedValue> maskUnitFile(String text) {
           plain.write(value);
         }
       }
+      continuesSecret = value.endsWith('\\');
     }
     if (!last) plain.write('\n');
   }
