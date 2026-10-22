@@ -56,10 +56,13 @@ class TerminalGestureHandler extends StatefulWidget {
   /// selecting.
   final GestureLongPressEndCallback? onLongPressEnd;
 
-  /// [seance fork] Asked as every primary press goes down, with its local
-  /// position and multi-click count: true claims the press for opening a
-  /// link, and it is then not reported to a mouse-reporting remote.
-  final bool Function(Offset localPosition, int tapCount)? claimPressForLink;
+  /// [seance fork] Asked as every primary press goes down at the raw pointer
+  /// layer, with its event and multi-click count: true claims the press for
+  /// opening a link, and it is then not reported to a mouse-reporting remote.
+  /// Asked there, not from the tap recognizer, because a tap's down resolves
+  /// only at its deadline or acceptance — for a quick click that is mouse-up
+  /// time, too late to read the modifiers the press started with.
+  final bool Function(PointerDownEvent event, int tapCount)? claimPressForLink;
 
   final bool readOnly;
 
@@ -128,6 +131,7 @@ class _TerminalGestureHandlerState extends State<TerminalGestureHandler> {
       onTapUp: onTapUp,
       onSingleTapUp: onSingleTapUp,
       onTapDown: onTapDown,
+      onPrimaryPointerDown: onPrimaryPointerDown,
       onSecondaryTapDown: onSecondaryTapDown,
       onSecondaryTapUp: onSecondaryTapUp,
       // [seance fork] Upstream wired tertiary taps to the *secondary*
@@ -203,13 +207,21 @@ class _TerminalGestureHandlerState extends State<TerminalGestureHandler> {
   /// changes state mid-press — a remote that saw the down needs the up.
   bool _leftDownSentToTerminal = false;
 
+  /// [seance fork] Whether the press now on the ground opens a link instead
+  /// of reaching the remote, decided at pointer-down — see
+  /// [onPrimaryPointerDown].
+  bool _pressOpensLink = false;
+
+  /// [seance fork] Press-time decisions live here: this fires with the raw
+  /// pointer-down, before any recognizer resolves.
+  void onPrimaryPointerDown(PointerDownEvent event, int tapCount) {
+    _pressOpensLink = widget.claimPressForLink?.call(event, tapCount) ?? false;
+  }
+
   void onTapDown(TapDownDetails details, int tapCount) {
     // [seance fork] A press that opens a link is not reported: the remote
     // must see neither its down nor its up.
-    final opensLink =
-        widget.claimPressForLink?.call(details.localPosition, tapCount) ??
-            false;
-    _leftDownSentToTerminal = _shouldSendTapEvent && !opensLink;
+    _leftDownSentToTerminal = _shouldSendTapEvent && !_pressOpensLink;
     if (_leftDownSentToTerminal) {
       renderTerminal.mouseEvent(
         TerminalMouseButton.left,

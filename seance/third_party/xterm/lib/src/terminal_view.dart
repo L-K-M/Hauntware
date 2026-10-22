@@ -484,10 +484,9 @@ class TerminalViewState extends State<TerminalView> {
     final offset = renderTerminal.getCellOffset(
       renderTerminal.globalToLocal(position),
     );
-    _setHoveredLink(
-        _remoteOwnsTapAt(offset) && !_linkModifierOutranksRemote
-            ? null
-            : widget.terminal.buffer.getLinkAt(offset));
+    _setHoveredLink(_remoteOwnsTapAt(offset) && !_linkModifierOutranksRemote
+        ? null
+        : widget.terminal.buffer.getLinkAt(offset));
   }
 
   bool _remoteOwnsTapAt(CellOffset offset) =>
@@ -513,21 +512,38 @@ class TerminalViewState extends State<TerminalView> {
         !keys.isAltPressed;
   }
 
-  /// [seance fork] Decides, as a primary press goes down at [localPosition],
-  /// whether it opens a link instead of reaching a mouse-reporting remote.
-  /// The gesture handler asks before reporting the press, so a claimed press
-  /// reaches the remote neither down nor up, and the release honours the
-  /// same decision: Cmd pressed only after a reported press opens nothing,
-  /// and a claimed press opens its link even when the modifiers change
-  /// before its release.
-  bool _claimPressForLink(Offset localPosition, int tapCount) {
-    _pressOpensLink = widget.onLinkTap != null &&
-            tapCount == 1 &&
-            _linkModifierOutranksRemote
-        ? widget.terminal.buffer.getLinkAt(
-            renderTerminal.getCellOffset(localPosition),
-          )
-        : null;
+  /// [seance fork] Decides, as a primary press goes down at [press], whether
+  /// it opens a link instead of reaching a mouse-reporting remote. The
+  /// gesture handler asks at the raw pointer layer — before any recognizer
+  /// resolves, so the decision sees the modifiers the press started with —
+  /// and a claimed press reaches the remote neither down nor up. The release
+  /// then honours the same decision: Cmd pressed only after a reported press
+  /// opens nothing, and a claimed press opens its link even when the
+  /// modifiers change before its release. Without the capture a press the
+  /// remote never saw would be re-decided at mouse-up and vanish whenever
+  /// the modifiers drifted — and for a quick click the tap's own down only
+  /// resolves at mouse-up, so even its claim would come too late.
+  bool _claimPressForLink(PointerDownEvent press, int tapCount) {
+    // Every press re-decides: one that does not claim clears the claim, so
+    // no release can act on a stale one.
+    _pressOpensLink = null;
+
+    if (widget.onLinkTap == null || tapCount != 1) return false;
+
+    final keys = HardwareKeyboard.instance;
+    final linkGesture = press.kind == PointerDeviceKind.touch ||
+        (_isApplePlatform ? keys.isMetaPressed : keys.isControlPressed);
+    if (!linkGesture || keys.isShiftPressed || keys.isAltPressed) return false;
+
+    final offset = renderTerminal.getCellOffset(press.localPosition);
+    // Cmd outranks a mouse-reporting remote on Apple. Everywhere else a
+    // link modifier is reportable and a remote that owns the tap keeps it,
+    // but a press nobody owns (no mouse reporting, or the scrollback) has
+    // to decide here — its release must open the link whatever the
+    // modifiers do in between.
+    if (!_linkModifierOutranksRemote && _remoteOwnsTapAt(offset)) return false;
+
+    _pressOpensLink = widget.terminal.buffer.getLinkAt(offset);
     return _pressOpensLink != null;
   }
 
@@ -557,11 +573,13 @@ class TerminalViewState extends State<TerminalView> {
     final claimedLink = _pressOpensLink;
     _pressOpensLink = null;
     if (claimedLink != null) {
+      // Intentionally no re-validation at release: the press decided, and a
+      // link that scrolled away between the press and its release must not
+      // eat the click.
       widget.onLinkTap?.call(claimedLink);
     } else {
       final keys = HardwareKeyboard.instance;
-      final linkGesture =
-          details.kind == PointerDeviceKind.touch ||
+      final linkGesture = details.kind == PointerDeviceKind.touch ||
           (_isApplePlatform ? keys.isMetaPressed : keys.isControlPressed);
 
       // Click-only mouse reporting consumes DOWN but not UP. Keep that

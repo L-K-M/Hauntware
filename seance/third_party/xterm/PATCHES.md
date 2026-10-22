@@ -571,7 +571,12 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     entirely. The claimed link is captured at mouse-down, so a release
     shifted within tap slop cannot pick another cell. Only single clicks
     are claimed, so the later presses of a Cmd-multi-click still reach the
-    remote.
+    remote. The decision is taken at the raw pointer-down, not at the tap
+    recognizer's down (which resolves at its 100ms deadline or at
+    acceptance — mouse-up time for a quick click), and it covers every link
+    press the remote does not own on every platform: the Ctrl link modifier
+    elsewhere claims too when nobody reports taps, while a mouse-reporting
+    remote still keeps those clicks.
 
 ### App-layer notes (outside this package)
 
