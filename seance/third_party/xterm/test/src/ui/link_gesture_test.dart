@@ -136,6 +136,138 @@ void main() {
     });
   }
 
+  // Cmd has no bit in the mouse protocol, so a remote would only see a plain
+  // click: on Apple platforms a Cmd-click on a link opens it instead.
+  for (final mode in mouseReportingModes.entries) {
+    testWidgets('Cmd-click opens links under ${mode.key} mouse reporting',
+        (tester) async {
+      final terminal = Terminal();
+      final controller = TerminalController();
+      addTearDown(controller.dispose);
+      final opened = <Uri>[];
+      final point = await pumpTerminal(
+        tester,
+        terminal,
+        controller,
+        opened,
+        text: '${url.toString().padRight(30)}plain text',
+      );
+      terminal.write('${mode.value.$1}$sgrMouse');
+      final output = <String>[];
+      terminal.onOutput = output.add;
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.tapAt(point, kind: PointerDeviceKind.mouse);
+      await tester.pump(gestureTimeout);
+      expect(opened, [url]);
+      expect(output, isEmpty);
+
+      // Off a link, the remote keeps the Cmd-click.
+      final cellWidth = tester
+          .state<TerminalViewState>(find.byType(TerminalView))
+          .renderTerminal
+          .cellSize
+          .width;
+      await tester.tapAt(
+        point + Offset(cellWidth * 30, 0),
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pump(gestureTimeout);
+      expect(opened, [url]);
+      expect(output, hasLength(mode.value.$2));
+
+      // A plain click on the link stays the remote's.
+      output.clear();
+      await tester.tapAt(point, kind: PointerDeviceKind.mouse);
+      await tester.pump(gestureTimeout);
+      expect(opened, [url]);
+      expect(output, hasLength(mode.value.$2));
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+  }
+
+  testWidgets('Cmd pressed after a reported press leaves the link closed',
+      (tester) async {
+    final terminal = Terminal();
+    final controller = TerminalController();
+    addTearDown(controller.dispose);
+    final opened = <Uri>[];
+    final point = await pumpTerminal(tester, terminal, controller, opened);
+    // Click-only reporting consumes the press but passes its release on.
+    terminal.write('\x1b[?9h$sgrMouse');
+    final output = <String>[];
+    terminal.onOutput = output.add;
+
+    final press = await tester.startGesture(
+      point,
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump(kPressTimeout * 2);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await press.up();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pump(gestureTimeout);
+
+    expect(output, hasLength(1));
+    expect(opened, isEmpty);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('holding Cmd shows links the remote would otherwise own',
+      (tester) async {
+    final terminal = Terminal();
+    final controller = TerminalController();
+    addTearDown(controller.dispose);
+    final opened = <Uri>[];
+    final point = await pumpTerminal(tester, terminal, controller, opened);
+    terminal.write('\x1b[?1000h');
+    await tester.pump();
+    bool showsLink() => tester
+        .widgetList<MouseRegion>(find.byType(MouseRegion))
+        .any((region) => region.cursor == SystemMouseCursors.click);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+
+    await mouse.moveTo(point);
+    await tester.pump();
+    expect(showsLink(), isFalse);
+
+    // The pointer stays put: the hint follows Cmd alone.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pump();
+    expect(showsLink(), isTrue);
+
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pump();
+    expect(showsLink(), isFalse);
+    await mouse.removePointer();
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('a claimed press dragged away reports nothing', (tester) async {
+    final terminal = Terminal();
+    final controller = TerminalController();
+    addTearDown(controller.dispose);
+    final opened = <Uri>[];
+    final point = await pumpTerminal(tester, terminal, controller, opened);
+    terminal.write('\x1b[?1000h$sgrMouse');
+    final output = <String>[];
+    terminal.onOutput = output.add;
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    final press = await tester.startGesture(
+      point,
+      kind: PointerDeviceKind.mouse,
+    );
+    // Past the tap's deadline, so its press is claimed before the drag.
+    await tester.pump(kPressTimeout * 2);
+    await press.moveBy(const Offset(60, 0));
+    await press.up();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pump(gestureTimeout);
+
+    expect(output, isEmpty);
+    expect(opened, isEmpty);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
   for (final update in {
     'mouse reporting': '\x1b[?1000h',
     'rewritten output': '\r\x1b[2Kplain text',
