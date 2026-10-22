@@ -55,9 +55,24 @@ const List<String> kCommonLogPaths = [
   '/var/log/httpd/error_log',
 ];
 
-/// What the Logs panel reads: a [source] with LOG-01's journal filters and
-/// LOG-22's [path]. Empty text filters match everything; only the
-/// [source]'s own filters reach the engine.
+/// Turns LOG-05's search text into the pattern journalctl matches on the
+/// server (LOG-06, `-g`, PCRE2): plain text has its metacharacters
+/// escaped, and the pattern pins its case rule with `(?i)` or `(?-i)`,
+/// since journalctl otherwise ignores case for an all-lower-case pattern
+/// and matches it for any other.
+String serverLogPattern(
+  String query, {
+  required bool regex,
+  required bool caseSensitive,
+}) {
+  final pattern = regex ? query : RegExp.escape(query);
+  return caseSensitive ? '(?-i)$pattern' : '(?i)$pattern';
+}
+
+/// What the Logs panel reads: a [source] with LOG-01's journal filters,
+/// LOG-06's server-side [grep], LOG-09's [pastBoot] and LOG-22's [path].
+/// Empty text filters match everything; only the [source]'s own filters
+/// reach the engine.
 @immutable
 final class LogQuery {
   const LogQuery({
@@ -66,7 +81,9 @@ final class LogQuery {
     this.identifier = '',
     this.priority,
     this.currentBootOnly = false,
+    this.pastBoot,
     this.range = LogTimeRange.any,
+    this.grep = '',
     this.path = '',
   });
 
@@ -77,26 +94,64 @@ final class LogQuery {
   /// The least urgent priority shown, or null for every priority.
   final LogPriority? priority;
   final bool currentBootOnly;
+
+  /// A past boot picked by LOG-09's boot picker, read by the journal and
+  /// the kernel log by its ID; null reads every boot (or the current one,
+  /// with [currentBootOnly], and always for the kernel log).
+  final JournalBootEntry? pastBoot;
+
+  JournalBoot? get _boot => switch (pastBoot) {
+    final entry? => JournalBoot.id(entry.id),
+    null => null,
+  };
+
   final LogTimeRange range;
+
+  /// The pattern journalctl matches on the server (LOG-06), from
+  /// [serverLogPattern]; empty for none. Only the journal reads it.
+  final String grep;
+
   final String path;
 
   LogQuery withSource(LogSourceKind source) => _copy(source: source);
 
   LogQuery withPath(String path) => _copy(path: path);
 
-  LogQuery _copy({LogSourceKind? source, String? path}) => LogQuery(
-    source: source ?? this.source,
+  LogQuery withGrep(String grep) => _copy(grep: grep);
+
+  /// Every boot ([past] null, [current] false), the current one
+  /// ([current] true), or the [past] boot.
+  LogQuery withBoot(JournalBootEntry? past, {bool current = false}) => LogQuery(
+    source: source,
     unit: unit,
     identifier: identifier,
     priority: priority,
-    currentBootOnly: currentBootOnly,
+    currentBootOnly: past == null && current,
+    pastBoot: past,
     range: range,
-    path: path ?? this.path,
+    grep: grep,
+    path: path,
   );
+
+  LogQuery _copy({LogSourceKind? source, String? path, String? grep}) =>
+      LogQuery(
+        source: source ?? this.source,
+        unit: unit,
+        identifier: identifier,
+        priority: priority,
+        currentBootOnly: currentBootOnly,
+        pastBoot: pastBoot,
+        range: range,
+        grep: grep ?? this.grep,
+        path: path ?? this.path,
+      );
 
   /// Whether a stream can open: a file needs a path the engine accepts.
   bool get ready =>
       source != LogSourceKind.file || logPathProblem(path) == null;
+
+  /// Whether the source can be followed: a past boot only has a window.
+  bool get followable => source == LogSourceKind.file || pastBoot == null;
 
   /// The filters narrowing [source], for the phone's Filters button.
   int get filterCount => switch (source) {
@@ -104,7 +159,7 @@ final class LogQuery {
       unit.isNotEmpty,
       identifier.isNotEmpty,
       priority != null,
-      currentBootOnly,
+      currentBootOnly || pastBoot != null,
       range != LogTimeRange.any,
     ].where((set) => set).length,
     LogSourceKind.kernel => 0,
@@ -119,12 +174,14 @@ final class LogQuery {
       identifier: identifier.isEmpty ? null : identifier,
       priority: priority,
       currentBootOnly: currentBootOnly,
+      boot: _boot,
       since: switch (range.span) {
         final span? => now.subtract(span),
         null => null,
       },
+      grep: grep.isEmpty ? null : grep,
     ),
-    LogSourceKind.kernel => const KernelLogSource(),
+    LogSourceKind.kernel => KernelLogSource(boot: _boot),
     LogSourceKind.file => FileLogSource(path),
   };
 }

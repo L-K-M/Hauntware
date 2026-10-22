@@ -168,6 +168,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'leaveServer without openServer for $serverId'",
     // A subscription id the engine keys a surface's streams by (D45).
     r"'$surface-${_subscriptionCount++}'",
+    // A host query's id, which its HostResult answers by (LOG-08, LOG-09).
+    r"'host-${_nextHostQuery++}'",
   },
   // Services panel (SVC-01 to SVC-04, CN-10).
   'lib/controllers/log_reads.dart': {
@@ -467,9 +469,15 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The other users' table's key prefix, never shown.
     r"'${ServerPanel.jobs.name}.others'",
   },
+  'lib/ui/logs/logs_panel.dart': {
+    // The empty server pattern, which reads the whole journal again.
+    "''",
+  },
   'lib/ui/logs/log_query.dart': {
-    // The path rule's separators and dot parts (03 §8.8), and the empty
-    // defaults of the text filters.
+    // PCRE2's inline flags that pin journalctl's case rule (LOG-06):
+    // sent to the server, shown only as the pattern sent.
+    r"'(?-i)$pattern'",
+    r"'(?i)$pattern'",
     "'/'",
     "'..'",
     "'/.'",
