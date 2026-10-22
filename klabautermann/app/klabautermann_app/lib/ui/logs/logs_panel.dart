@@ -101,9 +101,11 @@ _StatusWord? _statusWord(LogsPanelController panel) {
       LogStreamEndReason.missing => _StatusWord.missing,
       LogStreamEndReason.denied => _StatusWord.denied,
       // Only a container's logs end for their driver, and their view
-      // names it in place of this status (ContainerLogsView).
+      // names it in place of this status (ContainerLogsView). No view
+      // sends a journal pattern before LOG-06's search box (M27b).
       LogStreamEndReason.failed ||
-      LogStreamEndReason.logDriverUnreadable => _StatusWord.failed,
+      LogStreamEndReason.logDriverUnreadable ||
+      LogStreamEndReason.searchUnsupported => _StatusWord.failed,
       LogStreamEndReason.windowFilled ||
       LogStreamEndReason.oldestReached ||
       LogStreamEndReason.closed => null,
