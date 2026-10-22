@@ -325,6 +325,112 @@ void main() {
     });
   });
 
+  group('one-off commands (CTX-08)', () {
+    late _Engine engine;
+    setUp(() => engine = _Engine()..containers.add(_container('web-1')));
+
+    String webId() => '${engine.containers.single['Id']}';
+
+    test('a command is one exec step the preview shows as the request, '
+        'acknowledged and re-validated', () async {
+      final plan = _planned(
+        await _plan(
+          ContainerExec(
+            _server,
+            containerId: 'web-1',
+            argv: const ['sh', '-c', 'ls /srv'],
+            user: 'app',
+          ),
+          engine,
+        ),
+      );
+      expect(plan.kind, OperationKind.containerExec);
+      expect(plan.targetName, 'web-1');
+      expect(plan.tier, ConfirmationTier.acknowledge);
+      final step = plan.steps.single as ExecStep;
+      expect(step.containerId, webId());
+      expect(step.argv, ['sh', '-c', 'ls /srv']);
+      expect(
+        step.display,
+        'POST /v1.52/containers/${webId()}/exec '
+        '{"Cmd":["sh","-c","ls /srv"],"User":"app","Tty":false}',
+      );
+      expect(identical(plan.preview.steps, plan.steps), isTrue);
+      expect(plan.danger, isEmpty);
+      final check = plan.revalidate.single as DockerTargetUnchanged;
+      expect(check.id, webId());
+    });
+
+    test('the linter reads the argv', () async {
+      final plan = _planned(
+        await _plan(
+          ContainerExec(
+            _server,
+            containerId: 'web-1',
+            argv: const ['rm', '-rf', '/'],
+          ),
+          engine,
+        ),
+      );
+      expect(plan.danger, isNotEmpty);
+    });
+
+    test(
+      'a protected or managed container needs the typed confirmation',
+      () async {
+        engine.containers
+          ..clear()
+          ..add(_container('web-1', labels: {'coolify.managed': 'true'}));
+        final managed = _planned(
+          await _plan(
+            ContainerExec(_server, containerId: 'web-1', argv: const ['id']),
+            engine,
+          ),
+        );
+        expect(managed.tier, ConfirmationTier.typedPhrase);
+      },
+    );
+
+    test('refuses an empty command or user, a stopped container and a gone '
+        'one', () async {
+      Future<ActionRefusalReason?> refusal(ContainerExec intent) async =>
+          (await _plan(intent, engine)).refusal;
+
+      expect(
+        await refusal(
+          ContainerExec(_server, containerId: 'web-1', argv: const []),
+        ),
+        ActionRefusalReason.invalidTarget,
+      );
+      expect(
+        await refusal(
+          ContainerExec(
+            _server,
+            containerId: 'web-1',
+            argv: const ['id'],
+            user: '',
+          ),
+        ),
+        ActionRefusalReason.invalidTarget,
+      );
+      expect(
+        await refusal(
+          ContainerExec(_server, containerId: 'nope', argv: const ['id']),
+        ),
+        ActionRefusalReason.targetChanged,
+      );
+      engine.containers
+        ..clear()
+        ..add(_container('web-1', state: 'exited'));
+      expect(
+        await refusal(
+          ContainerExec(_server, containerId: 'web-1', argv: const ['id']),
+        ),
+        ActionRefusalReason.invalidTarget,
+      );
+    });
+  });
+
   group('images (IMG-02)', () {
     final imageId = 'sha256:${_id('feed')}';
 

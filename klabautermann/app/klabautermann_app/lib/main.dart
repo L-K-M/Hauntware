@@ -20,6 +20,7 @@ import 'controllers/monitoring_controller.dart';
 import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
 import 'controllers/sync_controller.dart';
+import 'controllers/sync_secrets_controller.dart';
 import 'services/app_version.dart';
 import 'services/engine_keystore.dart';
 import 'services/instance_guard.dart';
@@ -228,6 +229,21 @@ Future<void> main(List<String> args) async {
         serverId,
   );
 
+  // The "sync passwords" switch (SYN-02), device-local in settings.json
+  // and applied to the engine now, since it starts with the switch off.
+  final syncSecrets = SyncSecretsController(
+    syncSecrets: settings.syncSecrets,
+    apply: (enabled) {
+      try {
+        engine.send(SetSyncSecrets(enabled: enabled));
+      } on StateError {
+        // A stopped engine syncs nothing; the next one gets the switch at
+        // its spawn.
+      }
+    },
+    save: settings.setSyncSecrets,
+  );
+
   // SAF-08's notice heads the Docker tab until dismissed on this device,
   // which settings.json keeps (03 §8.4).
   final dockerNotice = DockerNoticeController(
@@ -247,6 +263,7 @@ Future<void> main(List<String> args) async {
     appVersion: appVersion,
     monitorSet: fleet.monitorSettings,
     safety: safety,
+    syncSecrets: syncSecrets,
   );
 
   runApp(
@@ -258,6 +275,7 @@ Future<void> main(List<String> args) async {
       coverage: coverage,
       announcements: announcements,
       safety: safety,
+      syncSecrets: syncSecrets,
       admin: admin,
       operations: operations,
       dockerNotice: dockerNotice,
