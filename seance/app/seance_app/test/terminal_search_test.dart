@@ -141,12 +141,18 @@ void main() {
     late TerminalController controller;
     late _FakeViewport viewport;
 
+    // These tests read the hits right after search(), so each scan must
+    // finish in one slice. The 4 ms default can run out on a loaded CI
+    // runner; TerminalBufferScan's own tests cover the pausing.
+    const wholeScan = Duration(days: 1);
+
     TerminalSearchSession session() {
       final session = TerminalSearchSession(
         terminal: terminal,
         controller: controller,
         viewport: viewport,
         theme: TerminalThemes.defaultTheme,
+        sliceBudget: wholeScan,
       );
       addTearDown(session.dispose);
       return session;
@@ -211,6 +217,7 @@ void main() {
         controller: controller,
         viewport: viewport,
         theme: TerminalThemes.defaultTheme,
+        sliceBudget: wholeScan,
       )..search('row');
       expect(controller.highlights, isNotEmpty);
       search.dispose();

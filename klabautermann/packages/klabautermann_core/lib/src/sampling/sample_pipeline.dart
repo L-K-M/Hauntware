@@ -287,11 +287,13 @@ final class ServerSamplePipeline {
               identical(s, reply.sections.first) ? reply.uptimeSeconds : null,
               _bootedAt(reply.uptimeSeconds, at),
             ),
-            SampleStream.units => UnitsResult(parseUnits(text(s), ctx).value),
+            SampleStream.units || SampleStream.userUnits => UnitsResult(
+              parseUnits(text(s), ctx).value,
+            ),
             SampleStream.failedUnits => FailedUnitsResult(
               parseUnits(text(s), ctx).value.failed,
             ),
-            SampleStream.timers => TimersResult(
+            SampleStream.timers || SampleStream.userTimers => TimersResult(
               parseTimers(text(s), ctx).value,
             ),
             SampleStream.cron => cronResult(

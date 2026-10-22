@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/catalog/engine_sync.dart';
 import 'package:klabautermann_core/src/catalog/engine_vault.dart';
+import 'package:klabautermann_core/src/catalog/klabautermann_records.dart';
 import 'package:seance_core/catalog.dart'
     show FileVaultStore, InMemoryConflictAwareHostKeyStore;
 import 'package:seance_core/seance_core.dart'
@@ -273,6 +275,46 @@ void main() {
     });
   });
 
+  test('a save asked for during a round waits for it, so a pulled secret '
+      'and a typed one never interleave on the vault file', () async {
+    final sync = await open();
+    await sync.setSyncSecrets(enabled: true);
+    await sync.enroll(_enroll);
+    await server.seedServer(
+      fakeServer(
+        'srv-a',
+        'alpha',
+      ).copyWith(secretRef: 'secret-a', syncSecret: true),
+    );
+    await server.seedSecret(
+      const Secret(
+        id: 'secret-a',
+        kind: SecretKind.password,
+        value: 'from-seance',
+      ),
+      updatedAt: 1,
+    );
+
+    // The save is asked for while the round waits on its pull, inside
+    // the round's turn on the vault.
+    final order = <String>[];
+    final gate = server.pullGate = Completer<void>();
+    final held = server.pullHeld = Completer<void>();
+    final round = sync.runRound().then((_) => order.add('round'));
+    await held.future;
+    final saving = vault
+        .save(Secret(id: 'secret-b', kind: SecretKind.password, value: 'typed'))
+        .then((_) => order.add('save'));
+    await pumpEventQueue();
+    expect(order, isEmpty);
+    gate.complete();
+    await Future.wait([round, saving]);
+
+    expect(order, ['round', 'save']);
+    expect((await vault.read('secret-a'))?.value, 'from-seance');
+    expect((await vault.read('secret-b'))?.value, 'typed');
+  });
+
   group('rounds (03 §4.4, D14)', () {
     test('a round applies what changed and pushes nothing', () async {
       await server.seedServer(fakeServer('srv-a', 'alpha'));
@@ -289,6 +331,38 @@ void main() {
         ['alpha', 'bravo'],
       );
       expect(server.pushes, 0);
+    });
+
+    test('a pulled pref shows for its server once the server is in the '
+        'catalog, and the status carries the prefix budget', () async {
+      await server.seedKlabautermann(
+        KlabautermannRecordType.pref.idOf('srv-b'),
+        encodeServerPrefs('srv-b', const ServerPrefs(readOnly: true)),
+      );
+      await server.seedServer(fakeServer('srv-a', 'alpha'));
+      final sync = await open();
+
+      final enrolled = await sync.enroll(_enroll);
+      expect(enrolled.phase, SyncPhase.succeeded, reason: enrolled.detail);
+      // srv-b is absent: its pref waits.
+      expect(await sync.serverPrefs(), isEmpty);
+      expect(enrolled.prefixBudget?.usedBytes, greaterThan(0));
+      expect(enrolled.prefixBudget?.warns, isFalse);
+
+      await server.seedServer(fakeServer('srv-b', 'bravo'));
+      final round = await sync.runRound();
+      expect(round.phase, SyncPhase.succeeded, reason: round.detail);
+      expect((await sync.serverPrefs())['srv-b']?.readOnly, isTrue);
+      expect(file(klabautermannRecordsFileName).existsSync(), isTrue);
+
+      await server.seedKlabautermann(
+        KlabautermannRecordType.pref.idOf('srv-b'),
+        removedPayload(KlabautermannRecordType.pref.idOf('srv-b')),
+        updatedAt: 2,
+      );
+      final removal = await sync.runRound();
+      expect(removal.phase, SyncPhase.succeeded, reason: removal.detail);
+      expect(await sync.serverPrefs(), isEmpty);
     });
 
     test('a session the server rejects fails the round', () async {

@@ -2308,6 +2308,27 @@ list says so. The `sender` and `alertstatus` records of a server are
 removed with sealed `removed` records when alerting is removed for that
 server.
 
+As built in M5 (M04): the engine's coordinator applies `pref` and `rule`
+records through `klabautermann_core`'s `KlabautermannRecordHandler` into
+`klabautermann_records.json` (4.10), still pull-only. A payload's `id`
+is the whole record id and its `type` the id's second segment. A `pref`
+holds `readOnly`, `cadence` (a 6.4 column), `pinnedUnits`,
+`pinnedContainers`, `protectedTargets`, `panelOrder`, `hostAuditLine`
+and `stackScanDirs` (absolute paths); a cadence this build does not know
+leaves the device's. A `rule` holds the rule model's fields (7.19) under
+their model names, so `evalScope` reads `client` for this device, plus a
+`target` (the server id or group name a `server` or `group` scope names).
+A record over its blob or count cap, of another kind, or whose `id` or
+`type` disagrees with its envelope trips and is skipped; a `v` above 1 is
+kept like an unknown type. The handler applies in the coordinator's last
+phase, so an excluded server is judged against the round's final server
+set, and it never opens records for the passphrase trial, since the v1.x
+`sudo` and `registry` types carry credentials. The engine sends each
+server's preferences as `ServerPrefsChanged` after its fleet, then only
+changes, a null for a removal, and every succeeded sync status carries
+the prefix budget. Retracting an excluded server's `pref` is written but
+refused until pushes are on (M05).
+
 ### 4.9 What never syncs
 
 Metrics, history, logs, inspect output, `docker compose config` output,
@@ -2337,6 +2358,7 @@ platform identities in 04, section 12.3):
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
 | `capabilities/<name>.json` | Cached probe results, 24 h TTL; named, written only by a process that holds the directory alone, and purged as D59 decides | `klabautermann_core` | MVP |
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
+| `klabautermann_records.json` [E] | The `klabautermann:` records the coordinator applied (4.8, M5, M04): per record id, the `(updatedAt, deviceId)` it won with and its sealed payload, sealed removals, unknown types and newer versions included, so the tuple guard holds across restarts and §3.1's recovery re-seals them verbatim. A `pref` whose server is absent waits here. Kept like the sync state files. Never pushed while sync is pull-only | `klabautermann_core` | v1 |
 | `operations_shown.json` [E] | Detached operations this device remembers (M4, E17b, 7.17): per server and operation id, the operation's directory, whether its result was shown and audited here, and, for one this device launched, the audit record's facts (action, target, redacted steps, tier, start). An entry goes once the operation's files are gone. Kept like the sync state files: written only with exclusive access, a damaged file set aside; losing it costs a result's launch facts and the reminder of a root cleanup, which the 7-day prune covers. Never synced | `klabautermann_core` | MVP |
 | `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample) | `klabautermann_core` | v1 |
 | `alerts.jsonl` | In-app alert history, 30 days [E]; from v1.x also host alerts fetched from the inbox or read from a host spool, with source tier, server item ids and status (D42) | `klabautermann_core` | v1 |
@@ -3390,6 +3412,38 @@ a polkit refusal (`Interactive authentication required` or
 than as a failed step. Every unit action re-validates that the unit
 still loads, and only start reports no impact.
 
+As built in M5 (M22), `UnitAction` also takes enable, disable, mask,
+unmask and reset-failed (SVC-05, SVC-06), each tier 1, and tier 2 on a
+protected unit. Stop, restart, reload and mask name the impact; the
+others change only the next boot or start, or clear a failed state. A
+`UnitScope.user` action or `StartTimer` (SVC-09, JOB-08) addresses
+`systemctl --user` and runs as the login user even in admin mode. It
+sets `XDG_RUNTIME_DIR=/run/user/<uid>` where the probe found the
+session without one, and its re-validation reads the same manager. A
+user timer's run follows no journal unit, since the follow reads the
+system journal by unit. `UnitQuery` reads a unit's file (SVC-07), its
+resources (SVC-08) or the sockets (SVC-10), JSON from systemd 246,
+always as the login user. The file masks every `Environment=` value
+and the secrets of `Exec*=` lines, as process arguments are masked
+(8.9). A user manager without a session or linger answers
+`managerUnavailable`.
+
+The unit page (plan M27a) offers the v1 verbs behind "More", on the
+page and in the row menu. Its name row opens the unit file read-only in
+Planchette's editor, masked, with a timed reveal as the stack file view
+has. Its states line also carries the unit's resources, read when the
+page opens and again when its active or sub state changes. The "Yours"
+switch for user units and the per-type tabs follow in a later change.
+
+The slow sampler's `user_units` and `user_timers` collectors (collector
+set version 9) read `systemctl --user list-units` and `list-timers` in
+the system collectors' block shapes, crossing as the `userUnits` and
+`userTimers` streams with the `units` and `timers` cadences. Where the
+session has no `XDG_RUNTIME_DIR` they set systemd's own
+`/run/user/<uid>` first. Without a user session or linger the bus is
+missing and the section reports an error. The capture tool records no
+fixture for them, since a capture container has no login session.
+
 As built in M4 (E21a), where actions are allowed the Services table's
 row menu and a unit's page offer Start, Stop, Restart and Reload; the
 table keeps no action slot otherwise, so its layout does not change.
@@ -3589,6 +3643,13 @@ answers each open with a `LogStreamState` before it returns, and
   prelude for other users, whose stdin handling 8.3 verifies); pause with a
   marker comment; managed-crontab detection; run a cron command now (JOB-19:
   `sh -c` as the job user, danger-linted, detached when long).
+- **As built in M5 (M24, first part).** `JobHistoryQuery` reads
+  anacron's table with each job's stamp (JOB-04), a timer's last trigger
+  with its service's result, and the job starts cron logged (JOB-05).
+  Each runs as the login user, or through admin mode when it is on,
+  which a journal the login user cannot read needs. Commands cross
+  masked, as the cron rows' do. A host without `/etc/anacrontab`
+  answers `notInstalled`.
 - **v1.x.** Timer creator, output capture, dead-man pings (T1, +E), missed
   runs, fleet jobs overview.
 
@@ -4137,7 +4198,9 @@ each server's operations. Decisions:
 
 - The slow sampler reads `ops` once on each link, right after the probe,
   and again when the engine asks: after a launch, and every 15 s [E]
-  while an operation runs. Each read becomes an `OperationsChanged` with
+  while an operation runs or one this device launched within the last
+  minute [E] is not listed yet, since its wrapper writes the record only
+  after the launch returns. Each read becomes an `OperationsChanged` with
   the server's full list and how far each directory was read, or the
   collector's failure.
 - A running record is checked by its wrapper's PID and start ticks with

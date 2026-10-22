@@ -10,6 +10,7 @@ const _appearanceKey = 'klabautermann.appearance';
 const _firstRunCardKey = 'klabautermann.coverage.firstRunCardDismissed';
 const _rootNoticeKey = 'klabautermann.docker.rootEquivalenceNoticeDismissed';
 const _announceBandsKey = 'klabautermann.accessibility.announceThresholdBands';
+const _syncSecretsKey = 'klabautermann.sync.secrets';
 const _overridesKey = 'klabautermann.docker.endpointOverrides';
 const _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
 const _monitorSetKey = 'klabautermann.monitorSet';
@@ -385,6 +386,33 @@ void main() {
         expect(store.dockerEndpointOverrides, isEmpty);
         expect(file.readAsStringSync(), before);
       });
+    });
+
+    test('syncs no passwords until turned on, across reloads', () async {
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.syncSecrets, isFalse);
+      await store.setSyncSecrets(true);
+      final reopened = await DeviceSettingsStore.open(file);
+
+      expect(reopened.syncSecrets, isTrue);
+      expect(document(), {
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _syncSecretsKey: true,
+      });
+
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _syncSecretsKey: 'yes',
+      });
+      expect(
+        (await DeviceSettingsStore.open(file)).syncSecrets,
+        isFalse,
+        reason: 'a damaged value syncs nothing',
+      );
     });
 
     test(
