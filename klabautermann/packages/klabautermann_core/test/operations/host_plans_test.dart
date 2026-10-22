@@ -487,6 +487,29 @@ void main() {
       expect(stepOf(planned).argv.take(3), ['runuser', '-u', 'alice']);
     });
 
+    test("the login user's crontab, listed by name, is read without -u, "
+        'which cronie refuses anyone but root', () async {
+      // Admin mode lists every spooled crontab by name, the login user's
+      // too; reading it as that user must not pass -u.
+      const line = '0 * * * * /home/deploy/bin/sync';
+      final link = _Link({
+        '-u': const RemoteCommandResult(
+          exitCode: 1,
+          stderr: 'must be privileged to use -u\n',
+        ),
+        'crontab': _out('$line\n'),
+      });
+      final attempt = await planHostAction(
+        RunCronJob(_server, source: userCrontabSource('deploy'), raw: line),
+        _context(link),
+      );
+
+      expect(attempt.refusal, isNull);
+      expect(link.commands.single, isNot(contains('-u')));
+      expect(stepOf(attempt).elevated, isFalse);
+      expect(stepOf(attempt).argv, ['sh', '-c', '/home/deploy/bin/sync']);
+    });
+
     test('the run reports what the command printed, masked, and a failed '
         "one's exit status with it", () async {
       const line = '0 3 * * * /usr/local/bin/report';

@@ -368,6 +368,19 @@ void main() {
     ]);
   });
 
+  test('captured output is redacted before it is capped, so a secret '
+      'the cap cuts leaves no fragment', () {
+    final token = 'ghp_${'a' * 36}';
+    // The cap falls ten characters into the token.
+    final stdout = '${'x' * (kExecOutputMax - 11)} $token\n';
+
+    final kept = capturedOutput(stdout, '');
+
+    expect(kept.truncated, isTrue);
+    expect(kept.stdout.length, lessThanOrEqualTo(kExecOutputMax));
+    expect(kept.stdout, isNot(contains('ghp_')));
+  });
+
   test('API steps need the Docker runner and a 2xx answer', () async {
     final link = _Link((_, _) => _ok);
     final plan = _plan([

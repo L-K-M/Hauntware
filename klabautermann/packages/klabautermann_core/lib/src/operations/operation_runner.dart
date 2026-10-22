@@ -375,16 +375,23 @@ final _redactor = SecretRedactor();
 
 /// A captured step's output as [ActionFinished.output] carries it (JOB-19):
 /// redacted as the audit log redacts, and at most [kExecOutputMax]
-/// characters in all, stdout first.
+/// characters in all, stdout first. Redaction comes first: a secret the
+/// cap cut would no longer match its pattern and leave a fragment.
 ExecOutput capturedOutput(String stdout, String stderr) {
-  final keptOut = stdout.length > kExecOutputMax
-      ? stdout.substring(0, kExecOutputMax)
-      : stdout;
+  final redactedOut = _redactor.redact(stdout);
+  final redactedErr = _redactor.redact(stderr);
+  final keptOut = redactedOut.length > kExecOutputMax
+      ? redactedOut.substring(0, kExecOutputMax)
+      : redactedOut;
   final room = kExecOutputMax - keptOut.length;
-  final keptErr = stderr.length > room ? stderr.substring(0, room) : stderr;
+  final keptErr = redactedErr.length > room
+      ? redactedErr.substring(0, room)
+      : redactedErr;
   return ExecOutput(
-    stdout: _redactor.redact(keptOut),
-    stderr: _redactor.redact(keptErr),
-    truncated: keptOut.length < stdout.length || keptErr.length < stderr.length,
+    stdout: keptOut,
+    stderr: keptErr,
+    truncated:
+        keptOut.length < redactedOut.length ||
+        keptErr.length < redactedErr.length,
   );
 }

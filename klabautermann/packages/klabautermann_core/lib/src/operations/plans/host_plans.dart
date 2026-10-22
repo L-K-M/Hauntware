@@ -243,7 +243,11 @@ Future<PlanAttempt> _planCronRun(
     if (userCrontabSource(owner) != source) {
       return _refused(ActionRefusalReason.invalidTarget);
     }
-    read = HostCommands.crontabList(owner);
+    // The login user's own crontab, listed by name in admin mode, reads
+    // without -u: cronie refuses -u to anyone but root.
+    read = owner == login
+        ? const ['crontab', '-l']
+        : HostCommands.crontabList(owner);
     system = false;
   } else if (source == '/etc/crontab' || _cronDFile.hasMatch(source)) {
     read = ['cat', '--', source];
