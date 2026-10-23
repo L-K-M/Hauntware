@@ -19,7 +19,11 @@
 # user installation on the runner's tool cache — the durable volume the
 # Flutter toolchain and pub cache already use — so one download serves
 # every later job on that runner instead of one per job. A local build
-# has no tool cache and keeps flatpak's own default.
+# has no tool cache and keeps flatpak's own default. The directory needs
+# no lock: it is one per runner, and a runner executes one job at a time,
+# so no two jobs ever write the same installation. The ci.yml
+# flatpak-runtime-download concurrency group serializes the downloads
+# for the shared uplink, not to protect this directory.
 if [[ -z "${FLATPAK_USER_DIR:-}" && -n "${RUNNER_TOOL_CACHE:-}" ]]; then
   export FLATPAK_USER_DIR="$RUNNER_TOOL_CACHE/flatpak-user"
 fi
