@@ -4971,6 +4971,17 @@ N" (tier 1, N = 5 by default) and removing every backup of one file
 while it still hashes to what planning read. Rows for v1.x writes join
 the manifest with those writes.
 
+The footprint view (plan M18) is the server Safety menu's Footprint
+page. It asks for a fresh `FootprintState` when it opens and lists each
+scope's rows and backups by file, with each backup's time, short hash
+and state. Root's part offers the admin-mode button until admin mode
+reads it. "Keep last 5", "Remove all backups" and "Restore…" are action
+entries, hidden where actions are not allowed. A restore reads the
+backup through the edit read and checks it against the hash its index
+records. It then opens the file's editor with the backup as the
+unsaved text, so a restore is an ordinary reviewed edit. Only an
+unchanged backup restores.
+
 ### 8.12 Threat model
 
 | Adversary or failure | Could | Mitigation |

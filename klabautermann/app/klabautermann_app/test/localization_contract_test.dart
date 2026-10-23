@@ -95,6 +95,17 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'a preview is already pending'",
     // An edit read's request id, never shown.
     r"'edit-${_nextEditRead++}'",
+    // The rejected request's class name, which RequestRejected carries,
+    // and the server id its reason ends with; never shown.
+    r"'$FootprintQuery'",
+    r"' $id'",
+  },
+  'lib/ui/footprint_page.dart': {
+    // The index's source prefix for a crontab's backups (03 §8.11), which
+    // the page strips before it shows the account.
+    "'crontab:'",
+    // A backup's path in its directory, which only the read takes.
+    r"'$directory/${entry.name}'",
   },
   'lib/ui/edit/remote_editor.dart': {
     // A crontab's highlighting and validation key, never shown.
