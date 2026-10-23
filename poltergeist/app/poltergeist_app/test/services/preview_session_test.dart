@@ -81,6 +81,9 @@ void main() {
       h.session.previewFocused();
       await untilPhase(h.session, PreviewPhase.producing);
       h.session.previewFocused();
+      // The phase flips before the producer receives its spec; wait for
+      // the one production, then give a duplicate time to show.
+      await untilTrue(() => h.producer.specs.isNotEmpty);
       await previewSettle();
       expect(h.session.phase, PreviewPhase.producing);
       expect(h.producer.specs, hasLength(1));

@@ -3410,7 +3410,8 @@ through the elevation executor. Outside it the step runs unelevated, and
 a polkit refusal (`Interactive authentication required` or
 `Access denied` on stderr) ends the run as needing admin mode rather
 than as a failed step. Every unit action re-validates that the unit
-still loads, and only start reports no impact.
+still loads or is masked, so that unmask can run, and only start
+reports no impact.
 
 As built in M5 (M22), `UnitAction` also takes enable, disable, mask,
 unmask and reset-failed (SVC-05, SVC-06), each tier 1, and tier 2 on a
@@ -7260,6 +7261,22 @@ account's crontab is replaced through `crontab -u <user> -` and backed
 up as root. Each test seeds its own files and removes them, the root
 backups and the manifest; runner_vm.sh removes them too on every exit,
 and installs `acl` or `attr` where `setfacl` or `setfattr` is missing.
+
+As built in M5 (M28), `klabautermann_core/test/integration/
+runner_vm_v1_test.dart` (tag `runner-vm`) runs the v1 host rows. A
+seeded system unit is enabled, disabled, masked, unmasked and, once
+failed, reset through elevation, and disabling or masking `ssh.service`
+asks for its typed name. The linger account starts its own service and
+runs its own timer through `systemctl --user`, unelevated. A unit's
+file and resources read as the login user. The journal lists the
+current boot, last at offset 0, and a `-g` search returns only the
+record it names. A rotated `.gz` under `/var/log` is listed as gzip and
+read through `zcat`. Anacron's jobs match `/etc/anacrontab` where the
+image has one, and its absence reads as not installed otherwise. A cron
+line is run now: the login user's own over the link, and another
+account's through elevation as that account. Each test seeds what it
+acts on and removes it; runner_vm.sh removes the system unit and the
+rotated log on every exit.
 
 As built in M3 (D10), the Docker host's image
 (`klabautermann/test/integration/sshd/Dockerfile.docker`) builds `FROM`
