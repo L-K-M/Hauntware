@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Séance can open a terminal from a `seance://connect` link sent by
+  Poltergeist or Klabautermann. A link names one of your saved servers
+  and, optionally, a folder to start in; Séance never creates a server
+  from a link, and a link with any other parameter, a command included,
+  is refused whole. Every link is reviewed first: the review shows the
+  server as you saved it, the starting folder with hidden characters
+  removed, and Connect or Cancel. With a folder, Séance opens a new tab
+  and types the `cd` at the first prompt without pressing Enter, which
+  needs shell integration; otherwise it says so and offers to copy the
+  path. Up to 16 links wait behind the one under review, and the review
+  says how many more were ignored. The operating systems learn the
+  scheme in a following release.
 - A double-click in the Files pane opens its row even while the machine
   is busy. The pane timed the two presses against the wall clock as it
   handled them, so a stalled moment in between lost the double-click and
