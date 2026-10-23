@@ -14,13 +14,6 @@
 #   $work/stage  ->  flatpak_build: flatpak-builder, then the smoke check
 #                    inside the built sandbox
 
-# The smoke check run inside the built sandbox, as `sh -c` with $1 the
-# manifest's command and $2 the prefix (/app). The command is the .deb's
-# wrapper script, so the check follows its exec line to the real binary:
-# the binary must exist after the /usr -> /app remap, and every library it
-# links must resolve. ldd on the wrapper itself proves nothing — it is not
-# an ELF.
-# shellcheck disable=SC2016  # expanded by the sandbox's sh, not here
 # The Flathub runtimes this pulls (org.gnome.Sdk and the GL extension,
 # ~2 GB) make the bundle the longest step of a CI job. Keep the flatpak
 # user installation on the runner's tool cache — the durable volume the
@@ -31,6 +24,13 @@ if [[ -z "${FLATPAK_USER_DIR:-}" && -n "${RUNNER_TOOL_CACHE:-}" ]]; then
   export FLATPAK_USER_DIR="$RUNNER_TOOL_CACHE/flatpak-user"
 fi
 
+# The smoke check run inside the built sandbox, as `sh -c` with $1 the
+# manifest's command and $2 the prefix (/app). The command is the .deb's
+# wrapper script, so the check follows its exec line to the real binary:
+# the binary must exist after the /usr -> /app remap, and every library it
+# links must resolve. ldd on the wrapper itself proves nothing — it is not
+# an ELF.
+# shellcheck disable=SC2016  # expanded by the sandbox's sh, not here
 FLATPAK_SMOKE_CHECK='
 fail() { echo "flatpak smoke check: $*" >&2; exit 1; }
 bin="$2/bin/$1"

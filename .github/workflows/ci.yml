@@ -1492,7 +1492,7 @@ jobs:
     needs: affected
     if: needs.affected.outputs.planchette == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    timeout-minutes: 120  # cold: Flutter toolchain plus the ~2 GB Flatpak runtimes, downloaded by four client jobs at once over one uplink. Fetched objects persist in the tool cache, so a run that misses the deadline still advances the next one.
+    timeout-minutes: 120  # cold: Flutter toolchain plus ~2 GB Flatpak runtimes over a shared uplink. Only the self-hosted runner's tool cache persists, so a timed-out run still advances the next one; fork PRs on hosted runners re-download every run.
     strategy:
       fail-fast: false
       matrix:
@@ -1599,7 +1599,7 @@ jobs:
     needs: affected
     if: needs.affected.outputs.seance == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    timeout-minutes: 120  # cold: Flutter toolchain plus the ~2 GB Flatpak runtimes, downloaded by four client jobs at once over one uplink. Fetched objects persist in the tool cache, so a run that misses the deadline still advances the next one.
+    timeout-minutes: 120  # cold: Flutter toolchain plus ~2 GB Flatpak runtimes over a shared uplink. Only the self-hosted runner's tool cache persists, so a timed-out run still advances the next one; fork PRs on hosted runners re-download every run.
     strategy:
       fail-fast: false
       matrix:
@@ -1739,7 +1739,7 @@ jobs:
     needs: affected
     if: needs.affected.outputs.poltergeist == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    timeout-minutes: 120  # cold: Flutter toolchain plus the ~2 GB Flatpak runtimes, downloaded by four client jobs at once over one uplink. Fetched objects persist in the tool cache, so a run that misses the deadline still advances the next one.
+    timeout-minutes: 120  # cold: Flutter toolchain plus ~2 GB Flatpak runtimes over a shared uplink. Only the self-hosted runner's tool cache persists, so a timed-out run still advances the next one; fork PRs on hosted runners re-download every run.
     strategy:
       fail-fast: false
       matrix:
@@ -1872,7 +1872,7 @@ jobs:
     needs: affected
     if: needs.affected.outputs.klabautermann == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    timeout-minutes: 120  # cold: Flutter toolchain plus the ~2 GB Flatpak runtimes, downloaded by four client jobs at once over one uplink. Fetched objects persist in the tool cache, so a run that misses the deadline still advances the next one.
+    timeout-minutes: 120  # cold: Flutter toolchain plus ~2 GB Flatpak runtimes over a shared uplink. Only the self-hosted runner's tool cache persists, so a timed-out run still advances the next one; fork PRs on hosted runners re-download every run.
     strategy:
       fail-fast: false
       matrix:
