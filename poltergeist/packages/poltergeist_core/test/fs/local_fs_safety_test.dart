@@ -240,11 +240,14 @@ void main() {
     });
 
     test('trims an excessive trailing slash run in bounded time', () {
+      final path = 'name${'/' * 65535}';
+      // One untimed call first: the bound guards against quadratic work,
+      // not against the JIT compiling this code while sibling test files
+      // start up on a busy runner.
+      validateRelativeLocalPath(path, maximumDepth: 2);
       final stopwatch = Stopwatch()..start();
 
-      expect(validateRelativeLocalPath('name${'/' * 65535}', maximumDepth: 2), [
-        'name',
-      ]);
+      expect(validateRelativeLocalPath(path, maximumDepth: 2), ['name']);
 
       expect(stopwatch.elapsed, lessThan(const Duration(milliseconds: 100)));
     });
