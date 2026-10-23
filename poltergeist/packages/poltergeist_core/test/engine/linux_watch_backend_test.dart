@@ -54,11 +54,13 @@ void main() {
 
     expect(events[0], isA<FileSystemCreateEvent>());
     expect(events.any((event) => event is FileSystemModifyEvent), isTrue);
-    // dart:io's Linux shape: the rename halves merge into one move event
-    // naming the source with its destination.
-    expect(
-      events.whereType<FileSystemMoveEvent>().toList(),
-      [
+    // dart:io's Linux shape: rename halves read in one chunk merge into a
+    // move event naming the source with its destination. Halves split
+    // across reads, as on a loaded host, surface instead as a delete of
+    // the source and a create of the destination.
+    final moves = events.whereType<FileSystemMoveEvent>().toList();
+    if (moves.isNotEmpty) {
+      expect(moves, [
         isA<FileSystemMoveEvent>()
             .having(
               (event) => event.path,
@@ -70,8 +72,19 @@ void main() {
               'destination',
               p.join(root.path, 'moved.txt'),
             ),
-      ],
-    );
+      ]);
+    } else {
+      expect(
+        events.whereType<FileSystemDeleteEvent>().map((event) => event.path),
+        contains(p.join(root.path, 'entry.txt')),
+        reason: 'a split rename deletes its source; seen: $events',
+      );
+      expect(
+        events.whereType<FileSystemCreateEvent>().map((event) => event.path),
+        contains(p.join(root.path, 'moved.txt')),
+        reason: 'a split rename creates its destination; seen: $events',
+      );
+    }
     expect(
       events.whereType<FileSystemDeleteEvent>().map((event) => event.path),
       contains(p.join(root.path, 'moved.txt')),
