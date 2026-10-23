@@ -149,9 +149,8 @@ void main() {
     expect(done(), isTrue, reason: 'the checkout did not settle in 30 s');
   }
 
-  /// Two presses with no frame between them: the pane times the
-  /// double-click against the wall clock, which a loaded machine could
-  /// otherwise stretch past the window.
+  /// Two presses with no frame between them, so nothing but the taps'
+  /// own stamps decide the double-click window.
   Future<void> doubleClick(WidgetTester tester, String name) async {
     // The listing's row, not a Local edits entry of the same name.
     final row = find.descendant(
@@ -441,8 +440,126 @@ void main() {
     expect(files.currentPath, '$_home/docs');
   });
 
+  platformTest(
+    'a press stamped before the last one is not a double-click',
+    TargetPlatform.linux,
+    (tester) async {
+      final files = await pumpFilesPane(tester, _ListFileSystem());
+      final docs = tester.getCenter(find.text('docs'));
+
+      // A mis-stamped or synthetic press (remote input, automation) can
+      // carry an earlier stamp than the press before it; only a positive
+      // gap inside the window may read as a double-click.
+      for (final at in [kDoubleTapTimeout, Duration.zero]) {
+        await tester.sendEventToBinding(
+          PointerDownEvent(
+            pointer: 1,
+            position: docs,
+            timeStamp: at,
+            buttons: kPrimaryButton,
+          ),
+        );
+        await tester.sendEventToBinding(
+          PointerUpEvent(pointer: 1, position: docs, timeStamp: at),
+        );
+        await tester.pump();
+      }
+      await tester.runAsync(() async {});
+      await tester.pump();
+      expect(files.currentPath, _home);
+      expect(files.selectedPaths, {'$_home/docs'});
+    },
+  );
+
+  platformTest(
+    'a press sharing its predecessor\'s stamp still double-clicks',
+    TargetPlatform.linux,
+    (tester) async {
+      final files = await pumpFilesPane(tester, _ListFileSystem());
+      final docs = tester.getCenter(find.text('docs'));
+
+      // Zero counts as inside the window: taps from tests carry the zero
+      // stamp, and coarsely stamped synthetic input (remote input,
+      // automation) legitimately shares one. Only a negative gap — an
+      // out-of-order stamp — is not a double-click.
+      for (var i = 0; i < 2; i++) {
+        await tester.sendEventToBinding(
+          PointerDownEvent(
+            pointer: 1,
+            position: docs,
+            timeStamp: kDoubleTapTimeout,
+            buttons: kPrimaryButton,
+          ),
+        );
+        await tester.sendEventToBinding(
+          PointerUpEvent(
+            pointer: 1,
+            position: docs,
+            timeStamp: kDoubleTapTimeout,
+          ),
+        );
+        await tester.pump();
+      }
+      await tester.runAsync(() async {});
+      await tester.pump();
+      expect(files.currentPath, '$_home/docs');
+    },
+  );
+
   // The first click selects; nothing the selection shows may move the
   // rows, or the second click lands on a different one.
+  // The double-click window runs on the presses' own event stamps, not on
+  // when their handlers get scheduled. A machine stalling between the two
+  // must not split the double-click, and a slow pair of clicks must not
+  // become one.
+  platformTest(
+    'a double-click survives a stall between its two presses',
+    TargetPlatform.linux,
+    (tester) async {
+      final files = await pumpFilesPane(tester, _ListFileSystem());
+      final docs = tester.getCenter(find.text('docs'));
+
+      await tester.tapAt(docs);
+      await tester.pump();
+      // Real time passes while the fake clock stands still: the presses
+      // were back to back, only their handling was stretched.
+      await tester.runAsync(() => Future<void>.delayed(kDoubleTapTimeout * 2));
+      await tester.tapAt(docs);
+      await tester.pump();
+      await tester.runAsync(() async {});
+      await tester.pump();
+      expect(files.currentPath, '$_home/docs');
+    },
+  );
+
+  platformTest(
+    'two presses past the window stay single clicks',
+    TargetPlatform.linux,
+    (tester) async {
+      final files = await pumpFilesPane(tester, _ListFileSystem());
+      final docs = tester.getCenter(find.text('docs'));
+
+      for (final at in [Duration.zero, kDoubleTapTimeout * 2]) {
+        await tester.sendEventToBinding(
+          PointerDownEvent(
+            pointer: 1,
+            position: docs,
+            timeStamp: at,
+            buttons: kPrimaryButton,
+          ),
+        );
+        await tester.sendEventToBinding(
+          PointerUpEvent(pointer: 1, position: docs, timeStamp: at),
+        );
+        await tester.pump();
+      }
+      await tester.runAsync(() async {});
+      await tester.pump();
+      expect(files.currentPath, _home);
+      expect(files.selectedPaths, {'$_home/docs'});
+    },
+  );
+
   platformTest(
     'a double-click from no selection opens the row under the pointer',
     TargetPlatform.linux,
