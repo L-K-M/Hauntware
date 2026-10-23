@@ -5,6 +5,7 @@ import 'package:ghost_ui/ghost_ui.dart' show contrastRatio;
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/logs/log_level.dart';
 import 'package:klabautermann_app/ui/logs/log_text.dart';
+import 'package:klabautermann_app/ui/logs/log_tokens.dart';
 import 'package:klabautermann_app/ui/logs/log_view_controller.dart'
     show ContainerLine;
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -247,6 +248,108 @@ void main() {
       }
     });
   }
+
+  group('highlighting (LOG-07)', () {
+    for (final brightness in Brightness.values) {
+      test('every token colour reads at 4.5:1, ${brightness.name} theme', () {
+        final palette = _palette(brightness);
+        for (final level in [...LogLevel.values, null]) {
+          for (final kind in LogTokenKind.values) {
+            final style = palette.tokenStyle(
+              palette.styleFor(SgrStyle.plain, level),
+              kind,
+            );
+            expect(
+              _contrast(style, palette),
+              greaterThanOrEqualTo(logTextMinContrast),
+              reason: '$kind at $level',
+            );
+          }
+        }
+      });
+    }
+
+    final palette = _palette(Brightness.light);
+    const base = TextStyle(fontSize: 13);
+
+    test('colours tokens in plain text and keeps the rest of the style', () {
+      final span = logLineSpan(
+        const LogLine(0, 'GET /a 503 from \x1b[1m10.0.0.1\x1b[0m'),
+        palette: palette,
+        base: base,
+        level: LogLevel.warning,
+      );
+      final runs = span.children!.cast<TextSpan>();
+      expect(runs.map((run) => run.text), [
+        'GET /a ',
+        '503',
+        ' from ',
+        '10.0.0.1',
+      ]);
+      final warning = palette.styleFor(SgrStyle.plain, LogLevel.warning);
+      expect(runs[0].style, warning);
+      expect(
+        runs[1].style,
+        palette.tokenStyle(warning, LogTokenKind.httpServerError),
+      );
+      final bold = palette.styleFor(
+        const SgrStyle(bold: true),
+        LogLevel.warning,
+      );
+      expect(runs[3].style, palette.tokenStyle(bold, LogTokenKind.ipAddress));
+      expect(runs[3].style!.fontWeight, FontWeight.bold);
+    });
+
+    test('a token split by an SGR span is coloured on both sides', () {
+      final span = logLineSpan(
+        const LogLine(0, 'http://a.\x1b[4mtest\x1b[0m/x'),
+        palette: palette,
+        base: base,
+      );
+      final runs = span.children!.cast<TextSpan>();
+      expect(runs.map((run) => run.text), ['http://a.', 'test', '/x']);
+      final url = palette.tokenStyle(
+        palette.styleFor(SgrStyle.plain, null),
+        LogTokenKind.url,
+      );
+      expect(runs[0].style, url);
+      expect(runs[2].style, url);
+      expect(runs[1].style!.color, url.color);
+    });
+
+    test("a program's own colours win over a token's", () {
+      const red = SgrStyle(foreground: SgrPaletteColor(1));
+      final span = logLineSpan(
+        const LogLine(0, '\x1b[31mGET /a 200\x1b[0m \x1b[7m10.0.0.1\x1b[0m'),
+        palette: palette,
+        base: base,
+      );
+      final runs = span.children!.cast<TextSpan>();
+      expect(runs.map((run) => run.text), ['GET /a 200', ' ', '10.0.0.1']);
+      expect(runs[0].style, palette.styleFor(red, null));
+      expect(
+        runs[2].style,
+        palette.styleFor(const SgrStyle(inverse: true), null),
+      );
+    });
+
+    test('a search match over a token keeps the match colours', () {
+      final span = logLineSpan(
+        const LogLine(0, 'GET /a 404'),
+        palette: palette,
+        base: base,
+        matches: const [TextMatch(start: 7, end: 10)],
+        currentMatch: 0,
+      );
+      final runs = span.children!.cast<TextSpan>();
+      expect(runs.last.text, '404');
+      expect(runs.last.style!.backgroundColor, isNotNull);
+      expect(
+        runs.last.style!.decoration!.contains(TextDecoration.underline),
+        isTrue,
+      );
+    });
+  });
 
   group('journal rows (LOG-01)', () {
     LogLine journal(Map<String, String?> fields) =>

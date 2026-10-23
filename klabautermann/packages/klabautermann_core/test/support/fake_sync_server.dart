@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:klabautermann_core/src/catalog/engine_sync.dart';
@@ -43,6 +44,12 @@ final class FakeSyncServer {
   /// Thrown by the next pull, once.
   Object? nextPullError;
 
+  /// Holds every pull until it completes; [pullHeld] completes as one
+  /// waits, so a test can act in the middle of a round. Both stay null
+  /// unless a test sets them: completers cannot cross to an isolate.
+  Completer<void>? pullGate;
+  Completer<void>? pullHeld;
+
   /// Thrown by every call, as a server nobody can reach.
   Object? unreachable;
 
@@ -68,6 +75,24 @@ final class FakeSyncServer {
       ),
     );
     _records[server.id] = sealed.withSeq(++_seq);
+  }
+
+  /// Seals [data] as a `klabautermann:` record under [id] and seeds it.
+  Future<void> seedKlabautermann(
+    String id,
+    Map<String, Object?> data, {
+    int updatedAt = 1,
+  }) async {
+    final sealed = await RecordCrypto(RecordCodec(keys.vaultKey)).seal(
+      DecryptedRecord(
+        id: id,
+        kind: RecordKind.klabautermann,
+        updatedAt: updatedAt,
+        deviceId: 'klabautermann-device',
+        data: data,
+      ),
+    );
+    _records[id] = sealed.withSeq(++_seq);
   }
 
   /// Seals [secret] as its `secret:` record under the account key and
@@ -149,6 +174,12 @@ final class _FakeTransport implements SyncTransport {
     if (_server.nextPullError case final error?) {
       _server.nextPullError = null;
       throw error;
+    }
+    if (_server.pullGate case final gate?) {
+      if (_server.pullHeld case final held? when !held.isCompleted) {
+        held.complete();
+      }
+      await gate.future;
     }
     if (token != 'token-1') {
       throw const ApiError(code: 'unauthorized', message: 'Invalid token');

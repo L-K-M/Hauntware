@@ -33,6 +33,27 @@ final class ThresholdBound {
   /// changes (`for` in the rule model).
   final Duration duration;
 
+  /// Reads [toJson]'s shape strictly: a [FormatException] for a missing
+  /// or mistyped field, a value that is not finite or a negative
+  /// duration.
+  factory ThresholdBound.fromJson(Object? json) {
+    if (json is! Map<String, Object?>) {
+      throw const FormatException('a bound is not an object');
+    }
+    final value = json['value'];
+    final duration = json['for'];
+    if (value is! num || !value.isFinite) {
+      throw const FormatException('a bound has no finite value');
+    }
+    if (duration is! int || duration < 0) {
+      throw const FormatException('a bound has no duration');
+    }
+    return ThresholdBound(
+      value: value.toDouble(),
+      duration: Duration(milliseconds: duration),
+    );
+  }
+
   Map<String, Object?> toJson() => {
     'value': value,
     'for': duration.inMilliseconds,
@@ -73,6 +94,25 @@ final class ThresholdRule {
   /// Where evaluation happens.
   final RuleEvalScope evalScope;
 
+  /// Reads [toJson]'s shape strictly, ignoring keys it does not name: a
+  /// [FormatException] for a missing or mistyped field or a name no enum
+  /// value has.
+  factory ThresholdRule.fromJson(Map<String, Object?> json) {
+    final metric = json['metric'];
+    if (metric is! String || metric.isEmpty) {
+      throw const FormatException('a rule has no metric');
+    }
+    return ThresholdRule(
+      metric: metric,
+      scope: _byName(RuleScope.values, json['scope'], 'scope'),
+      op: _byName(ThresholdOp.values, json['op'], 'op'),
+      raise: ThresholdBound.fromJson(json['raise']),
+      clear: ThresholdBound.fromJson(json['clear']),
+      severity: _byName(AlertSeverity.values, json['severity'], 'severity'),
+      evalScope: _byName(RuleEvalScope.values, json['evalScope'], 'evalScope'),
+    );
+  }
+
   Map<String, Object?> toJson() => {
     'metric': metric,
     'scope': scope.name,
@@ -82,6 +122,15 @@ final class ThresholdRule {
     'severity': severity.name,
     'evalScope': evalScope.name,
   };
+}
+
+/// The value of [values] named [name], or a [FormatException] naming
+/// [field].
+T _byName<T extends Enum>(List<T> values, Object? name, String field) {
+  for (final value in values) {
+    if (value.name == name) return value;
+  }
+  throw FormatException('a rule has no known $field');
 }
 
 /// The hysteresis phase of one rule on one host (03 §7.19).

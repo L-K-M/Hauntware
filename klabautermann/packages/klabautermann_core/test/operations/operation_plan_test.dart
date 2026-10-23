@@ -174,6 +174,11 @@ void main() {
         OperationKind.stop,
         OperationKind.restart,
         OperationKind.reload,
+        OperationKind.enable,
+        OperationKind.disable,
+        OperationKind.mask,
+        OperationKind.unmask,
+        OperationKind.resetFailed,
         OperationKind.pause,
         OperationKind.unpause,
         OperationKind.kill,
@@ -189,6 +194,8 @@ void main() {
         OperationKind.stackServiceScale,
         OperationKind.removeContainer,
         OperationKind.removeUnusedImage,
+        OperationKind.editFile,
+        OperationKind.keepLastBackups,
       };
       for (final kind in OperationKind.values) {
         expect(

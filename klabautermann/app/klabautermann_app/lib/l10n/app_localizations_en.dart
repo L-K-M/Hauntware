@@ -1789,7 +1789,51 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get logsPanelCurrentBoot => 'Current boot only';
+  String get logsPanelBoot => 'Boot';
+
+  @override
+  String logsPanelBootChoice(String choice) {
+    String _temp0 = intl.Intl.selectLogic(choice, {
+      'all': 'All boots',
+      'current': 'This boot',
+      'other': 'Boot',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String logsPanelBootPast(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString boots ago',
+      one: 'Previous boot',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String logsPanelBootSpan(String start, String end) {
+    return '$start to $end';
+  }
+
+  @override
+  String get logsPanelBootsLoading => 'Reading the server\'s boots…';
+
+  @override
+  String logsPanelBootsFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server denied access to its boot list.',
+      'missing': 'The server has no journal to list boots from.',
+      'other': 'Reading the server\'s boots failed.',
+    });
+    return '$_temp0';
+  }
 
   @override
   String get logsPanelTimeRange => 'Time range';
@@ -1824,6 +1868,48 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get logsPanelCommonPaths => 'Common paths';
+
+  @override
+  String get logsPanelBrowseFiles => 'Browse /var/log';
+
+  @override
+  String get logsPanelFiles => 'Files in /var/log';
+
+  @override
+  String get logsPanelFilesFilter => 'Filter by name';
+
+  @override
+  String get logsPanelFilesLoading => 'Listing the server\'s log files…';
+
+  @override
+  String logsPanelFilesFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server denied access to /var/log.',
+      'missing': 'The server cannot list /var/log.',
+      'other': 'Listing the server\'s log files failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsPanelFilesEmpty => 'The server has no files under /var/log.';
+
+  @override
+  String get logsPanelFilesNoMatch => 'No file path contains this text.';
+
+  @override
+  String logsPanelFileDetails(String size, String modified) {
+    return '$size, changed $modified';
+  }
+
+  @override
+  String get logsPanelFileCompressed =>
+      'Compressed: reads its last lines, without following';
+
+  @override
+  String get logsPanelFileUnreadable =>
+      'Your account cannot read it; admin mode can';
 
   @override
   String get logsPanelApply => 'Apply';
@@ -1861,6 +1947,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'Follow new entries as the server writes them';
 
   @override
+  String get logsPanelLivePastBoot =>
+      'A past boot has no new entries to follow';
+
+  @override
+  String get logsPanelLiveCompressed =>
+      'A compressed file has no new lines to follow';
+
+  @override
   String get logsPanelJournalLimited =>
       'Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The server\'s Access section shows how to add it.';
 
@@ -1883,6 +1977,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'denied': 'The server denied access to this log.',
       'failed': 'Reading the log failed.',
       'rejected': 'The engine did not open this log.',
+      'searchUnsupported':
+          'This server\'s journal cannot search. Clear the server search to read the log.',
       'other': 'Choose or type the absolute path of a file to tail.',
     });
     return '$_temp0';
@@ -1905,6 +2001,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get logsPanelSearchCase => 'Match case';
+
+  @override
+  String get logsPanelSearchRegex => 'Regular expression';
+
+  @override
+  String get logsPanelSearchInvalid => 'Not a valid regular expression';
+
+  @override
+  String get logsPanelSearchServer => 'Search the whole journal on the server';
+
+  @override
+  String logsPanelServerMatch(String pattern) {
+    return 'Server search: $pattern';
+  }
+
+  @override
+  String get logsPanelServerMatchClear => 'Clear the server search';
 
   @override
   String logsPanelSearchMatches(int total) {
@@ -2654,6 +2767,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAnnounceNotChanged => 'The setting could not be changed.';
 
   @override
+  String get settingsSyncSecretsTitle => 'Passwords and keys';
+
+  @override
+  String get settingsSyncSecrets => 'Sync saved passwords & keys';
+
+  @override
+  String get settingsSyncSecretsDetail =>
+      'Only includes servers where credential sync is also enabled.';
+
+  @override
+  String get settingsSyncSecretsNotSaved =>
+      'The setting changed, but it could not be saved, so it will not be kept after a restart.';
+
+  @override
+  String get settingsSyncSecretsNotChanged =>
+      'The setting could not be changed.';
+
+  @override
   String get settingsAboutTitle => 'About';
 
   @override
@@ -3113,6 +3244,27 @@ class AppLocalizationsEn extends AppLocalizations {
       'Read-only: actions on this server are hidden.';
 
   @override
+  String credentialTitle(String label) {
+    return 'Password for $label';
+  }
+
+  @override
+  String get credentialExplanation =>
+      'Saved only if you choose to: on this device, in its encrypted vault, and used for this server from now on.';
+
+  @override
+  String get credentialPassword => 'Password';
+
+  @override
+  String get credentialSaveInVault => 'Save in vault';
+
+  @override
+  String get credentialCancel => 'Cancel';
+
+  @override
+  String get credentialConnect => 'Connect';
+
+  @override
   String elevationTitle(String host) {
     return 'Admin password for $host';
   }
@@ -3239,6 +3391,12 @@ class AppLocalizationsEn extends AppLocalizations {
       'transientUnit': 'A transient systemd unit, gone when it ends',
       'engineState': 'The container engine\'s own state',
       'loginRecords': 'Login records, as every SSH command leaves',
+      'editTarget': 'The file or crontab you edited',
+      'editTempFile':
+          'A temporary copy beside the file, renamed over it or removed',
+      'userBackups': 'A backup in your Klabautermann backups folder',
+      'rootBackups': 'A backup under /var/lib/klabautermann/backups',
+      'footprintManifest': 'The list of what Klabautermann keeps on the server',
       'other': 'A change on the server',
     });
     return '$_temp0';
@@ -3301,6 +3459,8 @@ class AppLocalizationsEn extends AppLocalizations {
           'The compose CLI could not list every profile\'s services, so some of these containers may belong to a service a profile enables.',
       'mayDieAtLogout':
           'This server ends your processes when you log out, which can stop the operation before it finishes.',
+      'unitNotVerified':
+          'This server\'s systemd is not known to be version 250 or later, so the unit file is not checked before it is replaced.',
       'other': '',
     });
     return '$_temp0';
@@ -3587,6 +3747,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'RedeployStack': 'Redeploy stack',
       'ContainerExec': 'Run command',
       'ContainerShell': 'Container shell',
+      'EditFile': 'Edit',
+      'KeepLastBackups': 'Keep recent backups',
+      'RemoveBackups': 'Remove backups',
       'other': 'Action',
     });
     return '$_temp0';
@@ -5050,4 +5213,344 @@ class AppLocalizationsEn extends AppLocalizations {
     });
     return '$_temp0';
   }
+
+  @override
+  String get editClose => 'Close';
+
+  @override
+  String editTitleFile(String name) {
+    return 'Edit $name';
+  }
+
+  @override
+  String get editTitleOwnCrontab => 'Edit your crontab';
+
+  @override
+  String editTitleCrontab(String user) {
+    return 'Edit $user\'s crontab';
+  }
+
+  @override
+  String get editRetry => 'Read again';
+
+  @override
+  String get editReading => 'Reading the file…';
+
+  @override
+  String editReadFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noLink': 'There is no connection to this server.',
+      'invalidTarget': 'Klabautermann does not edit this path.',
+      'notFound': 'There is no file at this path on the host.',
+      'adminRequired':
+          'Only root can read this file. Turn on admin mode to edit it.',
+      'tooLarge': 'This file is too large for the editor.',
+      'notText': 'This file is not text.',
+      'failed': 'The file could not be read.',
+      'other': 'The file could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get editRootFile => 'Root\'s file';
+
+  @override
+  String get editUnsaved => 'Not saved';
+
+  @override
+  String editEditorLabel(String path) {
+    return 'Editor for $path';
+  }
+
+  @override
+  String get editDiscard => 'Discard changes';
+
+  @override
+  String get editReview => 'Review changes';
+
+  @override
+  String get editDiscardTitle => 'Discard your changes?';
+
+  @override
+  String get editDiscardBody =>
+      'Your changes are not saved to the server and will be lost.';
+
+  @override
+  String get editKeepEditing => 'Keep editing';
+
+  @override
+  String get editConflictTitle => 'The file changed on the server';
+
+  @override
+  String get editConflictBody =>
+      'It changed since you opened it, so your save did not run. Your changes are still here.';
+
+  @override
+  String get editConflictDiscard => 'Discard mine';
+
+  @override
+  String get editConflictCompare => 'Reload and compare';
+
+  @override
+  String editProblem(int line, String kind, String subject) {
+    String _temp0 = intl.Intl.pluralLogic(
+      line,
+      locale: localeName,
+      other: 'Line $line',
+    );
+    String _temp1 = intl.Intl.selectLogic(kind, {
+      'syntaxError': 'does not parse',
+      'duplicateKey': 'key set again',
+      'duplicateTable': 'table declared again',
+      'duplicateAttribute': 'attribute given twice',
+      'jsonComment': 'comment in JSON',
+      'jsonTrailingComma': 'trailing comma in JSON',
+      'unterminatedQuote': 'quote never closed',
+      'tabIndentation': 'tab indentation',
+      'mismatchedClosingTag': 'closing tag does not match',
+      'unclosedElement': 'element never closed',
+      'unexpectedClosingTag': 'closing tag without an open element',
+      'mergeConflict': 'merge conflict marker',
+      'other': 'problem',
+    });
+    return '$_temp0: $_temp1 $subject';
+  }
+
+  @override
+  String get editSave => 'Save to server';
+
+  @override
+  String get editSaveAnyway => 'Save anyway';
+
+  @override
+  String get editDiffing => 'Comparing…';
+
+  @override
+  String editDiffStatus(String status) {
+    String _temp0 = intl.Intl.selectLogic(status, {
+      'identical': 'Your text is the same as the server\'s.',
+      'tooLarge': 'The change is too large to show as a diff.',
+      'timedOut': 'The comparison took too long to show.',
+      'failed': 'The comparison failed.',
+      'other': 'The change cannot be shown.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get editDiffLabel => 'Changes to the file';
+
+  @override
+  String get dockerStackFileEdit => 'Edit';
+
+  @override
+  String get jobsEditOwnCrontab => 'Edit your crontab';
+
+  @override
+  String editDiffServerLabel(String path) {
+    return '$path (server)';
+  }
+
+  @override
+  String editDiffYourLabel(String path) {
+    return '$path (yours)';
+  }
+
+  @override
+  String get footprintMenu => 'Footprint';
+
+  @override
+  String footprintTitle(String server) {
+    return 'Footprint on $server';
+  }
+
+  @override
+  String get footprintVerify => 'Check again';
+
+  @override
+  String get footprintChecking =>
+      'Checking what Klabautermann keeps on this server…';
+
+  @override
+  String get footprintUnavailable =>
+      'Klabautermann cannot check what it keeps on this server without a connection. Connect, then check again.';
+
+  @override
+  String get footprintRootUnchecked =>
+      'Root\'s backups and manifest are checked in admin mode.';
+
+  @override
+  String footprintWarning(String warning) {
+    return 'The check reported: $warning';
+  }
+
+  @override
+  String get footprintNone => 'Klabautermann keeps nothing on this server.';
+
+  @override
+  String footprintScope(String scope) {
+    String _temp0 = intl.Intl.selectLogic(scope, {
+      'user': 'Your account',
+      'root': 'Root',
+      'other': 'Other',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String footprintFile(String kind, String present) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'backupDirectory': 'Backup directory',
+      'backupIndex': 'Backup index',
+      'other': 'File',
+    });
+    String _temp1 = intl.Intl.selectLogic(present, {
+      'true': 'present',
+      'other': 'missing on the host',
+    });
+    return '$_temp0 · $_temp1';
+  }
+
+  @override
+  String footprintKeepLast(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Keep the newest $count backups of each file',
+      one: 'Keep only the newest backup of each file',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get footprintRemoveAll => 'Remove all backups';
+
+  @override
+  String footprintCrontabSource(String user) {
+    return '$user\'s crontab';
+  }
+
+  @override
+  String footprintBackup(String hash, String status) {
+    String _temp0 = intl.Intl.selectLogic(status, {
+      'intact': 'unchanged',
+      'modified': 'changed on the host since it was recorded',
+      'missing': 'missing on the host',
+      'other': 'unknown',
+    });
+    return '$hash · $_temp0';
+  }
+
+  @override
+  String get footprintRestore => 'Restore…';
+
+  @override
+  String get footprintRestoreChanged =>
+      'The backup changed since it was checked, so it was not opened.';
+
+  @override
+  String get unitEnable => 'Enable';
+
+  @override
+  String get unitDisable => 'Disable';
+
+  @override
+  String get unitMask => 'Mask';
+
+  @override
+  String get unitUnmask => 'Unmask';
+
+  @override
+  String get unitResetFailed => 'Reset failed state';
+
+  @override
+  String get unitMoreActions => 'More';
+
+  @override
+  String unitQueryFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noLink': 'There is no connection to this server.',
+      'invalidUnit': 'This is not a unit name.',
+      'notFound': 'The manager has no such unit.',
+      'managerUnavailable':
+          'Your user manager cannot be reached: you need a login session or lingering.',
+      'failed': 'The read failed.',
+      'other': 'The read failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get unitResourcesMemory => 'Memory';
+
+  @override
+  String get unitResourcesCpu => 'CPU time';
+
+  @override
+  String unitResourcesCpuSeconds(String seconds) {
+    return '$seconds s';
+  }
+
+  @override
+  String get unitResourcesTasks => 'Tasks';
+
+  @override
+  String get unitResourcesRestarts => 'Restarts';
+
+  @override
+  String get unitResourcesMainPid => 'Main PID';
+
+  @override
+  String get unitResourcesActiveSince => 'Active since';
+
+  @override
+  String get unitFileShow => 'Show unit file';
+
+  @override
+  String unitFileTitle(String unit) {
+    return '$unit file';
+  }
+
+  @override
+  String get unitFileClose => 'Close';
+
+  @override
+  String get unitFileReading => 'Reading the unit file…';
+
+  @override
+  String unitFileMasked(int count, int seconds) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count values are masked.',
+      one: '1 value is masked.',
+    );
+    return '$_temp0 Reveal shows them for $seconds seconds.';
+  }
+
+  @override
+  String get unitFileReveal => 'Reveal values';
+
+  @override
+  String get unitFileHide => 'Hide values';
+
+  @override
+  String unitFileEditorLabel(String unit) {
+    return 'File of $unit';
+  }
+
+  @override
+  String get servicesScopeSystem => 'System';
+
+  @override
+  String get servicesScopeUser => 'Yours';
+
+  @override
+  String get servicesUserLogsAbsent =>
+      'The logs of your own units are not shown here yet.';
+
+  @override
+  String get servicesUserUnavailable =>
+      'Your own units could not be read. Your user manager runs only while you are logged in, or with lingering enabled.';
 }

@@ -326,14 +326,156 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Warning and above').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Current boot only'));
     await tester.tap(find.text('Apply'));
     await tester.pumpAndSettle();
 
     final source = panel.opens.last.spec.source as JournalLogSource;
     expect(source.unit, 'nginx.service');
     expect(source.priority, LogPriority.warning);
-    expect(source.currentBootOnly, isTrue);
+    expect(source.currentBootOnly, isFalse);
+  });
+
+  testWidgets('searches with a regular expression and says when one does '
+      'not compile (LOG-06)', (tester) async {
+    final panel = await _pump(tester);
+    await panel.running(tester);
+    await tester.tap(find.byTooltip('Regular expression'));
+    await tester.enterText(find.byType(TextField).last, 'timed (out');
+    await tester.pumpAndSettle(const Duration(milliseconds: 300));
+    expect(find.text('Not a valid regular expression'), findsOneWidget);
+    expect(
+      tester
+          .widget<IconButton>(
+            find.widgetWithIcon(IconButton, Icons.travel_explore),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    await tester.enterText(find.byType(TextField).last, r'(timed|unexp\w+) ');
+    await tester.pumpAndSettle(const Duration(milliseconds: 300));
+    expect(find.text('Not a valid regular expression'), findsNothing);
+    expect(find.text('2 matches'), findsOneWidget);
+  });
+
+  testWidgets('hands the search to the server as a journal pattern, and '
+      'reads the whole journal again (LOG-06)', (tester) async {
+    final panel = await _pump(tester);
+    await panel.running(tester);
+    await tester.enterText(find.byType(TextField).last, 'Timed out?');
+    await tester.pumpAndSettle(const Duration(milliseconds: 300));
+    await tester.tap(find.byTooltip('Search the whole journal on the server'));
+    await tester.pumpAndSettle();
+
+    // Plain text is escaped, and case is ignored as the local search does.
+    final source = panel.opens.last.spec.source as JournalLogSource;
+    expect(source.grep, r'(?i)Timed out\?');
+    expect(find.text(r'Server search: (?i)Timed out\?'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Clear the server search'));
+    await tester.pumpAndSettle();
+    expect((panel.opens.last.spec.source as JournalLogSource).grep, isNull);
+    expect(find.textContaining('Server search'), findsNothing);
+
+    // Only the journal matches on the server.
+    await tester.tap(find.text('Kernel'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byTooltip('Search the whole journal on the server'),
+      findsNothing,
+    );
+  });
+
+  testWidgets('says when the server\'s journal cannot search', (tester) async {
+    final panel = await _pump(tester);
+    await panel.emit(
+      tester,
+      LogStreamState(
+        panel.opens.last.streamId,
+        const LogStreamEnded(LogStreamEndReason.searchUnsupported),
+      ),
+    );
+    expect(find.textContaining('journal cannot search'), findsOneWidget);
+    expect(find.text('Retry'), findsNothing);
+  });
+
+  testWidgets('picks this boot or a past one from the server\'s list; a '
+      'past boot has no follow (LOG-09)', (tester) async {
+    final panel = await _pump(tester);
+    await tester.tap(find.text('All boots'));
+    await tester.pumpAndSettle();
+    expect(find.text("Reading the server's boots…"), findsOneWidget);
+
+    final query = panel.engine.sentOfType<HostQuery>().single as HostQuery;
+    expect(query.query, isA<BootsQuery>());
+    JournalBootEntry boot(int offset) => JournalBootEntry(
+      offset: offset,
+      id: ('${-offset}' * 32).substring(0, 32),
+      firstEntry: DateTime.utc(2026, 10, 10 + offset, 8),
+      lastEntry: DateTime.utc(2026, 10, 10 + offset, 20),
+    );
+    await panel.emit(
+      tester,
+      HostResult(
+        serverId: 'srv-1',
+        queryId: query.queryId,
+        payload: JournalBoots([boot(-2), boot(0), boot(-1)]),
+      ),
+    );
+    // Past boots only, newest first; this boot has its own choice.
+    expect(find.text('Previous boot'), findsOneWidget);
+    expect(find.text('2 boots ago'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Previous boot')).dy,
+      lessThan(tester.getTopLeft(find.text('2 boots ago')).dy),
+    );
+
+    await tester.tap(find.text('Previous boot'));
+    await tester.pumpAndSettle();
+    final spec = panel.opens.last.spec;
+    expect((spec.source as JournalLogSource).boot, JournalBoot.id('1' * 32));
+    expect(spec.follow, isFalse);
+    final live = tester.widget<FilterChip>(find.byType(FilterChip));
+    expect(live.onSelected, isNull);
+    expect(live.tooltip, 'A past boot has no new entries to follow');
+
+    // The kernel log reads the same past boot.
+    await tester.tap(find.text('Kernel'));
+    await tester.pumpAndSettle();
+    expect(
+      (panel.opens.last.spec.source as KernelLogSource).boot,
+      JournalBoot.id('1' * 32),
+    );
+
+    await tester.tap(find.text('Journal'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Previous boot'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('This boot'));
+    await tester.pumpAndSettle();
+    final current = panel.opens.last.spec;
+    expect((current.source as JournalLogSource).currentBootOnly, isTrue);
+    expect((current.source as JournalLogSource).boot, isNull);
+    expect(current.follow, isTrue);
+  });
+
+  testWidgets('says why the boots could not be listed', (tester) async {
+    final panel = await _pump(tester);
+    await tester.tap(find.text('All boots'));
+    await tester.pumpAndSettle();
+    final query = panel.engine.sentOfType<HostQuery>().single as HostQuery;
+    await panel.emit(
+      tester,
+      HostResult(
+        serverId: 'srv-1',
+        queryId: query.queryId,
+        payload: const HostQueryFailed(HostQueryFailure.denied),
+      ),
+    );
+    expect(
+      find.text('The server denied access to its boot list.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('keeps the keyboard focus where it was after applying', (
@@ -416,6 +558,162 @@ void main() {
     );
     expect(find.text('The server denied access to this log.'), findsOneWidget);
     expect(find.text('tail: cannot open: Permission denied'), findsOneWidget);
+  });
+
+  testWidgets('browses /var/log: sizes, dates, compressed and unreadable '
+      'files in words; a compressed file reads without follow (LOG-08)', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await tester.tap(find.text('File'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Browse /var/log'));
+    await tester.pumpAndSettle();
+    expect(find.text('Files in /var/log'), findsOneWidget);
+    expect(find.text("Listing the server's log files…"), findsOneWidget);
+
+    final query = panel.engine.sentOfType<HostQuery>().single as HostQuery;
+    expect(query.query, isA<VarLogQuery>());
+    LogFileEntry file(String path, int bytes, {bool readable = true}) =>
+        LogFileEntry(
+          path: path,
+          bytes: bytes,
+          modified: DateTime.utc(2026, 10, 12, 8, 14),
+          readable: readable,
+        );
+    await panel.emit(
+      tester,
+      HostResult(
+        serverId: 'srv-1',
+        queryId: query.queryId,
+        payload: VarLogFiles([
+          file('/var/log/auth.log', 2048, readable: false),
+          file('/var/log/syslog', 12288),
+          file('/var/log/syslog.2.gz', 4096),
+        ]),
+      ),
+    );
+    expect(find.text('/var/log/syslog'), findsOneWidget);
+    expect(find.textContaining('12 KiB, changed '), findsOneWidget);
+    expect(
+      find.text('Your account cannot read it; admin mode can'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Compressed: reads its last lines, without following'),
+      findsOneWidget,
+    );
+
+    // The filter narrows the list by path.
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Filter by name'),
+      'SYSLOG',
+    );
+    await tester.pump();
+    expect(find.text('/var/log/auth.log'), findsNothing);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Filter by name'),
+      'nginx',
+    );
+    await tester.pump();
+    expect(find.text('No file path contains this text.'), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Filter by name'),
+      'gz',
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('/var/log/syslog.2.gz'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing);
+    final spec = panel.opens.last.spec;
+    final source = spec.source as FileLogSource;
+    expect((source.path, source.compressed), ('/var/log/syslog.2.gz', true));
+    expect(spec.follow, isFalse);
+    final live = tester.widget<FilterChip>(find.byType(FilterChip));
+    expect(live.onSelected, isNull);
+    expect(live.tooltip, 'A compressed file has no new lines to follow');
+    expect(
+      tester
+          .widget<TextField>(find.widgetWithText(TextField, 'File path'))
+          .controller!
+          .text,
+      '/var/log/syslog.2.gz',
+    );
+
+    // The current file is marked when the browser opens again.
+    await tester.tap(find.text('Browse /var/log'));
+    await tester.pumpAndSettle();
+    final again = panel.engine.sentOfType<HostQuery>().last as HostQuery;
+    await panel.emit(
+      tester,
+      HostResult(
+        serverId: 'srv-1',
+        queryId: again.queryId,
+        payload: VarLogFiles([file('/var/log/syslog.2.gz', 4096)]),
+      ),
+    );
+    expect(
+      tester
+          .widget<ListTile>(
+            find.widgetWithText(ListTile, '/var/log/syslog.2.gz'),
+          )
+          .selected,
+      isTrue,
+    );
+  });
+
+  testWidgets('says why /var/log could not be listed', (tester) async {
+    final panel = await _pump(tester);
+    await tester.tap(find.text('File'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Browse /var/log'));
+    await tester.pumpAndSettle();
+    final query = panel.engine.sentOfType<HostQuery>().single as HostQuery;
+    await panel.emit(
+      tester,
+      HostResult(
+        serverId: 'srv-1',
+        queryId: query.queryId,
+        payload: const HostQueryFailed(HostQueryFailure.denied),
+      ),
+    );
+    expect(find.text('The server denied access to /var/log.'), findsOneWidget);
+  });
+
+  testWidgets('on a phone, a file picked from /var/log applies the '
+      'filters', (tester) async {
+    final panel = await _pump(tester, size: _phone);
+    await tester.tap(find.text('Journal'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('File'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('Filters'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Browse /var/log'));
+    await tester.pumpAndSettle();
+    final query = panel.engine.sentOfType<HostQuery>().single as HostQuery;
+    await panel.emit(
+      tester,
+      HostResult(
+        serverId: 'srv-1',
+        queryId: query.queryId,
+        payload: VarLogFiles([
+          LogFileEntry(
+            path: '/var/log/syslog',
+            bytes: 100,
+            modified: DateTime.utc(2026, 10, 12),
+            readable: true,
+          ),
+        ]),
+      ),
+    );
+    await tester.tap(find.text('/var/log/syslog'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing);
+    final spec = panel.opens.last.spec;
+    expect((spec.source as FileLogSource).path, '/var/log/syslog');
+    expect(spec.follow, isTrue);
   });
 
   testWidgets('on a phone, the source and filters open bottom sheets', (

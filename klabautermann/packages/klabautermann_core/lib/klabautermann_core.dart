@@ -18,11 +18,13 @@ export 'src/engine/protocol.dart';
 // The plain-data plan parts an ActionPreview carries (03 §8.5), and
 // DangerLinter's findings in it.
 export 'src/operations/plan_types.dart';
+
 export 'package:seance_core/seance_core.dart'
     show DangerFinding, DangerSeverity;
 // The signal and unit verb an ActionIntent names (PRC-02, SVC-03).
 export 'package:klabautermann_host/klabautermann_host.dart'
     show KillSignal, SystemctlVerb;
+
 // FL-21's monitor set rules, which the engine enforces and the app's
 // toggles offer (03 §4.3 step 4).
 export 'src/fleet/monitor_set.dart'
@@ -80,6 +82,10 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         TimersSnapshot,
         UnitListFormat,
         UnitsSnapshot;
+// The Logs panel's boot picker and /var/log browser (LOG-08, LOG-09): a
+// HostResult's rows and the boot a source reads.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show JournalBoot, JournalBootEntry, LogCompression, LogFileEntry;
 // The Jobs panel (JOB-01, JOB-02): the jobs rows a CronResult carries, the
 // timer rows the app builds from a TimersResult, their schedule
 // descriptions and their runs as plain CronRun values (D52), and the
@@ -116,6 +122,14 @@ export 'package:klabautermann_host/klabautermann_host.dart'
 // Job history (JOB-04, JOB-05): what a JobHistoryResult carries.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show AnacronJob, AnacronPeriod, LoggedCronRun, TimerLastRun;
+// The v1 unit reads (SVC-08, SVC-10): the resources and sockets a
+// UnitQueryResult carries.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show UnitResources, UnitSocket;
+// The footprint view (SAF-14, 03 §8.11): the manifest rows and backup
+// index entries a FootprintState carries.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show BackupEntry, FootprintKind, FootprintRow;
 // The Logs panel's LOG-04 notice: the access check's journal row (K04)
 // over the probe's HostProfile.
 export 'package:klabautermann_host/klabautermann_host.dart'
@@ -148,6 +162,9 @@ export 'package:seance_core/seance_core.dart' show quoteShellWord;
 export 'package:seance_core/catalog.dart' show PushPolicy;
 export 'package:seance_core/seance_core.dart'
     show SyncEnrollmentIssue, SyncEnrollmentMode, validateSyncEnrollment;
+// The login password prompt (03 §4.5) hands ghost_servers' credential
+// dialog the auth method it asks for.
+export 'package:seance_core/seance_core.dart' show AuthMethod;
 // A process row's masked arguments (03 §8.9): the Processes panel shows
 // their display and reveals one on request.
 export 'package:klabautermann_docker/klabautermann_docker.dart'
@@ -169,6 +186,7 @@ export 'src/docker/docker_ladder.dart'
 export 'src/docker/docker_ladder.dart'
     show DockerSocketPathProblem, dockerSocketPathProblem;
 export 'src/docker/docker_access.dart' show dockerAccessFacts;
+
 export 'package:klabautermann_host/klabautermann_host.dart'
     show ComposeFacts, DockerAccessFacts;
 
