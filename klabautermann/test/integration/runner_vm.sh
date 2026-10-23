@@ -155,6 +155,10 @@ readonly op_units='klabautermann-op-*.service'
 # leaves them loaded, as a transient unit would not be. They run as
 # nobody and print what the suite looks for in the journal.
 readonly unit_dir='/etc/systemd/system'
+# The v1 host suite's unit lives where packages install theirs: mask
+# writes its /dev/null link into unit_dir, which refuses a unit file of
+# the same name there.
+readonly vendor_unit_dir='/usr/lib/systemd/system'
 readonly test_service='klabautermann-vm-test.service'
 readonly job_service='klabautermann-vm-job.service'
 readonly job_timer='klabautermann-vm-job.timer'
@@ -217,7 +221,7 @@ for user in "${users[@]}"; do
   fi
 done
 for path in "$sudoers_file" "$root_ops_parent" "$root_manifest_dir" \
-  "$edit_dir" "$unit_dir/$edit_unit" "$unit_dir/$v1_unit" \
+  "$edit_dir" "$unit_dir/$edit_unit" "$vendor_unit_dir/$v1_unit" \
   "$rotated_log" "${test_units[@]/#/$unit_dir/}"; do
   if sudo -n test -e "$path"; then
     die "$path exists; this leg removes only what it created"
@@ -336,7 +340,7 @@ on_exit() {
       "$unit_dir/$edit_unit" || cleanup=1
     sudo -n systemctl unmask -- "$v1_unit" 2>/dev/null || true
     sudo -n systemctl disable -- "$v1_unit" 2>/dev/null || true
-    sudo -n rm -f -- "$unit_dir/$v1_unit" "$rotated_log" || cleanup=1
+    sudo -n rm -f -- "$vendor_unit_dir/$v1_unit" "$rotated_log" || cleanup=1
   fi
   if ((units_installed)); then
     sudo -n systemctl stop "${test_units[@]}" 2>/dev/null || true

@@ -29,6 +29,10 @@ import 'support/runner_vm.dart';
 const _v1Service = 'klabautermann-vm-v1.service';
 const _unitDir = '/etc/systemd/system';
 
+/// Where the seeded v1 unit lives: a vendor directory, since mask writes
+/// its /dev/null link into [_unitDir] and refuses a unit file there.
+const _vendorUnitDir = '/usr/lib/systemd/system';
+
 /// The rotated log the LOG-08 test lists and reads.
 const _rotatedLog = '/var/log/klabautermann-vm.log.1.gz';
 
@@ -129,13 +133,20 @@ void main() {
     );
   }
 
+  /// A step that keeps its output reports the exit status it ended with,
+  /// 0 on success, where other plans report none ([expectSucceeded]).
+  void expectRanCleanly(ActionFinished finished) => expect(
+    (finished.outcome, finished.failure, finished.exitCode),
+    (ActionOutcome.succeeded, null, 0),
+  );
+
   group('units (SVC-05, SVC-06)', () {
     setUp(() async {
       addTearDown(
         () => root(
           'systemctl unmask -- $_v1Service; '
           'systemctl disable -- $_v1Service; '
-          'rm -f -- $_unitDir/$_v1Service; '
+          'rm -f -- $_vendorUnitDir/$_v1Service; '
           'systemctl daemon-reload; '
           'systemctl reset-failed -- $_v1Service 2>/dev/null; true',
         ),
@@ -144,7 +155,7 @@ void main() {
         "printf '%s\\n' '[Unit]' 'Description=Klabautermann runner-VM v1' "
         "'[Service]' 'Type=oneshot' 'ExecStart=/bin/false' "
         "'[Install]' 'WantedBy=multi-user.target' "
-        '> $_unitDir/$_v1Service && systemctl daemon-reload',
+        '> $_vendorUnitDir/$_v1Service && systemctl daemon-reload',
       );
     });
 
@@ -261,7 +272,7 @@ void main() {
       const UnitFileQuery(_userService, scope: UnitScope.user),
     );
     expect(
-      (file as UnitFilePayload).text.map((v) => v.display).join('\n'),
+      (file as UnitFilePayload).text.map((v) => v.display).join(),
       contains(_userMarker),
     );
   });
@@ -275,9 +286,9 @@ void main() {
       sudoServer,
       UnitFileQuery(vm.testService),
     );
-    final text = (file as UnitFilePayload).text.map((v) => v.display);
-    expect(text.join('\n'), contains('ExecStart=/bin/sleep infinity'));
-    expect(text.join('\n'), contains('# $_unitDir/${vm.testService}'));
+    final text = (file as UnitFilePayload).text.map((v) => v.display).join();
+    expect(text, contains('ExecStart=/bin/sleep infinity'));
+    expect(text, contains('# $_unitDir/${vm.testService}'));
 
     final resources = await unitQuery(
       engine,
@@ -346,7 +357,8 @@ void main() {
     );
     expect(
       [for (final r in records) (r as FileRecord).text],
-      ['rotated one', 'rotated two'],
+      // A window comes newest first.
+      ['rotated two', 'rotated one'],
     );
   });
 
@@ -425,7 +437,7 @@ void main() {
       expect(planned.preview.requiredLevel, RequiredLevel.login);
       expect((planned.preview.steps.single as ShellStep).elevated, isFalse);
       final finished = await run(engine, planned) as ActionFinished;
-      expectSucceeded(finished);
+      expectRanCleanly(finished);
       expect(finished.output?.stdout, 'own-line-ran\n${vm.sudoUser}\n');
     });
 
@@ -456,7 +468,7 @@ void main() {
       expect(planned.preview.runner.identity, other);
       expect((planned.preview.steps.single as ShellStep).elevated, isTrue);
       final finished = await run(engine, planned) as ActionFinished;
-      expectSucceeded(finished);
+      expectRanCleanly(finished);
       expect(finished.output?.stdout, '$other\n');
     });
   });

@@ -57,6 +57,7 @@ const _rotatedLogLine =
     "readonly rotated_log='/var/log/klabautermann-vm.log.1.gz'";
 const _rootDockerLine = "readonly root_docker_dir='/root/.docker'";
 const _unitDirLine = "readonly unit_dir='/etc/systemd/system'";
+const _vendorUnitDirLine = "readonly vendor_unit_dir='/usr/lib/systemd/system'";
 
 /// Bodies of the stand-ins, which log to `$STUB_LOG` and keep the
 /// accounts `useradd` made in `$STUB_STATE/users`. sudo runs what only
@@ -370,6 +371,7 @@ void main() {
         _rotatedLogLine,
         _rootDockerLine,
         _unitDirLine,
+        _vendorUnitDirLine,
       ]) {
         expect(script, contains(line));
       }
@@ -461,6 +463,10 @@ void main() {
               .replaceFirst(
                 _unitDirLine,
                 "readonly unit_dir='${sandbox.path}/units'",
+              )
+              .replaceFirst(
+                _vendorUnitDirLine,
+                "readonly vendor_unit_dir='${sandbox.path}/vendor-units'",
               ),
         );
       final chmod = await Process.run('chmod', [
