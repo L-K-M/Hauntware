@@ -535,6 +535,23 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The search's initial empty query.
   'lib/ui/logs/log_search.dart': {"''"},
+  'lib/ui/logs/log_tokens.dart': {
+    // LOG-07's token patterns (URLs, IP addresses, HTTP status codes):
+    // matched against server output, never shown.
+    r"""r'''\b(?:https?|wss?|ftp)://[^\s<>"'`]+'''""",
+    r"""r'[.,;:!?)\]}]+$'""",
+    r"""r'(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)'""",
+    r"""'(?<![\\w.])(?:$_octet\\.){3}$_octet(?::\\d{1,5}|/\\d{1,2})?(?!\\.?\\w)'""",
+    r"""r'(?<![\w:])(?:'""",
+    r"""r'(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}'""",
+    r"""r'|(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{0,4}::'""",
+    r"""r'(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{0,4}'""",
+    r"""r')(?:%[\w.]+)?(?![\w:])'""",
+    r"""r'(?:HTTP/\d(?:\.\d)?"?\s+'""",
+    r"""r'|\b(?:GET|HEAD|POST|PUT|DELETE|PATCH|OPTIONS|CONNECT|TRACE)\s+\S+\s+'""",
+    r"""r'|\b(?:[Ss]tatus|STATUS|[Cc]ode|CODE)(?:_code)?["\x27]?\s*[=:]\s*"?)'""",
+    r"""r'([1-5]\d\d)\b'""",
+  },
   'lib/ui/logs/log_text.dart': {
     // A row's unit and PID prefix in classic syslog notation, as
     // journalctl's short format prints it, or none.
