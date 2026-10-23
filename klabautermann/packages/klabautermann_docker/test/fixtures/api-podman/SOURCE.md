@@ -4,7 +4,7 @@ Recorded by `klabautermann_docker/tool/capture_api.dart` (03 §11.1, D21)
 from Podman 5.8.7, Docker-compatible API 1.44 (minimum 1.24), running
 rootful in a privileged container of
 `quay.io/podman/stable:v5.8.7@sha256:2fb39ca923dd9e0ee33f9e319c3a107a2bfde022a6a31560cbd56a862821e7d3`,
-through its Unix socket, on 2026-10-17T16:14:50.067150Z (a local run).
+through its Unix socket, on 2026-10-20T17:14:44.869364Z (a local run).
 The daemon reported fedora, kernel 6.18.44-fc-v139 and cgroup v1.
 
 The tool seeded the daemon through the API first:
@@ -56,13 +56,17 @@ value.
 | `logs-tail` | `GET /v1.44/containers/job/logs?stdout=1&stderr=1&timestamps=1&tail=20` | 200 |
 | `logs-tail-tty` | `GET /v1.44/containers/tty/logs?stdout=1&stderr=1&timestamps=1&tail=20` | 200 |
 | `logs-follow` | `GET /v1.44/containers/job/logs?stdout=1&stderr=1&timestamps=1&follow=1` | 200 |
-| `logs-since` | `GET /v1.44/containers/job/logs?stdout=1&stderr=1&timestamps=1&since=1792253680.373011652` | 200 |
+| `logs-since` | `GET /v1.44/containers/job/logs?stdout=1&stderr=1&timestamps=1&since=1792516474.895326341` | 200 |
 | `images` | `GET /v1.44/images/json` | 200 |
 | `image-inspect` | `GET /v1.44/images/mirror.gcr.io/library/busybox:1.37.0/json` | 200 |
 | `networks` | `GET /v1.44/networks` | 200 |
 | `volumes` | `GET /v1.44/volumes` | 200 |
 | `system-df` | `GET /v1.44/system/df` | 200 |
-| `events` | `GET /v1.44/events?since=1792253671&until=1792253684` | 200 |
+| `events` | `GET /v1.44/events?since=1792516468&until=1792516479` | 200 |
 | `below-min` | `GET /v1.23/info` | 200 |
 | `above-max` | `GET /v1.45/info` | 200 |
 | `floor-1.41` | `GET /v1.41/info` | 200 |
+| `exec-create` | `POST /v1.44/containers/web/exec` | 201 |
+| `exec-start` | `POST /v1.44/exec/21dd181c6762b05ad22434af4d521f560b453731f7e9eb8ef391dd6206b9aa8d/start` | 101 |
+| `exec-inspect` | `GET /v1.44/exec/21dd181c6762b05ad22434af4d521f560b453731f7e9eb8ef391dd6206b9aa8d/json` | 200 |
+| `exec-resize` | `POST /v1.44/exec/cc2c5b67b72f60bc5c850336afe245ba9a71cebb97bf7d6d2156920310c1d582/resize?h=40&w=120` | 201 |

@@ -45,6 +45,9 @@ enum JobRunsUnknown {
 
   /// Neither a cron line nor anacron runs the directory.
   noDriver,
+
+  /// The line is paused (JOB-07): cron skips it until it is resumed.
+  paused,
 }
 
 /// One row of the unified jobs list (03 §7.7). Only [mergeJobs] builds
@@ -375,6 +378,16 @@ CronJobEntry _cronEntry(
   evaluate,
 }) {
   final expression = job.expression;
+  if (job.paused) {
+    return CronJobEntry._(
+      id: id,
+      job: job,
+      schedule: expression == null
+          ? null
+          : CronSchedule(text: job.schedule, expression: expression),
+      runsUnknown: JobRunsUnknown.paused,
+    );
+  }
   if (expression == null) {
     return CronJobEntry._(
       id: id,
@@ -488,8 +501,9 @@ _DirectoryDrivers _directoryDrivers(
   required bool anacron,
 }) {
   final directory = _periodDirectory(period);
+  // A paused line runs nothing, so it drives nothing.
   final drivers = cronEntries
-      .where((e) => _runsParts(e.job.command, directory))
+      .where((e) => !e.job.paused && _runsParts(e.job.command, directory))
       .toList();
   final driverIds = [for (final d in drivers) d.id];
   final direct = drivers
