@@ -201,6 +201,40 @@ ParseResult<List<CronJob>> parseUserCrontab(
   ], warnings);
 }
 
+/// Parses one cron source's [text], as `crontab -l` printed it or as the
+/// file reads (JOB-19): a system table (`/etc/crontab`, `/etc/cron.d/*`)
+/// when [systemTable], whose lines name their user, otherwise a user
+/// table whose jobs carry [user]. Each job carries [source]. Never
+/// throws.
+List<CronJob> parseCrontabText(
+  String text, {
+  required String source,
+  required bool systemTable,
+  String? user,
+}) {
+  final parsed = <CronJob>[];
+  _parseCrontab(
+    text.split('\n'),
+    source: source,
+    table: systemTable ? _CronTable.system : _CronTable.user,
+    jobs: parsed,
+    warnings: [],
+  );
+  if (systemTable || user == null) return parsed;
+  return [
+    for (final job in parsed)
+      CronJob(
+        source: job.source,
+        schedule: job.schedule,
+        command: job.command,
+        raw: job.raw,
+        expression: job.expression,
+        user: user,
+        cronTz: job.cronTz,
+      ),
+  ];
+}
+
 /// The `crontab_meta` block: `tool=missing` or `rc=<n>`. rc 0 means a
 /// crontab exists; a nonzero rc with a "no crontab" note in the output
 /// means the user simply has none (03 §7.7); anything else is ambiguous.

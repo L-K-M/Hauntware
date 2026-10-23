@@ -32,17 +32,35 @@ final class ShellStep extends PlanStep {
     Iterable<String> argv, {
     this.elevated = false,
     this.discardOutput = false,
+    this.captureOutput = false,
+    Iterable<String>? shownArgv,
     List<int>? input,
     Map<int, RevalidationFailure> exitMeanings = const {},
   }) : argv = List.unmodifiable(argv),
+       shownArgv = List.unmodifiable(shownArgv ?? argv),
        input = input == null ? null : List.unmodifiable(input),
        exitMeanings = Map.unmodifiable(exitMeanings),
        commandLine =
            HostCommands.commandLine(List.of(argv), quote: quoteShellWord) +
+           (discardOutput ? _discarded : ''),
+       _shownLine =
+           HostCommands.commandLine(
+             List.of(shownArgv ?? argv),
+             quote: quoteShellWord,
+           ) +
            (discardOutput ? _discarded : '');
 
   final List<String> argv;
   final String commandLine;
+
+  /// [argv] as the preview, the linter and the audit show it: the same
+  /// words, with what 8.9 masks masked, as for a cron line's command.
+  final List<String> shownArgv;
+  final String _shownLine;
+
+  /// The runner keeps what the step printed, redacted and capped, for
+  /// [ActionFinished.output] (JOB-19).
+  final bool captureOutput;
 
   /// What the command reads on stdin, or null for nothing.
   final List<int>? input;
@@ -61,7 +79,7 @@ final class ShellStep extends PlanStep {
 
   @override
   String get display {
-    final line = elevated ? 'sudo: $commandLine' : commandLine;
+    final line = elevated ? 'sudo: $_shownLine' : _shownLine;
     final bytes = input?.length;
     if (bytes == null) return line;
     return '$line < new content ($bytes ${bytes == 1 ? 'byte' : 'bytes'})';

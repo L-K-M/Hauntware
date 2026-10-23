@@ -259,4 +259,29 @@ void main() {
     expect(job.cronTz, 'Europe/Berlin');
     expect(r.warnings, [contains('short line')]);
   });
+
+  group('one source read alone (JOB-19)', () {
+    test('a user table carries its user and source', () {
+      final jobs = parseCrontabText(
+        '# nightly\nMAILTO=ops\n0 3 * * * /usr/local/bin/backup %daily\n',
+        source: userCrontabSource('alice'),
+        systemTable: false,
+        user: 'alice',
+      );
+      final job = jobs.single;
+      expect(job.user, 'alice');
+      expect(job.source, 'crontab -u alice');
+      expect(job.command, '/usr/local/bin/backup %daily');
+    });
+
+    test("a system table reads each line's user", () {
+      final jobs = parseCrontabText(
+        '*/5 * * * * www-data php /srv/app/cron.php\n',
+        source: '/etc/cron.d/app',
+        systemTable: true,
+      );
+      expect(jobs.single.user, 'www-data');
+      expect(jobs.single.command, 'php /srv/app/cron.php');
+    });
+  });
 }
