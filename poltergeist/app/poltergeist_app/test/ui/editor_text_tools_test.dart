@@ -242,7 +242,18 @@ void main() {
     ]);
 
     // The load and save ride real I/O, so the drive runs where the event
-    // loop really turns; the assertions read the settled tree after.
+    // loop really turns; the assertions read the settled tree after. Each
+    // step waits for its result rather than a fixed interval, which a
+    // loaded runner can outlast.
+    Future<void> settle(bool Function() done) async {
+      final deadline = DateTime.now().add(const Duration(seconds: 20));
+      await tester.pump();
+      while (!done() && DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await tester.pump();
+      }
+    }
+
     await tester.runAsync(() async {
       await tester.pumpWidget(
         MaterialApp(
@@ -259,9 +270,9 @@ void main() {
           ),
         ),
       );
-      await tester.pump();
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      await tester.pump();
+      await settle(
+        () => find.textContaining('13 bytes').evaluate().isNotEmpty,
+      );
     });
 
     // The buffer is normalized to LF, but the status row reports what the
@@ -276,9 +287,9 @@ void main() {
     await tester.pump();
     await tester.runAsync(() async {
       await tester.tap(find.byTooltip('Save locally'));
-      await tester.pump();
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      await tester.pump();
+      await settle(
+        () => file.readAsStringSync(encoding: latin1).contains('uno'),
+      );
     });
 
     final saved = file.readAsBytesSync();
