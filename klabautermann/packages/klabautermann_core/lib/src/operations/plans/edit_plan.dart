@@ -6,6 +6,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
         EditCommands,
@@ -13,9 +14,11 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         HostCommandError,
         HostCommands,
         encodeFootprintManifest,
+        kVerifyAsUnitSystemd,
         kRootBackupsDir,
         kRootManifestPath,
-        parseFootprintManifest;
+        parseFootprintManifest,
+        unitFileName;
 import 'package:seance_core/seance_core.dart'
     show RemoteCommandException, RemoteCommandResult, quoteShellWord;
 
@@ -148,6 +151,14 @@ Future<PlanAttempt> _planFile(
   final manifest = await _manifestStep(c, root: privileged, backups: backups);
   if (manifest case _ManifestRefused(:final reason)) return _refused(reason);
   final relabel = await _selinuxEnforcing(c);
+  // A unit file is checked as its unit before the rename where the
+  // host's systemd can load the temp under the unit's name; elsewhere the
+  // preview says it is not.
+  final unit = unitFileName(path);
+  final verifyUnit =
+      unit != null &&
+      !temp.contains(':') &&
+      (c.profile.systemdVersion ?? 0) >= kVerifyAsUnitSystemd;
 
   ShellStep step(List<String> argv, {List<int>? input, bool cas = false}) =>
       ShellStep(
@@ -167,6 +178,7 @@ Future<PlanAttempt> _planFile(
         if (manifest case _ManifestWrite(:final step)) step,
         step(EditCommands.writeTemp(temp), input: utf8.encode(intent.text)),
         if (_isSudoers(path)) step(['visudo', '-c', '-f', temp]),
+        if (verifyUnit) step(EditCommands.verifyUnit(temp, unit)),
         step(EditCommands.copyAttributes(path, temp)),
         // Status only: compose's errors can quote interpolated values.
         if (checkArgv != null)
@@ -188,6 +200,7 @@ Future<PlanAttempt> _planFile(
         HostWriteRow.loginRecords,
       ],
       protected: isProtectedEditPath(path) ? ProtectedReason.builtIn : null,
+      warnings: [if (unit != null && !verifyUnit) PlanWarning.unitNotVerified],
     ),
   );
 }
@@ -315,16 +328,28 @@ Future<_Manifest> _manifestStep(
     return const _ManifestRefused(ActionRefusalReason.noLink);
   }
   final parsed = parseFootprintManifest(read.stdout);
-  if (parsed.value.isEmpty && read.stdout.trim().isNotEmpty) {
+  // The rewrite keeps only the rows the parser understood, so a manifest
+  // with any it skipped is refused rather than shortened, as the backup
+  // index is.
+  if (parsed.warnings.isNotEmpty ||
+      (parsed.value.isEmpty && read.stdout.trim().isNotEmpty)) {
     return const _ManifestRefused(ActionRefusalReason.invalidTarget);
   }
   final rows = manifestWithBackups(parsed.value, backups);
   if (rows == null) return const _ManifestListed();
   return _ManifestWrite(
     ShellStep(
-      EditCommands.manifestWrite(path),
+      // Against the read above: a manifest another run changed since is
+      // not overwritten with rows built from the old one. The check and
+      // the rename are two steps, so two runs between them can still
+      // drop one's rows; its backup then shows as an orphan.
+      EditCommands.manifestWrite(
+        path,
+        sha256.convert(utf8.encode(read.stdout)).toString(),
+      ),
       elevated: root,
       input: utf8.encode(encodeFootprintManifest(rows)),
+      exitMeanings: _contentChanged,
     ),
   );
 }

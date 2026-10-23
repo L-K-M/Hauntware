@@ -31,6 +31,7 @@ const String _rootEquivalenceNoticeKey =
 const String _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
 const String _monitorSetKey = 'klabautermann.monitorSet';
 const String _safetyKey = 'klabautermann.safety';
+const String _syncSecretsKey = 'klabautermann.sync.secrets';
 
 const String _endpointOverridesKey = 'klabautermann.docker.endpointOverrides';
 const String _stackFoldersKey = 'klabautermann.docker.stackFolders';
@@ -305,6 +306,20 @@ final class DeviceSettingsStore {
   /// way.
   Future<void> setAnnounceThresholdBands(bool announce) async {
     _values[_announceBandsKey] = announce;
+    await _save();
+  }
+
+  /// The device's "sync passwords" switch (03 §4.5, SYN-02),
+  /// `klabautermann.sync.secrets`: off unless the user turned it on, so
+  /// anything but `true` reads as off and a damaged file syncs no
+  /// passwords.
+  bool get syncSecrets => _values[_syncSecretsKey] == true;
+
+  /// Stores [enabled] and writes the document. Throws when the write
+  /// fails or this session is read-only; the value stays in memory either
+  /// way.
+  Future<void> setSyncSecrets(bool enabled) async {
+    _values[_syncSecretsKey] = enabled;
     await _save();
   }
 

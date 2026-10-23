@@ -47,6 +47,46 @@ const String kManifestSuffix = '/klabautermann/manifest.json';
 /// `<epoch seconds> TAB <sha256> TAB <original path>`.
 const String kEditBackupIndexName = 'index';
 
+/// The first systemd major whose `systemd-analyze verify` reads a file as
+/// another unit (`FILE:UNIT`), which checking a unit file's temp copy
+/// needs: the temp's own name is no unit name.
+const int kVerifyAsUnitSystemd = 250;
+
+/// The unit types a unit file defines (systemd.unit(5)); device and scope
+/// units come from udev and the manager, never from a file.
+const Set<String> _unitFileTypes = {
+  'service',
+  'socket',
+  'target',
+  'mount',
+  'automount',
+  'swap',
+  'path',
+  'timer',
+  'slice',
+};
+
+/// The unit [path] defines when it is a unit file systemd loads: a unit
+/// name, with a unit type's suffix, directly in a `systemd/system` or
+/// `systemd/user` directory. A drop-in, under `<unit>.d/`, defines none,
+/// and neither does a name with `:`, which `FILE:UNIT` would split.
+/// Otherwise null.
+String? unitFileName(String path) {
+  final slash = path.lastIndexOf('/');
+  if (slash <= 0) return null;
+  final directory = path.substring(0, slash);
+  if (!directory.endsWith('/systemd/system') &&
+      !directory.endsWith('/systemd/user')) {
+    return null;
+  }
+  final name = path.substring(slash + 1);
+  final dot = name.lastIndexOf('.');
+  if (dot <= 0 || !_unitFileTypes.contains(name.substring(dot + 1))) {
+    return null;
+  }
+  return _unitName.hasMatch(name) ? name : null;
+}
+
 /// The default cap on what [EditCommands.readFile] prints of a file: an
 /// editor buffer, not a log (03 §8.5).
 const int kEditReadMaxBytes = 1024 * 1024;
@@ -67,6 +107,10 @@ abstract final class EditExit {
   /// [EditCommands.copyAttributes]: as [aclNotCarried], for extended
   /// attributes other than the SELinux label.
   static const int xattrNotCarried = 103;
+
+  /// [EditCommands.sha256List]: a path exists but `sha256sum` could not
+  /// read it, so the list is incomplete.
+  static const int unreadable = 104;
 }
 
 /// What [EditCommands.readFile]'s first line says of the file: its
@@ -88,8 +132,8 @@ ReadHeader? parseReadHeader(String line) {
 
 /// Reads `sha256sum` output, as [EditCommands.sha256List] prints it, into
 /// a hash per path. Lines it does not recognise are skipped. GNU marks a
-/// line whose path holds a backslash with a leading `\` and escapes the
-/// path; BusyBox prints the path as it is.
+/// line whose path holds a backslash or a newline with a leading `\` and
+/// escapes the path; BusyBox prints the path as it is.
 Map<String, String> parseSha256List(String output) => {
   for (final line in output.split('\n'))
     if (_sha256Line.firstMatch(line) case final m?)
@@ -111,6 +155,8 @@ final _sha256Line = RegExp(r'^(\\)?([0-9a-f]{64})  (/.*)$');
 final _sha256 = RegExp(r'^[0-9a-f]{64}$');
 final _backupName = RegExp(r'^[0-9a-f]{64}-\d{1,12}$');
 final _token = RegExp('^[0-9a-f]{$kEditTempTokenLength}\$');
+// systemd.unit(5)'s characters, less `:`.
+final _unitName = RegExp(r'^[A-Za-z0-9_.@\\-]+$');
 
 /// Prints `<size> <uid> <gid> <mode> <sha256>` and then, when the size is
 /// at most the cap, the content. The hash is of the file as `sha256sum` read it; the
@@ -204,23 +250,38 @@ mv -f -- "$d/.crontab.tmp" "$b" || { s=$?; rm -f -- "$d/.crontab.tmp"; exit "$s"
   mv -f -- "$d/.index.tmp" "$d/index" || exit
 printf '%s\n' "$b"''';
 
+/// Sets `c` to the SHA-256 of `$1`, or of nothing when `$1` does not
+/// exist. A `$1` that exists but cannot be read exits non-zero, so it
+/// never passes for an absent one.
+const String _kHashOrEmpty =
+    'if [ -e "\$1" ]; then c=\$(sha256sum < "\$1") || exit; '
+    'else c=\$(sha256sum < /dev/null); fi\n';
+
+/// Exits [EditExit.hashMismatch] unless `c` holds the SHA-256 in `$2`.
+const String _kExitUnlessHash =
+    'if [ "\${c%% *}" != "\$2" ]; then exit ${EditExit.hashMismatch}; fi\n';
+
 /// Replaces a backup index with stdin while it still hashes to the
 /// SHA-256 the plan read (an absent index hashes as empty), so a backup
 /// another edit added meanwhile is never dropped from it.
-const String _kIndexWriteIfHashScript = r'''
-umask 077
-c=$( { cat -- "$1" 2>/dev/null || :; } | sha256sum) || exit
-if [ "${c%% *}" != "$2" ]; then exit 101; fi
-cat > "$1.klabautermann-tmp" && mv -f -- "$1.klabautermann-tmp" "$1" ||
-  { s=$?; rm -f -- "$1.klabautermann-tmp"; exit "$s"; }''';
+const String _kIndexWriteIfHashScript =
+    'umask 077\n'
+    '$_kHashOrEmpty'
+    '$_kExitUnlessHash'
+    'cat > "\$1.klabautermann-tmp" && mv -f -- "\$1.klabautermann-tmp" "\$1" ||\n'
+    '  { s=\$?; rm -f -- "\$1.klabautermann-tmp"; exit "\$s"; }';
 
 /// Writes stdin to the manifest through a temp file beside it, creating
-/// its directory 0700.
-const String _kManifestWriteScript = r'''
-umask 077
-mkdir -p -- "${1%/*}" || exit
-x=$1.klabautermann-tmp.$$
-cat > "$x" && mv -f -- "$x" "$1" || { s=$?; rm -f -- "$x"; exit "$s"; }''';
+/// its directory 0700, while the manifest still hashes to the read the
+/// plan rewrote (an absent one hashes as empty); otherwise exits
+/// [EditExit.hashMismatch].
+const String _kManifestWriteScript =
+    'umask 077\n'
+    'mkdir -p -- "\${1%/*}" || exit\n'
+    '$_kHashOrEmpty'
+    '$_kExitUnlessHash'
+    'x=\$1.klabautermann-tmp.\$\$\n'
+    'cat > "\$x" && mv -f -- "\$x" "\$1" || { s=\$?; rm -f -- "\$x"; exit "\$s"; }';
 
 /// The validated builders of the edit pipeline (03 §8.5, §8.8, D67).
 abstract final class EditCommands {
@@ -285,6 +346,27 @@ abstract final class EditCommands {
       temp,
       sha256,
     ];
+  }
+
+  /// Checks [temp] as the unit [unit] with `systemd-analyze verify`
+  /// before it replaces the unit file (03 §8.5): `FILE:UNIT` loads the
+  /// temp under the unit's name, which needs systemd
+  /// [kVerifyAsUnitSystemd] or later. It runs in system mode, which
+  /// needs no user manager, for user units too. `--man=no` skips the
+  /// lookup of `Documentation=` man pages, which fails the check on a
+  /// host without them although the unit is valid.
+  static List<String> verifyUnit(String temp, String unit) {
+    _checkTemp(temp);
+    if (temp.contains(':')) {
+      throw HostCommandError(
+        'FILE:UNIT cannot name a path with :',
+        argument: temp,
+      );
+    }
+    if (unitFileName('/etc/systemd/system/$unit') != unit) {
+      throw HostCommandError('not a unit file name', argument: unit);
+    }
+    return ['systemd-analyze', 'verify', '--man=no', '--', '$temp:$unit'];
   }
 
   /// Prints `1` while SELinux enforces; fails where the host has no
@@ -400,10 +482,23 @@ abstract final class EditCommands {
     return _readIfPresent(path);
   }
 
-  /// Replaces the footprint manifest at [path] with stdin, atomically.
-  static List<String> manifestWrite(String path) {
+  /// Replaces the footprint manifest at [path] with stdin, atomically,
+  /// while it still hashes to [baseSha256], the SHA-256 of the read the
+  /// new rows were built from; otherwise exits [EditExit.hashMismatch]
+  /// and leaves it as it was.
+  static List<String> manifestWrite(String path, String baseSha256) {
     _checkManifest(path);
-    return ['sh', '-c', _kManifestWriteScript, 'klabautermann-manifest', path];
+    if (!_sha256.hasMatch(baseSha256)) {
+      throw HostCommandError('not a SHA-256', argument: baseSha256);
+    }
+    return [
+      'sh',
+      '-c',
+      _kManifestWriteScript,
+      'klabautermann-manifest',
+      path,
+      baseSha256,
+    ];
   }
 
   /// Prints the index of backup directory [dir], or nothing when it has
@@ -465,13 +560,22 @@ abstract final class EditCommands {
     path,
   ];
 
-  /// `sha256sum` of each of [paths], for the footprint's verification;
-  /// [parseSha256List] reads the output, which leaves out a path that is
-  /// gone.
+  /// `sha256sum` of each of [paths] that exists, for the footprint's
+  /// verification; [parseSha256List] reads the output, which leaves out a
+  /// path that is gone. A gone path is not a failure, so any other exit
+  /// than 0 means the list is incomplete: a path that exists but could
+  /// not be read exits [EditExit.unreadable].
   static List<String> sha256List(List<String> paths) {
     if (paths.isEmpty) throw const HostCommandError('no paths');
     paths.forEach(_checkPath);
-    return ['sha256sum', '--', ...paths];
+    return [
+      'sh',
+      '-c',
+      'for p; do [ ! -e "\$p" ] || sha256sum -- "\$p" || '
+          'exit ${EditExit.unreadable}; done',
+      'klabautermann-sha256',
+      ...paths,
+    ];
   }
 
   /// [path] is absolute and normalized (03 §8.8), and holds no control

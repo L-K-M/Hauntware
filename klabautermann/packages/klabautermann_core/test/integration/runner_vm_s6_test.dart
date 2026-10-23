@@ -160,8 +160,10 @@ void main() {
     final elevated = await executor.start([
       binary,
     ], password: await vm.sudoPassword());
-    final refusal = await elevated.refusal;
+    // The refusal settles once stdout carries something, and sftp-server
+    // says nothing until the client's init: speak first, then ask.
     final elevatedSession = await _sftpSession(elevated, probeFile);
+    final refusal = await elevated.refusal;
     final plainSession = await _sftpSession(
       await link.start(quoteShellWord(binary)),
       probeFile,

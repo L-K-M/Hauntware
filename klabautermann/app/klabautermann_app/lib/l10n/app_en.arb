@@ -2146,9 +2146,55 @@
       }
     }
   },
-  "logsPanelCurrentBoot": "Current boot only",
-  "@logsPanelCurrentBoot": {
-    "description": "Toggle of the Logs panel's journal filters that shows only entries since the server last started."
+  "logsPanelBoot": "Boot",
+  "@logsPanelBoot": {
+    "description": "Tooltip and title of the Logs panel's boot picker, which chooses the server start whose journal or kernel entries are shown."
+  },
+  "logsPanelBootChoice": "{choice, select, all{All boots} current{This boot} other{Boot}}",
+  "@logsPanelBootChoice": {
+    "description": "The boot picker's choice: every boot the journal keeps, or only the one since the server last started.",
+    "placeholders": {
+      "choice": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelBootPast": "{count, plural, =1{Previous boot} other{{count} boots ago}}",
+  "@logsPanelBootPast": {
+    "description": "A past boot in the boot picker, counted back from the current one.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "logsPanelBootSpan": "{start} to {end}",
+  "@logsPanelBootSpan": {
+    "description": "When a boot's first and last journal entries were written, under its name in the boot picker.",
+    "placeholders": {
+      "start": {
+        "type": "String",
+        "example": "12 Oct, 08:14"
+      },
+      "end": {
+        "type": "String",
+        "example": "14 Oct, 23:02"
+      }
+    }
+  },
+  "logsPanelBootsLoading": "Reading the server's boots…",
+  "@logsPanelBootsLoading": {
+    "description": "Shown in the boot picker while the server lists its boots."
+  },
+  "logsPanelBootsFailed": "{failure, select, noLink{Not connected to the server.} denied{The server denied access to its boot list.} missing{The server has no journal to list boots from.} other{Reading the server's boots failed.}}",
+  "@logsPanelBootsFailed": {
+    "description": "Shown in the boot picker when the server's boots could not be listed.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
   },
   "logsPanelTimeRange": "Time range",
   "@logsPanelTimeRange": {
@@ -2184,6 +2230,126 @@
   "@logsPanelCommonPaths": {
     "description": "Tooltip of the button beside the file path field that lists common log files, such as the syslog and web server logs."
   },
+  "logsPanelBrowseFiles": "Browse /var/log",
+  "@logsPanelBrowseFiles": {
+    "description": "Button beside the file path field that lists the server's log files under /var/log (LOG-08)."
+  },
+  "logsPanelFiles": "Files in /var/log",
+  "@logsPanelFiles": {
+    "description": "Title of the sheet listing the server's log files under /var/log."
+  },
+  "logsPanelFilesFilter": "Filter by name",
+  "@logsPanelFilesFilter": {
+    "description": "Label of the field that narrows the /var/log listing to paths containing its text."
+  },
+  "logsPanelFilesLoading": "Listing the server's log files…",
+  "@logsPanelFilesLoading": {
+    "description": "Shown in the /var/log browser while the server lists its files."
+  },
+  "logsPanelFilesFailed": "{failure, select, noLink{Not connected to the server.} denied{The server denied access to /var/log.} missing{The server cannot list /var/log.} other{Listing the server's log files failed.}}",
+  "@logsPanelFilesFailed": {
+    "description": "Shown in the /var/log browser when the server's files could not be listed.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelFilesEmpty": "The server has no files under /var/log.",
+  "@logsPanelFilesEmpty": {
+    "description": "Shown in the /var/log browser when the listing is empty."
+  },
+  "logsPanelFilesNoMatch": "No file path contains this text.",
+  "@logsPanelFilesNoMatch": {
+    "description": "Shown in the /var/log browser when the filter matches no file."
+  },
+  "logsPanelFileDetails": "{size}, changed {modified}",
+  "@logsPanelFileDetails": {
+    "description": "Under a file's path in the /var/log browser: its size and when it last changed.",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "12 KiB"
+      },
+      "modified": {
+        "type": "String",
+        "example": "12 Oct, 08:14"
+      }
+    }
+  },
+  "logsPanelFileCompressed": "Compressed: reads its last lines, without following",
+  "@logsPanelFileCompressed": {
+    "description": "Under a rotated .gz or .xz file in the /var/log browser."
+  },
+  "logsPanelFileUnreadable": "Your account cannot read it; admin mode can",
+  "@logsPanelFileUnreadable": {
+    "description": "Under a file in the /var/log browser that the server account may not read."
+  },
+  "logsExport": "Export",
+  "@logsExport": {
+    "description": "Tooltip of the Logs panel's button that exports the lines it holds (LOG-10)."
+  },
+  "logsExportTitle": "{count, plural, =1{Export 1 line} other{Export {count} lines}}",
+  "@logsExportTitle": {
+    "description": "Title of the log export sheet.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "logsExportIncludeSecrets": "Include secrets",
+  "@logsExportIncludeSecrets": {
+    "description": "Switch in the log export sheet that turns off redaction."
+  },
+  "logsExportSecretsRedacted": "Passwords, tokens and keys are replaced before the lines leave the app.",
+  "@logsExportSecretsRedacted": {
+    "description": "Under the Include secrets switch while it is off."
+  },
+  "logsExportSecretsIncluded": "The lines leave the app as they are, secrets included.",
+  "@logsExportSecretsIncluded": {
+    "description": "Under the Include secrets switch while it is on."
+  },
+  "logsExportAction": "{target, select, copy{Copy} save{Save…} other{Share…}}",
+  "@logsExportAction": {
+    "description": "A button in the log export sheet: copy to the clipboard, save to a file, or open the share sheet.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "logsExportDone": "{target, select, copy{Copied the lines.} other{Saved the lines.}}",
+  "@logsExportDone": {
+    "description": "Toast after the log export copied or saved the lines.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "logsExportFailed": "{target, select, copy{The lines could not be copied.} save{The lines could not be saved.} other{The lines could not be shared.}}",
+  "@logsExportFailed": {
+    "description": "Toast when the log export failed.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "logsExportNotRedacted": "The lines could not be redacted, so nothing was exported.",
+  "@logsExportNotRedacted": {
+    "description": "Toast when the engine could not redact the lines; the export never falls back to the unredacted text."
+  },
+  "logsExportFileName": "{source, select, journal{journal} kernel{kernel} other{log}}.log",
+  "@logsExportFileName": {
+    "description": "The suggested file name for a saved log export. Keep it a valid file name.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
   "logsPanelApply": "Apply",
   "@logsPanelApply": {
     "description": "Button that reads the log again with the filters or path entered."
@@ -2211,6 +2377,14 @@
   "@logsPanelLiveTooltip": {
     "description": "Tooltip of the Logs panel's Live chip."
   },
+  "logsPanelLivePastBoot": "A past boot has no new entries to follow",
+  "@logsPanelLivePastBoot": {
+    "description": "Tooltip of the Logs panel's Live chip while it is off because a past boot is shown."
+  },
+  "logsPanelLiveCompressed": "A compressed file has no new lines to follow",
+  "@logsPanelLiveCompressed": {
+    "description": "Tooltip of the Logs panel's Live chip while it is off because a compressed rotated file is shown."
+  },
   "logsPanelJournalLimited": "Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The server's Access section shows how to add it.",
   "@logsPanelJournalLimited": {
     "description": "Notice above the journal when the server shows the signed-in account only its own entries. The group names are names on the server and stay as they are."
@@ -2219,7 +2393,7 @@
   "@logsPanelKernelLimited": {
     "description": "Notice above the kernel log when the server's journal shows the signed-in account only its own entries, which never include kernel messages. The group names are names on the server and stay as they are."
   },
-  "logsPanelStatus": "{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} gap{Following again. Lines written while it was paused or disconnected may be missing.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} other{Choose or type the absolute path of a file to tail.}}",
+  "logsPanelStatus": "{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} gap{Following again. Lines written while it was paused or disconnected may be missing.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} searchUnsupported{This server's journal cannot search. Clear the server search to read the log.} other{Choose or type the absolute path of a file to tail.}}",
   "@logsPanelStatus": {
     "description": "Status line above the log saying what reading it is doing or why it stopped.",
     "placeholders": {
@@ -2251,6 +2425,32 @@
   "logsPanelSearchCase": "Match case",
   "@logsPanelSearchCase": {
     "description": "Tooltip of the toggle that makes the log search tell upper from lower case."
+  },
+  "logsPanelSearchRegex": "Regular expression",
+  "@logsPanelSearchRegex": {
+    "description": "Tooltip of the toggle that makes the log search read its text as a regular expression."
+  },
+  "logsPanelSearchInvalid": "Not a valid regular expression",
+  "@logsPanelSearchInvalid": {
+    "description": "Error under the log search field when its text, read as a regular expression, does not compile."
+  },
+  "logsPanelSearchServer": "Search the whole journal on the server",
+  "@logsPanelSearchServer": {
+    "description": "Tooltip of the button that reads only the journal entries matching the search, matched by the server, rather than searching the entries already shown."
+  },
+  "logsPanelServerMatch": "Server search: {pattern}",
+  "@logsPanelServerMatch": {
+    "description": "Chip above the log while the server reads only the journal entries matching a pattern; the pattern is shown as sent.",
+    "placeholders": {
+      "pattern": {
+        "type": "String",
+        "example": "(?i)timeout"
+      }
+    }
+  },
+  "logsPanelServerMatchClear": "Clear the server search",
+  "@logsPanelServerMatchClear": {
+    "description": "Tooltip of the button on the server-search chip that reads the whole journal again."
   },
   "logsPanelSearchMatches": "{total, plural, =0{No matches} =1{1 match} other{{total} matches}}",
   "@logsPanelSearchMatches": {
@@ -2962,7 +3162,7 @@
       }
     }
   },
-  "jobsRunsUnknown": "{reason, select, reboot{Runs when cron starts, not at a time.} unparsed{The schedule does not parse, so its runs are unknown.} timeZoneUnresolved{This device does not know the CRON_TZ zone, so its runs are unknown.} serverZoneUnknown{The server's time zone is not known yet, so its runs are unknown.} noRunInHorizon{No run falls in the next {years} years.} notEvaluated{Runs are worked out for the first {limit} cron lines only.} anacron{anacron runs this directory; its timing is not shown in this version.} other{No cron line runs this directory.}}",
+  "jobsRunsUnknown": "{reason, select, reboot{Runs when cron starts, not at a time.} unparsed{The schedule does not parse, so its runs are unknown.} timeZoneUnresolved{This device does not know the CRON_TZ zone, so its runs are unknown.} serverZoneUnknown{The server's time zone is not known yet, so its runs are unknown.} noRunInHorizon{No run falls in the next {years} years.} notEvaluated{Runs are worked out for the first {limit} cron lines only.} anacron{anacron runs this directory; its timing is not shown in this version.} paused{Paused: cron skips this job until it is resumed.} other{No cron line runs this directory.}}",
   "@jobsRunsUnknown": {
     "description": "Why a job lists no next runs (03 §7.7); reason is the engine's JobRunsUnknown name, and other is noDriver. limit is how many cron lines a reading works out runs for, and years how far ahead it looks.",
     "placeholders": {
@@ -2977,7 +3177,7 @@
       }
     }
   },
-  "jobsNextRunUnknown": "{reason, select, reboot{At cron start} unparsed{Unreadable schedule} timeZoneUnresolved{Zone not known} serverZoneUnknown{Zone not known yet} noRunInHorizon{None in {years} years} notEvaluated{Not worked out} anacron{Timed by anacron} other{Not run}}",
+  "jobsNextRunUnknown": "{reason, select, reboot{At cron start} unparsed{Unreadable schedule} timeZoneUnresolved{Zone not known} serverZoneUnknown{Zone not known yet} noRunInHorizon{None in {years} years} notEvaluated{Not worked out} anacron{Timed by anacron} paused{Paused} other{Not run}}",
   "@jobsNextRunUnknown": {
     "description": "A job's next-run cell in the jobs table when it lists no runs: jobsRunsUnknown cut short to fit the column, which stays at phone width. reason is the engine's JobRunsUnknown name, and other is noDriver; years is how far ahead the engine looks. The job's details give the full reason.",
     "placeholders": {
@@ -3248,6 +3448,26 @@
   "settingsAnnounceNotChanged": "The setting could not be changed.",
   "@settingsAnnounceNotChanged": {
     "description": "Toast when the app did not take a change of the threshold announcement switch."
+  },
+  "settingsSyncSecretsTitle": "Passwords and keys",
+  "@settingsSyncSecretsTitle": {
+    "description": "Section heading on the Sync settings tab over the sync passwords switch (SYN-02)."
+  },
+  "settingsSyncSecrets": "Sync saved passwords & keys",
+  "@settingsSyncSecrets": {
+    "description": "Switch on the Sync settings tab (SYN-02): whether passwords and keys other devices synced are added to this device's vault. Séance's wording."
+  },
+  "settingsSyncSecretsDetail": "Only includes servers where credential sync is also enabled.",
+  "@settingsSyncSecretsDetail": {
+    "description": "Explanation under the sync passwords switch, Séance's subtitle."
+  },
+  "settingsSyncSecretsNotSaved": "The setting changed, but it could not be saved, so it will not be kept after a restart.",
+  "@settingsSyncSecretsNotSaved": {
+    "description": "Toast when the sync passwords switch applied but settings.json could not be written."
+  },
+  "settingsSyncSecretsNotChanged": "The setting could not be changed.",
+  "@settingsSyncSecretsNotChanged": {
+    "description": "Toast when the app did not take a change of the sync passwords switch."
   },
   "settingsAboutTitle": "About",
   "@settingsAboutTitle": {
@@ -3812,6 +4032,35 @@
   "@serverReadOnlyNotice": {
     "description": "Notice in the server header while the server, or every server, is read-only (SAF-06)."
   },
+  "credentialTitle": "Password for {label}",
+  "@credentialTitle": {
+    "description": "Title of the login password dialog shown on connect when the vault holds no password for the server (03 §4.5); label is the server's name.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "credentialExplanation": "Saved only if you choose to: on this device, in its encrypted vault, and used for this server from now on.",
+  "@credentialExplanation": {
+    "description": "Line under the login password dialog's title when the password can be saved in the vault."
+  },
+  "credentialPassword": "Password",
+  "@credentialPassword": {
+    "description": "Label of the password field in the login password dialog."
+  },
+  "credentialSaveInVault": "Save in vault",
+  "@credentialSaveInVault": {
+    "description": "Checkbox in the login password dialog that keeps the password in this device's vault once the server accepts it."
+  },
+  "credentialCancel": "Cancel",
+  "@credentialCancel": {
+    "description": "Button that closes the login password dialog without connecting."
+  },
+  "credentialConnect": "Connect",
+  "@credentialConnect": {
+    "description": "Button that connects with the typed password."
+  },
   "elevationTitle": "Admin password for {host}",
   "@elevationTitle": {
     "description": "Title of the admin mode password dialog (SAF-02); host is the server's address.",
@@ -4003,7 +4252,7 @@
   "@actionPreviewRemoveOrphans": {
     "description": "Switch in a redeploy preview that plans it again with --remove-orphans, which needs the typed confirmation (STK-06)."
   },
-  "actionPreviewWarning": "{warning, select, profileGatedServices{Some running services are enabled only by a compose profile, which Klabautermann cannot see. The redeploy leaves them as they are.} profilesUnknown{The compose CLI could not list every profile's services, so some of these containers may belong to a service a profile enables.} mayDieAtLogout{This server ends your processes when you log out, which can stop the operation before it finishes.} other{}}",
+  "actionPreviewWarning": "{warning, select, profileGatedServices{Some running services are enabled only by a compose profile, which Klabautermann cannot see. The redeploy leaves them as they are.} profilesUnknown{The compose CLI could not list every profile's services, so some of these containers may belong to a service a profile enables.} mayDieAtLogout{This server ends your processes when you log out, which can stop the operation before it finishes.} unitNotVerified{This server's systemd is not known to be version 250 or later, so the unit file is not checked before it is replaced.} other{}}",
   "@actionPreviewWarning": {
     "description": "A warning in the action preview; warning is the engine's PlanWarning name.",
     "placeholders": {
@@ -4335,7 +4584,7 @@
   "@activityColumnResult": {
     "description": "Column of the activity log: how the run ended."
   },
-  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} StackAction{Stack action} RedeployStack{Redeploy stack} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
+  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
   "@activityAction": {
     "description": "An activity log row's action; action is the engine's intent type name.",
     "placeholders": {
@@ -6478,5 +6727,242 @@
         "type": "String"
       }
     }
+  },
+  "footprintMenu": "Footprint",
+  "@footprintMenu": {
+    "description": "Server Safety menu: opens what Klabautermann keeps on the server (SAF-14)."
+  },
+  "footprintTitle": "Footprint on {server}",
+  "@footprintTitle": {
+    "description": "Footprint page title. server is the server's name.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "footprintVerify": "Check again",
+  "@footprintVerify": {
+    "description": "Footprint page: asks the engine to verify the footprint again."
+  },
+  "footprintChecking": "Checking what Klabautermann keeps on this server…",
+  "@footprintChecking": {
+    "description": "Footprint page: shown until the engine answers."
+  },
+  "footprintUnavailable": "Klabautermann cannot check what it keeps on this server without a connection. Connect, then check again.",
+  "@footprintUnavailable": {
+    "description": "Footprint page: the engine refused the check, as for a server with no connection."
+  },
+  "footprintRootUnchecked": "Root's backups and manifest are checked in admin mode.",
+  "@footprintRootUnchecked": {
+    "description": "Footprint page: root's part is not read without admin mode."
+  },
+  "footprintWarning": "The check reported: {warning}",
+  "@footprintWarning": {
+    "description": "Footprint page: one problem the check found, in the engine's words.",
+    "placeholders": {
+      "warning": {
+        "type": "String"
+      }
+    }
+  },
+  "footprintNone": "Klabautermann keeps nothing on this server.",
+  "@footprintNone": {
+    "description": "Footprint page: no manifest rows and no backups."
+  },
+  "footprintScope": "{scope, select, user{Your account} root{Root} other{Other}}",
+  "@footprintScope": {
+    "description": "Footprint page: a scope's heading. scope is the FootprintScope name.",
+    "placeholders": {
+      "scope": {
+        "type": "String"
+      }
+    }
+  },
+  "footprintFile": "{kind, select, backupDirectory{Backup directory} backupIndex{Backup index} other{File}} · {present, select, true{present} other{missing on the host}}",
+  "@footprintFile": {
+    "description": "Footprint page: a manifest row's kind and whether it is on the host. kind is the FootprintKind name; present is true or false.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      },
+      "present": {
+        "type": "String"
+      }
+    }
+  },
+  "footprintKeepLast": "{count, plural, =1{Keep only the newest backup of each file} other{Keep the newest {count} backups of each file}}",
+  "@footprintKeepLast": {
+    "description": "Footprint page: removes older backups (Q11, tier 1).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "footprintRemoveAll": "Remove all backups",
+  "@footprintRemoveAll": {
+    "description": "Footprint page: removes every backup of one file (Q11, typed confirmation)."
+  },
+  "footprintCrontabSource": "{user}'s crontab",
+  "@footprintCrontabSource": {
+    "description": "Footprint page: the heading of a crontab's backups. user is the account.",
+    "placeholders": {
+      "user": {
+        "type": "String"
+      }
+    }
+  },
+  "footprintBackup": "{hash} · {status, select, intact{unchanged} modified{changed on the host since it was recorded} missing{missing on the host} other{unknown}}",
+  "@footprintBackup": {
+    "description": "Footprint page: a backup's short hash and whether it still has the recorded content. status is the FootprintBackupStatus name.",
+    "placeholders": {
+      "hash": {
+        "type": "String"
+      },
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "footprintRestore": "Restore…",
+  "@footprintRestore": {
+    "description": "Footprint page: opens the file's editor with this backup as the new text, to review and save."
+  },
+  "footprintRestoreChanged": "The backup changed since it was checked, so it was not opened.",
+  "@footprintRestoreChanged": {
+    "description": "Footprint page: the backup read back does not have its recorded hash."
+  },
+  "unitEnable": "Enable",
+  "@unitEnable": {
+    "description": "Unit action (SVC-05): starts the unit at boot."
+  },
+  "unitDisable": "Disable",
+  "@unitDisable": {
+    "description": "Unit action (SVC-05): stops starting the unit at boot."
+  },
+  "unitMask": "Mask",
+  "@unitMask": {
+    "description": "Unit action (SVC-06): prevents the unit from being started at all."
+  },
+  "unitUnmask": "Unmask",
+  "@unitUnmask": {
+    "description": "Unit action (SVC-06): lets a masked unit start again."
+  },
+  "unitResetFailed": "Reset failed state",
+  "@unitResetFailed": {
+    "description": "Unit action (SVC-06): clears the unit's failed state."
+  },
+  "unitMoreActions": "More",
+  "@unitMoreActions": {
+    "description": "Unit page and row menu: the v1 unit actions (SVC-05, SVC-06)."
+  },
+  "unitQueryFailed": "{reason, select, noLink{There is no connection to this server.} invalidUnit{This is not a unit name.} notFound{The manager has no such unit.} managerUnavailable{Your user manager cannot be reached: you need a login session or lingering.} failed{The read failed.} other{The read failed.}}",
+  "@unitQueryFailed": {
+    "description": "Unit page: why a unit read found nothing. reason is the engine's UnitQueryFailure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "unitResourcesMemory": "Memory",
+  "@unitResourcesMemory": {
+    "description": "Unit page: the unit's current memory use."
+  },
+  "unitResourcesCpu": "CPU time",
+  "@unitResourcesCpu": {
+    "description": "Unit page: the CPU time the unit used."
+  },
+  "unitResourcesCpuSeconds": "{seconds} s",
+  "@unitResourcesCpuSeconds": {
+    "description": "Unit page: CPU time in seconds. seconds is formatted with one decimal.",
+    "placeholders": {
+      "seconds": {
+        "type": "String"
+      }
+    }
+  },
+  "unitResourcesTasks": "Tasks",
+  "@unitResourcesTasks": {
+    "description": "Unit page: the unit's current tasks."
+  },
+  "unitResourcesRestarts": "Restarts",
+  "@unitResourcesRestarts": {
+    "description": "Unit page: how often systemd restarted the unit."
+  },
+  "unitResourcesMainPid": "Main PID",
+  "@unitResourcesMainPid": {
+    "description": "Unit page: the unit's main process ID."
+  },
+  "unitResourcesActiveSince": "Active since",
+  "@unitResourcesActiveSince": {
+    "description": "Unit page: when the unit last became active."
+  },
+  "unitFileShow": "Show unit file",
+  "@unitFileShow": {
+    "description": "Unit page: opens the unit file and its drop-ins (SVC-07)."
+  },
+  "unitFileTitle": "{unit} file",
+  "@unitFileTitle": {
+    "description": "Unit file view title. unit is the unit name.",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "unitFileClose": "Close",
+  "@unitFileClose": {
+    "description": "Unit file view: closes the dialog."
+  },
+  "unitFileReading": "Reading the unit file…",
+  "@unitFileReading": {
+    "description": "Unit file view: shown while the file is read."
+  },
+  "unitFileMasked": "{count, plural, =1{1 value is masked.} other{{count} values are masked.}} Reveal shows them for {seconds} seconds.",
+  "@unitFileMasked": {
+    "description": "Unit file view: how many values the engine masked, and how long a reveal lasts.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "unitFileReveal": "Reveal values",
+  "@unitFileReveal": {
+    "description": "Unit file view: shows the masked values for a while."
+  },
+  "unitFileHide": "Hide values",
+  "@unitFileHide": {
+    "description": "Unit file view: masks the revealed values again."
+  },
+  "unitFileEditorLabel": "File of {unit}",
+  "@unitFileEditorLabel": {
+    "description": "Unit file view: accessibility label of the read-only editor.",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "servicesScopeSystem": "System",
+  "@servicesScopeSystem": {
+    "description": "Services tab: lists the system manager's units."
+  },
+  "servicesScopeUser": "Yours",
+  "@servicesScopeUser": {
+    "description": "Services tab: lists the login user's own units (SVC-09)."
+  },
+  "servicesUserLogsAbsent": "The logs of your own units are not shown here yet.",
+  "@servicesUserLogsAbsent": {
+    "description": "Unit page of a user unit: its journal lines are not read (SVC-09)."
+  },
+  "servicesUserUnavailable": "Your own units could not be read. Your user manager runs only while you are logged in, or with lingering enabled.",
+  "@servicesUserUnavailable": {
+    "description": "Services tab, Yours: the user manager could not be reached (SVC-09)."
   }
 }

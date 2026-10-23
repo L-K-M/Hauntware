@@ -163,6 +163,16 @@ Future<_Editor> _pump(
 }
 
 void main() {
+  test('a stack file is highlighted and validated by its own path', () {
+    expect(
+      editTargetPath(
+        const StackFileTarget(project: 'web', path: '/srv/web/compose.yaml'),
+      ),
+      '/srv/web/compose.yaml',
+    );
+    expect(editTargetPath(const CrontabTarget()), 'crontab');
+  });
+
   testWidgets('reads the file, and offers Review only once it changed', (
     tester,
   ) async {
@@ -372,6 +382,9 @@ void main() {
 
     expect(editor.text(tester), '$_original# mine\n');
     expect(find.text('There is no connection to this server.'), findsOneWidget);
+    // Reviewing against the base the save was refused for would only be
+    // refused again: only the editor's own Review button is left.
+    expect(find.text('Review changes'), findsOneWidget);
     await tester.pump(const Duration(seconds: 10));
   });
 

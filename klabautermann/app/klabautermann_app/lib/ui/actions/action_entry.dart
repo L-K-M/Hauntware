@@ -38,8 +38,12 @@ enum ActionEntryPoint {
   /// Taking a whole stack down, never with its volumes (STK-23).
   stackDown,
 
-  /// Editing a file or a crontab (SAF-12, X-05).
+  /// Editing a file or a crontab (SAF-12, X-05), or restoring a backup
+  /// into the editor.
   fileEdit,
+
+  /// Keeping the newest backups, or removing a file's (SAF-14, Q11).
+  backupRemove,
 }
 
 /// The operations controller for every route, which action entries plan

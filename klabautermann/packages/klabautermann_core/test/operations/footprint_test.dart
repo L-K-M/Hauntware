@@ -118,6 +118,28 @@ void main() {
       );
     });
 
+    test('a failed presence check or hash list warns instead of reporting '
+        'rows gone or backups missing', () async {
+      final entry = _entry('a=1\n', '/home/deploy/.env', 100);
+      scope(
+        kHostUserManifest,
+        kHostUserBackups,
+        [entry],
+        blobs: {entry.name: 'a=1\n'},
+      );
+      host.failing.add('klabautermann-sha256');
+
+      final unhashed = await readFootprint(_server, context());
+      expect(unhashed.files.every((f) => f.present), isTrue);
+      expect(unhashed.backups, isEmpty);
+      expect(unhashed.warnings, ['user backup hashes: exit 1']);
+
+      host.failing.add('klabautermann-exists');
+      final unchecked = await readFootprint(_server, context());
+      expect(unchecked.files, isEmpty);
+      expect(unchecked.warnings, ['user paths: exit 1']);
+    });
+
     test('a host without a manifest has no footprint', () async {
       final state = await readFootprint(_server, context());
 
@@ -144,12 +166,11 @@ void main() {
         ],
       );
       expect(state.backups, isEmpty);
-      expect(
-        host.commands
-            .where((c) => c.contains(kRootManifestPath))
-            .every((c) => c.contains(' elevate ')),
-        isTrue,
+      final rootReads = host.commands.where(
+        (c) => c.contains(kRootManifestPath),
       );
+      expect(rootReads, isNotEmpty);
+      expect(rootReads.every((c) => c.contains(' elevate ')), isTrue);
     });
 
     test('a malformed index line warns and the rest still verify', () async {

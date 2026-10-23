@@ -2,6 +2,18 @@ import 'package:test/test.dart';
 import 'package:xterm/core.dart';
 
 void main() {
+  test('keyboard-mode sequences leave the text style alone', () {
+    final terminal = Terminal();
+
+    // Claude Code sets xterm's modifyOtherKeys on start and resets it on exit.
+    // Read as SGR 4;2 and SGR 4, these underlined everything printed after.
+    terminal.write('\x1b[>4;2m\x1b[>4m\$ ls');
+
+    final attrs = terminal.buffer.lines[0].getAttributes(0);
+    expect(attrs & CellAttr.underline, 0);
+    expect(attrs & CellAttr.faint, 0);
+  });
+
   test('cursor position reports use one-based rows and columns', () {
     final output = <String>[];
     final terminal = Terminal(onOutput: output.add);

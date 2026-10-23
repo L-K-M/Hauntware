@@ -41,13 +41,20 @@ String editTargetPath(EditTarget target) => switch (target) {
 
 /// Opens [target] on [serverId] in the editor (03 §8.5, SAF-12, X-05): a
 /// dialog on wide windows, a page of its own on phones. Closing it with
-/// changes not saved asks first. Completes once it is closed.
+/// changes not saved asks first. Completes once it is closed. With
+/// [proposedText], such as a backup to restore, the editor opens with it
+/// in place of the server's text, unsaved.
 Future<void> openRemoteEditor(
   BuildContext context, {
   required String serverId,
   required EditTarget target,
+  String? proposedText,
 }) {
-  final editor = RemoteEditor(serverId: serverId, target: target);
+  final editor = RemoteEditor(
+    serverId: serverId,
+    target: target,
+    proposedText: proposedText,
+  );
   final title = _title(AppLocalizations.of(context), target);
   if (MediaQuery.sizeOf(context).width < _pageBelowWidth) {
     return Navigator.of(context).push(
@@ -137,10 +144,19 @@ enum _ConflictChoice {
 /// mine". Nothing is kept on this device: the text lives in this view's
 /// editor only.
 class RemoteEditor extends StatefulWidget {
-  const RemoteEditor({super.key, required this.serverId, required this.target});
+  const RemoteEditor({
+    super.key,
+    required this.serverId,
+    required this.target,
+    this.proposedText,
+  });
 
   final String serverId;
   final EditTarget target;
+
+  /// The text the editor opens with over the first read, unsaved; null
+  /// opens the server's.
+  final String? proposedText;
 
   @override
   State<RemoteEditor> createState() => _RemoteEditorState();
@@ -160,6 +176,9 @@ class _RemoteEditorState extends State<RemoteEditor> {
   int _reads = 0;
 
   bool _dirty = false;
+
+  /// Whether [RemoteEditor.proposedText] still waits for the first read.
+  late bool _proposing = widget.proposedText != null;
 
   /// The run of the save the user confirmed, followed to its end.
   StreamSubscription<(String, RunState)>? _run;
@@ -186,10 +205,11 @@ class _RemoteEditorState extends State<RemoteEditor> {
   /// Reads the target again. The server's text replaces the editor's
   /// unless [keepMine], which only moves the base under the user's text;
   /// a read that fails then says why in a toast and leaves the user's
-  /// text where it is, rather than trading it for the notice.
-  Future<void> _read({required bool keepMine}) async {
+  /// text where it is, rather than trading it for the notice. Answers
+  /// whether the read became the new base.
+  Future<bool> _read({required bool keepMine}) async {
     final operations = _operations;
-    if (operations == null) return;
+    if (operations == null) return false;
 
     final read = ++_reads;
     if (!keepMine) setState(() => _answer = null);
@@ -197,24 +217,29 @@ class _RemoteEditorState extends State<RemoteEditor> {
       widget.serverId,
       widget.target,
     );
-    if (!mounted || read != _reads) return;
+    if (!mounted || read != _reads) return false;
 
     if (answer is EditReadFailed && keepMine && _editor != null) {
       showTopToast(
         Overlay.of(context, rootOverlay: true),
-        message: AppLocalizations.of(
-          context,
-        ).editReadFailed(answer.failure.name),
+        message: AppLocalizations.of(context)
+            .editReadFailed(answer.failure.name),
       );
-      return;
+      return false;
     }
     setState(() {
       _answer = answer;
       if (answer is! EditContent) return;
       _base = answer;
-      if (!keepMine || _editor == null) _showText(answer.text);
+      if (_proposing) {
+        _proposing = false;
+        _showText(widget.proposedText!);
+      } else if (!keepMine || _editor == null) {
+        _showText(answer.text);
+      }
       _dirty = _editor!.text.text != answer.text;
     });
+    return answer is EditContent;
   }
 
   /// Shows [text] in a new editor and lets the old one go once the frame
@@ -306,8 +331,9 @@ class _RemoteEditorState extends State<RemoteEditor> {
       case _ConflictChoice.discard:
         await _read(keepMine: false);
       case _ConflictChoice.compare:
-        await _read(keepMine: true);
-        if (mounted && _dirty) await _review();
+        // A read that failed leaves the base the save was refused for, and
+        // a review against it would only be refused again.
+        if (await _read(keepMine: true) && mounted && _dirty) await _review();
     }
   }
 
@@ -677,6 +703,7 @@ class _DiffBody extends StatelessWidget {
           .toList(),
     );
     final lines = result.text.split('\n');
+    if (lines.last.isEmpty) lines.removeLast();
     return DecoratedBox(
       decoration: BoxDecoration(
         border: Border.all(color: scheme.outlineVariant),
@@ -691,7 +718,10 @@ class _DiffBody extends StatelessWidget {
             itemCount: lines.length,
             itemBuilder: (context, index) {
               final line = lines[index];
-              final header = line.startsWith('+++') || line.startsWith('---');
+              // Only the two label lines; an added '++x' line is content.
+              final header =
+                  index < 2 &&
+                  (line.startsWith('+++') || line.startsWith('---'));
               final tint = header
                   ? null
                   : line.startsWith('+')
@@ -706,7 +736,6 @@ class _DiffBody extends StatelessWidget {
                   style: line.startsWith('@@') || header
                       ? mono?.copyWith(color: scheme.onSurfaceVariant)
                       : mono,
-                  softWrap: false,
                 ),
               );
             },

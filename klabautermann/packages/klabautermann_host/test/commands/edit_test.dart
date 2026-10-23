@@ -5,9 +5,9 @@ import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:test/test.dart';
 
 // Low entropy, so the secret scan does not read it as a key.
-const _token = 'feedfacefeedface';
+const _tempId = 'feedfacefeedface';
 const _target = '/etc/nginx/nginx.conf';
-const _temp = '/etc/nginx/.nginx.conf.klabautermann-tmp-$_token';
+const _temp = '/etc/nginx/.nginx.conf.klabautermann-tmp-$_tempId';
 final _hash = 'a' * 64;
 
 Matcher _refused(String reason) =>
@@ -15,14 +15,63 @@ Matcher _refused(String reason) =>
 
 void main() {
   test('the temp file sits beside its target under a dotted name', () {
-    expect(EditCommands.tempPathFor(_target, _token), _temp);
+    expect(EditCommands.tempPathFor(_target, _tempId), _temp);
     expect(
-      EditCommands.tempPathFor('/crontab', _token),
-      '/.crontab.klabautermann-tmp-$_token',
+      EditCommands.tempPathFor('/crontab', _tempId),
+      '/.crontab.klabautermann-tmp-$_tempId',
     );
     expect(
       () => EditCommands.tempPathFor(_target, 'ABC'),
       _refused('not a temp token'),
+    );
+  });
+
+  test('a unit file names its unit; a drop-in or other file names none', () {
+    for (final (path, unit) in [
+      ('/etc/systemd/system/app.service', 'app.service'),
+      ('/etc/systemd/system/backup.timer', 'backup.timer'),
+      ('/etc/systemd/system/getty@.service', 'getty@.service'),
+      ('/usr/lib/systemd/system/dev-sda1.swap', 'dev-sda1.swap'),
+      ('/home/deploy/.config/systemd/user/sync.service', 'sync.service'),
+    ]) {
+      expect(unitFileName(path), unit, reason: path);
+    }
+    for (final path in [
+      '/etc/systemd/system/app.service.d/override.conf',
+      '/etc/systemd/system.conf',
+      '/etc/systemd/system/app.conf',
+      '/etc/systemd/system/sys-devices.device',
+      '/etc/systemd/system/a:b.service',
+      '/srv/app.service',
+      '/etc/systemd/system/.service',
+    ]) {
+      expect(unitFileName(path), isNull, reason: path);
+    }
+  });
+
+  test('a unit file\'s temp is verified under the unit\'s name', () {
+    const temp = '/etc/systemd/system/.app.service.klabautermann-tmp-$_tempId';
+    expect(EditCommands.verifyUnit(temp, 'app.service'), [
+      'systemd-analyze',
+      'verify',
+      '--man=no',
+      '--',
+      '$temp:app.service',
+    ]);
+    expect(
+      () => EditCommands.verifyUnit(temp, 'app.conf'),
+      _refused('not a unit file name'),
+    );
+    expect(
+      () => EditCommands.verifyUnit(
+        '/srv/a:b/.app.service.klabautermann-tmp-$_tempId',
+        'app.service',
+      ),
+      _refused('FILE:UNIT cannot name a path with :'),
+    );
+    expect(
+      () => EditCommands.verifyUnit(_target, 'app.service'),
+      _refused('not an edit temp file'),
     );
   });
 
@@ -51,7 +100,14 @@ void main() {
       _target,
       kRootBackupsDir,
     ]);
-    expect(EditCommands.sha256List([_target]), ['sha256sum', '--', _target]);
+    expect(EditCommands.sha256List([_target]).sublist(3), [
+      'klabautermann-sha256',
+      _target,
+    ]);
+    expect(
+      EditCommands.sha256List([_target])[2],
+      contains('exit ${EditExit.unreadable};'),
+    );
   });
 
   test('crontab writes take stdin, for the login user or a named one', () {
@@ -104,9 +160,18 @@ void main() {
       kRootManifestPath,
     );
     expect(
-      () => EditCommands.manifestWrite('/etc/passwd'),
+      () => EditCommands.manifestWrite('/etc/passwd', _hash),
       _refused('not a manifest path'),
     );
+    expect(
+      () => EditCommands.manifestWrite(kRootManifestPath, 'nope'),
+      _refused('not a SHA-256'),
+    );
+    expect(EditCommands.manifestWrite(kRootManifestPath, _hash).sublist(3), [
+      'klabautermann-manifest',
+      kRootManifestPath,
+      _hash,
+    ]);
     expect(EditCommands.backupIndexWrite(kRootBackupsDir, _hash).sublist(3), [
       'klabautermann-index',
       '$kRootBackupsDir/index',
@@ -157,11 +222,11 @@ void main() {
 
   test("a temp must be its target's own", () {
     for (final bad in [
-      '/etc/nginx/nginx.conf.klabautermann-tmp-$_token',
+      '/etc/nginx/nginx.conf.klabautermann-tmp-$_tempId',
       '/etc/nginx/.nginx.conf.klabautermann-tmp-xyz',
-      '/etc/nginx/.klabautermann-tmp-$_token',
-      '/etc/nginx/.other.klabautermann-tmp-$_token',
-      '/tmp/.nginx.conf.klabautermann-tmp-$_token',
+      '/etc/nginx/.klabautermann-tmp-$_tempId',
+      '/etc/nginx/.other.klabautermann-tmp-$_tempId',
+      '/tmp/.nginx.conf.klabautermann-tmp-$_tempId',
     ]) {
       expect(
         () => EditCommands.copyAttributes(_target, bad),
@@ -227,5 +292,9 @@ void main() {
     });
     // GNU escapes a path with a backslash and marks its line.
     expect(parseSha256List('\\$_hash  /etc/a\\\\b\n'), {r'/etc/a\b': _hash});
+    // And a newline in the path the same way.
+    expect(parseSha256List('\\$_hash  /etc/a\\nb\n'), {'/etc/a\nb': _hash});
+    // BusyBox prints a backslash as it is, on an unmarked line.
+    expect(parseSha256List('$_hash  /etc/a\\b\n'), {r'/etc/a\b': _hash});
   });
 }

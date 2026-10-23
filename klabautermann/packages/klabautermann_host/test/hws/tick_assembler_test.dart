@@ -139,7 +139,7 @@ void main() {
       expect(_assemble([..._marker('READY HWS/1 7'), ..._reply(1)]), [
         'failed versionMismatch',
       ]);
-      expect(kCollectorSetVersion, '8');
+      expect(kCollectorSetVersion, '9');
     });
 
     test('a second SELF before READY', () {

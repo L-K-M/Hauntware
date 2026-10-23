@@ -18,6 +18,8 @@ import 'package:klabautermann_host/klabautermann_host.dart'
     show
         EditCommands,
         EditExit,
+        FootprintKind,
+        FootprintRow,
         HostProfile,
         backupFootprint,
         encodeFootprintManifest,
@@ -39,13 +41,15 @@ String _sha(String text) => sha256Of(text);
 void main() {
   late EditHost host;
   AdminSession? admin;
+  late HostProfile profile;
 
   setUp(() {
     host = EditHost();
     admin = null;
+    profile = _profile;
   });
 
-  EditContext context() => (link: host, profile: _profile, admin: admin);
+  EditContext context() => (link: host, profile: profile, admin: admin);
 
   void adminOn() => admin = AdminSession.test(
     ElevatedExecutor(
@@ -210,7 +214,7 @@ void main() {
       expect(temp, startsWith('/home/deploy/app/..env.klabautermann-tmp-'));
       expect(argvs(p), [
         EditCommands.backupFile(path, _home),
-        EditCommands.manifestWrite(kHostUserManifest),
+        EditCommands.manifestWrite(kHostUserManifest, _sha('')),
         EditCommands.writeTemp(temp),
         EditCommands.copyAttributes(path, temp),
         EditCommands.replaceIfHash(path, temp, _sha('TOKEN=a\n')),
@@ -220,6 +224,11 @@ void main() {
         encodeFootprintManifest(backupFootprint(_home)),
       );
       expect(utf8.decode((p.steps[2] as ShellStep).input!), 'TOKEN=b\n');
+      // The manifest is swapped only while it still matches the read the
+      // new rows came from.
+      expect((p.steps[1] as ShellStep).exitMeanings, {
+        EditExit.hashMismatch: RevalidationFailure.contentChanged,
+      });
       expect((p.steps.last as ShellStep).exitMeanings, {
         EditExit.hashMismatch: RevalidationFailure.contentChanged,
       });
@@ -263,18 +272,55 @@ void main() {
           text: 'x\n',
           rootOnly: false,
         );
-        host.readable[kHostUserManifest] = '{not json';
-
-        expect(
-          (await plan(
-            const FileTarget('/home/deploy/a'),
-            'y\n',
-            _sha('x\n'),
-          )).refusal,
-          ActionRefusalReason.invalidTarget,
-        );
+        // Not JSON; and rows the parser would skip, which a rewrite of the
+        // rows it kept would drop.
+        for (final manifest in [
+          '{not json',
+          jsonEncode({
+            'v': 1,
+            'rows': [
+              {'path': '/home/deploy/.local/share/x', 'kind': 'backupIndex'},
+              {'path': '/home/deploy/y', 'kind': 'fromANewerVersion'},
+            ],
+          }),
+        ]) {
+          host.readable[kHostUserManifest] = manifest;
+          expect(
+            (await plan(
+              const FileTarget('/home/deploy/a'),
+              'y\n',
+              _sha('x\n'),
+            )).refusal,
+            ActionRefusalReason.invalidTarget,
+            reason: manifest,
+          );
+        }
       },
     );
+
+    test('the manifest write is against the manifest the plan read', () async {
+      host.files['/home/deploy/a'] = (
+        uid: 1000,
+        mode: '644',
+        text: 'x\n',
+        rootOnly: false,
+      );
+      final listed = encodeFootprintManifest([
+        const FootprintRow('/home/deploy/other', FootprintKind.backupIndex),
+      ]);
+      host.readable[kHostUserManifest] = listed;
+
+      final p = (await plan(
+        const FileTarget('/home/deploy/a'),
+        'y\n',
+        _sha('x\n'),
+      )).plan!;
+
+      expect(
+        argvs(p)[1],
+        EditCommands.manifestWrite(kHostUserManifest, _sha(listed)),
+      );
+    });
 
     test("root's file needs admin mode even to plan; then every step runs "
         'elevated and backs up under /var/lib', () async {
@@ -304,7 +350,7 @@ void main() {
       expect(p.cleanup.single.elevated, isTrue);
       expect(argvs(p).take(2), [
         EditCommands.backupFile('/etc/app.conf', kRootBackupsDir),
-        EditCommands.manifestWrite(kRootManifestPath),
+        EditCommands.manifestWrite(kRootManifestPath, _sha('')),
       ]);
       expect(p.requiredLevel, RequiredLevel.admin);
       expect(p.runner.identity, 'root');
@@ -342,6 +388,81 @@ void main() {
       expect(argvs(p), contains(equals(['visudo', '-c', '-f', temp])));
       expect(p.protected, ProtectedReason.builtIn);
       expect(p.tier, ConfirmationTier.typedPhrase);
+    });
+
+    test('a unit file is verified as its unit before the swap where '
+        'systemd can, and the preview says so where it cannot', () async {
+      adminOn();
+      const path = '/etc/systemd/system/app.service';
+      const text = '[Service]\nExecStart=/usr/bin/app\n';
+      host.files[path] = (
+        uid: 0,
+        mode: '644',
+        text: '[Service]\nExecStart=/bin/true\n',
+        rootOnly: false,
+      );
+      Future<OperationPlan> planned() async => (await plan(
+        const FileTarget(path),
+        text,
+        _sha('[Service]\nExecStart=/bin/true\n'),
+      )).plan!;
+
+      profile = HostProfile(uid: 1000, user: 'deploy', systemdVersion: 255);
+      final verified = await planned();
+      final temp = tempOf(verified);
+      final verify = argvs(
+        verified,
+      ).indexWhere((argv) => argv.first == 'systemd-analyze');
+      expect(verify, isNonNegative);
+      expect(
+        argvs(verified)[verify],
+        EditCommands.verifyUnit(temp, 'app.service'),
+      );
+      expect(
+        argvs(verified)[verify + 1],
+        EditCommands.copyAttributes(path, temp),
+      );
+      expect((verified.steps[verify] as ShellStep).elevated, isTrue);
+      expect(verified.warnings, isEmpty);
+
+      profile = HostProfile(uid: 1000, user: 'deploy', systemdVersion: 249);
+      final unverified = await planned();
+      expect(
+        argvs(unverified).map((argv) => argv.first),
+        isNot(contains('systemd-analyze')),
+      );
+      expect(unverified.warnings, {PlanWarning.unitNotVerified});
+
+      // A host whose systemd version is unknown is not assumed new enough.
+      profile = HostProfile(uid: 1000, user: 'deploy');
+      final unknown = await planned();
+      expect(
+        argvs(unknown).map((argv) => argv.first),
+        isNot(contains('systemd-analyze')),
+      );
+      expect(unknown.warnings, {PlanWarning.unitNotVerified});
+    });
+
+    test('a drop-in or any other file gets no unit check', () async {
+      profile = HostProfile(uid: 1000, user: 'deploy', systemdVersion: 255);
+      host.files['/home/deploy/.config/systemd/user/app.service.d/x.conf'] = (
+        uid: 1000,
+        mode: '644',
+        text: 'a\n',
+        rootOnly: false,
+      );
+      final p = (await plan(
+        const FileTarget(
+          '/home/deploy/.config/systemd/user/app.service.d/x.conf',
+        ),
+        'b\n',
+        _sha('a\n'),
+      )).plan!;
+      expect(
+        argvs(p).map((argv) => argv.first),
+        isNot(contains('systemd-analyze')),
+      );
+      expect(p.warnings, isEmpty);
     });
 
     test('a target that changed since the read, a bad path and a file only '
@@ -401,7 +522,7 @@ void main() {
       expect(p.targetName, 'crontab:deploy');
       expect(argvs(p), [
         EditCommands.crontabBackup(_home, indexName: 'crontab:deploy'),
-        EditCommands.manifestWrite(kHostUserManifest),
+        EditCommands.manifestWrite(kHostUserManifest, _sha('')),
         EditCommands.crontabWriteIfHash(
           _sha('0 3 * * * /usr/local/bin/backup\n'),
         ),
@@ -512,8 +633,8 @@ void main() {
         'place before the swap', () async {
       serve(override, 'services:\n');
       final p = (await plan(override, lookup())).plan!;
-      final temp = (p.steps[1] as ShellStep).argv.last;
-      final check = p.steps[3] as ShellStep;
+      final temp = _stepRunning(p, 'klabautermann-write').argv.last;
+      final check = _stepRunning(p, 'config');
 
       expect(check.argv, [
         ...composeConfig(
@@ -525,8 +646,9 @@ void main() {
         ).argv,
       ]);
       expect(check.discardOutput, isTrue);
+      final checked = p.steps.indexOf(check);
       expect(
-        (p.steps[4] as ShellStep).argv,
+        (p.steps[checked + 1] as ShellStep).argv,
         EditCommands.replaceIfHash(override, temp, _sha('services:\n')),
       );
       expect(p.targetName, override);
@@ -536,8 +658,8 @@ void main() {
         'the project records none', () async {
       serve(dotEnv, 'services:\n');
       final p = (await plan(dotEnv, lookup())).plan!;
-      final temp = (p.steps[1] as ShellStep).argv.last;
-      final check = (p.steps[3] as ShellStep).argv;
+      final temp = _stepRunning(p, 'klabautermann-write').argv.last;
+      final check = _stepRunning(p, 'config').argv;
 
       expect(check, containsAllInOrder(['--env-file', temp]));
       expect(check, containsAllInOrder(['-f', compose, '-f', override]));
@@ -561,3 +683,9 @@ void main() {
     });
   });
 }
+
+/// [plan]'s first shell step whose argv holds [word], wherever steps
+/// before it, such as the manifest's, put it.
+ShellStep _stepRunning(OperationPlan plan, String word) => plan.steps
+    .whereType<ShellStep>()
+    .firstWhere((step) => step.argv.contains(word));
