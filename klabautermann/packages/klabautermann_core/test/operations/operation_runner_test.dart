@@ -159,6 +159,13 @@ void main() {
         null,
       ),
       (
+        // Unmask runs on a masked unit, which systemd reports as masked.
+        'a masked unit passes',
+        const UnitLoaded('nginx.service'),
+        const RemoteCommandResult(exitCode: 0, stdout: 'masked\n'),
+        null,
+      ),
+      (
         'a unit that no longer loads',
         const UnitLoaded('nginx.service'),
         const RemoteCommandResult(exitCode: 0, stdout: 'not-found\n'),

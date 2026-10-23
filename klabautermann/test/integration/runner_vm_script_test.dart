@@ -53,8 +53,11 @@ const _sudoersLine =
 const _rootOpsLine = "readonly root_ops_parent='/var/lib/klabautermann'";
 const _rootManifestLine = "readonly root_manifest_dir='/etc/klabautermann'";
 const _editDirLine = "readonly edit_dir='/etc/klabautermann-vm-edit'";
+const _rotatedLogLine =
+    "readonly rotated_log='/var/log/klabautermann-vm.log.1.gz'";
 const _rootDockerLine = "readonly root_docker_dir='/root/.docker'";
 const _unitDirLine = "readonly unit_dir='/etc/systemd/system'";
+const _vendorUnitDirLine = "readonly vendor_unit_dir='/usr/lib/systemd/system'";
 
 /// Bodies of the stand-ins, which log to `$STUB_LOG` and keep the
 /// accounts `useradd` made in `$STUB_STATE/users`. sudo runs what only
@@ -365,8 +368,10 @@ void main() {
         _rootOpsLine,
         _rootManifestLine,
         _editDirLine,
+        _rotatedLogLine,
         _rootDockerLine,
         _unitDirLine,
+        _vendorUnitDirLine,
       ]) {
         expect(script, contains(line));
       }
@@ -448,12 +453,20 @@ void main() {
                 "readonly edit_dir='${sandbox.path}/edit'",
               )
               .replaceFirst(
+                _rotatedLogLine,
+                "readonly rotated_log='${sandbox.path}/rotated.log.1.gz'",
+              )
+              .replaceFirst(
                 _rootDockerLine,
                 "readonly root_docker_dir='${sandbox.path}/root-docker'",
               )
               .replaceFirst(
                 _unitDirLine,
                 "readonly unit_dir='${sandbox.path}/units'",
+              )
+              .replaceFirst(
+                _vendorUnitDirLine,
+                "readonly vendor_unit_dir='${sandbox.path}/vendor-units'",
               ),
         );
       final chmod = await Process.run('chmod', [

@@ -27,7 +27,11 @@
 # privileged edits (runner_vm_edit_test.dart, M5 M20b): a root file's
 # owner, mode, ACL and xattr kept through the prelude with root's backup
 # and manifest, a unit file systemd-analyze verify refuses, a conflict,
-# and another account's crontab.
+# and another account's crontab; and the v1 host rows
+# (runner_vm_v1_test.dart, M5 M28): unit enable, disable, mask, unmask
+# and reset-failed, the linger account's own units, unit files and
+# resources, the journal's boots and -g, a rotated .gz, anacron and a
+# cron line run now.
 #
 # run.sh calls it after the fixture suites. It creates accounts and runs
 # a root sshd, so it runs only on a GitHub-hosted runner, the ephemeral
@@ -52,7 +56,8 @@
 # root-owned directory under /tmp; a transient system timer; the
 # operation units and the root operation directory the S4 suite leaves;
 # the root backups and manifest the edit suite's edits leave, and the
-# root file and unit file it seeds;
+# root file and unit file it seeds; the system unit and rotated log the
+# v1 host suite seeds;
 # and its key and capture directories. klab-vm-sudo's password is made
 # at job start, as are klab-vm-linger's and klab-vm-nocache's, each kept
 # in a 0600 file in the
@@ -131,6 +136,11 @@ readonly root_ops_parent='/var/lib/klabautermann'
 readonly root_manifest_dir='/etc/klabautermann'
 readonly edit_dir='/etc/klabautermann-vm-edit'
 readonly edit_unit='klabautermann-vm-edit.service'
+# What the v1 host suite seeds and removes itself (M5 M28): a system unit
+# and a rotated log under /var/log; teardown removes both should a run
+# end part-way.
+readonly v1_unit='klabautermann-vm-v1.service'
+readonly rotated_log='/var/log/klabautermann-vm.log.1.gz'
 # Root's Docker CLI directory, which the leg creates for the dead
 # default context and removes; one the image has is moved aside into the
 # sshd's root-owned directory meanwhile and put back.
@@ -145,6 +155,10 @@ readonly op_units='klabautermann-op-*.service'
 # leaves them loaded, as a transient unit would not be. They run as
 # nobody and print what the suite looks for in the journal.
 readonly unit_dir='/etc/systemd/system'
+# The v1 host suite's unit lives where packages install theirs: mask
+# writes its /dev/null link into unit_dir, which refuses a unit file of
+# the same name there.
+readonly vendor_unit_dir='/usr/lib/systemd/system'
 readonly test_service='klabautermann-vm-test.service'
 readonly job_service='klabautermann-vm-job.service'
 readonly job_timer='klabautermann-vm-job.timer'
@@ -207,7 +221,8 @@ for user in "${users[@]}"; do
   fi
 done
 for path in "$sudoers_file" "$root_ops_parent" "$root_manifest_dir" \
-  "$edit_dir" "$unit_dir/$edit_unit" "${test_units[@]/#/$unit_dir/}"; do
+  "$edit_dir" "$unit_dir/$edit_unit" "$vendor_unit_dir/$v1_unit" \
+  "$rotated_log" "${test_units[@]/#/$unit_dir/}"; do
   if sudo -n test -e "$path"; then
     die "$path exists; this leg removes only what it created"
   fi
@@ -323,6 +338,9 @@ on_exit() {
     sudo -n systemctl reset-failed "$op_units" 2>/dev/null || true
     sudo -n rm -rf -- "$root_ops_parent" "$root_manifest_dir" "$edit_dir" \
       "$unit_dir/$edit_unit" || cleanup=1
+    sudo -n systemctl unmask -- "$v1_unit" 2>/dev/null || true
+    sudo -n systemctl disable -- "$v1_unit" 2>/dev/null || true
+    sudo -n rm -f -- "$vendor_unit_dir/$v1_unit" "$rotated_log" || cleanup=1
   fi
   if ((units_installed)); then
     sudo -n systemctl stop "${test_units[@]}" 2>/dev/null || true
