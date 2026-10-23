@@ -325,14 +325,35 @@ class _JobsPanelState extends State<JobsPanel> {
   /// The details' Run now, for a timer row, or a cron line no other
   /// manager owns, where actions are allowed.
   Widget? _runNow(BuildContext context, JobEntry job) => switch (job) {
-    CronJobEntry(:final job) when job.managedBy == null => CronRunButton(
-      serverId: widget.serverId,
-      source: job.source,
-      raw: job.raw,
-      onRun: (planId, preview) {
-        Navigator.of(context).pop();
-        _showCronOutput(planId, preview);
-      },
+    CronJobEntry(:final job) when job.managedBy == null => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 8,
+      children: [
+        CronRunButton(
+          serverId: widget.serverId,
+          source: job.source,
+          raw: job.raw,
+          onRun: (planId, preview) {
+            Navigator.of(context).pop();
+            _showCronOutput(planId, preview);
+          },
+        ),
+        // The details show the line as it was read, so they close first.
+        CronPauseButton(
+          serverId: widget.serverId,
+          job: job,
+          onPressed: () {
+            Navigator.of(context).pop();
+            unawaited(
+              toggleCronPause(
+                this.context,
+                serverId: widget.serverId,
+                job: job,
+              ),
+            );
+          },
+        ),
+      ],
     ),
     TimerJobEntry(:final timer)
         when actionsAllowedAt(
@@ -592,13 +613,20 @@ class _JobsPanelState extends State<JobsPanel> {
                               ),
                               CronJobEntry(:final job)
                                   when job.managedBy == null =>
-                                cronActionEntries(
-                                  context,
-                                  serverId: widget.serverId,
-                                  source: job.source,
-                                  raw: job.raw,
-                                  onRun: _showCronOutput,
-                                ),
+                                [
+                                  ...cronActionEntries(
+                                    context,
+                                    serverId: widget.serverId,
+                                    source: job.source,
+                                    raw: job.raw,
+                                    onRun: _showCronOutput,
+                                  ),
+                                  ...cronPauseEntries(
+                                    context,
+                                    serverId: widget.serverId,
+                                    job: job,
+                                  ),
+                                ],
                               _ => const [],
                             }
                           : null,

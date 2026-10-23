@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart'
-    show SidebarMenuAction, SidebarMenuEntry, SidebarMenuSubmenu;
+    show SidebarMenuAction, SidebarMenuEntry, SidebarMenuSubmenu, showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -283,6 +283,96 @@ List<SidebarMenuEntry> cronActionEntries(
       ),
     ),
   ];
+}
+
+/// [job]'s JOB-07 verb for the Jobs table's row menu: Pause, or Resume
+/// on a paused line. None where actions are not allowed, or on a line
+/// [cronPauseTarget] leaves alone.
+List<SidebarMenuEntry> cronPauseEntries(
+  BuildContext context, {
+  required String serverId,
+  required CronJob job,
+}) {
+  if (cronPauseTarget(job) == null ||
+      !actionsAllowedAt(context, serverId, ActionEntryPoint.cronPause)) {
+    return const [];
+  }
+  final l10n = AppLocalizations.of(context);
+  return [
+    SidebarMenuAction(
+      label: job.paused ? l10n.jobsResume : l10n.jobsPause,
+      onSelected: () => toggleCronPause(context, serverId: serverId, job: job),
+    ),
+  ];
+}
+
+/// [job]'s JOB-07 verb as a button in its details, or nothing where
+/// [cronPauseTarget] leaves the line alone. [onPressed] replaces
+/// [toggleCronPause] from this button's context, for details that close
+/// first and toggle from the view behind them.
+class CronPauseButton extends StatelessWidget {
+  const CronPauseButton({
+    super.key,
+    required this.serverId,
+    required this.job,
+    this.onPressed,
+  });
+
+  final String serverId;
+  final CronJob job;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    if (cronPauseTarget(job) == null) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context);
+    return ActionEntry(
+      serverId: serverId,
+      point: ActionEntryPoint.cronPause,
+      child: OutlinedButton.icon(
+        onPressed:
+            onPressed ??
+            () => toggleCronPause(context, serverId: serverId, job: job),
+        icon: Icon(job.paused ? Icons.play_circle_outline : Icons.pause),
+        label: Text(job.paused ? l10n.jobsResume : l10n.jobsPause),
+      ),
+    );
+  }
+}
+
+/// Pauses [job], or resumes it when it is paused (JOB-07): reads the
+/// crontab that holds it, toggles the line and plans the write as an
+/// edit, whose preview shows the steps and the backup before anything
+/// runs. The edit is planned against the hash of this read, so a crontab
+/// changed in between is refused as an edit's conflict. A read that
+/// fails, or a crontab that no longer holds the line, says so in a toast.
+Future<void> toggleCronPause(
+  BuildContext context, {
+  required String serverId,
+  required CronJob job,
+}) async {
+  final operations = OperationsScope.maybeOf(context);
+  final target = cronPauseTarget(job);
+  if (operations == null || target == null) return;
+  final l10n = AppLocalizations.of(context);
+  final overlay = Overlay.of(context, rootOverlay: true);
+
+  final read = await operations.readEditable(serverId, target);
+  if (!context.mounted) return;
+  switch (read) {
+    case EditReadFailed(:final failure):
+      showTopToast(overlay, message: l10n.editReadFailed(failure.name));
+    case EditContent(:final text, :final sha256):
+      final edited = togglePausedCronJob(text, job, at: DateTime.now());
+      if (edited == null) {
+        showTopToast(overlay, message: l10n.jobsPauseLineChanged);
+        return;
+      }
+      startAction(
+        context,
+        EditFile(serverId, target: target, text: edited, baseSha256: sha256),
+      );
+  }
 }
 
 /// [timer]'s JOB-08 verb for the Jobs table's row menu, or none where

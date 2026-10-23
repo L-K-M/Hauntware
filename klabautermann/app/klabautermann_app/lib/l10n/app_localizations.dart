@@ -4936,6 +4936,24 @@ abstract class AppLocalizations {
   /// **'Run now'**
   String get jobsRunNow;
 
+  /// Cron line action (JOB-07): comments the line out, through an edit of the crontab, so cron skips it until it is resumed.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get jobsPause;
+
+  /// Paused cron line action (JOB-07): restores the line Pause commented out, through an edit of the crontab.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get jobsResume;
+
+  /// Toast when Pause or Resume reads the crontab and the line has changed or gone since the Jobs tab read it (JOB-07).
+  ///
+  /// In en, this message translates to:
+  /// **'The crontab no longer holds this line as shown. Wait for the next reading and try again.'**
+  String get jobsPauseLineChanged;
+
   /// Title of the sheet that follows a timer run's journal; unit is the service the timer started.
   ///
   /// In en, this message translates to:

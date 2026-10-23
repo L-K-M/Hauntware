@@ -1857,6 +1857,10 @@ is on main:
   ghost_theme's shared editor (presets, mode, colours, font, corners,
   copy, paste and reset), in the app and in the desktop settings window,
   in Klabautermann's words.
+- Pause and Resume (M5 M27c, JOB-07): a cron line in the login user's
+  crontab, or another user's in admin mode, pauses and resumes from its
+  row menu or details as an edit of that crontab, previewed and backed
+  up like any edit; system tables and managed lines offer neither.
 - X-01 theme paste (M5 M32): complete. Themes copied in Séance and
   Poltergeist paste into the Appearance tab and keep their name,
   colours, font and corners; Séance's terminal colours, which

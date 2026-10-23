@@ -3811,6 +3811,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get jobsRunNow => 'Run now';
 
   @override
+  String get jobsPause => 'Pause';
+
+  @override
+  String get jobsResume => 'Resume';
+
+  @override
+  String get jobsPauseLineChanged =>
+      'The crontab no longer holds this line as shown. Wait for the next reading and try again.';
+
+  @override
   String jobsRunOutputTitle(String unit) {
     return 'Output of $unit';
   }

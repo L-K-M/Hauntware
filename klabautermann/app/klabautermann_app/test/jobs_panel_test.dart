@@ -1200,6 +1200,117 @@ void main() {
       expect(find.widgetWithText(OutlinedButton, 'Run now'), findsNothing);
     });
 
+    /// The crontab [lines] read from, as `crontab -l` prints it.
+    const crontab =
+        '*/15 * * * *  /home/deploy/bin/sync-assets\n'
+        '# klabautermann:paused 2026-10-20T00:00:00Z 0 3 * * * '
+        '/home/deploy/bin/backup\n'
+        '0 4 * * * dokku ps:report\n';
+
+    /// Answers the crontab read Pause or Resume sent with [text].
+    Future<void> answerRead(
+      WidgetTester tester,
+      _Panel panel, {
+      String text = crontab,
+    }) async {
+      final read =
+          panel.engine.sentOfType<ReadEditable>().single as ReadEditable;
+      expect(read.target, const CrontabTarget());
+      await panel.emit(
+        tester,
+        EditRead(
+          serverId: _serverId,
+          requestId: read.requestId,
+          result: EditContent(text: text, sha256: 'base', privileged: false),
+        ),
+      );
+    }
+
+    EditFile planned(_Panel panel) =>
+        (panel.engine.sentOfType<PlanAction>().single as PlanAction).intent
+            as EditFile;
+
+    testWidgets('a line pauses from its row menu, as an edit of the '
+        'crontab read for it (JOB-07)', (tester) async {
+      final panel = await _pump(tester, safety: managed);
+      await panel.emit(tester, HostProfileChanged(_serverId, jobsProfile));
+      await panel.sample(tester, SampleStream.cron, lines());
+
+      await tester.tap(
+        find.byKey(const ValueKey('jobs.rowActions.cron|crontab|0')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Pause'));
+      await tester.pumpAndSettle();
+      expect(panel.engine.sentOfType<PlanAction>(), isEmpty);
+      await answerRead(tester, panel);
+
+      final edit = planned(panel);
+      expect((edit.target, edit.baseSha256), (const CrontabTarget(), 'base'));
+      final edited = edit.text.split('\n');
+      expect(edited[0], startsWith('# klabautermann:paused '));
+      expect(
+        edited[0],
+        endsWith(' */15 * * * *  /home/deploy/bin/sync-assets'),
+      );
+      expect(edited.skip(1), crontab.split('\n').skip(1));
+    });
+
+    testWidgets('a paused line resumes from its details, which close '
+        'first', (tester) async {
+      final panel = await _pump(tester, size: _phone, safety: managed);
+      await panel.emit(tester, HostProfileChanged(_serverId, jobsProfile));
+      await panel.sample(tester, SampleStream.cron, lines());
+
+      await tester.tap(_row('cron|crontab|1'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Resume'));
+      await tester.pumpAndSettle();
+      expect(find.byType(JobDetails), findsNothing);
+      await answerRead(tester, panel);
+
+      expect(
+        planned(panel).text,
+        '*/15 * * * *  /home/deploy/bin/sync-assets\n'
+        '0 3 * * * /home/deploy/bin/backup\n'
+        '0 4 * * * dokku ps:report\n',
+      );
+    });
+
+    testWidgets('a crontab changed since the reading plans nothing and '
+        'says so', (tester) async {
+      final panel = await _pump(tester, safety: managed);
+      await panel.emit(tester, HostProfileChanged(_serverId, jobsProfile));
+      await panel.sample(tester, SampleStream.cron, lines());
+
+      await tester.tap(
+        find.byKey(const ValueKey('jobs.rowActions.cron|crontab|0')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Pause'));
+      await tester.pumpAndSettle();
+      await answerRead(tester, panel, text: '0 5 * * * /bin/true\n');
+
+      expect(panel.engine.sentOfType<PlanAction>(), isEmpty);
+      expect(
+        find.text(
+          'The crontab no longer holds this line as shown. Wait for the '
+          'next reading and try again.',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a system table offers Run now but no Pause', (tester) async {
+      final panel = await _pump(tester, safety: managed);
+      await panel.all(tester);
+
+      await tester.tap(_row('cron|/etc/cron.d/backup|0'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(OutlinedButton, 'Run now'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, 'Pause'), findsNothing);
+    });
+
     testWidgets("a line's details read the newest start cron logged for it", (
       tester,
     ) async {
