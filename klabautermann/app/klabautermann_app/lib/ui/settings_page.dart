@@ -13,6 +13,7 @@ import '../controllers/announcement_controller.dart';
 import '../controllers/appearance_controller.dart';
 import '../controllers/monitor_set.dart';
 import '../controllers/safety_controller.dart';
+import '../controllers/sync_secrets_controller.dart';
 import '../l10n/app_localizations.dart';
 import '../services/settings_window/settings_window_link.dart';
 import 'about_dialog.dart';
@@ -23,7 +24,8 @@ import 'monitor_set_feedback.dart';
 /// Settings (03 §10.2): the seven planned tabs as placeholders, except
 /// General, which holds A11Y-15's switch (D60) and the about row (M16),
 /// Appearance, which already drives the app's appearance, Servers, which
-/// holds FL-21's monitor set (03 §4.3 step 4), and Safety (M4 plan M4). A
+/// holds FL-21's monitor set (03 §4.3 step 4), Safety (M4 plan M4), and
+/// Sync, which holds the "sync passwords" switch (SYN-02). A
 /// route on phones (and wherever the desktop window cannot open); on
 /// desktop the same page fills the settings window
 /// (`settings_window_app.dart`).
@@ -35,6 +37,7 @@ class SettingsPage extends StatefulWidget {
     required this.appVersion,
     required this.monitorSet,
     this.safety,
+    this.syncSecrets,
     this.initialTab = SettingsTab.general,
     this.tabRequests,
   });
@@ -45,6 +48,9 @@ class SettingsPage extends StatefulWidget {
 
   /// Null in tests that leave safety out, where the tab is a placeholder.
   final SafetySettings? safety;
+
+  /// Null in tests that leave it out, where the Sync tab is a placeholder.
+  final SyncSecretsSettings? syncSecrets;
 
   /// The running build's version for the about row; null when the
   /// platform could not tell (`readAppVersion`).
@@ -125,6 +131,9 @@ class _SettingsPageState extends State<SettingsPage>
                 appearance: widget.appearance,
               ),
               SettingsTab.servers => ServersTab(monitorSet: widget.monitorSet),
+              SettingsTab.sync when widget.syncSecrets != null => SyncTab(
+                syncSecrets: widget.syncSecrets!,
+              ),
               SettingsTab.safety when widget.safety != null => SafetyTab(
                 safety: widget.safety!,
               ),
@@ -210,6 +219,62 @@ class GeneralTab extends StatelessWidget {
             title: Text(l10n.appTitle),
             subtitle: Text(appVersionLine(l10n, appVersion)),
             onTap: () => showAppAboutDialog(context, version: appVersion),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The Sync tab: the device's "sync passwords" switch (03 §4.5, SYN-02),
+/// in Séance's words. While on, sync rounds add the passwords and keys
+/// other devices synced to this device's vault.
+class SyncTab extends StatelessWidget {
+  const SyncTab({super.key, required this.syncSecrets});
+
+  final SyncSecretsSettings syncSecrets;
+
+  /// As [GeneralTab._set].
+  Future<void> _set(BuildContext context, bool enabled) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final l10n = AppLocalizations.of(context);
+    try {
+      await syncSecrets.setSyncSecrets(enabled);
+    } on SyncSecretsNotSavedException catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) {
+        showTopToast(overlay, message: l10n.settingsSyncSecretsNotSaved);
+      }
+    } on Exception catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) {
+        showTopToast(overlay, message: l10n.settingsSyncSecretsNotChanged);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return ListenableBuilder(
+      listenable: syncSecrets,
+      builder: (context, _) => ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          Semantics(
+            header: true,
+            child: Text(
+              l10n.settingsSyncSecretsTitle,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+          ),
+          const SizedBox(height: 4),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: syncSecrets.value,
+            onChanged: (enabled) => unawaited(_set(context, enabled)),
+            title: Text(l10n.settingsSyncSecrets),
+            subtitle: Text(l10n.settingsSyncSecretsDetail),
           ),
         ],
       ),

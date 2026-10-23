@@ -362,6 +362,51 @@ void main() {
     expect(record.failure, isNull);
   });
 
+  test('a launch the next listing misses keeps ops read every 15 s until '
+      'it shows, for at most a minute', () async {
+    final launch = OperationLaunch(
+      action: 'RedeployStack',
+      targetName: 'web',
+      steps: ['docker compose pull'],
+      tier: ConfirmationTier.acknowledge,
+      startedAt: DateTime.utc(2026, 10, 18, 9),
+    );
+    await tracker.launched(
+      _s1,
+      _done,
+      directory: OpDirectoryKind.user,
+      launch: launch,
+    );
+    expect(reads, [_s1]);
+
+    // The wrapper has not written its record yet.
+    await tracker.listed(_s1, _section());
+    await clock.elapse(const Duration(seconds: 15));
+    expect(reads, [_s1, _s1]);
+
+    await tracker.listed(_s1, _section(user: {_done: _record(_done)}));
+    expect(op(_done).state, DetachedOperationState.done);
+    await clock.elapse(const Duration(minutes: 1));
+    expect(reads, [_s1, _s1], reason: 'it showed, and nothing runs');
+
+    // A wrapper that never records stops the re-reads after a minute.
+    await tracker.launched(
+      _s1,
+      _running,
+      directory: OpDirectoryKind.user,
+      launch: launch,
+    );
+    reads.clear();
+    for (var i = 0; i < 4; i++) {
+      await tracker.listed(_s1, _section());
+      await clock.elapse(const Duration(seconds: 15));
+    }
+    expect(reads, hasLength(4));
+    await tracker.listed(_s1, _section());
+    await clock.elapse(const Duration(minutes: 1));
+    expect(reads, hasLength(4));
+  });
+
   test('a lost result audits as interrupted', () async {
     link.answer = (c) => c.contains('klabautermann-ticks')
         ? const RemoteCommandResult(exitCode: 3)

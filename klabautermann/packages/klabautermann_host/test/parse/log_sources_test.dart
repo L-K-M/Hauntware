@@ -74,7 +74,8 @@ void main() {
     test('an oversized offset or a row without times warns, never '
         'throws', () {
       final r = parseJournalBoots(
-        '99999999999999999999 $_a Sun 2025-10-19 08:00:01 UTC\n'
+        '99999999999999999999 $_a Sun 2025-10-19 08:00:01 UTC—'
+        'Sun 2025-10-19 22:00:00 UTC\n'
         '  0 $_b no times here\n',
         JournalBootsFormat.text,
       );
@@ -84,6 +85,17 @@ void main() {
         'list-boots: row skipped',
         'list-boots: row without entry times',
       ]);
+    });
+
+    test('a JSON entry time beyond what Dart holds warns, never throws', () {
+      final r = parseJournalBoots(
+        '[{"index":0,"boot_id":"$_b","first_entry":8640000000000000001,'
+        '"last_entry":1760947200000000}]',
+        JournalBootsFormat.json,
+      );
+      expect(r.value.single.firstEntry, isNull);
+      expect(r.value.single.lastEntry, isNotNull);
+      expect(r.warnings, ['list-boots: entry time out of range']);
     });
   });
 

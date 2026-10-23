@@ -22,8 +22,11 @@ import '../admin/safety_policy.dart';
 import '../admin/user_crontabs.dart';
 import '../capabilities/capability_cache.dart';
 import '../catalog/engine_sync.dart';
+import '../catalog/engine_vault.dart';
+import '../catalog/klabautermann_records.dart' show diffServerPrefs;
 import '../catalog/keystore_channel.dart';
 import '../docker/docker_router.dart';
+import '../docker/exec_sessions.dart';
 import '../fleet/endpoint_pins.dart';
 import '../fleet/imported_fleet.dart';
 import '../fleet/monitor_set.dart';
@@ -41,6 +44,8 @@ import '../logs/host_queries.dart';
 import '../logs/log_stream_router.dart';
 import '../operations/confirmation.dart';
 import '../operations/detached_runner.dart';
+import '../operations/edit_reader.dart';
+import '../operations/footprint.dart';
 import '../operations/operation_plan.dart'
     show DockerTargetUnchanged, PlanAttempt, StackConfigUnchanged;
 import '../operations/operation_runner.dart';
@@ -48,7 +53,11 @@ import '../operations/operation_tracker.dart';
 import '../operations/operations_shown.dart';
 import '../operations/plan_registry.dart';
 import '../operations/plan_types.dart' show RequiredLevel;
+import '../operations/plans/backup_plans.dart';
 import '../operations/plans/docker_plans.dart';
+import '../operations/plans/edit_plan.dart';
+import '../jobs/job_history_query.dart';
+import '../services/unit_queries.dart';
 import '../operations/plans/host_plans.dart';
 import '../operations/plans/redeploy_plan.dart';
 import '../operations/protected_targets.dart';
@@ -60,6 +69,10 @@ import 'protocol.dart';
 /// Redacts the lines an export carries (LOG-10, 03 §8.9), as the audit
 /// log and operation output are.
 final _exportRedactor = SecretRedactor();
+
+/// How long a shutdown waits for open shells to end and write their
+/// audit records; a link that went silent cannot hold the quit longer.
+const Duration _shutdownGrace = Duration(seconds: 2);
 
 /// What the engine isolate starts with, sent once by `Isolate.spawn`
 /// (D18): the port it answers on and the app's support directory, where it
@@ -201,6 +214,9 @@ void engineMain(
   // One-shot host reads over each server's ready link (03 §7.6); none
   // while links are off.
   HostQueries? hostQueries;
+  // Container shells over the Docker endpoints (03 §7.13); none while
+  // links are off.
+  ExecSessions? terminals;
   // Admin mode per server (03 §8.2), over the links; none while links are
   // off. The safety policy the app last sent; until then every server is
   // observe-only (SAF-01).
@@ -279,6 +295,17 @@ void engineMain(
   // opened with the import store.
   final keystore = ChannelSyncKeystore(uiPort.send);
   late final EngineSync sync;
+  var syncOpened = false;
+
+  // The one vault over `vault.json` (03 §4.5), which links read and sync
+  // re-keys. Until sync has opened, the account is unknown, so the vault
+  // mints no master key.
+  final vault = EngineVault(
+    Directory(start.supportDirectory),
+    access: start.supportDirectoryAccess,
+    keystore: keystore,
+    enrolled: () => !syncOpened || sync.account != null,
+  );
 
   // What the engine asks the user while it connects, keyed by prompt id
   // (03 §10.1).
@@ -304,7 +331,9 @@ void engineMain(
           connect: LinkConnector(
             credentials: EngineCredentialSource(
               identityAuditLogIn(start.supportDirectory),
+              vault: vault.read,
             ),
+            saveSecret: vault.save,
             hostKeys: hostKeys,
             prompts: prompts,
             hopConfig: configOf,
@@ -328,6 +357,7 @@ void engineMain(
                 }
               } else {
                 readyLinks.remove(event.serverId);
+                terminals?.linkLost(event.serverId);
                 admin?.linkLost(event.serverId);
                 operations?.linkLost(event.serverId);
               }
@@ -372,6 +402,26 @@ void engineMain(
   var monitored = const <String>{};
   final viewed = <String>{};
 
+  // Verifies a server's footprint (SAF-14, P13) and sends what it found:
+  // on every connect, when admin mode turns on (root's part), after an
+  // edit or a backup removal, and on request. readFootprint answers
+  // rather than throws.
+  void verifyFootprint(String serverId) {
+    final link = links?.link(serverId);
+    final profile = profiles[serverId];
+    if (link == null || profile == null) return;
+    unawaited(
+      lendSession(
+        serverId,
+        () => readFootprint(serverId, (
+          link: link,
+          profile: profile,
+          admin: admin?.session(serverId),
+        )),
+      ).then(uiPort.send),
+    );
+  }
+
   if (links != null) {
     admin = AdminModeController(
       linkFor: links.link,
@@ -390,13 +440,20 @@ void engineMain(
         // A sudo relay and an elevated follow live only while admin mode
         // does (plan M7, LOG-22).
         docker?.adminChanged(event.serverId);
+        if (event.phase == AdminModePhase.on) verifyFootprint(event.serverId);
         logs?.adminChanged(event.serverId);
+        if (event.phase != AdminModePhase.on) {
+          terminals?.adminEnded(event.serverId);
+        }
         // A root result's cleanup waits for admin mode (03 §7.17).
         if (event.phase == AdminModePhase.on) {
           unawaited(operations?.adminOn(event.serverId));
         }
       },
     );
+    // One-off commands' output is redacted as the audit log redacts the
+    // steps (CTX-08, 03 §8.10).
+    final execRedactor = SecretRedactor();
     runner = OperationRunner(
       linkFor: links.link,
       emit: uiPort.send,
@@ -415,6 +472,19 @@ void engineMain(
           router.actionRan(serverId, containers: {?container}, images: images);
         }
         return status;
+      },
+      exec: (serverId, step) {
+        final router = docker;
+        if (router == null) {
+          throw const DockerEndpointUnavailable(DockerQueryFailure.cancelled);
+        }
+        return runOneOffExec(
+          step,
+          open: () => router.openExec(serverId),
+          control: <T>(call) =>
+              router.useEndpoint(serverId, (client, _) => call(client)),
+          redact: execRedactor.redact,
+        );
       },
       docker: (serverId, check) async {
         final router = docker;
@@ -479,6 +549,10 @@ void engineMain(
       // started detached operation is audited with its result, once the
       // app has shown it (03 §7.17).
       finished: (result) {
+        if (result.plan.intent
+            case EditFile() || KeepLastBackups() || RemoveBackups()) {
+          verifyFootprint(result.plan.intent.serverId);
+        }
         if (result.plan.detached &&
             result.finished.outcome == ActionOutcome.succeeded) {
           return;
@@ -495,6 +569,7 @@ void engineMain(
       probed: (serverId, profile) {
         profiles[serverId] = profile;
         admin?.probed(serverId, profile);
+        verifyFootprint(serverId);
         unawaited(capabilities?.probed(serverId, profile));
         docker?.probed(serverId, profile);
       },
@@ -512,12 +587,21 @@ void engineMain(
       adminFor: (serverId) => admin?.session(serverId),
       quotas: channelQuotas,
     );
-    docker = DockerRouter(
+    final router = docker = DockerRouter(
       linkFor: links.link,
       emit: uiPort.send,
       samplerSessions: (serverId) => scheduler?.samplerSessions(serverId) ?? 0,
       adminFor: (serverId) => admin?.session(serverId),
       quotas: channelQuotas,
+    );
+    terminals = ExecSessions(
+      open: router.openExec,
+      control: <T>(serverId, call) =>
+          router.useEndpoint(serverId, (client, _) => call(client)),
+      emit: uiPort.send,
+      fleet: (serverId) => fleetIds.contains(serverId),
+      audit: audit.append,
+      deviceId: start.deviceId,
     );
   }
 
@@ -534,6 +618,19 @@ void engineMain(
   // Whether the app has had a fleet. Probing waits for it, since the app
   // keeps answers only for servers its fleet lists.
   var fleetSent = false;
+
+  // The synced preferences the app last heard, so a round sends only
+  // what changed.
+  var prefsSent = <String, String>{};
+  Future<void> sendServerPrefs() async {
+    final (changes, sent) = diffServerPrefs(
+      prefsSent,
+      await sync.serverPrefs(),
+    );
+    changes.forEach(uiPort.send);
+    prefsSent = sent;
+  }
+
   void probeFleet() {
     if (!fleetSent) return;
     reachability?.update(probeTargets(fleetEntries(), configOf));
@@ -610,6 +707,7 @@ void engineMain(
             previous?.endpointOf(id) != fleet.endpointOf(id))
           id,
     };
+    terminals?.forget(forgotten);
     docker
       ?..forget(forgotten)
       ..retain(fleetIds);
@@ -742,6 +840,7 @@ void engineMain(
       }
       if (status.phase == SyncPhase.succeeded) {
         uiPort.send(CatalogReplaced(fleetEntries()));
+        await sendServerPrefs();
       }
       uiPort.send(status);
     });
@@ -775,6 +874,7 @@ void engineMain(
         // anything.
         uiPort.send(CatalogReplaced(fleetEntries()));
         fleetSent = true;
+        await sendServerPrefs();
         probeFleet();
       case Connect(:final serverId):
         sendCachedProfile(serverId);
@@ -811,6 +911,7 @@ void engineMain(
         // Its streams end before its link closes, so none reports
         // waiting for that link first.
         logs?.disconnect(serverId);
+        terminals?.linkLost(serverId);
         docker?.disconnect(serverId);
         links?.disconnect(serverId);
         if (monitoredServer) {
@@ -915,6 +1016,25 @@ void engineMain(
             lines.map(_exportRedactor.redact).join('\n'),
           ),
         );
+      case OpenTerminal():
+        switch (terminals) {
+          case null:
+            reject(message, 'links are off in this engine');
+          case final terminals:
+            if (terminals.validate(message) case final problem?) {
+              reject(message, problem);
+              return;
+            }
+            terminals.open(message, safetyPolicy);
+        }
+      case TerminalInput():
+        terminals?.input(message);
+      case TerminalResize():
+        terminals?.resize(message);
+      case TerminalEndInput(:final terminalId):
+        terminals?.endInput(terminalId);
+      case CloseTerminal(:final terminalId):
+        terminals?.close(terminalId);
       case SetDockerEndpoint():
         switch (docker) {
           case null:
@@ -1030,7 +1150,8 @@ void engineMain(
           case ContainerAction() ||
               RemoveContainer() ||
               RemoveImage() ||
-              StackAction():
+              StackAction() ||
+              ContainerExec():
             final router = docker;
             if (router == null) {
               refuse(ActionRefusalReason.engineUnavailable);
@@ -1052,7 +1173,7 @@ void engineMain(
                     refusal: ActionRefusalReason.engineUnavailable,
                   ),
                 );
-          case RedeployStack():
+          case RedeployStack() || StackComposeAction():
             final router = docker;
             if (router == null) {
               refuse(ActionRefusalReason.engineUnavailable);
@@ -1063,9 +1184,8 @@ void engineMain(
             attempt =
                 lendSession(
                   serverId,
-                  () => router.useStacks(
-                    serverId,
-                    (client, route, stacks) => planRedeploy(intent, (
+                  () => router.useStacks(serverId, (client, route, stacks) {
+                    final RedeployPlanContext context = (
                       client: client,
                       route: route,
                       stacks: stacks,
@@ -1083,14 +1203,47 @@ void engineMain(
                       },
                       protection: protection,
                       loginUser: profile.user ?? 'login user',
-                    )),
-                  ),
+                    );
+                    return switch (intent) {
+                      final RedeployStack redeploy => planRedeploy(
+                        redeploy,
+                        context,
+                      ),
+                      final StackComposeAction compose => planStackCompose(
+                        compose,
+                        context,
+                      ),
+                      _ => throw StateError(
+                        'not a compose intent: ${intent.runtimeType}',
+                      ),
+                    };
+                  }),
                 ).catchError(
                   (Object _) => (
                     plan: null,
                     refusal: ActionRefusalReason.engineUnavailable,
                   ),
                 );
+          case KeepLastBackups() || RemoveBackups():
+            attempt = lendSession(
+              serverId,
+              () => planBackupRemoval(intent, (
+                link: link,
+                profile: profile,
+                admin: admin?.session(serverId),
+              )),
+            );
+          case EditFile():
+            // Planning reads the target again over the link, through admin
+            // mode where it needs root, as the run will.
+            attempt = lendSession(
+              serverId,
+              () => planEdit(intent, (
+                link: link,
+                profile: profile,
+                admin: admin?.session(serverId),
+              )),
+            );
         }
         // Not awaited: planning reads over the link, and the queue keeps
         // serving the app meanwhile.
@@ -1104,6 +1257,43 @@ void engineMain(
             final planId = plans.hold(plan, linkGeneration: generation);
             uiPort.send(ActionPlanned(planId, plan.preview));
           }),
+        );
+      case FootprintQuery(:final serverId):
+        if (!fleetIds.contains(serverId)) {
+          reject(message, 'no fleet server $serverId');
+        } else if (links?.link(serverId) == null ||
+            profiles[serverId] == null) {
+          reject(message, 'no connection to $serverId');
+        } else {
+          verifyFootprint(serverId);
+        }
+      case ReadEditable(:final serverId, :final requestId, :final target):
+        void answer(EditReadResult result) => uiPort.send(
+          EditRead(serverId: serverId, requestId: requestId, result: result),
+        );
+        final link = links?.link(serverId);
+        final profile = profiles[serverId];
+        if (!fleetIds.contains(serverId) || link == null || profile == null) {
+          answer(const EditReadFailed(EditReadFailure.noLink));
+          return;
+        }
+        // Not awaited: the read waits on the host while the queue serves
+        // the app. readEditable answers rather than throws; a lend that
+        // fails still answers, so the editor never waits on nothing.
+        unawaited(
+          lendSession(
+            serverId,
+            () => readEditable(target, (
+              link: link,
+              profile: profile,
+              admin: admin?.session(serverId),
+            )),
+          ).then(
+            answer,
+            onError: (Object error) => answer(
+              EditReadFailed(EditReadFailure.failed, detail: '$error'),
+            ),
+          ),
         );
       case AuditQuery(:final serverId, :final before, :final limit):
         final (:records, :more) = await audit.query(
@@ -1163,6 +1353,59 @@ void engineMain(
             ),
           ).then(uiPort.send),
         );
+      case UnitQuery(:final serverId, :final requestId, :final query):
+        final link = links?.link(serverId);
+        final profile = profiles[serverId];
+        if (!fleetIds.contains(serverId) || link == null || profile == null) {
+          uiPort.send(
+            UnitQueryResult(
+              serverId: serverId,
+              requestId: requestId,
+              payload: const UnitQueryFailed(UnitQueryFailure.noLink),
+            ),
+          );
+          return;
+        }
+        // Not awaited, as the other reads: runUnitQuery answers rather
+        // than throws.
+        unawaited(
+          lendSession(
+            serverId,
+            () => runUnitQuery(
+              serverId,
+              requestId,
+              query,
+              link: link,
+              profile: profile,
+            ),
+          ).then(uiPort.send),
+        );
+      case JobHistoryQuery(:final serverId, :final requestId, :final query):
+        final link = links?.link(serverId);
+        if (!fleetIds.contains(serverId) || link == null) {
+          uiPort.send(
+            JobHistoryResult(
+              serverId: serverId,
+              requestId: requestId,
+              payload: const JobHistoryFailed(JobHistoryFailure.noLink),
+            ),
+          );
+          return;
+        }
+        // Not awaited, as the other reads: the query answers rather than
+        // throws.
+        unawaited(
+          lendSession(
+            serverId,
+            () => runJobHistoryQuery(
+              serverId,
+              requestId,
+              query,
+              link: link,
+              admin: admin?.session(serverId),
+            ),
+          ).then(uiPort.send),
+        );
       case SetSafetyPolicy(:final policy):
         if (validateSafetyPolicy(policy) case final problem?) {
           reject(message, problem);
@@ -1174,6 +1417,10 @@ void engineMain(
         for (final serverId in [...?admin?.servers]) {
           if (adminRefusal(policy, serverId) != null) admin?.disable(serverId);
         }
+      case SetSyncSecrets(:final enabled):
+        // Behind any sync operation already queued, which runs under the
+        // switch as it was when it was asked for.
+        syncTail = syncTail.then((_) => sync.setSyncSecrets(enabled: enabled));
       case SetAdminMode(:final serverId, :final enabled):
         if (!fleetIds.contains(serverId)) {
           reject(message, 'no fleet server $serverId');
@@ -1244,8 +1491,11 @@ void engineMain(
           }),
         );
       case Shutdown():
-        // Each stream's end goes out before the isolate does, and its
-        // process goes with the isolate.
+        // Open shells end first, so their TerminalClosed and audit
+        // records are not cut off by Isolate.exit. Each stream's end goes
+        // out before the isolate does, and its process goes with the
+        // isolate.
+        await terminals?.dispose().timeout(_shutdownGrace, onTimeout: () {});
         unawaited(logs?.close());
         unawaited(docker?.close());
         commands.close();
@@ -1288,8 +1538,10 @@ void engineMain(
           deviceId: start.deviceId,
           hostKeys: hostKeys,
           keystore: keystore,
+          vault: vault,
           transport: syncTransport,
         );
+        syncOpened = true;
         syncedServers = await sync.servers();
         synced = await listSynced(syncedServers);
         trustedIds = {...synced.confirmedIds, ...synced.unreadableIds};
