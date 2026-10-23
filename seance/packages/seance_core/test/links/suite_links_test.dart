@@ -1,8 +1,8 @@
 // The parser and display groups of Poltergeist's
 // test/services/deep_links_test.dart and the builder cases of its
 // seance_links_test.dart, copied with the code they cover
-// (docs/design/suite-links.md section 9, F5d-1). F5d-2 replaces them with
-// the link contract corpus.
+// (docs/design/suite-links.md section 9, F5d-1). They stay beside the link
+// contract corpus (suite_link_corpus_test.dart) as finer-grained cases.
 import 'package:seance_core/seance_core.dart';
 import 'package:test/test.dart';
 
