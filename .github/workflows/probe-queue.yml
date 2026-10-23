@@ -1,0 +1,51 @@
+name: Probe queue max
+on:
+  push:
+    branches: [probe/queue-max]
+jobs:
+  a:
+    name: Probe a
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: probe-flatpak
+      cancel-in-progress: false
+      queue: max
+    steps:
+      - run: sleep 20
+  b:
+    name: Probe b
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: probe-flatpak
+      cancel-in-progress: false
+      queue: max
+    steps:
+      - run: sleep 20
+  c:
+    name: Probe c
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: probe-flatpak
+      cancel-in-progress: false
+      queue: max
+    steps:
+      - run: sleep 20
+  m:
+    name: Probe matrix ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux
+          - target: macos
+    concurrency:
+      group: ${{ matrix.target == 'linux' && 'probe-shared' || format('probe-free-{0}-{1}', matrix.target, github.run_id) }}
+      cancel-in-progress: false
+      queue: max
+    steps:
+      - run: sleep 20
