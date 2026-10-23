@@ -324,6 +324,28 @@ void main() {
       },
     );
 
+    test('a footprint query needs a fleet server with a link '
+        '(SAF-14)', () async {
+      final client = await IsolateEngineClient.spawn(
+        supportDirectory: support.path,
+        linksEnabled: true,
+      );
+      addTearDown(client.shutdown);
+      final (:events, fleet: _) = await started(client);
+      client.send(const ImportSshConfig('Host web\n  HostName 192.0.2.10\n'));
+      expect(await next(events), isA<CatalogReplaced>());
+      expect(await next(events), isA<SshConfigImported>());
+
+      client.send(const FootprintQuery('srv-x'));
+      final unknown = (await next(events)) as RequestRejected;
+      expect(unknown.requestName, 'FootprintQuery');
+      expect(unknown.reason, 'no fleet server srv-x');
+
+      client.send(const FootprintQuery('ssh-config:web'));
+      final unlinked = (await next(events)) as RequestRejected;
+      expect(unlinked.reason, 'no connection to ssh-config:web');
+    });
+
     test('an endpoint choice is rejected while links are off', () async {
       final client = await spawnEngine();
       final (:events, fleet: _) = await started(client);

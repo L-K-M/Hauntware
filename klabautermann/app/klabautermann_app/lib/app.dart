@@ -21,6 +21,7 @@ import 'controllers/monitoring_controller.dart';
 import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
 import 'controllers/sync_controller.dart';
+import 'controllers/sync_secrets_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'theme/app_theme.dart';
@@ -56,6 +57,7 @@ class KlabautermannApp extends StatelessWidget {
     required this.coverage,
     required this.announcements,
     this.safety,
+    this.syncSecrets,
     this.admin,
     this.operations,
     required this.dockerNotice,
@@ -89,6 +91,11 @@ class KlabautermannApp extends StatelessWidget {
   /// safety out: Settings then shows its placeholder and the server header
   /// neither the Safety menu nor its notices.
   final SafetyController? safety;
+
+  /// The device's "sync passwords" switch (SYN-02); like [appearance], it
+  /// outlives an engine run. Null in tests that leave it out, where the
+  /// Sync settings tab is a placeholder.
+  final SyncSecretsController? syncSecrets;
 
   /// Admin mode per server (03 §8.2), one engine run's like [fleet]. Null
   /// in tests that leave it out, where the header shows no admin chip.
@@ -241,6 +248,12 @@ class KlabautermannApp extends StatelessWidget {
             // its dialogs come up over Settings too.
             child: PromptHost(
               prompts: prompts,
+              labelOf: (serverId) =>
+                  fleet.servers
+                      .where((server) => server.id == serverId)
+                      .firstOrNull
+                      ?.displayName ??
+                  serverId,
               child: _withResultToasts(
                 Builder(
                   builder: (context) {
@@ -275,6 +288,7 @@ class KlabautermannApp extends StatelessWidget {
               appVersion: appVersion,
               monitorSet: fleet.monitorSettings,
               safety: safety,
+              syncSecrets: syncSecrets,
             ),
           },
         );

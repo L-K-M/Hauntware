@@ -203,17 +203,13 @@ final class OperationRunner {
         );
         switch (plan.steps[i]) {
           case final ShellStep step:
-            final result = step.elevated
-                ? await session!.executor.run(
-                    step.argv,
-                    password: session.password,
-                  )
-                : await link.run(step.commandLine, stdin: const []);
+            final result = await _runShell(link, step, session);
             if (step.captureOutput) {
               output = capturedOutput(result.stdout, result.stderr);
               exitCode = result.exitCode;
             }
             if (result.exitCode != 0) {
+              await _cleanUp(link, plan, session);
               if (step.exitMeanings[result.exitCode] case final changed?) {
                 return failed(
                   ActionFailure.revalidation,
@@ -238,6 +234,7 @@ final class OperationRunner {
             }
             final status = await api(serverId, step);
             if (status < _httpOk || status >= _httpMultipleChoices) {
+              await _cleanUp(link, plan, session);
               return failed(
                 ActionFailure.stepFailed,
                 step: i,
@@ -274,15 +271,19 @@ final class OperationRunner {
         }
       }
     } on ElevationException {
+      await _cleanUp(link, plan, session);
       return failed(ActionFailure.elevationRefused);
     } on RemoteCommandException {
+      await _cleanUp(link, plan, session);
       return failed(ActionFailure.transport);
     } on DockerException {
       return failed(ActionFailure.transport);
     } on DockerEndpointUnavailable {
       return failed(ActionFailure.transport);
     } on ChannelOpenException {
-      // The link refused the channel, at its session limit or closing.
+      // The link refused the channel, at its session limit or closing. A
+      // later channel may still open, so the cleanup is tried.
+      await _cleanUp(link, plan, session);
       return failed(ActionFailure.transport);
     }
     return ActionFinished(
@@ -291,6 +292,37 @@ final class OperationRunner {
       exitCode: exitCode,
       output: output,
     );
+  }
+
+  /// Runs [step] over [link], or through [session]'s elevation, with its
+  /// input on stdin.
+  Future<RemoteCommandResult> _runShell(
+    SshLink link,
+    ShellStep step,
+    AdminSession? session,
+  ) => step.elevated
+      ? session!.executor.run(
+          step.argv,
+          password: session.password,
+          stdin: step.input,
+        )
+      : link.run(step.commandLine, stdin: step.input ?? const []);
+
+  /// Runs [plan]'s cleanup steps after a failure, best effort: a cleanup
+  /// that fails, or a link that is gone, leaves what 03 §8.11's rows say
+  /// the next run or the footprint view removes.
+  Future<void> _cleanUp(
+    SshLink link,
+    OperationPlan plan,
+    AdminSession? session,
+  ) async {
+    for (final step in plan.cleanup) {
+      try {
+        await _runShell(link, step, session);
+      } on Object {
+        return;
+      }
+    }
   }
 
   Future<RevalidationFailure?> _revalidate(
@@ -343,16 +375,23 @@ final _redactor = SecretRedactor();
 
 /// A captured step's output as [ActionFinished.output] carries it (JOB-19):
 /// redacted as the audit log redacts, and at most [kExecOutputMax]
-/// characters in all, stdout first.
+/// characters in all, stdout first. Redaction comes first: a secret the
+/// cap cut would no longer match its pattern and leave a fragment.
 ExecOutput capturedOutput(String stdout, String stderr) {
-  final keptOut = stdout.length > kExecOutputMax
-      ? stdout.substring(0, kExecOutputMax)
-      : stdout;
+  final redactedOut = _redactor.redact(stdout);
+  final redactedErr = _redactor.redact(stderr);
+  final keptOut = redactedOut.length > kExecOutputMax
+      ? redactedOut.substring(0, kExecOutputMax)
+      : redactedOut;
   final room = kExecOutputMax - keptOut.length;
-  final keptErr = stderr.length > room ? stderr.substring(0, room) : stderr;
+  final keptErr = redactedErr.length > room
+      ? redactedErr.substring(0, room)
+      : redactedErr;
   return ExecOutput(
-    stdout: _redactor.redact(keptOut),
-    stderr: _redactor.redact(keptErr),
-    truncated: keptOut.length < stdout.length || keptErr.length < stderr.length,
+    stdout: keptOut,
+    stderr: keptErr,
+    truncated:
+        keptOut.length < redactedOut.length ||
+        keptErr.length < redactedErr.length,
   );
 }

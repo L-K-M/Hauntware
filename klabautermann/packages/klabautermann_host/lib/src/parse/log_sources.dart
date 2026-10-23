@@ -86,8 +86,16 @@ List<JournalBootEntry> _bootsJson(String raw, List<String> warnings) {
     return const [];
   }
 
-  DateTime? micros(Object? v) =>
-      v is int ? DateTime.fromMicrosecondsSinceEpoch(v, isUtc: true) : null;
+  DateTime? micros(Object? v) {
+    if (v is! int) return null;
+    // DateTime throws beyond ±_maxEpochSeconds; a garbled row must not.
+    const limit = _maxEpochSeconds * Duration.microsecondsPerSecond;
+    if (v < -limit || v > limit) {
+      warnings.add('list-boots: entry time out of range');
+      return null;
+    }
+    return DateTime.fromMicrosecondsSinceEpoch(v, isUtc: true);
+  }
 
   final boots = <JournalBootEntry>[];
   for (final entry in decoded) {

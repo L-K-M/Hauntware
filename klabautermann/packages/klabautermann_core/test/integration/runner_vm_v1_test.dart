@@ -19,8 +19,6 @@ library;
 import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
-import 'package:klabautermann_host/klabautermann_host.dart'
-    show LogCompression, kOwnCrontabSource, userCrontabSource;
 import 'package:test/test.dart';
 
 import 'support/actions.dart';
