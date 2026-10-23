@@ -337,9 +337,12 @@ final class OperationRunner {
           HostCommands.unitLoadState(unit, manager: manager),
         );
         if (result.exitCode != 0) return RevalidationFailure.unreadable;
-        return result.stdout.trim() == 'loaded'
-            ? null
-            : RevalidationFailure.unitMissing;
+        // A masked unit is still there: systemd reports it as masked, and
+        // its unmask runs on exactly that state.
+        return switch (result.stdout.trim()) {
+          'loaded' || 'masked' => null,
+          _ => RevalidationFailure.unitMissing,
+        };
       case ProcessStarted(:final pid, :final startTicks):
         final result = await _read(link, HostCommands.startTicks(pid));
         return switch (result.exitCode) {
