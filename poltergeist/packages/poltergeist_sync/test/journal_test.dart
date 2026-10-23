@@ -3,6 +3,7 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:path/path.dart' as p;
 import 'package:poltergeist_core/poltergeist_core.dart';
@@ -491,7 +492,6 @@ void main() {
   });
 
   test('legacy relative trash restores through its canonical root', () async {
-    final previousCurrent = Directory.current;
     final working = Directory('${runsDir.path}/working')..createSync();
     final restoreRoot = Directory('${runsDir.path}/restored')..createSync();
     final fs = LocalFileSystem();
@@ -527,20 +527,15 @@ void main() {
       ),
     );
 
-    Directory.current = working;
-    try {
-      final report = await restoreTrashedFiles(
-        journal,
-        fsFor: (_) => fs,
-        rootFor: (_) => restoreRootPath,
-      );
-
-      expect(report.restored, ['old.txt'], reason: '${report.skipped}');
-      expect(File('${restoreRoot.path}/old.txt').readAsStringSync(), 'legacy');
-      expect(await trashed.exists(), isFalse);
-    } finally {
-      Directory.current = previousCurrent;
-    }
+    final restored = await _runHelper('journal_restore_helper.dart', [
+      journal.path,
+      restoreRootPath,
+    ], workingDirectory: working.path);
+    expect(restored.exitCode, 0, reason: '${restored.stderr}');
+    final report = jsonDecode('${restored.stdout}') as Map<String, Object?>;
+    expect(report['restored'], ['old.txt'], reason: '${report['skipped']}');
+    expect(File('${restoreRoot.path}/old.txt').readAsStringSync(), 'legacy');
+    expect(await trashed.exists(), isFalse);
   });
 
   test('restore reuses each validated filesystem and root binding', () async {
@@ -1716,4 +1711,23 @@ final class _CountingLocalFileSystem extends LocalFileSystem {
     accessCount++;
     return super.stat(path, followLinks: followLinks);
   }
+}
+
+/// Runs [helper], a script under this package's test directory, in a
+/// process of its own: the only way to give it a working directory without
+/// moving the one every concurrently running suite shares.
+Future<ProcessResult> _runHelper(
+  String helper,
+  List<String> arguments, {
+  required String workingDirectory,
+}) {
+  final library = Isolate.resolvePackageUriSync(
+    Uri.parse('package:poltergeist_sync/poltergeist_sync.dart'),
+  )!;
+  final packageConfig = Isolate.packageConfigSync;
+  return Process.run(Platform.resolvedExecutable, [
+    if (packageConfig != null) '--packages=${packageConfig.toFilePath()}',
+    File.fromUri(library.resolve('../test/$helper')).path,
+    ...arguments,
+  ], workingDirectory: workingDirectory);
 }
