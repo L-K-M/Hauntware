@@ -1132,6 +1132,32 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('a failed run with no exit status says a step failed', (
+      tester,
+    ) async {
+      final panel = await _pump(tester, size: _phone, safety: managed);
+      await panel.emit(tester, HostProfileChanged(_serverId, jobsProfile));
+      await panel.sample(tester, SampleStream.cron, lines());
+
+      await tester.tap(_row('cron|crontab|0'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Run now'));
+      await tester.pumpAndSettle();
+      await panel.emit(tester, ActionPlanned('plan-1', preview()));
+      await tester.tap(find.text('Run'));
+      await tester.pumpAndSettle();
+      await panel.emit(
+        tester,
+        const ActionFinished(
+          planId: 'plan-1',
+          outcome: ActionOutcome.failed,
+          failure: ActionFailure.stepFailed,
+        ),
+      );
+      expect(find.textContaining('did not finish: a step failed.'), findsOne);
+      expect(find.textContaining('exit status'), findsNothing);
+    });
+
     testWidgets("a paused line says so and reads no last run; Dokku's line "
         'is badged and offers no run', (tester) async {
       final panel = await _pump(tester, safety: managed);
