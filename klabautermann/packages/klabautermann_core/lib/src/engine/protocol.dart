@@ -240,6 +240,12 @@ import '../operations/plan_types.dart';
 /// Running a cron line now then joined v3 the same way (03 §7.7,
 /// JOB-19): [RunCronJob] is planned as a host action, and reports its
 /// output as [ContainerExec] does.
+///
+/// Stack files and folders then joined v3 the same way (03 §7.16 STK-07
+/// to STK-09): a [StackFileTarget] edits a verified stack's file through
+/// the same pipeline, [DockerStackProfilesQuery] lists the profiles its
+/// files name, and [DockerStackScanQuery] finds compose files in the
+/// folders the user chose.
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -1727,6 +1733,9 @@ enum EditReadFailure {
   /// The file is not UTF-8 text.
   notText,
 
+  /// A [StackFileTarget]'s project is not a verified source (STK-07).
+  stackUnverified,
+
   /// The read failed otherwise.
   failed,
 }
@@ -3129,6 +3138,32 @@ final class DockerStackFileQuery extends DockerQuerySpec {
   final String path;
 }
 
+/// The profiles a verified project's files name (03 §7.16 STK-09), for
+/// STK-23's `--profile` choices: `compose config --profiles`. Answered
+/// by [DockerStackProfilesPayload], by [DockerStackFileFailed] when the
+/// project is unknown or unverified, or by [DockerQueryFailed] when the
+/// CLI could not list them.
+final class DockerStackProfilesQuery extends DockerQuerySpec {
+  const DockerStackProfilesQuery(this.project);
+
+  final String project;
+}
+
+/// The compose files in [directories] and the folders right below them
+/// (03 §7.16 STK-08): `find <dir> -maxdepth 2` for `compose*.y*ml` and
+/// `docker-compose*.y*ml`, run as the login user, for stacks with no
+/// containers. Answered by [DockerStackScanPayload].
+final class DockerStackScanQuery extends DockerQuerySpec {
+  DockerStackScanQuery(Iterable<String> directories)
+    : directories = List.unmodifiable(directories);
+
+  /// Absolute paths, at most [kStackScanDirectoriesMax].
+  final List<String> directories;
+}
+
+/// The most folders one [DockerStackScanQuery] searches [E].
+const int kStackScanDirectoriesMax = 16;
+
 /// The compose CLIs on the server (03 §7.16 STK-05), for the Access tab's
 /// compose row (CN-24) without a stacks watch: looked for once per
 /// endpoint in one exec, as stack verification does. Answered by
@@ -3356,6 +3391,30 @@ final class DockerStackFilePayload extends DockerPayload {
   /// Whether the file is over [kStackFileMaxBytes], so [text] holds only
   /// its complete lines within that many bytes.
   final bool truncated;
+}
+
+/// The profiles a [DockerStackProfilesQuery] found, sorted.
+final class DockerStackProfilesPayload extends DockerPayload {
+  DockerStackProfilesPayload({
+    required this.project,
+    required Iterable<String> profiles,
+  }) : profiles = List.unmodifiable(profiles);
+
+  final String project;
+  final List<String> profiles;
+}
+
+/// The compose files a [DockerStackScanQuery] found, sorted.
+final class DockerStackScanPayload extends DockerPayload {
+  DockerStackScanPayload(Iterable<String> files, {this.incomplete = false})
+    : files = List.unmodifiable(files);
+
+  /// Absolute paths; a stack's folder is a file's directory.
+  final List<String> files;
+
+  /// Whether a folder could not be read, or the list was cut at the
+  /// output cap, so stacks may be missing.
+  final bool incomplete;
 }
 
 /// The most bytes of a stack file the engine reads (M11 [E]).
@@ -3972,6 +4031,29 @@ final class CrontabTarget extends EditTarget {
 
   @override
   int get hashCode => Object.hash(CrontabTarget, user);
+}
+
+/// One file of the compose project [project] (03 §7.16 STK-07): a config
+/// or environment file its containers recorded, or the `.env` in its
+/// working directory, as [DockerStackFileQuery] reads them. Only a
+/// verified project's files are read or written, and a write checks the
+/// candidate with `compose config -q` before it replaces the file.
+final class StackFileTarget extends EditTarget {
+  const StackFileTarget({required this.project, required this.path});
+
+  final String project;
+
+  /// The file's absolute path, as the project's labels name it.
+  final String path;
+
+  @override
+  bool operator ==(Object other) =>
+      other is StackFileTarget &&
+      other.project == project &&
+      other.path == path;
+
+  @override
+  int get hashCode => Object.hash(StackFileTarget, project, path);
 }
 
 /// Replaces [target]'s content with [text] (SAF-12, X-05), only while the

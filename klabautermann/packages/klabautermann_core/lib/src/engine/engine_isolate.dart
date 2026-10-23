@@ -58,6 +58,7 @@ import '../operations/plans/docker_plans.dart';
 import '../operations/plans/edit_plan.dart';
 import '../jobs/job_history_query.dart';
 import '../services/unit_queries.dart';
+import '../operations/stack_edits.dart';
 import '../operations/plans/host_plans.dart';
 import '../operations/plans/redeploy_plan.dart';
 import '../operations/protected_targets.dart';
@@ -368,6 +369,33 @@ void engineMain(
               : BackgroundLinkPolicy.keepOpen,
         )
       : null;
+
+  // A stack file's edit (STK-07) looks its project up on the server's
+  // Docker endpoint, for its read and again for its plan: null while
+  // links are off.
+  StackEditLookup? stackEditLookup(String serverId) {
+    final router = docker;
+    if (router == null) return null;
+    return (project, path) async {
+      try {
+        return await router.useStacks(serverId, (client, route, stacks) async {
+          final found = await stacks.editable(client, project, path);
+          return (
+            project: found.project,
+            socketPath: route.socketPath,
+            failure: found.failure,
+          );
+        });
+      } on Object {
+        // No endpoint, or the list failed: nothing to edit against.
+        return (
+          project: null,
+          socketPath: null,
+          failure: StackFileFailure.readFailed,
+        );
+      }
+    };
+  }
 
   // A user-initiated step on a link at its learned session limit borrows
   // the slow sampler's session for the while; the fast sampler samples on
@@ -1252,7 +1280,7 @@ void engineMain(
                 link: link,
                 profile: profile,
                 admin: admin?.session(serverId),
-              )),
+              ), stacks: stackEditLookup(serverId)),
             );
         }
         // Not awaited: planning reads over the link, and the queue keeps
@@ -1297,7 +1325,7 @@ void engineMain(
               link: link,
               profile: profile,
               admin: admin?.session(serverId),
-            )),
+            ), stacks: stackEditLookup(serverId)),
           ).then(
             answer,
             onError: (Object error) => answer(

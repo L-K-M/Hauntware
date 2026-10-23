@@ -11,6 +11,9 @@ import 'package:klabautermann_core/src/operations/confirmation.dart';
 import 'package:klabautermann_core/src/operations/edit_reader.dart';
 import 'package:klabautermann_core/src/operations/operation_plan.dart';
 import 'package:klabautermann_core/src/operations/plans/edit_plan.dart';
+import 'package:klabautermann_core/src/operations/stack_edits.dart';
+import 'package:klabautermann_docker/klabautermann_docker.dart'
+    show ComposeProject, Ownership, composeConfig;
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
         EditCommands,
@@ -545,4 +548,144 @@ void main() {
       );
     });
   });
+
+  group('stack files (STK-07, M25b)', () {
+    const compose = '/srv/web/compose.yaml';
+    const override = '/srv/web/compose.override.yaml';
+    const dotEnv = '/srv/web/.env';
+    const socket = '/run/docker.sock';
+    const web = ComposeProject(
+      name: 'web',
+      services: [],
+      ownership: Ownership([]),
+      workingDir: '/srv/web',
+      configFiles: [compose, override],
+    );
+
+    StackEditLookup lookup({
+      ComposeProject? project = web,
+      StackFileFailure? failure,
+    }) =>
+        (name, path) async => (
+          project: failure == null ? project : null,
+          socketPath: failure == null ? socket : null,
+          failure: failure,
+        );
+
+    void serve(String path, String text) => host.files[path] = (
+      uid: 1000,
+      mode: '644',
+      text: text,
+      rootOnly: false,
+    );
+
+    Future<PlanAttempt> plan(String path, StackEditLookup? stacks) => planEdit(
+      EditFile(
+        _server,
+        target: StackFileTarget(project: 'web', path: path),
+        text: 'services: {}\n',
+        baseSha256: _sha('services:\n'),
+      ),
+      context(),
+      random: Random(1),
+      stacks: stacks,
+    );
+
+    test("a verified project's file reads as a file does", () async {
+      serve(compose, 'services:\n');
+      final read = await readEditable(
+        const StackFileTarget(project: 'web', path: compose),
+        context(),
+        stacks: lookup(),
+      );
+      expect((read as EditContent).text, 'services:\n');
+    });
+
+    test('an unverified project, a stranger file and no Docker endpoint '
+        'read nothing', () async {
+      serve(compose, 'services:\n');
+      Future<EditReadResult> read(StackEditLookup? stacks) => readEditable(
+        const StackFileTarget(project: 'web', path: compose),
+        context(),
+        stacks: stacks,
+      );
+
+      expect(
+        (await read(lookup(failure: StackFileFailure.notVerified))
+                as EditReadFailed)
+            .failure,
+        EditReadFailure.stackUnverified,
+      );
+      expect(
+        (await read(lookup(failure: StackFileFailure.notStackFile))
+                as EditReadFailed)
+            .failure,
+        EditReadFailure.invalidTarget,
+      );
+      expect(
+        (await read(null) as EditReadFailed).failure,
+        EditReadFailure.failed,
+      );
+      expect(host.commands, isEmpty, reason: 'nothing was read');
+    });
+
+    test('the candidate is checked by compose config -q in the file\'s '
+        'place before the swap', () async {
+      serve(override, 'services:\n');
+      final p = (await plan(override, lookup())).plan!;
+      final temp = _stepRunning(p, 'klabautermann-write').argv.last;
+      final check = _stepRunning(p, 'config');
+
+      expect(check.argv, [
+        ...composeConfig(
+          socketPath: socket,
+          project: 'web',
+          projectDirectory: '/srv/web',
+          configFiles: [compose, temp],
+          quiet: true,
+        ).argv,
+      ]);
+      expect(check.discardOutput, isTrue);
+      final checked = p.steps.indexOf(check);
+      expect(
+        (p.steps[checked + 1] as ShellStep).argv,
+        EditCommands.replaceIfHash(override, temp, _sha('services:\n')),
+      );
+      expect(p.targetName, override);
+    });
+
+    test("the working directory's .env is checked as the env file when "
+        'the project records none', () async {
+      serve(dotEnv, 'services:\n');
+      final p = (await plan(dotEnv, lookup())).plan!;
+      final temp = _stepRunning(p, 'klabautermann-write').argv.last;
+      final check = _stepRunning(p, 'config').argv;
+
+      expect(check, containsAllInOrder(['--env-file', temp]));
+      expect(check, containsAllInOrder(['-f', compose, '-f', override]));
+    });
+
+    test('an unverified project is refused before anything is read, and '
+        'no lookup means no engine to plan with', () async {
+      serve(compose, 'services:\n');
+      expect(
+        (await plan(
+          compose,
+          lookup(failure: StackFileFailure.notVerified),
+        )).refusal,
+        ActionRefusalReason.stackUnverified,
+      );
+      expect(host.commands, isEmpty);
+      expect(
+        (await plan(compose, null)).refusal,
+        ActionRefusalReason.engineUnavailable,
+      );
+    });
+  });
 }
+
+/// [plan]'s first shell step whose argv holds [word], wherever steps
+/// before it, such as the manifest's, put it.
+ShellStep _stepRunning(OperationPlan plan, String word) => plan.steps
+    .whereType<ShellStep>()
+    .firstWhere((step) => step.argv.contains(word));
