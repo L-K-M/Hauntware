@@ -8,12 +8,17 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
     show groupComposeProjects;
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
+        BackupEntry,
         CoreCpuTimes,
         CronDst,
         CronExpression,
         CronJob,
         CronJobEntry,
+        FootprintKind,
+        FootprintRow,
         FsMount,
+        JournalBoot,
+        JournalBootEntry,
         ServerZone,
         SystemdTimer,
         mergeJobs,
@@ -110,6 +115,33 @@ void main() {
           ),
         ),
         const CloseStream('stream-1'),
+        const ReadEditable(
+          serverId: 'srv-1',
+          requestId: 'e-1',
+          target: FileTarget('/etc/hosts'),
+        ),
+        const PlanAction(
+          EditFile(
+            'srv-1',
+            target: CrontabTarget(user: 'www-data'),
+            text: '* * * * * true\n',
+            baseSha256: 'abc',
+          ),
+        ),
+        OpenLogStream(
+          streamId: 'stream-3',
+          spec: LogStreamSpec(
+            serverId: 'srv-1',
+            source: const JournalLogSource(
+              boot: JournalBoot.offset(-1),
+              grep: 'oom',
+            ),
+            window: 100,
+            follow: false,
+          ),
+        ),
+        const HostQuery(serverId: 'srv-1', queryId: 'h-1', query: BootsQuery()),
+        const RedactLines('r-1', ['a', 'b']),
         const DockerQuery(
           serverId: 'srv-1',
           queryId: 'q-1',
@@ -133,6 +165,40 @@ void main() {
           serverId: 'srv-1',
           requestId: 'h-3',
           query: CronRunsQuery(lines: 20),
+        ),
+        const PlanAction(
+          UnitAction(
+            'srv-1',
+            unit: 'syncthing.service',
+            verb: SystemctlVerb.mask,
+            scope: UnitScope.user,
+          ),
+        ),
+        const UnitQuery(
+          serverId: 'srv-1',
+          requestId: 'u-1',
+          query: UnitFileQuery('app.service'),
+        ),
+        const UnitQuery(
+          serverId: 'srv-1',
+          requestId: 'u-2',
+          query: UnitResourcesQuery('app.service', scope: UnitScope.user),
+        ),
+        const UnitQuery(
+          serverId: 'srv-1',
+          requestId: 'u-3',
+          query: SocketsQuery(),
+        ),
+        const FootprintQuery('srv-1'),
+        const PlanAction(
+          KeepLastBackups('srv-1', scope: FootprintScope.user, count: 3),
+        ),
+        const PlanAction(
+          RemoveBackups(
+            'srv-1',
+            scope: FootprintScope.root,
+            source: '/etc/hosts',
+          ),
         ),
         const DockerWatch(
           serverId: 'srv-1',
@@ -273,6 +339,64 @@ void main() {
           queryId: 'q-1',
           payload: DockerImagesPayload([]),
         ),
+        const EditRead(
+          serverId: 'srv-1',
+          requestId: 'e-1',
+          result: EditContent(
+            text: 'a=1\n',
+            sha256: 'abc',
+            privileged: true,
+            uid: 0,
+            gid: 0,
+            mode: 420,
+          ),
+        ),
+        const EditRead(
+          serverId: 'srv-1',
+          requestId: 'e-2',
+          result: EditReadFailed(EditReadFailure.adminRequired),
+        ),
+        HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-1',
+          payload: JournalBoots([
+            JournalBootEntry(
+              offset: -1,
+              id: '0123456789abcdef0123456789abcdef',
+              firstEntry: DateTime.utc(2026, 10, 19),
+            ),
+          ]),
+          warnings: const ['list-boots: row skipped'],
+        ),
+        const HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-2',
+          payload: HostQueryFailed(HostQueryFailure.noLink),
+        ),
+        const RedactedLines('r-1', 'a\nb'),
+        FootprintState(
+          'srv-1',
+          files: const [
+            FootprintFile(
+              FootprintScope.user,
+              FootprintRow('/b', FootprintKind.backupDirectory),
+              present: true,
+            ),
+          ],
+          backups: [
+            FootprintBackup(
+              FootprintScope.user,
+              BackupEntry(
+                savedAt: DateTime.utc(2026, 10, 20),
+                sha256: 'a' * 64,
+                source: '/etc/hosts',
+              ),
+              FootprintBackupStatus.modified,
+            ),
+          ],
+          rootUnchecked: true,
+          warnings: const ['w'],
+        ),
         const DockerEndpointState(
           serverId: 'srv-1',
           phase: DockerEndpointPhase.waiting,
@@ -403,6 +527,39 @@ void main() {
           'srv-1',
           unavailable: const CollectorUnavailable(
             CollectorUnavailableReason.timeout,
+          ),
+        ),
+        UnitQueryResult(
+          serverId: 'srv-1',
+          requestId: 'u-1',
+          payload: UnitFilePayload([
+            MaskedValue.plain('Environment='),
+            MaskedValue.secret('A=1'),
+          ]),
+        ),
+        UnitQueryResult(
+          serverId: 'srv-1',
+          requestId: 'u-2',
+          payload: const UnitResourcesPayload(UnitResources(tasks: 3)),
+          warnings: const ['w'],
+        ),
+        UnitQueryResult(
+          serverId: 'srv-1',
+          requestId: 'u-3',
+          payload: UnitSocketsPayload([
+            UnitSocket(
+              listen: '/run/docker.sock',
+              unit: 'docker.socket',
+              activates: ['docker.service'],
+            ),
+          ]),
+        ),
+        UnitQueryResult(
+          serverId: 'srv-1',
+          requestId: 'u-4',
+          payload: const UnitQueryFailed(
+            UnitQueryFailure.failed,
+            detail: 'boom',
           ),
         ),
         JobHistoryResult(
@@ -1146,6 +1303,9 @@ void main() {
         SampleStream.failedUnits: FailedUnitsResult(const []),
         SampleStream.timers: TimersResult(TimersSnapshot()),
         SampleStream.cron: CronResult(CronSnapshot()),
+        // The user manager's streams share the system streams' variants.
+        SampleStream.userUnits: UnitsResult(UnitsSnapshot()),
+        SampleStream.userTimers: TimersResult(TimersSnapshot()),
       };
       expect(variants.keys, SampleStream.values);
       const unavailable = CollectorUnavailable(
@@ -1162,9 +1322,8 @@ void main() {
 
       for (final stream in SampleStream.values) {
         expect(sample(stream, unavailable).result, same(unavailable));
-        for (final MapEntry(key: variantStream, value: result)
-            in variants.entries) {
-          if (variantStream == stream) {
+        for (final result in variants.values) {
+          if (result.runtimeType == variants[stream]!.runtimeType) {
             expect(sample(stream, result).result, same(result));
             continue;
           }

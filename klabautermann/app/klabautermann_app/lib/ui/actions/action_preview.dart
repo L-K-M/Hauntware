@@ -15,14 +15,13 @@ const double _sheetBelowWidth = 600;
 
 /// Plans and previews [intent], if an operations controller is in scope
 /// and no other preview is on its way (the preview is modal). [onRun]
-/// hears of the preview once its plan runs, and [onRunPlan] of the plan
-/// id, which [OperationsController.runOf] follows. Every action entry
-/// starts here.
+/// hears of the plan once it runs, and [onRefused], when given, of a
+/// refusal in place of its toast. Every action entry starts here.
 void startAction(
   BuildContext context,
   ActionIntent intent, {
-  void Function(ActionPreview preview)? onRun,
-  void Function(String planId, ActionPreview preview)? onRunPlan,
+  void Function(String planId, ActionPreview preview)? onRun,
+  ValueChanged<ActionRefusalReason>? onRefused,
 }) {
   final operations = OperationsScope.maybeOf(context);
   if (operations == null || operations.planning) return;
@@ -32,7 +31,7 @@ void startAction(
       operations,
       intent,
       onRun: onRun,
-      onRunPlan: onRunPlan,
+      onRefused: onRefused,
     ),
   );
 }
@@ -40,16 +39,18 @@ void startAction(
 /// Plans [intent] through [operations], shows the preview, and runs the
 /// plan once the user confirms (SAF-04, SAF-05). A refused plan says why
 /// in a toast; the run's progress and end come as toasts from
-/// [ActionResultToasts]. [onRun] hears of the preview once its plan runs,
-/// as JOB-08's output sheet does, and [onRunPlan] of its plan id too. A
-/// preview that offers another intent (STK-06's orphan removal) plans
-/// that one and shows it instead. Returns once the preview is closed.
+/// [ActionResultToasts]. [onRun] hears of the plan once it runs, as
+/// JOB-08's output sheet and the editor do; [onRefused], when given,
+/// hears of a refusal instead of the toast, as the editor's conflict
+/// sheet does. A preview that offers another intent (STK-06's orphan
+/// removal) plans that one and shows it instead. Returns once the
+/// preview is closed.
 Future<void> previewAndRun(
   BuildContext context,
   OperationsController operations,
   ActionIntent intent, {
-  void Function(ActionPreview preview)? onRun,
-  void Function(String planId, ActionPreview preview)? onRunPlan,
+  void Function(String planId, ActionPreview preview)? onRun,
+  ValueChanged<ActionRefusalReason>? onRefused,
 }) async {
   final overlay = Overlay.of(context, rootOverlay: true);
   final l10n = AppLocalizations.of(context);
@@ -59,6 +60,8 @@ Future<void> previewAndRun(
     if (!context.mounted) return;
 
     switch (answer) {
+      case PlanRefused(:final reason) when onRefused != null:
+        onRefused(reason);
       case PlanRefused(:final reason):
         if (overlay.mounted) {
           showTopToast(overlay, message: l10n.actionRefused(reason.name));
@@ -76,8 +79,7 @@ Future<void> previewAndRun(
         }
         if (confirmation == null) return;
         operations.run(planId, confirmation);
-        onRun?.call(preview);
-        onRunPlan?.call(planId, preview);
+        onRun?.call(planId, preview);
         if (overlay.mounted) {
           showTopToast(
             overlay,

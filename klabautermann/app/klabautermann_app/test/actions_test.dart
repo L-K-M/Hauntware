@@ -338,18 +338,19 @@ void main() {
     };
 
     Future<void> pumpEntries(WidgetTester tester, SafetyPolicy? policy) async {
-      // Built at once, unlike a lazy list, so every entry can be found.
-      final entries = SingleChildScrollView(
-        child: Column(
-          children: [
-            for (final point in ActionEntryPoint.values)
-              ActionEntry(
-                serverId: 'srv-1',
-                point: point,
-                child: Text('entry ${point.name}'),
-              ),
-          ],
-        ),
+      // Tall enough that the list builds every entry.
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final entries = ListView(
+        children: [
+          for (final point in ActionEntryPoint.values)
+            ActionEntry(
+              serverId: 'srv-1',
+              point: point,
+              child: Text('entry ${point.name}'),
+            ),
+        ],
       );
       // Every case has an operations controller, so only the policy
       // decides.

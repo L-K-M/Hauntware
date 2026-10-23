@@ -59,6 +59,19 @@ void main() {
       expect(utf8.decode(r.body), 'rest');
     });
 
+    test('keeps the raw stream after a 101 upgrade', () {
+      final r = parseRecordedResponse(
+        _bytes(
+          '${_head('101 UPGRADED', ['Connection: Upgrade', 'Upgrade: tcp'])}'
+          '\x01\x00\x00\x00\x00\x00\x00\x01x',
+        ),
+      );
+      expect(r.framing, BodyFraming.upgraded);
+      expect(r.body, hasLength(9));
+      expect(r.complete, isTrue);
+      expect(classifyBody(r.body), BodyKind.stdcopy);
+    });
+
     test('gives a HEAD response no body', () {
       final r = parseRecordedResponse(
         _bytes(_head('200 OK', ['Content-Length: 2', 'Api-Version: 1.55'])),
@@ -260,6 +273,7 @@ void main() {
       String contentType = 'application/json',
       List<String> extraHeaders = const [],
       List<String> order = const ['version', 'containers'],
+      String containersRequest = 'GET /v1.55/containers/json?all=1',
     }) {
       final versionBody = '{"Version":"$version"}';
       final versionHead = _head('200 OK', [
@@ -270,7 +284,7 @@ void main() {
       final responses = {
         'version': ('GET /version', 200, '$versionHead$versionBody'),
         'containers': (
-          'GET /v1.55/containers/json?all=1',
+          containersRequest,
           status,
           _head('$status X', [
                 'Content-Type: $contentType',
@@ -320,6 +334,28 @@ void main() {
 
     test('ignores ids, dates and the volatile headers', () {
       expect(diff(corpus(), corpus(id: 'another-id')), isEmpty);
+    });
+
+    test('ignores an id the daemon chose in the request path, but not '
+        'another path', () {
+      String exec(String id) => 'GET /v1.55/exec/$id/json';
+      expect(
+        diff(
+          corpus(containersRequest: exec('a' * 64)),
+          corpus(containersRequest: exec('b' * 64)),
+        ),
+        isEmpty,
+      );
+      expect(
+        diff(
+          corpus(containersRequest: exec('a' * 64)),
+          corpus(containersRequest: 'GET /v1.55/exec/web/json'),
+        ),
+        [
+          'containers: request GET /v1.55/exec/<id>/json, now '
+              'GET /v1.55/exec/web/json',
+        ],
+      );
     });
 
     test('reports a new or missing key', () {
