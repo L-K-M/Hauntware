@@ -256,13 +256,14 @@ class _StackFileViewState extends State<StackFileView> {
     if (path != null) unawaited(_open(path));
   }
 
-  /// Edits [path] (STK-07) and reads it again once the editor closes,
-  /// since a save changed it.
+  /// Edits [path] (STK-07) as the project's file, which the engine
+  /// checks with `compose config -q` before it replaces it, and reads it
+  /// again once the editor closes, since a save changed it.
   Future<void> _edit(String path) async {
     await openRemoteEditor(
       context,
       serverId: widget.serverId,
-      target: FileTarget(path),
+      target: StackFileTarget(project: widget.project.name, path: path),
     );
     if (mounted && path == _path) unawaited(_open(path));
   }

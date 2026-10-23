@@ -10,6 +10,7 @@ import 'docker_endpoint_choices.dart';
 import 'job_history_reads.dart';
 import 'log_reads.dart';
 import 'log_streams.dart';
+import 'stack_folders.dart';
 
 /// How long a server's link outlives the last view that opened it, as long
 /// as the grace 03 §5.1 and D34 give a backgrounded phone's link: stepping
@@ -142,12 +143,16 @@ final class MonitoringController extends ChangeNotifier {
   /// once. [now] is what [clock] reads. [dockerEndpointChoices], the
   /// Docker sockets chosen on this device (CN-09), outlives this run and
   /// goes to [docker]; without it the choices last this run.
+  /// [stackFolders], the folders STK-08 scans on each server, outlives it
+  /// the same way.
   MonitoringController(
     this._engine, {
     this._linkGrace = kLinkLeaveGrace,
     DateTime Function() now = DateTime.now,
     DockerEndpointChoices? dockerEndpointChoices,
-  }) : _clock = _FreshnessClock(now) {
+    StackFolders? stackFolders,
+  }) : _clock = _FreshnessClock(now),
+       stackFolders = stackFolders ?? StackFolders() {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
     logs = LogStreams(_engine);
     jobHistory = JobHistoryReads(_engine);
@@ -157,6 +162,10 @@ final class MonitoringController extends ChangeNotifier {
       now: now,
     );
   }
+
+  /// The folders the Stacks sub-tab scans for stacks without containers
+  /// (STK-08), chosen on this device.
+  final StackFolders stackFolders;
 
   /// The log streams panels open, and each server's journal access for
   /// LOG-04's notice (03 §10.1, §10.8): a concern of its own that lasts

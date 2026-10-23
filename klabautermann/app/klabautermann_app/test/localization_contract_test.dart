@@ -169,6 +169,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/monitor_set_feedback.dart': {r"'$error'"},
   // The diagnostic of a sync answer the stopped engine never gave;
   // surfaces show ARB text for its failure kind (syncFailed).
+  'lib/controllers/stack_folders.dart': {
+    // The line break the folders field separates folders by, and the
+    // path separator and parent segment a folder is checked for.
+    r"'\n'",
+    "'/'",
+    "'..'",
+  },
   'lib/controllers/sync_controller.dart': {"'the engine stopped'"},
   // A Docker query id the engine echoes in its answer (03 §10.1).
   // The query and watch ids the engine keys Docker answers by (03 §10.1).
@@ -458,8 +465,17 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "', '",
   },
   'lib/ui/docker/stacks_panel.dart': {
-    // The key tests find a stack's row by.
+    // The keys tests find a stack's row and the unlisted section by.
     r"'stacks.row.${project.name}'",
+    r"'stacks.unlisted.${widget.serverId}'",
+  },
+  'lib/ui/docker/unlisted_stacks.dart': {
+    // The path separator a found file's folder and name split at, the
+    // folders' list separator inside the ARB sentence, and the line
+    // break the folders field shows one folder per line with.
+    "'/'",
+    "', '",
+    r"'\n'",
   },
   'lib/ui/docker/stacks_view.dart': {
     // The name compose reads a working directory's environment file by,

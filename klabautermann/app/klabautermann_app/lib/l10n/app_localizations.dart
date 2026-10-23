@@ -7027,7 +7027,7 @@ abstract class AppLocalizations {
   /// Remote editor: why the engine read nothing. reason is the engine's EditReadFailure name.
   ///
   /// In en, this message translates to:
-  /// **'{reason, select, noLink{There is no connection to this server.} invalidTarget{Klabautermann does not edit this path.} notFound{There is no file at this path on the host.} adminRequired{Only root can read this file. Turn on admin mode to edit it.} tooLarge{This file is too large for the editor.} notText{This file is not text.} failed{The file could not be read.} other{The file could not be read.}}'**
+  /// **'{reason, select, noLink{There is no connection to this server.} invalidTarget{Klabautermann does not edit this path.} notFound{There is no file at this path on the host.} adminRequired{Only root can read this file. Turn on admin mode to edit it.} tooLarge{This file is too large for the editor.} notText{This file is not text.} stackUnverified{This stack\'s files are not its verified source, so Klabautermann does not edit them.} failed{The file could not be read.} other{The file could not be read.}}'**
   String editReadFailed(String reason);
 
   /// Remote editor: chip on a file only root may write; saving it runs through admin mode.
@@ -7137,6 +7137,168 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Changes to the file'**
   String get editDiffLabel;
+
+  /// Tooltip of a compose service's action menu on the stack overview (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Actions for {service}'**
+  String dockerStackServiceActions(String service);
+
+  /// Service menu item that pulls the service's image (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Pull image'**
+  String get dockerStackServicePull;
+
+  /// Service menu item that recreates the service's containers even when unchanged (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Recreate'**
+  String get dockerStackServiceRecreate;
+
+  /// Service menu item, and the scale dialog's confirm button, that sets the service's container count (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Scale'**
+  String get dockerStackServiceScale;
+
+  /// Title of the dialog that asks how many containers a service runs (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Scale {service}'**
+  String dockerStackScaleTitle(String service);
+
+  /// Label of the scale dialog's container count field (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Containers'**
+  String get dockerStackScaleLabel;
+
+  /// Error under the scale dialog's field when it is not a whole number in range (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a number from 0 to {max}.'**
+  String dockerStackScaleRange(int max);
+
+  /// Scale dialog button that scales nothing (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get dockerStackScaleCancel;
+
+  /// Stack overview button that takes the whole stack down, its containers and networks but never its volumes; the preview asks for the typed confirmation (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Down'**
+  String get dockerStackDown;
+
+  /// Label over the profiles a verified stack's compose files name (STK-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Profiles'**
+  String get dockerStackProfiles;
+
+  /// Shown under Profiles while the engine lists them (STK-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Reading…'**
+  String get dockerStackProfilesReading;
+
+  /// Shown under Profiles when compose could not list them (STK-09).
+  ///
+  /// In en, this message translates to:
+  /// **'The profiles could not be listed.'**
+  String get dockerStackProfilesFailed;
+
+  /// Heading of the section listing compose files found in the chosen folders that no running or stopped stack accounts for (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Stacks without containers'**
+  String get dockerStacksUnlisted;
+
+  /// Shown when no scan folders are chosen for this server (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Name the folders your stacks live in, such as /opt/stacks, to find stacks that have no containers.'**
+  String get dockerStackFoldersNone;
+
+  /// The scan folders chosen for this server (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Folders: {folders}'**
+  String dockerStackFoldersList(String folders);
+
+  /// Button that opens the dialog naming the folders to scan for stacks (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Choose folders'**
+  String get dockerStackFoldersChoose;
+
+  /// Button that scans the chosen folders again (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Scan again'**
+  String get dockerStackFoldersScanAgain;
+
+  /// Shown while the folders are scanned (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Scanning the folders…'**
+  String get dockerStackFoldersScanning;
+
+  /// Shown when the scan could not run (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'The folders could not be scanned.'**
+  String get dockerStackFoldersScanFailed;
+
+  /// Shown when the scan found no compose file that a listed stack does not account for (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Every stack in these folders has containers.'**
+  String get dockerStackFoldersNoneFound;
+
+  /// Shown under the scan's results when a folder could not be read (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'A folder could not be read, so some stacks may be missing.'**
+  String get dockerStackFoldersIncomplete;
+
+  /// Title of the dialog naming the folders to scan for stacks on this server (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Stack folders'**
+  String get dockerStackFoldersTitle;
+
+  /// Helper under the stack folders field (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'One absolute path per line, at most {max}. The folders and the folders right below them are searched for compose files. Kept on this device.'**
+  String dockerStackFoldersHelper(int max);
+
+  /// Error under the stack folders field (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'{problem, select, notAbsolute{Each folder must be an absolute path, such as /opt/stacks.} tooMany{Name at most {max} folders.} other{These folders cannot be scanned.}}'**
+  String dockerStackFoldersProblem(String problem, int max);
+
+  /// Stack folders dialog button that keeps the folders as they were (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get dockerStackFoldersCancel;
+
+  /// Stack folders dialog button that keeps the folders on this device and scans them (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get dockerStackFoldersSave;
+
+  /// Toast when settings.json could not be written; the folders hold in memory (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'The folders could not be saved on this device. They apply until the app quits.'**
+  String get dockerStackFoldersNotSaved;
 
   /// Stack file view: opens the file shown in the editor (STK-07).
   ///

@@ -416,7 +416,12 @@ void main() {
 
       await tester.tap(find.text('Edit'));
       await tester.pumpAndSettle();
-      expect(editor.reads.single.target, _target);
+      // As the stack's file: the engine edits only a verified source's
+      // files, and checks the candidate with compose config -q.
+      expect(
+        editor.reads.single.target,
+        const StackFileTarget(project: 'web', path: _path),
+      );
       await editor.answer(tester, _content(_original));
       expect(editor.text(tester), _original);
     });

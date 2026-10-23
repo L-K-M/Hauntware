@@ -216,7 +216,8 @@ export 'package:klabautermann_docker/klabautermann_docker.dart'
         Ownership,
         OwnershipMarker,
         SystemDf,
-        dockerSummary;
+        dockerSummary,
+        kComposeMaxScale;
 // A container's managed-by badge (DKE-10), from its inspected labels; a
 // stack's is its ComposeProject.ownership.
 export 'package:klabautermann_docker/klabautermann_docker.dart'
