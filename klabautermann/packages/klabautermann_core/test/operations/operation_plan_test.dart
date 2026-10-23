@@ -174,13 +174,20 @@ void main() {
         OperationKind.stop,
         OperationKind.restart,
         OperationKind.reload,
+        OperationKind.enable,
+        OperationKind.disable,
+        OperationKind.mask,
+        OperationKind.unmask,
+        OperationKind.resetFailed,
         OperationKind.pause,
         OperationKind.unpause,
         OperationKind.kill,
         OperationKind.runTimerNow,
+        OperationKind.cronRunNow,
         OperationKind.stackStart,
         OperationKind.stackStop,
         OperationKind.stackRestart,
+        OperationKind.containerExec,
         OperationKind.redeploy,
         OperationKind.stackServicePull,
         OperationKind.stackServiceRecreate,
@@ -188,6 +195,7 @@ void main() {
         OperationKind.removeContainer,
         OperationKind.removeUnusedImage,
         OperationKind.editFile,
+        OperationKind.keepLastBackups,
       };
       for (final kind in OperationKind.values) {
         expect(

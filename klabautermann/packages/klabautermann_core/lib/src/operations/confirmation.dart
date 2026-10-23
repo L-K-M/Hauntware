@@ -9,13 +9,27 @@ enum OperationKind {
   stop(ConfirmationTier.acknowledge),
   restart(ConfirmationTier.acknowledge),
   reload(ConfirmationTier.acknowledge),
+
+  /// SVC-05 and SVC-06: a protected unit's raises to the typed
+  /// confirmation, as for every verb.
+  enable(ConfirmationTier.acknowledge),
+  disable(ConfirmationTier.acknowledge),
+  mask(ConfirmationTier.acknowledge),
+  unmask(ConfirmationTier.acknowledge),
+  resetFailed(ConfirmationTier.acknowledge),
   pause(ConfirmationTier.acknowledge),
   unpause(ConfirmationTier.acknowledge),
   kill(ConfirmationTier.acknowledge),
   runTimerNow(ConfirmationTier.acknowledge),
+
+  /// A cron line's command, run once now (JOB-19).
+  cronRunNow(ConfirmationTier.acknowledge),
   stackStart(ConfirmationTier.acknowledge),
   stackStop(ConfirmationTier.acknowledge),
   stackRestart(ConfirmationTier.acknowledge),
+
+  /// A one-off command in a container (CTX-08).
+  containerExec(ConfirmationTier.acknowledge),
 
   /// Pull and redeploy, keeping orphans.
   redeploy(ConfirmationTier.acknowledge),
@@ -33,6 +47,12 @@ enum OperationKind {
   /// An edit of a file the user reviewed in the diff (SAF-12).
   editFile(ConfirmationTier.acknowledge),
   crontabOverwrite(ConfirmationTier.typedPhrase),
+
+  /// Keep the newest backups of each file, removing older ones (Q11).
+  keepLastBackups(ConfirmationTier.acknowledge),
+
+  /// Remove every backup of one file: its edits' only undo (Q11).
+  removeAllBackups(ConfirmationTier.typedPhrase),
   reboot(ConfirmationTier.typedPhrase),
   packageUpgrade(ConfirmationTier.typedPhrase);
 

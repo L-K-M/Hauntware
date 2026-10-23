@@ -187,6 +187,25 @@ void main() {
     },
   );
 
+  test('a past boot reads a window, and Live waits for a boot that can be '
+      'followed (LOG-09)', () async {
+    panel
+      ..setVisible(true)
+      ..apply(
+        const LogQuery().withBoot(JournalBootEntry(offset: -1, id: 'b' * 32)),
+      );
+    expect(panel.canFollow, isFalse);
+    expect(panel.live, isFalse);
+    final window = opens().last.spec;
+    expect(window.follow, isFalse);
+    expect((window.source as JournalLogSource).boot, JournalBoot.id('b' * 32));
+
+    panel.apply(const LogQuery());
+    expect(panel.canFollow, isTrue);
+    expect(panel.live, isTrue, reason: 'Live was never turned off');
+    expect(opens().last.spec.follow, isTrue);
+  });
+
   group('a container\'s logs (CTX-01)', () {
     late LogsPanelController logs;
 

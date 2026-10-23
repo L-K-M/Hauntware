@@ -47,7 +47,8 @@ String _describe(PromptAnswer answer) => switch (answer) {
   PromptTrustAnswer(:final accepted) => 'trust $accepted',
   PromptResponsesAnswer(:final responses) => 'responses $responses',
   PromptCancelAnswer() => 'cancel',
-  PromptSecretAnswer(:final secret) => 'secret $secret',
+  PromptSecretAnswer(:final secret, :final save) =>
+    save ? 'secret $secret, saved' : 'secret $secret',
 };
 
 /// Every [AnswerPrompt] the app sent, in order.
@@ -359,20 +360,6 @@ void main() {
       expect(_answers(harness.engine), isEmpty);
     });
 
-    testWidgets('credential prompts are dismissed without a dialog', (
-      tester,
-    ) async {
-      final harness = await pumpApp(tester, servers: twoServers);
-
-      harness.engine
-        ..emit(_prompt('p-1', const CredentialPromptRequest(user: 'me')))
-        ..emit(_prompt('p-3', _hostKey));
-      await tester.pumpAndSettle();
-
-      expect(_answers(harness.engine), ['p-1: secret null']);
-      expect(_hostKeyTitle, findsOneWidget);
-    });
-
     testWidgets('an engine that stops closes the dialog unanswered', (
       tester,
     ) async {
@@ -511,6 +498,75 @@ void main() {
 
       expect(title, findsNothing);
       expect(_answers(harness.engine), isEmpty);
+    });
+  });
+  group('the login password prompt (03 §4.5)', () {
+    final title = find.text('Password for web-1');
+    final password = find.descendant(
+      of: find.byType(Dialog),
+      matching: find.byType(TextField),
+    );
+    final saveBox = find.descendant(
+      of: find.byType(Dialog),
+      matching: find.byType(Checkbox),
+    );
+
+    testWidgets('names the server and account, and sends the password with '
+        'the vault save the user ticked', (tester) async {
+      final harness = await pumpApp(tester, servers: twoServers);
+      harness.engine.emit(
+        _prompt(
+          'p-1',
+          const CredentialPromptRequest(user: 'deploy', canSave: true),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(title, findsOneWidget);
+      expect(find.text('deploy@web-1.example:22'), findsOneWidget);
+      expect(
+        find.textContaining('Saved only if you choose to'),
+        findsOneWidget,
+      );
+      await tester.enterText(password, 'hunter2');
+      await tester.tap(find.text('Save in vault'));
+      await tester.pump();
+      await tester.tap(find.text('Connect'));
+      await tester.pumpAndSettle();
+
+      expect(_answers(harness.engine), ['p-1: secret hunter2, saved']);
+      expect(title, findsNothing);
+    });
+
+    testWidgets('offers no save the engine cannot honour', (tester) async {
+      final harness = await pumpApp(tester, servers: twoServers);
+      harness.engine.emit(
+        _prompt('p-1', const CredentialPromptRequest(user: 'deploy')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(saveBox, findsNothing);
+      expect(find.textContaining('Saved only if you choose to'), findsNothing);
+      await tester.enterText(password, 'hunter2');
+      await tester.pump();
+      await tester.tap(find.text('Connect'));
+      await tester.pumpAndSettle();
+      expect(_answers(harness.engine), ['p-1: secret hunter2']);
+    });
+
+    testWidgets('Cancel answers none', (tester) async {
+      final harness = await pumpApp(tester, servers: twoServers);
+      harness.engine.emit(
+        _prompt(
+          'p-1',
+          const CredentialPromptRequest(user: 'deploy', canSave: true),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(_answers(harness.engine), ['p-1: secret null']);
     });
   });
 }
