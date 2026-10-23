@@ -4,7 +4,7 @@ Recorded by `klabautermann_docker/tool/capture_api.dart` (03 §11.1, D21)
 from Docker Engine 25.0.5, API 1.44 (minimum 1.24), running rootful in a
 privileged container of
 `mirror.gcr.io/library/docker:25.0.5-dind@sha256:b41d0183012e2334aacd4e0b8e339b89246c4fdb7eada6cc86b0355f41328549`,
-through its Unix socket, on 2026-10-17T16:13:38.133779Z (a local run).
+through its Unix socket, on 2026-10-20T17:14:04.221362Z (a local run).
 The daemon reported Alpine Linux v3.20, kernel 6.18.44-fc-v139 and
 cgroup v1.
 
@@ -50,13 +50,17 @@ value.
 | `logs-tail` | `GET /v1.44/containers/job/logs?stdout=1&stderr=1&timestamps=1&tail=20` | 200 |
 | `logs-tail-tty` | `GET /v1.44/containers/tty/logs?stdout=1&stderr=1&timestamps=1&tail=20` | 200 |
 | `logs-follow` | `GET /v1.44/containers/job/logs?stdout=1&stderr=1&timestamps=1&follow=1` | 200 |
-| `logs-since` | `GET /v1.44/containers/job/logs?stdout=1&stderr=1&timestamps=1&since=1792253611.303681408` | 200 |
+| `logs-since` | `GET /v1.44/containers/job/logs?stdout=1&stderr=1&timestamps=1&since=1792516439.021592523` | 200 |
 | `images` | `GET /v1.44/images/json` | 200 |
 | `image-inspect` | `GET /v1.44/images/mirror.gcr.io/library/busybox:1.37.0/json` | 200 |
 | `networks` | `GET /v1.44/networks` | 200 |
 | `volumes` | `GET /v1.44/volumes` | 200 |
 | `system-df` | `GET /v1.44/system/df` | 200 |
-| `events` | `GET /v1.44/events?since=1792253602&until=1792253617` | 200 |
+| `events` | `GET /v1.44/events?since=1792516432&until=1792516443` | 200 |
 | `below-min` | `GET /v1.23/info` | 400 |
 | `above-max` | `GET /v1.45/info` | 400 |
 | `floor-1.41` | `GET /v1.41/info` | 200 |
+| `exec-create` | `POST /v1.44/containers/web/exec` | 201 |
+| `exec-start` | `POST /v1.44/exec/12c10976aad042a3130cde1ccd0079adcebd90c23b06c672ee220c2a1b5d243e/start` | 101 |
+| `exec-inspect` | `GET /v1.44/exec/12c10976aad042a3130cde1ccd0079adcebd90c23b06c672ee220c2a1b5d243e/json` | 200 |
+| `exec-resize` | `POST /v1.44/exec/d1fb56f0b3cd3b73643d6736b8b1535a4be0dd29ae2515d3cd5ce6209767acfc/resize?h=40&w=120` | 200 |

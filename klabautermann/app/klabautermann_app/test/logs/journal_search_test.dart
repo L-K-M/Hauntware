@@ -137,6 +137,54 @@ void main() {
       expect(search.total, 0);
     });
 
+    test('reads the query as a regular expression while asked (LOG-06)', () {
+      final (logs, search) = _logs();
+      logs.add(['GET /a 200', 'GET /b 502', 'post /c 404', 'none']);
+
+      search
+        ..setRegex(true)
+        ..setQuery(r'(get|post) \S+ [45]\d\d');
+      expect(search.invalidPattern, isFalse);
+      expect(search.total, 2);
+      expect(search.matchesIn(logs[1] as LogLine), const [
+        TextMatch(start: 0, end: 10),
+      ]);
+
+      search.setCaseSensitive(true);
+      expect(search.total, 1, reason: 'only the lower-case post line');
+
+      // A pattern that matches no characters finds nothing to show.
+      search
+        ..setCaseSensitive(false)
+        ..setQuery('x*');
+      expect(search.total, 0);
+
+      // Plain text again: the parentheses are characters.
+      search
+        ..setRegex(false)
+        ..setQuery('(get');
+      expect(search.total, 0);
+      expect(search.invalidPattern, isFalse);
+    });
+
+    test('a pattern that does not compile matches nothing and says so', () {
+      final (logs, search) = _logs();
+      logs.add(['a (b', 'c']);
+      search
+        ..setRegex(true)
+        ..setQuery('(b');
+      expect(search.invalidPattern, isTrue);
+      expect(search.total, 0);
+      expect(search.matchesIn(logs[0] as LogLine), isEmpty);
+
+      logs.add(['(b again']);
+      expect(search.total, 0, reason: 'new lines are not searched either');
+
+      search.setRegex(false);
+      expect(search.invalidPattern, isFalse);
+      expect(search.total, 2);
+    });
+
     test('reads a journal row\'s unit and PID with its message', () {
       final (logs, search) = _logs();
       logs.addJournal([_entry('started')]);
