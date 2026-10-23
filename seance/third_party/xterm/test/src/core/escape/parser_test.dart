@@ -39,6 +39,118 @@ void main() {
     });
   });
 
+  /// [seance fork] A private marker or an intermediate byte names a different
+  /// control function than the bare final byte. See PATCHES.md.
+  group('EscapeParser CSI function identity', () {
+    final m = 'm'.codeUnitAt(0);
+
+    test('ignores private-marker functions it does not implement', () {
+      final parser = EscapeParser(MockEscapeHandler());
+
+      parser.write('\x1b[>4;2m'); // XTMODKEYS: set modifyOtherKeys
+      parser.write('\x1b[>4m'); // XTMODKEYS: reset modifyOtherKeys
+      parser.write('\x1b[?4m'); // XTQMODKEYS
+      parser.write('\x1b[<0;10;5m'); // an echoed SGR mouse report
+      parser.write('\x1b[?1;1S'); // XTSMGRAPHICS
+      parser.write('\x1b[>1T'); // XTRMTITLE
+      parser.write('\x1b[?1r'); // XTRESTORE
+      parser.write('\x1b[>6n'); // key modifier options: disable
+      parser.write('\x1b[?62;22c'); // an echoed primary DA reply
+
+      verifyInOrder([
+        parser.handler.unknownCSI(m),
+        parser.handler.unknownCSI(m),
+        parser.handler.unknownCSI(m),
+        parser.handler.unknownCSI(m),
+        parser.handler.unknownCSI('S'.codeUnitAt(0)),
+        parser.handler.unknownCSI('T'.codeUnitAt(0)),
+        parser.handler.unknownCSI('r'.codeUnitAt(0)),
+        parser.handler.unknownCSI('n'.codeUnitAt(0)),
+        parser.handler.unknownCSI('c'.codeUnitAt(0)),
+      ]);
+      verifyNoMoreInteractions(parser.handler);
+    });
+
+    test('ignores functions with intermediate bytes', () {
+      final parser = EscapeParser(MockEscapeHandler());
+
+      parser.write('\x1b[2 A'); // SR: scroll right
+      parser.write('\x1b[3 @'); // SL: scroll left
+      parser.write('\x1b[#P'); // XTPUSHCOLORS
+
+      verifyInOrder([
+        parser.handler.unknownCSI('A'.codeUnitAt(0)),
+        parser.handler.unknownCSI('@'.codeUnitAt(0)),
+        parser.handler.unknownCSI('P'.codeUnitAt(0)),
+      ]);
+      verifyNoMoreInteractions(parser.handler);
+    });
+
+    test('still dispatches the private-marker functions it implements', () {
+      final parser = EscapeParser(MockEscapeHandler());
+
+      parser.write('\x1b[?7l'); // DECAWM
+      parser.write('\x1b[?6n'); // DECXCPR
+      parser.write('\x1b[?2J'); // DECSED
+      parser.write('\x1b[?2K'); // DECSEL
+      parser.write('\x1b[>c'); // secondary DA
+      parser.write('\x1b[=c'); // tertiary DA
+
+      verifyInOrder([
+        parser.handler.setAutoWrapMode(false),
+        parser.handler.sendCursorPosition(),
+        parser.handler.eraseDisplay(),
+        parser.handler.eraseLine(),
+        parser.handler.sendSecondaryDeviceAttributes(),
+        parser.handler.sendTertiaryDeviceAttributes(),
+      ]);
+      verifyNoMoreInteractions(parser.handler);
+    });
+
+    test('forgets the previous sequence\'s marker and intermediates', () {
+      final parser = EscapeParser(MockEscapeHandler());
+
+      parser.write('\x1b[>4m\x1b[4m');
+      parser.write('\x1b[2 A\x1b[2A');
+
+      verifyInOrder([
+        parser.handler.unknownCSI(m),
+        parser.handler.setCursorUnderline(),
+        parser.handler.unknownCSI('A'.codeUnitAt(0)),
+        parser.handler.moveCursorY(-2),
+      ]);
+      verifyNoMoreInteractions(parser.handler);
+    });
+
+    test('identifies a sequence split across writes', () {
+      final parser = EscapeParser(MockEscapeHandler());
+
+      parser.write('\x1b[');
+      parser.write('>4');
+      parser.write(';2m');
+      parser.write('\x1b[2');
+      parser.write(' A');
+
+      verifyInOrder([
+        parser.handler.unknownCSI(m),
+        parser.handler.unknownCSI('A'.codeUnitAt(0)),
+      ]);
+      verifyNoMoreInteractions(parser.handler);
+    });
+
+    test('still applies SGR without a marker', () {
+      final parser = EscapeParser(MockEscapeHandler());
+
+      parser.write('\x1b[4;2m');
+
+      verifyInOrder([
+        parser.handler.setCursorUnderline(),
+        parser.handler.setCursorFaint(),
+      ]);
+      verifyNoMoreInteractions(parser.handler);
+    });
+  });
+
   /// [seance fork] An escape sequence that never terminates used to be held on
   /// the queue forever and re-parsed in full on every write — quadratic time
   /// and unbounded memory, which wedged the terminal for the rest of the
