@@ -163,6 +163,16 @@ Future<_Editor> _pump(
 }
 
 void main() {
+  test('a stack file is highlighted and validated by its own path', () {
+    expect(
+      editTargetPath(
+        const StackFileTarget(project: 'web', path: '/srv/web/compose.yaml'),
+      ),
+      '/srv/web/compose.yaml',
+    );
+    expect(editTargetPath(const CrontabTarget()), 'crontab');
+  });
+
   testWidgets('reads the file, and offers Review only once it changed', (
     tester,
   ) async {

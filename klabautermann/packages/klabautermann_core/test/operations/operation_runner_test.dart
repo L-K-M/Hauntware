@@ -51,6 +51,7 @@ OperationPlan _plan(
   List<PlanStep> steps, {
   RequiredLevel level = RequiredLevel.login,
   List<Revalidation> revalidate = const [],
+  List<ShellStep> cleanup = const [],
 }) => OperationPlan(
   intent: const UnitAction(
     _server,
@@ -63,6 +64,7 @@ OperationPlan _plan(
   requiredLevel: level,
   runner: const RunnerFacts(identity: 'deploy'),
   revalidate: revalidate,
+  cleanup: cleanup,
 );
 
 void main() {
@@ -330,6 +332,53 @@ void main() {
       "'replace'",
       "'cleanup'",
     ]);
+  });
+
+  test('a refused channel mid-plan still runs the cleanup', () async {
+    // The link refuses the second step's channel, at its session limit;
+    // the temporary file the first step wrote is still removed.
+    var refused = false;
+    final link = _Link((command, _) {
+      if (command.contains('replace') && !refused) {
+        refused = true;
+        throw const ChannelOpenException(
+          ChannelRefusal.sessionLimit,
+          'no session channel',
+        );
+      }
+      return _ok;
+    });
+    final plan = _plan(
+      [
+        ShellStep(['write']),
+        ShellStep(['replace']),
+      ],
+      cleanup: [
+        ShellStep(['cleanup']),
+      ],
+    );
+
+    final finished = await runner(link).run('plan-1', plan);
+
+    expect(finished.failure, ActionFailure.transport);
+    expect(link.commands.map((c) => c.split(' ').last), [
+      "'write'",
+      "'replace'",
+      "'cleanup'",
+    ]);
+  });
+
+  test('captured output is redacted before it is capped, so a secret '
+      'the cap cuts leaves no fragment', () {
+    final token = 'ghp_${'a' * 36}';
+    // The cap falls ten characters into the token.
+    final stdout = '${'x' * (kExecOutputMax - 11)} $token\n';
+
+    final kept = capturedOutput(stdout, '');
+
+    expect(kept.truncated, isTrue);
+    expect(kept.stdout.length, lessThanOrEqualTo(kExecOutputMax));
+    expect(kept.stdout, isNot(contains('ghp_')));
   });
 
   test('API steps need the Docker runner and a 2xx answer', () async {

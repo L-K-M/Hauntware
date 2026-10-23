@@ -37,8 +37,12 @@ enum ActionEntryPoint {
   /// A stack's pull and redeploy (STK-06).
   stackRedeploy,
 
-  /// Editing a file or a crontab (SAF-12, X-05).
+  /// Editing a file or a crontab (SAF-12, X-05), or restoring a backup
+  /// into the editor.
   fileEdit,
+
+  /// Keeping the newest backups, or removing a file's (SAF-14, Q11).
+  backupRemove,
 }
 
 /// The operations controller for every route, which action entries plan

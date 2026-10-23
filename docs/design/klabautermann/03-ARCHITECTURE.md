@@ -1251,11 +1251,15 @@ Proposals awaiting the owner close the section; they are not decisions.
   2. its attributes come from the target with `cp --attributes-only
      --preserve=mode,ownership,xattr` where the host's `cp` accepts it;
   3. elsewhere (BusyBox) they come from `stat` through numeric `chown`
-     and `chmod`. A target carrying extended ACL entries (`getfacl`
-     lists more than the three base entries) or xattrs (`getfattr -d`
-     lists any but `security.selinux`) is refused there, naming the
-     missing tool, rather than written without them; a host with
-     neither tool sets neither;
+     and `chmod`, which cannot copy ACLs or xattrs. Where `getfacl` or
+     `getfattr` is present, a target carrying extended ACL entries
+     (`getfacl` lists more than the three base entries) or xattrs
+     (`getfattr -d -m -` lists any but `security.selinux`) is refused,
+     naming what this path would drop, rather than written without
+     them. What a missing tool cannot check is taken to be absent, an
+     accepted risk: attributes set from elsewhere (an image built on
+     another host, shared storage) would be dropped. A host with
+     neither tool writes ahead unchecked;
   4. the hash re-check runs right before `mv`, and `restorecon` runs on
      the target after it when SELinux enforces;
   5. any failed step removes the temp and leaves the target as it was.
@@ -2304,6 +2308,27 @@ list says so. The `sender` and `alertstatus` records of a server are
 removed with sealed `removed` records when alerting is removed for that
 server.
 
+As built in M5 (M04): the engine's coordinator applies `pref` and `rule`
+records through `klabautermann_core`'s `KlabautermannRecordHandler` into
+`klabautermann_records.json` (4.10), still pull-only. A payload's `id`
+is the whole record id and its `type` the id's second segment. A `pref`
+holds `readOnly`, `cadence` (a 6.4 column), `pinnedUnits`,
+`pinnedContainers`, `protectedTargets`, `panelOrder`, `hostAuditLine`
+and `stackScanDirs` (absolute paths); a cadence this build does not know
+leaves the device's. A `rule` holds the rule model's fields (7.19) under
+their model names, so `evalScope` reads `client` for this device, plus a
+`target` (the server id or group name a `server` or `group` scope names).
+A record over its blob or count cap, of another kind, or whose `id` or
+`type` disagrees with its envelope trips and is skipped; a `v` above 1 is
+kept like an unknown type. The handler applies in the coordinator's last
+phase, so an excluded server is judged against the round's final server
+set, and it never opens records for the passphrase trial, since the v1.x
+`sudo` and `registry` types carry credentials. The engine sends each
+server's preferences as `ServerPrefsChanged` after its fleet, then only
+changes, a null for a removal, and every succeeded sync status carries
+the prefix budget. Retracting an excluded server's `pref` is written but
+refused until pushes are on (M05).
+
 ### 4.9 What never syncs
 
 Metrics, history, logs, inspect output, `docker compose config` output,
@@ -2333,6 +2358,7 @@ platform identities in 04, section 12.3):
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
 | `capabilities/<name>.json` | Cached probe results, 24 h TTL; named, written only by a process that holds the directory alone, and purged as D59 decides | `klabautermann_core` | MVP |
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
+| `klabautermann_records.json` [E] | The `klabautermann:` records the coordinator applied (4.8, M5, M04): per record id, the `(updatedAt, deviceId)` it won with and its sealed payload, sealed removals, unknown types and newer versions included, so the tuple guard holds across restarts and §3.1's recovery re-seals them verbatim. A `pref` whose server is absent waits here. Kept like the sync state files. Never pushed while sync is pull-only | `klabautermann_core` | v1 |
 | `operations_shown.json` [E] | Detached operations this device remembers (M4, E17b, 7.17): per server and operation id, the operation's directory, whether its result was shown and audited here, and, for one this device launched, the audit record's facts (action, target, redacted steps, tier, start). An entry goes once the operation's files are gone. Kept like the sync state files: written only with exclusive access, a damaged file set aside; losing it costs a result's launch facts and the reminder of a root cleanup, which the 7-day prune covers. Never synced | `klabautermann_core` | MVP |
 | `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample) | `klabautermann_core` | v1 |
 | `alerts.jsonl` | In-app alert history, 30 days [E]; from v1.x also host alerts fetched from the inbox or read from a host spool, with source tier, server item ids and status (D42) | `klabautermann_core` | v1 |
@@ -3386,6 +3412,38 @@ a polkit refusal (`Interactive authentication required` or
 than as a failed step. Every unit action re-validates that the unit
 still loads, and only start reports no impact.
 
+As built in M5 (M22), `UnitAction` also takes enable, disable, mask,
+unmask and reset-failed (SVC-05, SVC-06), each tier 1, and tier 2 on a
+protected unit. Stop, restart, reload and mask name the impact; the
+others change only the next boot or start, or clear a failed state. A
+`UnitScope.user` action or `StartTimer` (SVC-09, JOB-08) addresses
+`systemctl --user` and runs as the login user even in admin mode. It
+sets `XDG_RUNTIME_DIR=/run/user/<uid>` where the probe found the
+session without one, and its re-validation reads the same manager. A
+user timer's run follows no journal unit, since the follow reads the
+system journal by unit. `UnitQuery` reads a unit's file (SVC-07), its
+resources (SVC-08) or the sockets (SVC-10), JSON from systemd 246,
+always as the login user. The file masks every `Environment=` value
+and the secrets of `Exec*=` lines, as process arguments are masked
+(8.9). A user manager without a session or linger answers
+`managerUnavailable`.
+
+The unit page (plan M27a) offers the v1 verbs behind "More", on the
+page and in the row menu. Its name row opens the unit file read-only in
+Planchette's editor, masked, with a timed reveal as the stack file view
+has. Its states line also carries the unit's resources, read when the
+page opens and again when its active or sub state changes. The "Yours"
+switch for user units and the per-type tabs follow in a later change.
+
+The slow sampler's `user_units` and `user_timers` collectors (collector
+set version 9) read `systemctl --user list-units` and `list-timers` in
+the system collectors' block shapes, crossing as the `userUnits` and
+`userTimers` streams with the `units` and `timers` cadences. Where the
+session has no `XDG_RUNTIME_DIR` they set systemd's own
+`/run/user/<uid>` first. Without a user session or linger the bus is
+missing and the section reports an error. The capture tool records no
+fixture for them, since a capture container has no login session.
+
 As built in M4 (E21a), where actions are allowed the Services table's
 row menu and a unit's page offer Start, Stop, Restart and Reload; the
 table keeps no action slot otherwise, so its layout does not change.
@@ -4195,7 +4253,9 @@ each server's operations. Decisions:
 
 - The slow sampler reads `ops` once on each link, right after the probe,
   and again when the engine asks: after a launch, and every 15 s [E]
-  while an operation runs. Each read becomes an `OperationsChanged` with
+  while an operation runs or one this device launched within the last
+  minute [E] is not listed yet, since its wrapper writes the record only
+  after the launch returns. Each read becomes an `OperationsChanged` with
   the server's full list and how far each directory was read, or the
   collector's failure.
 - A running record is checked by its wrapper's PID and start ticks with
@@ -4685,7 +4745,14 @@ OperationPlan {
   Planning reads `/sys/fs/selinux/enforce` along with the target, rather
   than adding it to the probe, to decide the `restorecon` step. A
   crontab is backed up from `crontab -l` and replaced with `crontab -`
-  while `crontab -l` still hashes to the edit's base.
+  while `crontab -l` still hashes to the edit's base. A unit file (a
+  unit name directly in a `systemd/system` or `systemd/user` directory;
+  a drop-in is not one) is checked with `systemd-analyze verify
+  --man=no -- <temp>:<unit>` before the rename, in system mode, which
+  needs no user manager; `--man=no` keeps a host without the unit's
+  man pages from failing a valid unit. Only systemd 250 and later load a file under another unit
+  name, so on an older host the step is left out and the preview warns
+  that the unit file goes unchecked (M5 M15c).
 
 As built in M4 (E20, `app/klabautermann_app/lib/ui/actions/`), the app
 asks for one preview at a time through `OperationsController`: the
@@ -4716,7 +4783,9 @@ not block, since the host's own checks run at planning. Saving plans an
 as every action. A plan refused as `targetChanged`, or a run that ends
 with `contentChanged`, opens the conflict sheet. "Reload and compare"
 reads the server's text as the new base, keeps the user's and opens the
-review again; "Discard mine" takes the server's. A finished save reads
+review again; a reload that fails says why and opens nothing, since a
+review against the refused base would be refused again. "Discard mine"
+takes the server's. A finished save reads
 the target again for its new base. The stack file view and the Jobs
 tab, for the login user's crontab, open it through the `fileEdit`
 entry point. The text lives only in the editor's state.
@@ -4956,6 +5025,17 @@ N" (tier 1, N = 5 by default) and removing every backup of one file
 (tier 2, Q11) name each file they delete and rewrite the index only
 while it still hashes to what planning read. Rows for v1.x writes join
 the manifest with those writes.
+
+The footprint view (plan M18) is the server Safety menu's Footprint
+page. It asks for a fresh `FootprintState` when it opens and lists each
+scope's rows and backups by file, with each backup's time, short hash
+and state. Root's part offers the admin-mode button until admin mode
+reads it. "Keep last 5", "Remove all backups" and "Restore…" are action
+entries, hidden where actions are not allowed. A restore reads the
+backup through the edit read and checks it against the hash its index
+records. It then opens the file's editor with the backup as the
+unsaved text, so a restore is an ordinary reviewed edit. Only an
+unchanged backup restores.
 
 ### 8.12 Threat model
 
@@ -7165,6 +7245,21 @@ every exit removes the accounts with their sessions, the sshd, the
 timer and the directories; the system sshd, its config and port 22 stay
 untouched. The accounts with sudo, `systemd-run`, linger, the elevation
 prelude and the detached runners remain for later legs.
+
+As built in M5 (M20b), `klabautermann_core/test/integration/
+runner_vm_edit_test.dart` (tag `runner-vm`) edits in admin mode as the
+password-sudo account. A root file, `root:adm` 0640 with an ACL entry
+for that account and a `user.` xattr, is replaced through the prelude
+with its owner, mode, ACL and xattr kept; its backup lands in
+`/var/lib/klabautermann/backups`, 0700, with the root manifest, which a
+new engine's connect leaves unchecked until admin mode turns on. A unit
+file whose candidate `systemd-analyze verify` rejects is left as it was
+with no temp file, and one it accepts replaces it; a root file changed
+between plan and run keeps the outside change; and the unprivileged
+account's crontab is replaced through `crontab -u <user> -` and backed
+up as root. Each test seeds its own files and removes them, the root
+backups and the manifest; runner_vm.sh removes them too on every exit,
+and installs `acl` or `attr` where `setfacl` or `setfattr` is missing.
 
 As built in M3 (D10), the Docker host's image
 (`klabautermann/test/integration/sshd/Dockerfile.docker`) builds `FROM`

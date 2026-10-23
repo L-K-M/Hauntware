@@ -937,6 +937,13 @@ final class DockerRouter {
             await endpoint.stacks.readFile(client, project, path),
             const [],
           );
+        case DockerStackProfilesQuery(:final project):
+          return read(
+            await endpoint.stacks.profiles(client, project),
+            const [],
+          );
+        case DockerStackScanQuery(:final directories):
+          return read(await endpoint.stacks.scan(directories), const []);
       }
     } on DockerException catch (e) {
       final (:failure, :dropped) = dockerReadFailure(e);
@@ -953,6 +960,13 @@ final class DockerRouter {
     DockerContainerQuery(:final containerId) => containerId.isNotEmpty,
     DockerStackFileQuery(:final project, :final path) =>
       composeNamePattern.hasMatch(project) && _absolute(path),
+    DockerStackProfilesQuery(:final project) => composeNamePattern.hasMatch(
+      project,
+    ),
+    DockerStackScanQuery(:final directories) =>
+      directories.isNotEmpty &&
+          directories.length <= kStackScanDirectoriesMax &&
+          directories.every(_absolute),
     _ => true,
   };
 

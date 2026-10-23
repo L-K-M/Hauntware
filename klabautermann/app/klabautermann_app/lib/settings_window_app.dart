@@ -88,6 +88,7 @@ class _SettingsWindowAppState extends State<SettingsWindowApp> {
                 appVersion: remote.appVersion,
                 monitorSet: remote.monitorSet,
                 safety: remote.safety,
+                syncSecrets: remote.syncSecrets,
                 initialTab: page.tab,
                 tabRequests: remote.tabRequests,
               );

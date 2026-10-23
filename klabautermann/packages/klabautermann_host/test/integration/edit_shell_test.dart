@@ -27,7 +27,7 @@ final _shells = <String, String>{
 };
 
 // Low entropy, so the secret scan does not read it as a key.
-const _token = 'feedfacefeedface';
+const _tempId = 'feedfacefeedface';
 
 /// The octal permission bits of [path].
 String _mode(String path) =>
@@ -55,7 +55,7 @@ void main() {
         target = '${dir.path}/app.conf';
         File(target).writeAsStringSync('original\n');
         Process.runSync('chmod', ['0640', target]);
-        temp = EditCommands.tempPathFor(target, _token);
+        temp = EditCommands.tempPathFor(target, _tempId);
       });
 
       /// Runs [argv] with [shell] as its `sh` and [stdin], with the shims
@@ -380,6 +380,27 @@ void main() {
           File(manifest).parent.listSync().map((e) => e.path),
           isNot(contains(contains('klabautermann-tmp'))),
         );
+
+        // One that exists but cannot be read never passes for absent: a
+        // directory at the path once hashed as empty and took the file.
+        final blockedManifest =
+            '${dir.path}/blocked/config/klabautermann/manifest.json';
+        final blockedBackups = '${dir.path}/blocked$kBackupsDirSuffix';
+        final targets = {
+          blockedManifest: EditCommands.manifestWrite(
+            blockedManifest,
+            _emptySha256,
+          ),
+          '$blockedBackups/$kEditBackupIndexName':
+              EditCommands.backupIndexWrite(blockedBackups, _emptySha256),
+        };
+        for (final MapEntry(key: path, value: write) in targets.entries) {
+          Directory(path).createSync(recursive: true);
+          final refused = await run(write, stdin: '{"v":3}');
+          expect(refused.exitCode, isNot(0), reason: path);
+          expect(refused.exitCode, isNot(EditExit.hashMismatch), reason: path);
+          expect(Directory(path).listSync(), isEmpty, reason: path);
+        }
 
         final read = await run(EditCommands.manifestRead(manifest));
         expect(read.stdout, '{"v":1}');

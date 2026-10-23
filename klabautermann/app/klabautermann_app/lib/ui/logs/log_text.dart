@@ -7,6 +7,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:planchette_core/planchette_core.dart' show TextMatch;
 
 import 'log_level.dart';
+import 'log_tokens.dart';
 import 'log_view_controller.dart' show ContainerLine;
 
 /// The contrast every span of log text keeps on its background: WCAG's
@@ -57,8 +58,10 @@ final class LogPalette {
     required this._match,
     required this._currentMatch,
     required List<Color> ansi,
+    required Map<LogTokenKind, Color> tokens,
   }) : assert(ansi.length == 16),
-       _ansi = List.unmodifiable(ansi);
+       _ansi = List.unmodifiable(ansi),
+       _tokens = Map.unmodifiable(tokens);
 
   /// The palette of [theme]: its lowest container as the background, its
   /// text colours, and the family's red and yellow for errors and
@@ -100,6 +103,14 @@ final class LogPalette {
         ...hues,
         const Color(0xFFFFFFFF),
       ],
+      tokens: {
+        LogTokenKind.url: family.glyph(FamilyHue.blue),
+        LogTokenKind.ipAddress: family.glyph(FamilyHue.cyan),
+        LogTokenKind.httpSuccess: family.glyph(FamilyHue.green),
+        LogTokenKind.httpRedirect: family.glyph(FamilyHue.purple),
+        LogTokenKind.httpClientError: family.glyph(FamilyHue.orange),
+        LogTokenKind.httpServerError: family.glyph(FamilyHue.red),
+      },
     );
   }
 
@@ -113,6 +124,7 @@ final class LogPalette {
   final Color _match;
   final Color _currentMatch;
   final List<Color> _ansi;
+  final Map<LogTokenKind, Color> _tokens;
 
   final _styles = <(SgrStyle, LogLevel?), TextStyle>{};
   final _legibleCache = <(Color, Color), Color>{};
@@ -162,6 +174,12 @@ final class LogPalette {
       ]),
     );
   }
+
+  /// [style] with LOG-07's colour for a [kind] token, held to
+  /// [logTextMinContrast] on what it is drawn over.
+  TextStyle tokenStyle(TextStyle style, LogTokenKind kind) => style.copyWith(
+    color: _legible(_tokens[kind]!, style.backgroundColor ?? background),
+  );
 
   /// The colours and attributes of [style] on a line at [level]: the
   /// level's colour stands in for the default foreground.
@@ -352,14 +370,38 @@ TextSpan logLineSpan(
     ] else if (source.isNotEmpty)
       (0, source.length, palette.sourceStyle, null),
   ];
+  // LOG-07's tokens colour only text whose SGR styles set no colour: a
+  // program's own colours win.
+  final tokens = logTokens(body.text);
+  var token = 0;
   void run(int start, int end, SgrStyle style) {
     if (start == end) return;
-    runs.add((
-      source.length + start,
-      source.length + end,
-      palette.styleFor(style, level),
-      null,
-    ));
+    final resolved = palette.styleFor(style, level);
+    void add(int from, int to, TextStyle style) {
+      if (from < to) {
+        runs.add((source.length + from, source.length + to, style, null));
+      }
+    }
+
+    if (style.foreground != null || style.inverse) {
+      add(start, end, resolved);
+      return;
+    }
+    var at = start;
+    while (token < tokens.length && tokens[token].start < end) {
+      final (start: from, end: to, :kind) = tokens[token];
+      if (to <= at) {
+        token++;
+        continue;
+      }
+      add(at, math.max(at, from), resolved);
+      final stop = math.min(to, end);
+      add(math.max(at, from), stop, palette.tokenStyle(resolved, kind));
+      at = stop;
+      if (to > end) break;
+      token++;
+    }
+    add(at, end, resolved);
   }
 
   var at = 0;

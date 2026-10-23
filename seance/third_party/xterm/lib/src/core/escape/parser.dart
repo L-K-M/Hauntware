@@ -224,7 +224,7 @@ class EscapeParser {
     final consumed = _consumeCsi();
     if (!consumed) return false;
 
-    final csiHandler = _csiHandlers[_csi.finalByte];
+    final csiHandler = _csiHandlerFor(_csi);
 
     if (csiHandler == null) {
       handler.unknownCSI(_csi.finalByte);
@@ -247,6 +247,7 @@ class EscapeParser {
     }
 
     _csi.params.clear();
+    _csi.hasIntermediates = false;
 
     // test whether the csi is a `CSI ? Ps ...` or `CSI Ps ...`
     final prefix = _queue.peek();
@@ -285,7 +286,9 @@ class EscapeParser {
       }
 
       if (char > Ascii.NULL && char < Ascii.num0) {
-        // intermediates.add(char);
+        // [seance fork] 0x20-0x2F are intermediates; embedded C0 controls
+        // are still skipped.
+        if (char >= Ascii.space) _csi.hasIntermediates = true;
         continue;
       }
 
@@ -331,6 +334,39 @@ class EscapeParser {
     'X'.codeUnitAt(0): _csiHandleEraseCharacters,
     '@'.codeUnitAt(0): _csiHandleInsertBlankCharacters,
   });
+
+  /// [seance fork] The private-marker functions this terminal implements,
+  /// keyed by marker. Every other marker and final byte pair is ignored.
+  late final _csiPrivateHandlers = {
+    Ascii.questionMark: FastLookupTable<_CsiHandler>({
+      'h'.codeUnitAt(0): _csiHandleMode, // DECSET
+      'l'.codeUnitAt(0): _csiHandleMode, // DECRST
+      'n'.codeUnitAt(0): _csiHandleDeviceStatusReport, // DEC DSR
+      'J'.codeUnitAt(0): _csiHandleEraseDisplay, // DECSED
+      'K'.codeUnitAt(0): _csiHandleEraseLine, // DECSEL
+    }),
+    Ascii.greaterThan: FastLookupTable<_CsiHandler>({
+      'c'.codeUnitAt(0): _csiHandleSendDeviceAttributes, // secondary DA
+    }),
+    Ascii.equal: FastLookupTable<_CsiHandler>({
+      'c'.codeUnitAt(0): _csiHandleSendDeviceAttributes, // tertiary DA
+    }),
+  };
+
+  /// [seance fork] Finds the handler for the whole function identity of
+  /// [csi]. A private marker or an intermediate names a different function
+  /// than the bare final byte: `CSI > 4 m` resets xterm's modifyOtherKeys,
+  /// `CSI 4 m` turns on underline. Upstream dispatched on the final byte
+  /// alone, so Claude Code's exit sequence underlined all later output.
+  _CsiHandler? _csiHandlerFor(_Csi csi) {
+    // No implemented function takes intermediates, e.g. `CSI 2 SP A` (SR).
+    if (csi.hasIntermediates) return null;
+
+    final prefix = csi.prefix;
+    if (prefix == null) return _csiHandlers[csi.finalByte];
+
+    return _csiPrivateHandlers[prefix]?[csi.finalByte];
+  }
 
   /// `ESC [ Ps a` Cursor Horizontal Position Relative (HPR)
   ///
@@ -1187,6 +1223,9 @@ class _Csi {
   });
 
   int? prefix;
+
+  /// [seance fork] Whether the sequence carried any intermediate byte.
+  var hasIntermediates = false;
 
   List<int> params;
 

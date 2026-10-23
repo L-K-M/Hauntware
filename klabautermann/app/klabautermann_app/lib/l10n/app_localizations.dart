@@ -2608,11 +2608,41 @@ abstract class AppLocalizations {
   /// **'{level, select, emergency{Emergency} alert{Alert and above} critical{Critical and above} error{Error and above} warning{Warning and above} notice{Notice and above} info{Info and above} other{Debug and above}}'**
   String logsPanelPriorityLevel(String level);
 
-  /// Toggle of the Logs panel's journal filters that shows only entries since the server last started.
+  /// Tooltip and title of the Logs panel's boot picker, which chooses the server start whose journal or kernel entries are shown.
   ///
   /// In en, this message translates to:
-  /// **'Current boot only'**
-  String get logsPanelCurrentBoot;
+  /// **'Boot'**
+  String get logsPanelBoot;
+
+  /// The boot picker's choice: every boot the journal keeps, or only the one since the server last started.
+  ///
+  /// In en, this message translates to:
+  /// **'{choice, select, all{All boots} current{This boot} other{Boot}}'**
+  String logsPanelBootChoice(String choice);
+
+  /// A past boot in the boot picker, counted back from the current one.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Previous boot} other{{count} boots ago}}'**
+  String logsPanelBootPast(int count);
+
+  /// When a boot's first and last journal entries were written, under its name in the boot picker.
+  ///
+  /// In en, this message translates to:
+  /// **'{start} to {end}'**
+  String logsPanelBootSpan(String start, String end);
+
+  /// Shown in the boot picker while the server lists its boots.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the server\'s boots…'**
+  String get logsPanelBootsLoading;
+
+  /// Shown in the boot picker when the server's boots could not be listed.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected to the server.} denied{The server denied access to its boot list.} missing{The server has no journal to list boots from.} other{Reading the server\'s boots failed.}}'**
+  String logsPanelBootsFailed(String failure);
 
   /// Label of the Logs panel's time range filter.
   ///
@@ -2650,6 +2680,126 @@ abstract class AppLocalizations {
   /// **'Common paths'**
   String get logsPanelCommonPaths;
 
+  /// Button beside the file path field that lists the server's log files under /var/log (LOG-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Browse /var/log'**
+  String get logsPanelBrowseFiles;
+
+  /// Title of the sheet listing the server's log files under /var/log.
+  ///
+  /// In en, this message translates to:
+  /// **'Files in /var/log'**
+  String get logsPanelFiles;
+
+  /// Label of the field that narrows the /var/log listing to paths containing its text.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter by name'**
+  String get logsPanelFilesFilter;
+
+  /// Shown in the /var/log browser while the server lists its files.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing the server\'s log files…'**
+  String get logsPanelFilesLoading;
+
+  /// Shown in the /var/log browser when the server's files could not be listed.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected to the server.} denied{The server denied access to /var/log.} missing{The server cannot list /var/log.} other{Listing the server\'s log files failed.}}'**
+  String logsPanelFilesFailed(String failure);
+
+  /// Shown in the /var/log browser when the listing is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'The server has no files under /var/log.'**
+  String get logsPanelFilesEmpty;
+
+  /// Shown in the /var/log browser when the filter matches no file.
+  ///
+  /// In en, this message translates to:
+  /// **'No file path contains this text.'**
+  String get logsPanelFilesNoMatch;
+
+  /// Under a file's path in the /var/log browser: its size and when it last changed.
+  ///
+  /// In en, this message translates to:
+  /// **'{size}, changed {modified}'**
+  String logsPanelFileDetails(String size, String modified);
+
+  /// Under a rotated .gz or .xz file in the /var/log browser.
+  ///
+  /// In en, this message translates to:
+  /// **'Compressed: reads its last lines, without following'**
+  String get logsPanelFileCompressed;
+
+  /// Under a file in the /var/log browser that the server account may not read.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account cannot read it; admin mode can'**
+  String get logsPanelFileUnreadable;
+
+  /// Tooltip of the Logs panel's button that exports the lines it holds (LOG-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Export'**
+  String get logsExport;
+
+  /// Title of the log export sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Export 1 line} other{Export {count} lines}}'**
+  String logsExportTitle(int count);
+
+  /// Switch in the log export sheet that turns off redaction.
+  ///
+  /// In en, this message translates to:
+  /// **'Include secrets'**
+  String get logsExportIncludeSecrets;
+
+  /// Under the Include secrets switch while it is off.
+  ///
+  /// In en, this message translates to:
+  /// **'Passwords, tokens and keys are replaced before the lines leave the app.'**
+  String get logsExportSecretsRedacted;
+
+  /// Under the Include secrets switch while it is on.
+  ///
+  /// In en, this message translates to:
+  /// **'The lines leave the app as they are, secrets included.'**
+  String get logsExportSecretsIncluded;
+
+  /// A button in the log export sheet: copy to the clipboard, save to a file, or open the share sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{target, select, copy{Copy} save{Save…} other{Share…}}'**
+  String logsExportAction(String target);
+
+  /// Toast after the log export copied or saved the lines.
+  ///
+  /// In en, this message translates to:
+  /// **'{target, select, copy{Copied the lines.} other{Saved the lines.}}'**
+  String logsExportDone(String target);
+
+  /// Toast when the log export failed.
+  ///
+  /// In en, this message translates to:
+  /// **'{target, select, copy{The lines could not be copied.} save{The lines could not be saved.} other{The lines could not be shared.}}'**
+  String logsExportFailed(String target);
+
+  /// Toast when the engine could not redact the lines; the export never falls back to the unredacted text.
+  ///
+  /// In en, this message translates to:
+  /// **'The lines could not be redacted, so nothing was exported.'**
+  String get logsExportNotRedacted;
+
+  /// The suggested file name for a saved log export. Keep it a valid file name.
+  ///
+  /// In en, this message translates to:
+  /// **'{source, select, journal{journal} kernel{kernel} other{log}}.log'**
+  String logsExportFileName(String source);
+
   /// Button that reads the log again with the filters or path entered.
   ///
   /// In en, this message translates to:
@@ -2674,6 +2824,18 @@ abstract class AppLocalizations {
   /// **'Follow new entries as the server writes them'**
   String get logsPanelLiveTooltip;
 
+  /// Tooltip of the Logs panel's Live chip while it is off because a past boot is shown.
+  ///
+  /// In en, this message translates to:
+  /// **'A past boot has no new entries to follow'**
+  String get logsPanelLivePastBoot;
+
+  /// Tooltip of the Logs panel's Live chip while it is off because a compressed rotated file is shown.
+  ///
+  /// In en, this message translates to:
+  /// **'A compressed file has no new lines to follow'**
+  String get logsPanelLiveCompressed;
+
   /// Notice above the journal when the server shows the signed-in account only its own entries. The group names are names on the server and stay as they are.
   ///
   /// In en, this message translates to:
@@ -2689,7 +2851,7 @@ abstract class AppLocalizations {
   /// Status line above the log saying what reading it is doing or why it stopped.
   ///
   /// In en, this message translates to:
-  /// **'{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} gap{Following again. Lines written while it was paused or disconnected may be missing.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} other{Choose or type the absolute path of a file to tail.}}'**
+  /// **'{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} gap{Following again. Lines written while it was paused or disconnected may be missing.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} searchUnsupported{This server\'s journal cannot search. Clear the server search to read the log.} other{Choose or type the absolute path of a file to tail.}}'**
   String logsPanelStatus(String status);
 
   /// Button that opens the log again after it stopped or was refused.
@@ -2727,6 +2889,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Match case'**
   String get logsPanelSearchCase;
+
+  /// Tooltip of the toggle that makes the log search read its text as a regular expression.
+  ///
+  /// In en, this message translates to:
+  /// **'Regular expression'**
+  String get logsPanelSearchRegex;
+
+  /// Error under the log search field when its text, read as a regular expression, does not compile.
+  ///
+  /// In en, this message translates to:
+  /// **'Not a valid regular expression'**
+  String get logsPanelSearchInvalid;
+
+  /// Tooltip of the button that reads only the journal entries matching the search, matched by the server, rather than searching the entries already shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Search the whole journal on the server'**
+  String get logsPanelSearchServer;
+
+  /// Chip above the log while the server reads only the journal entries matching a pattern; the pattern is shown as sent.
+  ///
+  /// In en, this message translates to:
+  /// **'Server search: {pattern}'**
+  String logsPanelServerMatch(String pattern);
+
+  /// Tooltip of the button on the server-search chip that reads the whole journal again.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the server search'**
+  String get logsPanelServerMatchClear;
 
   /// How many matches the log search found, before one is selected.
   ///
@@ -3574,6 +3766,36 @@ abstract class AppLocalizations {
   /// **'The setting could not be changed.'**
   String get settingsAnnounceNotChanged;
 
+  /// Section heading on the Sync settings tab over the sync passwords switch (SYN-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Passwords and keys'**
+  String get settingsSyncSecretsTitle;
+
+  /// Switch on the Sync settings tab (SYN-02): whether passwords and keys other devices synced are added to this device's vault. Séance's wording.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync saved passwords & keys'**
+  String get settingsSyncSecrets;
+
+  /// Explanation under the sync passwords switch, Séance's subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Only includes servers where credential sync is also enabled.'**
+  String get settingsSyncSecretsDetail;
+
+  /// Toast when the sync passwords switch applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The setting changed, but it could not be saved, so it will not be kept after a restart.'**
+  String get settingsSyncSecretsNotSaved;
+
+  /// Toast when the app did not take a change of the sync passwords switch.
+  ///
+  /// In en, this message translates to:
+  /// **'The setting could not be changed.'**
+  String get settingsSyncSecretsNotChanged;
+
   /// Heading of the about row on the General settings tab, which shows the app's title and version and opens the About dialog.
   ///
   /// In en, this message translates to:
@@ -4156,6 +4378,42 @@ abstract class AppLocalizations {
   /// **'Read-only: actions on this server are hidden.'**
   String get serverReadOnlyNotice;
 
+  /// Title of the login password dialog shown on connect when the vault holds no password for the server (03 §4.5); label is the server's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Password for {label}'**
+  String credentialTitle(String label);
+
+  /// Line under the login password dialog's title when the password can be saved in the vault.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved only if you choose to: on this device, in its encrypted vault, and used for this server from now on.'**
+  String get credentialExplanation;
+
+  /// Label of the password field in the login password dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get credentialPassword;
+
+  /// Checkbox in the login password dialog that keeps the password in this device's vault once the server accepts it.
+  ///
+  /// In en, this message translates to:
+  /// **'Save in vault'**
+  String get credentialSaveInVault;
+
+  /// Button that closes the login password dialog without connecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get credentialCancel;
+
+  /// Button that connects with the typed password.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect'**
+  String get credentialConnect;
+
   /// Title of the admin mode password dialog (SAF-02); host is the server's address.
   ///
   /// In en, this message translates to:
@@ -4339,7 +4597,7 @@ abstract class AppLocalizations {
   /// A warning in the action preview; warning is the engine's PlanWarning name.
   ///
   /// In en, this message translates to:
-  /// **'{warning, select, profileGatedServices{Some running services are enabled only by a compose profile, which Klabautermann cannot see. The redeploy leaves them as they are.} profilesUnknown{The compose CLI could not list every profile\'s services, so some of these containers may belong to a service a profile enables.} mayDieAtLogout{This server ends your processes when you log out, which can stop the operation before it finishes.} other{}}'**
+  /// **'{warning, select, profileGatedServices{Some running services are enabled only by a compose profile, which Klabautermann cannot see. The redeploy leaves them as they are.} profilesUnknown{The compose CLI could not list every profile\'s services, so some of these containers may belong to a service a profile enables.} mayDieAtLogout{This server ends your processes when you log out, which can stop the operation before it finishes.} unitNotVerified{This server\'s systemd is not known to be version 250 or later, so the unit file is not checked before it is replaced.} other{}}'**
   String actionPreviewWarning(String warning);
 
   /// Toast when a detached operation started on the server; its result shows under Operations.
@@ -6921,6 +7179,258 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{path} (yours)'**
   String editDiffYourLabel(String path);
+
+  /// Server Safety menu: opens what Klabautermann keeps on the server (SAF-14).
+  ///
+  /// In en, this message translates to:
+  /// **'Footprint'**
+  String get footprintMenu;
+
+  /// Footprint page title. server is the server's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Footprint on {server}'**
+  String footprintTitle(String server);
+
+  /// Footprint page: asks the engine to verify the footprint again.
+  ///
+  /// In en, this message translates to:
+  /// **'Check again'**
+  String get footprintVerify;
+
+  /// Footprint page: shown until the engine answers.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking what Klabautermann keeps on this server…'**
+  String get footprintChecking;
+
+  /// Footprint page: the engine refused the check, as for a server with no connection.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann cannot check what it keeps on this server without a connection. Connect, then check again.'**
+  String get footprintUnavailable;
+
+  /// Footprint page: root's part is not read without admin mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Root\'s backups and manifest are checked in admin mode.'**
+  String get footprintRootUnchecked;
+
+  /// Footprint page: one problem the check found, in the engine's words.
+  ///
+  /// In en, this message translates to:
+  /// **'The check reported: {warning}'**
+  String footprintWarning(String warning);
+
+  /// Footprint page: no manifest rows and no backups.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann keeps nothing on this server.'**
+  String get footprintNone;
+
+  /// Footprint page: a scope's heading. scope is the FootprintScope name.
+  ///
+  /// In en, this message translates to:
+  /// **'{scope, select, user{Your account} root{Root} other{Other}}'**
+  String footprintScope(String scope);
+
+  /// Footprint page: a manifest row's kind and whether it is on the host. kind is the FootprintKind name; present is true or false.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, backupDirectory{Backup directory} backupIndex{Backup index} other{File}} · {present, select, true{present} other{missing on the host}}'**
+  String footprintFile(String kind, String present);
+
+  /// Footprint page: removes older backups (Q11, tier 1).
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Keep only the newest backup of each file} other{Keep the newest {count} backups of each file}}'**
+  String footprintKeepLast(int count);
+
+  /// Footprint page: removes every backup of one file (Q11, typed confirmation).
+  ///
+  /// In en, this message translates to:
+  /// **'Remove all backups'**
+  String get footprintRemoveAll;
+
+  /// Footprint page: the heading of a crontab's backups. user is the account.
+  ///
+  /// In en, this message translates to:
+  /// **'{user}\'s crontab'**
+  String footprintCrontabSource(String user);
+
+  /// Footprint page: a backup's short hash and whether it still has the recorded content. status is the FootprintBackupStatus name.
+  ///
+  /// In en, this message translates to:
+  /// **'{hash} · {status, select, intact{unchanged} modified{changed on the host since it was recorded} missing{missing on the host} other{unknown}}'**
+  String footprintBackup(String hash, String status);
+
+  /// Footprint page: opens the file's editor with this backup as the new text, to review and save.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore…'**
+  String get footprintRestore;
+
+  /// Footprint page: the backup read back does not have its recorded hash.
+  ///
+  /// In en, this message translates to:
+  /// **'The backup changed since it was checked, so it was not opened.'**
+  String get footprintRestoreChanged;
+
+  /// Unit action (SVC-05): starts the unit at boot.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable'**
+  String get unitEnable;
+
+  /// Unit action (SVC-05): stops starting the unit at boot.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable'**
+  String get unitDisable;
+
+  /// Unit action (SVC-06): prevents the unit from being started at all.
+  ///
+  /// In en, this message translates to:
+  /// **'Mask'**
+  String get unitMask;
+
+  /// Unit action (SVC-06): lets a masked unit start again.
+  ///
+  /// In en, this message translates to:
+  /// **'Unmask'**
+  String get unitUnmask;
+
+  /// Unit action (SVC-06): clears the unit's failed state.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset failed state'**
+  String get unitResetFailed;
+
+  /// Unit page and row menu: the v1 unit actions (SVC-05, SVC-06).
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get unitMoreActions;
+
+  /// Unit page: why a unit read found nothing. reason is the engine's UnitQueryFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{There is no connection to this server.} invalidUnit{This is not a unit name.} notFound{The manager has no such unit.} managerUnavailable{Your user manager cannot be reached: you need a login session or lingering.} failed{The read failed.} other{The read failed.}}'**
+  String unitQueryFailed(String reason);
+
+  /// Unit page: the unit's current memory use.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get unitResourcesMemory;
+
+  /// Unit page: the CPU time the unit used.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU time'**
+  String get unitResourcesCpu;
+
+  /// Unit page: CPU time in seconds. seconds is formatted with one decimal.
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds} s'**
+  String unitResourcesCpuSeconds(String seconds);
+
+  /// Unit page: the unit's current tasks.
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks'**
+  String get unitResourcesTasks;
+
+  /// Unit page: how often systemd restarted the unit.
+  ///
+  /// In en, this message translates to:
+  /// **'Restarts'**
+  String get unitResourcesRestarts;
+
+  /// Unit page: the unit's main process ID.
+  ///
+  /// In en, this message translates to:
+  /// **'Main PID'**
+  String get unitResourcesMainPid;
+
+  /// Unit page: when the unit last became active.
+  ///
+  /// In en, this message translates to:
+  /// **'Active since'**
+  String get unitResourcesActiveSince;
+
+  /// Unit page: opens the unit file and its drop-ins (SVC-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Show unit file'**
+  String get unitFileShow;
+
+  /// Unit file view title. unit is the unit name.
+  ///
+  /// In en, this message translates to:
+  /// **'{unit} file'**
+  String unitFileTitle(String unit);
+
+  /// Unit file view: closes the dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get unitFileClose;
+
+  /// Unit file view: shown while the file is read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the unit file…'**
+  String get unitFileReading;
+
+  /// Unit file view: how many values the engine masked, and how long a reveal lasts.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 value is masked.} other{{count} values are masked.}} Reveal shows them for {seconds} seconds.'**
+  String unitFileMasked(int count, int seconds);
+
+  /// Unit file view: shows the masked values for a while.
+  ///
+  /// In en, this message translates to:
+  /// **'Reveal values'**
+  String get unitFileReveal;
+
+  /// Unit file view: masks the revealed values again.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide values'**
+  String get unitFileHide;
+
+  /// Unit file view: accessibility label of the read-only editor.
+  ///
+  /// In en, this message translates to:
+  /// **'File of {unit}'**
+  String unitFileEditorLabel(String unit);
+
+  /// Services tab: lists the system manager's units.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get servicesScopeSystem;
+
+  /// Services tab: lists the login user's own units (SVC-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Yours'**
+  String get servicesScopeUser;
+
+  /// Unit page of a user unit: its journal lines are not read (SVC-09).
+  ///
+  /// In en, this message translates to:
+  /// **'The logs of your own units are not shown here yet.'**
+  String get servicesUserLogsAbsent;
+
+  /// Services tab, Yours: the user manager could not be reached (SVC-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Your own units could not be read. Your user manager runs only while you are logged in, or with lingering enabled.'**
+  String get servicesUserUnavailable;
 }
 
 class _AppLocalizationsDelegate

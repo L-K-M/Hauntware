@@ -23,6 +23,7 @@ import '../admin/user_crontabs.dart';
 import '../capabilities/capability_cache.dart';
 import '../catalog/engine_sync.dart';
 import '../catalog/engine_vault.dart';
+import '../catalog/klabautermann_records.dart' show diffServerPrefs;
 import '../catalog/keystore_channel.dart';
 import '../docker/docker_router.dart';
 import '../docker/exec_sessions.dart';
@@ -39,6 +40,7 @@ import '../links/channel_quota.dart';
 import '../links/link_connector.dart';
 import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
+import '../logs/host_queries.dart';
 import '../logs/log_stream_router.dart';
 import '../operations/confirmation.dart';
 import '../operations/detached_runner.dart';
@@ -55,6 +57,8 @@ import '../operations/plans/backup_plans.dart';
 import '../operations/plans/docker_plans.dart';
 import '../operations/plans/edit_plan.dart';
 import '../jobs/job_history_query.dart';
+import '../services/unit_queries.dart';
+import '../operations/stack_edits.dart';
 import '../operations/plans/host_plans.dart';
 import '../operations/plans/redeploy_plan.dart';
 import '../operations/protected_targets.dart';
@@ -62,6 +66,10 @@ import '../sampling/sampling_scheduler.dart';
 import '../sampling/subscriptions.dart';
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
 import 'protocol.dart';
+
+/// Redacts the lines an export carries (LOG-10, 03 §8.9), as the audit
+/// log and operation output are.
+final _exportRedactor = SecretRedactor();
 
 /// How long a shutdown waits for open shells to end and write their
 /// audit records; a link that went silent cannot hold the quit longer.
@@ -204,6 +212,9 @@ void engineMain(
   // none while links are off. It follows every LinkState and probe
   // answer.
   DockerRouter? docker;
+  // One-shot host reads over each server's ready link (03 §7.6); none
+  // while links are off.
+  HostQueries? hostQueries;
   // Container shells over the Docker endpoints (03 §7.13); none while
   // links are off.
   ExecSessions? terminals;
@@ -358,6 +369,33 @@ void engineMain(
               : BackgroundLinkPolicy.keepOpen,
         )
       : null;
+
+  // A stack file's edit (STK-07) looks its project up on the server's
+  // Docker endpoint, for its read and again for its plan: null while
+  // links are off.
+  StackEditLookup? stackEditLookup(String serverId) {
+    final router = docker;
+    if (router == null) return null;
+    return (project, path) async {
+      try {
+        return await router.useStacks(serverId, (client, route, stacks) async {
+          final found = await stacks.editable(client, project, path);
+          return (
+            project: found.project,
+            socketPath: route.socketPath,
+            failure: found.failure,
+          );
+        });
+      } on Object {
+        // No endpoint, or the list failed: nothing to edit against.
+        return (
+          project: null,
+          socketPath: null,
+          failure: StackFileFailure.readFailed,
+        );
+      }
+    };
+  }
 
   // A user-initiated step on a link at its learned session limit borrows
   // the slow sampler's session for the while; the fast sampler samples on
@@ -566,6 +604,11 @@ void engineMain(
       opsRead: (serverId, section) =>
           unawaited(operations?.listed(serverId, section)),
     );
+    hostQueries = HostQueries(
+      linkFor: links.link,
+      systemdVersionOf: (serverId) => profiles[serverId]?.systemdVersion,
+      emit: uiPort.send,
+    );
     logs = LogStreamRouter(
       linkFor: links.link,
       emit: uiPort.send,
@@ -603,6 +646,19 @@ void engineMain(
   // Whether the app has had a fleet. Probing waits for it, since the app
   // keeps answers only for servers its fleet lists.
   var fleetSent = false;
+
+  // The synced preferences the app last heard, so a round sends only
+  // what changed.
+  var prefsSent = <String, String>{};
+  Future<void> sendServerPrefs() async {
+    final (changes, sent) = diffServerPrefs(
+      prefsSent,
+      await sync.serverPrefs(),
+    );
+    changes.forEach(uiPort.send);
+    prefsSent = sent;
+  }
+
   void probeFleet() {
     if (!fleetSent) return;
     reachability?.update(probeTargets(fleetEntries(), configOf));
@@ -812,6 +868,7 @@ void engineMain(
       }
       if (status.phase == SyncPhase.succeeded) {
         uiPort.send(CatalogReplaced(fleetEntries()));
+        await sendServerPrefs();
       }
       uiPort.send(status);
     });
@@ -845,6 +902,7 @@ void engineMain(
         // anything.
         uiPort.send(CatalogReplaced(fleetEntries()));
         fleetSent = true;
+        await sendServerPrefs();
         probeFleet();
       case Connect(:final serverId):
         sendCachedProfile(serverId);
@@ -969,6 +1027,23 @@ void engineMain(
         }
       case DockerUnwatch():
         docker?.unwatch(message);
+      case HostQuery(:final serverId):
+        switch (hostQueries) {
+          case null:
+            reject(message, 'links are off in this engine');
+          case _ when !fleetIds.contains(serverId):
+            reject(message, 'no fleet server $serverId');
+          case final queries:
+            // Not awaited: the queue keeps serving while the host answers.
+            unawaited(queries.query(message));
+        }
+      case RedactLines(:final requestId, :final lines):
+        uiPort.send(
+          RedactedLines(
+            requestId,
+            lines.map(_exportRedactor.redact).join('\n'),
+          ),
+        );
       case OpenTerminal():
         switch (terminals) {
           case null:
@@ -1205,7 +1280,7 @@ void engineMain(
                 link: link,
                 profile: profile,
                 admin: admin?.session(serverId),
-              )),
+              ), stacks: stackEditLookup(serverId)),
             );
         }
         // Not awaited: planning reads over the link, and the queue keeps
@@ -1250,7 +1325,7 @@ void engineMain(
               link: link,
               profile: profile,
               admin: admin?.session(serverId),
-            )),
+            ), stacks: stackEditLookup(serverId)),
           ).then(
             answer,
             onError: (Object error) => answer(
@@ -1313,6 +1388,33 @@ void engineMain(
               session: session,
               profile: profiles[serverId],
               now: DateTime.now().toUtc(),
+            ),
+          ).then(uiPort.send),
+        );
+      case UnitQuery(:final serverId, :final requestId, :final query):
+        final link = links?.link(serverId);
+        final profile = profiles[serverId];
+        if (!fleetIds.contains(serverId) || link == null || profile == null) {
+          uiPort.send(
+            UnitQueryResult(
+              serverId: serverId,
+              requestId: requestId,
+              payload: const UnitQueryFailed(UnitQueryFailure.noLink),
+            ),
+          );
+          return;
+        }
+        // Not awaited, as the other reads: runUnitQuery answers rather
+        // than throws.
+        unawaited(
+          lendSession(
+            serverId,
+            () => runUnitQuery(
+              serverId,
+              requestId,
+              query,
+              link: link,
+              profile: profile,
             ),
           ).then(uiPort.send),
         );

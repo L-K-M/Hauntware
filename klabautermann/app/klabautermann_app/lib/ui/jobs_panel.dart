@@ -279,8 +279,9 @@ class _JobsPanelState extends State<JobsPanel> {
 
   /// JOB-19's output sheet for the cron run [planId].
   void _showCronOutput(String planId, ActionPreview preview) {
+    if (!mounted) return;
     final operations = OperationsScope.maybeOf(context);
-    if (!mounted || operations == null) return;
+    if (operations == null) return;
     unawaited(
       showCronRunOutput(
         context,

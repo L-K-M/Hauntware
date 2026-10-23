@@ -9,6 +9,14 @@ enum OperationKind {
   stop(ConfirmationTier.acknowledge),
   restart(ConfirmationTier.acknowledge),
   reload(ConfirmationTier.acknowledge),
+
+  /// SVC-05 and SVC-06: a protected unit's raises to the typed
+  /// confirmation, as for every verb.
+  enable(ConfirmationTier.acknowledge),
+  disable(ConfirmationTier.acknowledge),
+  mask(ConfirmationTier.acknowledge),
+  unmask(ConfirmationTier.acknowledge),
+  resetFailed(ConfirmationTier.acknowledge),
   pause(ConfirmationTier.acknowledge),
   unpause(ConfirmationTier.acknowledge),
   kill(ConfirmationTier.acknowledge),

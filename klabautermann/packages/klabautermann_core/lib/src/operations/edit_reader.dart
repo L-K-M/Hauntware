@@ -18,6 +18,7 @@ import 'package:seance_core/seance_core.dart'
 
 import '../admin/admin_mode.dart' show AdminSession;
 import '../engine/protocol.dart';
+import 'stack_edits.dart';
 
 /// What an edit's read and plan see of one server: its ready link, its
 /// probe, and admin mode's session, null while admin mode is off.
@@ -32,12 +33,24 @@ typedef EditContext = ({
 /// header line.
 const int kEditReadCap = 240 * 1024;
 
-/// Reads [target] for an edit; never throws.
-Future<EditReadResult> readEditable(EditTarget target, EditContext c) async {
+/// Reads [target] for an edit; never throws. A [StackFileTarget] is
+/// looked up through [stacks] first, and is read only when it is a
+/// verified project's file (STK-07).
+Future<EditReadResult> readEditable(
+  EditTarget target,
+  EditContext c, {
+  StackEditLookup? stacks,
+}) async {
   try {
     return switch (target) {
       FileTarget(:final path) => await _readFile(path, c),
       CrontabTarget(:final user) => await _readCrontab(user, c),
+      StackFileTarget(:final project, :final path) => await _readStackFile(
+        project,
+        path,
+        c,
+        stacks,
+      ),
     };
   } on HostCommandError {
     return const EditReadFailed(EditReadFailure.invalidTarget);
@@ -87,6 +100,25 @@ Future<EditReadResult> _readFile(String path, EditContext c) async {
     gid: header.gid,
     mode: header.mode,
   );
+}
+
+Future<EditReadResult> _readStackFile(
+  String project,
+  String path,
+  EditContext c,
+  StackEditLookup? stacks,
+) async {
+  if (stacks == null) {
+    return const EditReadFailed(
+      EditReadFailure.failed,
+      detail: 'no Docker endpoint',
+    );
+  }
+  final source = await stacks(project, path);
+  if (source.failure case final failure?) {
+    return EditReadFailed(stackReadFailure(failure));
+  }
+  return _readFile(path, c);
 }
 
 Future<EditReadResult> _readCrontab(String? user, EditContext c) async {

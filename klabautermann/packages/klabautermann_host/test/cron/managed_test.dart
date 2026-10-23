@@ -34,6 +34,17 @@ void main() {
     ]);
   });
 
+  test("a paused line is the app's own, whatever its held command "
+      'names', () {
+    expect(
+      crontabOwners([
+        '${kCrontabPauseMarker}2026-10-21T03:00:00Z 0 3 * * * dokku logs app',
+        '0 4 * * * /usr/local/bin/mine',
+      ]),
+      [null, null],
+    );
+  });
+
   test("the dokku account's crontab and a manager's cron.d file are "
       'wholly its', () {
     expect(

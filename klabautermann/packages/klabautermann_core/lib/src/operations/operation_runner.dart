@@ -34,33 +34,31 @@ typedef ApiStepRunner = Future<int> Function(String serverId, ApiStep step);
 /// redacted output. A [DockerApiException] it throws, the daemon's
 /// refusal, fails the step; any other [DockerException] or a
 /// [DockerEndpointUnavailable] ends the run as a transport failure.
-typedef ExecStepRunner = Future<({int? exitCode, ExecOutput output})> Function(
-  String serverId,
-  ExecStep step,
-);
+typedef ExecStepRunner =
+    Future<({int? exitCode, ExecOutput output})> Function(
+      String serverId,
+      ExecStep step,
+    );
 
 /// Checks a [DockerTargetUnchanged] or a [StackConfigUnchanged] on
 /// [serverId] through its Docker endpoint: null when unchanged.
-typedef DockerRevalidator = Future<RevalidationFailure?> Function(
-  String serverId,
-  Revalidation check,
-);
+typedef DockerRevalidator =
+    Future<RevalidationFailure?> Function(String serverId, Revalidation check);
 
 /// Launches a detached [plan] on [serverId] as its runner row says,
 /// through [session]'s elevation where the row needs it (03 §7.17).
-typedef DetachedLauncher = Future<LaunchResult> Function(
-  String serverId,
-  OperationPlan plan,
-  AdminSession? session,
-);
+typedef DetachedLauncher =
+    Future<LaunchResult> Function(
+      String serverId,
+      OperationPlan plan,
+      AdminSession? session,
+    );
 
 /// Runs [body], a user-initiated step's work on [serverId]'s link, with a
 /// session channel free for it: on a link at its learned session limit,
 /// the slow sampler lends its own for the while (M4 plan M6).
-typedef SessionLender = Future<T> Function<T>(
-  String serverId,
-  Future<T> Function() body,
-);
+typedef SessionLender =
+    Future<T> Function<T>(String serverId, Future<T> Function() body);
 
 /// What became of one run, for the audit log (8.10, E12b).
 typedef OperationResult = ({
@@ -283,7 +281,9 @@ final class OperationRunner {
     } on DockerEndpointUnavailable {
       return failed(ActionFailure.transport);
     } on ChannelOpenException {
-      // The link refused the channel, at its session limit or closing.
+      // The link refused the channel, at its session limit or closing. A
+      // later channel may still open, so the cleanup is tried.
+      await _cleanUp(link, plan, session);
       return failed(ActionFailure.transport);
     }
     return ActionFinished(
@@ -331,8 +331,11 @@ final class OperationRunner {
     Revalidation check,
   ) async {
     switch (check) {
-      case UnitLoaded(:final unit):
-        final result = await _read(link, HostCommands.unitLoadState(unit));
+      case UnitLoaded(:final unit, :final manager):
+        final result = await _read(
+          link,
+          HostCommands.unitLoadState(unit, manager: manager),
+        );
         if (result.exitCode != 0) return RevalidationFailure.unreadable;
         return result.stdout.trim() == 'loaded'
             ? null
@@ -372,16 +375,23 @@ final _redactor = SecretRedactor();
 
 /// A captured step's output as [ActionFinished.output] carries it (JOB-19):
 /// redacted as the audit log redacts, and at most [kExecOutputMax]
-/// characters in all, stdout first.
+/// characters in all, stdout first. Redaction comes first: a secret the
+/// cap cut would no longer match its pattern and leave a fragment.
 ExecOutput capturedOutput(String stdout, String stderr) {
-  final keptOut = stdout.length > kExecOutputMax
-      ? stdout.substring(0, kExecOutputMax)
-      : stdout;
+  final redactedOut = _redactor.redact(stdout);
+  final redactedErr = _redactor.redact(stderr);
+  final keptOut = redactedOut.length > kExecOutputMax
+      ? redactedOut.substring(0, kExecOutputMax)
+      : redactedOut;
   final room = kExecOutputMax - keptOut.length;
-  final keptErr = stderr.length > room ? stderr.substring(0, room) : stderr;
+  final keptErr = redactedErr.length > room
+      ? redactedErr.substring(0, room)
+      : redactedErr;
   return ExecOutput(
-    stdout: _redactor.redact(keptOut),
-    stderr: _redactor.redact(keptErr),
-    truncated: keptOut.length < stdout.length || keptErr.length < stderr.length,
+    stdout: keptOut,
+    stderr: keptErr,
+    truncated:
+        keptOut.length < redactedOut.length ||
+        keptErr.length < redactedErr.length,
   );
 }

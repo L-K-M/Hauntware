@@ -60,12 +60,12 @@ class CronRunOutput extends StatelessWidget {
     );
     final (status, output) = switch (state) {
       RunFinished(:final finished) => (
-        switch ((finished.outcome, finished.failure)) {
-          (ActionOutcome.succeeded, _) => l10n.jobsCronRunSucceeded,
-          (_, ActionFailure.stepFailed) => l10n.jobsCronRunExited(
-            finished.exitCode ?? -1,
+        switch ((finished.outcome, finished.failure, finished.exitCode)) {
+          (ActionOutcome.succeeded, _, _) => l10n.jobsCronRunSucceeded,
+          (_, ActionFailure.stepFailed, final code?) => l10n.jobsCronRunExited(
+            code,
           ),
-          (_, final failure) => l10n.actionFailed(
+          (_, final failure, _) => l10n.actionFailed(
             title,
             (failure ?? ActionFailure.stepFailed).name,
           ),

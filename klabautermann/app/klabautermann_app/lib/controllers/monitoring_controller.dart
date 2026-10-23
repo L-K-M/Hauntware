@@ -181,6 +181,18 @@ final class MonitoringController extends ChangeNotifier {
 
   final Map<String, _ServerReadings> _readings = {};
 
+  /// The host queries waiting for their answers, by query id.
+  final Map<String, (String, Completer<HostResult>)> _hostQueries = {};
+  int _nextHostQuery = 0;
+
+  /// Unit reads waiting on the engine, by request id.
+  final Map<String, (String, Completer<UnitQueryResult>)> _unitQueries = {};
+  int _nextUnitQuery = 0;
+
+  /// The [redactLines] requests waiting for the engine, by request id.
+  final Map<String, Completer<String?>> _redactions = {};
+  int _nextRedaction = 0;
+
   /// The refreshes waiting for their readings.
   final Set<_PendingRefresh> _refreshes = {};
 
@@ -340,6 +352,35 @@ final class MonitoringController extends ChangeNotifier {
     _send(Unsubscribe(serverId: serverId, subscriptionId: subscriptionId));
   }
 
+  /// Reads [query] on [serverId]: the files under `/var/log` or the
+  /// journal's boots (LOG-08, LOG-09). A stopped engine answers no link.
+  Future<HostResult> queryHost(String serverId, HostQuerySpec query) {
+    final queryId = 'host-${_nextHostQuery++}';
+    if (_engineStopped) return Future.value(_noHostLink(serverId, queryId));
+    final answer = Completer<HostResult>();
+    _hostQueries[queryId] = (serverId, answer);
+    _send(HostQuery(serverId: serverId, queryId: queryId, query: query));
+    return answer.future;
+  }
+
+  /// [lines] joined by newlines, through the engine's secret redactor
+  /// (LOG-10, 03 §8.9), which the app cannot import; null when the engine
+  /// has stopped, so nothing is exported unredacted by accident.
+  Future<String?> redactLines(List<String> lines) {
+    if (_engineStopped) return Future.value();
+    final requestId = 'redact-${_nextRedaction++}';
+    final answer = Completer<String?>();
+    _redactions[requestId] = answer;
+    _send(RedactLines(requestId, lines));
+    return answer.future;
+  }
+
+  static HostResult _noHostLink(String serverId, String queryId) => HostResult(
+    serverId: serverId,
+    queryId: queryId,
+    payload: const HostQueryFailed(HostQueryFailure.noLink),
+  );
+
   /// Asks the engine to read the streams of [serverId]'s subscription
   /// [subscriptionId] at once (PLT-02's pull to refresh). Completes once
   /// each has a newer sample, failed readings included, once the server
@@ -407,6 +448,25 @@ final class MonitoringController extends ChangeNotifier {
   /// returned [LogRead] reports its records and state; the caller closes
   /// it once it no longer shows it.
   LogRead openLogRead(LogStreamSpec spec) => LogRead(logs, spec);
+
+  /// Reads [query] on [serverId]: a unit's file, its resources or the
+  /// sockets (03 §7.5, SVC-07, SVC-08, SVC-10). A stopped engine answers
+  /// no link.
+  Future<UnitQueryResult> queryUnit(String serverId, UnitQuerySpec query) {
+    final requestId = 'unit-${_nextUnitQuery++}';
+    if (_engineStopped) return Future.value(_noUnitLink(serverId, requestId));
+    final answer = Completer<UnitQueryResult>();
+    _unitQueries[requestId] = (serverId, answer);
+    _send(UnitQuery(serverId: serverId, requestId: requestId, query: query));
+    return answer.future;
+  }
+
+  static UnitQueryResult _noUnitLink(String serverId, String requestId) =>
+      UnitQueryResult(
+        serverId: serverId,
+        requestId: requestId,
+        payload: const UnitQueryFailed(UnitQueryFailure.noLink),
+      );
 
   /// A view of [serverId] opened (the desktop workspace, the phone's pushed
   /// screen). The first sends [Connect]; within the grace after the last
@@ -535,6 +595,10 @@ final class MonitoringController extends ChangeNotifier {
 
   void _onEngineEvent(EngineEvent event) {
     switch (event) {
+      case HostResult(:final queryId):
+        _hostQueries.remove(queryId)?.$2.complete(event);
+      case RedactedLines(:final requestId, :final text):
+        _redactions.remove(requestId)?.complete(text);
       case Sample(:final serverId):
         // One still in flight when its server left the fleet would bring
         // back what the purge dropped.
@@ -592,6 +656,8 @@ final class MonitoringController extends ChangeNotifier {
         // As for a sample: a server that left the fleet stays purged.
         if (_fleetIds case final ids? when !ids.contains(serverId)) return;
         _server(serverId).gap(event);
+      case UnitQueryResult(:final requestId):
+        _unitQueries.remove(requestId)?.$2.complete(event);
       case EngineEvent():
         break;
     }
@@ -641,6 +707,20 @@ final class MonitoringController extends ChangeNotifier {
 
   void _onEngineDone() {
     _engineStopped = true;
+    for (final MapEntry(key: queryId, value: (serverId, answer))
+        in _hostQueries.entries) {
+      answer.complete(_noHostLink(serverId, queryId));
+    }
+    _hostQueries.clear();
+    for (final MapEntry(key: requestId, value: (serverId, answer))
+        in _unitQueries.entries) {
+      answer.complete(_noUnitLink(serverId, requestId));
+    }
+    _unitQueries.clear();
+    for (final answer in _redactions.values) {
+      answer.complete(null);
+    }
+    _redactions.clear();
     for (final timer in _leaving.values) {
       timer.cancel();
     }
