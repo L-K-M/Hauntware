@@ -6,6 +6,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
+import 'log_export.dart';
 import 'log_level.dart';
 import 'log_query.dart';
 import 'log_search.dart';
@@ -333,6 +334,14 @@ class _LogsPanelState extends State<LogsPanel> {
             label: Text(_bootLabel(l10n, query)),
           ),
         LogLiveChip(panel: _panel),
+        ListenableBuilder(
+          listenable: _panel.logs,
+          builder: (context, _) => IconButton(
+            tooltip: l10n.logsExport,
+            icon: const Icon(Icons.ios_share),
+            onPressed: _panel.logs.length == 0 ? null : _export,
+          ),
+        ),
         if (!compact)
           SizedBox(
             width: MediaQuery.textScalerOf(context).scale(_fieldWidth * 2.25),
@@ -448,6 +457,20 @@ class _LogsPanelState extends State<LogsPanel> {
     );
     if (!mounted || picked == null) return;
     _panel.apply(_panel.query.withBoot(picked.past, current: picked.current));
+  }
+
+  /// LOG-10: the held lines, redacted unless the user says otherwise.
+  Future<void> _export() {
+    final l10n = AppLocalizations.of(context);
+    final lines = logExportLines(_panel.logs, dropped: l10n.logDroppedLines);
+    return _sheet<void>(
+      (sheetContext) => LogExportSheet(
+        monitoring: widget.monitoring,
+        host: LogExportScope.of(context),
+        lines: lines,
+        fileName: l10n.logsExportFileName(_panel.query.source.name),
+      ),
+    );
   }
 
   Future<void> _editFilters() => _sheet<void>(

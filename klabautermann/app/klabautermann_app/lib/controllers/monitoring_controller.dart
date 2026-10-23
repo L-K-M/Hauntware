@@ -183,6 +183,10 @@ final class MonitoringController extends ChangeNotifier {
   final Map<String, (String, Completer<UnitQueryResult>)> _unitQueries = {};
   int _nextUnitQuery = 0;
 
+  /// The [redactLines] requests waiting for the engine, by request id.
+  final Map<String, Completer<String?>> _redactions = {};
+  int _nextRedaction = 0;
+
   /// The refreshes waiting for their readings.
   final Set<_PendingRefresh> _refreshes = {};
 
@@ -350,6 +354,18 @@ final class MonitoringController extends ChangeNotifier {
     final answer = Completer<HostResult>();
     _hostQueries[queryId] = (serverId, answer);
     _send(HostQuery(serverId: serverId, queryId: queryId, query: query));
+    return answer.future;
+  }
+
+  /// [lines] joined by newlines, through the engine's secret redactor
+  /// (LOG-10, 03 §8.9), which the app cannot import; null when the engine
+  /// has stopped, so nothing is exported unredacted by accident.
+  Future<String?> redactLines(List<String> lines) {
+    if (_engineStopped) return Future.value();
+    final requestId = 'redact-${_nextRedaction++}';
+    final answer = Completer<String?>();
+    _redactions[requestId] = answer;
+    _send(RedactLines(requestId, lines));
     return answer.future;
   }
 
@@ -575,6 +591,8 @@ final class MonitoringController extends ChangeNotifier {
     switch (event) {
       case HostResult(:final queryId):
         _hostQueries.remove(queryId)?.$2.complete(event);
+      case RedactedLines(:final requestId, :final text):
+        _redactions.remove(requestId)?.complete(text);
       case Sample(:final serverId):
         // One still in flight when its server left the fleet would bring
         // back what the purge dropped.
@@ -693,6 +711,10 @@ final class MonitoringController extends ChangeNotifier {
       answer.complete(_noUnitLink(serverId, requestId));
     }
     _unitQueries.clear();
+    for (final answer in _redactions.values) {
+      answer.complete(null);
+    }
+    _redactions.clear();
     for (final timer in _leaving.values) {
       timer.cancel();
     }

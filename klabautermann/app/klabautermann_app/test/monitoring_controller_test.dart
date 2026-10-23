@@ -1213,4 +1213,35 @@ void main() {
       );
     });
   });
+
+  group('export redaction (LOG-10)', () {
+    test('each request is answered by its own redacted text', () async {
+      final first = monitoring.redactLines(['a', 'b']);
+      final second = monitoring.redactLines(['c']);
+      final sent = engine
+          .sentOfType<RedactLines>()
+          .cast<RedactLines>()
+          .toList();
+      expect(sent.map((r) => r.lines), [
+        ['a', 'b'],
+        ['c'],
+      ]);
+      expect(sent[0].requestId, isNot(sent[1].requestId));
+
+      engine
+        ..emit(RedactedLines(sent[1].requestId, 'C'))
+        ..emit(RedactedLines(sent[0].requestId, 'A\nB'));
+      expect(await first, 'A\nB');
+      expect(await second, 'C');
+    });
+
+    test('a stopped engine redacts nothing, and so does one that stops '
+        'before answering', () async {
+      final waiting = monitoring.redactLines(['token=abc']);
+      await engine.close();
+      await settle();
+      expect(await waiting, isNull);
+      expect(await monitoring.redactLines(['token=abc']), isNull);
+    });
+  });
 }

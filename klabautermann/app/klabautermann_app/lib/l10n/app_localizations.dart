@@ -2740,6 +2740,66 @@ abstract class AppLocalizations {
   /// **'Your account cannot read it; admin mode can'**
   String get logsPanelFileUnreadable;
 
+  /// Tooltip of the Logs panel's button that exports the lines it holds (LOG-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Export'**
+  String get logsExport;
+
+  /// Title of the log export sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Export 1 line} other{Export {count} lines}}'**
+  String logsExportTitle(int count);
+
+  /// Switch in the log export sheet that turns off redaction.
+  ///
+  /// In en, this message translates to:
+  /// **'Include secrets'**
+  String get logsExportIncludeSecrets;
+
+  /// Under the Include secrets switch while it is off.
+  ///
+  /// In en, this message translates to:
+  /// **'Passwords, tokens and keys are replaced before the lines leave the app.'**
+  String get logsExportSecretsRedacted;
+
+  /// Under the Include secrets switch while it is on.
+  ///
+  /// In en, this message translates to:
+  /// **'The lines leave the app as they are, secrets included.'**
+  String get logsExportSecretsIncluded;
+
+  /// A button in the log export sheet: copy to the clipboard, save to a file, or open the share sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{target, select, copy{Copy} save{Save…} other{Share…}}'**
+  String logsExportAction(String target);
+
+  /// Toast after the log export copied or saved the lines.
+  ///
+  /// In en, this message translates to:
+  /// **'{target, select, copy{Copied the lines.} other{Saved the lines.}}'**
+  String logsExportDone(String target);
+
+  /// Toast when the log export failed.
+  ///
+  /// In en, this message translates to:
+  /// **'{target, select, copy{The lines could not be copied.} save{The lines could not be saved.} other{The lines could not be shared.}}'**
+  String logsExportFailed(String target);
+
+  /// Toast when the engine could not redact the lines; the export never falls back to the unredacted text.
+  ///
+  /// In en, this message translates to:
+  /// **'The lines could not be redacted, so nothing was exported.'**
+  String get logsExportNotRedacted;
+
+  /// The suggested file name for a saved log export. Keep it a valid file name.
+  ///
+  /// In en, this message translates to:
+  /// **'{source, select, journal{journal} kernel{kernel} other{log}}.log'**
+  String logsExportFileName(String source);
+
   /// Button that reads the log again with the filters or path entered.
   ///
   /// In en, this message translates to:
