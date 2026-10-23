@@ -3,14 +3,20 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:ghost_servers/ghost_servers.dart'
     show
+        GhostCredentialRequest,
+        GhostCredentialStrings,
         GhostHostKeyPrompt,
         GhostHostKeyStrings,
         GhostKeyboardInteractiveStrings,
+        GhostKeyField,
         GhostKeyboardPrompt,
+        GhostPasswordReply,
+        showGhostCredentialDialog,
         showGhostHostKeyDialog,
         showGhostKeyboardInteractiveDialog;
 import 'package:klabautermann_core/klabautermann_core.dart'
     show
+        AuthMethod,
         CredentialPromptRequest,
         ElevationPromptRequest,
         HostKeyPromptRequest,
@@ -40,9 +46,9 @@ import 'elevation_dialog.dart';
 ///   on Cancel.
 /// - Admin mode's sudo password (SAF-02) is answered with
 ///   [PromptSecretAnswer], null on Cancel.
-/// - Credential prompts have no dialog yet, and no producer in the
-///   engine; one is dismissed with `PromptSecretAnswer(null)` rather than
-///   left to expire.
+/// - A login password the vault lacks (03 §4.5) is answered with
+///   [PromptSecretAnswer], null on Cancel, whose `save` keeps it in the
+///   vault when the prompt offered that and the user ticked it.
 ///
 /// A prompt the engine withdraws closes its dialog without an answer. Each
 /// dialog is keyed, so only its own route goes, even under another route.
@@ -50,9 +56,18 @@ import 'elevation_dialog.dart';
 /// sends nothing for a prompt no longer open, which it checks once the
 /// dialog's await has returned.
 class PromptHost extends StatefulWidget {
-  const PromptHost({super.key, required this.prompts, required this.child});
+  const PromptHost({
+    super.key,
+    required this.prompts,
+    this.labelOf,
+    required this.child,
+  });
 
   final PromptController prompts;
+
+  /// A fleet server's name, which the password prompt's title shows; the
+  /// prompt's host stands in without it.
+  final String Function(String serverId)? labelOf;
   final Widget child;
 
   @override
@@ -191,9 +206,38 @@ class _PromptHostState extends State<PromptHost> {
           }),
         );
         return true;
-      case CredentialPromptRequest():
-        widget.prompts.answer(prompt.promptId, const PromptSecretAnswer(null));
-        return false;
+      case final CredentialPromptRequest request:
+        unawaited(
+          _ask(prompt, const PromptSecretAnswer(null), (dialogKey) async {
+            final reply = await showGhostCredentialDialog(
+              context,
+              GhostCredentialRequest(
+                authMethod: AuthMethod.password,
+                endpointLabel:
+                    widget.labelOf?.call(prompt.serverId) ??
+                    _endpointHost(prompt.host),
+                keyField: GhostKeyField.passphraseOnly,
+                username: request.user,
+                host: prompt.host,
+                port: prompt.port,
+                offerVaultSave: request.canSave,
+              ),
+              strings: _credentialStrings(l10n, canSave: request.canSave),
+              monoStyle: _monoStyle,
+              dialogKey: dialogKey,
+            );
+            return switch (reply) {
+              // Kept only when the engine offered to keep it.
+              GhostPasswordReply(:final password, :final saveToVault) =>
+                PromptSecretAnswer(
+                  password,
+                  save: request.canSave && saveToVault,
+                ),
+              _ => const PromptSecretAnswer(null),
+            };
+          }),
+        );
+        return true;
     }
   }
 
@@ -295,6 +339,24 @@ GhostKeyboardInteractiveStrings _keyboardStrings(AppLocalizations l10n) =>
       cancel: l10n.keyboardCancel,
       submit: l10n.keyboardSubmit,
     );
+
+/// The login password dialog's words in ARB. Only the password form of
+/// `ghost_servers`' dialog shows, so the key fields keep their defaults;
+/// the line about saving shows only where the prompt offers to save.
+GhostCredentialStrings _credentialStrings(
+  AppLocalizations l10n, {
+  required bool canSave,
+}) => GhostCredentialStrings(
+  passwordTitle: l10n.credentialTitle,
+  explanation: canSave ? l10n.credentialExplanation : null,
+  endpoint: (user, host, port) => user == null
+      ? l10n.promptEndpoint(_endpointHost(host), port)
+      : l10n.promptEndpointWithUser(user, _endpointHost(host), port),
+  passwordField: l10n.credentialPassword,
+  saveInVault: l10n.credentialSaveInVault,
+  cancel: l10n.credentialCancel,
+  connect: l10n.credentialConnect,
+);
 
 /// The host as the host-key review's endpoint line shows it: a bare IPv6
 /// address gains brackets, so its colons cannot be read as the port's, as

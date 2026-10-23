@@ -26,7 +26,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:klabautermann_docker/klabautermann_docker.dart';
-import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
+import 'package:klabautermann_host/klabautermann_host.dart'
+    show HostCommandError, HostCommands, StackScanCommands;
 import 'package:seance_core/seance_core.dart'
     show
         ChannelOpenException,
@@ -195,12 +196,7 @@ final class StackSources {
     String project,
     String path,
   ) async {
-    final list = await client.listContainers(
-      filters: {
-        'label': ['${ComposeLabelKeys.project}=$project'],
-      },
-    );
-    final found = groupComposeProjects(list.value).project(project);
+    final found = await _listed(client, project);
     if (found == null) {
       return const DockerStackFileFailed(StackFileFailure.unknownStack);
     }
@@ -212,6 +208,103 @@ final class StackSources {
       return const DockerStackFileFailed(StackFileFailure.notVerified);
     }
     return _read(project, path, kind);
+  }
+
+  /// [project] as its containers list it now, when [path] is one of its
+  /// files and its source is verified: what an edit of [path] reads and
+  /// plans against (STK-07). Otherwise why not.
+  Future<({ComposeProject? project, StackFileFailure? failure})> editable(
+    DockerClient client,
+    String project,
+    String path,
+  ) async {
+    final found = await _listed(client, project);
+    if (found == null) {
+      return (project: null, failure: StackFileFailure.unknownStack);
+    }
+    if (_fileKind(found, path) == null) {
+      return (project: null, failure: StackFileFailure.notStackFile);
+    }
+    if (await verdict(found) is! StackVerified) {
+      return (project: null, failure: StackFileFailure.notVerified);
+    }
+    return (project: found, failure: null);
+  }
+
+  /// The profiles a verified [project]'s files name (STK-09):
+  /// `config --profiles`, whose output is names only.
+  Future<DockerPayload> profiles(DockerClient client, String project) async {
+    final found = await _listed(client, project);
+    if (found == null) {
+      return const DockerStackFileFailed(StackFileFailure.unknownStack);
+    }
+    if (await verdict(found) is! StackVerified) {
+      return const DockerStackFileFailed(StackFileFailure.notVerified);
+    }
+    final ComposeInvocation invocation;
+    try {
+      invocation = composeConfig(
+        socketPath: _socketPath,
+        project: found.name,
+        projectDirectory: found.workingDir,
+        configFiles: found.configFiles,
+        envFiles: found.environmentFiles,
+        listProfiles: true,
+      );
+    } on ArgumentError {
+      return const DockerStackFileFailed(StackFileFailure.notVerified);
+    }
+    final result = await _command(invocation.argv);
+    if (result == null) {
+      return const DockerQueryFailed(DockerQueryFailure.connectionFailed);
+    }
+    // Profile names follow the service-name rule (compose-spec).
+    final names = result.succeeded && !result.truncated
+        ? parseComposeServiceNames(result.stdout)
+        : null;
+    if (names == null) {
+      return const DockerQueryFailed(
+        DockerQueryFailure.daemonError,
+        detail: 'compose config --profiles failed',
+      );
+    }
+    return DockerStackProfilesPayload(
+      project: found.name,
+      profiles: names.toList()..sort(),
+    );
+  }
+
+  /// The compose files in [directories] and the folders below them
+  /// (STK-08), as the login user: a folder it cannot read leaves the
+  /// list [DockerStackScanPayload.incomplete].
+  Future<DockerPayload> scan(List<String> directories) async {
+    final List<String> argv;
+    try {
+      argv = StackScanCommands.find(directories);
+    } on HostCommandError catch (e) {
+      return DockerQueryFailed(
+        DockerQueryFailure.invalidQuery,
+        detail: e.reason,
+      );
+    }
+    final result = await _command(argv);
+    if (result == null) {
+      return const DockerQueryFailed(DockerQueryFailure.connectionFailed);
+    }
+    return DockerStackScanPayload(
+      StackScanCommands.parse(result.stdout, directories),
+      incomplete: !result.succeeded || result.truncated,
+    );
+  }
+
+  /// [project] as its containers list it now; null when none does.
+  Future<ComposeProject?> _listed(DockerClient client, String project) async {
+    final list = await client.listContainers(
+      filters: {
+        'label': ['${ComposeLabelKeys.project}=$project'],
+      },
+    );
+    return groupComposeProjects(list.value).project(project);
   }
 
   // -- redeploy (STK-06) ----------------------------------------------

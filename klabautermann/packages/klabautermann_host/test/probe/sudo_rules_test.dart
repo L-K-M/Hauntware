@@ -150,6 +150,19 @@ void main() {
     expect(allows(r'!/usr/bin/systemd-run\*'), isTrue);
     // A bracket that never closes is a literal `[`.
     expect(allows('!/usr/bin/systemd-run[*'), isTrue);
+    // A reversed range is empty, as fnmatch(3) reads it, not an error;
+    // the set's other members still match.
+    expect(allows('!/usr/bin/[z-a]*'), isTrue);
+    expect(allows('!/usr/bin/[z-as]ystemd-run'), isFalse);
+    // A `-` first or last in a set is a member.
+    expect(allows('!/usr/bin/systemd[-x]run'), isFalse);
+    expect(allows('!/usr/bin/systemd[x-]run'), isFalse);
+    expect(allows('!/usr/bin/[r-t]ystemd-run'), isFalse);
+    // POSIX classes name their characters; an unknown one matches none.
+    expect(allows('!/usr/bin/[[:alpha:]]*'), isFalse);
+    expect(allows('!/usr/bin/[[:digit:]]*'), isTrue);
+    expect(allows('!/usr/bin/systemd[[:punct:]]run'), isFalse);
+    expect(allows('!/usr/bin/[[:nonsense:]]*'), isTrue);
   });
 
   test('a negated directory denies every program in it', () {
@@ -201,6 +214,23 @@ void main() {
     expect(
       sudoListAllows(
         _listing(['(ALL) ALL, NOPASSWD: !/usr/bin/systemd-run']),
+        'systemd-run',
+      ),
+      isFalse,
+    );
+  });
+
+  test("a command's options such as CWD= read like its tags", () {
+    expect(
+      sudoListAllows(
+        _listing(['(root) CWD=/srv NOPASSWD: /usr/bin/systemd-run']),
+        'systemd-run',
+      ),
+      isTrue,
+    );
+    expect(
+      sudoListAllows(
+        _listing(['(ALL) ALL, CHROOT=/jail TIMEOUT=5m !/usr/bin/systemd-run']),
         'systemd-run',
       ),
       isFalse,

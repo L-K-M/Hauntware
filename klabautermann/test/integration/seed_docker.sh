@@ -25,6 +25,16 @@
 # - stack `managed`, labelled `coolify.managed=true`;
 # - `ssh-port`, publishing port 22, a protected target (03 §8.6).
 #
+# and, for the v1 stack suite (M5 M29), with the same image:
+#
+# - stack `services`, with services `app` and `worker` for per-service
+#   actions, and stack `downable`, which the suite takes down;
+# - stack `override`, deployed from `compose.yaml` and
+#   `compose.override.yaml`, so its labels record two files;
+# - stack `profiled`, whose `debug` service sits behind a profile;
+# - a folder `idle` holding a compose file that never ran, which only a
+#   folder scan finds (STK-08).
+#
 # Only the fixture's registry is pulled from: the engine has no route to
 # any other it may rely on.
 #
@@ -145,6 +155,29 @@ for stack in redeploy orphans managed; do
 done
 # `old` leaves the file once it runs, so its container is an orphan.
 { echo services:; app_service app; } >"$stacks/orphans/compose.yaml"
+mkdir -p "$stacks/services" "$stacks/downable" "$stacks/override" \
+  "$stacks/profiled" "$stacks/idle"
+{ echo services:; app_service app; app_service worker; } \
+  >"$stacks/services/compose.yaml"
+{ echo services:; app_service app; } >"$stacks/downable/compose.yaml"
+{ echo services:; app_service app; } >"$stacks/override/compose.yaml"
+printf 'services:\n  app:\n    labels:\n      klabautermann.fixture: override\n' \
+  >"$stacks/override/compose.override.yaml"
+{
+  echo services:
+  app_service app
+  app_service debug
+  printf '    profiles: ["debug"]\n'
+} >"$stacks/profiled/compose.yaml"
+{ echo services:; app_service app; } >"$stacks/idle/compose.yaml"
+for stack in services downable profiled; do
+  docker compose --project-name "$stack" \
+    --file "$stacks/$stack/compose.yaml" up --detach
+done
+docker compose --project-name override \
+  --file "$stacks/override/compose.yaml" \
+  --file "$stacks/override/compose.override.yaml" up --detach
+
 # Port 22 on dind's own network namespace, which nothing publishes.
 docker run --detach --pull never --name ssh-port --publish 22:22 "$image" \
   sh -c 'while :; do sleep 60; done' >/dev/null

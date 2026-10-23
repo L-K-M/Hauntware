@@ -85,4 +85,76 @@ void main() {
       );
     });
   });
+
+  group('server search and boots (LOG-06, LOG-09)', () {
+    test('serverLogPattern escapes plain text and pins case with (?i) or '
+        '(?-i)', () {
+      expect(
+        serverLogPattern('a.b (c)', regex: false, caseSensitive: false),
+        r'(?i)a\.b \(c\)',
+      );
+      // journalctl would ignore case for an all-lower-case pattern.
+      expect(
+        serverLogPattern('a.b', regex: true, caseSensitive: true),
+        '(?-i)a.b',
+      );
+    });
+
+    final past = JournalBootEntry(offset: -1, id: 'a' * 32);
+
+    test('the journal reads the pattern and the past boot by its ID', () {
+      final query = const LogQuery().withGrep('(?i)oom').withBoot(past);
+      final source = query.toSource(DateTime.utc(2026)) as JournalLogSource;
+      expect(source.grep, '(?i)oom');
+      expect(source.boot, JournalBoot.id('a' * 32));
+      expect(source.currentBootOnly, isFalse);
+      expect(query.followable, isFalse);
+      expect(query.filterCount, 1);
+    });
+
+    test('the kernel log reads the past boot; this boot clears it', () {
+      final kernel = const LogQuery()
+          .withSource(LogSourceKind.kernel)
+          .withBoot(past);
+      expect(
+        (kernel.toSource(DateTime.utc(2026)) as KernelLogSource).boot,
+        JournalBoot.id('a' * 32),
+      );
+
+      final current = kernel.withBoot(null, current: true);
+      expect(current.pastBoot, isNull);
+      expect(current.currentBootOnly, isTrue);
+      expect(current.followable, isTrue);
+      expect(
+        (current.toSource(DateTime.utc(2026)) as KernelLogSource).boot,
+        isNull,
+      );
+    });
+
+    test('no pattern reaches the engine as none', () {
+      final source =
+          const LogQuery().toSource(DateTime.utc(2026)) as JournalLogSource;
+      expect(source.grep, isNull);
+      expect(source.boot, isNull);
+    });
+  });
+
+  group('rotated files (LOG-08)', () {
+    for (final (path, compressed) in [
+      ('/var/log/syslog', false),
+      ('/var/log/syslog.1', false),
+      ('/var/log/syslog.2.gz', true),
+      ('/var/log/journal.xz', true),
+    ]) {
+      test('$path ${compressed ? 'reads as a window' : 'follows'}', () {
+        final query = const LogQuery()
+            .withSource(LogSourceKind.file)
+            .withPath(path);
+        final source = query.toSource(DateTime.utc(2026)) as FileLogSource;
+        expect(source.path, path);
+        expect(source.compressed, compressed);
+        expect(query.followable, !compressed);
+      });
+    }
+  });
 }

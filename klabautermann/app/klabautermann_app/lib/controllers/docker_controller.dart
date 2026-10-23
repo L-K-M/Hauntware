@@ -349,7 +349,24 @@ final class DockerController {
     String serverId, {
     required String project,
     required String path,
-  }) {
+  }) => _ask(serverId, DockerStackFileQuery(project: project, path: path));
+
+  /// The profiles a verified [project]'s files name on [serverId]
+  /// (STK-09): a [DockerStackProfilesPayload], a [DockerStackFileFailed]
+  /// when the project is unknown or unverified, or a [DockerQueryFailed].
+  Future<DockerPayload> readStackProfiles(
+    String serverId, {
+    required String project,
+  }) => _ask(serverId, DockerStackProfilesQuery(project));
+
+  /// The compose files in [folders] on [serverId] and the folders below
+  /// them (STK-08): a [DockerStackScanPayload] or a [DockerQueryFailed].
+  Future<DockerPayload> scanStacks(String serverId, List<String> folders) =>
+      _ask(serverId, DockerStackScanQuery(folders));
+
+  /// Sends [spec] once and completes with the engine's answer, as
+  /// [readStackFile] describes.
+  Future<DockerPayload> _ask(String serverId, DockerQuerySpec spec) {
     if (!_listed(serverId)) {
       return Future.value(
         const DockerQueryFailed(DockerQueryFailure.notInFleet),
@@ -362,13 +379,7 @@ final class DockerController {
     }
 
     final queryId = 'stack-file-${_count++}';
-    _send(
-      DockerQuery(
-        serverId: serverId,
-        queryId: queryId,
-        query: DockerStackFileQuery(project: project, path: path),
-      ),
-    );
+    _send(DockerQuery(serverId: serverId, queryId: queryId, query: spec));
     if (_stopped) {
       return Future.value(
         const DockerQueryFailed(DockerQueryFailure.cancelled),
@@ -1311,11 +1322,11 @@ final class _DockerServer {
   /// The containers details views show, by full id.
   final Map<String, _InspectedContainer> inspected = {};
 
-  /// The stack file reads in flight, by query id, each completed with
-  /// the engine's answer.
+  /// The one-shot stack reads in flight (files, profiles), by query id,
+  /// each completed with the engine's answer.
   final Map<String, Completer<DockerPayload>> fileReads = {};
 
-  /// Answers every stack file read in flight with [failure]: the engine
+  /// Answers every one-shot stack read in flight with [failure]: the engine
   /// will not.
   void endFileReads(DockerQueryFailure failure) {
     for (final read in fileReads.values) {
