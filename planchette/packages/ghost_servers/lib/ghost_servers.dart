@@ -13,4 +13,5 @@ export 'src/credential_dialog.dart';
 export 'src/host_key_dialog.dart';
 export 'src/keyboard_interactive_dialog.dart';
 export 'src/server_grouping.dart';
+export 'src/server_editor/strings.dart';
 export 'src/server_status.dart';

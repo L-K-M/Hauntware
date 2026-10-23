@@ -354,6 +354,25 @@ void main() {
       expect(script.runsUnknown, JobRunsUnknown.anacron);
     });
 
+    test('a paused line lists no runs and drives no directory '
+        '(JOB-07)', () {
+      final jobs = _merge(
+        _cron(
+          crontab:
+              '${kCrontabPauseMarker}2026-06-01T00:00:00Z '
+              '17 * * * * run-parts /etc/cron.hourly',
+          dirs: 'hourly backup',
+        ),
+      );
+      final line = jobs.whereType<CronJobEntry>().single;
+      expect(line.runsUnknown, JobRunsUnknown.paused);
+      expect(line.schedule?.text, '17 * * * *');
+      expect(line.nextRuns, isEmpty);
+      final script = jobs.whereType<PeriodicJobEntry>().single;
+      expect(script.driverIds, isEmpty);
+      expect(script.runsUnknown, JobRunsUnknown.noDriver);
+    });
+
     test('without anacron installed a guarded line runs the directory', () {
       final jobs = _merge(_cron(etc: debianEtc, dirs: 'daily apt-compat'));
       final script = jobs.whereType<PeriodicJobEntry>().single;

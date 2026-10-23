@@ -14,6 +14,17 @@
   path. Up to 16 links wait behind the one under review, and the review
   says how many more were ignored. Android, iOS and macOS open these
   links in Séance; Linux and Windows follow in a later release.
+- A double-click in the Files pane opens its row even while the machine
+  is busy. The pane timed the two presses against the wall clock as it
+  handled them, so a stalled moment in between lost the double-click and
+  left you with two single clicks; it now times the presses themselves.
+- Text printed after Claude Code exits is no longer underlined. The
+  terminal read keyboard-mode requests and other sequences it does not
+  support as text styles, scrolling or cursor moves; it now ignores them.
+- On macOS and iPadOS, Cmd-clicking a link in the terminal opens it
+  even while tmux or a full-screen program reports mouse clicks. Before,
+  such a program received every click, so links there showed no hand
+  cursor and Cmd-click did nothing.
 - Séance recognises the settings Klabautermann will sync to the same
   account and leaves them alone: it never applies, rewrites or deletes
   them, and names one as a "Klabautermann setting" if the server ever

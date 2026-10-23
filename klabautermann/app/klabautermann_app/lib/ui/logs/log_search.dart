@@ -13,8 +13,10 @@ import 'log_view_controller.dart';
 typedef LogMatch = ({int seq, int index});
 
 /// Text search over the lines a [LogViewController] holds (LOG-05, 03
-/// §7.6): plain text, ignoring case unless [caseSensitive], with stepping
-/// from match to match. It reads each row's visible text ([logRowText]),
+/// §7.6): plain text, or a regular expression while [regex] is on (LOG-06),
+/// ignoring case unless [caseSensitive], with stepping from match to match.
+/// A pattern that does not compile matches nothing and says so through
+/// [invalidPattern]; a match of no characters is skipped. It reads each row's visible text ([logRowText]),
 /// a container row's time and stream mark included (CTX-02), with
 /// `planchette_core`'s `findSearchMatches` and keeps up as lines arrive
 /// and leave, holding only a count for each matching line; a view asks
@@ -42,6 +44,11 @@ class LogSearch extends ChangeNotifier {
 
   String _query = '';
   bool _caseSensitive = false;
+  bool _regex = false;
+
+  /// [_query] compiled while [_regex] is on, or null when it does not
+  /// compile.
+  RegExp? _pattern;
 
   /// The matching lines, oldest first, and how many matches each holds.
   final _lines = ListQueue<({int seq, int count})>();
@@ -56,6 +63,12 @@ class LogSearch extends ChangeNotifier {
   String get query => _query;
 
   bool get caseSensitive => _caseSensitive;
+
+  /// Whether the query is a regular expression (LOG-06).
+  bool get regex => _regex;
+
+  /// Whether [regex] is on and the query does not compile.
+  bool get invalidPattern => _regex && _query.isNotEmpty && _pattern == null;
 
   /// The matches in the lines held.
   int get total => _total;
@@ -92,9 +105,15 @@ class LogSearch extends ChangeNotifier {
     _searchAll();
   }
 
+  void setRegex(bool regex) {
+    if (regex == _regex) return;
+    _regex = regex;
+    _searchAll();
+  }
+
   /// The matches in [line]'s [logRowText], in order.
   List<TextMatch> matchesIn(LogLine line) {
-    if (_query.isEmpty || _find(line.seq) < 0) return const [];
+    if (!_searching || _find(line.seq) < 0) return const [];
     return _search(_rowText(line));
   }
 
@@ -161,6 +180,7 @@ class LogSearch extends ChangeNotifier {
   }
 
   void _searchAll() {
+    _pattern = _compile();
     _lines.clear();
     _total = 0;
     _current = null;
@@ -190,7 +210,7 @@ class LogSearch extends ChangeNotifier {
     final first = _logs.firstSeq;
     final end = first + _logs.length;
     var found = false;
-    for (; _searchedTo < end && _query.isNotEmpty; _searchedTo++) {
+    for (; _searchedTo < end && _searching; _searchedTo++) {
       final entry = _logs[_searchedTo - first];
       if (entry is! LogLine) continue;
 
@@ -209,11 +229,34 @@ class LogSearch extends ChangeNotifier {
   String _rowText(LogLine line) =>
       logRowText(line, container: _logs.containerOf(line));
 
+  /// Whether a query is set that can match.
+  bool get _searching => _query.isNotEmpty && !invalidPattern;
+
+  RegExp? _compile() {
+    if (!_regex || _query.isEmpty) return null;
+    try {
+      return RegExp(_query, caseSensitive: _caseSensitive, unicode: true);
+    } on FormatException {
+      return null;
+    }
+  }
+
   /// Every match in [text]: the limit is the most a text can hold.
-  List<TextMatch> _search(String text) => findSearchMatches(
-    text,
-    _query,
-    caseSensitive: _caseSensitive,
-    limit: text.length,
-  );
+  List<TextMatch> _search(String text) {
+    if (!_regex) {
+      return findSearchMatches(
+        text,
+        _query,
+        caseSensitive: _caseSensitive,
+        limit: text.length,
+      );
+    }
+    final pattern = _pattern;
+    if (pattern == null) return const [];
+    return [
+      for (final match in pattern.allMatches(text))
+        if (match.end > match.start)
+          TextMatch(start: match.start, end: match.end),
+    ];
+  }
 }
