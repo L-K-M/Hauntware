@@ -5,7 +5,14 @@
 // typed facts.
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_host/klabautermann_host.dart'
-    show CronJob, kGuardedKillFailed, kGuardedKillReused, userCrontabSource;
+    show
+        CronJob,
+        CrontabManager,
+        kCrontabPauseMarker,
+        kGuardedKillFailed,
+        kGuardedKillReused,
+        parseCrontabText,
+        userCrontabSource;
 import 'package:klabautermann_core/src/operations/confirmation.dart'
     show OperationKind;
 import 'package:klabautermann_core/src/operations/operation_plan.dart';
@@ -437,6 +444,28 @@ void main() {
       ]);
       expect(step.display, isNot(contains('hunter2')));
       expect(plan.preview.targetName, isNot(contains('hunter2')));
+    });
+
+    test('a paused line runs its held command, as shown masked with its '
+        'state and manager kept (JOB-07, JOB-09)', () async {
+      const paused =
+          '${kCrontabPauseMarker}2026-10-21T03:00:00Z 0 3 * * * /bin/backup';
+      final shown = maskedCronJobs(
+        parseCrontabText(
+          '# dokku\n$paused\n',
+          source: 'crontab',
+          systemTable: false,
+        ),
+      ).values.single;
+      expect(shown.paused, isTrue);
+      expect(shown.managedBy, CrontabManager.dokku);
+
+      final link = _Link({'crontab': _out('# dokku\n$paused\n')});
+      final attempt = await planHostAction(
+        RunCronJob(_server, source: 'crontab', raw: shown.raw),
+        _context(link),
+      );
+      expect(stepOf(attempt).argv, ['sh', '-c', '/bin/backup']);
     });
 
     test("a line's % text is fed to the command", () async {
