@@ -1,12 +1,15 @@
 // Adapted from Seance app/seance_app/test/server_mark_picker_test.dart @
 // 66411c1; re-diffed at d811309; see docs/PORTS.md. Since 2026-10-08 the
-// picker is ghost_marks' and its suite lives there; this keeps the wrapper
-// opening it in this app's words on the server's accent.
+// picker is ghost_marks' and its suite lives there; this keeps it opening,
+// as the server editor opens it, in this app's words on the server's accent.
+import 'package:ghost_marks/ghost_marks.dart'
+    as marks
+    show showServerMarkPicker;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/ui/server_appearance.dart';
-import 'package:poltergeist_app/ui/server_mark_picker.dart';
+import 'package:poltergeist_app/ui/server_appearance_strings.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 void main() {
@@ -20,10 +23,13 @@ void main() {
         home: Builder(
           builder: (context) => Scaffold(
             body: TextButton(
-              onPressed: () => showServerMarkPicker(
+              onPressed: () => marks.showServerMarkPicker(
                 context,
                 current: const ServerGlyphMark(null),
                 accent: accent,
+                strings: PoltergeistServerAppearanceStrings(
+                  AppLocalizations.of(context),
+                ),
               ),
               child: const Text('open'),
             ),

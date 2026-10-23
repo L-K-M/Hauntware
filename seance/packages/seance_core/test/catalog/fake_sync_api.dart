@@ -22,8 +22,18 @@ final class FakeSyncApi implements SyncApi {
   /// stored — the permanently-losing push that must not spin the round.
   bool rejectPushes = false;
 
+  /// The limits every [pull] advertises; null advertises none.
+  PushLimits? limits;
+
+  /// Ids the server refuses as too large: a push holding one throws the
+  /// 413 `payload_too_large` for the whole push, as the real server does.
+  final tooLarge = <String>{};
+
   var pullCalls = 0;
   var pushCalls = 0;
+
+  /// The size of every [push], in order.
+  final pushSizes = <int>[];
 
   /// Every `since` cursor a [pull] was called with, in order — lets a test
   /// prove the resync retry pulled from zero.
@@ -65,16 +75,20 @@ final class FakeSyncApi implements SyncApi {
     }
     final list = records.values.where((r) => (r.seq ?? 0) > since).toList()
       ..sort((a, b) => (a.seq ?? 0).compareTo(b.seq ?? 0));
-    return PullResponse(records: list, latestSeq: _seq);
+    return PullResponse(records: list, latestSeq: _seq, limits: limits);
   }
 
   @override
   Future<PushResponse> push(List<EncryptedRecord> pushed) async {
     pushCalls++;
+    pushSizes.add(pushed.length);
     final error = nextPushError;
     if (error != null) {
       nextPushError = null;
       throw error;
+    }
+    if (pushed.any((record) => tooLarge.contains(record.id))) {
+      throw const ApiError(code: 'payload_too_large', message: 'too large');
     }
     final results = <PushResult>[];
     for (final incoming in pushed) {
