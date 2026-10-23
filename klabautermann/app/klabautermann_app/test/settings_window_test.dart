@@ -10,6 +10,7 @@ import 'package:ghost_theme/ghost_theme.dart';
 import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
+import 'package:klabautermann_app/controllers/sync_secrets_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
 import 'package:klabautermann_app/controllers/docker_notice_controller.dart';
@@ -120,11 +121,19 @@ void main() {
     return safety;
   }
 
+  /// A sync passwords switch applying to nothing, disposed after the test.
+  SyncSecretsController newSyncSecrets() {
+    final syncSecrets = SyncSecretsController(apply: (_) {});
+    addTearDown(syncSecrets.dispose);
+    return syncSecrets;
+  }
+
   SettingsWindowHost newHost(
     AppearanceSettings appearance, [
     AnnouncementSettings? announcements,
     MonitorSetSettings? monitorSet,
     SafetySettings? safety,
+    SyncSecretsSettings? syncSecrets,
   ]) {
     final host = SettingsWindowHost(
       appearance: appearance,
@@ -132,6 +141,7 @@ void main() {
       appVersion: _appVersion,
       monitorSet: monitorSet ?? newFleet().monitorSettings,
       safety: safety ?? newSafety(),
+      syncSecrets: syncSecrets ?? newSyncSecrets(),
       control: _control,
       link: _appLink,
       requestAppExit: () async => AppExitResponse.exit,
@@ -234,6 +244,7 @@ void main() {
             appVersion: _appVersion,
             monitorSet: newFleet().monitorSettings,
             safety: newSafety(),
+            syncSecrets: newSyncSecrets(),
           ),
           isNull,
           reason: '$platform',
@@ -251,6 +262,7 @@ void main() {
           appVersion: _appVersion,
           monitorSet: newFleet().monitorSettings,
           safety: newSafety(),
+          syncSecrets: newSyncSecrets(),
         );
         expect(host, isNotNull, reason: '$platform');
         host!.dispose();
@@ -276,6 +288,8 @@ void main() {
     late FleetController fleet;
     late SafetyController safety;
     late List<SafetyPolicy> applied;
+    late SyncSecretsController syncSecrets;
+    late List<bool> syncApplied;
     late SettingsWindowHost host;
 
     setUp(() {
@@ -301,7 +315,16 @@ void main() {
         labelOf: (id) => id == 'srv-1' ? 'alpha' : id,
       );
       addTearDown(safety.dispose);
-      host = newHost(appearance, announcements, fleet.monitorSettings, safety);
+      syncApplied = [];
+      syncSecrets = SyncSecretsController(apply: syncApplied.add);
+      addTearDown(syncSecrets.dispose);
+      host = newHost(
+        appearance,
+        announcements,
+        fleet.monitorSettings,
+        safety,
+        syncSecrets,
+      );
     });
 
     tearDown(() {
@@ -557,6 +580,38 @@ void main() {
       expect(windowSwitch(), isTrue);
     });
 
+    testWidgets('the Sync tab\'s switch changes the app\'s sync passwords '
+        'through the link (SYN-02)', (tester) async {
+      final remote = await pumpBothWindows(
+        tester,
+        appearance,
+        tab: SettingsTab.sync,
+      );
+      bool windowSwitch() => tester
+          .widget<SwitchListTile>(
+            find.descendant(
+              of: find.byType(SettingsWindowApp),
+              matching: find.byType(SwitchListTile),
+            ),
+          )
+          .value;
+      expect(windowSwitch(), isFalse);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(SettingsWindowApp),
+          matching: find.text('Sync saved passwords & keys'),
+        ),
+      );
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+
+      expect(syncSecrets.value, isTrue);
+      expect(syncApplied, [false, true], reason: 'at once, then the change');
+      expect(remote.syncSecrets.value, isTrue);
+      expect(windowSwitch(), isTrue);
+    });
+
     testWidgets('the Servers tab\'s switches change the app\'s monitor set '
         'through the link (FL-21)', (tester) async {
       final remote = await pumpWindow(tester, SettingsTab.servers);
@@ -741,6 +796,14 @@ void main() {
       expect(
         roundTrip(const AnnouncementNotSavedException('disk full')),
         isA<AnnouncementNotSavedException>().having(
+          (error) => error.message,
+          'message',
+          'disk full',
+        ),
+      );
+      expect(
+        roundTrip(const SyncSecretsNotSavedException('disk full')),
+        isA<SyncSecretsNotSavedException>().having(
           (error) => error.message,
           'message',
           'disk full',

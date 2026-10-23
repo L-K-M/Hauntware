@@ -38,7 +38,15 @@ String _goldensRoot() {
 }
 
 const _fast = {SampleStream.overview, SampleStream.core};
-final _slow = SampleStream.values.toSet().difference(_fast);
+
+/// The user manager's streams have no captured fixture (the capture
+/// tool's `kFixtureCollectors`): their payloads are the system streams'
+/// shapes, which these fixtures read.
+const _userManager = {SampleStream.userUnits, SampleStream.userTimers};
+final _slow = SampleStream.values.toSet().difference({
+  ..._fast,
+  ..._userManager,
+});
 
 /// Every field comes from a system-wide `/proc` file, so a container
 /// without lxcfs withholds them all (D50).

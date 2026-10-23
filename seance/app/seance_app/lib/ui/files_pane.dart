@@ -79,7 +79,8 @@ class FilesPane extends StatelessWidget {
         if (session.isLocal) {
           return const _FilesUnavailable(
             icon: Icons.folder_off_outlined,
-            message: 'This shell is already on this device — use the terminal, '
+            message:
+                'This shell is already on this device — use the terminal, '
                 'or open a server session to browse its files.',
           );
         }
@@ -150,7 +151,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
   /// The pane's double-click window (the pane state times it itself, as
   /// Poltergeist's `_RowGestures` does): a second primary press on the
   /// same row inside it opens the entry.
-  DateTime _lastPrimaryDownAt = DateTime.fromMillisecondsSinceEpoch(0);
+  Duration _lastPrimaryDownAt = Duration.zero;
   String? _lastPrimaryDownPath;
 
   final FocusNode _listFocus = FocusNode();
@@ -562,11 +563,20 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
       controller.toggleSelection(entry.path);
       return;
     }
-    final now = DateTime.now();
+    // The window runs on the press's own stamp, not on when this handler
+    // got scheduled: a stalled main thread between two quick clicks must
+    // not split them, and two slow clicks must not merge.
+    // The gap must be non-negative: a mis-stamped or synthetic press
+    // (remote input, automation) can carry an earlier stamp than its
+    // predecessor, and the negative gap would read as a double-click. Zero
+    // counts as inside — taps from tests and coarsely stamped synthetic
+    // input share a stamp.
+    final sinceLast = event.timeStamp - _lastPrimaryDownAt;
     final doubleClick =
         _lastPrimaryDownPath == entry.path &&
-        now.difference(_lastPrimaryDownAt) <= kDoubleTapTimeout;
-    _lastPrimaryDownAt = now;
+        !sinceLast.isNegative &&
+        sinceLast <= kDoubleTapTimeout;
+    _lastPrimaryDownAt = event.timeStamp;
     _lastPrimaryDownPath = entry.path;
     controller.selectOnly(entry.path);
     if (doubleClick) {
@@ -2716,9 +2726,7 @@ class _RecoveredLocalEdits extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                onTap: copy.missing
-                    ? null
-                    : () => _open(context, copy),
+                onTap: copy.missing ? null : () => _open(context, copy),
                 trailing: Wrap(
                   children: [
                     PopupMenuButton<String>(

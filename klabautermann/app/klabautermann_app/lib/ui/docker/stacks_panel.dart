@@ -7,13 +7,15 @@ import '../../controllers/docker_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
-import '../actions/docker_actions.dart' show StackActionButtons;
+import '../actions/docker_actions.dart'
+    show StackActionButtons, StackDownButton, StackServiceMenu;
 import 'container_details.dart' show openContainerDetails;
 import 'containers_panel.dart'
     show ContainerHealthBadge, DockerNotice, containerStateText;
 import 'containers_view.dart';
 import 'stack_file_view.dart' show openStackFiles;
 import 'stacks_view.dart';
+import 'unlisted_stacks.dart';
 
 /// The panel width from which the stacks show as a list beside the
 /// selected one's overview; narrower, as on a phone, the list shows alone
@@ -215,9 +217,14 @@ class _StacksPanelState extends State<StacksPanel> {
     final l10n = AppLocalizations.of(context);
     final projects = stacks.grouping.projects;
     if (projects.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(16),
-        child: Text(l10n.dockerStacksEmpty),
+      return ListView(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(l10n.dockerStacksEmpty),
+          ),
+          _unlisted(projects),
+        ],
       );
     }
 
@@ -255,6 +262,13 @@ class _StacksPanelState extends State<StacksPanel> {
     );
   }
 
+  Widget _unlisted(List<ComposeProject> projects) => UnlistedStacks(
+    key: ValueKey('stacks.unlisted.${widget.serverId}'),
+    monitoring: widget.monitoring,
+    serverId: widget.serverId,
+    projects: projects,
+  );
+
   /// The stacks by name, [selected] marked in the wide layout.
   Widget _list(
     DockerStacksPayload stacks, {
@@ -267,9 +281,11 @@ class _StacksPanelState extends State<StacksPanel> {
     return Material(
       type: MaterialType.transparency,
       child: ListView.separated(
-        itemCount: projects.length,
+        // The stacks, then the ones without containers (STK-08).
+        itemCount: projects.length + 1,
         separatorBuilder: (context, _) => const Divider(height: 1),
         itemBuilder: (context, index) {
+          if (index == projects.length) return _unlisted(projects);
           final project = projects[index];
           return _StackTile(
             key: ValueKey('stacks.row.${project.name}'),
@@ -700,6 +716,9 @@ class StackOverview extends StatelessWidget {
       if (marker != null) _ManagedByNote(marker: marker),
       if (actionsAllowedAt(context, serverId, ActionEntryPoint.stackVerb))
         StackActionButtons(serverId: serverId, project: project.name),
+      // STK-23's compose operations run on a verified source only.
+      if (verdict is StackVerified)
+        StackDownButton(serverId: serverId, project: project.name),
       _Section(
         title: l10n.dockerStackSource,
         children: [
@@ -718,6 +737,12 @@ class StackOverview extends StatelessWidget {
             ),
           if (project.version case final version?)
             _Fact(label: l10n.dockerStackComposeVersion, values: [version]),
+          if (verdict is StackVerified)
+            _Profiles(
+              monitoring: monitoring,
+              serverId: serverId,
+              project: project.name,
+            ),
           // STK-04: verified sources only.
           if (verdict is StackVerified)
             Align(
@@ -748,6 +773,14 @@ class StackOverview extends StatelessWidget {
           for (final service in project.services)
             _ServiceCard(
               service: service,
+              menu: service.oneOff || verdict is! StackVerified
+                  ? null
+                  : StackServiceMenu(
+                      serverId: serverId,
+                      project: project.name,
+                      service: service.name,
+                      replicas: service.containers.length,
+                    ),
               onOpen: (container) => openContainerDetails(
                 context,
                 monitoring: monitoring,
@@ -812,6 +845,47 @@ class _Section extends StatelessWidget {
   );
 }
 
+/// The profiles a verified stack's files name (STK-09), read once as
+/// the overview opens: STK-23's `--profile` choices.
+class _Profiles extends StatefulWidget {
+  const _Profiles({
+    required this.monitoring,
+    required this.serverId,
+    required this.project,
+  });
+
+  final MonitoringController monitoring;
+  final String serverId;
+  final String project;
+
+  @override
+  State<_Profiles> createState() => _ProfilesState();
+}
+
+class _ProfilesState extends State<_Profiles> {
+  late final Future<DockerPayload> _read = widget.monitoring.docker
+      .readStackProfiles(widget.serverId, project: widget.project);
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return FutureBuilder(
+      future: _read,
+      builder: (context, snapshot) => _Fact(
+        label: l10n.dockerStackProfiles,
+        values: switch (snapshot.data) {
+          null => [l10n.dockerStackProfilesReading],
+          DockerStackProfilesPayload(:final profiles) when profiles.isEmpty => [
+            l10n.dockerStackNoneRecorded,
+          ],
+          DockerStackProfilesPayload(:final profiles) => profiles,
+          _ => [l10n.dockerStackProfilesFailed],
+        },
+      ),
+    );
+  }
+}
+
 /// A label over its values, one per line, read as one node.
 class _Fact extends StatelessWidget {
   const _Fact({required this.label, required this.values});
@@ -843,17 +917,16 @@ class _Fact extends StatelessWidget {
 /// One compose service: its name, a one-off mark, its image, and its
 /// containers, each of which opens its details through [onOpen].
 class _ServiceCard extends StatelessWidget {
-  const _ServiceCard({required this.service, required this.onOpen});
+  const _ServiceCard({required this.service, required this.onOpen, this.menu});
 
   final ComposeService service;
   final ValueChanged<ContainerSummary> onOpen;
 
+  /// The service's actions (STK-23), beside its name.
+  final Widget? menu;
+
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    final muted = theme.colorScheme.onSurfaceVariant;
-    final image = service.image;
     return Card.outlined(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -862,40 +935,15 @@ class _ServiceCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: MergeSemantics(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  spacing: 2,
-                  children: [
-                    Wrap(
-                      spacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Text(
-                          service.name,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        if (service.oneOff)
-                          Text(
-                            l10n.dockerStackOneOff,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: muted,
-                            ),
-                          ),
-                      ],
-                    ),
-                    if (image != null && image.isNotEmpty)
-                      Text(
-                        image,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: muted,
-                        ),
-                      ),
-                  ],
-                ),
+              padding: EdgeInsetsDirectional.only(
+                start: 12,
+                end: menu == null ? 12 : 0,
+              ),
+              child: Row(
+                children: [
+                  Expanded(child: _serviceHeader(context)),
+                  ?menu,
+                ],
               ),
             ),
             for (final container in service.containers)
@@ -905,6 +953,43 @@ class _ServiceCard extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _serviceHeader(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final image = service.image;
+    return MergeSemantics(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: 2,
+        children: [
+          Wrap(
+            spacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                service.name,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (service.oneOff)
+                Text(
+                  l10n.dockerStackOneOff,
+                  style: theme.textTheme.labelSmall?.copyWith(color: muted),
+                ),
+            ],
+          ),
+          if (image != null && image.isNotEmpty)
+            Text(
+              image,
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
+        ],
       ),
     );
   }
