@@ -2,6 +2,7 @@
 // both parsers, and the builders against their parsers.
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math';
 
 import 'package:seance_core/seance_core.dart';
@@ -350,12 +351,16 @@ final class _Row {
   String get label => note ?? uri;
 }
 
+/// The corpus, found from the package rather than the working directory:
+/// CI runs the suite from the workspace root.
 List<_Row> _loadCorpus() {
-  final json =
-      jsonDecode(
-            File('test/fixtures/suite_link_corpus.json').readAsStringSync(),
-          )
-          as Map<String, Object?>;
+  final library = Isolate.resolvePackageUriSync(
+    Uri.parse('package:seance_core/seance_core.dart'),
+  );
+  final file = File.fromUri(
+    library!.resolve('../test/fixtures/suite_link_corpus.json'),
+  );
+  final json = jsonDecode(file.readAsStringSync()) as Map<String, Object?>;
   return [
     for (final row in json['rows']! as List<Object?>)
       _Row(row! as Map<String, Object?>),

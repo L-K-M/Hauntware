@@ -51,8 +51,13 @@ const _lockLine = "readonly lock_file='/tmp/klabautermann-runner-vm.lock'";
 const _sudoersLine =
     "readonly sudoers_file='/etc/sudoers.d/klabautermann-runner-vm'";
 const _rootOpsLine = "readonly root_ops_parent='/var/lib/klabautermann'";
+const _rootManifestLine = "readonly root_manifest_dir='/etc/klabautermann'";
+const _editDirLine = "readonly edit_dir='/etc/klabautermann-vm-edit'";
+const _rotatedLogLine =
+    "readonly rotated_log='/var/log/klabautermann-vm.log.1.gz'";
 const _rootDockerLine = "readonly root_docker_dir='/root/.docker'";
 const _unitDirLine = "readonly unit_dir='/etc/systemd/system'";
+const _vendorUnitDirLine = "readonly vendor_unit_dir='/usr/lib/systemd/system'";
 
 /// Bodies of the stand-ins, which log to `$STUB_LOG` and keep the
 /// accounts `useradd` made in `$STUB_STATE/users`. sudo runs what only
@@ -150,6 +155,9 @@ echo "$2:x:4242:4242::$STUB_STATE/home/$2:/bin/sh"
   'pgrep': 'exit 1\n',
   // Found on PATH, so the copy installs no cron; sudo runs it.
   'crontab': 'exit 99\n',
+  // As crontab, so the copy installs no acl or attr.
+  'setfacl': 'exit 99\n',
+  'setfattr': 'exit 99\n',
   'docker':
       r'echo "docker $*" >>"$STUB_LOG"'
       '\n',
@@ -300,7 +308,8 @@ void main() {
         lines(script).join('\n'),
         contains(
           'run_child "\$dart_binary" test --concurrency=1 '
-          "--tags 'runner-vm || runner-vm-s4' \"\${reporter[@]}\" "
+          "--tags 'runner-vm || runner-vm-s4 || runner-vm-s6' "
+          '"\${reporter[@]}" '
           'packages/klabautermann_core/test/integration',
         ),
       );
@@ -309,7 +318,7 @@ void main() {
         'packages/klabautermann_core/dart_test.yaml',
       ]) {
         final tags = loadYaml(File('${root.path}$path').readAsStringSync());
-        for (final tag in ['runner-vm', 'runner-vm-s4']) {
+        for (final tag in ['runner-vm', 'runner-vm-s4', 'runner-vm-s6']) {
           expect((tags['tags'] as YamlMap).containsKey(tag), isTrue);
         }
       }
@@ -357,8 +366,12 @@ void main() {
         _lockLine,
         _sudoersLine,
         _rootOpsLine,
+        _rootManifestLine,
+        _editDirLine,
+        _rotatedLogLine,
         _rootDockerLine,
         _unitDirLine,
+        _vendorUnitDirLine,
       ]) {
         expect(script, contains(line));
       }
@@ -432,12 +445,28 @@ void main() {
                 "readonly root_ops_parent='${sandbox.path}/var-lib'",
               )
               .replaceFirst(
+                _rootManifestLine,
+                "readonly root_manifest_dir='${sandbox.path}/etc-klab'",
+              )
+              .replaceFirst(
+                _editDirLine,
+                "readonly edit_dir='${sandbox.path}/edit'",
+              )
+              .replaceFirst(
+                _rotatedLogLine,
+                "readonly rotated_log='${sandbox.path}/rotated.log.1.gz'",
+              )
+              .replaceFirst(
                 _rootDockerLine,
                 "readonly root_docker_dir='${sandbox.path}/root-docker'",
               )
               .replaceFirst(
                 _unitDirLine,
                 "readonly unit_dir='${sandbox.path}/units'",
+              )
+              .replaceFirst(
+                _vendorUnitDirLine,
+                "readonly vendor_unit_dir='${sandbox.path}/vendor-units'",
               ),
         );
       final chmod = await Process.run('chmod', [
@@ -464,9 +493,16 @@ void main() {
         includeParentEnvironment: false,
       );
       final output = StringBuffer();
-      process.stdout.transform(utf8.decoder).listen(output.write);
-      process.stderr.transform(utf8.decoder).listen(output.write);
-      return (process: process, exitCode: process.exitCode, output: output);
+      final drained = [
+        process.stdout.transform(utf8.decoder).listen(output.write).asFuture(),
+        process.stderr.transform(utf8.decoder).listen(output.write).asFuture(),
+      ];
+      // The exit can arrive before the last output does, and a test reads
+      // the output once the exit code is in.
+      final exitCode = process.exitCode.then(
+        (code) => Future.wait(drained).then((_) => code),
+      );
+      return (process: process, exitCode: exitCode, output: output);
     }
 
     const onRunner = {
