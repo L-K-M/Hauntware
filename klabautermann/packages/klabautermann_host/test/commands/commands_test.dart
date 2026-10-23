@@ -72,8 +72,8 @@ void main() {
       expect(HostCommands.unitResources('nginx.service'), [
         'systemctl',
         'show',
-        '--property=MemoryCurrent,CPUUsageNSec,TasksCurrent,NRestarts,'
-            'MainPID,ActiveEnterTimestamp',
+        '--property=LoadState,MemoryCurrent,CPUUsageNSec,TasksCurrent,'
+            'NRestarts,MainPID,ActiveEnterTimestamp',
         '--',
         'nginx.service',
       ]);

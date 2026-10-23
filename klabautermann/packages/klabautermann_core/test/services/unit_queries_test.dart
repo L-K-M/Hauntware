@@ -165,7 +165,29 @@ void main() {
     expect(resources.tasks, 7);
     expect(resources.restarts, 2);
     expect(resources.mainPid, 4300);
-    expect(link.commands.single, contains('--property=MemoryCurrent'));
+    expect(link.commands.single, contains(',MemoryCurrent,'));
+  });
+
+  test('a unit systemd cannot find reads as not found', () async {
+    // `systemctl show` exits 0 for a unit it cannot find and prints the
+    // defaults, so only LoadState tells a missing unit from an idle one.
+    final link = _Link(
+      _out(
+        'LoadState=not-found\n'
+        'MemoryCurrent=[not set]\n'
+        'TasksCurrent=[not set]\n'
+        'NRestarts=0\n'
+        'MainPID=0\n',
+      ),
+    );
+
+    final payload = await _query(
+      link,
+      const UnitResourcesQuery('gone.service'),
+    );
+
+    expect((payload as UnitQueryFailed).failure, UnitQueryFailure.notFound);
+    expect(link.commands.single, contains('--property=LoadState,'));
   });
 
   test(
