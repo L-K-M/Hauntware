@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
+import 'package:klabautermann_app/ui/logs/log_export.dart';
 import 'package:klabautermann_app/ui/logs/log_query.dart';
 import 'package:klabautermann_app/ui/logs/log_view.dart';
 import 'package:klabautermann_app/ui/logs/logs_panel.dart';
@@ -64,11 +67,37 @@ final _entries = [
     ),
 ];
 
+/// A [LogExportHost] that records what it was handed.
+final class _ExportHost implements LogExportHost {
+  _ExportHost({this.canShare = false, this.saves = true});
+
+  @override
+  final bool canShare;
+
+  /// Whether a save goes through, or the user cancels the dialog.
+  final bool saves;
+
+  final saved = <(String, String)>[];
+  final shared = <(String, String)>[];
+
+  @override
+  Future<bool> save(String fileName, Uint8List bytes) async {
+    if (saves) saved.add((fileName, utf8.decode(bytes)));
+    return saves;
+  }
+
+  @override
+  Future<void> share(String fileName, Uint8List bytes, {Rect? origin}) async {
+    shared.add((fileName, utf8.decode(bytes)));
+  }
+}
+
 Future<_Panel> _pump(
   WidgetTester tester, {
   Size size = _wide,
   double textScale = 1,
   Brightness brightness = Brightness.light,
+  LogExportHost? exportHost,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -90,11 +119,14 @@ Future<_Panel> _pump(
       home: MediaQuery.withClampedTextScaling(
         minScaleFactor: textScale,
         maxScaleFactor: textScale,
-        child: Scaffold(
-          body: LogsPanel(
-            monitoring: monitoring,
-            serverId: 'srv-1',
-            visible: true,
+        child: LogExportScope(
+          host: exportHost ?? _ExportHost(),
+          child: Scaffold(
+            body: LogsPanel(
+              monitoring: monitoring,
+              serverId: 'srv-1',
+              visible: true,
+            ),
           ),
         ),
       ),
@@ -714,6 +746,126 @@ void main() {
     final spec = panel.opens.last.spec;
     expect((spec.source as FileLogSource).path, '/var/log/syslog');
     expect(spec.follow, isTrue);
+  });
+
+  group('export (LOG-10)', () {
+    const rows = [
+      'nginx.service[101]: GET /healthz 200',
+      'nginx.service[102]: upstream timed out, retrying',
+      'sshd.service[103]: Accepted publickey for deploy',
+      'backup.service[104]: rsync: connection unexpectedly closed',
+    ];
+
+    Finder exportButton() => find.byTooltip('Export');
+
+    testWidgets('copies the held rows through the engine\'s redactor', (
+      tester,
+    ) async {
+      String? copied;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied = (call.arguments as Map)['text'] as String?;
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      final panel = await _pump(tester);
+      expect(
+        tester
+            .widget<IconButton>(
+              find.widgetWithIcon(IconButton, Icons.ios_share),
+            )
+            .onPressed,
+        isNull,
+      );
+      await panel.running(tester);
+
+      await tester.tap(exportButton());
+      await tester.pumpAndSettle();
+      expect(find.text('Export 4 lines'), findsOneWidget);
+      expect(find.text('Share…'), findsNothing);
+
+      await tester.tap(find.text('Copy'));
+      await tester.pump();
+      final redact =
+          panel.engine.sentOfType<RedactLines>().single as RedactLines;
+      expect(redact.lines, rows);
+      expect(copied, isNull);
+
+      await panel.emit(tester, RedactedLines(redact.requestId, 'redacted'));
+      expect(copied, 'redacted');
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(find.text('Copied the lines.'), findsOneWidget);
+    });
+
+    testWidgets('with secrets included, saves and shares the rows as they '
+        'are, without the redactor', (tester) async {
+      final host = _ExportHost(canShare: true);
+      final panel = await _pump(tester, exportHost: host);
+      await panel.running(tester);
+
+      await tester.tap(exportButton());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Include secrets'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('The lines leave the app as they are, secrets included.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Save…'));
+      await tester.pumpAndSettle();
+      expect(host.saved, [('journal.log', '${rows.join('\n')}\n')]);
+      expect(find.byType(BottomSheet), findsNothing);
+
+      await tester.tap(exportButton());
+      await tester.pumpAndSettle();
+      // Each export starts redacted again.
+      expect(
+        tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+        isFalse,
+      );
+      await tester.tap(find.text('Include secrets'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Share…'));
+      await tester.pumpAndSettle();
+      expect(host.shared.single.$1, 'journal.log');
+      expect(panel.engine.sentOfType<RedactLines>(), isEmpty);
+    });
+
+    testWidgets('a cancelled save keeps the sheet; a stopped engine exports '
+        'nothing', (tester) async {
+      final host = _ExportHost(saves: false);
+      final panel = await _pump(tester, exportHost: host);
+      await panel.running(tester);
+      await tester.tap(exportButton());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Include secrets'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save…'));
+      await tester.pumpAndSettle();
+      expect(find.text('Export 4 lines'), findsOneWidget);
+
+      await tester.tap(find.text('Include secrets'));
+      await tester.pumpAndSettle();
+      await panel.engine.close();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save…'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('The lines could not be redacted, so nothing was exported.'),
+        findsOneWidget,
+      );
+      expect(host.saved, isEmpty);
+    });
   });
 
   testWidgets('on a phone, the source and filters open bottom sheets', (

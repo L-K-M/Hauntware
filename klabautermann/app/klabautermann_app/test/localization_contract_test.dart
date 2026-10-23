@@ -209,6 +209,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'host-${_nextHostQuery++}'",
     // A unit read's request id, never shown.
     r"'unit-${_nextUnitQuery++}'",
+    // An export redaction's id, which its RedactedLines answers by
+    // (LOG-10).
+    r"'redact-${_nextRedaction++}'",
   },
   // Services panel (SVC-01 to SVC-04, CN-10).
   'lib/controllers/log_reads.dart': {
@@ -556,6 +559,14 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"""r'|\b(?:GET|HEAD|POST|PUT|DELETE|PATCH|OPTIONS|CONNECT|TRACE)\s+\S+\s+'""",
     r"""r'|\b(?:[Ss]tatus|STATUS|[Cc]ode|CODE)(?:_code)?["\x27]?\s*[=:]\s*"?)'""",
     r"""r'([1-5]\d\d)\b'""",
+  },
+  'lib/ui/logs/log_export.dart': {
+    // LOG-10's export: the lines joined as a text file, ending in a
+    // newline, and the file's media type for the save dialog and the
+    // share sheet.
+    r"'\n'",
+    r"'$text\n'",
+    "'text/plain'",
   },
   'lib/ui/logs/log_text.dart': {
     // A row's unit and PID prefix in classic syslog notation, as
