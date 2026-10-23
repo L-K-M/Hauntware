@@ -526,23 +526,18 @@ void main() {
       );
     });
 
-    test(
-      'publishPin pushes the pin and clears a negative verdict',
-      () async {
-        final device = await _Device.create(tempDir, 'a');
-        await device.verdicts.addNegativePin('h.example.com:22');
-        await device.coordinator.writer.publishPin(
-          pin('h.example.com', 'SHA256:NEW', pinnedAt: 7),
-        );
-        expect(await device.verdicts.negativePins(), isEmpty);
-        final record = await device.records.getRecord(
-          'hostkey:h.example.com:22',
-        );
-        expect(record, isNotNull);
-        expect(record!.deleted, isFalse);
-        expect(await device.records.dirtyRecords(), isNotEmpty);
-      },
-    );
+    test('publishPin pushes the pin and clears a negative verdict', () async {
+      final device = await _Device.create(tempDir, 'a');
+      await device.verdicts.addNegativePin('h.example.com:22');
+      await device.coordinator.writer.publishPin(
+        pin('h.example.com', 'SHA256:NEW', pinnedAt: 7),
+      );
+      expect(await device.verdicts.negativePins(), isEmpty);
+      final record = await device.records.getRecord('hostkey:h.example.com:22');
+      expect(record, isNotNull);
+      expect(record!.deleted, isFalse);
+      expect(await device.records.dirtyRecords(), isNotEmpty);
+    });
   });
 
   group('serverConfig catalog (shared mode)', () {
@@ -673,6 +668,42 @@ void main() {
       expect(ServerConfig.fromJson(dec.data).group, 'prod');
       expect(device.catalog!.byId('web')!.label, 'Web');
     });
+
+    test('a round pushes in batches the pulled limits allow', () async {
+      final device = await _Device.create(tempDir, 'a', shared: true);
+      for (final id in ['web', 'db', 'cache']) {
+        await _saveServer(device, _server(id, label: id));
+      }
+      server.limits = const PushLimits(maxRecordsPerPush: 2);
+
+      final result = await device.coordinator.runRound(server);
+
+      expect(server.pushSizes, [2, 1]);
+      expect(result.pushed, 3);
+      expect(await device.records.dirtyRecords(), isEmpty);
+    });
+
+    test(
+      'a record refused as too large stays dirty and the rest push',
+      () async {
+        final device = await _Device.create(tempDir, 'a', shared: true);
+        for (final id in ['web', 'db']) {
+          await _saveServer(device, _server(id, label: id));
+        }
+        server
+          ..limits = const PushLimits(maxRecordsPerPush: 1)
+          ..tooLarge.add('web');
+
+        final result = await device.coordinator.runRound(server);
+
+        expect(result.refusedIds, ['web']);
+        expect(server.records.keys, ['db']);
+        expect(
+          [for (final r in await device.records.dirtyRecords()) r.id],
+          ['web'],
+        );
+      },
+    );
 
     test('create, edit, and delete converge across shared devices', () async {
       final a = await _Device.create(tempDir, 'a', shared: true);
