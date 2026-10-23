@@ -186,6 +186,200 @@ void main() {
     }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
   }
 
+  // The press decides: a claimed press reaches the remote neither down nor
+  // up, so the release must open the link whatever the modifiers do in
+  // between — otherwise the click is lost entirely.
+  testWidgets('a claimed press opens its link when Cmd rises before mouse-up',
+      (tester) async {
+    final terminal = Terminal();
+    final controller = TerminalController();
+    addTearDown(controller.dispose);
+    final opened = <Uri>[];
+    final point = await pumpTerminal(tester, terminal, controller, opened);
+    terminal.write('\x1b[?1000h$sgrMouse');
+    final output = <String>[];
+    terminal.onOutput = output.add;
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    final press = await tester.startGesture(
+      point,
+      kind: PointerDeviceKind.mouse,
+    );
+    // Past the tap's deadline, so the press is claimed while Cmd is held.
+    await tester.pump(kPressTimeout * 2);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await press.up();
+    await tester.pump(gestureTimeout);
+
+    expect(opened, [url]);
+    expect(output, isEmpty);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('a claimed press opens its link when Shift falls before mouse-up',
+      (tester) async {
+    final terminal = Terminal();
+    final controller = TerminalController();
+    addTearDown(controller.dispose);
+    final opened = <Uri>[];
+    final point = await pumpTerminal(tester, terminal, controller, opened);
+    terminal.write('\x1b[?1000h$sgrMouse');
+    final output = <String>[];
+    terminal.onOutput = output.add;
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    final press = await tester.startGesture(
+      point,
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump(kPressTimeout * 2);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await press.up();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pump(gestureTimeout);
+
+    expect(opened, [url]);
+    expect(output, isEmpty);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  // The claim is taken at raw pointer-down, so the decision sees the
+  // modifiers the press started with even when the tap's own down resolves
+  // at mouse-up (a quick click) — and it stands on every platform whose
+  // modifier opens links, not just Cmd on Apple. Without a remote to own
+  // the press there is nobody else to finish the click, so one of these
+  // presses whose modifier drifts before mouse-up must still open its link:
+  // anything else loses the click entirely.
+  for (final entry in {
+    TargetPlatform.macOS: LogicalKeyboardKey.metaLeft,
+    TargetPlatform.linux: LogicalKeyboardKey.controlLeft,
+    TargetPlatform.windows: LogicalKeyboardKey.controlLeft,
+  }.entries) {
+    for (final heldMs in [0, 200]) {
+      final held = heldMs == 0 ? 'quick' : 'held';
+
+      testWidgets(
+          '${entry.key}: a $held press opens its link when its modifier '
+          'rises before mouse-up', (tester) async {
+        final terminal = Terminal();
+        final controller = TerminalController();
+        addTearDown(controller.dispose);
+        final opened = <Uri>[];
+        final point = await pumpTerminal(tester, terminal, controller, opened);
+
+        await tester.sendKeyDownEvent(entry.value);
+        final press = await tester.startGesture(
+          point,
+          kind: PointerDeviceKind.mouse,
+        );
+        if (heldMs > 0) {
+          await tester.pump(Duration(milliseconds: heldMs));
+        }
+        await tester.sendKeyUpEvent(entry.value);
+        await press.up();
+        await tester.pump(gestureTimeout);
+
+        expect(opened, [url]);
+      }, variant: TargetPlatformVariant({entry.key}));
+
+      testWidgets(
+          '${entry.key}: a $held press opens its link when Shift falls '
+          'before mouse-up', (tester) async {
+        final terminal = Terminal();
+        final controller = TerminalController();
+        addTearDown(controller.dispose);
+        final opened = <Uri>[];
+        final point = await pumpTerminal(tester, terminal, controller, opened);
+
+        await tester.sendKeyDownEvent(entry.value);
+        final press = await tester.startGesture(
+          point,
+          kind: PointerDeviceKind.mouse,
+        );
+        if (heldMs > 0) {
+          await tester.pump(Duration(milliseconds: heldMs));
+        }
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+        await press.up();
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+        await tester.sendKeyUpEvent(entry.value);
+        await tester.pump(gestureTimeout);
+
+        expect(opened, [url]);
+      }, variant: TargetPlatformVariant({entry.key}));
+    }
+  }
+
+  // The link is captured where the press went down: a release shifted
+  // within tap slop into another link's cell must not pick that other link.
+  testWidgets('a press opens the link under mouse-down, not under mouse-up', (
+    tester,
+  ) async {
+    final terminal = Terminal();
+    final controller = TerminalController();
+    addTearDown(controller.dispose);
+    final opened = <Uri>[];
+    await pumpTerminal(
+      tester,
+      terminal,
+      controller,
+      opened,
+      // Two links in adjacent cells, so a slop-sized move crosses over.
+      text: '\x1b]8;;https://one.test\x1b\\A\x1b]8;;\x1b\\'
+          '\x1b]8;;https://two.test\x1b\\B\x1b]8;;\x1b\\',
+    );
+    final render = tester
+        .state<TerminalViewState>(find.byType(TerminalView))
+        .renderTerminal;
+    Offset cellCenter(int x) => render.localToGlobal(
+          render.getOffset(CellOffset(x, 0)) +
+              Offset(render.cellSize.width / 2, render.cellSize.height / 2),
+        );
+    final step = render.cellSize.width;
+    expect(step, lessThan(kTouchSlop));
+
+    // Touch: its tap slop spans a cell, and a touch tap counts as a link
+    // click wherever the remote does not own the tap.
+    final press = await tester.startGesture(
+      cellCenter(0),
+      kind: PointerDeviceKind.touch,
+    );
+    await press.moveBy(Offset(step, 0));
+    await press.up();
+    await tester.pump(gestureTimeout);
+
+    expect(opened, [Uri.parse('https://one.test')]);
+  });
+
+  // A claim whose press is cancelled (here: dragged past tap slop) opens
+  // nothing and must not survive into a later press. Every press re-decides
+  // the claim at pointer-down, so the plain click that follows cannot fire
+  // the abandoned one.
+  testWidgets('a cancelled claim leaves nothing for the next press', (
+    tester,
+  ) async {
+    final terminal = Terminal();
+    final controller = TerminalController();
+    addTearDown(controller.dispose);
+    final opened = <Uri>[];
+    final point = await pumpTerminal(tester, terminal, controller, opened);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    final press = await tester.startGesture(
+      point,
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump(kPressTimeout * 2);
+    await press.moveBy(const Offset(60, 0));
+    await press.up();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pump(gestureTimeout);
+    expect(opened, isEmpty);
+
+    await tester.tapAt(point, kind: PointerDeviceKind.mouse);
+    await tester.pump(gestureTimeout);
+    expect(opened, isEmpty);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
   testWidgets('Cmd pressed after a reported press leaves the link closed',
       (tester) async {
     final terminal = Terminal();
