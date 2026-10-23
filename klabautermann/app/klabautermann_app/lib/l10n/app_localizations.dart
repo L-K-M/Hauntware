@@ -6988,6 +6988,102 @@ abstract class AppLocalizations {
   /// **'{path} (yours)'**
   String editDiffYourLabel(String path);
 
+  /// Server Safety menu: opens what Klabautermann keeps on the server (SAF-14).
+  ///
+  /// In en, this message translates to:
+  /// **'Footprint'**
+  String get footprintMenu;
+
+  /// Footprint page title. server is the server's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Footprint on {server}'**
+  String footprintTitle(String server);
+
+  /// Footprint page: asks the engine to verify the footprint again.
+  ///
+  /// In en, this message translates to:
+  /// **'Check again'**
+  String get footprintVerify;
+
+  /// Footprint page: shown until the engine answers.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking what Klabautermann keeps on this server…'**
+  String get footprintChecking;
+
+  /// Footprint page: the engine refused the check, as for a server with no connection.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann cannot check what it keeps on this server without a connection. Connect, then check again.'**
+  String get footprintUnavailable;
+
+  /// Footprint page: root's part is not read without admin mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Root\'s backups and manifest are checked in admin mode.'**
+  String get footprintRootUnchecked;
+
+  /// Footprint page: one problem the check found, in the engine's words.
+  ///
+  /// In en, this message translates to:
+  /// **'The check reported: {warning}'**
+  String footprintWarning(String warning);
+
+  /// Footprint page: no manifest rows and no backups.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann keeps nothing on this server.'**
+  String get footprintNone;
+
+  /// Footprint page: a scope's heading. scope is the FootprintScope name.
+  ///
+  /// In en, this message translates to:
+  /// **'{scope, select, user{Your account} root{Root} other{Other}}'**
+  String footprintScope(String scope);
+
+  /// Footprint page: a manifest row's kind and whether it is on the host. kind is the FootprintKind name; present is true or false.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, backupDirectory{Backup directory} backupIndex{Backup index} other{File}} · {present, select, true{present} other{missing on the host}}'**
+  String footprintFile(String kind, String present);
+
+  /// Footprint page: removes older backups (Q11, tier 1).
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Keep only the newest backup of each file} other{Keep the newest {count} backups of each file}}'**
+  String footprintKeepLast(int count);
+
+  /// Footprint page: removes every backup of one file (Q11, typed confirmation).
+  ///
+  /// In en, this message translates to:
+  /// **'Remove all backups'**
+  String get footprintRemoveAll;
+
+  /// Footprint page: the heading of a crontab's backups. user is the account.
+  ///
+  /// In en, this message translates to:
+  /// **'{user}\'s crontab'**
+  String footprintCrontabSource(String user);
+
+  /// Footprint page: a backup's short hash and whether it still has the recorded content. status is the FootprintBackupStatus name.
+  ///
+  /// In en, this message translates to:
+  /// **'{hash} · {status, select, intact{unchanged} modified{changed on the host since it was recorded} missing{missing on the host} other{unknown}}'**
+  String footprintBackup(String hash, String status);
+
+  /// Footprint page: opens the file's editor with this backup as the new text, to review and save.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore…'**
+  String get footprintRestore;
+
+  /// Footprint page: the backup read back does not have its recorded hash.
+  ///
+  /// In en, this message translates to:
+  /// **'The backup changed since it was checked, so it was not opened.'**
+  String get footprintRestoreChanged;
+
   /// Unit action (SVC-05): starts the unit at boot.
   ///
   /// In en, this message translates to:

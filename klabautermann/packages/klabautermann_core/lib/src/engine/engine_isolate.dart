@@ -1164,16 +1164,26 @@ void engineMain(
         );
         final Future<PlanAttempt> attempt;
         switch (intent) {
-          case KillProcess() || UnitAction() || StartTimer():
+          case KillProcess() || UnitAction() || StartTimer() || RunCronJob():
             // Planning reads the target over the link, as the run will.
+            final session = admin?.session(serverId);
             attempt = lendSession(
               serverId,
-              () => planHostAction(intent, (
-                link: link,
-                profile: profile,
-                protection: protection,
-                adminMode: admin?.session(serverId) != null,
-              )),
+              () => planHostAction(
+                intent,
+                (
+                  link: link,
+                  profile: profile,
+                  protection: protection,
+                  adminMode: session != null,
+                ),
+                elevated: session == null
+                    ? null
+                    : (argv) => session.executor.run(
+                        argv,
+                        password: session.password,
+                      ),
+              ),
             );
           case ContainerAction() ||
               RemoveContainer() ||

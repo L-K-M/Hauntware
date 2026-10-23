@@ -13,6 +13,7 @@ import 'package:seance_core/seance_core.dart'
         ElevationException,
         RemoteCommandException,
         RemoteCommandResult,
+        SecretRedactor,
         SshLink,
         quoteShellWord;
 
@@ -203,6 +204,10 @@ final class OperationRunner {
         switch (plan.steps[i]) {
           case final ShellStep step:
             final result = await _runShell(link, step, session);
+            if (step.captureOutput) {
+              output = capturedOutput(result.stdout, result.stderr);
+              exitCode = result.exitCode;
+            }
             if (result.exitCode != 0) {
               await _cleanUp(link, plan, session);
               if (step.exitMeanings[result.exitCode] case final changed?) {
@@ -219,6 +224,7 @@ final class OperationRunner {
                     : ActionFailure.stepFailed,
                 step: i,
                 exitCode: result.exitCode,
+                output: output,
               );
             }
           case final ApiStep step:
@@ -364,3 +370,28 @@ final _polkitRefused = RegExp(
 
 /// `klab_ticks`'s status for a process that is gone (proc_stat.dart).
 const _kTicksGone = 3;
+
+final _redactor = SecretRedactor();
+
+/// A captured step's output as [ActionFinished.output] carries it (JOB-19):
+/// redacted as the audit log redacts, and at most [kExecOutputMax]
+/// characters in all, stdout first. Redaction comes first: a secret the
+/// cap cut would no longer match its pattern and leave a fragment.
+ExecOutput capturedOutput(String stdout, String stderr) {
+  final redactedOut = _redactor.redact(stdout);
+  final redactedErr = _redactor.redact(stderr);
+  final keptOut = redactedOut.length > kExecOutputMax
+      ? redactedOut.substring(0, kExecOutputMax)
+      : redactedOut;
+  final room = kExecOutputMax - keptOut.length;
+  final keptErr = redactedErr.length > room
+      ? redactedErr.substring(0, room)
+      : redactedErr;
+  return ExecOutput(
+    stdout: keptOut,
+    stderr: keptErr,
+    truncated:
+        keptOut.length < redactedOut.length ||
+        keptErr.length < redactedErr.length,
+  );
+}

@@ -237,6 +237,10 @@ import '../operations/plan_types.dart';
 /// sends unasked; the [KeepLastBackups] and [RemoveBackups] intents plan
 /// backup removal.
 ///
+/// Running a cron line now then joined v3 the same way (03 §7.7,
+/// JOB-19): [RunCronJob] is planned as a host action, and reports its
+/// output as [ContainerExec] does.
+///
 /// Stack files and folders then joined v3 the same way (03 §7.16 STK-07
 /// to STK-09): a [StackFileTarget] edits a verified stack's file through
 /// the same pipeline, [DockerStackProfilesQuery] lists the profiles its
@@ -1828,11 +1832,12 @@ final class ActionFinished extends EngineEvent {
   /// [OperationsChanged] lists.
   final String? operationId;
 
-  /// What a [ContainerExec] printed, whether it succeeded or failed.
+  /// What a [ContainerExec] or a [RunCronJob] printed, whether it
+  /// succeeded or failed.
   final ExecOutput? output;
 }
 
-/// A one-off command's output (CTX-08), with secrets redacted as the
+/// A one-off command's output (CTX-08, JOB-19), with secrets redacted as the
 /// audit log redacts them, at most [kExecOutputMax] bytes in all.
 @immutable
 final class ExecOutput {
@@ -3850,6 +3855,22 @@ enum UnitScope {
   /// as the login user, never through sudo, which would address root's
   /// manager instead.
   user,
+}
+
+/// Runs a cron line's command once, now, as the user cron runs it as
+/// (03 §7.7, JOB-19): `sh -c` with the line's `%` text on standard input,
+/// and its output in [ActionFinished.output]. [source] and [raw] name the
+/// line as the jobs list shows it, masked; the engine reads the source
+/// again and finds the line by its masked form.
+final class RunCronJob extends ActionIntent {
+  const RunCronJob(super.serverId, {required this.source, required this.raw});
+
+  /// [CronJob.source]: `crontab`, `crontab -u <user>`, `/etc/crontab` or
+  /// an `/etc/cron.d/` file.
+  final String source;
+
+  /// The line as the jobs list shows it, masked.
+  final String raw;
 }
 
 /// What [ContainerAction] does to a container (CTR-02).

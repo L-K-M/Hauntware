@@ -3653,6 +3653,21 @@ answers each open with a `LogStreamState` before it returns, and
 - **v1.x.** Timer creator, output capture, dead-man pings (T1, +E), missed
   runs, fleet jobs overview.
 
+As built in M5 (M24b), JOB-19's run now is the `RunCronJob` action. The
+jobs rows carry cron lines masked (8.9), so the engine reads the line's
+source again (`crontab -l`; `crontab -l -u` through elevation for
+another user's; `cat` for `/etc/crontab` and `/etc/cron.d/*`) and finds
+the line by its masked form; a line gone, or two that mask alike, is
+refused as changed. The command runs once as cron would run it: `sh -c`
+with the text after its first unescaped `%` on standard input, as the
+login user, or as the line's user through elevation and
+`runCronCommand`. It is tier 1, like running a timer now; the preview,
+the danger linter and the audit see the command masked, and the output
+comes back redacted, capped at `kExecOutputMax`, in
+`ActionFinished.output`. The crontab's variable lines and cron's own
+minimal environment are not reproduced, and a long run is not detached
+yet.
+
 As built in M2 (`app/klabautermann_app/lib/ui/jobs_panel.dart`,
 `jobs_view.dart`), the Jobs tab lists the `cron` stream's jobs rows and
 a row per `timers` entry in the sortable table, next run first, with
@@ -4970,6 +4985,17 @@ N" (tier 1, N = 5 by default) and removing every backup of one file
 (tier 2, Q11) name each file they delete and rewrite the index only
 while it still hashes to what planning read. Rows for v1.x writes join
 the manifest with those writes.
+
+The footprint view (plan M18) is the server Safety menu's Footprint
+page. It asks for a fresh `FootprintState` when it opens and lists each
+scope's rows and backups by file, with each backup's time, short hash
+and state. Root's part offers the admin-mode button until admin mode
+reads it. "Keep last 5", "Remove all backups" and "Restore…" are action
+entries, hidden where actions are not allowed. A restore reads the
+backup through the edit read and checks it against the hash its index
+records. It then opens the file's editor with the backup as the
+unsaved text, so a restore is an ordinary reviewed edit. Only an
+unchanged backup restores.
 
 ### 8.12 Threat model
 
@@ -7179,6 +7205,21 @@ every exit removes the accounts with their sessions, the sshd, the
 timer and the directories; the system sshd, its config and port 22 stay
 untouched. The accounts with sudo, `systemd-run`, linger, the elevation
 prelude and the detached runners remain for later legs.
+
+As built in M5 (M20b), `klabautermann_core/test/integration/
+runner_vm_edit_test.dart` (tag `runner-vm`) edits in admin mode as the
+password-sudo account. A root file, `root:adm` 0640 with an ACL entry
+for that account and a `user.` xattr, is replaced through the prelude
+with its owner, mode, ACL and xattr kept; its backup lands in
+`/var/lib/klabautermann/backups`, 0700, with the root manifest, which a
+new engine's connect leaves unchecked until admin mode turns on. A unit
+file whose candidate `systemd-analyze verify` rejects is left as it was
+with no temp file, and one it accepts replaces it; a root file changed
+between plan and run keeps the outside change; and the unprivileged
+account's crontab is replaced through `crontab -u <user> -` and backed
+up as root. Each test seeds its own files and removes them, the root
+backups and the manifest; runner_vm.sh removes them too on every exit,
+and installs `acl` or `attr` where `setfacl` or `setfattr` is missing.
 
 As built in M3 (D10), the Docker host's image
 (`klabautermann/test/integration/sshd/Dockerfile.docker`) builds `FROM`

@@ -1519,6 +1519,32 @@ void main() {
           matchesGoldenFile('goldens/log_view_${brightness.name}.png'),
         );
       }, skip: skip);
+
+      testWidgets('URLs, addresses and HTTP codes, ${brightness.name} '
+          '(LOG-07)', (tester) async {
+        final logs = await _pump(
+          tester,
+          brightness: brightness,
+          size: const Size(480, 200),
+          wrap: LogWrap.on,
+          levelOf: (line) =>
+              const {'E': LogLevel.error, 'W': LogLevel.warning}[line.text[0]],
+        );
+        logs
+          ..add([
+            'I 10.0.0.7 "GET /a HTTP/1.1" 200 see https://example.test/a',
+            'W 192.168.1.20 "GET /old HTTP/1.1" 301 fe80::1%eth0',
+            'E 10.0.0.9 "POST /api HTTP/1.1" 404 then status=503',
+            'I \x1b[32mprogram colour 10.0.0.1 GET /x 500\x1b[0m',
+          ])
+          ..pause();
+        await tester.pump();
+
+        await expectLater(
+          find.byType(LogView),
+          matchesGoldenFile('goldens/log_view_tokens_${brightness.name}.png'),
+        );
+      }, skip: skip);
     }
   });
 }
