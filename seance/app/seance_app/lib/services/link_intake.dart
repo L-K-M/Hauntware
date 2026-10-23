@@ -101,7 +101,8 @@ abstract interface class SeanceLinkReview {
   ValueListenable<SeanceLinkQueue> get queue;
 
   /// Records the queue the review last showed, so "Discard waiting links"
-  /// drops exactly those links and never one that arrived unseen.
+  /// drops exactly those links and the dropped-link count clears only
+  /// what was shown: neither reaches one that arrived unseen.
   void markShown(SeanceLinkQueue shown);
 }
 
@@ -150,8 +151,9 @@ final class SeanceLinkIntake {
   int _ignored = 0;
   Completer<void>? _idle;
 
-  /// Completes when every queued link has been handled, or the queue is
-  /// waiting for a handler.
+  /// Completes when every queued link has been handled, the queue is
+  /// waiting for a handler, or a handler error paused it until the next
+  /// link or [activate].
   Future<void> get idle => _idle?.future ?? Future<void>.value();
 
   void add(Uri uri) {
@@ -270,10 +272,11 @@ final class SeanceLinkIntake {
       decision = await handler.review(review);
     } finally {
       _review = null;
+      review.queue.dispose();
     }
-    // The review showed these, so they are not reported again.
-    _ignored -= review.queue.value.ignoredCount;
-    review.queue.dispose();
+    // The drops the review showed are not reported again; any that arrived
+    // after it last drew carry to the next review or notice.
+    _ignored -= review.shown?.ignoredCount ?? 0;
     switch (decision) {
       case SeanceLinkDecision.cancel:
         return;
