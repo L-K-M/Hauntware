@@ -20,6 +20,14 @@ typedef GestureCountedDragStartCallback = void Function(
   int tapCount,
 );
 
+/// [seance fork] Signature for primary pointer-down callbacks that carry the
+/// multi-click count of the press (1 = single, 2 = double, 3 = triple), taken
+/// at the raw pointer layer before any recognizer resolves.
+typedef GestureCountedPointerDownCallback = void Function(
+  PointerDownEvent event,
+  int tapCount,
+);
+
 class TerminalGestureDetector extends StatefulWidget {
   const TerminalGestureDetector({
     super.key,
@@ -42,6 +50,7 @@ class TerminalGestureDetector extends StatefulWidget {
     this.onDragCancel,
     this.onDoubleTapDown,
     this.onTripleTapDown,
+    this.onPrimaryPointerDown,
   });
 
   final Widget? child;
@@ -63,6 +72,13 @@ class TerminalGestureDetector extends StatefulWidget {
 
   /// [seance fork] Third chained tap — triple-click.
   final GestureTapDownCallback? onTripleTapDown;
+
+  /// [seance fork] Asked for every counted primary press at the raw pointer
+  /// layer. Press-time decisions must be taken here, not in [onTapDown]:
+  /// the tap recognizer reports its down only at the 100ms deadline or on
+  /// acceptance, and for a quick click that is mouse-UP time — too late to
+  /// see the modifiers the press started with.
+  final GestureCountedPointerDownCallback? onPrimaryPointerDown;
 
   final GestureTapDownCallback? onTertiaryTapDown;
 
@@ -165,6 +181,7 @@ class _TerminalGestureDetectorState extends State<TerminalGestureDetector> {
     _tapSequenceTimer = null;
     _lastTapOffset = event.position;
     _pressTapCount = _tapCount;
+    widget.onPrimaryPointerDown?.call(event, _pressTapCount);
   }
 
   void _handlePointerUp(PointerUpEvent event) {

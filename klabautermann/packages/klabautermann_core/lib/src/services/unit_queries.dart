@@ -26,6 +26,9 @@ const int _jsonTablesSince = 246;
 /// The most of a failure's error text a [UnitQueryFailed] carries.
 const int _detailLimit = 500;
 
+/// The line `systemctl show` prints for a unit it cannot find.
+final _notFound = RegExp(r'^LoadState=not-found\s*$', multiLine: true);
+
 /// An `Environment=` assignment, whose values the unit file view masks.
 final _environment = RegExp(r'^(\s*Environment\s*=\s*)(.*)$');
 
@@ -82,6 +85,9 @@ Future<UnitQueryResult> runUnitQuery(
       case UnitFileQuery():
         return answer(UnitFilePayload(maskUnitFile(result.stdout)));
       case UnitResourcesQuery():
+        if (_notFound.hasMatch(result.stdout)) {
+          return answer(const UnitQueryFailed(UnitQueryFailure.notFound));
+        }
         final parsed = parseUnitResources(result.stdout);
         return answer(UnitResourcesPayload(parsed.value), parsed.warnings);
       case SocketsQuery():

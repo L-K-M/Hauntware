@@ -4,36 +4,15 @@ library;
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-const seanceDeepLinkScheme = 'seance';
-const seanceConnectRoute = 'connect';
-
-Uri seanceConnectUriForBookmark(Bookmark bookmark) {
-  final server = bookmark.server;
-  if (server == null) {
-    throw StateError('A remote bookmark must carry a server reference.');
-  }
-  if (server.serverConfigId case final id?) {
-    return _seanceConnectUri({'serverId': id});
-  }
-  final identity = server.identity;
-  if (identity == null) {
-    throw StateError('A server reference must carry an id or identity.');
-  }
-  return _seanceConnectUri({
-    'host': identity.host,
-    'port': '${identity.port}',
-    'username': identity.username,
-  });
-}
-
-Uri seanceConnectUriForServer(ServerConfig server) =>
-    _seanceConnectUri({'serverId': server.id});
-
-Uri _seanceConnectUri(Map<String, String> parameters) => Uri(
-  scheme: seanceDeepLinkScheme,
-  host: seanceConnectRoute,
-  queryParameters: parameters,
-);
+// The outbound link builders moved to seance_core
+// (docs/design/suite-links.md section 5); re-exported so this file's
+// importers do not change.
+export 'package:poltergeist_core/poltergeist_core.dart'
+    show
+        seanceConnectRoute,
+        seanceConnectUriForBookmark,
+        seanceConnectUriForServer,
+        seanceDeepLinkScheme;
 
 typedef UriHandlerProbe = Future<bool> Function(Uri uri);
 typedef ExternalUriLauncher = Future<bool> Function(Uri uri);
