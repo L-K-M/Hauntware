@@ -3,6 +3,8 @@
 /// the manager.
 library;
 
+import 'document.dart' show kCrontabPauseMarker;
+
 /// The managers whose crontab blocks JOB-09 recognizes (03 §8.7).
 enum CrontabManager { dokku, coolify, dokploy, runtipi }
 
@@ -38,6 +40,9 @@ List<CrontabManager?> crontabOwners(
   for (final line in lines) {
     if (line.trim().isEmpty) {
       block = null;
+    } else if (line.startsWith(kCrontabPauseMarker)) {
+      // A job this app paused is a comment too; whatever its held
+      // command names, it opens no manager's block.
     } else if (_managerComment.firstMatch(line) case final m?) {
       block = CrontabManager.values.byName(m[1]!.toLowerCase());
     }
