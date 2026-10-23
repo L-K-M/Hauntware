@@ -121,7 +121,7 @@ sealed class Revalidation {
   const Revalidation();
 }
 
-/// The unit still loads, in [manager].
+/// The unit still loads, or is masked, in [manager].
 final class UnitLoaded extends Revalidation {
   const UnitLoaded(this.unit, {this.manager = const UnitManager.system()});
 

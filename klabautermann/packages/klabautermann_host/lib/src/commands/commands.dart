@@ -450,7 +450,9 @@ abstract final class HostCommands {
   }
 
   /// `systemctl show` of [kUnitResourceProperties] for [unit] (SVC-08,
-  /// 03 §7.5); [parseUnitResources] reads the output.
+  /// 03 §7.5); [parseUnitResources] reads the output. `LoadState` comes
+  /// first: `show` exits 0 for a unit it cannot find and prints defaults,
+  /// so only `LoadState=not-found` says the unit is gone.
   static List<String> unitResources(
     String unit, {
     UnitManager manager = const UnitManager.system(),
@@ -459,7 +461,7 @@ abstract final class HostCommands {
     return [
       ...manager._head,
       'show',
-      '--property=${kUnitResourceProperties.join(',')}',
+      '--property=LoadState,${kUnitResourceProperties.join(',')}',
       '--',
       unit,
     ];
