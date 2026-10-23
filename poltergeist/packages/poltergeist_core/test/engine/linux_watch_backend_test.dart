@@ -382,8 +382,10 @@ void main() {
 }
 
 /// Ambient descriptor churn from suites sharing this process. A per-cycle
-/// descriptor leak accumulates far past this bound.
-const int _ambientDescriptorSlack = 8;
+/// descriptor leak accumulates far past this bound: at least 25 across
+/// the lifetime test and 40 across the retarget test. A loaded runner
+/// has shown nine ambient descriptors, so eight was too tight.
+const int _ambientDescriptorSlack = 16;
 
 /// The minimum count over a short window: transient holds from sibling
 /// suites settle, a genuine leak's floor stays elevated.
