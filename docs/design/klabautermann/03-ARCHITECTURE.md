@@ -3410,7 +3410,8 @@ through the elevation executor. Outside it the step runs unelevated, and
 a polkit refusal (`Interactive authentication required` or
 `Access denied` on stderr) ends the run as needing admin mode rather
 than as a failed step. Every unit action re-validates that the unit
-still loads, and only start reports no impact.
+still loads or is masked, so that unmask can run, and only start
+reports no impact.
 
 As built in M5 (M22), `UnitAction` also takes enable, disable, mask,
 unmask and reset-failed (SVC-05, SVC-06), each tier 1, and tier 2 on a
