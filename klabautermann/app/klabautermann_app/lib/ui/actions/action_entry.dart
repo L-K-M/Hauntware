@@ -16,6 +16,9 @@ enum ActionEntryPoint {
   /// "Run now" on a timer (JOB-08).
   timerRunNow,
 
+  /// "Run now" on a cron line (JOB-19).
+  cronRunNow,
+
   /// A container's state verbs (CTR-02).
   containerVerb,
 

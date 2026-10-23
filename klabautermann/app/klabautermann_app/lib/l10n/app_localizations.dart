@@ -4816,6 +4816,120 @@ abstract class AppLocalizations {
   /// **'Actions'**
   String get dockerActions;
 
+  /// A jobs table cell as a screen reader hears it: the job's name, then a badge such as jobsPaused.
+  ///
+  /// In en, this message translates to:
+  /// **'{text}, {badge}'**
+  String jobsBadged(String text, String badge);
+
+  /// Screen-reader name of the icon on a paused cron line's row (JOB-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get jobsPaused;
+
+  /// Note in a paused cron line's details (JOB-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Paused: cron skips this line until it is resumed.'**
+  String get jobsPausedDetail;
+
+  /// Screen-reader name of the icon on a cron line another manager owns (JOB-09); manager is the engine's CrontabManager name.
+  ///
+  /// In en, this message translates to:
+  /// **'{manager, select, dokku{Managed by Dokku} coolify{Managed by Coolify} dokploy{Managed by Dokploy} runtipi{Managed by Runtipi} other{Managed by another tool}}'**
+  String jobsManagedBy(String manager);
+
+  /// Note in the details of a cron line another manager owns (JOB-09); manager is the engine's CrontabManager name.
+  ///
+  /// In en, this message translates to:
+  /// **'{manager, select, dokku{Dokku} coolify{Coolify} dokploy{Dokploy} runtipi{Runtipi} other{Another tool}} manages this line. Change it there; a change here may be overwritten.'**
+  String jobsManagedDetail(String manager);
+
+  /// Label of a job's last run in its details (JOB-05).
+  ///
+  /// In en, this message translates to:
+  /// **'Last run'**
+  String get jobsLastRun;
+
+  /// A job's last run while it is being read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading…'**
+  String get jobsLastRunReading;
+
+  /// A timer's last run when it never triggered.
+  ///
+  /// In en, this message translates to:
+  /// **'Never triggered.'**
+  String get jobsLastRunNever;
+
+  /// Note under a timer's last run when its service succeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'It succeeded.'**
+  String get jobsLastRunSucceeded;
+
+  /// Note under a timer's last run when its service failed; result is systemd's Result word, such as exit-code.
+  ///
+  /// In en, this message translates to:
+  /// **'It ended as {result}, exit status {status}.'**
+  String jobsLastRunExited(String result, int status);
+
+  /// Note under a timer's last run when its service ended without an exit status; result is systemd's Result word.
+  ///
+  /// In en, this message translates to:
+  /// **'It ended as {result}.'**
+  String jobsLastRunEnded(String result);
+
+  /// Note under a cron line's last run (JOB-05).
+  ///
+  /// In en, this message translates to:
+  /// **'When cron started it; cron logs no exit status.'**
+  String get jobsLastRunNoStatus;
+
+  /// A cron line's last run when the log holds no start of it.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{cron logged no job starts that can be read.} =1{Not among the 1 newest job start cron logged.} other{Not among the {count} newest job starts cron logged.}}'**
+  String jobsLastRunNotLogged(int count);
+
+  /// A job's last run when its read failed; failure is the engine's JobHistoryFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Connect to the server to read the last run.} invalidTarget{This job\'s last run cannot be read.} other{The last run could not be read.}}'**
+  String jobsLastRunFailed(String failure);
+
+  /// Status in a cron line's run output sheet while it runs (JOB-19).
+  ///
+  /// In en, this message translates to:
+  /// **'Running…'**
+  String get jobsCronRunRunning;
+
+  /// Status in a cron line's run output sheet when the command succeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'It finished with exit status 0.'**
+  String get jobsCronRunSucceeded;
+
+  /// Status in a cron line's run output sheet when the command exited non-zero.
+  ///
+  /// In en, this message translates to:
+  /// **'It finished with exit status {status}.'**
+  String jobsCronRunExited(int status);
+
+  /// A cron line's run output when the command printed nothing.
+  ///
+  /// In en, this message translates to:
+  /// **'It printed nothing.'**
+  String get jobsCronRunNoOutput;
+
+  /// Note under a cron line's run output when the engine capped it.
+  ///
+  /// In en, this message translates to:
+  /// **'The output was longer than this; the rest was dropped.'**
+  String get jobsCronRunTruncated;
+
   /// Timer action (JOB-08): starts the unit the timer activates now.
   ///
   /// In en, this message translates to:

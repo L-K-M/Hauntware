@@ -224,6 +224,67 @@ class UnitActionButtons extends StatelessWidget {
   }
 }
 
+/// A cron line's JOB-19 verb as a button in its details. [onRun] gets
+/// the plan id of the run it starts, whose output comes with its end.
+class CronRunButton extends StatelessWidget {
+  const CronRunButton({
+    super.key,
+    required this.serverId,
+    required this.source,
+    required this.raw,
+    required this.onRun,
+  });
+
+  final String serverId;
+
+  /// The line's source and the line as the row shows it ([RunCronJob]).
+  final String source;
+  final String raw;
+  final void Function(String planId, ActionPreview preview) onRun;
+
+  @override
+  Widget build(BuildContext context) => ActionEntry(
+    serverId: serverId,
+    point: ActionEntryPoint.cronRunNow,
+    child: Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: OutlinedButton.icon(
+        onPressed: () => startAction(
+          context,
+          RunCronJob(serverId, source: source, raw: raw),
+          onRun: onRun,
+        ),
+        icon: const Icon(Icons.play_arrow),
+        label: Text(AppLocalizations.of(context).jobsRunNow),
+      ),
+    ),
+  );
+}
+
+/// A cron line's JOB-19 verb for the Jobs table's row menu, or none where
+/// actions are not allowed.
+List<SidebarMenuEntry> cronActionEntries(
+  BuildContext context, {
+  required String serverId,
+  required String source,
+  required String raw,
+  required void Function(String planId, ActionPreview preview) onRun,
+}) {
+  if (!actionsAllowedAt(context, serverId, ActionEntryPoint.cronRunNow)) {
+    return const [];
+  }
+  return [
+    SidebarMenuAction(
+      label: AppLocalizations.of(context).jobsRunNow,
+      onSelected: () => startAction(
+        context,
+        RunCronJob(serverId, source: source, raw: raw),
+        onRun: onRun,
+      ),
+    ),
+  ];
+}
+
 /// [timer]'s JOB-08 verb for the Jobs table's row menu, or none where
 /// actions are not allowed. [onRun] gets the unit the run starts, whose
 /// journal shows its output.

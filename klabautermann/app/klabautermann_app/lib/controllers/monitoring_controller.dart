@@ -7,6 +7,7 @@ import '../ui/charts/series_ring.dart';
 import '../ui/charts/time_series.dart';
 import 'docker_controller.dart';
 import 'docker_endpoint_choices.dart';
+import 'job_history_reads.dart';
 import 'log_reads.dart';
 import 'log_streams.dart';
 
@@ -149,6 +150,7 @@ final class MonitoringController extends ChangeNotifier {
   }) : _clock = _FreshnessClock(now) {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
     logs = LogStreams(_engine);
+    jobHistory = JobHistoryReads(_engine);
     docker = DockerController(
       _engine,
       endpointChoices: dockerEndpointChoices,
@@ -162,6 +164,10 @@ final class MonitoringController extends ChangeNotifier {
   /// sends every [OpenLogStream] the app sends, [openLogRead]'s included,
   /// since a rejection names no stream.
   late final LogStreams logs;
+
+  /// The Jobs tab's last runs (JOB-05), a concern of its own beside
+  /// [logs].
+  late final JobHistoryReads jobHistory;
 
   /// Each server's Docker endpoint, which the server header names, and
   /// the engine details the Docker tab shows (03 §5.9, §10.2): a concern
@@ -728,6 +734,7 @@ final class MonitoringController extends ChangeNotifier {
   void dispose() {
     unawaited(_events.cancel());
     logs.dispose();
+    jobHistory.dispose();
     docker.dispose();
     _onEngineDone();
     for (final refresh in _refreshes.toList()) {

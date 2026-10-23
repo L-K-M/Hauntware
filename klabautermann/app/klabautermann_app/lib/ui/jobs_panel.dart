@@ -9,7 +9,8 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'actions/action_entry.dart'
-    show ActionEntry, ActionEntryPoint, actionsAllowedAt;
+    show ActionEntry, ActionEntryPoint, OperationsScope, actionsAllowedAt;
+import 'actions/cron_run_output.dart';
 import 'admin_mode_chip.dart' show AdminScope;
 import 'actions/host_actions.dart';
 import 'actions/run_output_sheet.dart';
@@ -276,8 +277,63 @@ class _JobsPanelState extends State<JobsPanel> {
     );
   }
 
-  /// The details' Run now, for a timer row where actions are allowed.
+  /// JOB-19's output sheet for the cron run [planId].
+  void _showCronOutput(String planId, ActionPreview preview) {
+    if (!mounted) return;
+    final operations = OperationsScope.maybeOf(context);
+    if (operations == null) return;
+    unawaited(
+      showCronRunOutput(
+        context,
+        operations: operations,
+        planId: planId,
+        title: preview.targetName,
+      ),
+    );
+  }
+
+  /// The details' last run (JOB-05), read as they open: a timer's last
+  /// trigger and result, or the newest start cron logged for a line that
+  /// is not paused.
+  Widget? _lastRun(BuildContext context, JobEntry job) {
+    final reads = widget.monitoring.jobHistory;
+    final serverId = widget.serverId;
+    final offset = widget.monitoring
+        .profileFor(serverId)
+        .value
+        ?.serverZone
+        ?.offset;
+    return switch (job) {
+      TimerJobEntry(timer: SystemdTimer(:final unit, :final activates?)) =>
+        JobLastRun(
+          offset: offset,
+          read: () => reads.read(
+            serverId,
+            TimerLastRunQuery(timer: unit, service: activates),
+          ),
+        ),
+      CronJobEntry(:final job) when !job.paused => JobLastRun(
+        offset: offset,
+        cronCommand: job.command,
+        cronUser: job.user,
+        read: () => reads.read(serverId, const CronRunsQuery()),
+      ),
+      _ => null,
+    };
+  }
+
+  /// The details' Run now, for a timer row, or a cron line no other
+  /// manager owns, where actions are allowed.
   Widget? _runNow(BuildContext context, JobEntry job) => switch (job) {
+    CronJobEntry(:final job) when job.managedBy == null => CronRunButton(
+      serverId: widget.serverId,
+      source: job.source,
+      raw: job.raw,
+      onRun: (planId, preview) {
+        Navigator.of(context).pop();
+        _showCronOutput(planId, preview);
+      },
+    ),
     TimerJobEntry(:final timer)
         when actionsAllowedAt(
           context,
@@ -516,8 +572,10 @@ class _JobsPanelState extends State<JobsPanel> {
                         profile,
                         clock.value,
                         run: _runNow,
+                        lastRun: _lastRun,
                       ),
-                      // JOB-08 on timer rows where actions are allowed (M4
+                      // JOB-08 on timer rows and JOB-19 on cron lines no
+                      // other manager owns, where actions are allowed (M4
                       // E21); the table keeps no slot otherwise.
                       rowActions:
                           actionsAllowedAt(
@@ -532,6 +590,15 @@ class _JobsPanelState extends State<JobsPanel> {
                                 timer: timer.unit,
                                 onRun: _showOutput,
                               ),
+                              CronJobEntry(:final job)
+                                  when job.managedBy == null =>
+                                cronActionEntries(
+                                  context,
+                                  serverId: widget.serverId,
+                                  source: job.source,
+                                  raw: job.raw,
+                                  onRun: _showCronOutput,
+                                ),
                               _ => const [],
                             }
                           : null,
@@ -687,9 +754,18 @@ List<SortableTableColumn<JobEntry>> _columns(
     SortableTableColumn(
       id: _Column.job.name,
       label: l10n.jobsColumnJob,
-      text: jobTitle,
+      // What a screen reader hears of the cell: the name and its badges.
+      text: (entry) => switch (entry) {
+        CronJobEntry(:final job) => [
+          if (job.paused) l10n.jobsPaused,
+          if (job.managedBy case final manager?)
+            l10n.jobsManagedBy(manager.name),
+        ].fold(jobTitle(entry), l10n.jobsBadged),
+        _ => jobTitle(entry),
+      },
       sortKey: jobTitle,
       extent: const FlexColumnExtent(3),
+      cell: (context, job) => _JobCell(job),
     ),
     if (wide)
       SortableTableColumn(
@@ -838,6 +914,131 @@ String _scheduleCell(AppLocalizations l10n, JobEntry job) {
   return (time: time, dst: run.dst != CronDst.none);
 }
 
+/// A row's name, with an icon for a paused cron line (JOB-07) and one
+/// for a line another manager owns (JOB-09); the column's text names
+/// them for screen readers, so neither is told by colour (A11Y-01).
+class _JobCell extends StatelessWidget {
+  const _JobCell(this.job);
+
+  final JobEntry job;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    final cron = switch (job) {
+      CronJobEntry(:final job) => job,
+      _ => null,
+    };
+    return Row(
+      spacing: 4,
+      children: [
+        Flexible(
+          child: Text(
+            jobTitle(job),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        if (cron?.paused ?? false)
+          Icon(
+            Icons.pause_circle_outline,
+            size: _dstIconSize,
+            color: muted,
+            semanticLabel: l10n.jobsPaused,
+          ),
+        if (cron?.managedBy case final manager?)
+          Icon(
+            Icons.lock_outline,
+            size: _dstIconSize,
+            color: muted,
+            semanticLabel: l10n.jobsManagedBy(manager.name),
+          ),
+      ],
+    );
+  }
+}
+
+/// A job's last run (JOB-05), read once as its details open: a timer's
+/// last trigger and how its service ended, or the newest start cron
+/// logged for the line [cronCommand], as [cronUser] when it names one,
+/// on the server's clock at [offset]. cron logs no exit status, which
+/// the details say.
+class JobLastRun extends StatefulWidget {
+  const JobLastRun({
+    super.key,
+    required this.read,
+    required this.offset,
+    this.cronCommand,
+    this.cronUser,
+  });
+
+  final Future<JobHistoryPayload> Function() read;
+  final Duration? offset;
+
+  /// A cron line's command, masked as the row shows it, and its user.
+  final String? cronCommand;
+  final String? cronUser;
+
+  @override
+  State<JobLastRun> createState() => _JobLastRunState();
+}
+
+class _JobLastRunState extends State<JobLastRun> {
+  late final Future<JobHistoryPayload> _read = widget.read();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final offset = widget.offset ?? Duration.zero;
+    String at(DateTime time) =>
+        l10n.jobsRunTime(wallAt(time, offset), utcOffsetText(l10n, offset));
+    return FutureBuilder(
+      future: _read,
+      builder: (context, snapshot) =>
+          _Labelled(l10n.jobsLastRun, switch (snapshot.data) {
+            null => [_Run(l10n.jobsLastRunReading)],
+            TimerLastRunPayload(lastRun: TimerLastRun(lastTrigger: null)) => [
+              _Run(l10n.jobsLastRunNever),
+            ],
+            TimerLastRunPayload(:final lastRun) => [
+              _Run(
+                at(lastRun.lastTrigger!),
+                note: switch (lastRun) {
+                  TimerLastRun(result: 'success') => l10n.jobsLastRunSucceeded,
+                  TimerLastRun(:final result?, :final exitStatus?) =>
+                    l10n.jobsLastRunExited(result, exitStatus),
+                  TimerLastRun(:final result?) => l10n.jobsLastRunEnded(result),
+                  _ => null,
+                },
+              ),
+            ],
+            CronRunsPayload(:final runs) => switch (_newest(runs)) {
+              final run? => [_Run(at(run.at), note: l10n.jobsLastRunNoStatus)],
+              null => [_Run(l10n.jobsLastRunNotLogged(runs.length))],
+            },
+            JobHistoryFailed(:final failure) => [
+              _Run(l10n.jobsLastRunFailed(failure.name)),
+            ],
+            _ => [_Run(l10n.chartUnknownValue)],
+          }),
+    );
+  }
+
+  /// The newest of [runs] that started [JobLastRun.cronCommand], both
+  /// masked, as its user. The runs come newest first.
+  LoggedCronRun? _newest(List<LoggedCronRun> runs) {
+    final command = widget.cronCommand;
+    if (command == null) return null;
+    final user = widget.cronUser;
+    return runs
+        .where(
+          (run) => run.command == command && (user == null || run.user == user),
+        )
+        .firstOrNull;
+  }
+}
+
 /// A next run, grey while stale beside the freshness line's history icon
 /// (03 §9.5 item 4), with an icon when a DST change marks it; the column's
 /// text names the change, and the details say what it does.
@@ -906,6 +1107,7 @@ void _showDetails(
   HostProfile? profile,
   DateTime now, {
   required Widget? Function(BuildContext context, JobEntry job) run,
+  Widget? Function(BuildContext context, JobEntry job)? lastRun,
 }) {
   unawaited(
     showModalBottomSheet<void>(
@@ -920,6 +1122,7 @@ void _showDetails(
             spacing: 16,
             children: [
               JobDetails(job: job, profile: profile, now: now),
+              ?lastRun?.call(context, job),
               ?run(context, job),
             ],
           ),
@@ -973,6 +1176,9 @@ class JobDetails extends StatelessWidget {
           // The title is the line's command.
           CronJobEntry(:final job) => [
             _Labelled(l10n.jobsDetailsWritten, [Text(job.schedule)]),
+            if (job.paused) _Run.note(l10n.jobsPausedDetail),
+            if (job.managedBy case final manager?)
+              _Run.note(l10n.jobsManagedDetail(manager.name)),
           ],
           TimerJobEntry(timer: SystemdTimer(:final activates?)) => [
             _Labelled(l10n.jobsDetailsStarts, [Text(activates)]),

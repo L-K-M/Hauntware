@@ -3706,6 +3706,108 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerActions => 'Actions';
 
   @override
+  String jobsBadged(String text, String badge) {
+    return '$text, $badge';
+  }
+
+  @override
+  String get jobsPaused => 'Paused';
+
+  @override
+  String get jobsPausedDetail =>
+      'Paused: cron skips this line until it is resumed.';
+
+  @override
+  String jobsManagedBy(String manager) {
+    String _temp0 = intl.Intl.selectLogic(manager, {
+      'dokku': 'Managed by Dokku',
+      'coolify': 'Managed by Coolify',
+      'dokploy': 'Managed by Dokploy',
+      'runtipi': 'Managed by Runtipi',
+      'other': 'Managed by another tool',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String jobsManagedDetail(String manager) {
+    String _temp0 = intl.Intl.selectLogic(manager, {
+      'dokku': 'Dokku',
+      'coolify': 'Coolify',
+      'dokploy': 'Dokploy',
+      'runtipi': 'Runtipi',
+      'other': 'Another tool',
+    });
+    return '$_temp0 manages this line. Change it there; a change here may be overwritten.';
+  }
+
+  @override
+  String get jobsLastRun => 'Last run';
+
+  @override
+  String get jobsLastRunReading => 'Reading…';
+
+  @override
+  String get jobsLastRunNever => 'Never triggered.';
+
+  @override
+  String get jobsLastRunSucceeded => 'It succeeded.';
+
+  @override
+  String jobsLastRunExited(String result, int status) {
+    return 'It ended as $result, exit status $status.';
+  }
+
+  @override
+  String jobsLastRunEnded(String result) {
+    return 'It ended as $result.';
+  }
+
+  @override
+  String get jobsLastRunNoStatus =>
+      'When cron started it; cron logs no exit status.';
+
+  @override
+  String jobsLastRunNotLogged(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Not among the $count newest job starts cron logged.',
+      one: 'Not among the 1 newest job start cron logged.',
+      zero: 'cron logged no job starts that can be read.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String jobsLastRunFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Connect to the server to read the last run.',
+      'invalidTarget': 'This job\'s last run cannot be read.',
+      'other': 'The last run could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get jobsCronRunRunning => 'Running…';
+
+  @override
+  String get jobsCronRunSucceeded => 'It finished with exit status 0.';
+
+  @override
+  String jobsCronRunExited(int status) {
+    return 'It finished with exit status $status.';
+  }
+
+  @override
+  String get jobsCronRunNoOutput => 'It printed nothing.';
+
+  @override
+  String get jobsCronRunTruncated =>
+      'The output was longer than this; the rest was dropped.';
+
+  @override
   String get jobsRunNow => 'Run now';
 
   @override

@@ -3683,6 +3683,19 @@ As built in M5 (M24c), the rows carry JOB-07 and JOB-09:
   act-anyway an edit of a managed line needs (8.7) joins the edit plan
   once that pipeline and these rows share a base.
 
+As built in M5 (M27c, first part), the Jobs tab shows these:
+- A paused line's row carries a pause icon and a managed one a lock;
+  the cell's text names both for screen readers, and the details say
+  what each means.
+- The details read the last run (JOB-05) as they open, through
+  `JobHistoryReads`: a timer's last trigger and how its service ended,
+  or the newest start cron logged for the line, matched by its masked
+  command and user, which carries no exit status.
+- Run now (JOB-19) sits in a cron line's row menu and details, except
+  on a managed line; the output sheet waits for the run's end and shows
+  its exit status and what it printed. Edit crontab, Pause and Resume
+  follow once the editor (M17) shares this base.
+
 As built in M2 (`app/klabautermann_app/lib/ui/jobs_panel.dart`,
 `jobs_view.dart`), the Jobs tab lists the `cron` stream's jobs rows and
 a row per `timers` entry in the sortable table, next run first, with
