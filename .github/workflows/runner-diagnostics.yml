@@ -18,7 +18,7 @@ jobs:
         run: |
           id
           printf 'Runner environment: %s\n' "$RUNNER_ENVIRONMENT"
-          for path in /tmp "$HOME" "$RUNNER_TOOL_CACHE"; do
+          for path in /tmp "$HOME" "$RUNNER_TOOL_CACHE" "$RUNNER_TEMP"; do
             printf '\nPath: %s\n' "$path"
             findmnt -T "$path"
             stat -c 'device=%d mount=%m path=%n' "$path"
@@ -64,28 +64,25 @@ jobs:
             --output /dev/null --silent --show-error \
             --write-out 'HTTP=%{http_code} bytes=%{size_download} bytes_per_second=%{speed_download} connect=%{time_connect}s first_byte=%{time_starttransfer}s total=%{time_total}s\n' \
             https://dl.flathub.org/repo/summary
-      - name: Trace Flatpak downloads
+      - name: Trace RAM and disk installs
         if: always()
         shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y strace
-          base="$(mktemp -d /tmp/hauntware-flatpak-XXXXXX)"
-          trap 'rm -rf "$base"' EXIT
-          for mode in delta objects; do
-            export FLATPAK_USER_DIR="$base/$mode"
+          for location in /tmp "$RUNNER_TOOL_CACHE" "$RUNNER_TEMP"; do
+            base="$(mktemp -d "$location/hauntware-flatpak-XXXXXX")"
+            trap 'rm -rf "$base"' EXIT
+            export FLATPAK_USER_DIR="$base/installation"
             flatpak remote-add --user flathub https://flathub.org/repo/flathub.flatpakrepo
-            flags=()
-            if [ "$mode" = objects ]; then
-              flags=(--no-static-deltas)
-            fi
-            printf '\nNetwork trace: %s\n' "$mode"
+            printf '\nStorage trace: %s\n' "$location"
             set +e
-            time timeout --kill-after=10s 120s strace -f -tt -T -e trace=connect,getsockopt \
+            time timeout --kill-after=10s 60s strace -f -w -c \
               flatpak --verbose --ostree-verbose install \
-              --user --noninteractive --no-deps --no-related "${flags[@]}" \
+              --user --noninteractive --no-deps --no-related \
               flathub runtime/org.freedesktop.Platform.codecs-extra/x86_64/25.08-extra
             result=$?
             set -e
-            printf 'Install result: mode=%s status=%s\n' "$mode" "$result"
+            printf 'Install result: location=%s status=%s\n' "$location" "$result"
+            rm -rf "$base"
           done
