@@ -56,6 +56,47 @@ void main() {
     },
   );
 
+  test('input typed into a running program is not reported', () {
+    final commands = <String>[];
+    final e = XtermTerminalEngine(onCommand: commands.add);
+    e.feed(
+      Uint8List.fromList(
+        utf8.encode(
+          '\x1b]1337;ShellIntegrationVersion=1;bash\x07'
+          '\x1b]133;A\x07\x1b]133;B\x07',
+        ),
+      ),
+    );
+
+    e.injectInput('sudo ls');
+    e.injectInput('\r');
+    e.feed(Uint8List.fromList(utf8.encode('\x1b]133;C\x07Password: ')));
+    e.injectInput('hunter2');
+    e.injectInput('\r');
+    expect(commands, ['sudo ls']);
+
+    // The next prompt takes commands again.
+    e.feed(
+      Uint8List.fromList(
+        utf8.encode('\x1b]133;D;0\x07\x1b]133;A\x07\x1b]133;B\x07'),
+      ),
+    );
+    e.injectInput('ls');
+    e.injectInput('\r');
+    expect(commands, ['sudo ls', 'ls']);
+  });
+
+  test('without shell integration every line is reported', () {
+    final commands = <String>[];
+    final e = XtermTerminalEngine(onCommand: commands.add);
+
+    e.injectInput('ls');
+    e.injectInput('\r');
+    e.injectInput('pwd');
+    e.injectInput('\r');
+    expect(commands, ['ls', 'pwd']);
+  });
+
   test('sendKey forwards raw bytes to the session input', () async {
     final e = XtermTerminalEngine();
     final got = <int>[];
