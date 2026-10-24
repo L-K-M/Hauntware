@@ -92,7 +92,8 @@ void openContainerDetails(
 /// button that opens its logs ([openContainerLogs]), one that swaps its
 /// details for a [ContainerShellPane] where actions are allowed (CTX-07),
 /// and a close button. It takes keyboard focus as it opens, so the
-/// details are read next, and Escape inside it closes it.
+/// details are read next, and Escape inside it closes it, except from a
+/// shell pane, whose terminal hands Escape to the container.
 ///
 /// The shell pane goes, closing its shell, when another container shows
 /// or actions on the server stop being allowed.

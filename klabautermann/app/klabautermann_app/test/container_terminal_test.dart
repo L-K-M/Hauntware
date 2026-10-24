@@ -349,6 +349,7 @@ void main() {
       expect(_typed(engine), contains('cd /tmp'));
       expect(_typed(engine), isNot(contains('rm')));
       expect(_typed(engine), isNot(contains('\r')));
+      expect(_typed(engine), isNot(contains('\n')));
     });
 
     testWidgets('a clean multi-line paste goes in line by line, and Cancel '
@@ -466,14 +467,18 @@ void main() {
       addTearDown(tester.view.reset);
       final safety = SafetyController(initial: policy, apply: (_) {});
       addTearDown(safety.dispose);
+      // The scopes sit over the Navigator, as in the app, so a pushed
+      // route sees them. A phone platform, which the phone case needs.
       await tester.pumpWidget(
         MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.android),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: SafetyScope(
+          builder: (context, child) => SafetyScope(
             safety: safety,
-            child: OperationsScope(operations: operations, child: home),
+            child: OperationsScope(operations: operations, child: child!),
           ),
+          home: home,
         ),
       );
       return safety;
@@ -543,6 +548,27 @@ void main() {
 
       expect(find.text('Shell in web-db'), findsOneWidget);
       expect(find.byType(ContainerShellPane), findsOneWidget);
+    });
+
+    testWidgets('read-only takes the pushed shell away too', (tester) async {
+      final safety = await pumpScoped(
+        tester,
+        _allowed,
+        ContainerDetailsPage(
+          monitoring: monitoring,
+          serverId: _serverId,
+          container: _row,
+        ),
+      );
+      await tester.tap(find.byTooltip('Open a shell'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Open shell'));
+      await tester.pump();
+
+      await safety.setGlobalReadOnly(true);
+      await tester.pump();
+      expect(find.byType(ContainerShellPane), findsNothing);
+      expect(engine.sentOfType<CloseTerminal>(), hasLength(1));
     });
   });
 }

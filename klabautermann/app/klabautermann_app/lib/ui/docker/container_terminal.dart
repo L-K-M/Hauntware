@@ -9,6 +9,7 @@ import 'package:seance_terminal/seance_terminal.dart';
 import '../../controllers/container_terminals.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
+import '../actions/action_entry.dart';
 import 'containers_view.dart' show containerNameOf;
 
 /// Opens a shell in [container] on a page of its own, full screen with
@@ -31,10 +32,17 @@ void openContainerShellPage(
           ),
         ),
         body: SafeArea(
-          child: ContainerShellPane(
-            monitoring: monitoring,
+          // Gated like the entry that pushed it, as the desktop inspector
+          // gates its pane: a switch to read-only or observe-only takes
+          // the pane away, which closes its shell.
+          child: ActionEntry(
             serverId: serverId,
-            container: container,
+            point: ActionEntryPoint.containerShell,
+            child: ContainerShellPane(
+              monitoring: monitoring,
+              serverId: serverId,
+              container: container,
+            ),
           ),
         ),
       ),
@@ -258,6 +266,10 @@ class _ShellViewState extends State<_ShellView> {
         : keys.isControlPressed && keys.isShiftPressed;
     if (!clip) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.keyV) {
+      // As the toolbar and the menu offer no paste once the shell ended.
+      if (widget.run.shell.state.value is ContainerShellEnded) {
+        return KeyEventResult.handled;
+      }
       unawaited(_paste());
       return KeyEventResult.handled;
     }
