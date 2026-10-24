@@ -339,7 +339,9 @@ export KLABAUTERMANN_FIXTURE_PORT KLABAUTERMANN_FIXTURE_JUMP_PORT \
   KLABAUTERMANN_FIXTURE_AGENT_FINGERPRINT
 export KLABAUTERMANN_FIXTURE_USER="$fixture_user"
 export KLABAUTERMANN_FIXTURE_IDENTITY_FILE="$runtime_dir/identity"
-export KLABAUTERMANN_SYNC_SERVER="http://$(sync_address)"
+# Assigned first: export would hide a failed lookup's status.
+sync_server="http://$(sync_address)"
+export KLABAUTERMANN_SYNC_SERVER="$sync_server"
 export KLABAUTERMANN_PREVIOUS_RELEASE_HARNESS
 
 reporter=(--reporter expanded)

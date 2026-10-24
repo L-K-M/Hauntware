@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart'
     show SidebarMenuAction, SidebarMenuEntry, SidebarMenuSubmenu;
@@ -330,6 +332,235 @@ class StackActionButtons extends StatelessWidget {
               child: Text(_stackLabel(l10n, verb)),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// What a service's menu offers (STK-23), in its order.
+enum StackServiceOffer { start, stop, restart, pull, recreate, scale }
+
+String _serviceOfferLabel(AppLocalizations l10n, StackServiceOffer offer) =>
+    switch (offer) {
+      StackServiceOffer.start => l10n.dockerStackStart,
+      StackServiceOffer.stop => l10n.dockerStackStop,
+      StackServiceOffer.restart => l10n.dockerStackRestart,
+      StackServiceOffer.pull => l10n.dockerStackServicePull,
+      StackServiceOffer.recreate => l10n.dockerStackServiceRecreate,
+      StackServiceOffer.scale => l10n.dockerStackServiceScale,
+    };
+
+/// What [offer] on [service] of [project] asks the engine to plan;
+/// [replicas] for [StackServiceOffer.scale].
+ActionIntent stackServiceIntent(
+  String serverId, {
+  required String project,
+  required String service,
+  required StackServiceOffer offer,
+  int? replicas,
+}) => switch (offer) {
+  StackServiceOffer.start => StackAction(
+    serverId,
+    project: project,
+    verb: StackVerb.start,
+    service: service,
+  ),
+  StackServiceOffer.stop => StackAction(
+    serverId,
+    project: project,
+    verb: StackVerb.stop,
+    service: service,
+  ),
+  StackServiceOffer.restart => StackAction(
+    serverId,
+    project: project,
+    verb: StackVerb.restart,
+    service: service,
+  ),
+  StackServiceOffer.pull => StackComposeAction(
+    serverId,
+    project: project,
+    verb: StackComposeVerb.pullService,
+    service: service,
+  ),
+  StackServiceOffer.recreate => StackComposeAction(
+    serverId,
+    project: project,
+    verb: StackComposeVerb.recreateService,
+    service: service,
+  ),
+  StackServiceOffer.scale => StackComposeAction(
+    serverId,
+    project: project,
+    verb: StackComposeVerb.scaleService,
+    service: service,
+    replicas: replicas,
+  ),
+};
+
+/// A service's actions (STK-23) as a menu on its card, where actions on
+/// [serverId] are allowed. Scale asks for the replica count first. The
+/// engine refuses what the stack's verdict or manager does not allow,
+/// and the preview says why.
+class StackServiceMenu extends StatelessWidget {
+  const StackServiceMenu({
+    super.key,
+    required this.serverId,
+    required this.project,
+    required this.service,
+    this.replicas,
+  });
+
+  final String serverId;
+  final String project;
+  final String service;
+
+  /// The service's container count, which Scale starts from.
+  final int? replicas;
+
+  Future<void> _choose(BuildContext context, StackServiceOffer offer) async {
+    int? count;
+    if (offer == StackServiceOffer.scale) {
+      count = await showDialog<int>(
+        context: context,
+        builder: (context) =>
+            _ScaleDialog(service: service, initial: replicas ?? 1),
+      );
+      if (count == null || !context.mounted) return;
+    }
+    startAction(
+      context,
+      stackServiceIntent(
+        serverId,
+        project: project,
+        service: service,
+        offer: offer,
+        replicas: count,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return ActionEntry(
+      serverId: serverId,
+      point: ActionEntryPoint.stackService,
+      child: PopupMenuButton<StackServiceOffer>(
+        tooltip: l10n.dockerStackServiceActions(service),
+        icon: const Icon(Icons.more_vert),
+        onSelected: (offer) => unawaited(_choose(context, offer)),
+        itemBuilder: (context) => [
+          for (final offer in StackServiceOffer.values)
+            PopupMenuItem(
+              value: offer,
+              child: Text(_serviceOfferLabel(l10n, offer)),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Asks how many containers [service] should run, 0 to
+/// [kComposeMaxScale].
+class _ScaleDialog extends StatefulWidget {
+  const _ScaleDialog({required this.service, required this.initial});
+
+  final String service;
+  final int initial;
+
+  @override
+  State<_ScaleDialog> createState() => _ScaleDialogState();
+}
+
+class _ScaleDialogState extends State<_ScaleDialog> {
+  late final _count = TextEditingController(text: widget.initial.toString());
+
+  @override
+  void dispose() {
+    _count.dispose();
+    super.dispose();
+  }
+
+  int? get _value {
+    final value = int.tryParse(_count.text.trim());
+    return value != null && value >= 0 && value <= kComposeMaxScale
+        ? value
+        : null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final value = _value;
+    void submit() {
+      if (value != null) Navigator.pop(context, value);
+    }
+
+    return AlertDialog(
+      title: Text(l10n.dockerStackScaleTitle(widget.service)),
+      content: TextField(
+        controller: _count,
+        autofocus: true,
+        keyboardType: TextInputType.number,
+        decoration: InputDecoration(
+          labelText: l10n.dockerStackScaleLabel,
+          errorText: value == null
+              ? l10n.dockerStackScaleRange(kComposeMaxScale)
+              : null,
+        ),
+        onChanged: (_) => setState(() {}),
+        onSubmitted: (_) => submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(l10n.dockerStackScaleCancel),
+        ),
+        FilledButton(
+          onPressed: value == null ? null : submit,
+          child: Text(l10n.dockerStackServiceScale),
+        ),
+      ],
+    );
+  }
+}
+
+/// Takes a whole stack down (STK-23): its containers and networks, never
+/// its volumes. The preview asks for the typed confirmation.
+class StackDownButton extends StatelessWidget {
+  const StackDownButton({
+    super.key,
+    required this.serverId,
+    required this.project,
+  });
+
+  final String serverId;
+  final String project;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final error = Theme.of(context).colorScheme.error;
+    return ActionEntry(
+      serverId: serverId,
+      point: ActionEntryPoint.stackDown,
+      child: Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(foregroundColor: error),
+          onPressed: () => startAction(
+            context,
+            StackComposeAction(
+              serverId,
+              project: project,
+              verb: StackComposeVerb.down,
+            ),
+          ),
+          icon: const Icon(Icons.arrow_downward),
+          label: Text(l10n.dockerStackDown),
+        ),
       ),
     );
   }

@@ -289,6 +289,10 @@ void main() {
       expect((await openEnrollment()).pinPublicationAssertion, '2026.11.0');
 
       await state.setPinPublicationAssertion(null);
+      expect(
+        await fileIn(syncEnrollmentFileName).readAsString(),
+        '{"version":1,"passphraseUnverified":false,"notices":[]}',
+      );
       expect((await openEnrollment()).pinPublicationAssertion, isNull);
     });
 

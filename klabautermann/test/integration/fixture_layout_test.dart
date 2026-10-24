@@ -314,9 +314,21 @@ void main() {
     final seed = read('klabautermann/test/integration/seed_docker.sh');
     expect(seed, contains("app_image='registry:5000/klab/app:1'"));
     expect(seed, contains(r'docker push --quiet "$app_image"'));
-    for (final stack in ['redeploy', 'orphans', 'managed']) {
+    for (final stack in [
+      'redeploy',
+      'orphans',
+      'managed',
+      // The v1 stack suite's (M5 M29); `idle` never runs.
+      'services',
+      'downable',
+      'override',
+      'profiled',
+      'idle',
+    ]) {
       expect(seed, contains('"\$stacks/$stack/compose.yaml"'), reason: stack);
     }
+    expect(seed, contains('--file "\$stacks/override/compose.override.yaml"'));
+    expect(seed, isNot(contains('--project-name idle')));
     expect(seed, contains('--name ssh-port --publish 22:22'));
   });
 
@@ -347,7 +359,10 @@ void main() {
     expect(run, contains('\nwait_for_sync\n'));
     expect(
       run,
-      contains(r'export KLABAUTERMANN_SYNC_SERVER="http://$(sync_address)"'),
+      contains(
+        'sync_server="http://\$(sync_address)"\n'
+        r'export KLABAUTERMANN_SYNC_SERVER="$sync_server"',
+      ),
     );
     final suite = read(
       'klabautermann/packages/klabautermann_core/test/integration/'

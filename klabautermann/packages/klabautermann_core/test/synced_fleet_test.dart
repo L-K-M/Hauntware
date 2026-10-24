@@ -41,6 +41,12 @@ void main() {
     expect(entry.searchText, contains('label-a'));
     expect(entry.locatorConflict, isNull);
     expect(entry.endpoint, EndpointConfirmation.unconfirmed);
+    expect(entry.excludedFromSync, isFalse);
+
+    final [excluded] = SyncedFleet([
+      _server('b').copyWith(excludeFromSync: true, updatedAt: 2),
+    ]).entries;
+    expect(excluded.excludedFromSync, isTrue);
   });
 
   test('sign-in kinds follow the server config', () {

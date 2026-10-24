@@ -16,13 +16,16 @@ export 'src/engine/engine_client.dart';
 export 'src/engine/engine_isolate.dart' show EngineStart;
 export 'src/engine/protocol.dart';
 // The plain-data plan parts an ActionPreview carries (03 §8.5), and
-// DangerLinter's findings in it.
+// DangerLinter's findings in it. The linter itself checks what is pasted
+// into a container shell, as in Séance's shells (03 §7.13).
 export 'src/operations/plan_types.dart';
+
 export 'package:seance_core/seance_core.dart'
-    show DangerFinding, DangerSeverity;
+    show DangerFinding, DangerLinter, DangerSeverity;
 // The signal and unit verb an ActionIntent names (PRC-02, SVC-03).
 export 'package:klabautermann_host/klabautermann_host.dart'
     show KillSignal, SystemctlVerb;
+
 // FL-21's monitor set rules, which the engine enforces and the app's
 // toggles offer (03 §4.3 step 4).
 export 'src/fleet/monitor_set.dart'
@@ -80,6 +83,10 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         TimersSnapshot,
         UnitListFormat,
         UnitsSnapshot;
+// The Logs panel's boot picker and /var/log browser (LOG-08, LOG-09): a
+// HostResult's rows and the boot a source reads.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show JournalBoot, JournalBootEntry, LogCompression, LogFileEntry;
 // The Jobs panel (JOB-01, JOB-02): the jobs rows a CronResult carries, the
 // timer rows the app builds from a TimersResult, their schedule
 // descriptions and their runs as plain CronRun values (D52), and the
@@ -91,6 +98,7 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         CronDst,
         CronFieldItem,
         CronFields,
+        CronJob,
         CronJobEntry,
         CronMacro,
         CronRun,
@@ -108,11 +116,25 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         userCrontabSource;
 
 export 'src/sampling/sample_results.dart' show kCronLinesEvaluated;
+// Pause and Resume rewrite a cron line through the edit pipeline
+// (JOB-07): the crontab that holds it and the text with it toggled.
+export 'src/jobs/cron_pause.dart' show cronPauseTarget, togglePausedCronJob;
 
 // Detached operations (03 §7.17): which directory an operation records
 // in, and how far each directory's listing got.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show OpDirectoryKind, OpDirectoryListing, OpDirectoryState;
+// Job history (JOB-04, JOB-05): what a JobHistoryResult carries.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show AnacronJob, AnacronPeriod, LoggedCronRun, TimerLastRun;
+// The v1 unit reads (SVC-08, SVC-10): the resources and sockets a
+// UnitQueryResult carries.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show UnitResources, UnitSocket;
+// The footprint view (SAF-14, 03 §8.11): the manifest rows and backup
+// index entries a FootprintState carries.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show BackupEntry, FootprintKind, FootprintRow;
 // The Logs panel's LOG-04 notice: the access check's journal row (K04)
 // over the probe's HostProfile.
 export 'package:klabautermann_host/klabautermann_host.dart'
@@ -139,6 +161,9 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         HostPanel,
         evaluatePanel;
 export 'package:seance_core/seance_core.dart' show quoteShellWord;
+// A one-off command's words, split as a shell would without expanding
+// them (CTX-08).
+export 'src/operations/command_words.dart' show splitCommandWords;
 // The sync sign-in form (03 §4.3 step 1) checks its fields with the
 // suite's enrollment rule before the engine is asked, and the pull-only
 // test names the push policy.
@@ -169,6 +194,7 @@ export 'src/docker/docker_ladder.dart'
 export 'src/docker/docker_ladder.dart'
     show DockerSocketPathProblem, dockerSocketPathProblem;
 export 'src/docker/docker_access.dart' show dockerAccessFacts;
+
 export 'package:klabautermann_host/klabautermann_host.dart'
     show ComposeFacts, DockerAccessFacts;
 
@@ -198,7 +224,8 @@ export 'package:klabautermann_docker/klabautermann_docker.dart'
         Ownership,
         OwnershipMarker,
         SystemDf,
-        dockerSummary;
+        dockerSummary,
+        kComposeMaxScale;
 // A container's managed-by badge (DKE-10), from its inspected labels; a
 // stack's is its ComposeProject.ownership.
 export 'package:klabautermann_docker/klabautermann_docker.dart'

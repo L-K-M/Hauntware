@@ -20,6 +20,8 @@ import 'controllers/monitor_set.dart';
 import 'controllers/monitoring_controller.dart';
 import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
+import 'controllers/server_prefs_controller.dart';
+import 'controllers/stack_folders.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
 import 'services/app_version.dart';
@@ -178,9 +180,16 @@ Future<void> main(List<String> args) async {
   // Spawned once per launch: a restarted engine would be a new client
   // with new controllers over it, whose seq floors start empty (D44), and
   // KlabautermannApp remounts its tree when handed them.
+  // STK-08's scan folders per server, device-local in settings.json until
+  // the pref record syncs them (M5 plan M05).
+  final stackFolders = StackFolders(
+    stored: settings.stackFolders,
+    save: settings.setStackFolders,
+  );
   final monitoring = MonitoringController(
     engine,
     dockerEndpointChoices: dockerEndpointChoices,
+    stackFolders: stackFolders,
   );
   // The host-key and keyboard-interactive prompts the engine raises while
   // it connects, shown one at a time over every route.
@@ -226,9 +235,14 @@ Future<void> main(List<String> args) async {
     save: settings.setAnnounceThresholdBands,
   );
 
-  // The safety preferences (M4 plan M4), device-local in settings.json and
-  // applied to the engine now, since it starts with every server
-  // observe-only, and on every change.
+  // The synced servers' preferences (03 §4.8), as the engine reports their
+  // `pref` records.
+  final serverPrefs = ServerPrefsController(engine);
+
+  // The safety preferences (M4 plan M4), in settings.json and, for synced
+  // servers, their read-only switches and marks in their `pref` records
+  // (M5 plan M06); applied to the engine now, since it starts with every
+  // server observe-only, and on every change.
   final safety = safetyFromSettings(
     settings,
     engine,
@@ -238,6 +252,7 @@ Future<void> main(List<String> args) async {
             .firstOrNull
             ?.displayName ??
         serverId,
+    prefs: serverPrefs,
   );
 
   // The "sync passwords" switch (SYN-02), device-local in settings.json

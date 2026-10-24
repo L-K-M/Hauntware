@@ -661,6 +661,30 @@ void main() {
         ),
         CatalogWriteFailure.unknownTarget,
       );
+      expect(
+        await failure(
+          sync.putRule(
+            const PutRule(
+              requestId: 'r5',
+              ruleId: 'rule-1',
+              rule: ThresholdRule(
+                metric: 'cpu.busy',
+                op: ThresholdOp.greaterThan,
+                raise: ThresholdBound(
+                  value: 90,
+                  duration: Duration(minutes: 5),
+                ),
+                clear: ThresholdBound(
+                  value: 70,
+                  duration: Duration(minutes: 2),
+                ),
+              ),
+              target: ' ',
+            ),
+          ),
+        ),
+        CatalogWriteFailure.invalidDraft,
+      );
       expect([for (final s in await sync.servers()) s.id], ['srv-seed']);
       await sync.runRound();
       expect(server.pushed, isEmpty);

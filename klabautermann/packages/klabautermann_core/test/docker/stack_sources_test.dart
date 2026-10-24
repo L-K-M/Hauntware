@@ -95,7 +95,7 @@ List<String> _argv(String command) {
   return words.sublist(4);
 }
 
-enum _Run { test, cli, config }
+enum _Run { test, cli, config, profiles, scan }
 
 /// An SFTP file system over a map of files, which reads in 32 KiB chunks
 /// and stops with `cancelled` once asked, as the real one does.
@@ -198,6 +198,15 @@ final class _Harness {
     exitCode: 0,
   );
 
+  /// `config --profiles`' answer (STK-09).
+  RemoteCommandResult profiles = const RemoteCommandResult(
+    stdout: 'tools\ndebug\n',
+    exitCode: 0,
+  );
+
+  /// The folder scan's answer (STK-08).
+  RemoteCommandResult scan = const RemoteCommandResult(stdout: '', exitCode: 0);
+
   /// Every answered run by kind, with its words.
   final runs = <(_Run, List<String>)>[];
 
@@ -208,7 +217,11 @@ final class _Harness {
 
   Future<RemoteCommandResult>? _answer(String command) {
     final argv = _argv(command);
-    final kind = argv.first == 'docker'
+    final kind = argv.first == 'find'
+        ? _Run.scan
+        : argv.first == 'docker' && argv.contains('--profiles')
+        ? _Run.profiles
+        : argv.first == 'docker'
         ? _Run.config
         : argv[2].contains('docker-compose')
         ? _Run.cli
@@ -223,6 +236,8 @@ final class _Harness {
       ),
       _Run.cli => RemoteCommandResult(stdout: cli, exitCode: 0),
       _Run.config => hashes,
+      _Run.profiles => profiles,
+      _Run.scan => scan,
     };
     return () async {
       inFlight++;
@@ -259,16 +274,13 @@ final class _Harness {
     return stacks().last;
   }
 
-  Future<DockerPayload> read(String project, String path) async {
+  Future<DockerPayload> read(String project, String path) =>
+      query(DockerStackFileQuery(project: project, path: path));
+
+  Future<DockerPayload> query(DockerQuerySpec spec) async {
     router.probed(_srv, _profile);
     final id = 'q-${events.length}';
-    router.query(
-      DockerQuery(
-        serverId: _srv,
-        queryId: id,
-        query: DockerStackFileQuery(project: project, path: path),
-      ),
-    );
+    router.query(DockerQuery(serverId: _srv, queryId: id, query: spec));
     await settle();
     return events
         .whereType<DockerResult>()
@@ -769,6 +781,136 @@ void main() {
         );
       }
     });
+  });
+
+  group('edits, profiles and folders (STK-07 to STK-09, M25b)', () {
+    /// [StackSources.editable] over the harness's endpoint.
+    Future<({ComposeProject? project, StackFileFailure? failure})> editable(
+      _Harness h,
+      String project,
+      String path,
+    ) async {
+      h.router.probed(_srv, _profile);
+      return h.router.useStacks(
+        _srv,
+        (client, _, stacks) => stacks.editable(client, project, path),
+      );
+    }
+
+    test("only a verified project's own files are editable", () async {
+      final ok = await editable(_Harness(_demo()), 'demo', _compose);
+      expect(ok.failure, isNull);
+      expect(ok.project?.configFiles, [_compose]);
+
+      final dotEnv = await editable(
+        _Harness(_demo()),
+        'demo',
+        '/srv/demo/.env',
+      );
+      expect(dotEnv.failure, isNull);
+
+      final unverified = _Harness(_demo(webHash: 'dead00'));
+      expect(
+        (await editable(unverified, 'demo', _compose)).failure,
+        StackFileFailure.notVerified,
+      );
+      expect(
+        (await editable(_Harness(_demo()), 'demo', '/etc/passwd')).failure,
+        StackFileFailure.notStackFile,
+      );
+      expect(
+        (await editable(_Harness(_demo()), 'gone', _compose)).failure,
+        StackFileFailure.unknownStack,
+      );
+    });
+
+    test("a verified project's profiles arrive sorted from config "
+        '--profiles over its files', () async {
+      final h = _Harness(_demo());
+      final payload =
+          await h.query(const DockerStackProfilesQuery('demo'))
+              as DockerStackProfilesPayload;
+
+      expect(payload.profiles, ['debug', 'tools']);
+      final (_, argv) = h.runs.lastWhere((r) => r.$1 == _Run.profiles);
+      expect(
+        argv,
+        containsAllInOrder(['-f', _compose, 'config', '--profiles']),
+      );
+    });
+
+    test('profiles: an unverified project is refused without running '
+        'compose, and a failed run says so', () async {
+      final unverified = _Harness(_demo(webHash: 'dead00'));
+      expect(
+        (await unverified.query(const DockerStackProfilesQuery('demo'))
+                as DockerStackFileFailed)
+            .failure,
+        StackFileFailure.notVerified,
+      );
+      expect(unverified.kinds, isNot(contains(_Run.profiles)));
+
+      final failing = _Harness(_demo())
+        ..profiles = const RemoteCommandResult(
+          stdout: '',
+          stderr: 'unknown flag: --profiles',
+          exitCode: 1,
+        );
+      expect(
+        await failing.query(const DockerStackProfilesQuery('demo')),
+        isA<DockerQueryFailed>().having(
+          (f) => f.failure,
+          'failure',
+          DockerQueryFailure.daemonError,
+        ),
+      );
+    });
+
+    test('the folder scan lists compose files, and says when a folder '
+        'could not be read', () async {
+      final h = _Harness(_demo())
+        ..scan = const RemoteCommandResult(
+          stdout:
+              '/opt/stacks/b/compose.yaml\u0000'
+              '/opt/stacks/a/docker-compose.yml\u0000',
+          stderr: "find: '/srv/apps/': No such file or directory",
+          exitCode: 1,
+        );
+      final payload =
+          await h.query(DockerStackScanQuery(['/opt/stacks', '/srv/apps']))
+              as DockerStackScanPayload;
+
+      expect(payload.files, [
+        '/opt/stacks/a/docker-compose.yml',
+        '/opt/stacks/b/compose.yaml',
+      ]);
+      expect(payload.incomplete, isTrue);
+      final (_, argv) = h.runs.lastWhere((r) => r.$1 == _Run.scan);
+      expect(argv.take(3), ['find', '/opt/stacks/', '/srv/apps/']);
+    });
+
+    test(
+      'a scan of no folders, too many, or a relative one is invalid',
+      () async {
+        final h = _Harness(_demo());
+        for (final folders in [
+          <String>[],
+          [for (var i = 0; i <= kStackScanDirectoriesMax; i++) '/srv/s$i'],
+          ['opt/stacks'],
+        ]) {
+          expect(
+            await h.query(DockerStackScanQuery(folders)),
+            isA<DockerQueryFailed>().having(
+              (f) => f.failure,
+              'failure',
+              DockerQueryFailure.invalidQuery,
+            ),
+            reason: '$folders',
+          );
+        }
+        expect(h.kinds, isNot(contains(_Run.scan)));
+      },
+    );
   });
 
   test('the file checks quote paths through a real sh', () async {

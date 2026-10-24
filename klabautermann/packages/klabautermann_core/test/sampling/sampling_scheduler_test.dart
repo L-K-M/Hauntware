@@ -147,6 +147,8 @@ void main() {
       'failedUnits': [60, 60, 60],
       'timers': [60, 60, null],
       'cron': [60, 60, null],
+      'userUnits': [15, 15, 15],
+      'userTimers': [60, 60, null],
     });
   });
 

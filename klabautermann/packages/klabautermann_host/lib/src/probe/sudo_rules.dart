@@ -10,8 +10,10 @@ const _rulesHeader = 'may run the following commands';
 /// sudo's answer for a user with no rule at all.
 const _noRules = 'is not allowed to run sudo';
 
-/// The tags before a rule's commands, such as `NOPASSWD:` or `SETENV:`.
-final _tags = RegExp(r'^(?:[A-Z_]+:\s*)+');
+/// The options and tags before a rule's commands, such as `CWD=/srv`,
+/// `TIMEOUT=5m`, `NOPASSWD:` or `SETENV:`; `sudo -l` lists the options
+/// first (sudoers(5), "Cmnd_Spec").
+final _tags = RegExp(r'^(?:[A-Z_]+(?::|=\S*)\s*)+');
 
 /// A comma between commands; sudoers escapes one inside a command.
 final _commandSeparator = RegExp(r'(?<!\\),');
@@ -104,27 +106,71 @@ bool? sudoListAllows(String output, String program) {
   final negate = i < pattern.length && (pattern[i] == '!' || pattern[i] == '^');
   if (negate) i++;
 
-  final members = StringBuffer();
+  // Each member as its literal character; a range joins two of them.
+  final members = <String>[];
   // A `]` first in the set is a member, not its end.
   if (i < pattern.length && pattern[i] == ']') {
-    members.write(r'\]');
+    members.add(']');
     i++;
   }
+  final ranges = StringBuffer();
   for (; i < pattern.length; i++) {
     final c = pattern[i];
     if (c == ']') {
-      return (regex: '[${negate ? '^' : ''}$members]', end: i);
+      final set = '${members.map(_classLiteral).join()}$ranges';
+      // A set left with no members, such as `[z-a]`, matches nothing.
+      final regex = set.isEmpty
+          ? (negate ? '[^]' : '[]')
+          : '[${negate ? '^' : ''}$set]';
+      return (regex: regex, end: i);
     }
-    if (c == r'\' && i + 1 < pattern.length) {
-      members.write(_classLiteral(pattern[++i]));
-    } else if (c == r'\' || c == '^' || c == '[') {
-      members.write(_classLiteral(c));
-    } else {
-      members.write(c);
+    // A POSIX class such as `[:alpha:]` names its characters; fnmatch(3)
+    // matches nothing for a name it does not know.
+    final close = pattern.startsWith('[:', i)
+        ? pattern.indexOf(':]', i + 2)
+        : -1;
+    if (close >= 0) {
+      ranges.write(_posixClasses[pattern.substring(i + 2, close)] ?? '');
+      i = close + 1;
+      continue;
     }
+    // A `-` between two members makes a range; first or last in the set,
+    // it is a member.
+    final range =
+        c == '-' &&
+        members.isNotEmpty &&
+        i + 1 < pattern.length &&
+        pattern[i + 1] != ']';
+    if (range) {
+      final first = members.removeLast();
+      var last = pattern[++i];
+      if (last == r'\' && i + 1 < pattern.length) last = pattern[++i];
+      // fnmatch(3) reads a reversed range as empty; a regex rejects it.
+      if (first.compareTo(last) <= 0) {
+        ranges.write('${_classLiteral(first)}-${_classLiteral(last)}');
+      }
+      continue;
+    }
+    members.add(c == r'\' && i + 1 < pattern.length ? pattern[++i] : c);
   }
   return null;
 }
+
+/// The POSIX character classes as regex class members, in the C locale.
+const _posixClasses = {
+  'alnum': 'A-Za-z0-9',
+  'alpha': 'A-Za-z',
+  'blank': r' \t',
+  'cntrl': r'\x00-\x1f\x7f',
+  'digit': '0-9',
+  'graph': r'\x21-\x7e',
+  'lower': 'a-z',
+  'print': r'\x20-\x7e',
+  'punct': r'\x21-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e',
+  'space': r' \t\n\v\f\r',
+  'upper': 'A-Z',
+  'xdigit': '0-9A-Fa-f',
+};
 
 /// [c] as a literal member of a regex character class: letters and
 /// digits as they are, since `\d` or `\w` would name a class, and any
@@ -135,10 +181,11 @@ String _classLiteral(String c) =>
 String _baseName(String path) => path.substring(path.lastIndexOf('/') + 1);
 
 /// Whether [pattern], a sudoers glob's last path component, matches
-/// [name]: `*`, `?` and bracket expressions, with `!` or `^` negating a
-/// bracket and a `]` first in one taken as a member, as in fnmatch(3),
-/// and a backslash making the next character literal. A pattern without
-/// glob characters never matches here; the exact comparison covers it.
+/// [name]: `*`, `?` and bracket expressions as in fnmatch(3), with `!`
+/// or `^` negating a bracket, a `]` first in one taken as a member, and
+/// ranges and POSIX classes inside one; a backslash makes the next
+/// character literal. A pattern without glob characters never matches
+/// here; the exact comparison covers it.
 bool _globMatches(String pattern, String name) {
   if (!pattern.contains(_globCharacters)) return false;
 

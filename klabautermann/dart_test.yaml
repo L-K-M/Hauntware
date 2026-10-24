@@ -13,6 +13,9 @@ tags:
   # Spike S4's detached-runner cases on the runner VM (M4 E02), which
   # runner_vm.sh runs beside runner-vm; skipped without it.
   runner-vm-s4:
+  # Spike S6's privileged-file cases on the runner VM (M5 M01), which
+  # runner_vm.sh runs beside runner-vm; skipped without it.
+  runner-vm-s6:
   # The soak and 03 §11.4's budgets against the sshd fixture, which
   # run.sh's soak block runs alone; skipped without it.
   soak:

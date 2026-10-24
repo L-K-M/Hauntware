@@ -393,13 +393,13 @@ void main() {
     Map<String, Object?> sync({
       Object? target = 8787,
       Object? hostIp = '127.0.0.1',
-      String dbPath = '',
+      String? dbPath = '',
       List<Object?> volumes = const [],
     }) => {
       'image': 'klabautermann-sync:fixture',
       'environment': {
         'SEANCE_OPEN_REGISTRATION': '1',
-        'SEANCE_DB_PATH': dbPath,
+        if (dbPath != null) 'SEANCE_DB_PATH': dbPath,
       },
       'ports': [
         {'target': target, 'host_ip': hostIp, 'published': '2251'},
@@ -434,6 +434,10 @@ void main() {
       expect(errors(sync(dbPath: '/data/seance.sqlite')), [
         'sync keeps its storage on disk',
       ]);
+    });
+
+    test("rejects leaving the image's on-disk default in place", () {
+      expect(errors(sync(dbPath: null)), ['sync keeps its storage on disk']);
     });
   });
 }
