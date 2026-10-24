@@ -3,9 +3,11 @@
 // and a blank one meaning the default again.
 import 'dart:io' show FileSystemException;
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/device_name.dart';
+import 'package:klabautermann_app/l10n/app_localizations.dart';
+import 'package:klabautermann_app/ui/settings_page.dart';
 
 void main() {
   test('the default names the platform', () {
@@ -59,4 +61,78 @@ void main() {
     );
     expect(name.value, 'Laptop');
   });
+
+  test('review fix: the same name again retries a save that failed', () async {
+    var fail = true;
+    final saved = <String?>[];
+    final name = DeviceNameController(
+      fallback: 'Klabautermann on Linux',
+      apply: (_) {},
+      save: (value) async {
+        if (fail) throw const FileSystemException('disk full');
+        saved.add(value);
+      },
+    );
+    addTearDown(name.dispose);
+
+    await expectLater(
+      name.setDeviceName('Laptop'),
+      throwsA(isA<DeviceNameNotSavedException>()),
+    );
+    fail = false;
+    await name.setDeviceName('Laptop');
+    await name.setDeviceName('Laptop');
+
+    expect(saved, ['Laptop']);
+  });
+
+  testWidgets('review fix: the field sets a name once per submit, and not '
+      'when left unchanged', (tester) async {
+    final settings = _CountingName('Desk');
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: Column(
+            children: [
+              DeviceNameField(deviceName: settings),
+              const TextField(key: Key('other')),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(DeviceNameField));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('other')));
+    await tester.pumpAndSettle();
+    expect(settings.calls, isEmpty);
+
+    await tester.enterText(find.byType(DeviceNameField), 'Laptop');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(settings.calls, ['Laptop']);
+  });
+}
+
+/// A device name that records each set, as the window's link would send
+/// it, and takes it once it arrives.
+final class _CountingName extends ChangeNotifier implements DeviceNameSettings {
+  _CountingName(this._value);
+
+  String _value;
+  final calls = <String>[];
+
+  @override
+  String get value => _value;
+
+  @override
+  Future<void> setDeviceName(String name) async {
+    calls.add(name);
+    await Future<void>.delayed(Duration.zero);
+    _value = name.trim();
+    notifyListeners();
+  }
 }

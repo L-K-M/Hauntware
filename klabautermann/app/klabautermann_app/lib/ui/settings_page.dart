@@ -269,6 +269,7 @@ class DeviceNameField extends StatefulWidget {
 class _DeviceNameFieldState extends State<DeviceNameField> {
   late final _text = TextEditingController(text: widget.deviceName.value);
   final _focus = FocusNode();
+  var _applying = false;
 
   @override
   void initState() {
@@ -294,7 +295,24 @@ class _DeviceNameFieldState extends State<DeviceNameField> {
     _text.text = widget.deviceName.value;
   }
 
+  /// Submitting leaves the field first, so a submit reaches this twice;
+  /// leaving it unchanged sets nothing, which over the window's link
+  /// would otherwise send a change that is none.
   Future<void> _apply() async {
+    if (!mounted || _applying) return;
+    if (_text.text.trim() == widget.deviceName.value) {
+      _text.text = widget.deviceName.value;
+      return;
+    }
+    _applying = true;
+    try {
+      await _set();
+    } finally {
+      _applying = false;
+    }
+  }
+
+  Future<void> _set() async {
     final overlay = Overlay.of(context, rootOverlay: true);
     final l10n = AppLocalizations.of(context);
     try {

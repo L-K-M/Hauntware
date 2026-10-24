@@ -63,6 +63,10 @@ final class DeviceNameController extends ChangeNotifier
 
   final String fallback;
   String _value;
+
+  /// Whether [_value] is what settings.json holds; a failed save leaves it
+  /// false, so the same name set again saves rather than returns.
+  bool _saved = true;
   final void Function(String name) _apply;
   final Future<void> Function(String? name)? _save;
 
@@ -73,15 +77,19 @@ final class DeviceNameController extends ChangeNotifier
   Future<void> setDeviceName(String name) async {
     final trimmed = name.trim();
     final next = trimmed.isEmpty ? fallback : trimmed;
-    if (next == _value) return;
+    if (next == _value && _saved) return;
     // A throw from apply means the engine never took it, so nothing is
     // kept either.
-    _apply(next);
-    _value = next;
-    notifyListeners();
+    if (next != _value) {
+      _apply(next);
+      _value = next;
+      notifyListeners();
+    }
     try {
       await _save?.call(next == fallback ? null : next);
+      _saved = true;
     } on Exception catch (error, stackTrace) {
+      _saved = false;
       Error.throwWithStackTrace(
         DeviceNameNotSavedException('The device name was not saved: $error'),
         stackTrace,
