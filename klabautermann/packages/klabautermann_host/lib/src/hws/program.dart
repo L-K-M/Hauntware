@@ -39,7 +39,9 @@ const kSamplerStartCommand =
 /// Version 8 adds the `SELF` marker before READY, the probe's
 /// `run0 --no-ask-password true` check and the slow `ops` collector
 /// (03 §7.17).
-const kCollectorSetVersion = '8';
+/// Version 9 adds the slow `user_units` and `user_timers` collectors for
+/// the login user's own manager (03 §7.5, SVC-09).
+const kCollectorSetVersion = '9';
 
 /// The most `procs` rows one reply carries (D48). With more processes the
 /// fragment keeps the union of the [kProcsRowCap] / 2 with the highest CPU
@@ -115,6 +117,8 @@ const collectorFragments = <Collector, String>{
   Collector.procs: _kProcsFragment,
   Collector.units: _kUnitsFragment,
   Collector.timers: _kTimersFragment,
+  Collector.userUnits: _kUserUnitsFragment,
+  Collector.userTimers: _kUserTimersFragment,
   Collector.cron: _kCronFragment,
   Collector.timerDetail: _kTimerDetailFragment,
   Collector.ops: _kOpsFragment,
@@ -194,6 +198,16 @@ hw_sdfmt() {
       return 0 ;;
   esac
   if [ "$_v" -ge 246 ]; then printf json; else printf text; fi
+}
+
+# Sets systemd's own XDG_RUNTIME_DIR, /run/user/<uid>, where the session
+# left it unset, so `systemctl --user` finds the user manager's bus
+# (03 §7.5, SVC-09). Used by the user_units and user_timers fragments.
+hw_userbus() {
+  if [ -z "${XDG_RUNTIME_DIR:-}" ]; then
+    XDG_RUNTIME_DIR=/run/user/$(id -u 2>/dev/null)
+    export XDG_RUNTIME_DIR
+  fi
 }
 
 # Maps an exit status plus captured stderr to a section status
@@ -927,6 +941,58 @@ c_timers() {
     o="== timers_json ==$NL$_t"
   else
     _t=$(hw_run systemctl list-timers --all </dev/null 2>&1); _rt=$?
+    o="== timers_text ==$NL$_t"
+  fi
+  st=$(hw_st "$_rt" "$_t")
+}
+""";
+
+/// `user_units` (03 §7.5, SVC-09): `units` for the login user's own
+/// manager, `systemctl --user`, in the same block names so one parser
+/// reads both. `systemctl --user` finds the manager through
+/// `XDG_RUNTIME_DIR`; where the session left it unset, systemd's own
+/// `/run/user/<uid>` is set first [U]. Without a user session or linger
+/// the bus is not there and the section reports `error`.
+const _kUserUnitsFragment = r"""
+c_user_units() {
+  st=ok; o=''
+  if ! command -v systemctl >/dev/null 2>&1; then st=missing; return 0; fi
+  hw_userbus
+  if [ "$(hw_sdfmt)" = json ]; then
+    _u=$(hw_run systemctl --user list-units --all --output=json </dev/null 2>&1); _ru=$?
+    _f=$(hw_run systemctl --user --failed --output=json </dev/null 2>&1); _rf=$?
+    o="== units_json ==$NL$_u$NL== failed_json ==$NL$_f"
+  else
+    _u=$(hw_run systemctl --user list-units --all --plain --no-legend </dev/null 2>&1); _ru=$?
+    _f=$(hw_run systemctl --user --failed --plain --no-legend </dev/null 2>&1); _rf=$?
+    o="== units_text ==$NL$_u$NL== failed_text ==$NL$_f"
+  fi
+  _su=$(hw_st "$_ru" "$_u"); _sf=$(hw_st "$_rf" "$_f")
+  case $_su:$_sf in
+    ok:ok)
+      st=ok ;;
+    *:timeout | timeout:*)
+      st=timeout ;;
+    *:denied | denied:*)
+      st=denied ;;
+    *)
+      st=error ;;
+  esac
+}
+""";
+
+/// `user_timers` (03 §7.7, JOB-08): `timers` for the login user's own
+/// manager, in the same block names, with `user_units`' bus fallback.
+const _kUserTimersFragment = r"""
+c_user_timers() {
+  st=ok; o=''
+  if ! command -v systemctl >/dev/null 2>&1; then st=missing; return 0; fi
+  hw_userbus
+  if [ "$(hw_sdfmt)" = json ]; then
+    _t=$(hw_run systemctl --user list-timers --all --output=json </dev/null 2>&1); _rt=$?
+    o="== timers_json ==$NL$_t"
+  else
+    _t=$(hw_run systemctl --user list-timers --all </dev/null 2>&1); _rt=$?
     o="== timers_text ==$NL$_t"
   fi
   st=$(hw_st "$_rt" "$_t")

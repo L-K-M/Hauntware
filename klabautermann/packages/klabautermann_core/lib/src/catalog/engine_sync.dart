@@ -33,6 +33,7 @@ import 'package:seance_core/seance_core.dart'
         validateSyncEnrollment;
 
 import '../engine/protocol.dart';
+import 'klabautermann_records.dart';
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
 import 'engine_vault.dart';
 import 'keystore_channel.dart';
@@ -99,11 +100,17 @@ final class EngineSync {
     required this._transport,
     required String Function(String name) path,
     required this._account,
+    required this._klabautermannRecords,
   }) : _records = PersistentLocalRecordStore(path: path(_syncRecordsFileName)),
        _servers = FileServerConfigStore(
          path: path(_serversFileName),
          syncDeviceId: () => _deviceId,
-       );
+       ) {
+    _handler = KlabautermannRecordHandler(
+      store: _klabautermannRecords,
+      servers: _servers,
+    );
+  }
 
   /// Opens the sync state files in [supportDirectory] (none of the catalog
   /// library's files is read before an operation needs it). [deviceId] is
@@ -147,6 +154,10 @@ final class EngineSync {
       transport: transport,
       path: (name) => '${supportDirectory.path}${Platform.pathSeparator}$name',
       account: _info(account),
+      klabautermannRecords: await KlabautermannRecordStore.open(
+        supportDirectory,
+        access: access,
+      ),
     );
   }
 
@@ -165,6 +176,8 @@ final class EngineSync {
   final PersistentLocalRecordStore _records;
   final FileServerConfigStore _servers;
   final EngineVault _vault;
+  final KlabautermannRecordStore _klabautermannRecords;
+  late final KlabautermannRecordHandler _handler;
   final HostKeyMutationGate _hostKeyMutations = HostKeyMutationGate();
   SyncAccountInfo? _account;
 
@@ -207,6 +220,7 @@ final class EngineSync {
       (syncEnrollmentFileName, _enrollment?.issue),
       (pinVerdictsFileName, _pinVerdicts.issue),
       (syncTripwiresFileName, _tripwires.issue),
+      (klabautermannRecordsFileName, _klabautermannRecords.issue),
     ])
       if (issue != null)
         SyncStoreIssue(
@@ -233,6 +247,21 @@ final class EngineSync {
     } on Object {
       return const [];
     }
+  }
+
+  /// The synced preferences of every server [servers] lists that is not
+  /// excluded from sync, by server id (03 §4.8). A `pref` record whose
+  /// server is absent stays stored, pending, and shows once the server
+  /// arrives.
+  Future<Map<String, ServerPrefs>> serverPrefs() async {
+    // The servers first: a round applied while they load is then in prefs.
+    final synced = await servers();
+    final prefs = _klabautermannRecords.prefs();
+    return {
+      for (final server in synced)
+        if (!server.excludeFromSync)
+          if (prefs[server.id] case final serverPrefs?) server.id: serverPrefs,
+    };
   }
 
   /// Signs in to the account [request] names (03 §4.3 step 1), re-keys the
@@ -280,7 +309,7 @@ final class EngineSync {
           credentials: credentials,
           state: enrollment,
           records: _records,
-          handlers: const [],
+          handlers: [_handler],
         ).login(
           api: api,
           baseUrl: baseUrl,
@@ -296,6 +325,7 @@ final class EngineSync {
         operation,
         SyncPhase.succeeded,
         unverified: result.passphraseUnverified,
+        budget: prefixBudgetOf(await _records.allRecords()),
       );
     } on Object catch (error) {
       // The store applies a change in memory before it saves, so a login
@@ -349,6 +379,7 @@ final class EngineSync {
         operation,
         SyncPhase.succeeded,
         unverified: await _enrollment!.passphraseUnverified(),
+        budget: prefixBudgetOf(await _records.allRecords()),
       );
     } on Object catch (error) {
       return _failedWith(operation, error);
@@ -371,11 +402,12 @@ final class EngineSync {
   /// A pull-only, shared-mode coordinator over the account key [key]
   /// (03 §4.2, §4.4): it materializes pulled `serverConfig` records into
   /// `servers.json`, quarantines pulled pins against the engine's host-key
-  /// store, and applies pulled `secret:` records into the vault only while
-  /// [syncSecrets] is on (03 §4.5); the vault's key is the account key.
+  /// store, materializes `klabautermann:` records (4.8), and applies
+  /// pulled `secret:` records into the vault only while [syncSecrets] is
+  /// on (03 §4.5); the vault's key is the account key.
   RecordCoordinator _coordinator(List<int> key) => RecordCoordinator(
     records: _records,
-    handlers: const [],
+    handlers: [_handler],
     hostKeys: _hostKeys,
     hostKeyMutations: _hostKeyMutations,
     crypto: RecordCrypto(RecordCodec(key)),
@@ -396,6 +428,7 @@ final class EngineSync {
     bool unverified = false,
     SyncFailure? failure,
     String? detail,
+    SyncPrefixBudget? budget,
   }) => SyncStatus(
     phase,
     operation: operation,
@@ -403,6 +436,7 @@ final class EngineSync {
     failure: failure,
     passphraseUnverified: unverified,
     detail: detail,
+    prefixBudget: budget,
   );
 
   SyncStatus _failed(
