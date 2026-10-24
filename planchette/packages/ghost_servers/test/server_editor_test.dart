@@ -473,12 +473,20 @@ void main() {
         ..importReply = () async => throw const FormatException('binary');
       await openEditor(tester);
       await pasteKey(tester);
+      await tester.enterText(field('Private key (PEM/OpenSSH)'), 'TYPED KEY');
 
       await scrollTo(tester, find.text('Import from file…'));
       await tester.tap(find.text('Import from file…'));
       await tester.pumpAndSettle();
       expect(find.text('Could not read that file as a key.'), findsOneWidget);
       await outlastToasts(tester);
+      expect(
+        tester
+            .widget<TextFormField>(field('Private key (PEM/OpenSSH)'))
+            .controller!
+            .text,
+        'TYPED KEY',
+      );
     });
 
     testWidgets('a host without key import hides it', (tester) async {

@@ -231,7 +231,7 @@ final class _EngineEditorDelegate extends GhostServerEditorDelegate {
     if (Platform.isMacOS) await FilePicker.skipEntitlementsChecks();
     final files = await FilePicker.pickFiles();
     if (files.isEmpty) return null;
-    final file = files.single;
+    final file = files.first;
     final length = await file.length();
     if (length != null && length > _keyFileLimit) {
       // The editor words the failure; no message of its own is shown.
