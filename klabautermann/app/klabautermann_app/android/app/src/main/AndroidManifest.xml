@@ -38,6 +38,16 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
+        <!-- Android 11+ hides the siblings' link handlers unless declared
+             here; the hand-offs probe them (X-03, X-04, X-10). -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="seance"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="poltergeist"/>
+        </intent>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
