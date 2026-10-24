@@ -16,6 +16,7 @@ import 'controllers/pin_publication_controller.dart';
 import 'controllers/safety_controller.dart';
 import 'controllers/appearance_controller.dart';
 import 'controllers/coverage_controller.dart';
+import 'controllers/device_name.dart';
 import 'controllers/docker_notice_controller.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitoring_controller.dart';
@@ -59,6 +60,7 @@ class KlabautermannApp extends StatelessWidget {
     required this.appearance,
     required this.coverage,
     required this.announcements,
+    this.deviceName,
     this.safety,
     this.syncSecrets,
     this.pinPublication,
@@ -96,6 +98,11 @@ class KlabautermannApp extends StatelessWidget {
   /// safety out: Settings then shows its placeholder and the server header
   /// neither the Safety menu nor its notices.
   final SafetyController? safety;
+
+  /// The device name the host syslog line gives (M5 plan Q6); like
+  /// [appearance], it outlives an engine run. Null in tests that leave it
+  /// out, where General settings show no device name.
+  final DeviceNameController? deviceName;
 
   /// The device's "sync passwords" switch (SYN-02); like [appearance], it
   /// outlives an engine run. Null in tests that leave it out, where the
@@ -326,6 +333,7 @@ class KlabautermannApp extends StatelessWidget {
             kSettingsRoute: (_) => SettingsPage(
               appearance: appearance,
               announcements: announcements,
+              deviceName: deviceName,
               appVersion: appVersion,
               monitorSet: fleet.monitorSettings,
               safety: safety,

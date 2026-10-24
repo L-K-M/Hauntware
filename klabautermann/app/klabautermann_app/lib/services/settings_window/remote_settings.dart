@@ -8,6 +8,7 @@ import 'package:ghost_theme/ghost_theme.dart';
 
 import '../../controllers/announcement_controller.dart';
 import '../../controllers/appearance_controller.dart';
+import '../../controllers/device_name.dart';
 import '../../controllers/monitor_set.dart';
 import '../../controllers/pin_publication_controller.dart';
 import '../../controllers/safety_controller.dart';
@@ -53,6 +54,11 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
         invoke(SettingsLinkMethod.setAnnounceThresholdBands.name, announce),
   );
 
+  /// The General tab's device name, from the latest snapshot.
+  late final RemoteDeviceName deviceName = RemoteDeviceName._(
+    (name) => invoke(SettingsLinkMethod.setDeviceName.name, name),
+  );
+
   /// The Sync tab's "sync passwords" switch, from the latest snapshot.
   late final RemoteSyncSecrets syncSecrets = RemoteSyncSecrets._(
     (enabled) => invoke(SettingsLinkMethod.setSyncSecrets.name, enabled),
@@ -93,6 +99,7 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     announcements._apply(
       snapshot[SettingsLinkKey.announceThresholdBands.name]! as bool,
     );
+    deviceName._apply(snapshot[SettingsLinkKey.deviceName.name]! as String);
     syncSecrets._apply(snapshot[SettingsLinkKey.syncSecrets.name]! as bool);
     pinPublication._apply(
       decodePinPublication(
@@ -116,6 +123,7 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
   void dispose() {
     appearance.dispose();
     announcements.dispose();
+    deviceName.dispose();
     syncSecrets.dispose();
     pinPublication.dispose();
     monitorSet.dispose();
@@ -147,6 +155,32 @@ final class RemoteAnnouncements extends ChangeNotifier
   @override
   Future<void> setAnnounceThresholdBands(bool announce) async {
     await _call(announce);
+  }
+}
+
+/// [DeviceNameSettings] over the link: the app's name as the latest
+/// snapshot carries it, and changes that run in the app's isolate.
+final class RemoteDeviceName extends ChangeNotifier
+    implements DeviceNameSettings {
+  RemoteDeviceName._(this._call);
+
+  final Future<Object?> Function(String name) _call;
+
+  // Blank until the first snapshot, which comes with hello.
+  String _value = '';
+
+  void _apply(String name) {
+    if (name == _value) return;
+    _value = name;
+    notifyListeners();
+  }
+
+  @override
+  String get value => _value;
+
+  @override
+  Future<void> setDeviceName(String name) async {
+    await _call(name);
   }
 }
 

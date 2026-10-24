@@ -6397,4 +6397,22 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsServersAccountDetail =>
       'Add a server to your sync account here. To edit or delete one, open its menu in the server list.';
+
+  @override
+  String get settingsDeviceTitle => 'This device';
+
+  @override
+  String get settingsDeviceName => 'Device name';
+
+  @override
+  String get settingsDeviceNameDetail =>
+      'Servers\' system logs name this device beside each action you take there. Leave it blank for the default.';
+
+  @override
+  String get settingsDeviceNameNotSaved =>
+      'The device name changed, but it could not be saved, so it will not be kept after a restart.';
+
+  @override
+  String get settingsDeviceNameNotChanged =>
+      'The device name could not be changed.';
 }
