@@ -118,11 +118,17 @@ void main() {
       prefs = _Prefs();
     });
 
-    SafetyController controller({SafetyPolicy initial = const SafetyPolicy()}) {
+    SafetyController controller({
+      SafetyPolicy initial = const SafetyPolicy(),
+      bool saveFails = false,
+    }) {
       final safety = SafetyController(
         initial: initial,
         apply: applied.add,
-        save: (policy) async => saved.add(policy),
+        save: (policy) async {
+          if (saveFails) throw const FileSystemException('disk full');
+          saved.add(policy);
+        },
         prefs: prefs,
       );
       addTearDown(safety.dispose);
@@ -237,6 +243,116 @@ void main() {
       expect(turnedOn, isNull, reason: 'a record back at the defaults goes');
       expect(safety.value.servers['srv-1'], isNull);
     });
+
+    test('review fix: an earlier write answering keeps a later one '
+        'counting', () async {
+      prefs.syncing.add('srv-1');
+      final safety = controller();
+      final first = prefs.gate = Completer<void>();
+      final marking = safety.setServerSafety(
+        'srv-1',
+        const ServerSafety(marks: {'db'}),
+      );
+      await pumpEventQueue();
+      final second = prefs.gate = Completer<void>();
+      final locking = safety.setServerSafety(
+        'srv-1',
+        const ServerSafety(readOnly: true, marks: {'db'}),
+      );
+      await pumpEventQueue();
+
+      first.complete();
+      await marking;
+      expect(applied.last.servers['srv-1']!.readOnly, isTrue);
+
+      second.complete();
+      await locking;
+      expect(applied.last.servers['srv-1']!.readOnly, isTrue);
+    });
+
+    test('review fix: a refused write keeps a later reset counting', () async {
+      prefs
+        ..syncing.add('srv-1')
+        ..records['srv-1'] = const ServerPrefs(readOnly: true);
+      final safety = controller();
+      final first = prefs.gate = Completer<void>();
+      final clearing = safety.setServerSafety('srv-1', const ServerSafety());
+      await pumpEventQueue();
+      final second = prefs.gate = Completer<void>();
+      final again = safety.setServerSafety('srv-1', const ServerSafety());
+      await pumpEventQueue();
+
+      prefs.refuse = StateError('refused');
+      first.complete();
+      await expectLater(clearing, throwsA(isA<SafetyNotSavedException>()));
+      prefs.refuse = null;
+      expect(applied.last.servers['srv-1'], isNull);
+
+      second.complete();
+      await again;
+      expect(safety.value.servers['srv-1'], isNull);
+    });
+
+    test('review fix: a server that stops syncing during a write keeps the '
+        'written switch here', () async {
+      prefs.syncing.add('srv-1');
+      final safety = controller();
+      final gate = prefs.gate = Completer<void>();
+      final change = safety.setServerSafety(
+        'srv-1',
+        const ServerSafety(readOnly: true, marks: {'db'}),
+      );
+      await pumpEventQueue();
+
+      prefs.syncing.clear();
+      gate.complete();
+      await change;
+
+      final kept = saved.last.servers['srv-1']!;
+      expect(kept.readOnly, isTrue);
+      expect(kept.marks, {'db'});
+      expect(safety.value.servers['srv-1']!.readOnly, isTrue);
+    });
+
+    test('review fix: a refused write still observes a failed management '
+        'save', () async {
+      prefs
+        ..syncing.add('srv-1')
+        ..refuse = StateError('refused');
+      final safety = controller(saveFails: true);
+
+      await expectLater(
+        safety.setServerSafety(
+          'srv-1',
+          const ServerSafety(management: true, readOnly: true),
+        ),
+        throwsA(isA<SafetyNotSavedException>()),
+      );
+      await pumpEventQueue();
+    });
+
+    test(
+      'review fix: a write answering after dispose notifies no one',
+      () async {
+        prefs.syncing.add('srv-1');
+        final safety = SafetyController(
+          initial: const SafetyPolicy(),
+          apply: applied.add,
+          save: (policy) async => saved.add(policy),
+          prefs: prefs,
+        );
+        final gate = prefs.gate = Completer<void>();
+        final change = safety.setServerSafety(
+          'srv-1',
+          const ServerSafety(readOnly: true),
+        );
+        await pumpEventQueue();
+
+        safety.dispose();
+        gate.complete();
+        await change;
+      },
+    );
 
     test('a server that stops syncing keeps its switch and marks here', () {
       prefs
@@ -440,6 +556,7 @@ final class _Prefs extends ChangeNotifier implements ServerPrefsSource {
   @override
   Future<void> write(String serverId, ServerPrefs? prefs) async {
     writes.add((serverId, prefs));
+    // Each write waits on the gate set when it started.
     if (gate case final gate?) await gate.future;
     if (refuse case final error?) throw error;
     if (prefs == null) {

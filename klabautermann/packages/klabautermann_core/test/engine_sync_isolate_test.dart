@@ -165,6 +165,7 @@ void main() {
     final round = await untilSyncEnds(client, events, keystore);
     final roundStatus = round.last as SyncStatus;
     expect(roundStatus.phase, SyncPhase.succeeded, reason: roundStatus.detail);
+    expect(server.pushed, isEmpty, reason: 'nothing was written');
   });
 
   test('a saved server shows in the fleet, confirmed on this device, '
@@ -217,12 +218,11 @@ void main() {
     client.send(
       const ReadServerDraft(requestId: 'read-1', serverId: 'srv-new'),
     );
-    while (await events.moveNext()) {
-      if (events.current case ServerDraftRead(:final draft)) {
-        expect(draft?.host, 'web-3.example.com');
-        break;
-      }
+    ServerDraftRead? read;
+    while (read == null && await events.moveNext()) {
+      if (events.current case final ServerDraftRead answer) read = answer;
     }
+    expect(read?.draft?.host, 'web-3.example.com');
   });
 
   test('synced preferences go out after the fleet, then only when they '
@@ -269,5 +269,69 @@ void main() {
     expect(await restarted.moveNext(), isTrue);
     final again = restarted.current as ServerPrefsChanged;
     expect(again.prefs?.marks, {'nginx'});
+  });
+
+  group('pin publication (D15, M5 plan M07)', () {
+    const enroll = EnrollSync(
+      baseUrl: 'https://sync.example.com',
+      username: fakeSyncUser,
+      password: fakeSyncPassword,
+      encryptionPassphrase: fakeSyncPassword,
+    );
+
+    test('an offered release is reported at start, and an assertion is '
+        'reported back', () async {
+      final server = await FakeSyncServer.create();
+      final (client, events) = await spawn(
+        entryPoint: (start) => engineMain(
+          EngineStart(
+            uiPort: start.uiPort,
+            supportDirectory: start.supportDirectory,
+            supportDirectoryAccess: start.supportDirectoryAccess,
+            deviceId: start.deviceId,
+            pinPublicationRelease: '2026.11.0',
+          ),
+          syncTransport: server.transport,
+        ),
+      );
+      final state = client.ready.pinPublication!;
+      expect((state.release, state.asserted), ('2026.11.0', false));
+      client.send(enroll);
+      await untilSyncEnds(client, events, MemoryKeystore());
+
+      client.send(const SetPinPublication(asserted: true));
+      while (await events.moveNext()) {
+        if (events.current case PinPublicationState(:final asserted)) {
+          expect(asserted, isTrue);
+          break;
+        }
+      }
+      expect(
+        File('${support.path}/sync_enrollment.json').readAsStringSync(),
+        contains('"seance56Asserted":"2026.11.0"'),
+      );
+    });
+
+    test('with no release offered, nothing is reported and an assertion '
+        'is refused', () async {
+      final server = await FakeSyncServer.create();
+      final (client, events) = await spawn(
+        entryPoint: (start) =>
+            engineMain(start, syncTransport: server.transport),
+      );
+      client.send(enroll);
+      expect(client.ready.pinPublication, isNull);
+      final opened = await untilSyncEnds(client, events, MemoryKeystore());
+      expect(opened.whereType<PinPublicationState>(), isEmpty);
+
+      client.send(const SetPinPublication(asserted: true));
+      expect(await events.moveNext(), isTrue);
+      final refused = events.current as RequestRejected;
+      expect(refused.requestName, 'SetPinPublication');
+      expect(
+        File('${support.path}/sync_enrollment.json').readAsStringSync(),
+        isNot(contains('seance56Asserted')),
+      );
+    });
   });
 }

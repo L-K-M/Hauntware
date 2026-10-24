@@ -1,9 +1,63 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:ghost_fonts/ghost_fonts.dart'
+    show ghostMonoFontFamilies, ghostMonoFontFamily;
 
-import '../services/xterm_engine.dart';
-import '../theme.dart' show SeanceTheme;
+import 'xterm_engine.dart';
+
+/// The key caps' face: the family's shared monospace stack, led by bundled
+/// JetBrains Mono, as Séance's `SeanceTheme.mono` draws it.
+const TextStyle _mono = TextStyle(
+  fontFamily: ghostMonoFontFamily,
+  fontFamilyFallback: ghostMonoFontFamilies,
+);
+
+/// What [TerminalKeyboardBar] says to assistive technology: each key's
+/// semantics label, and the tooltip of the keys that show one. The
+/// defaults are English; an app with its own strings passes them. The
+/// cap legends (`esc`, `ctrl`, `^C`, `pgup`, `|`, ...) are key names and
+/// stay as they are.
+@immutable
+class TerminalKeyboardBarStrings {
+  const TerminalKeyboardBarStrings({
+    this.escape = 'Escape',
+    this.tab = 'Tab',
+    this.controlModifier = 'Control modifier',
+    this.controlC = 'Control C',
+    this.leftArrow = 'Left arrow',
+    this.upArrow = 'Up arrow',
+    this.downArrow = 'Down arrow',
+    this.rightArrow = 'Right arrow',
+    this.home = 'Home',
+    this.end = 'End',
+    this.pageUp = 'Page up',
+    this.pageDown = 'Page down',
+    this.pipe = 'Pipe',
+    this.slash = 'Slash',
+    this.hyphen = 'Hyphen',
+    this.tilde = 'Tilde',
+    this.hideKeyboard = 'Hide keyboard',
+  });
+
+  final String escape;
+  final String tab;
+  final String controlModifier;
+  final String controlC;
+  final String leftArrow;
+  final String upArrow;
+  final String downArrow;
+  final String rightArrow;
+  final String home;
+  final String end;
+  final String pageUp;
+  final String pageDown;
+  final String pipe;
+  final String slash;
+  final String hyphen;
+  final String tilde;
+  final String hideKeyboard;
+}
 
 /// A compact, horizontally-scrollable row of keys the soft keyboard lacks —
 /// Esc, Tab, Ctrl, arrows, Home/End/PgUp/PgDn and a few shell punctuation
@@ -15,7 +69,12 @@ import '../theme.dart' show SeanceTheme;
 /// `^C` button is provided too because interrupting is the common case.
 class TerminalKeyboardBar extends StatelessWidget {
   final XtermTerminalEngine engine;
-  const TerminalKeyboardBar({super.key, required this.engine});
+  final TerminalKeyboardBarStrings strings;
+  const TerminalKeyboardBar({
+    super.key,
+    required this.engine,
+    this.strings = const TerminalKeyboardBarStrings(),
+  });
 
   static const List<int> _esc = [0x1b];
   static const List<int> _tab = [0x09];
@@ -45,46 +104,46 @@ class TerminalKeyboardBar extends StatelessWidget {
                       vertical: 6,
                     ),
                     children: [
-                      _label('esc', _esc, 'Escape'),
-                      _label('tab', _tab, 'Tab'),
+                      _label('esc', _esc, strings.escape),
+                      _label('tab', _tab, strings.tab),
                       _ctrlKey(context),
-                      _label('^C', _ctrlC, 'Control C'),
+                      _label('^C', _ctrlC, strings.controlC),
                       _icon(
                         Icons.keyboard_arrow_left,
                         TerminalCursorKey.arrowLeft,
-                        'Left arrow',
+                        strings.leftArrow,
                       ),
                       _icon(
                         Icons.keyboard_arrow_up,
                         TerminalCursorKey.arrowUp,
-                        'Up arrow',
+                        strings.upArrow,
                       ),
                       _icon(
                         Icons.keyboard_arrow_down,
                         TerminalCursorKey.arrowDown,
-                        'Down arrow',
+                        strings.downArrow,
                       ),
                       _icon(
                         Icons.keyboard_arrow_right,
                         TerminalCursorKey.arrowRight,
-                        'Right arrow',
+                        strings.rightArrow,
                       ),
-                      _cursorKey('home', TerminalCursorKey.home, 'Home'),
-                      _cursorKey('end', TerminalCursorKey.end, 'End'),
-                      _label('pgup', _pgUp, 'Page up'),
-                      _label('pgdn', _pgDn, 'Page down'),
-                      _char('|', 'Pipe'),
-                      _char('/', 'Slash'),
-                      _char('-', 'Hyphen'),
-                      _char('~', 'Tilde'),
+                      _cursorKey('home', TerminalCursorKey.home, strings.home),
+                      _cursorKey('end', TerminalCursorKey.end, strings.end),
+                      _label('pgup', _pgUp, strings.pageUp),
+                      _label('pgdn', _pgDn, strings.pageDown),
+                      _char('|', strings.pipe),
+                      _char('/', strings.slash),
+                      _char('-', strings.hyphen),
+                      _char('~', strings.tilde),
                     ],
                   ),
                 ),
                 const VerticalDivider(width: 1),
                 _KeyButton(
                   onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-                  semanticLabel: 'Hide keyboard',
-                  tooltip: 'Hide keyboard',
+                  semanticLabel: strings.hideKeyboard,
+                  tooltip: strings.hideKeyboard,
                   child: const Icon(Icons.keyboard_hide_outlined, size: 20),
                 ),
               ],
@@ -99,7 +158,7 @@ class TerminalKeyboardBar extends StatelessWidget {
       _KeyButton(
         onTap: () => engine.sendKey(bytes),
         semanticLabel: semanticLabel,
-        child: Text(text, style: SeanceTheme.mono.copyWith(fontSize: 13)),
+        child: Text(text, style: _mono.copyWith(fontSize: 13)),
       );
 
   Widget _icon(IconData icon, TerminalCursorKey key, String semanticLabel) =>
@@ -114,13 +173,13 @@ class TerminalKeyboardBar extends StatelessWidget {
       _KeyButton(
         onTap: () => engine.sendCursorKey(key),
         semanticLabel: semanticLabel,
-        child: Text(text, style: SeanceTheme.mono.copyWith(fontSize: 13)),
+        child: Text(text, style: _mono.copyWith(fontSize: 13)),
       );
 
   Widget _char(String ch, String semanticLabel) => _KeyButton(
     onTap: () => engine.sendKey(utf8.encode(ch)),
     semanticLabel: semanticLabel,
-    child: Text(ch, style: SeanceTheme.mono.copyWith(fontSize: 15)),
+    child: Text(ch, style: _mono.copyWith(fontSize: 15)),
   );
 
   /// The sticky Ctrl modifier, highlighted while armed.
@@ -130,12 +189,12 @@ class TerminalKeyboardBar extends StatelessWidget {
       valueListenable: engine.ctrlArmed,
       builder: (context, armed, _) => _KeyButton(
         onTap: engine.toggleCtrl,
-        semanticLabel: 'Control modifier',
+        semanticLabel: strings.controlModifier,
         toggled: armed,
         background: armed ? scheme.primary : null,
         child: Text(
           'ctrl',
-          style: SeanceTheme.mono.copyWith(
+          style: _mono.copyWith(
             fontSize: 13,
             fontWeight: armed ? FontWeight.bold : FontWeight.normal,
             color: armed ? scheme.onPrimary : null,

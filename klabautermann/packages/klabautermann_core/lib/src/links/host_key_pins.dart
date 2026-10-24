@@ -7,7 +7,7 @@ import 'package:seance_core/catalog.dart'
         FileHostKeyStore,
         HostKeyInstallResult,
         InMemoryConflictAwareHostKeyStore;
-import 'package:seance_core/seance_core.dart' show HostKey;
+import 'package:seance_core/seance_core.dart' show HostKey, HostKeyStore;
 
 import '../settings/instance_lock.dart' show SupportDirectoryAccess;
 
@@ -38,6 +38,30 @@ ConflictAwareHostKeyStore openHostKeyPins(
     SupportDirectoryAccess.exclusive => FileHostKeyStore(file),
     SupportDirectoryAccess.unguarded => _ReadOnlyFilePins(file),
   };
+}
+
+/// [_pins] for the links, with each pin the user confirms handed to
+/// [_onPinned] once it is stored: `TofuVerifier.pin` puts a first-seen
+/// key the user accepted and a changed key they trusted, and nothing
+/// else puts. Pulled pins arrive through the catalog's own install path
+/// on the same store, never here, so a pin is never published back.
+final class PublishingHostKeyStore implements HostKeyStore {
+  PublishingHostKeyStore(this._pins, this._onPinned);
+
+  final HostKeyStore _pins;
+  final void Function(HostKey pin) _onPinned;
+
+  @override
+  Future<List<HostKey>> all() => _pins.all();
+
+  @override
+  Future<HostKey?> get(String host, int port) => _pins.get(host, port);
+
+  @override
+  Future<void> put(HostKey key) async {
+    await _pins.put(key);
+    _onPinned(key);
+  }
 }
 
 /// Pins seeded once from [_file] and then held in memory only.

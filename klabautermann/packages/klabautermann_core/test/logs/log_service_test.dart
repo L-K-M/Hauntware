@@ -6,7 +6,8 @@ import 'dart:convert';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/logs/log_service.dart';
-import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
+import 'package:klabautermann_host/klabautermann_host.dart'
+    show HostCommands, JournalBoot, kDecompressFailedMarker;
 import 'package:seance_core/seance_core.dart'
     show RemoteExit, SshLinkClosed, SshLinkClosedReason, quoteShellWord;
 import 'package:test/test.dart';
@@ -506,6 +507,125 @@ void main() {
         final end = await read(error, _spec(syslog), stderr: stderr, exit: 1);
         expect(end, LogStreamEnded(reason, detail: '$tail: $error'));
       }
+    });
+  });
+
+  group('v1 sources (LOG-06, LOG-08, LOG-09)', () {
+    test('a pattern reaches journalctl as -g', () async {
+      const source = JournalLogSource(grep: 'oom|killed');
+      expect(
+        await read('a', _spec(source, window: 3), stdout: _entries(9, 7)),
+        _filled,
+      );
+      expect(link.commands.single, contains("'-g' 'oom|killed'"));
+      expect(texts('a'), ['entry 9', 'entry 8', 'entry 7']);
+    });
+
+    test('a pattern with a control byte is refused before running', () {
+      service.open('a', _spec(const JournalLogSource(grep: 'a\nb')));
+      expect(link.commands, isEmpty);
+      expect(statuses('a'), [const LogStreamEnded(LogStreamEndReason.invalid)]);
+    });
+
+    test(
+      'a journalctl without pattern matching ends searchUnsupported',
+      () async {
+        final end = await read(
+          'a',
+          _spec(const JournalLogSource(grep: 'oom')),
+          stderr: 'Compiled without pattern matching support\n',
+          exit: 1,
+        );
+        expect(end.reason, LogStreamEndReason.searchUnsupported);
+      },
+    );
+
+    test('a past boot reads with -b <offset> or -b <id>', () async {
+      const id = '0123456789abcdef0123456789abcdef';
+      service
+        ..open('a', _spec(const JournalLogSource(boot: JournalBoot.offset(-1))))
+        ..open('b', _spec(const JournalLogSource(boot: JournalBoot.id(id))));
+      expect(link.commands[0], contains("'-b' '-1'"));
+      expect(link.commands[1], contains("'-b' '$id'"));
+    });
+
+    test('two boots, or a boot that counts forward, are refused', () {
+      service
+        ..open(
+          'a',
+          _spec(
+            const JournalLogSource(
+              currentBootOnly: true,
+              boot: JournalBoot.offset(-1),
+            ),
+          ),
+        )
+        ..open('b', _spec(const JournalLogSource(boot: JournalBoot.offset(1))))
+        ..open('c', _spec(const JournalLogSource(boot: JournalBoot.id('x'))));
+      expect(link.commands, isEmpty);
+      for (final id in ['a', 'b', 'c']) {
+        expect(statuses(id), [
+          const LogStreamEnded(LogStreamEndReason.invalid),
+        ], reason: id);
+      }
+    });
+
+    test("a past boot's kernel log never falls back to dmesg", () async {
+      const source = KernelLogSource(boot: JournalBoot.offset(-2));
+      expect(await read('a', _spec(source)), _oldest);
+      expect(link.commands, [
+        _command('journalctl -o json --no-pager -k -b -2 -n 500 -r'),
+      ]);
+    });
+
+    test('a compressed file reads its tail through its decompressor', () async {
+      const source = FileLogSource('/var/log/syslog.2.gz', compressed: true);
+      final end = await read(
+        'a',
+        _spec(source, window: 2),
+        stdout: 'one\ntwo\nthree\n',
+      );
+      expect(end, _filled);
+      expect(
+        link.commands.single,
+        HostCommands.commandLine(
+          HostCommands.rotatedTail('/var/log/syslog.2.gz', lines: 2),
+          quote: quoteShellWord,
+        ),
+      );
+      expect(texts('a'), ['three', 'two'], reason: 'newest first');
+    });
+
+    test(
+      'a missing decompressor ends missing, another failure failed',
+      () async {
+        const gz = FileLogSource('/var/log/syslog.2.gz', compressed: true);
+        const xz = FileLogSource('/var/log/kern.log.3.xz', compressed: true);
+        final missing = await read(
+          'a',
+          _spec(gz),
+          stderr: 'sh: 1: zcat: not found\n$kDecompressFailedMarker 127\n',
+        );
+        final corrupt = await read(
+          'b',
+          _spec(xz),
+          stdout: 'kept\n',
+          stderr:
+              'xzcat: Unexpected end of input\n$kDecompressFailedMarker 1\n',
+        );
+        expect(missing.reason, LogStreamEndReason.missing);
+        expect(corrupt.reason, LogStreamEndReason.failed);
+        expect(texts('b'), ['kept'], reason: 'what it read before still goes');
+      },
+    );
+
+    test('a compressed read of a file without .gz or .xz is refused', () {
+      service.open(
+        'a',
+        _spec(const FileLogSource('/var/log/syslog', compressed: true)),
+      );
+      expect(link.commands, isEmpty);
+      expect(statuses('a'), [const LogStreamEnded(LogStreamEndReason.invalid)]);
     });
   });
 

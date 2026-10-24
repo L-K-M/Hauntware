@@ -47,7 +47,74 @@ enum SystemctlVerb {
   reload,
   enable,
   disable,
+  mask,
+  unmask,
+  resetFailed('reset-failed');
+
+  const SystemctlVerb([this._wireName]);
+
+  final String? _wireName;
+
+  /// The verb as `systemctl` spells it.
+  String get wireName => _wireName ?? name;
 }
+
+/// The `systemctl show` properties SVC-08's per-unit resources read
+/// (03 §7.5). `systemctl show` has no JSON output [R: systemd issue
+/// #39081], so [parseUnitResources] reads its `KEY=VALUE` lines.
+const List<String> kUnitResourceProperties = [
+  'MemoryCurrent',
+  'CPUUsageNSec',
+  'TasksCurrent',
+  'NRestarts',
+  'MainPID',
+  'ActiveEnterTimestamp',
+];
+
+/// The systemd manager a unit command addresses (03 §7.5, SVC-09): the
+/// system manager, or the login user's own. A user-manager command never
+/// runs under sudo, which would address root's manager instead; the
+/// planner keeps it out of elevation.
+final class UnitManager {
+  /// The system manager (`systemctl` without `--user`).
+  const UnitManager.system() : _user = false, runtimeDir = null;
+
+  /// The login user's manager (`systemctl --user`), with [runtimeDir] as
+  /// `XDG_RUNTIME_DIR` when the login session does not set it.
+  const UnitManager.user({this.runtimeDir}) : _user = true;
+
+  /// The login user's manager on a host whose probe recorded [uid] and
+  /// the session's [xdgRuntimeDir] (03 §6.1). `systemctl --user` finds
+  /// the manager's bus through `XDG_RUNTIME_DIR`; where the session left
+  /// it unset, the command sets systemd's own `/run/user/<uid>` [U].
+  factory UnitManager.userFor({int? uid, String? xdgRuntimeDir}) {
+    final set = xdgRuntimeDir != null && xdgRuntimeDir.isNotEmpty;
+    if (set || uid == null) return const UnitManager.user();
+    return UnitManager.user(runtimeDir: '/run/user/$uid');
+  }
+
+  final bool _user;
+
+  /// The `XDG_RUNTIME_DIR` a user-manager command sets, or null to keep
+  /// the session's.
+  final String? runtimeDir;
+
+  /// Whether this is the login user's manager.
+  bool get isUser => _user;
+
+  /// The words before the `systemctl` verb.
+  List<String> get _head {
+    if (!_user) return const ['systemctl'];
+    final dir = runtimeDir;
+    if (dir == null) return const ['systemctl', '--user'];
+    HostCommands._check(ArgValidators.absolutePath, dir);
+    return ['env', 'XDG_RUNTIME_DIR=$dir', 'systemctl', '--user'];
+  }
+}
+
+/// How [HostCommands.unitSockets] asks for its table: JSON on systemd
+/// 246+, the `--no-legend` text table below (03 §6.4).
+enum UnitTableFormat { json, text }
 
 /// The signals a guarded kill may send (PRC-02, 03 §7.2, §8.8 "signal
 /// names (enum)"): the ones a person picks for a process. Each [wireName]
@@ -190,6 +257,134 @@ enum JournalOrder {
   follow,
 }
 
+/// One boot of the journal (LOG-09, 03 §7.6): an offset from the
+/// current boot (0, -1 for the one before) or a boot ID, which stays
+/// put when the host boots again.
+final class JournalBoot {
+  /// The boot [offset] boots before the current one; 0 is the current.
+  const JournalBoot.offset(int offset) : _offset = offset, _id = null;
+
+  /// The boot whose ID is [id], 32 lower-case hex digits.
+  const JournalBoot.id(String id) : _offset = null, _id = id;
+
+  final int? _offset;
+  final String? _id;
+
+  /// The offset, or null for a boot named by [id].
+  int? get offset => _offset;
+
+  /// The boot ID, or null for a boot named by [offset].
+  String? get id => _id;
+
+  @override
+  bool operator ==(Object other) =>
+      other is JournalBoot && other._offset == _offset && other._id == _id;
+
+  @override
+  int get hashCode => Object.hash(_offset, _id);
+
+  @override
+  String toString() => 'JournalBoot(${_id ?? _offset})';
+
+  /// The `-b` argument, after validating it.
+  String get _wire {
+    final id = _id;
+    if (id != null) {
+      if (!_bootId.hasMatch(id)) {
+        throw HostCommandError('not a boot ID', argument: id);
+      }
+      return id;
+    }
+    final offset = _offset!;
+    if (offset > 0) {
+      throw HostCommandError('a boot offset counts back', argument: '$offset');
+    }
+    return '$offset';
+  }
+
+  static final _bootId = RegExp(r'^[0-9a-f]{32}$');
+}
+
+/// The first systemd whose `journalctl --list-boots` takes `-o json`
+/// (03 §7.6).
+const int kListBootsJsonSystemd = 251;
+
+/// How [HostCommands.journalBoots] asks for the boot list: JSON on
+/// systemd [kListBootsJsonSystemd] and later, the text table below.
+enum JournalBootsFormat { json, text }
+
+/// How a rotated log under `/var/log` is compressed (LOG-08, 03 §7.6),
+/// from its name.
+enum LogCompression {
+  none,
+  gzip,
+  xz;
+
+  /// The compression [path]'s suffix names.
+  static LogCompression of(String path) {
+    if (path.endsWith('.gz')) return gzip;
+    if (path.endsWith('.xz')) return xz;
+    return none;
+  }
+}
+
+/// The marker [HostCommands.rotatedTail] writes to stderr when the
+/// decompressor fails, followed by its exit status (127: not installed).
+const String kDecompressFailedMarker = 'klabautermann-decompress-failed';
+
+/// Reads the tail of a compressed log: the decompressor's failure is
+/// reported on stderr, since the pipeline's status is `tail`'s.
+const String _kRotatedTailScript =
+    '{ "\$1" -- "\$2" || echo "$kDecompressFailedMarker \$?" >&2; } '
+    '| tail -n "\$3"';
+
+/// Lists the regular files under `/var/log`, two levels deep (LOG-08,
+/// 03 §7.6): `<readable> <bytes> <mtime> <path>` per file, where
+/// readable is 1 or 0. `stat -c` and `find -maxdepth` work under GNU
+/// and BusyBox alike, unlike `find -printf`. A name holding a newline
+/// is not listed.
+const String _kLogFilesScript = r'''
+find /var/log -maxdepth 2 -type f 2>/dev/null | while IFS= read -r f; do
+  if [ -r "$f" ]; then r=1; else r=0; fi
+  s=$(stat -c '%s %Y' -- "$f" 2>/dev/null) || continue
+  printf '%s %s %s
+' "$r" "$s" "$f"
+done''';
+
+/// [HostCommands.anacron]'s exit when it printed the table and stamps.
+const int kAnacronListed = 0;
+
+/// [HostCommands.anacron]'s exit when `/etc/anacrontab` does not exist:
+/// anacron is not installed.
+const int kAnacronMissing = 3;
+
+/// [HostCommands.anacron]'s exit when `/etc/anacrontab` exists but could
+/// not be read.
+const int kAnacronUnreadable = 4;
+
+/// The marker before anacron's job stamps in [HostCommands.anacron]'s
+/// output; the table comes before it.
+const String kAnacronStampsMarker = '== klabautermann anacron stamps ==';
+
+/// Prints `/etc/anacrontab`, then [kAnacronStampsMarker], then one
+/// `<job> <stamp>` line per file under `/var/spool/anacron` (JOB-04, 03
+/// §7.7); an unreadable stamp prints `?`.
+const String _kAnacronScript =
+    '''
+[ -e /etc/anacrontab ] || exit $kAnacronMissing
+cat /etc/anacrontab || exit $kAnacronUnreadable
+printf '\n%s\n' '$kAnacronStampsMarker'
+for f in /var/spool/anacron/*; do
+  [ -f "\$f" ] || continue
+  d=\$(cat -- "\$f" 2>/dev/null) || d='?'
+  printf '%s %s\n' "\${f##*/}" "\${d:-?}"
+done
+exit $kAnacronListed''';
+
+/// The syslog identifiers cron daemons log their runs under (JOB-05, 03
+/// §7.7): Debian's and Ubuntu's cron, cronie and BusyBox crond.
+const List<String> kCronJournalIdentifiers = ['CRON', 'CROND', 'crond'];
+
 /// How a cron command runs as another user (JOB-19, 03 §7.7): util-linux
 /// `runuser`, which root runs without a password prompt or PAM session
 /// checks, or `su` where a host lacks it (BusyBox).
@@ -238,24 +433,75 @@ abstract final class HostCommands {
     ].map(quote).join(' ');
   }
 
-  /// `systemctl --no-ask-password <verb> -- <unit>` (03 §7.5).
-  /// `--no-ask-password` fails fast where a polkit prompt would block.
-  static List<String> systemctl(SystemctlVerb verb, String unit) {
+  /// `systemctl --no-ask-password <verb> -- <unit>` (03 §7.5), for
+  /// [manager]'s units. `--no-ask-password` fails fast where a polkit
+  /// prompt would block.
+  static List<String> systemctl(
+    SystemctlVerb verb,
+    String unit, {
+    UnitManager manager = const UnitManager.system(),
+  }) {
     _check(ArgValidators.unitName, unit);
-    return ['systemctl', '--no-ask-password', verb.name, '--', unit];
+    return [...manager._head, '--no-ask-password', verb.wireName, '--', unit];
   }
+
+  /// `systemctl cat -- <unit>`: the unit file and its drop-ins, each
+  /// after a `# <path>` line (SVC-07, 03 §7.5).
+  static List<String> unitFile(
+    String unit, {
+    UnitManager manager = const UnitManager.system(),
+  }) {
+    _check(ArgValidators.unitName, unit);
+    return [...manager._head, 'cat', '--', unit];
+  }
+
+  /// `systemctl show` of [kUnitResourceProperties] for [unit] (SVC-08,
+  /// 03 §7.5); [parseUnitResources] reads the output. `LoadState` comes
+  /// first: `show` exits 0 for a unit it cannot find and prints defaults,
+  /// so only `LoadState=not-found` says the unit is gone.
+  static List<String> unitResources(
+    String unit, {
+    UnitManager manager = const UnitManager.system(),
+  }) {
+    _check(ArgValidators.unitName, unit);
+    return [
+      ...manager._head,
+      'show',
+      '--property=LoadState,${kUnitResourceProperties.join(',')}',
+      '--',
+      unit,
+    ];
+  }
+
+  /// `systemctl list-sockets --all` as [format] (SVC-10, 03 §7.5);
+  /// [parseUnitSockets] reads either shape.
+  static List<String> unitSockets(
+    UnitTableFormat format, {
+    UnitManager manager = const UnitManager.system(),
+  }) => [
+    ...manager._head,
+    'list-sockets',
+    '--all',
+    ...switch (format) {
+      UnitTableFormat.json => const ['--output=json'],
+      UnitTableFormat.text => const ['--no-legend'],
+    },
+  ];
 
   /// `systemctl --no-ask-password start -- <unit>` for "run timer now"
   /// (JOB-08, 03 §7.7, M13): starts the unit the timer activates, with
   /// SVC-03's guards. [activates] is the timer's `Unit=`, any unit but a
   /// timer [R: systemd.timer(5)]; the caller follows its journal with
   /// [journalctl]'s `unit`, `since` and [JournalOrder.follow].
-  static List<String> timerStart(String activates) {
+  static List<String> timerStart(
+    String activates, {
+    UnitManager manager = const UnitManager.system(),
+  }) {
     _check(ArgValidators.unitName, activates);
     if (activates.endsWith('.timer')) {
       throw HostCommandError('a timer activates no timer', argument: activates);
     }
-    return systemctl(SystemctlVerb.start, activates);
+    return systemctl(SystemctlVerb.start, activates, manager: manager);
   }
 
   /// The guarded kill (PRC-02, 03 §7.2): `sh -c` with a constant script
@@ -325,17 +571,37 @@ abstract final class HostCommands {
 
   /// Prints the unit timer [timer] activates (its `Unit=`), for JOB-08's
   /// run-timer-now plan (03 §7.7).
-  static List<String> timerActivates(String timer) {
+  static List<String> timerActivates(
+    String timer, {
+    UnitManager manager = const UnitManager.system(),
+  }) {
     _check(ArgValidators.unitName, timer);
-    return ['systemctl', 'show', '--property=Unit', '--value', '--', timer];
+    return [
+      ...manager._head,
+      'show',
+      '--property=Unit',
+      '--value',
+      '--',
+      timer,
+    ];
   }
 
   /// Prints systemd's load state of [unit] (`loaded`, `not-found`, ...),
   /// for an operation's re-validation (03 §8.5): a unit that no longer
   /// loads is not acted on.
-  static List<String> unitLoadState(String unit) {
+  static List<String> unitLoadState(
+    String unit, {
+    UnitManager manager = const UnitManager.system(),
+  }) {
     _check(ArgValidators.unitName, unit);
-    return ['systemctl', 'show', '--property=LoadState', '--value', '--', unit];
+    return [
+      ...manager._head,
+      'show',
+      '--property=LoadState',
+      '--value',
+      '--',
+      unit,
+    ];
   }
 
   /// The crontab spool listing for JOB-03 (03 §7.7, M14), run elevated:
@@ -353,8 +619,8 @@ abstract final class HostCommands {
   }
 
   /// `journalctl -o json` with the log view's filters (03 §7.6, §10.1):
-  /// the kernel log (`-k -b`), unit, identifier, the current boot,
-  /// priority floor, time range, resume cursor, window size ([lines]),
+  /// the kernel log (`-k -b`), unit, identifier, the current boot or
+  /// another [boot], priority floor, time range, resume cursor, window size ([lines]),
   /// [order] and a grep pattern. Every supplied filter is validated.
   /// Refused here are what journalctl refuses, `--since` with a cursor
   /// (it takes one starting point) and a range that ends before it
@@ -371,6 +637,7 @@ abstract final class HostCommands {
     String? unit,
     String? identifier,
     bool currentBoot = false,
+    JournalBoot? boot,
     String? priority,
     DateTime? since,
     DateTime? until,
@@ -389,6 +656,10 @@ abstract final class HostCommands {
     if (lines != null && lines < 0) {
       throw const HostCommandError('negative line count');
     }
+    if (boot != null && currentBoot) {
+      throw const HostCommandError('two boots named');
+    }
+    final bootArg = boot?._wire;
     if (since != null && cursor != null) {
       throw const HostCommandError('--since and a cursor exclude each other');
     }
@@ -408,7 +679,11 @@ abstract final class HostCommands {
       'json',
       '--no-pager',
       if (kernel) '-k',
-      if (kernel || currentBoot) '-b',
+      if (bootArg != null) ...[
+        '-b',
+        bootArg,
+      ] else if (kernel || currentBoot)
+        '-b',
       if (unit != null) ...['-u', unit],
       if (identifier != null) ...['-t', identifier],
       if (priority != null) ...['-p', priority],
@@ -473,6 +748,94 @@ abstract final class HostCommands {
     _check(ArgValidators.absolutePath, path);
     if (lines < 0) throw const HostCommandError('negative line count');
     return ['tail', '-n', '$lines', if (follow) '-F', '--', path];
+  }
+
+  /// `journalctl --list-boots` (LOG-09, 03 §7.6), as JSON on systemd
+  /// [kListBootsJsonSystemd] and later, else the text table;
+  /// `parseJournalBoots` reads either.
+  static List<String> journalBoots(JournalBootsFormat format) => [
+    'journalctl',
+    '--list-boots',
+    '--no-pager',
+    if (format == JournalBootsFormat.json) ...['-o', 'json'],
+  ];
+
+  /// The files under `/var/log` (LOG-08, 03 §7.6); `parseLogFiles`
+  /// reads the output.
+  static List<String> logFiles() => const [
+    'sh',
+    '-c',
+    _kLogFilesScript,
+    'klabautermann-logs',
+  ];
+
+  /// The last [lines] lines of a compressed rotated log (LOG-08, 03
+  /// §7.6), through `zcat` or `xzcat`; never followed, since a rotated
+  /// file no longer grows. An uncompressed file reads through [tail].
+  static List<String> rotatedTail(String path, {required int lines}) {
+    _check(ArgValidators.absolutePath, path);
+    if (lines < 0) throw const HostCommandError('negative line count');
+    final tool = switch (LogCompression.of(path)) {
+      LogCompression.gzip => 'zcat',
+      LogCompression.xz => 'xzcat',
+      LogCompression.none => throw HostCommandError(
+        'not a compressed log',
+        argument: path,
+      ),
+    };
+    return [
+      'sh',
+      '-c',
+      _kRotatedTailScript,
+      'klabautermann-rotated',
+      tool,
+      path,
+      '$lines',
+    ];
+  }
+
+  /// anacron's table and job stamps (JOB-04, 03 §7.7); the exit codes are
+  /// [kAnacronListed], [kAnacronMissing] and [kAnacronUnreadable], and
+  /// `parseAnacron` reads the output.
+  static List<String> anacron() => const [
+    'sh',
+    '-c',
+    _kAnacronScript,
+    'klabautermann-anacron',
+  ];
+
+  /// A timer's last run (JOB-05, 03 §7.7): `systemctl show` of the
+  /// timer's `LastTriggerUSec` and the result of [service], the unit it
+  /// activates; `parseTimerLastRun` reads the two blocks.
+  static List<String> timerLastRun(String timer, String service) {
+    _check(ArgValidators.timerUnit, timer);
+    _check(ArgValidators.unitName, service);
+    return [
+      'systemctl',
+      'show',
+      '--property=Id,LastTriggerUSec,Result,ExecMainStatus,'
+          'ExecMainExitTimestamp',
+      '--',
+      timer,
+      service,
+    ];
+  }
+
+  /// cron's own log of the jobs it started (JOB-05, 03 §7.7): the newest
+  /// [lines] records under [kCronJournalIdentifiers], newest first.
+  /// `parseCronRuns` reads them; cron records no exit status.
+  static List<String> cronRuns({required int lines}) {
+    if (lines < 0) throw const HostCommandError('negative line count');
+    return [
+      'journalctl',
+      '-o',
+      'json',
+      '--no-pager',
+      for (final id in kCronJournalIdentifiers) ...['-t', id],
+      '-n',
+      '$lines',
+      '-r',
+    ];
   }
 
   /// A cron job's command run now (JOB-19, 03 §7.7): `sh -c` with the

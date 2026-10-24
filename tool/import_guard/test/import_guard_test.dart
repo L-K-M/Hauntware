@@ -41,6 +41,8 @@ products:
       - packages/poltergeist_core/lib
     forbidden_dependencies:
       poltergeist_sync: [bridge]
+    allowed_dependencies:
+      poltergeist_view: [meta, "path*"]
     seance_core_implementation_imports:
       - packages/poltergeist_core/lib/src/connection
     standalone_resolutions:
@@ -507,6 +509,10 @@ dependency_overrides: {"dartssh2": any}
       final extended = await _Fixture.create(
         guardsConfig: _extendedGuardsConfig,
       );
+      // The package allowed_dependencies names; a missing one fails.
+      const view = '$_product/packages/poltergeist_view';
+      await extended.write('$view/pubspec.yaml', 'name: poltergeist_view\n');
+      await extended._register('poltergeist_view', view);
       try {
         await body(extended);
       } finally {
@@ -652,6 +658,112 @@ dependency_overrides: {"dartssh2": any}
           1,
           'forbidden transitive dependency poltergeist_sync -> middle -> bridge',
         );
+      });
+    });
+
+    group('allowlist', () {
+      const view = '$_product/packages/poltergeist_view';
+
+      Future<void> viewPackage(_Fixture f, String dependencies) async {
+        await f.package('meta', '');
+        await f.package('path', '');
+        await f.package('bridge', '');
+        await f.write(
+          '$view/pubspec.yaml',
+          'name: poltergeist_view\n$dependencies',
+        );
+        await f._register('poltergeist_view', view);
+      }
+
+      test('accepts listed runtime and any dev dependencies', () async {
+        await withFixture((f) async {
+          await viewPackage(
+            f,
+            'dependencies: {meta: any, path: any}\n'
+            'dev_dependencies: {bridge: any}\n',
+          );
+          await f.write(
+            '$view/lib/view.dart',
+            "import 'package:meta/meta.dart';\n"
+                "import 'package:path/path.dart';\n"
+                "import 'package:poltergeist_view/other.dart';\n"
+                "import 'dart:async';",
+          );
+          await f.write(
+            '$view/test/view_test.dart',
+            "import 'package:bridge/bridge.dart';",
+          );
+          await f.expectExit(0);
+        });
+      });
+
+      for (final section in ['dependencies', 'dependency_overrides']) {
+        test('rejects an unlisted package in $section', () async {
+          await withFixture((f) async {
+            await viewPackage(f, '$section: {bridge: any}\n');
+            await f.expectExit(
+              1,
+              'poltergeist/packages/poltergeist_view: dependency bridge is '
+              'not in its allowlist',
+            );
+          });
+        });
+      }
+
+      test('rejects an unlisted import from lib', () async {
+        await withFixture((f) async {
+          await viewPackage(f, '');
+          await f.write(
+            '$view/lib/view.dart',
+            "import 'package:bridge/bridge.dart';",
+          );
+          await f.expectExit(
+            1,
+            'poltergeist/packages/poltergeist_view/lib/view.dart: '
+            'import/export bridge is not in its allowlist',
+          );
+        });
+      });
+
+      test('rejects a dev-only package imported from lib', () async {
+        await withFixture((f) async {
+          await viewPackage(f, 'dev_dependencies: {bridge: any}\n');
+          await f.write(
+            '$view/lib/view.dart',
+            "import 'package:bridge/bridge.dart';",
+          );
+          await f.expectExit(
+            1,
+            'poltergeist/packages/poltergeist_view/lib/view.dart: '
+            'import/export bridge is not in its allowlist',
+          );
+        });
+      });
+
+      test('rejects an allowlist naming no scanned package', () async {
+        await withFixture((f) async {
+          await Directory(p.join(f.root.path, view)).delete(recursive: true);
+          await f.expectExit(
+            1,
+            'poltergeist: allowed_dependencies names poltergeist_view, '
+            'which is not a scanned package',
+          );
+        });
+      });
+
+      test('leaves packages without an allowlist alone', () async {
+        await withFixture((f) async {
+          await f.package('bridge', '');
+          await f.write(
+            '$_product/packages/poltergeist_other/pubspec.yaml',
+            'name: poltergeist_other\ndependencies: {bridge: any}\n',
+          );
+          await f._register(
+            'poltergeist_other',
+            '$_product/packages/poltergeist_other',
+          );
+          await f.expectExit(0);
+        });
       });
     });
 

@@ -13,6 +13,7 @@ import 'controllers/admin_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/device_name.dart';
+import 'controllers/pin_publication_controller.dart';
 import 'controllers/docker_endpoint_choices.dart';
 import 'controllers/docker_notice_controller.dart';
 import 'controllers/fleet_controller.dart';
@@ -21,6 +22,7 @@ import 'controllers/monitoring_controller.dart';
 import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
 import 'controllers/server_prefs_controller.dart';
+import 'controllers/stack_folders.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
 import 'services/app_version.dart';
@@ -179,9 +181,16 @@ Future<void> main(List<String> args) async {
   // Spawned once per launch: a restarted engine would be a new client
   // with new controllers over it, whose seq floors start empty (D44), and
   // KlabautermannApp remounts its tree when handed them.
+  // STK-08's scan folders per server, device-local in settings.json until
+  // the pref record syncs them (M5 plan M05).
+  final stackFolders = StackFolders(
+    stored: settings.stackFolders,
+    save: settings.setStackFolders,
+  );
   final monitoring = MonitoringController(
     engine,
     dockerEndpointChoices: dockerEndpointChoices,
+    stackFolders: stackFolders,
   );
   // The host-key and keyboard-interactive prompts the engine raises while
   // it connects, shown one at a time over every route.
@@ -198,7 +207,17 @@ Future<void> main(List<String> args) async {
   // Pull-only sync (03 §4.3, D14): the sign-in and rounds the user asks
   // for, and the OS keystore the engine's sync reaches through this
   // isolate, which alone can call the keystore plugin (D62).
-  final sync = SyncController(engine, account: engine.ready.syncAccount);
+  // Pin publication (D15, M5 plan M07): offered only once a release with
+  // Séance's #56 fix is named, which the engine reports at start.
+  final pinPublication = PinPublicationController(
+    engine,
+    initial: engine.ready.pinPublication,
+  );
+  final sync = SyncController(
+    engine,
+    account: engine.ready.syncAccount,
+    pinPublication: pinPublication,
+  );
   EngineKeystoreResponder(engine, klabautermannMasterKeyManager());
   for (final issue in engine.ready.syncStoreIssues) {
     debugPrint('${issue.fileName}: ${issue.kind.name} ${issue.detail ?? ''}');
@@ -276,6 +295,7 @@ Future<void> main(List<String> args) async {
     monitorSet: fleet.monitorSettings,
     safety: safety,
     syncSecrets: syncSecrets,
+    pinPublication: pinPublication,
   );
 
   runApp(
@@ -288,6 +308,7 @@ Future<void> main(List<String> args) async {
       announcements: announcements,
       safety: safety,
       syncSecrets: syncSecrets,
+      pinPublication: pinPublication,
       admin: admin,
       operations: operations,
       dockerNotice: dockerNotice,

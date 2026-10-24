@@ -8,6 +8,7 @@ import 'package:klabautermann_core/klabautermann_core.dart'
 import '../controllers/announcement_controller.dart';
 import '../controllers/appearance_controller.dart';
 import '../controllers/monitor_set.dart';
+import '../controllers/pin_publication_controller.dart';
 import '../controllers/safety_controller.dart';
 import '../controllers/sync_secrets_controller.dart';
 import '../l10n/app_localizations.dart';
@@ -34,6 +35,7 @@ class SettingsPage extends StatefulWidget {
     required this.monitorSet,
     this.safety,
     this.syncSecrets,
+    this.pinPublication,
     this.initialTab = SettingsTab.general,
     this.tabRequests,
   });
@@ -47,6 +49,9 @@ class SettingsPage extends StatefulWidget {
 
   /// Null in tests that leave it out, where the Sync tab is a placeholder.
   final SyncSecretsSettings? syncSecrets;
+
+  /// The host key sharing assertion; null in tests that leave it out.
+  final PinPublicationSettings? pinPublication;
 
   /// The running build's version for the about row; null when the
   /// platform could not tell (`readAppVersion`).
@@ -129,6 +134,7 @@ class _SettingsPageState extends State<SettingsPage>
               SettingsTab.servers => ServersTab(monitorSet: widget.monitorSet),
               SettingsTab.sync when widget.syncSecrets != null => SyncTab(
                 syncSecrets: widget.syncSecrets!,
+                pinPublication: widget.pinPublication,
               ),
               SettingsTab.safety when widget.safety != null => SafetyTab(
                 safety: widget.safety!,
@@ -224,11 +230,27 @@ class GeneralTab extends StatelessWidget {
 
 /// The Sync tab: the device's "sync passwords" switch (03 §4.5, SYN-02),
 /// in Séance's words. While on, sync rounds add the passwords and keys
-/// other devices synced to this device's vault.
+/// other devices synced to this device's vault. Once a release is offered,
+/// the host key sharing assertion too (D15, M5 plan M07).
 class SyncTab extends StatelessWidget {
-  const SyncTab({super.key, required this.syncSecrets});
+  const SyncTab({super.key, required this.syncSecrets, this.pinPublication});
 
   final SyncSecretsSettings syncSecrets;
+  final PinPublicationSettings? pinPublication;
+
+  /// As [_set], for the host key sharing switch.
+  Future<void> _assert(BuildContext context, bool asserted) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final l10n = AppLocalizations.of(context);
+    try {
+      await pinPublication!.setAsserted(asserted);
+    } on Exception catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) {
+        showTopToast(overlay, message: l10n.settingsPinPublicationNotChanged);
+      }
+    }
+  }
 
   /// As [GeneralTab._set].
   Future<void> _set(BuildContext context, bool enabled) async {
@@ -252,8 +274,9 @@ class SyncTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final pins = pinPublication;
     return ListenableBuilder(
-      listenable: syncSecrets,
+      listenable: Listenable.merge([syncSecrets, ?pins]),
       builder: (context, _) => ListView(
         padding: const EdgeInsets.all(24),
         children: [
@@ -272,6 +295,27 @@ class SyncTab extends StatelessWidget {
             title: Text(l10n.settingsSyncSecrets),
             subtitle: Text(l10n.settingsSyncSecretsDetail),
           ),
+          if (pins?.value case PinPublication(
+            :final release?,
+            :final asserted,
+          )) ...[
+            const SizedBox(height: 24),
+            Semantics(
+              header: true,
+              child: Text(
+                l10n.settingsPinPublicationTitle,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            const SizedBox(height: 4),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: asserted,
+              onChanged: (value) => unawaited(_assert(context, value)),
+              title: Text(l10n.settingsPinPublication(release)),
+              subtitle: Text(l10n.settingsPinPublicationDetail),
+            ),
+          ],
         ],
       ),
     );

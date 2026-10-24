@@ -2146,9 +2146,55 @@
       }
     }
   },
-  "logsPanelCurrentBoot": "Current boot only",
-  "@logsPanelCurrentBoot": {
-    "description": "Toggle of the Logs panel's journal filters that shows only entries since the server last started."
+  "logsPanelBoot": "Boot",
+  "@logsPanelBoot": {
+    "description": "Tooltip and title of the Logs panel's boot picker, which chooses the server start whose journal or kernel entries are shown."
+  },
+  "logsPanelBootChoice": "{choice, select, all{All boots} current{This boot} other{Boot}}",
+  "@logsPanelBootChoice": {
+    "description": "The boot picker's choice: every boot the journal keeps, or only the one since the server last started.",
+    "placeholders": {
+      "choice": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelBootPast": "{count, plural, =1{Previous boot} other{{count} boots ago}}",
+  "@logsPanelBootPast": {
+    "description": "A past boot in the boot picker, counted back from the current one.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "logsPanelBootSpan": "{start} to {end}",
+  "@logsPanelBootSpan": {
+    "description": "When a boot's first and last journal entries were written, under its name in the boot picker.",
+    "placeholders": {
+      "start": {
+        "type": "String",
+        "example": "12 Oct, 08:14"
+      },
+      "end": {
+        "type": "String",
+        "example": "14 Oct, 23:02"
+      }
+    }
+  },
+  "logsPanelBootsLoading": "Reading the server's boots…",
+  "@logsPanelBootsLoading": {
+    "description": "Shown in the boot picker while the server lists its boots."
+  },
+  "logsPanelBootsFailed": "{failure, select, noLink{Not connected to the server.} denied{The server denied access to its boot list.} missing{The server has no journal to list boots from.} other{Reading the server's boots failed.}}",
+  "@logsPanelBootsFailed": {
+    "description": "Shown in the boot picker when the server's boots could not be listed.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
   },
   "logsPanelTimeRange": "Time range",
   "@logsPanelTimeRange": {
@@ -2184,6 +2230,126 @@
   "@logsPanelCommonPaths": {
     "description": "Tooltip of the button beside the file path field that lists common log files, such as the syslog and web server logs."
   },
+  "logsPanelBrowseFiles": "Browse /var/log",
+  "@logsPanelBrowseFiles": {
+    "description": "Button beside the file path field that lists the server's log files under /var/log (LOG-08)."
+  },
+  "logsPanelFiles": "Files in /var/log",
+  "@logsPanelFiles": {
+    "description": "Title of the sheet listing the server's log files under /var/log."
+  },
+  "logsPanelFilesFilter": "Filter by name",
+  "@logsPanelFilesFilter": {
+    "description": "Label of the field that narrows the /var/log listing to paths containing its text."
+  },
+  "logsPanelFilesLoading": "Listing the server's log files…",
+  "@logsPanelFilesLoading": {
+    "description": "Shown in the /var/log browser while the server lists its files."
+  },
+  "logsPanelFilesFailed": "{failure, select, noLink{Not connected to the server.} denied{The server denied access to /var/log.} missing{The server cannot list /var/log.} other{Listing the server's log files failed.}}",
+  "@logsPanelFilesFailed": {
+    "description": "Shown in the /var/log browser when the server's files could not be listed.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelFilesEmpty": "The server has no files under /var/log.",
+  "@logsPanelFilesEmpty": {
+    "description": "Shown in the /var/log browser when the listing is empty."
+  },
+  "logsPanelFilesNoMatch": "No file path contains this text.",
+  "@logsPanelFilesNoMatch": {
+    "description": "Shown in the /var/log browser when the filter matches no file."
+  },
+  "logsPanelFileDetails": "{size}, changed {modified}",
+  "@logsPanelFileDetails": {
+    "description": "Under a file's path in the /var/log browser: its size and when it last changed.",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "12 KiB"
+      },
+      "modified": {
+        "type": "String",
+        "example": "12 Oct, 08:14"
+      }
+    }
+  },
+  "logsPanelFileCompressed": "Compressed: reads its last lines, without following",
+  "@logsPanelFileCompressed": {
+    "description": "Under a rotated .gz or .xz file in the /var/log browser."
+  },
+  "logsPanelFileUnreadable": "Your account cannot read it; admin mode can",
+  "@logsPanelFileUnreadable": {
+    "description": "Under a file in the /var/log browser that the server account may not read."
+  },
+  "logsExport": "Export",
+  "@logsExport": {
+    "description": "Tooltip of the Logs panel's button that exports the lines it holds (LOG-10)."
+  },
+  "logsExportTitle": "{count, plural, =1{Export 1 line} other{Export {count} lines}}",
+  "@logsExportTitle": {
+    "description": "Title of the log export sheet.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "logsExportIncludeSecrets": "Include secrets",
+  "@logsExportIncludeSecrets": {
+    "description": "Switch in the log export sheet that turns off redaction."
+  },
+  "logsExportSecretsRedacted": "Passwords, tokens and keys are replaced before the lines leave the app.",
+  "@logsExportSecretsRedacted": {
+    "description": "Under the Include secrets switch while it is off."
+  },
+  "logsExportSecretsIncluded": "The lines leave the app as they are, secrets included.",
+  "@logsExportSecretsIncluded": {
+    "description": "Under the Include secrets switch while it is on."
+  },
+  "logsExportAction": "{target, select, copy{Copy} save{Save…} other{Share…}}",
+  "@logsExportAction": {
+    "description": "A button in the log export sheet: copy to the clipboard, save to a file, or open the share sheet.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "logsExportDone": "{target, select, copy{Copied the lines.} other{Saved the lines.}}",
+  "@logsExportDone": {
+    "description": "Toast after the log export copied or saved the lines.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "logsExportFailed": "{target, select, copy{The lines could not be copied.} save{The lines could not be saved.} other{The lines could not be shared.}}",
+  "@logsExportFailed": {
+    "description": "Toast when the log export failed.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "logsExportNotRedacted": "The lines could not be redacted, so nothing was exported.",
+  "@logsExportNotRedacted": {
+    "description": "Toast when the engine could not redact the lines; the export never falls back to the unredacted text."
+  },
+  "logsExportFileName": "{source, select, journal{journal} kernel{kernel} other{log}}.log",
+  "@logsExportFileName": {
+    "description": "The suggested file name for a saved log export. Keep it a valid file name.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
   "logsPanelApply": "Apply",
   "@logsPanelApply": {
     "description": "Button that reads the log again with the filters or path entered."
@@ -2211,6 +2377,14 @@
   "@logsPanelLiveTooltip": {
     "description": "Tooltip of the Logs panel's Live chip."
   },
+  "logsPanelLivePastBoot": "A past boot has no new entries to follow",
+  "@logsPanelLivePastBoot": {
+    "description": "Tooltip of the Logs panel's Live chip while it is off because a past boot is shown."
+  },
+  "logsPanelLiveCompressed": "A compressed file has no new lines to follow",
+  "@logsPanelLiveCompressed": {
+    "description": "Tooltip of the Logs panel's Live chip while it is off because a compressed rotated file is shown."
+  },
   "logsPanelJournalLimited": "Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The server's Access section shows how to add it.",
   "@logsPanelJournalLimited": {
     "description": "Notice above the journal when the server shows the signed-in account only its own entries. The group names are names on the server and stay as they are."
@@ -2219,7 +2393,7 @@
   "@logsPanelKernelLimited": {
     "description": "Notice above the kernel log when the server's journal shows the signed-in account only its own entries, which never include kernel messages. The group names are names on the server and stay as they are."
   },
-  "logsPanelStatus": "{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} gap{Following again. Lines written while it was paused or disconnected may be missing.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} other{Choose or type the absolute path of a file to tail.}}",
+  "logsPanelStatus": "{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} gap{Following again. Lines written while it was paused or disconnected may be missing.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} searchUnsupported{This server's journal cannot search. Clear the server search to read the log.} other{Choose or type the absolute path of a file to tail.}}",
   "@logsPanelStatus": {
     "description": "Status line above the log saying what reading it is doing or why it stopped.",
     "placeholders": {
@@ -2251,6 +2425,32 @@
   "logsPanelSearchCase": "Match case",
   "@logsPanelSearchCase": {
     "description": "Tooltip of the toggle that makes the log search tell upper from lower case."
+  },
+  "logsPanelSearchRegex": "Regular expression",
+  "@logsPanelSearchRegex": {
+    "description": "Tooltip of the toggle that makes the log search read its text as a regular expression."
+  },
+  "logsPanelSearchInvalid": "Not a valid regular expression",
+  "@logsPanelSearchInvalid": {
+    "description": "Error under the log search field when its text, read as a regular expression, does not compile."
+  },
+  "logsPanelSearchServer": "Search the whole journal on the server",
+  "@logsPanelSearchServer": {
+    "description": "Tooltip of the button that reads only the journal entries matching the search, matched by the server, rather than searching the entries already shown."
+  },
+  "logsPanelServerMatch": "Server search: {pattern}",
+  "@logsPanelServerMatch": {
+    "description": "Chip above the log while the server reads only the journal entries matching a pattern; the pattern is shown as sent.",
+    "placeholders": {
+      "pattern": {
+        "type": "String",
+        "example": "(?i)timeout"
+      }
+    }
+  },
+  "logsPanelServerMatchClear": "Clear the server search",
+  "@logsPanelServerMatchClear": {
+    "description": "Tooltip of the button on the server-search chip that reads the whole journal again."
   },
   "logsPanelSearchMatches": "{total, plural, =0{No matches} =1{1 match} other{{total} matches}}",
   "@logsPanelSearchMatches": {
@@ -2962,7 +3162,7 @@
       }
     }
   },
-  "jobsRunsUnknown": "{reason, select, reboot{Runs when cron starts, not at a time.} unparsed{The schedule does not parse, so its runs are unknown.} timeZoneUnresolved{This device does not know the CRON_TZ zone, so its runs are unknown.} serverZoneUnknown{The server's time zone is not known yet, so its runs are unknown.} noRunInHorizon{No run falls in the next {years} years.} notEvaluated{Runs are worked out for the first {limit} cron lines only.} anacron{anacron runs this directory; its timing is not shown in this version.} other{No cron line runs this directory.}}",
+  "jobsRunsUnknown": "{reason, select, reboot{Runs when cron starts, not at a time.} unparsed{The schedule does not parse, so its runs are unknown.} timeZoneUnresolved{This device does not know the CRON_TZ zone, so its runs are unknown.} serverZoneUnknown{The server's time zone is not known yet, so its runs are unknown.} noRunInHorizon{No run falls in the next {years} years.} notEvaluated{Runs are worked out for the first {limit} cron lines only.} anacron{anacron runs this directory; its timing is not shown in this version.} paused{Paused: cron skips this job until it is resumed.} other{No cron line runs this directory.}}",
   "@jobsRunsUnknown": {
     "description": "Why a job lists no next runs (03 §7.7); reason is the engine's JobRunsUnknown name, and other is noDriver. limit is how many cron lines a reading works out runs for, and years how far ahead it looks.",
     "placeholders": {
@@ -2977,7 +3177,7 @@
       }
     }
   },
-  "jobsNextRunUnknown": "{reason, select, reboot{At cron start} unparsed{Unreadable schedule} timeZoneUnresolved{Zone not known} serverZoneUnknown{Zone not known yet} noRunInHorizon{None in {years} years} notEvaluated{Not worked out} anacron{Timed by anacron} other{Not run}}",
+  "jobsNextRunUnknown": "{reason, select, reboot{At cron start} unparsed{Unreadable schedule} timeZoneUnresolved{Zone not known} serverZoneUnknown{Zone not known yet} noRunInHorizon{None in {years} years} notEvaluated{Not worked out} anacron{Timed by anacron} paused{Paused} other{Not run}}",
   "@jobsNextRunUnknown": {
     "description": "A job's next-run cell in the jobs table when it lists no runs: jobsRunsUnknown cut short to fit the column, which stays at phone width. reason is the engine's JobRunsUnknown name, and other is noDriver; years is how far ahead the engine looks. The job's details give the full reason.",
     "placeholders": {
@@ -3268,6 +3468,25 @@
   "settingsSyncSecretsNotChanged": "The setting could not be changed.",
   "@settingsSyncSecretsNotChanged": {
     "description": "Toast when the app did not take a change of the sync passwords switch."
+  },
+  "settingsPinPublicationTitle": "Host keys",
+  "@settingsPinPublicationTitle": {
+    "description": "Heading of the Sync tab's host key sharing section, shown once a Séance release with the shared host key fix is named."
+  },
+  "settingsPinPublication": "Every device runs Séance {release} or later",
+  "@settingsPinPublication": {
+    "description": "Switch asserting that every device on the account runs a Séance release that checks shared host keys; while on, host keys the user confirms are shared.",
+    "placeholders": {
+      "release": {"type": "String", "example": "2026.11.0"}
+    }
+  },
+  "settingsPinPublicationDetail": "While on, host keys you confirm are shared with your other devices, so they can check a server the first time they connect. Turning it off stops sharing; keys already shared stay.",
+  "@settingsPinPublicationDetail": {
+    "description": "What the host key sharing switch does, under it."
+  },
+  "settingsPinPublicationNotChanged": "The host key setting could not be changed.",
+  "@settingsPinPublicationNotChanged": {
+    "description": "Toast when the engine did not take or keep a change of the host key sharing switch."
   },
   "settingsAboutTitle": "About",
   "@settingsAboutTitle": {
@@ -3627,6 +3846,17 @@
   "syncFleetAssertionDetail": "Older Séance releases can mistake records from other apps for servers.",
   "@syncFleetAssertionDetail": {
     "description": "Why the fleet assertion matters, under its checkbox."
+  },
+  "syncPinPublicationAssertion": "Every device on this account runs Séance {release} or later",
+  "@syncPinPublicationAssertion": {
+    "description": "Optional checkbox at sign-in asserting the release that checks shared host keys; ticked, host keys the user confirms are shared.",
+    "placeholders": {
+      "release": {"type": "String", "example": "2026.11.0"}
+    }
+  },
+  "syncPinPublicationAssertionDetail": "Then host keys you confirm are shared with them. Older releases accept a shared key without checking it.",
+  "@syncPinPublicationAssertionDetail": {
+    "description": "Why the host key assertion matters, under its checkbox."
   },
   "syncDisclosureAccountKey": "Your encryption passphrase opens the records of every app on this account, Séance and Poltergeist included.",
   "@syncDisclosureAccountKey": {
@@ -4001,7 +4231,7 @@
   "@actionPreviewHostWrites": {
     "description": "Heading above the host writes the action causes (03 §8.11)."
   },
-  "actionPreviewHostWrite": "{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine's own state} loginRecords{Login records, as every SSH command leaves} auditSyslog{One line in the system log naming this action and this device} other{A change on the server}}",
+  "actionPreviewHostWrite": "{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine's own state} loginRecords{Login records, as every SSH command leaves} editTarget{The file or crontab you edited} editTempFile{A temporary copy beside the file, renamed over it or removed} userBackups{A backup in your Klabautermann backups folder} rootBackups{A backup under /var/lib/klabautermann/backups} footprintManifest{The list of what Klabautermann keeps on the server} auditSyslog{One line in the system log naming this action and this device} other{A change on the server}}",
   "@actionPreviewHostWrite": {
     "description": "One host write in the action preview; row is the engine's HostWriteRow name.",
     "placeholders": {
@@ -4056,7 +4286,7 @@
   "@actionPreviewRemoveOrphans": {
     "description": "Switch in a redeploy preview that plans it again with --remove-orphans, which needs the typed confirmation (STK-06)."
   },
-  "actionPreviewWarning": "{warning, select, profileGatedServices{Some running services are enabled only by a compose profile, which Klabautermann cannot see. The redeploy leaves them as they are.} profilesUnknown{The compose CLI could not list every profile's services, so some of these containers may belong to a service a profile enables.} mayDieAtLogout{This server ends your processes when you log out, which can stop the operation before it finishes.} other{}}",
+  "actionPreviewWarning": "{warning, select, profileGatedServices{Some running services are enabled only by a compose profile, which Klabautermann cannot see. The redeploy leaves them as they are.} profilesUnknown{The compose CLI could not list every profile's services, so some of these containers may belong to a service a profile enables.} mayDieAtLogout{This server ends your processes when you log out, which can stop the operation before it finishes.} unitNotVerified{This server's systemd is not known to be version 250 or later, so the unit file is not checked before it is replaced.} other{}}",
   "@actionPreviewWarning": {
     "description": "A warning in the action preview; warning is the engine's PlanWarning name.",
     "placeholders": {
@@ -4270,9 +4500,143 @@
   "@dockerActions": {
     "description": "Tooltip of the button that opens a container's or image's actions in the phone list."
   },
+  "jobsBadged": "{text}, {badge}",
+  "@jobsBadged": {
+    "description": "A jobs table cell as a screen reader hears it: the job's name, then a badge such as jobsPaused.",
+    "placeholders": {
+      "text": {
+        "type": "String"
+      },
+      "badge": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsPaused": "Paused",
+  "@jobsPaused": {
+    "description": "Screen-reader name of the icon on a paused cron line's row (JOB-07)."
+  },
+  "jobsPausedDetail": "Paused: cron skips this line until it is resumed.",
+  "@jobsPausedDetail": {
+    "description": "Note in a paused cron line's details (JOB-07)."
+  },
+  "jobsManagedBy": "{manager, select, dokku{Managed by Dokku} coolify{Managed by Coolify} dokploy{Managed by Dokploy} runtipi{Managed by Runtipi} other{Managed by another tool}}",
+  "@jobsManagedBy": {
+    "description": "Screen-reader name of the icon on a cron line another manager owns (JOB-09); manager is the engine's CrontabManager name.",
+    "placeholders": {
+      "manager": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsManagedDetail": "{manager, select, dokku{Dokku} coolify{Coolify} dokploy{Dokploy} runtipi{Runtipi} other{Another tool}} manages this line. Change it there; a change here may be overwritten.",
+  "@jobsManagedDetail": {
+    "description": "Note in the details of a cron line another manager owns (JOB-09); manager is the engine's CrontabManager name.",
+    "placeholders": {
+      "manager": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsLastRun": "Last run",
+  "@jobsLastRun": {
+    "description": "Label of a job's last run in its details (JOB-05)."
+  },
+  "jobsLastRunReading": "Reading…",
+  "@jobsLastRunReading": {
+    "description": "A job's last run while it is being read."
+  },
+  "jobsLastRunNever": "Never triggered.",
+  "@jobsLastRunNever": {
+    "description": "A timer's last run when it never triggered."
+  },
+  "jobsLastRunSucceeded": "It succeeded.",
+  "@jobsLastRunSucceeded": {
+    "description": "Note under a timer's last run when its service succeeded."
+  },
+  "jobsLastRunExited": "It ended as {result}, exit status {status}.",
+  "@jobsLastRunExited": {
+    "description": "Note under a timer's last run when its service failed; result is systemd's Result word, such as exit-code.",
+    "placeholders": {
+      "result": {
+        "type": "String"
+      },
+      "status": {
+        "type": "int"
+      }
+    }
+  },
+  "jobsLastRunEnded": "It ended as {result}.",
+  "@jobsLastRunEnded": {
+    "description": "Note under a timer's last run when its service ended without an exit status; result is systemd's Result word.",
+    "placeholders": {
+      "result": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsLastRunNoStatus": "When cron started it; cron logs no exit status.",
+  "@jobsLastRunNoStatus": {
+    "description": "Note under a cron line's last run (JOB-05)."
+  },
+  "jobsLastRunNotLogged": "{count, plural, =0{cron logged no job starts that can be read.} =1{Not among the 1 newest job start cron logged.} other{Not among the {count} newest job starts cron logged.}}",
+  "@jobsLastRunNotLogged": {
+    "description": "A cron line's last run when the log holds no start of it.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "jobsLastRunFailed": "{failure, select, noLink{Connect to the server to read the last run.} invalidTarget{This job's last run cannot be read.} other{The last run could not be read.}}",
+  "@jobsLastRunFailed": {
+    "description": "A job's last run when its read failed; failure is the engine's JobHistoryFailure name.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "jobsCronRunRunning": "Running…",
+  "@jobsCronRunRunning": {
+    "description": "Status in a cron line's run output sheet while it runs (JOB-19)."
+  },
+  "jobsCronRunSucceeded": "It finished with exit status 0.",
+  "@jobsCronRunSucceeded": {
+    "description": "Status in a cron line's run output sheet when the command succeeded."
+  },
+  "jobsCronRunExited": "It finished with exit status {status}.",
+  "@jobsCronRunExited": {
+    "description": "Status in a cron line's run output sheet when the command exited non-zero.",
+    "placeholders": {
+      "status": {
+        "type": "int"
+      }
+    }
+  },
+  "jobsCronRunNoOutput": "It printed nothing.",
+  "@jobsCronRunNoOutput": {
+    "description": "A cron line's run output when the command printed nothing."
+  },
+  "jobsCronRunTruncated": "The output was longer than this; the rest was dropped.",
+  "@jobsCronRunTruncated": {
+    "description": "Note under a cron line's run output when the engine capped it."
+  },
   "jobsRunNow": "Run now",
   "@jobsRunNow": {
     "description": "Timer action (JOB-08): starts the unit the timer activates now."
+  },
+  "jobsPause": "Pause",
+  "@jobsPause": {
+    "description": "Cron line action (JOB-07): comments the line out, through an edit of the crontab, so cron skips it until it is resumed."
+  },
+  "jobsResume": "Resume",
+  "@jobsResume": {
+    "description": "Paused cron line action (JOB-07): restores the line Pause commented out, through an edit of the crontab."
+  },
+  "jobsPauseLineChanged": "The crontab no longer holds this line as shown. Wait for the next reading and try again.",
+  "@jobsPauseLineChanged": {
+    "description": "Toast when Pause or Resume reads the crontab and the line has changed or gone since the Jobs tab read it (JOB-07)."
   },
   "jobsRunOutputTitle": "Output of {unit}",
   "@jobsRunOutputTitle": {
@@ -4388,7 +4752,7 @@
   "@activityColumnResult": {
     "description": "Column of the activity log: how the run ended."
   },
-  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} StackAction{Stack action} RedeployStack{Redeploy stack} other{Action}}",
+  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
   "@activityAction": {
     "description": "An activity log row's action; action is the engine's intent type name.",
     "placeholders": {
@@ -5903,6 +6267,192 @@
   "@dockerLogsShow": {
     "description": "Tooltip of the button on a container's details, and the container row's menu item, that opens the container's logs (CTX-01)."
   },
+  "dockerCommandOpen": "Run a command",
+  "@dockerCommandOpen": {
+    "description": "Tooltip of the button on a container's details that opens the one-off command sheet (CTX-08)."
+  },
+  "dockerCommandTitle": "Run a command in {container}",
+  "@dockerCommandTitle": {
+    "description": "Title of the one-off command sheet (CTX-08).",
+    "placeholders": {
+      "container": {
+        "type": "String",
+        "example": "web-1"
+      }
+    }
+  },
+  "dockerCommandLabel": "Command",
+  "@dockerCommandLabel": {
+    "description": "Label of the one-off command's field (CTX-08)."
+  },
+  "dockerCommandHelper": "Runs without a shell or terminal. Quote words as in a shell; for pipes and variables, run sh -c '…'.",
+  "@dockerCommandHelper": {
+    "description": "Helper under the command field: the words run as typed, without a shell expanding them (CTX-08)."
+  },
+  "dockerCommandUnparsed": "Enter a complete command: close any open quote and remove a trailing backslash.",
+  "@dockerCommandUnparsed": {
+    "description": "Error under the command field when it is empty, a quote is left open or it ends with a backslash (CTX-08)."
+  },
+  "dockerCommandRun": "Run",
+  "@dockerCommandRun": {
+    "description": "Button that plans the one-off command, shows its preview and runs it once confirmed (CTX-08)."
+  },
+  "dockerCommandRunning": "Running…",
+  "@dockerCommandRunning": {
+    "description": "Status of the one-off command sheet while the command runs (CTX-08)."
+  },
+  "dockerCommandStdout": "Output",
+  "@dockerCommandStdout": {
+    "description": "Label over the command's standard output (CTX-08)."
+  },
+  "dockerCommandStderr": "Errors",
+  "@dockerCommandStderr": {
+    "description": "Label over the command's standard error (CTX-08)."
+  },
+  "dockerCommandNoOutput": "The command printed nothing.",
+  "@dockerCommandNoOutput": {
+    "description": "Shown when the finished command wrote nothing to stdout or stderr (CTX-08)."
+  },
+  "dockerCommandTruncated": "The output was longer than 1 MiB; the rest was dropped.",
+  "@dockerCommandTruncated": {
+    "description": "Shown when the command's output exceeded the kept maximum (CTX-08)."
+  },
+  "dockerShellOpen": "Open a shell",
+  "@dockerShellOpen": {
+    "description": "Tooltip of the button on a container's details that opens a shell in the container (CTX-07)."
+  },
+  "dockerShellHide": "Show details",
+  "@dockerShellHide": {
+    "description": "Tooltip of the inspector button that swaps a container shell back for the container's details, closing the shell (CTX-07)."
+  },
+  "dockerShellTitle": "Shell in {container}",
+  "@dockerShellTitle": {
+    "description": "Title of the page that shows a shell in a container (CTX-07).",
+    "placeholders": {
+      "container": {
+        "type": "String",
+        "example": "web-1"
+      }
+    }
+  },
+  "dockerShellShellLabel": "Shell",
+  "@dockerShellShellLabel": {
+    "description": "Label of the field that picks the shell program to run in a container (CTX-07)."
+  },
+  "dockerShellShellAuto": "Automatic: /bin/bash, then /bin/sh",
+  "@dockerShellShellAuto": {
+    "description": "Hint and menu item of the shell field when no shell is chosen: the engine runs /bin/bash where the container has it, otherwise /bin/sh (CTX-07)."
+  },
+  "dockerShellUserLabel": "User",
+  "@dockerShellUserLabel": {
+    "description": "Label of the field naming the user a container shell runs as (CTX-07)."
+  },
+  "dockerShellUserHint": "The container's user",
+  "@dockerShellUserHint": {
+    "description": "Hint of the empty user field: the shell runs as the container's configured user (CTX-07)."
+  },
+  "dockerShellStart": "Open shell",
+  "@dockerShellStart": {
+    "description": "Button that opens the shell in the container with the chosen shell and user (CTX-07)."
+  },
+  "dockerShellOpening": "Opening the shell…",
+  "@dockerShellOpening": {
+    "description": "Status above a container shell while the engine starts it (CTX-07)."
+  },
+  "dockerShellRunning": "Running {command}",
+  "@dockerShellRunning": {
+    "description": "Status above a running container shell, naming the command the exec runs (CTX-07).",
+    "placeholders": {
+      "command": {
+        "type": "String",
+        "example": "/bin/bash"
+      }
+    }
+  },
+  "dockerShellEnded": "{reason, select, exited{The shell exited.} closed{The shell was closed.} observeOnly{Management is off for this server, so no shell opens.} readOnly{Read-only mode is on, so no shell opens.} notInFleet{This server is no longer in the fleet.} endpointUnavailable{The server's Docker endpoint could not be reached.} noChannel{No session channel was free on the server. Close another view or shell and try again.} tooMany{This server already has the most shells open. Close one first.} refused{The container is gone, or Docker refused the shell.} linkLost{The connection to the server was lost.} adminEnded{Admin mode ended, and the shell with it.} failed{The shell failed.} other{The engine stopped, and the shell with it.}}",
+  "@dockerShellEnded": {
+    "description": "Status above a container shell that ended or never started, by the engine's reason (CTX-07).",
+    "placeholders": {
+      "reason": {
+        "type": "String",
+        "example": "exited"
+      }
+    }
+  },
+  "dockerShellExitCode": "Exit code {code}.",
+  "@dockerShellExitCode": {
+    "description": "Follows the ended status when the shell reported its exit code (CTX-07).",
+    "placeholders": {
+      "code": {
+        "type": "int",
+        "example": "0"
+      }
+    }
+  },
+  "dockerShellReopen": "Open again",
+  "@dockerShellReopen": {
+    "description": "Button that opens the container shell again with the same shell and user after it ended (CTX-07)."
+  },
+  "dockerShellChange": "Change shell",
+  "@dockerShellChange": {
+    "description": "Button that goes back to the shell and user fields after a container shell ended (CTX-07)."
+  },
+  "dockerShellClose": "Close the shell",
+  "@dockerShellClose": {
+    "description": "Tooltip of the button that ends a running container shell (CTX-07)."
+  },
+  "dockerShellCopy": "Copy",
+  "@dockerShellCopy": {
+    "description": "Context menu item that copies the selected terminal text (CTX-07)."
+  },
+  "dockerShellPaste": "Paste",
+  "@dockerShellPaste": {
+    "description": "Button tooltip and context menu item that pastes the clipboard into a container shell, checked first when it has several lines (CTX-07)."
+  },
+  "dockerShellPasteTitle": "{count, plural, one{Paste 1 line?} other{Paste {count} lines?}}",
+  "@dockerShellPasteTitle": {
+    "description": "Title of the dialog that asks before pasting several lines into a container shell (CTX-07).",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "dockerShellPasteFindings": "Some of these lines look dangerous. Each line runs as you paste it.",
+  "@dockerShellPasteFindings": {
+    "description": "Body of the paste dialog when the danger linter flagged lines (CTX-07)."
+  },
+  "dockerShellPasteUnchecked": "These lines could not be checked. Each line runs as you paste it.",
+  "@dockerShellPasteUnchecked": {
+    "description": "Body of the paste dialog when the danger check failed: unknown, not clean (CTX-07)."
+  },
+  "dockerShellPasteFinding": "Line {line}: {explanation}",
+  "@dockerShellPasteFinding": {
+    "description": "One danger finding in the paste dialog: the pasted line it is on and the linter's explanation (CTX-07).",
+    "placeholders": {
+      "line": {
+        "type": "int",
+        "example": "2"
+      },
+      "explanation": {
+        "type": "String",
+        "example": "Recursively deletes files"
+      }
+    }
+  },
+  "dockerShellPasteAll": "Paste all",
+  "@dockerShellPasteAll": {
+    "description": "Paste dialog button that pastes every line (CTX-07)."
+  },
+  "dockerShellPasteFirstLine": "First line only",
+  "@dockerShellPasteFirstLine": {
+    "description": "Paste dialog button that pastes the first line without its line break (CTX-07)."
+  },
+  "dockerShellPasteCancel": "Cancel",
+  "@dockerShellPasteCancel": {
+    "description": "Paste dialog button that pastes nothing (CTX-07)."
+  },
   "dockerLogsTitle": "Logs",
   "@dockerLogsTitle": {
     "description": "Under a container's name above its logs, in the Docker tab's log pane on desktops and in the bottom sheet on phones."
@@ -6221,5 +6771,552 @@
         "type": "String"
       }
     }
+  },
+  "editClose": "Close",
+  "@editClose": {
+    "description": "Remote editor: closes the editor dialog; asks first when changes are not saved."
+  },
+  "editTitleFile": "Edit {name}",
+  "@editTitleFile": {
+    "description": "Remote editor: the title for a file (SAF-12). name is the file name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "editTitleOwnCrontab": "Edit your crontab",
+  "@editTitleOwnCrontab": {
+    "description": "Remote editor: the title for the login user's crontab (JOB-04)."
+  },
+  "editTitleCrontab": "Edit {user}'s crontab",
+  "@editTitleCrontab": {
+    "description": "Remote editor: the title for another account's crontab (JOB-06). user is the account name.",
+    "placeholders": {
+      "user": {
+        "type": "String"
+      }
+    }
+  },
+  "editRetry": "Read again",
+  "@editRetry": {
+    "description": "Remote editor: reads the file again after a failed read."
+  },
+  "editReading": "Reading the file…",
+  "@editReading": {
+    "description": "Remote editor: shown while the engine reads the file."
+  },
+  "editReadFailed": "{reason, select, noLink{There is no connection to this server.} invalidTarget{Klabautermann does not edit this path.} notFound{There is no file at this path on the host.} adminRequired{Only root can read this file. Turn on admin mode to edit it.} tooLarge{This file is too large for the editor.} notText{This file is not text.} stackUnverified{This stack's files are not its verified source, so Klabautermann does not edit them.} failed{The file could not be read.} other{The file could not be read.}}",
+  "@editReadFailed": {
+    "description": "Remote editor: why the engine read nothing. reason is the engine's EditReadFailure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "editRootFile": "Root's file",
+  "@editRootFile": {
+    "description": "Remote editor: chip on a file only root may write; saving it runs through admin mode."
+  },
+  "editUnsaved": "Not saved",
+  "@editUnsaved": {
+    "description": "Remote editor: shown while the text differs from the server's."
+  },
+  "editEditorLabel": "Editor for {path}",
+  "@editEditorLabel": {
+    "description": "Remote editor: accessibility label of the editor. path is the file being edited.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "editDiscard": "Discard changes",
+  "@editDiscard": {
+    "description": "Remote editor: drops the changes for the server's text."
+  },
+  "editReview": "Review changes",
+  "@editReview": {
+    "description": "Remote editor: shows the diff and the format checks before saving."
+  },
+  "editDiscardTitle": "Discard your changes?",
+  "@editDiscardTitle": {
+    "description": "Remote editor: title of the confirmation before changes are dropped."
+  },
+  "editDiscardBody": "Your changes are not saved to the server and will be lost.",
+  "@editDiscardBody": {
+    "description": "Remote editor: body of the confirmation before changes are dropped."
+  },
+  "editKeepEditing": "Keep editing",
+  "@editKeepEditing": {
+    "description": "Remote editor: closes a dialog and returns to the editor."
+  },
+  "editConflictTitle": "The file changed on the server",
+  "@editConflictTitle": {
+    "description": "Remote editor: title of the conflict sheet, when the file changed since it was read."
+  },
+  "editConflictBody": "It changed since you opened it, so your save did not run. Your changes are still here.",
+  "@editConflictBody": {
+    "description": "Remote editor: body of the conflict sheet."
+  },
+  "editConflictDiscard": "Discard mine",
+  "@editConflictDiscard": {
+    "description": "Remote editor: conflict sheet; replaces the user's text with the server's."
+  },
+  "editConflictCompare": "Reload and compare",
+  "@editConflictCompare": {
+    "description": "Remote editor: conflict sheet; reads the server's text and reviews the user's text against it."
+  },
+  "editProblem": "{line, plural, other{Line {line}}}: {kind, select, syntaxError{does not parse} duplicateKey{key set again} duplicateTable{table declared again} duplicateAttribute{attribute given twice} jsonComment{comment in JSON} jsonTrailingComma{trailing comma in JSON} unterminatedQuote{quote never closed} tabIndentation{tab indentation} mismatchedClosingTag{closing tag does not match} unclosedElement{element never closed} unexpectedClosingTag{closing tag without an open element} mergeConflict{merge conflict marker} other{problem}} {subject}",
+  "@editProblem": {
+    "description": "Remote editor review: one format problem. line is 1-based; kind is the TextProblemKind name; subject is the key, tag or parser detail, or empty.",
+    "placeholders": {
+      "line": {
+        "type": "int"
+      },
+      "kind": {
+        "type": "String"
+      },
+      "subject": {
+        "type": "String"
+      }
+    }
+  },
+  "editSave": "Save to server",
+  "@editSave": {
+    "description": "Remote editor review: plans the save, whose preview shows every step before it runs."
+  },
+  "editSaveAnyway": "Save anyway",
+  "@editSaveAnyway": {
+    "description": "Remote editor review: saves although the format checks found problems."
+  },
+  "editDiffing": "Comparing…",
+  "@editDiffing": {
+    "description": "Remote editor review: shown while the diff is computed."
+  },
+  "editDiffStatus": "{status, select, identical{Your text is the same as the server's.} tooLarge{The change is too large to show as a diff.} timedOut{The comparison took too long to show.} failed{The comparison failed.} other{The change cannot be shown.}}",
+  "@editDiffStatus": {
+    "description": "Remote editor review: why no diff shows. status is the UnifiedDiffStatus name.",
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "editDiffLabel": "Changes to the file",
+  "@editDiffLabel": {
+    "description": "Remote editor review: accessibility label of the diff."
+  },
+  "dockerStackServiceActions": "Actions for {service}",
+  "@dockerStackServiceActions": {
+    "description": "Tooltip of a compose service's action menu on the stack overview (STK-23).",
+    "placeholders": {
+      "service": {
+        "type": "String",
+        "example": "web"
+      }
+    }
+  },
+  "dockerStackServicePull": "Pull image",
+  "@dockerStackServicePull": {
+    "description": "Service menu item that pulls the service's image (STK-23)."
+  },
+  "dockerStackServiceRecreate": "Recreate",
+  "@dockerStackServiceRecreate": {
+    "description": "Service menu item that recreates the service's containers even when unchanged (STK-23)."
+  },
+  "dockerStackServiceScale": "Scale",
+  "@dockerStackServiceScale": {
+    "description": "Service menu item, and the scale dialog's confirm button, that sets the service's container count (STK-23)."
+  },
+  "dockerStackScaleTitle": "Scale {service}",
+  "@dockerStackScaleTitle": {
+    "description": "Title of the dialog that asks how many containers a service runs (STK-23).",
+    "placeholders": {
+      "service": {
+        "type": "String",
+        "example": "web"
+      }
+    }
+  },
+  "dockerStackScaleLabel": "Containers",
+  "@dockerStackScaleLabel": {
+    "description": "Label of the scale dialog's container count field (STK-23)."
+  },
+  "dockerStackScaleRange": "Enter a number from 0 to {max}.",
+  "@dockerStackScaleRange": {
+    "description": "Error under the scale dialog's field when it is not a whole number in range (STK-23).",
+    "placeholders": {
+      "max": {
+        "type": "int",
+        "example": "100"
+      }
+    }
+  },
+  "dockerStackScaleCancel": "Cancel",
+  "@dockerStackScaleCancel": {
+    "description": "Scale dialog button that scales nothing (STK-23)."
+  },
+  "dockerStackDown": "Down",
+  "@dockerStackDown": {
+    "description": "Stack overview button that takes the whole stack down, its containers and networks but never its volumes; the preview asks for the typed confirmation (STK-23)."
+  },
+  "dockerStackProfiles": "Profiles",
+  "@dockerStackProfiles": {
+    "description": "Label over the profiles a verified stack's compose files name (STK-09)."
+  },
+  "dockerStackProfilesReading": "Reading…",
+  "@dockerStackProfilesReading": {
+    "description": "Shown under Profiles while the engine lists them (STK-09)."
+  },
+  "dockerStackProfilesFailed": "The profiles could not be listed.",
+  "@dockerStackProfilesFailed": {
+    "description": "Shown under Profiles when compose could not list them (STK-09)."
+  },
+  "dockerStacksUnlisted": "Stacks without containers",
+  "@dockerStacksUnlisted": {
+    "description": "Heading of the section listing compose files found in the chosen folders that no running or stopped stack accounts for (STK-08)."
+  },
+  "dockerStackFoldersNone": "Name the folders your stacks live in, such as /opt/stacks, to find stacks that have no containers.",
+  "@dockerStackFoldersNone": {
+    "description": "Shown when no scan folders are chosen for this server (STK-08)."
+  },
+  "dockerStackFoldersList": "Folders: {folders}",
+  "@dockerStackFoldersList": {
+    "description": "The scan folders chosen for this server (STK-08).",
+    "placeholders": {
+      "folders": {
+        "type": "String",
+        "example": "/opt/stacks, /srv/apps"
+      }
+    }
+  },
+  "dockerStackFoldersChoose": "Choose folders",
+  "@dockerStackFoldersChoose": {
+    "description": "Button that opens the dialog naming the folders to scan for stacks (STK-08)."
+  },
+  "dockerStackFoldersScanAgain": "Scan again",
+  "@dockerStackFoldersScanAgain": {
+    "description": "Button that scans the chosen folders again (STK-08)."
+  },
+  "dockerStackFoldersScanning": "Scanning the folders…",
+  "@dockerStackFoldersScanning": {
+    "description": "Shown while the folders are scanned (STK-08)."
+  },
+  "dockerStackFoldersScanFailed": "The folders could not be scanned.",
+  "@dockerStackFoldersScanFailed": {
+    "description": "Shown when the scan could not run (STK-08)."
+  },
+  "dockerStackFoldersNoneFound": "Every stack in these folders has containers.",
+  "@dockerStackFoldersNoneFound": {
+    "description": "Shown when the scan found no compose file that a listed stack does not account for (STK-08)."
+  },
+  "dockerStackFoldersIncomplete": "A folder could not be read, so some stacks may be missing.",
+  "@dockerStackFoldersIncomplete": {
+    "description": "Shown under the scan's results when a folder could not be read (STK-08)."
+  },
+  "dockerStackFoldersTitle": "Stack folders",
+  "@dockerStackFoldersTitle": {
+    "description": "Title of the dialog naming the folders to scan for stacks on this server (STK-08)."
+  },
+  "dockerStackFoldersHelper": "One absolute path per line, at most {max}. The folders and the folders right below them are searched for compose files. Kept on this device.",
+  "@dockerStackFoldersHelper": {
+    "description": "Helper under the stack folders field (STK-08).",
+    "placeholders": {
+      "max": {
+        "type": "int",
+        "example": "16"
+      }
+    }
+  },
+  "dockerStackFoldersProblem": "{problem, select, notAbsolute{Each folder must be an absolute path, such as /opt/stacks.} tooMany{Name at most {max} folders.} other{These folders cannot be scanned.}}",
+  "@dockerStackFoldersProblem": {
+    "description": "Error under the stack folders field (STK-08).",
+    "placeholders": {
+      "problem": {
+        "type": "String",
+        "example": "notAbsolute"
+      },
+      "max": {
+        "type": "int",
+        "example": "16"
+      }
+    }
+  },
+  "dockerStackFoldersCancel": "Cancel",
+  "@dockerStackFoldersCancel": {
+    "description": "Stack folders dialog button that keeps the folders as they were (STK-08)."
+  },
+  "dockerStackFoldersSave": "Save",
+  "@dockerStackFoldersSave": {
+    "description": "Stack folders dialog button that keeps the folders on this device and scans them (STK-08)."
+  },
+  "dockerStackFoldersNotSaved": "The folders could not be saved on this device. They apply until the app quits.",
+  "@dockerStackFoldersNotSaved": {
+    "description": "Toast when settings.json could not be written; the folders hold in memory (STK-08)."
+  },
+  "dockerStackFileEdit": "Edit",
+  "@dockerStackFileEdit": {
+    "description": "Stack file view: opens the file shown in the editor (STK-07)."
+  },
+  "jobsEditOwnCrontab": "Edit your crontab",
+  "@jobsEditOwnCrontab": {
+    "description": "Jobs tab: opens the login user's crontab in the editor (JOB-04)."
+  },
+  "editDiffServerLabel": "{path} (server)",
+  "@editDiffServerLabel": {
+    "description": "Remote editor review: the diff's label for the server's text. path is the file.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "editDiffYourLabel": "{path} (yours)",
+  "@editDiffYourLabel": {
+    "description": "Remote editor review: the diff's label for the user's text. path is the file.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "footprintMenu": "Footprint",
+  "@footprintMenu": {
+    "description": "Server Safety menu: opens what Klabautermann keeps on the server (SAF-14)."
+  },
+  "footprintTitle": "Footprint on {server}",
+  "@footprintTitle": {
+    "description": "Footprint page title. server is the server's name.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "footprintVerify": "Check again",
+  "@footprintVerify": {
+    "description": "Footprint page: asks the engine to verify the footprint again."
+  },
+  "footprintChecking": "Checking what Klabautermann keeps on this server…",
+  "@footprintChecking": {
+    "description": "Footprint page: shown until the engine answers."
+  },
+  "footprintUnavailable": "Klabautermann cannot check what it keeps on this server without a connection. Connect, then check again.",
+  "@footprintUnavailable": {
+    "description": "Footprint page: the engine refused the check, as for a server with no connection."
+  },
+  "footprintRootUnchecked": "Root's backups and manifest are checked in admin mode.",
+  "@footprintRootUnchecked": {
+    "description": "Footprint page: root's part is not read without admin mode."
+  },
+  "footprintWarning": "The check reported: {warning}",
+  "@footprintWarning": {
+    "description": "Footprint page: one problem the check found, in the engine's words.",
+    "placeholders": {
+      "warning": {
+        "type": "String"
+      }
+    }
+  },
+  "footprintNone": "Klabautermann keeps nothing on this server.",
+  "@footprintNone": {
+    "description": "Footprint page: no manifest rows and no backups."
+  },
+  "footprintScope": "{scope, select, user{Your account} root{Root} other{Other}}",
+  "@footprintScope": {
+    "description": "Footprint page: a scope's heading. scope is the FootprintScope name.",
+    "placeholders": {
+      "scope": {
+        "type": "String"
+      }
+    }
+  },
+  "footprintFile": "{kind, select, backupDirectory{Backup directory} backupIndex{Backup index} other{File}} · {present, select, true{present} other{missing on the host}}",
+  "@footprintFile": {
+    "description": "Footprint page: a manifest row's kind and whether it is on the host. kind is the FootprintKind name; present is true or false.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      },
+      "present": {
+        "type": "String"
+      }
+    }
+  },
+  "footprintKeepLast": "{count, plural, =1{Keep only the newest backup of each file} other{Keep the newest {count} backups of each file}}",
+  "@footprintKeepLast": {
+    "description": "Footprint page: removes older backups (Q11, tier 1).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "footprintRemoveAll": "Remove all backups",
+  "@footprintRemoveAll": {
+    "description": "Footprint page: removes every backup of one file (Q11, typed confirmation)."
+  },
+  "footprintCrontabSource": "{user}'s crontab",
+  "@footprintCrontabSource": {
+    "description": "Footprint page: the heading of a crontab's backups. user is the account.",
+    "placeholders": {
+      "user": {
+        "type": "String"
+      }
+    }
+  },
+  "footprintBackup": "{hash} · {status, select, intact{unchanged} modified{changed on the host since it was recorded} missing{missing on the host} other{unknown}}",
+  "@footprintBackup": {
+    "description": "Footprint page: a backup's short hash and whether it still has the recorded content. status is the FootprintBackupStatus name.",
+    "placeholders": {
+      "hash": {
+        "type": "String"
+      },
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "footprintRestore": "Restore…",
+  "@footprintRestore": {
+    "description": "Footprint page: opens the file's editor with this backup as the new text, to review and save."
+  },
+  "footprintRestoreChanged": "The backup changed since it was checked, so it was not opened.",
+  "@footprintRestoreChanged": {
+    "description": "Footprint page: the backup read back does not have its recorded hash."
+  },
+  "unitEnable": "Enable",
+  "@unitEnable": {
+    "description": "Unit action (SVC-05): starts the unit at boot."
+  },
+  "unitDisable": "Disable",
+  "@unitDisable": {
+    "description": "Unit action (SVC-05): stops starting the unit at boot."
+  },
+  "unitMask": "Mask",
+  "@unitMask": {
+    "description": "Unit action (SVC-06): prevents the unit from being started at all."
+  },
+  "unitUnmask": "Unmask",
+  "@unitUnmask": {
+    "description": "Unit action (SVC-06): lets a masked unit start again."
+  },
+  "unitResetFailed": "Reset failed state",
+  "@unitResetFailed": {
+    "description": "Unit action (SVC-06): clears the unit's failed state."
+  },
+  "unitMoreActions": "More",
+  "@unitMoreActions": {
+    "description": "Unit page and row menu: the v1 unit actions (SVC-05, SVC-06)."
+  },
+  "unitQueryFailed": "{reason, select, noLink{There is no connection to this server.} invalidUnit{This is not a unit name.} notFound{The manager has no such unit.} managerUnavailable{Your user manager cannot be reached: you need a login session or lingering.} failed{The read failed.} other{The read failed.}}",
+  "@unitQueryFailed": {
+    "description": "Unit page: why a unit read found nothing. reason is the engine's UnitQueryFailure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "unitResourcesMemory": "Memory",
+  "@unitResourcesMemory": {
+    "description": "Unit page: the unit's current memory use."
+  },
+  "unitResourcesCpu": "CPU time",
+  "@unitResourcesCpu": {
+    "description": "Unit page: the CPU time the unit used."
+  },
+  "unitResourcesCpuSeconds": "{seconds} s",
+  "@unitResourcesCpuSeconds": {
+    "description": "Unit page: CPU time in seconds. seconds is formatted with one decimal.",
+    "placeholders": {
+      "seconds": {
+        "type": "String"
+      }
+    }
+  },
+  "unitResourcesTasks": "Tasks",
+  "@unitResourcesTasks": {
+    "description": "Unit page: the unit's current tasks."
+  },
+  "unitResourcesRestarts": "Restarts",
+  "@unitResourcesRestarts": {
+    "description": "Unit page: how often systemd restarted the unit."
+  },
+  "unitResourcesMainPid": "Main PID",
+  "@unitResourcesMainPid": {
+    "description": "Unit page: the unit's main process ID."
+  },
+  "unitResourcesActiveSince": "Active since",
+  "@unitResourcesActiveSince": {
+    "description": "Unit page: when the unit last became active."
+  },
+  "unitFileShow": "Show unit file",
+  "@unitFileShow": {
+    "description": "Unit page: opens the unit file and its drop-ins (SVC-07)."
+  },
+  "unitFileTitle": "{unit} file",
+  "@unitFileTitle": {
+    "description": "Unit file view title. unit is the unit name.",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "unitFileClose": "Close",
+  "@unitFileClose": {
+    "description": "Unit file view: closes the dialog."
+  },
+  "unitFileReading": "Reading the unit file…",
+  "@unitFileReading": {
+    "description": "Unit file view: shown while the file is read."
+  },
+  "unitFileMasked": "{count, plural, =1{1 value is masked.} other{{count} values are masked.}} Reveal shows them for {seconds} seconds.",
+  "@unitFileMasked": {
+    "description": "Unit file view: how many values the engine masked, and how long a reveal lasts.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "unitFileReveal": "Reveal values",
+  "@unitFileReveal": {
+    "description": "Unit file view: shows the masked values for a while."
+  },
+  "unitFileHide": "Hide values",
+  "@unitFileHide": {
+    "description": "Unit file view: masks the revealed values again."
+  },
+  "unitFileEditorLabel": "File of {unit}",
+  "@unitFileEditorLabel": {
+    "description": "Unit file view: accessibility label of the read-only editor.",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "servicesScopeSystem": "System",
+  "@servicesScopeSystem": {
+    "description": "Services tab: lists the system manager's units."
+  },
+  "servicesScopeUser": "Yours",
+  "@servicesScopeUser": {
+    "description": "Services tab: lists the login user's own units (SVC-09)."
+  },
+  "servicesUserLogsAbsent": "The logs of your own units are not shown here yet.",
+  "@servicesUserLogsAbsent": {
+    "description": "Unit page of a user unit: its journal lines are not read (SVC-09)."
+  },
+  "servicesUserUnavailable": "Your own units could not be read. Your user manager runs only while you are logged in, or with lingering enabled.",
+  "@servicesUserUnavailable": {
+    "description": "Services tab, Yours: the user manager could not be reached (SVC-09)."
   }
 }

@@ -208,9 +208,8 @@ void main() {
     });
 
     test('anchors a relative path to the working directory', () async {
-      final previous = Directory.current;
-      Directory.current = root;
-      addTearDown(() => Directory.current = previous);
+      // Reads the working directory rather than moving it: suites run
+      // concurrently in one process, so a move would reach all of them.
       // getcwd resolves macOS's /var alias even for a missing child.
       expect(
         await fs.canonicalize('sub/../rel'),

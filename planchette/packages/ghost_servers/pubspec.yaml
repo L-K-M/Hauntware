@@ -15,6 +15,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # The server editor's appearance section: accent, badge and both pickers
+  # (docs/design/ghost-servers-part2.md, F5a-2a).
+  ghost_marks:
+    path: ../ghost_marks
   # The sidebar dot vocabulary the status dots draw with, and the toast
   # helper the connection log views will use (a later stage of
   # docs/design/ghost-servers-part1.md).

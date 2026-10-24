@@ -27,7 +27,8 @@ Each directory holds:
   status line, headers and body with its chunked framing, so replaying
   them also exercises the HTTP parser. `.gitattributes` keeps them
   byte-exact. `stats-stream.http` ends at the chunk that completes its
-  second line.
+  second line. `exec-start.http` is the `101` upgrade followed by the
+  raw stdcopy stream until the daemon closed it.
 - `MANIFEST.json`: the daemon's version, API range, OS, kernel, cgroup
   and storage facts; the seed image's digest and id; the ids of
   everything the tool seeded; and the exchanges in order, each with its
@@ -41,7 +42,9 @@ streamed stats, logs (tail for a TTY and a non-TTY container, a follow
 until the container exits, `since`), images, image inspect, networks,
 volumes, `/system/df`, a finite `since`/`until` events window, and
 `/info` under versions one below the daemon's minimum, one above its
-maximum and at the client floor 1.41.
+maximum and at the client floor 1.41, and an exec: a non-TTY exec on
+`web` created, started over a hijacked connection until it exits with
+code 3, and inspected, then the resize of a detached TTY exec.
 
 `RecordedDaemon` and `RecordedCorpus` in `lib/testing.dart` serve a
 directory to the real HTTP client (03 section 11.1's fake transport);

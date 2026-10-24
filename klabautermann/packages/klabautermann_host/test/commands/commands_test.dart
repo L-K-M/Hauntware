@@ -11,11 +11,88 @@ void main() {
         expect(HostCommands.systemctl(v, 'nginx.service'), [
           'systemctl',
           '--no-ask-password',
-          v.name,
+          v.wireName,
           '--',
           'nginx.service',
         ]);
       }
+      expect(SystemctlVerb.resetFailed.wireName, 'reset-failed');
+    });
+
+    test('the user manager adds --user, and XDG_RUNTIME_DIR only when the '
+        'session lacks it', () {
+      expect(
+        HostCommands.systemctl(
+          SystemctlVerb.enable,
+          'sync.service',
+          manager: UnitManager.userFor(uid: 1000, xdgRuntimeDir: null),
+        ),
+        [
+          'env',
+          'XDG_RUNTIME_DIR=/run/user/1000',
+          'systemctl',
+          '--user',
+          '--no-ask-password',
+          'enable',
+          '--',
+          'sync.service',
+        ],
+      );
+      expect(
+        HostCommands.unitFile(
+          'sync.service',
+          manager: UnitManager.userFor(
+            uid: 1000,
+            xdgRuntimeDir: '/run/user/1000',
+          ),
+        ),
+        ['systemctl', '--user', 'cat', '--', 'sync.service'],
+      );
+      expect(
+        UnitManager.userFor(uid: null, xdgRuntimeDir: '').runtimeDir,
+        isNull,
+        reason: 'without a uid there is no directory to name',
+      );
+      expect(
+        () => HostCommands.unitFile(
+          'sync.service',
+          manager: const UnitManager.user(runtimeDir: 'run/user/1000'),
+        ),
+        throwsA(isA<HostCommandError>()),
+      );
+    });
+
+    test('the unit file, resources and sockets reads', () {
+      expect(HostCommands.unitFile('nginx.service'), [
+        'systemctl',
+        'cat',
+        '--',
+        'nginx.service',
+      ]);
+      expect(HostCommands.unitResources('nginx.service'), [
+        'systemctl',
+        'show',
+        '--property=LoadState,MemoryCurrent,CPUUsageNSec,TasksCurrent,'
+            'NRestarts,MainPID,ActiveEnterTimestamp',
+        '--',
+        'nginx.service',
+      ]);
+      expect(HostCommands.unitSockets(UnitTableFormat.json), [
+        'systemctl',
+        'list-sockets',
+        '--all',
+        '--output=json',
+      ]);
+      expect(HostCommands.unitSockets(UnitTableFormat.text), [
+        'systemctl',
+        'list-sockets',
+        '--all',
+        '--no-legend',
+      ]);
+      expect(
+        () => HostCommands.unitResources('nginx; id'),
+        throwsA(isA<HostCommandError>()),
+      );
     });
 
     test('an invalid unit name is refused with the offending argument', () {
@@ -33,6 +110,39 @@ void main() {
   });
 
   group('journalctl', () {
+    test('a boot by offset or ID replaces the bare -b', () {
+      expect(HostCommands.journalctl(boot: const JournalBoot.offset(-1)), [
+        'journalctl',
+        '-o',
+        'json',
+        '--no-pager',
+        '-b',
+        '-1',
+      ]);
+      const id = '0123456789abcdef0123456789abcdef';
+      expect(
+        HostCommands.journalctl(kernel: true, boot: const JournalBoot.id(id)),
+        ['journalctl', '-o', 'json', '--no-pager', '-k', '-b', id],
+      );
+      for (final bad in [
+        const JournalBoot.offset(1),
+        const JournalBoot.id('0123'),
+        const JournalBoot.id('-b; id'),
+      ]) {
+        expect(
+          () => HostCommands.journalctl(boot: bad),
+          throwsA(isA<HostCommandError>()),
+        );
+      }
+      expect(
+        () => HostCommands.journalctl(
+          currentBoot: true,
+          boot: const JournalBoot.offset(0),
+        ),
+        throwsA(isA<HostCommandError>()),
+      );
+    });
+
     test('filters append in a fixed order and JSON is always set', () {
       expect(
         HostCommands.journalctl(
@@ -479,5 +589,68 @@ void main() {
       () => HostCommands.unitLoadState('-x'),
       throwsA(isA<HostCommandError>()),
     );
+  });
+
+  test("a user timer's reads and start address the user's manager "
+      '(SVC-09, JOB-08)', () {
+    const manager = UnitManager.user(runtimeDir: '/run/user/1000');
+    const head = [
+      'env',
+      'XDG_RUNTIME_DIR=/run/user/1000',
+      'systemctl',
+      '--user',
+    ];
+    expect(HostCommands.timerActivates('backup.timer', manager: manager), [
+      ...head,
+      'show',
+      '--property=Unit',
+      '--value',
+      '--',
+      'backup.timer',
+    ]);
+    expect(HostCommands.timerStart('backup.service', manager: manager), [
+      ...head,
+      '--no-ask-password',
+      'start',
+      '--',
+      'backup.service',
+    ]);
+    expect(
+      HostCommands.unitLoadState('backup.service', manager: manager).take(5),
+      [...head, 'show'],
+    );
+  });
+
+  group('log sources', () {
+    test('the boot list asks for JSON only where journalctl has it', () {
+      expect(HostCommands.journalBoots(JournalBootsFormat.json), [
+        'journalctl',
+        '--list-boots',
+        '--no-pager',
+        '-o',
+        'json',
+      ]);
+      expect(HostCommands.journalBoots(JournalBootsFormat.text), [
+        'journalctl',
+        '--list-boots',
+        '--no-pager',
+      ]);
+    });
+
+    test('a rotated log reads through the decompressor its name asks for', () {
+      final gz = HostCommands.rotatedTail('/var/log/syslog.2.gz', lines: 50);
+      expect(gz.sublist(4), ['zcat', '/var/log/syslog.2.gz', '50']);
+      final xz = HostCommands.rotatedTail('/var/log/messages.xz', lines: 5);
+      expect(xz.sublist(4), ['xzcat', '/var/log/messages.xz', '5']);
+      expect(
+        () => HostCommands.rotatedTail('/var/log/syslog', lines: 5),
+        throwsA(isA<HostCommandError>()),
+        reason: 'an uncompressed log reads through tail',
+      );
+      expect(
+        () => HostCommands.rotatedTail('../etc/shadow.gz', lines: 5),
+        throwsA(isA<HostCommandError>()),
+      );
+    });
   });
 }

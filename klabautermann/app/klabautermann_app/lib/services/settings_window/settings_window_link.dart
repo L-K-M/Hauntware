@@ -17,6 +17,7 @@ import '../../controllers/announcement_controller.dart'
 import '../../controllers/appearance_controller.dart'
     show AppearanceNotSavedException;
 import '../../controllers/monitor_set.dart';
+import '../../controllers/pin_publication_controller.dart' show PinPublication;
 import '../../controllers/safety_controller.dart' show SafetyNotSavedException;
 import '../../controllers/sync_secrets_controller.dart'
     show SyncSecretsNotSavedException;
@@ -64,6 +65,10 @@ enum SettingsLinkMethod {
   /// bool.
   setSyncSecrets,
 
+  /// The Sync tab's host key sharing switch (M5 plan M07); the argument is
+  /// a bool.
+  setPinPublication,
+
   /// A Servers tab toggle of FL-21's monitor set; the argument is an
   /// object of [SettingsLinkKey.serverId] and [SettingsLinkKey.monitored].
   setMonitored,
@@ -88,6 +93,12 @@ enum SettingsLinkKey {
   mode,
   announceThresholdBands,
   syncSecrets,
+
+  /// The host key sharing assertion, an object of [release] and
+  /// [asserted], or null when the app holds none.
+  pinPublication,
+  release,
+  asserted,
 
   /// The running build's version for the about row, a string or null:
   /// the window's engine registers no plugins to read it itself.
@@ -120,6 +131,20 @@ AppAppearance decodeAppearance(Map<String, Object?> json) => AppAppearance(
     json[SettingsLinkKey.mode.name]! as String,
   ),
 );
+
+/// The pin publication state as the snapshot carries it.
+Map<String, Object?> encodePinPublication(PinPublication value) => {
+  SettingsLinkKey.release.name: value.release,
+  SettingsLinkKey.asserted.name: value.asserted,
+};
+
+/// The inverse of [encodePinPublication]; null reads as none offered.
+PinPublication decodePinPublication(Map<Object?, Object?>? json) => json == null
+    ? const PinPublication()
+    : PinPublication(
+        release: json[SettingsLinkKey.release.name] as String?,
+        asserted: json[SettingsLinkKey.asserted.name]! as bool,
+      );
 
 /// The monitor set's candidates as the snapshot carries them, in fleet
 /// order, the eligibility by name.
