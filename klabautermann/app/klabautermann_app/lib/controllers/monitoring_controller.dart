@@ -5,6 +5,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../ui/charts/series_ring.dart';
 import '../ui/charts/time_series.dart';
+import 'container_terminals.dart';
 import 'docker_controller.dart';
 import 'docker_endpoint_choices.dart';
 import 'job_history_reads.dart';
@@ -155,6 +156,7 @@ final class MonitoringController extends ChangeNotifier {
        stackFolders = stackFolders ?? StackFolders() {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
     logs = LogStreams(_engine);
+    terminals = ContainerTerminals(_engine);
     jobHistory = JobHistoryReads(_engine);
     docker = DockerController(
       _engine,
@@ -173,6 +175,10 @@ final class MonitoringController extends ChangeNotifier {
   /// sends every [OpenLogStream] the app sends, [openLogRead]'s included,
   /// since a rejection names no stream.
   late final LogStreams logs;
+
+  /// The container shells views open (03 §7.13, CTX-07): a concern of
+  /// its own for this engine run, listening beside [logs].
+  late final ContainerTerminals terminals;
 
   /// The Jobs tab's last runs (JOB-05), a concern of its own beside
   /// [logs].
@@ -743,6 +749,7 @@ final class MonitoringController extends ChangeNotifier {
   void dispose() {
     unawaited(_events.cancel());
     logs.dispose();
+    terminals.dispose();
     jobHistory.dispose();
     docker.dispose();
     _onEngineDone();
