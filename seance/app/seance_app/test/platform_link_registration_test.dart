@@ -94,6 +94,8 @@ void main() {
     expect(scheme.runes.every((rune) => rune < 0x80), isTrue);
 
     final main = _read('windows/runner/main.cpp');
+    // A missing call has index -1, which would pass the ordering check.
+    expect(main, contains('ClaimOrForwardDeepLinkInstance'));
     expect(
       main.indexOf('ClaimOrForwardDeepLinkInstance'),
       lessThan(main.indexOf('FlutterWindow window(project)')),
