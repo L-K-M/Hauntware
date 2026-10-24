@@ -48,7 +48,7 @@ void main() {
 
     /// Tests [user] with the fixture's key file, trusting the host key
     /// when [trust] says so.
-    Future<ServerConnectionTested> test(
+    Future<ServerConnectionTested> tryConnection(
       String user, {
       required bool trust,
     }) async {
@@ -91,17 +91,17 @@ void main() {
       }
     }
 
-    final passed = await test(fixture.user, trust: true);
+    final passed = await tryConnection(fixture.user, trust: true);
     expect(passed.ok, isTrue, reason: passed.log);
     expect(passed.summary, contains('${fixture.user}@'));
 
     // Trusted for that attempt only: the next test asks again.
     final pins = File('${support.path}/host_keys.json');
     expect(await pins.exists() ? await _pinned(support) : const [], isEmpty);
-    final declined = await test(fixture.user, trust: false);
+    final declined = await tryConnection(fixture.user, trust: false);
     expect(declined.ok, isFalse);
 
-    final refused = await test('no-such-user', trust: true);
+    final refused = await tryConnection('no-such-user', trust: true);
     expect(refused.ok, isFalse);
     expect(refused.log, isNotEmpty);
     expect(await pins.exists() ? await _pinned(support) : const [], isEmpty);
