@@ -355,6 +355,13 @@ packages:
       relative: true
     source: path
     version: "1.9.2"
+  ghost_marks_picker:
+    dependency: "direct main"
+    description:
+      path: "../../../planchette/packages/ghost_marks_picker"
+      relative: true
+    source: path
+    version: "1.9.2"
   ghost_servers:
     dependency: "direct main"
     description:
@@ -865,6 +872,13 @@ packages:
     dependency: transitive
     description:
       path: "../../packages/seance_protocol"
+      relative: true
+    source: path
+    version: "1.9.2"
+  seance_terminal:
+    dependency: "direct main"
+    description:
+      path: "../../packages/seance_terminal"
       relative: true
     source: path
     version: "1.9.2"

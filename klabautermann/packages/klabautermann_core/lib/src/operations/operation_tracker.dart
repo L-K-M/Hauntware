@@ -22,6 +22,13 @@ import 'operations_shown.dart';
 /// the `units` period, so a result shows about as soon as a unit change.
 const kRunningOperationsReread = Duration(seconds: 15);
 
+/// How long after a launch its operation keeps `ops` read again while no
+/// listing shows it [E]: the wrapper writes its record only once
+/// `systemd-run` or the setsid launch has returned, so the read the launch
+/// asks for can miss it. A wrapper that fails before its first record
+/// never shows, and the re-reads stop after this.
+const kLaunchListingGrace = Duration(minutes: 1);
+
 /// The exit of `HostCommands.startTicks` for a PID that names no process.
 const _kProcessGone = 3;
 
@@ -38,6 +45,10 @@ final class _Server {
   AdminSession? rootPrunedIn;
 
   Timer? reread;
+
+  /// The operations this device launched that no listing has shown yet,
+  /// with when each launched.
+  final Map<String, DateTime> unlisted = {};
 
   /// The tail of this server's steps, run one after another (see
   /// [OperationTracker._serially]).
@@ -105,14 +116,22 @@ final class OperationTracker {
     }
     server.listing = listing;
     server.operations = operations;
+    final launchedSince = _now().subtract(kLaunchListingGrace);
+    server.unlisted.removeWhere(
+      (id, at) =>
+          operations.containsKey(id) ||
+          listing.rejected.any((r) => r.id == id) ||
+          !at.isAfter(launchedSince),
+    );
     await _forgetCleaned(serverId, listing);
     await _cleanUp(serverId, link);
     await _pruneUser(server, link, listing);
     _report(serverId);
 
-    if (operations.values.any(
-      (o) => o.state == DetachedOperationState.running,
-    )) {
+    if (server.unlisted.isNotEmpty ||
+        operations.values.any(
+          (o) => o.state == DetachedOperationState.running,
+        )) {
       server.reread = _startTimer(
         kRunningOperationsReread,
         () => _readOps(serverId),
@@ -131,6 +150,7 @@ final class OperationTracker {
   }) {
     _servers.putIfAbsent(serverId, _Server.new);
     return _serially(serverId, () async {
+      _servers[serverId]?.unlisted[id] = _now();
       // A note the file misses is kept in memory.
       await _quietly(
         () => _store.put(

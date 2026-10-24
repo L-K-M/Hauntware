@@ -22,7 +22,11 @@ class SeanceLinkReviewDialog extends StatelessWidget {
     final theme = Theme.of(context);
     return ValueListenableBuilder<SeanceLinkQueue>(
       valueListenable: review.queue,
-      builder: (context, queue, _) => _build(context, theme, queue),
+      builder: (context, queue, _) {
+        // Every frame, so the decision covers exactly what was on screen.
+        review.markShown(queue);
+        return _build(context, theme, queue);
+      },
     );
   }
 
@@ -89,10 +93,8 @@ class SeanceLinkReviewDialog extends StatelessWidget {
       actions: [
         if (queue.waitingCount > 0)
           TextButton(
-            onPressed: () {
-              review.markShown(queue);
-              Navigator.pop(context, SeanceLinkDecision.discardWaiting);
-            },
+            onPressed: () =>
+                Navigator.pop(context, SeanceLinkDecision.discardWaiting),
             child: const Text('Discard waiting links'),
           ),
         TextButton(

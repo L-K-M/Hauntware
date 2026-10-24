@@ -8,7 +8,9 @@ import 'package:planchette_editor/planchette_editor.dart'
 
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
+import '../actions/action_entry.dart';
 import '../admin_mode_chip.dart';
+import '../edit/remote_editor.dart';
 import '../processes_panel.dart' show kRevealDuration;
 import 'container_details.dart' show ContainerInspectionScope;
 import 'containers_panel.dart' show DockerNotice;
@@ -254,6 +256,18 @@ class _StackFileViewState extends State<StackFileView> {
     if (path != null) unawaited(_open(path));
   }
 
+  /// Edits [path] (STK-07) as the project's file, which the engine
+  /// checks with `compose config -q` before it replaces it, and reads it
+  /// again once the editor closes, since a save changed it.
+  Future<void> _edit(String path) async {
+    await openRemoteEditor(
+      context,
+      serverId: widget.serverId,
+      target: StackFileTarget(project: widget.project.name, path: path),
+    );
+    if (mounted && path == _path) unawaited(_open(path));
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -286,11 +300,27 @@ class _StackFileViewState extends State<StackFileView> {
                 ),
             ],
           ),
-        Text(
-          path,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
+        Row(
+          spacing: 8,
+          children: [
+            Expanded(
+              child: Text(
+                path,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            ActionEntry(
+              serverId: widget.serverId,
+              point: ActionEntryPoint.fileEdit,
+              child: TextButton.icon(
+                onPressed: () => unawaited(_edit(path)),
+                icon: const Icon(Icons.edit_outlined),
+                label: Text(l10n.dockerStackFileEdit),
+              ),
+            ),
+          ],
         ),
         ..._body(context, l10n, name),
       ],

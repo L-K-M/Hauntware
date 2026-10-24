@@ -94,6 +94,8 @@ void main() {
     expect(scheme.runes.every((rune) => rune < 0x80), isTrue);
 
     final main = _read('windows/runner/main.cpp');
+    // A missing call has index -1, which would pass the ordering check.
+    expect(main, contains('ClaimOrForwardDeepLinkInstance'));
     expect(
       main.indexOf('ClaimOrForwardDeepLinkInstance'),
       lessThan(main.indexOf('FlutterWindow window(project)')),
@@ -121,14 +123,16 @@ void main() {
 
   test('app_links is pinned to the version Poltergeist runs', () {
     final pin = RegExp(r'^\s*app_links:\s*(\S+)\s*$', multiLine: true);
-    expect(
-      pin.firstMatch(_read('pubspec.yaml'))?.group(1),
-      pin
-          .firstMatch(
-            _read('../../../poltergeist/app/poltergeist_app/pubspec.yaml'),
-          )
-          ?.group(1),
-    );
+    final seance = pin.firstMatch(_read('pubspec.yaml'))?.group(1);
+    final poltergeist = pin
+        .firstMatch(
+          _read('../../../poltergeist/app/poltergeist_app/pubspec.yaml'),
+        )
+        ?.group(1);
+    // Two missing pins would otherwise compare equal.
+    expect(seance, isNotNull, reason: 'Séance pins app_links');
+    expect(poltergeist, isNotNull, reason: 'Poltergeist pins app_links');
+    expect(seance, poltergeist);
   });
 }
 

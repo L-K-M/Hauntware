@@ -63,8 +63,10 @@ final class RecordedExchange {
   bool get closesConnection {
     final h = headers;
     if (h['connection']?.toLowerCase() == 'close') return true;
-    // A body with neither length nor chunked framing ends at EOF; HEAD,
-    // 1xx, 204 and 304 responses have no body at all.
+    // A body with neither length nor chunked framing ends at EOF, as
+    // does the raw stream after a 101 upgrade; HEAD, other 1xx, 204 and
+    // 304 responses have no body at all.
+    if (status == 101) return true;
     if (method == 'HEAD' ||
         (status >= 100 && status < 200) ||
         status == 204 ||

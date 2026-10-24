@@ -196,6 +196,32 @@ void main() {
       expect(handler.notices, isEmpty);
     });
 
+    test('drops after the review last drew reach the next one', () async {
+      final handler = _Handler([_web])..holdReviews = true;
+      final intake = SeanceLinkIntake()..activate(handler);
+
+      intake.add(_connect(_webId));
+      await pumpEventQueue();
+      for (var i = 0; i < seanceLinkQueueLimit; i++) {
+        intake.add(_connect(_webId, cwd: '/srv/$i'));
+      }
+      final drawn = handler.reviews.single.queue.value;
+      expect(drawn.ignoredCount, 0);
+      intake
+        ..add(_connect(_webId, cwd: '/srv/late-1'))
+        ..add(_connect(_webId, cwd: '/srv/late-2'));
+      expect(handler.reviews.single.queue.value.ignoredCount, 2);
+
+      // Decided before the dialog drew the drops.
+      handler.answer(SeanceLinkDecision.cancel, shown: drawn);
+      await pumpEventQueue();
+      expect(handler.reviews[1].queue.value.ignoredCount, 2);
+
+      handler.answer(SeanceLinkDecision.discardWaiting);
+      await intake.idle;
+      expect(handler.notices, isEmpty);
+    });
+
     test('reports dropped links when no review is left to carry it', () async {
       final intake = SeanceLinkIntake();
       for (var i = 0; i < seanceLinkQueueLimit + 2; i++) {
@@ -421,14 +447,12 @@ final class _Handler implements SeanceLinkHandler {
     for (final notice in notices) notice.kind,
   ];
 
-  /// Answers the open review; a discard covers [shown], or what the
-  /// review shows now.
+  /// Answers the open review, which last showed [shown], or what it shows
+  /// now: the dialog marks every frame it draws.
   void answer(SeanceLinkDecision decision, {SeanceLinkQueue? shown}) {
     final open = _open!;
     _open = null;
-    if (decision == SeanceLinkDecision.discardWaiting) {
-      reviews.last.markShown(shown ?? reviews.last.queue.value);
-    }
+    reviews.last.markShown(shown ?? reviews.last.queue.value);
     open.complete(decision);
   }
 
