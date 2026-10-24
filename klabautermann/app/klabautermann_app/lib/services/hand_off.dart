@@ -30,22 +30,12 @@ enum HandOffTarget {
 }
 
 /// Whether [target] registers its scheme on [platform] (D12, 03:403-404):
-/// until it does, the app offers no hand-off to it there. Séance takes
-/// links on Android, iOS and macOS; Linux and Windows wait for its
-/// single-instance forwarding. Poltergeist takes them everywhere.
+/// until it does, the app offers no hand-off to it there. Séance and
+/// Poltergeist take links on every platform they ship on, Linux and
+/// Windows through their single-instance forwarding (F5d-3); neither
+/// ships on Fuchsia.
 bool handOffIntakeOn(HandOffTarget target, TargetPlatform platform) =>
-    switch (target) {
-      HandOffTarget.seance => switch (platform) {
-        TargetPlatform.android ||
-        TargetPlatform.iOS ||
-        TargetPlatform.macOS => true,
-        _ => false,
-      },
-      HandOffTarget.poltergeist => switch (platform) {
-        TargetPlatform.fuchsia => false,
-        _ => true,
-      },
-    };
+    platform != TargetPlatform.fuchsia;
 
 /// The `seance://connect` link for [serverId], or null when Séance could
 /// not name it: an id that is not a UUID (an ssh_config import, which only

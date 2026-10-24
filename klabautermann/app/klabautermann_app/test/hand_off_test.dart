@@ -1,7 +1,8 @@
 // Hand-offs to Séance and Poltergeist (X-03, X-04, X-10; M5 plan M31).
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:klabautermann_app/controllers/fleet_controller.dart' show FleetServer;
+import 'package:klabautermann_app/controllers/fleet_controller.dart'
+    show FleetServer;
 import 'package:klabautermann_app/services/hand_off.dart';
 import 'package:klabautermann_app/ui/hand_off_actions.dart';
 
@@ -66,8 +67,8 @@ void main() {
         TargetPlatform.android: HandOffTarget.values.toSet(),
         TargetPlatform.iOS: HandOffTarget.values.toSet(),
         TargetPlatform.macOS: HandOffTarget.values.toSet(),
-        TargetPlatform.linux: {HandOffTarget.poltergeist},
-        TargetPlatform.windows: {HandOffTarget.poltergeist},
+        TargetPlatform.linux: HandOffTarget.values.toSet(),
+        TargetPlatform.windows: HandOffTarget.values.toSet(),
         TargetPlatform.fuchsia: <HandOffTarget>{},
       });
     });
@@ -76,18 +77,28 @@ void main() {
         'handler', () async {
       final probed = <Uri>[];
       final errors = <Object>[];
-      final launcher = await UrlHandOffLauncher.probe(
-        platform: TargetPlatform.linux,
-        onError: (error, _) => errors.add(error),
-        probe: (uri) async {
-          probed.add(uri);
-          return true;
-        },
-        open: (_) async => true,
-      );
-      // Séance has no Linux intake, so it is not even asked about.
-      expect(probed, [Uri.parse('poltergeist://browse')]);
-      expect(launcher.available(HandOffTarget.seance), isFalse);
+      Future<UrlHandOffLauncher> probeOn(TargetPlatform platform) =>
+          UrlHandOffLauncher.probe(
+            platform: platform,
+            onError: (error, _) => errors.add(error),
+            probe: (uri) async {
+              probed.add(uri);
+              return true;
+            },
+            open: (_) async => true,
+          );
+
+      // Neither sibling ships on Fuchsia, so neither is even asked about.
+      final none = await probeOn(TargetPlatform.fuchsia);
+      expect(probed, isEmpty);
+      expect(none.available(HandOffTarget.seance), isFalse);
+
+      final launcher = await probeOn(TargetPlatform.linux);
+      expect(probed, [
+        Uri.parse('seance://connect'),
+        Uri.parse('poltergeist://browse'),
+      ]);
+      expect(launcher.available(HandOffTarget.seance), isTrue);
       expect(launcher.available(HandOffTarget.poltergeist), isTrue);
 
       final failing = await UrlHandOffLauncher.probe(
