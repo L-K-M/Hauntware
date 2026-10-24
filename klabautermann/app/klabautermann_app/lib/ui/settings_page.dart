@@ -8,6 +8,7 @@ import 'package:klabautermann_core/klabautermann_core.dart'
 import '../controllers/announcement_controller.dart';
 import '../controllers/appearance_controller.dart';
 import '../controllers/monitor_set.dart';
+import '../controllers/pin_publication_controller.dart';
 import '../controllers/safety_controller.dart';
 import '../controllers/sync_secrets_controller.dart';
 import '../l10n/app_localizations.dart';
@@ -16,6 +17,7 @@ import 'about_dialog.dart';
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 import 'appearance_tab.dart';
 import 'monitor_set_feedback.dart';
+import 'server_editing.dart';
 
 /// Settings (03 §10.2): the seven planned tabs as placeholders, except
 /// General, which holds A11Y-15's switch (D60) and the about row (M16),
@@ -34,6 +36,7 @@ class SettingsPage extends StatefulWidget {
     required this.monitorSet,
     this.safety,
     this.syncSecrets,
+    this.pinPublication,
     this.initialTab = SettingsTab.general,
     this.tabRequests,
   });
@@ -47,6 +50,9 @@ class SettingsPage extends StatefulWidget {
 
   /// Null in tests that leave it out, where the Sync tab is a placeholder.
   final SyncSecretsSettings? syncSecrets;
+
+  /// The host key sharing assertion; null in tests that leave it out.
+  final PinPublicationSettings? pinPublication;
 
   /// The running build's version for the about row; null when the
   /// platform could not tell (`readAppVersion`).
@@ -129,6 +135,7 @@ class _SettingsPageState extends State<SettingsPage>
               SettingsTab.servers => ServersTab(monitorSet: widget.monitorSet),
               SettingsTab.sync when widget.syncSecrets != null => SyncTab(
                 syncSecrets: widget.syncSecrets!,
+                pinPublication: widget.pinPublication,
               ),
               SettingsTab.safety when widget.safety != null => SafetyTab(
                 safety: widget.safety!,
@@ -224,11 +231,27 @@ class GeneralTab extends StatelessWidget {
 
 /// The Sync tab: the device's "sync passwords" switch (03 §4.5, SYN-02),
 /// in Séance's words. While on, sync rounds add the passwords and keys
-/// other devices synced to this device's vault.
+/// other devices synced to this device's vault. Once a release is offered,
+/// the host key sharing assertion too (D15, M5 plan M07).
 class SyncTab extends StatelessWidget {
-  const SyncTab({super.key, required this.syncSecrets});
+  const SyncTab({super.key, required this.syncSecrets, this.pinPublication});
 
   final SyncSecretsSettings syncSecrets;
+  final PinPublicationSettings? pinPublication;
+
+  /// As [_set], for the host key sharing switch.
+  Future<void> _assert(BuildContext context, bool asserted) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final l10n = AppLocalizations.of(context);
+    try {
+      await pinPublication!.setAsserted(asserted);
+    } on Exception catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) {
+        showTopToast(overlay, message: l10n.settingsPinPublicationNotChanged);
+      }
+    }
+  }
 
   /// As [GeneralTab._set].
   Future<void> _set(BuildContext context, bool enabled) async {
@@ -252,8 +275,9 @@ class SyncTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final pins = pinPublication;
     return ListenableBuilder(
-      listenable: syncSecrets,
+      listenable: Listenable.merge([syncSecrets, ?pins]),
       builder: (context, _) => ListView(
         padding: const EdgeInsets.all(24),
         children: [
@@ -272,6 +296,27 @@ class SyncTab extends StatelessWidget {
             title: Text(l10n.settingsSyncSecrets),
             subtitle: Text(l10n.settingsSyncSecretsDetail),
           ),
+          if (pins?.value case PinPublication(
+            :final release?,
+            :final asserted,
+          )) ...[
+            const SizedBox(height: 24),
+            Semantics(
+              header: true,
+              child: Text(
+                l10n.settingsPinPublicationTitle,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            const SizedBox(height: 4),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: asserted,
+              onChanged: (value) => unawaited(_assert(context, value)),
+              title: Text(l10n.settingsPinPublication(release)),
+              subtitle: Text(l10n.settingsPinPublicationDetail),
+            ),
+          ],
         ],
       ),
     );
@@ -296,9 +341,46 @@ class ServersTab extends StatelessWidget {
       builder: (context, _) {
         final candidates = monitorSet.value;
         final monitored = candidates.where((c) => c.monitored).length;
+        final editing = ServerEditingScope.maybeOf(context);
         return ListView(
           padding: const EdgeInsets.all(24),
           children: [
+            // FL-03's entry point here, while an account is enrolled (P16).
+            // The desktop settings window has no engine of its own, so it
+            // offers none; the rail's add menu does.
+            if (editing != null)
+              ListenableBuilder(
+                listenable: editing.sync,
+                builder: (context, _) {
+                  if (!editing.enabled) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Semantics(
+                          header: true,
+                          child: Text(
+                            l10n.settingsServersAccountTitle,
+                            style: textTheme.titleSmall,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          l10n.settingsServersAccountDetail,
+                          style: textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton.tonal(
+                          onPressed: () =>
+                              unawaited(openServerEditor(context, editing)),
+                          child: Text(l10n.addServer),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
             Semantics(
               header: true,
               child: Text(

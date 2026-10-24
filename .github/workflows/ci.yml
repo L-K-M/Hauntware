@@ -51,8 +51,13 @@ env:
 # that need Docker (the self-hosted runners have no daemon; contracts'
 # actionlint is a container action), seance_dart (pinned sudo texts),
 # klabautermann_dart (its host-sampling and owner-only file tests need
-# a VM with systemd and a non-root user) and the timing measurements,
-# whose budgets assume GitHub's runner images.
+# a VM with systemd and a non-root user), poltergeist_dart (its native
+# archive I/O binds fstat, a symbol glibc exports only from 2.33 and
+# the runner images lack) and the timing measurements, whose budgets
+# assume GitHub's runner images.
+# Self-hosted runners keep the Flutter SDK and pub cache on disk, so
+# flutter-action's actions/cache, which downloads the 1.6 GB SDK
+# archive on every hit, runs on GitHub-hosted runners only.
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -313,7 +318,7 @@ jobs:
     name: Poltergeist pure-Dart packages (${{ matrix.os }})
     needs: affected
     if: needs.affected.outputs.poltergeist == 'true'
-    runs-on: ${{ matrix.os == 'ubuntu-latest' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -768,6 +773,11 @@ jobs:
               - 'poltergeist/test/integration/check_config.dart'
               - 'poltergeist/test/integration/sshd-modern/Dockerfile'
               - 'poltergeist/test/integration/sshd-common/**'
+              # Séance's sync server, which the fixture's sync service
+              # builds from its Dockerfile in the Séance workspace.
+              - 'seance/packages/seance_sync_server/**'
+              - 'seance/pubspec.yaml'
+              - 'seance/pubspec.lock'
               - '.github/workflows/ci.yml'
       # Main pushes and dispatch always check; PRs when a path matches.
       - name: Find committed entry points
@@ -887,7 +897,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}
       # klabautermann_client's GTK toolchain and keyring libraries, plus
       # xvfb and the Mesa stack for a headless display with real GLES
       # (llvmpipe through LIBGL_ALWAYS_SOFTWARE).
@@ -1033,7 +1043,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}
       # GTK toolchain for the embedder build; xvfb plus the Mesa stack for
       # a headless display with real GLES (llvmpipe via
       # LIBGL_ALWAYS_SOFTWARE) so Impeller produces genuine raster timings.
@@ -1328,7 +1338,7 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}
       # Formatting needs each package's language version resolved first —
       # unresolved, the formatter guesses and reports phantom diffs.
       - name: Resolve packages
@@ -1339,6 +1349,7 @@ jobs:
           (cd planchette/packages/planchette_editor && flutter pub get)
           (cd planchette/packages/ghost_desktop && flutter pub get)
           (cd planchette/packages/ghost_marks && flutter pub get)
+          (cd planchette/packages/ghost_marks_picker && flutter pub get)
           (cd planchette/packages/ghost_theme && flutter pub get)
           (cd planchette/packages/ghost_servers && flutter pub get)
           (cd planchette/packages/ghost_keystore && flutter pub get)
@@ -1366,6 +1377,11 @@ jobs:
           flutter test --no-pub
       - name: Shared server appearance
         working-directory: planchette/packages/ghost_marks
+        run: |
+          flutter analyze --no-pub
+          flutter test --no-pub
+      - name: Shared mark image picker
+        working-directory: planchette/packages/ghost_marks_picker
         run: |
           flutter analyze --no-pub
           flutter test --no-pub
@@ -1401,7 +1417,8 @@ jobs:
           planchette/packages/planchette_core planchette/packages/planchette_editor
           planchette/packages/ghost_ui planchette/packages/ghost_fonts
           planchette/packages/ghost_desktop
-          planchette/packages/ghost_marks planchette/packages/ghost_theme
+          planchette/packages/ghost_marks planchette/packages/ghost_marks_picker
+          planchette/packages/ghost_theme
           planchette/packages/ghost_servers planchette/packages/ghost_keystore
           planchette/packages/ghost_apk_update planchette/app/planchette_app
 
@@ -1416,7 +1433,20 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}
+      # The shared terminal package first, one resolution at a time.
+      - name: Resolve terminal package dependencies
+        working-directory: seance/packages/seance_terminal
+        run: flutter pub get
+      - name: Analyze terminal package
+        working-directory: seance/packages/seance_terminal
+        run: flutter analyze
+      - name: Test terminal package
+        working-directory: seance/packages/seance_terminal
+        run: flutter test
+      - name: Check terminal package formatting
+        working-directory: seance/packages/seance_terminal
+        run: dart format --set-exit-if-changed --output=none .
       - name: Resolve app dependencies
         working-directory: seance/app/seance_app
         run: flutter pub get
@@ -1445,7 +1475,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}
       - name: Resolve app dependencies
         working-directory: poltergeist/app/poltergeist_app
         run: flutter pub get
@@ -1467,7 +1497,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}
       - name: Resolve app dependencies
         working-directory: klabautermann/app/klabautermann_app
         run: flutter pub get
@@ -1492,7 +1522,28 @@ jobs:
     needs: affected
     if: needs.affected.outputs.planchette == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    timeout-minutes: 35
+    # Cold linux legs: build ~25 min plus a ~2 GB Flatpak runtime fill
+    # that measures 250-300 KB/s on the runner box (run 39959324171 spent
+    # 100 min on org.gnome.Sdk alone), so they need ~2.5 h. The other
+    # targets never fill and keep 120. Bounded, not generous: tighten
+    # linux to ~75 once every runner container's cache is warm, or drop
+    # the download entirely by baking org.gnome.Sdk//50 and
+    # org.gnome.Platform//50 into the runner image. Only the self-hosted
+    # tool cache persists, so a timed-out run still advances the next;
+    # fork PRs on hosted runners re-download every run.
+    timeout-minutes: ${{ matrix.target == 'linux' && 240 || 120 }}
+    # One Flatpak bundle at a time repo-wide: the bundle pulls ~2.5 GB of
+    # GNOME runtimes, and four at once split the runner box's uplink and
+    # disk until none finishes. The group membership mirrors this job's
+    # runs-on routing above — only the legs on the shared self-hosted uplink join,
+    # fork legs on hosted runners keep a run-unique group. queue: max
+    # queues every waiter instead of cancelling the pending one (actionlint
+    # v1.7.12 predates the key; .github/actionlint.yaml scopes the
+    # exception).
+    concurrency:
+      group: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && 'flatpak-runtime-download' || format('planchette-client-{0}-{1}', matrix.target, github.run_id) }}
+      cancel-in-progress: false
+      queue: max
     strategy:
       fail-fast: false
       matrix:
@@ -1526,7 +1577,7 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}
       - name: Resolve app
         working-directory: planchette/app/planchette_app
         run: flutter pub get
@@ -1599,7 +1650,22 @@ jobs:
     needs: affected
     if: needs.affected.outputs.seance == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    timeout-minutes: 45   # first run downloads the Flutter toolchain
+    # Cold linux legs: build ~25 min plus a ~2 GB Flatpak runtime fill
+    # that measures 250-300 KB/s on the runner box (run 39959324171 spent
+    # 100 min on org.gnome.Sdk alone), so they need ~2.5 h. The other
+    # targets never fill and keep 120. Bounded, not generous: tighten
+    # linux to ~75 once every runner container's cache is warm, or drop
+    # the download entirely by baking org.gnome.Sdk//50 and
+    # org.gnome.Platform//50 into the runner image. Only the self-hosted
+    # tool cache persists, so a timed-out run still advances the next;
+    # fork PRs on hosted runners re-download every run.
+    timeout-minutes: ${{ matrix.target == 'linux' && 240 || 120 }}
+    # Serialize Flatpak bundle downloads with the other client jobs;
+    # see planchette_client.
+    concurrency:
+      group: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && 'flatpak-runtime-download' || format('seance-client-{0}-{1}', matrix.target, github.run_id) }}
+      cancel-in-progress: false
+      queue: max
     strategy:
       fail-fast: false
       matrix:
@@ -1646,7 +1712,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}
       # Same ad-hoc switch as the release build: the committed project signs
       # Release with the owner's "Apple Development" identity, which no runner
       # has — and CI must exercise the exact signing path the release uses.
@@ -1739,7 +1805,22 @@ jobs:
     needs: affected
     if: needs.affected.outputs.poltergeist == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    timeout-minutes: 45   # first run downloads the Flutter toolchain
+    # Cold linux legs: build ~25 min plus a ~2 GB Flatpak runtime fill
+    # that measures 250-300 KB/s on the runner box (run 39959324171 spent
+    # 100 min on org.gnome.Sdk alone), so they need ~2.5 h. The other
+    # targets never fill and keep 120. Bounded, not generous: tighten
+    # linux to ~75 once every runner container's cache is warm, or drop
+    # the download entirely by baking org.gnome.Sdk//50 and
+    # org.gnome.Platform//50 into the runner image. Only the self-hosted
+    # tool cache persists, so a timed-out run still advances the next;
+    # fork PRs on hosted runners re-download every run.
+    timeout-minutes: ${{ matrix.target == 'linux' && 240 || 120 }}
+    # Serialize Flatpak bundle downloads with the other client jobs;
+    # see planchette_client.
+    concurrency:
+      group: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && 'flatpak-runtime-download' || format('poltergeist-client-{0}-{1}', matrix.target, github.run_id) }}
+      cancel-in-progress: false
+      queue: max
     strategy:
       fail-fast: false
       matrix:
@@ -1788,7 +1869,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}
       # If the committed project signs Release with a developer identity the
       # runner doesn't have, switch to ad-hoc — CI must exercise the exact
       # signing path the release uses. Harmless when the project already
@@ -1872,7 +1953,22 @@ jobs:
     needs: affected
     if: needs.affected.outputs.klabautermann == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    timeout-minutes: 45   # first run downloads the Flutter toolchain
+    # Cold linux legs: build ~25 min plus a ~2 GB Flatpak runtime fill
+    # that measures 250-300 KB/s on the runner box (run 39959324171 spent
+    # 100 min on org.gnome.Sdk alone), so they need ~2.5 h. The other
+    # targets never fill and keep 120. Bounded, not generous: tighten
+    # linux to ~75 once every runner container's cache is warm, or drop
+    # the download entirely by baking org.gnome.Sdk//50 and
+    # org.gnome.Platform//50 into the runner image. Only the self-hosted
+    # tool cache persists, so a timed-out run still advances the next;
+    # fork PRs on hosted runners re-download every run.
+    timeout-minutes: ${{ matrix.target == 'linux' && 240 || 120 }}
+    # Serialize Flatpak bundle downloads with the other client jobs;
+    # see planchette_client.
+    concurrency:
+      group: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && 'flatpak-runtime-download' || format('klabautermann-client-{0}-{1}', matrix.target, github.run_id) }}
+      cancel-in-progress: false
+      queue: max
     strategy:
       fail-fast: false
       matrix:
@@ -1919,7 +2015,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}
       # The committed project already signs ad-hoc, so today this step
       # (Poltergeist's) only switches the signing style to manual; it keeps
       # CI on the release leg's signing path if a developer identity is

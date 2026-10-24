@@ -7,8 +7,9 @@
 #
 # It owns the whole run: client keys and an agent made for this run only
 # (never committed, D53), the safety checks of the rendered Compose
-# config, readiness, the Docker engine's seed, the tests one at a time,
-# and teardown on every exit. With
+# config, readiness, the Docker engine's seed, the previous release's
+# harness (previous_release.sh), the tests one at a time, and teardown
+# on every exit. With
 # KLABAUTERMANN_EVIDENCE_DIR set, logs and test results go there. After
 # the fixture suites it runs the host write inventory (03 §8.11, M4
 # E31): the Docker host snapshotted as root before and after a scripted
@@ -35,6 +36,7 @@ readonly safety_checker="$klabautermann_dir/../poltergeist/test/integration/chec
 # rendered config.
 readonly docker_exposure_checker="$integration_dir/check_docker_exposure.dart"
 readonly seed_script="$integration_dir/seed_docker.sh"
+readonly previous_release_script="$integration_dir/previous_release.sh"
 readonly inventory_script="$integration_dir/inventory.sh"
 readonly inventory_checker="$integration_dir/inventory.dart"
 readonly inventory_allowlist="$integration_dir/inventory_allowlist.txt"
@@ -111,6 +113,36 @@ wait_for_sshd() {
     sleep 1
   done
   echo "sshd on port $port did not become ready" >&2
+  return 1
+}
+
+# The sync service's published address, which must be loopback.
+sync_address() {
+  local address
+  address="$(compose port sync 8787)"
+  if [[ "$address" != 127.0.0.1:* ]]; then
+    echo "unsafe published address for sync: $address" >&2
+    return 1
+  fi
+  echo "$address"
+}
+
+# Ready once the sync server answers HTTP: an unknown user's prelogin is
+# refused, which proves the server is up without making an account.
+wait_for_sync() {
+  local address attempt
+  address="$(sync_address)"
+  for ((attempt = 0; attempt < ready_attempts; attempt++)); do
+    if curl --silent --max-time 2 --output /dev/null \
+      --write-out '%{http_code}' -X POST \
+      -H 'content-type: application/json' \
+      --data '{"username":"klabautermann-readiness"}' \
+      "http://$address/v1/prelogin" | grep -q '^[1-4]'; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "sync on $address did not become ready" >&2
   return 1
 }
 
@@ -287,6 +319,11 @@ for service in "${services[@]}"; do
 done
 docker_port="$(published_port docker-sshd)"
 seed_docker_host
+wait_for_sync
+# The previous release's Séance and Poltergeist, built from the latest
+# release tag for the convergence suite's unknown-kind skip (M08b).
+KLABAUTERMANN_PREVIOUS_RELEASE_HARNESS="$("$previous_release_script" \
+  "$runtime_dir/previous-release")"
 
 export KLABAUTERMANN_FIXTURE_COMPOSE_FILE="$compose_file"
 export KLABAUTERMANN_FIXTURE_COMPOSE_PROJECT="$compose_project"
@@ -302,6 +339,10 @@ export KLABAUTERMANN_FIXTURE_PORT KLABAUTERMANN_FIXTURE_JUMP_PORT \
   KLABAUTERMANN_FIXTURE_AGENT_FINGERPRINT
 export KLABAUTERMANN_FIXTURE_USER="$fixture_user"
 export KLABAUTERMANN_FIXTURE_IDENTITY_FILE="$runtime_dir/identity"
+# Assigned first: export would hide a failed lookup's status.
+sync_server="http://$(sync_address)"
+export KLABAUTERMANN_SYNC_SERVER="$sync_server"
+export KLABAUTERMANN_PREVIOUS_RELEASE_HARNESS
 
 reporter=(--reporter expanded)
 if [[ -n "$evidence_dir" ]]; then

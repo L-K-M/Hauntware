@@ -2,7 +2,7 @@
 /// Séance account, sync rounds and catalog writes through the catalog
 /// library's `SyncEnrollment`, `RecordCoordinator` and `CatalogWriter`,
 /// over the engine's own files in the support directory (03 §4.10).
-/// Pull-only until v1 (D14).
+/// The MVP ran pull-only (D14); v1 writes and pushes (M5 plan M05).
 library;
 
 import 'dart:async';
@@ -29,6 +29,8 @@ import 'package:seance_core/seance_core.dart'
     show
         ApiError,
         DecryptedRecord,
+        HostKey,
+        hostKeyLocator,
         HttpSyncClient,
         RecordCodec,
         RecordKind,
@@ -259,6 +261,58 @@ final class EngineSync {
     } on Object {
       return const [];
     }
+  }
+
+  /// Whether the enrollment file asserts [release] for pin publication
+  /// (D15); false while [release] is null or the file is unavailable. The
+  /// enrollment sheet sets it before the account exists.
+  bool pinPublicationAsserted(String? release) =>
+      release != null && _enrollment?.pinPublicationAssertion == release;
+
+  /// Asserts [release] for pin publication, or withdraws the assertion
+  /// with null; pins already published stay. Throws when the enrollment
+  /// file cannot be written.
+  Future<void> setPinPublication(String? release) async =>
+      _enrollment?.setPinPublicationAssertion(release);
+
+  /// Publishes [pin], one the user confirmed, when the enrollment asserts
+  /// [release] (D15, FL-22) and a synced server that is not excluded
+  /// connects to its address, directly or as a hop of its route: a pin
+  /// only excluded servers use stays on this device (divergence 1), as
+  /// does one for an address no synced server names. Returns whether it
+  /// was published. Never throws.
+  Future<bool> publishPin(HostKey pin, {required String? release}) async {
+    if (!pinPublicationAsserted(release)) return false;
+    if (!_shared(pin, await servers())) return false;
+    final written = await _write(
+      'pin',
+      (writes) async =>
+          await writes.coordinator.writer.publishPin(pin) ==
+              WriteOutcome.written
+          ? const CatalogWritten(requestId: 'pin')
+          : _refused('pin', CatalogWriteFailure.other),
+    );
+    return written is CatalogWritten;
+  }
+
+  /// Whether a server in [servers] that is not excluded reaches [pin]'s
+  /// address, itself or through its jump hosts.
+  static bool _shared(HostKey pin, List<ServerConfig> servers) {
+    final byId = {for (final server in servers) server.id: server};
+    bool at(ServerConfig server) =>
+        hostKeyLocator(server.host, server.port) == pin.locator;
+    for (final server in servers) {
+      if (server.excludeFromSync) continue;
+      final seen = <String>{};
+      for (
+        ServerConfig? hop = server;
+        hop != null && seen.add(hop.id);
+        hop = byId[hop.jumpHostId]
+      ) {
+        if (at(hop)) return true;
+      }
+    }
+    return false;
   }
 
   /// The synced preferences of every server [servers] lists that is not
@@ -533,7 +587,7 @@ final class EngineSync {
   Future<EngineEvent> putRule(PutRule request) =>
       _write(request.requestId, (writes) async {
         final ruleId = request.ruleId.trim();
-        final target = request.target;
+        final target = request.target?.trim();
         if (ruleId.isEmpty || (target != null && target.isEmpty)) {
           return _refused(request.requestId, CatalogWriteFailure.invalidDraft);
         }

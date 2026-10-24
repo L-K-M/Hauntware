@@ -5,7 +5,7 @@
 // plan's steps run on the host instead, as one operation the runner
 // launches (03 §7.17, M4 E18).
 import 'package:klabautermann_docker/klabautermann_docker.dart'
-    show DockerException;
+    show DockerApiException, DockerException;
 import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
 import 'package:seance_core/seance_core.dart'
     show
@@ -13,6 +13,7 @@ import 'package:seance_core/seance_core.dart'
         ElevationException,
         RemoteCommandException,
         RemoteCommandResult,
+        SecretRedactor,
         SshLink,
         quoteShellWord;
 
@@ -27,6 +28,17 @@ import 'plan_types.dart';
 /// status (M4 E15). A [DockerException] or [DockerEndpointUnavailable]
 /// it throws ends the run as a transport failure.
 typedef ApiStepRunner = Future<int> Function(String serverId, ApiStep step);
+
+/// Runs one [ExecStep] on [serverId]'s engine (CTX-08) and returns the
+/// command's exit code, null when the daemon reported none, and its
+/// redacted output. A [DockerApiException] it throws, the daemon's
+/// refusal, fails the step; any other [DockerException] or a
+/// [DockerEndpointUnavailable] ends the run as a transport failure.
+typedef ExecStepRunner =
+    Future<({int? exitCode, ExecOutput output})> Function(
+      String serverId,
+      ExecStep step,
+    );
 
 /// Checks a [DockerTargetUnchanged] or a [StackConfigUnchanged] on
 /// [serverId] through its Docker endpoint: null when unchanged.
@@ -65,6 +77,7 @@ final class OperationRunner {
     required this._linkFor,
     required this._emit,
     this._api,
+    this._exec,
     this._docker,
     this._launch,
     this._finished,
@@ -75,6 +88,7 @@ final class OperationRunner {
   final SshLink? Function(String serverId) _linkFor;
   final void Function(EngineEvent event) _emit;
   final ApiStepRunner? _api;
+  final ExecStepRunner? _exec;
   final DockerRevalidator? _docker;
   final DetachedLauncher? _launch;
   final void Function(OperationResult result)? _finished;
@@ -120,6 +134,7 @@ final class OperationRunner {
       int? exitCode,
       int? httpStatus,
       RevalidationFailure? revalidation,
+      ExecOutput? output,
     }) => ActionFinished(
       planId: planId,
       outcome: ActionOutcome.failed,
@@ -128,7 +143,12 @@ final class OperationRunner {
       exitCode: exitCode,
       httpStatus: httpStatus,
       revalidation: revalidation,
+      output: output,
     );
+
+    // What a one-off command printed, for the answer.
+    ExecOutput? output;
+    int? exitCode;
 
     final serverId = plan.intent.serverId;
     final link = _linkFor(serverId);
@@ -187,6 +207,10 @@ final class OperationRunner {
             if (!await _tryStep(link, step)) skipped.add(i);
           case final ShellStep step:
             final result = await _runShell(link, step, session);
+            if (step.captureOutput) {
+              output = capturedOutput(result.stdout, result.stderr);
+              exitCode = result.exitCode;
+            }
             if (result.exitCode != 0) {
               await _cleanUp(link, plan, session);
               if (step.exitMeanings[result.exitCode] case final changed?) {
@@ -203,6 +227,7 @@ final class OperationRunner {
                     : ActionFailure.stepFailed,
                 step: i,
                 exitCode: result.exitCode,
+                output: output,
               );
             }
           case final ApiStep step:
@@ -219,11 +244,40 @@ final class OperationRunner {
                 httpStatus: status,
               );
             }
+          case final ExecStep step:
+            final exec = _exec;
+            if (exec == null) {
+              return failed(ActionFailure.unsupportedStep, step: i);
+            }
+            final ({int? exitCode, ExecOutput output}) result;
+            try {
+              result = await exec(serverId, step);
+            } on DockerApiException catch (e) {
+              // The daemon answered and refused, as for a container that
+              // stopped: the step failed, as an API step's error does.
+              return failed(
+                ActionFailure.stepFailed,
+                step: i,
+                httpStatus: e.statusCode,
+              );
+            }
+            output = result.output;
+            exitCode = result.exitCode;
+            if (exitCode != 0) {
+              return failed(
+                ActionFailure.stepFailed,
+                step: i,
+                exitCode: exitCode,
+                output: output,
+              );
+            }
         }
       }
       return ActionFinished(
         planId: planId,
         outcome: ActionOutcome.succeeded,
+        exitCode: exitCode,
+        output: output,
         skippedSteps: skipped,
       );
     } on ElevationException {
@@ -237,7 +291,9 @@ final class OperationRunner {
     } on DockerEndpointUnavailable {
       return failed(ActionFailure.transport);
     } on ChannelOpenException {
-      // The link refused the channel, at its session limit or closing.
+      // The link refused the channel, at its session limit or closing. A
+      // later channel may still open, so the cleanup is tried.
+      await _cleanUp(link, plan, session);
       return failed(ActionFailure.transport);
     }
   }
@@ -293,12 +349,18 @@ final class OperationRunner {
     Revalidation check,
   ) async {
     switch (check) {
-      case UnitLoaded(:final unit):
-        final result = await _read(link, HostCommands.unitLoadState(unit));
+      case UnitLoaded(:final unit, :final manager):
+        final result = await _read(
+          link,
+          HostCommands.unitLoadState(unit, manager: manager),
+        );
         if (result.exitCode != 0) return RevalidationFailure.unreadable;
-        return result.stdout.trim() == 'loaded'
-            ? null
-            : RevalidationFailure.unitMissing;
+        // A masked unit is still there: systemd reports it as masked, and
+        // its unmask runs on exactly that state.
+        return switch (result.stdout.trim()) {
+          'loaded' || 'masked' => null,
+          _ => RevalidationFailure.unitMissing,
+        };
       case ProcessStarted(:final pid, :final startTicks):
         final result = await _read(link, HostCommands.startTicks(pid));
         return switch (result.exitCode) {
@@ -329,3 +391,28 @@ final _polkitRefused = RegExp(
 
 /// `klab_ticks`'s status for a process that is gone (proc_stat.dart).
 const _kTicksGone = 3;
+
+final _redactor = SecretRedactor();
+
+/// A captured step's output as [ActionFinished.output] carries it (JOB-19):
+/// redacted as the audit log redacts, and at most [kExecOutputMax]
+/// characters in all, stdout first. Redaction comes first: a secret the
+/// cap cut would no longer match its pattern and leave a fragment.
+ExecOutput capturedOutput(String stdout, String stderr) {
+  final redactedOut = _redactor.redact(stdout);
+  final redactedErr = _redactor.redact(stderr);
+  final keptOut = redactedOut.length > kExecOutputMax
+      ? redactedOut.substring(0, kExecOutputMax)
+      : redactedOut;
+  final room = kExecOutputMax - keptOut.length;
+  final keptErr = redactedErr.length > room
+      ? redactedErr.substring(0, room)
+      : redactedErr;
+  return ExecOutput(
+    stdout: keptOut,
+    stderr: keptErr,
+    truncated:
+        keptOut.length < redactedOut.length ||
+        keptErr.length < redactedErr.length,
+  );
+}

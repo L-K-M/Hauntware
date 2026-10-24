@@ -56,6 +56,18 @@ Future<List<String>> checkImports(
     }
   }
 
+  // An allowlist whose package was renamed or removed would otherwise
+  // stop applying without a word.
+  final scannedNames = {for (final package in packages.values) package.name};
+  for (final name in product.allowedDependencies.keys) {
+    if (!scannedNames.contains(name)) {
+      violations.add(
+        '${product.name}: allowed_dependencies names $name, which is not '
+        'a scanned package',
+      );
+    }
+  }
+
   for (final area in product.scan) {
     final directory = _scanRoot(productRoot, area);
     await for (final file in dartSources(
@@ -141,7 +153,7 @@ Future<DependencyGraph?> _loadStandaloneGraph(
 }
 
 /// The scanned package under [directory], with its parsed manifests and
-/// the forbidden patterns that apply to its name.
+/// the forbidden patterns and allowlist that apply to its name.
 Future<_ScannedPackage> _loadPackage(
   Directory directory,
   String relative,
@@ -164,6 +176,7 @@ Future<_ScannedPackage> _loadPackage(
     forbidden: name is String
         ? product.forbiddenDependenciesFor(name)
         : const {},
+    allowed: name is String ? product.allowedDependenciesFor(name) : null,
   );
 }
 
@@ -207,6 +220,19 @@ Future<List<String>> _checkPackage(
       if (_matchesAny(package.forbidden, dependency)) {
         violations.add(
           '${_reported(product, relative)}: forbidden dependency $dependency',
+        );
+      }
+    }
+    final allowed = package.allowed;
+    if (allowed == null) continue;
+    for (final dependency in dependencyNames(
+      manifest,
+      _runtimeDependencySections,
+    ).toSet()) {
+      if (!_matchesAny(allowed, dependency)) {
+        violations.add(
+          '${_reported(product, relative)}: dependency $dependency is not '
+          'in its allowlist',
         );
       }
     }
@@ -353,6 +379,17 @@ Future<List<String>> _checkSource(
           '$packageName',
         );
       }
+      if (packageName != null &&
+          package != null &&
+          package.allowed != null &&
+          packageName != package.name &&
+          p.posix.isWithin(p.posix.join(package.relative, 'lib'), relative) &&
+          !_matchesAny(package.allowed!, packageName)) {
+        violations.add(
+          '${_reported(product, relative)}: import/export $packageName is '
+          'not in its allowlist',
+        );
+      }
       if (!_insidePurePackage(product, relative)) continue;
 
       if (uri.scheme == 'dart' && (uri.path == 'ui' || uri.path == 'ui_web')) {
@@ -392,11 +429,16 @@ bool _insidePurePackage(ProductGuard product, String relative) {
   return product.isPurePackage(p.posix.join(segments[0], segments[1]));
 }
 
+/// The sections an allowlist limits; development dependencies serve
+/// tests and tooling only. Overrides count because pub resolves them into
+/// the runtime graph, so a package named only there is importable.
+const _runtimeDependencySections = ['dependencies', 'dependency_overrides'];
+
 bool _matchesAny(Set<String> patterns, String name) =>
     patterns.any((pattern) => packageNameMatches(pattern, name));
 
 /// One scanned package: its manifests, purity, resolution and the
-/// forbidden patterns its name selects.
+/// forbidden patterns and allowlist its name selects.
 class _ScannedPackage {
   const _ScannedPackage({
     required this.directory,
@@ -407,6 +449,7 @@ class _ScannedPackage {
     required this.pure,
     required this.graph,
     required this.forbidden,
+    required this.allowed,
   });
 
   final Directory directory;
@@ -417,4 +460,5 @@ class _ScannedPackage {
   final bool pure;
   final DependencyGraph graph;
   final Set<String> forbidden;
+  final Set<String>? allowed;
 }

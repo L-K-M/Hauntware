@@ -41,13 +41,15 @@ String _sha(String text) => sha256Of(text);
 void main() {
   late EditHost host;
   AdminSession? admin;
+  late HostProfile profile;
 
   setUp(() {
     host = EditHost();
     admin = null;
+    profile = _profile;
   });
 
-  EditContext context() => (link: host, profile: _profile, admin: admin);
+  EditContext context() => (link: host, profile: profile, admin: admin);
 
   void adminOn() => admin = AdminSession.test(
     ElevatedExecutor(
@@ -386,6 +388,81 @@ void main() {
       expect(argvs(p), contains(equals(['visudo', '-c', '-f', temp])));
       expect(p.protected, ProtectedReason.builtIn);
       expect(p.tier, ConfirmationTier.typedPhrase);
+    });
+
+    test('a unit file is verified as its unit before the swap where '
+        'systemd can, and the preview says so where it cannot', () async {
+      adminOn();
+      const path = '/etc/systemd/system/app.service';
+      const text = '[Service]\nExecStart=/usr/bin/app\n';
+      host.files[path] = (
+        uid: 0,
+        mode: '644',
+        text: '[Service]\nExecStart=/bin/true\n',
+        rootOnly: false,
+      );
+      Future<OperationPlan> planned() async => (await plan(
+        const FileTarget(path),
+        text,
+        _sha('[Service]\nExecStart=/bin/true\n'),
+      )).plan!;
+
+      profile = HostProfile(uid: 1000, user: 'deploy', systemdVersion: 255);
+      final verified = await planned();
+      final temp = tempOf(verified);
+      final verify = argvs(
+        verified,
+      ).indexWhere((argv) => argv.first == 'systemd-analyze');
+      expect(verify, isNonNegative);
+      expect(
+        argvs(verified)[verify],
+        EditCommands.verifyUnit(temp, 'app.service'),
+      );
+      expect(
+        argvs(verified)[verify + 1],
+        EditCommands.copyAttributes(path, temp),
+      );
+      expect((verified.steps[verify] as ShellStep).elevated, isTrue);
+      expect(verified.warnings, isEmpty);
+
+      profile = HostProfile(uid: 1000, user: 'deploy', systemdVersion: 249);
+      final unverified = await planned();
+      expect(
+        argvs(unverified).map((argv) => argv.first),
+        isNot(contains('systemd-analyze')),
+      );
+      expect(unverified.warnings, {PlanWarning.unitNotVerified});
+
+      // A host whose systemd version is unknown is not assumed new enough.
+      profile = HostProfile(uid: 1000, user: 'deploy');
+      final unknown = await planned();
+      expect(
+        argvs(unknown).map((argv) => argv.first),
+        isNot(contains('systemd-analyze')),
+      );
+      expect(unknown.warnings, {PlanWarning.unitNotVerified});
+    });
+
+    test('a drop-in or any other file gets no unit check', () async {
+      profile = HostProfile(uid: 1000, user: 'deploy', systemdVersion: 255);
+      host.files['/home/deploy/.config/systemd/user/app.service.d/x.conf'] = (
+        uid: 1000,
+        mode: '644',
+        text: 'a\n',
+        rootOnly: false,
+      );
+      final p = (await plan(
+        const FileTarget(
+          '/home/deploy/.config/systemd/user/app.service.d/x.conf',
+        ),
+        'b\n',
+        _sha('a\n'),
+      )).plan!;
+      expect(
+        argvs(p).map((argv) => argv.first),
+        isNot(contains('systemd-analyze')),
+      );
+      expect(p.warnings, isEmpty);
     });
 
     test('a target that changed since the read, a bad path and a file only '

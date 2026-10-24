@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:klabautermann_docker/klabautermann_docker.dart';
@@ -443,4 +444,76 @@ void main() {
       expect(e.maxBytes, 4);
     });
   });
+
+  group('a line split across socket reads', () {
+    // A real socket delivers its next read as an event, not a microtask,
+    // so a partial line must wait for the event loop instead of spinning.
+    // A spinning read also starves timers, so each request runs in an
+    // isolate of its own and this one keeps the time.
+    test('a status line whose LF comes in a later read', () async {
+      final status = await _splitRequestStatus([
+        latin1.encode('HTTP/1.1 204 No Content\r'),
+        latin1.encode('\n\r\n'),
+      ]);
+      expect(status, 204, reason: 'no answer: the read spun');
+    });
+
+    test('a chunk whose closing CRLF comes in a later read', () async {
+      final status = await _splitRequestStatus([
+        latin1.encode(
+          'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n'
+          '3\r\nabc\r',
+        ),
+        latin1.encode('\n0\r\n\r\n'),
+      ]);
+      expect(status, 200, reason: 'no answer: the read spun');
+    });
+  });
+}
+
+/// The status of a GET answered with [reads], each fed after the event
+/// loop has turned, or null when no answer came within twenty seconds,
+/// inside package:test's 30 s. An error in the request's isolate fails
+/// the test with that error.
+Future<int?> _splitRequestStatus(List<List<int>> reads) async {
+  final answers = ReceivePort();
+  final errors = ReceivePort();
+  final isolate = await Isolate.spawn(_splitRequest, (
+    answers.sendPort,
+    reads,
+  ), onError: errors.sendPort);
+  final answer = Completer<int?>();
+  answers.listen((status) {
+    if (!answer.isCompleted) answer.complete(status as int?);
+  });
+  errors.listen((error) {
+    if (!answer.isCompleted) {
+      answer.completeError(StateError('request isolate failed: $error'));
+    }
+  });
+  try {
+    return await answer.future.timeout(
+      const Duration(seconds: 20),
+      onTimeout: () => null,
+    );
+  } finally {
+    isolate.kill(priority: Isolate.immediate);
+    answers.close();
+    errors.close();
+  }
+}
+
+Future<void> _splitRequest((SendPort, List<List<int>>) args) async {
+  final (reply, reads) = args;
+  final daemon = FakeDaemon();
+  final client = DockerHttpClient(() async => daemon.pair.client);
+  final response = client.sendBuffered(
+    const DockerHttpRequest(method: 'GET', path: '/x'),
+  );
+  await daemon.gotBytes(1);
+  for (final read in reads) {
+    daemon.feed(read);
+    await Future<void>.delayed(Duration.zero);
+  }
+  reply.send((await response).statusCode);
 }

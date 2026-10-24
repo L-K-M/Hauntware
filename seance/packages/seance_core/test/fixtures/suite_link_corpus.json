@@ -1,0 +1,922 @@
+{
+ "_comment": "The suite link contract corpus (docs/design/suite-links.md sections 2 and 9). form names the parser a row targets (seance or poltergeist, then the form); every other parser refuses the row as unsupportedLink, and reserved rows are refused by all.",
+ "rows": [
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000",
+   "form": "seance:id",
+   "verdict": "accept",
+   "expect": {
+    "serverId": "123e4567-e89b-42d3-a456-426614174000"
+   }
+  },
+  {
+   "uri": "seance://connect?serverId=123E4567-E89B-42D3-A456-426614174000",
+   "form": "seance:id",
+   "verdict": "accept",
+   "expect": {
+    "serverId": "123e4567-e89b-42d3-a456-426614174000"
+   },
+   "note": "the id is lowercased"
+  },
+  {
+   "uri": "SEANCE://CONNECT?serverId=123e4567-e89b-42d3-a456-426614174000",
+   "form": "seance:id",
+   "verdict": "accept",
+   "expect": {
+    "serverId": "123e4567-e89b-42d3-a456-426614174000"
+   },
+   "note": "scheme and route are case-insensitive"
+  },
+  {
+   "uri": "seance://connect/?serverId=123e4567-e89b-42d3-a456-426614174000",
+   "form": "seance:id",
+   "verdict": "accept",
+   "expect": {
+    "serverId": "123e4567-e89b-42d3-a456-426614174000"
+   },
+   "note": "a bare / path"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/",
+   "form": "seance:id",
+   "verdict": "accept",
+   "expect": {
+    "serverId": "123e4567-e89b-42d3-a456-426614174000",
+    "cwd": "/"
+   }
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/srv/my%20app",
+   "form": "seance:id",
+   "verdict": "accept",
+   "expect": {
+    "serverId": "123e4567-e89b-42d3-a456-426614174000",
+    "cwd": "/srv/my app"
+   },
+   "note": "a space, sent as %20"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/srv/it%27s%20%22quoted%22%20%24HOME%3B%2Bx",
+   "form": "seance:id",
+   "verdict": "accept",
+   "expect": {
+    "serverId": "123e4567-e89b-42d3-a456-426614174000",
+    "cwd": "/srv/it's \"quoted\" $HOME;+x"
+   },
+   "note": "shell syntax stays literal"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/srv/a%2Bb",
+   "form": "seance:id",
+   "verdict": "accept",
+   "expect": {
+    "serverId": "123e4567-e89b-42d3-a456-426614174000",
+    "cwd": "/srv/a+b"
+   },
+   "note": "%2B is a plus"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/srv/a%252Bb",
+   "form": "seance:id",
+   "verdict": "accept",
+   "expect": {
+    "serverId": "123e4567-e89b-42d3-a456-426614174000",
+    "cwd": "/srv/a%2Bb"
+   },
+   "note": "a literal %2B in a folder name"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/home/j%C3%B6rg/%E6%97%A5%E6%9C%AC",
+   "form": "seance:id",
+   "verdict": "accept",
+   "expect": {
+    "serverId": "123e4567-e89b-42d3-a456-426614174000",
+    "cwd": "/home/jörg/日本"
+   }
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/srv/%E2%80%AEgpj.exe",
+   "form": "seance:id",
+   "verdict": "accept",
+   "expect": {
+    "serverId": "123e4567-e89b-42d3-a456-426614174000",
+    "cwd": "/srv/\u202egpj.exe"
+   },
+   "note": "a bidi override passes the grammar; the review strips and flags it"
+  },
+  {
+   "uri": "seance://connect?host=files.example&port=22&username=ops",
+   "form": "seance:identity",
+   "verdict": "accept",
+   "expect": {
+    "host": "files.example",
+    "port": 22,
+    "username": "ops"
+   }
+  },
+  {
+   "uri": "seance://connect?host=fe80%3A%3A1%25en0&port=2200&username=ops%20%26%20build",
+   "form": "seance:identity",
+   "verdict": "accept",
+   "expect": {
+    "host": "fe80::1%en0",
+    "port": 2200,
+    "username": "ops & build"
+   },
+   "note": "IPv6 with a zone id"
+  },
+  {
+   "uri": "seance://connect?host=files.example&port=022&username=ops",
+   "form": "seance:identity",
+   "verdict": "accept",
+   "expect": {
+    "host": "files.example",
+    "port": 22,
+    "username": "ops"
+   },
+   "note": "leading zeros in a decimal port"
+  },
+  {
+   "uri": "poltergeist://browse?serverId=123E4567-E89B-42D3-A456-426614174000&path=/srv/my%20app",
+   "form": "poltergeist:id",
+   "verdict": "accept",
+   "expect": {
+    "serverId": "123e4567-e89b-42d3-a456-426614174000",
+    "path": "/srv/my app"
+   }
+  },
+  {
+   "uri": "poltergeist://browse?host=fe80%3A%3A1%25en0&port=22&username=ops&path=/",
+   "form": "poltergeist:identity",
+   "verdict": "accept",
+   "expect": {
+    "host": "fe80::1%en0",
+    "port": 22,
+    "username": "ops",
+    "path": "/"
+   },
+   "note": "IPv6 with a zone id"
+  },
+  {
+   "uri": "ssh://connect?serverId=123e4567-e89b-42d3-a456-426614174000",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "wrong scheme"
+  },
+  {
+   "uri": "seance://browse?serverId=123e4567-e89b-42d3-a456-426614174000",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "wrong route"
+  },
+  {
+   "uri": "seance://connect/x?serverId=123e4567-e89b-42d3-a456-426614174000",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "a path segment"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000#frag",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "a fragment"
+  },
+  {
+   "uri": "seance://connect:22?serverId=123e4567-e89b-42d3-a456-426614174000",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "an authority port"
+  },
+  {
+   "uri": "seance://ops@connect?serverId=123e4567-e89b-42d3-a456-426614174000",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "userinfo"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&serverId=123e4567-e89b-42d3-a456-426614174000",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "a repeated key"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&x=%FF",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "an escape that is not UTF-8"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/srv/%FFx",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "an escape that is not UTF-8, on a key the form uses"
+  },
+  {
+   "uri": "ssh://connect?host=files.example&port=22&username=ops",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "wrong scheme"
+  },
+  {
+   "uri": "seance://browse?host=files.example&port=22&username=ops",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "wrong route"
+  },
+  {
+   "uri": "seance://connect/x?host=files.example&port=22&username=ops",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "a path segment"
+  },
+  {
+   "uri": "seance://connect?host=files.example&port=22&username=ops#frag",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "a fragment"
+  },
+  {
+   "uri": "seance://connect:22?host=files.example&port=22&username=ops",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "an authority port"
+  },
+  {
+   "uri": "seance://ops@connect?host=files.example&port=22&username=ops",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "userinfo"
+  },
+  {
+   "uri": "seance://connect?host=files.example&port=22&username=ops&host=files.example",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "a repeated key"
+  },
+  {
+   "uri": "seance://connect?host=files.example&port=22&username=ops&x=%FF",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "an escape that is not UTF-8"
+  },
+  {
+   "uri": "ssh://browse?serverId=123e4567-e89b-42d3-a456-426614174000&path=/srv",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "wrong scheme"
+  },
+  {
+   "uri": "poltergeist://connect?serverId=123e4567-e89b-42d3-a456-426614174000&path=/srv",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "wrong route"
+  },
+  {
+   "uri": "poltergeist://browse/x?serverId=123e4567-e89b-42d3-a456-426614174000&path=/srv",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "a path segment"
+  },
+  {
+   "uri": "poltergeist://browse?serverId=123e4567-e89b-42d3-a456-426614174000&path=/srv#frag",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "a fragment"
+  },
+  {
+   "uri": "poltergeist://browse:22?serverId=123e4567-e89b-42d3-a456-426614174000&path=/srv",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "an authority port"
+  },
+  {
+   "uri": "poltergeist://ops@browse?serverId=123e4567-e89b-42d3-a456-426614174000&path=/srv",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "userinfo"
+  },
+  {
+   "uri": "poltergeist://browse?serverId=123e4567-e89b-42d3-a456-426614174000&path=/srv&serverId=123e4567-e89b-42d3-a456-426614174000",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "a repeated key"
+  },
+  {
+   "uri": "poltergeist://browse?serverId=123e4567-e89b-42d3-a456-426614174000&path=/srv&x=%FF",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "an escape that is not UTF-8"
+  },
+  {
+   "uri": "poltergeist://browse?serverId=123e4567-e89b-42d3-a456-426614174000&path=/srv/%FFx",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "an escape that is not UTF-8, on a key the form uses"
+  },
+  {
+   "uri": "ssh://browse?host=files.example&port=22&username=ops&path=/srv",
+   "form": "poltergeist:identity",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "wrong scheme"
+  },
+  {
+   "uri": "poltergeist://connect?host=files.example&port=22&username=ops&path=/srv",
+   "form": "poltergeist:identity",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "wrong route"
+  },
+  {
+   "uri": "poltergeist://browse/x?host=files.example&port=22&username=ops&path=/srv",
+   "form": "poltergeist:identity",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "a path segment"
+  },
+  {
+   "uri": "poltergeist://browse?host=files.example&port=22&username=ops&path=/srv#frag",
+   "form": "poltergeist:identity",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "a fragment"
+  },
+  {
+   "uri": "poltergeist://browse:22?host=files.example&port=22&username=ops&path=/srv",
+   "form": "poltergeist:identity",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "an authority port"
+  },
+  {
+   "uri": "poltergeist://ops@browse?host=files.example&port=22&username=ops&path=/srv",
+   "form": "poltergeist:identity",
+   "verdict": "refuse",
+   "kind": "unsupportedLink",
+   "note": "userinfo"
+  },
+  {
+   "uri": "poltergeist://browse?host=files.example&port=22&username=ops&path=/srv&host=files.example",
+   "form": "poltergeist:identity",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "a repeated key"
+  },
+  {
+   "uri": "poltergeist://browse?host=files.example&port=22&username=ops&path=/srv&x=%FF",
+   "form": "poltergeist:identity",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "an escape that is not UTF-8"
+  },
+  {
+   "uri": "seance://connect",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "no query"
+  },
+  {
+   "uri": "seance://connect?",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "an empty query"
+  },
+  {
+   "uri": "poltergeist://browse",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "no query"
+  },
+  {
+   "uri": "poltergeist://browse?",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "an empty query"
+  },
+  {
+   "uri": "seance://connect?serverId=%ZZ",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "Dart keeps a malformed escape as literal text, which no id matches"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cmd=ls",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "cmd with an id"
+  },
+  {
+   "uri": "seance://connect?host=files.example&port=22&username=ops&cmd=ls",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "cmd with an identity"
+  },
+  {
+   "uri": "poltergeist://browse?serverId=123e4567-e89b-42d3-a456-426614174000&path=/srv&cmd=ls",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "cmd on a browse link"
+  },
+  {
+   "uri": "seance://connect?cmd=ls",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "cmd alone"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&command=ls",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "command with an id"
+  },
+  {
+   "uri": "seance://connect?host=files.example&port=22&username=ops&command=ls",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "command with an identity"
+  },
+  {
+   "uri": "poltergeist://browse?serverId=123e4567-e89b-42d3-a456-426614174000&path=/srv&command=ls",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "command on a browse link"
+  },
+  {
+   "uri": "seance://connect?command=ls",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "command alone"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&exec=ls",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "exec with an id"
+  },
+  {
+   "uri": "seance://connect?host=files.example&port=22&username=ops&exec=ls",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "exec with an identity"
+  },
+  {
+   "uri": "poltergeist://browse?serverId=123e4567-e89b-42d3-a456-426614174000&path=/srv&exec=ls",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "exec on a browse link"
+  },
+  {
+   "uri": "seance://connect?exec=ls",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "exec alone"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&run=ls",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "run with an id"
+  },
+  {
+   "uri": "seance://connect?host=files.example&port=22&username=ops&run=ls",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "run with an identity"
+  },
+  {
+   "uri": "poltergeist://browse?serverId=123e4567-e89b-42d3-a456-426614174000&path=/srv&run=ls",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "run on a browse link"
+  },
+  {
+   "uri": "seance://connect?run=ls",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "run alone"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&script=ls",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "script with an id"
+  },
+  {
+   "uri": "seance://connect?host=files.example&port=22&username=ops&script=ls",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "script with an identity"
+  },
+  {
+   "uri": "poltergeist://browse?serverId=123e4567-e89b-42d3-a456-426614174000&path=/srv&script=ls",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "script on a browse link"
+  },
+  {
+   "uri": "seance://connect?script=ls",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "script alone"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&snippet=ls",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "snippet with an id"
+  },
+  {
+   "uri": "seance://connect?host=files.example&port=22&username=ops&snippet=ls",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "snippet with an identity"
+  },
+  {
+   "uri": "poltergeist://browse?serverId=123e4567-e89b-42d3-a456-426614174000&path=/srv&snippet=ls",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "snippet on a browse link"
+  },
+  {
+   "uri": "seance://connect?snippet=ls",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "snippet alone"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&foo=ls",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "foo with an id"
+  },
+  {
+   "uri": "seance://connect?host=files.example&port=22&username=ops&foo=ls",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "foo with an identity"
+  },
+  {
+   "uri": "poltergeist://browse?serverId=123e4567-e89b-42d3-a456-426614174000&path=/srv&foo=ls",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "foo on a browse link"
+  },
+  {
+   "uri": "seance://connect?foo=ls",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "foo alone"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/srv&cmd=ls",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "a command beside a folder"
+  },
+  {
+   "uri": "seance://connect?host=files.example&port=22&username=ops&cwd=/srv",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "no folder on the identity form"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&path=/srv",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "path belongs to browse links"
+  },
+  {
+   "uri": "poltergeist://browse?serverId=123e4567-e89b-42d3-a456-426614174000&path=/srv&cwd=/srv",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "cwd belongs to connect links"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&host=files.example&port=22&username=ops",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "both forms at once"
+  },
+  {
+   "uri": "seance://connect?serverId=srv-1",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "not a UUID"
+  },
+  {
+   "uri": "seance://connect?serverId=local-shell",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "the local shell is no server"
+  },
+  {
+   "uri": "poltergeist://browse?serverId=local-shell&path=/",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "not a UUID"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=srv",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidPath",
+   "note": "relative"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidPath",
+   "note": "empty"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/srv/./x",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidPath",
+   "note": "a . component"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/srv/../etc",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidPath",
+   "note": "a .. component"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=//srv",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidPath",
+   "note": "a leading //"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/srv//x",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidPath",
+   "note": "an inner //"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/srv/",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidPath",
+   "note": "a trailing slash"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/srv%00x",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidPath",
+   "note": "NUL"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/srv%0Ax",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidPath",
+   "note": "a line feed"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/srv%0Dx",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidPath",
+   "note": "a carriage return"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/srv%1Bx",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidPath",
+   "note": "an escape"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/srv%7Fx",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidPath",
+   "note": "DEL"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/srv%C2%85x",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidPath",
+   "note": "NEL, a C1 control"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/srv%5Cx",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidPath",
+   "note": "a backslash"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=C%3A%5CUsers%5Cname",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidPath",
+   "note": "a Windows path with backslashes"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidPath",
+   "note": "a component over 255 bytes"
+  },
+  {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidPath",
+   "note": "a path over 4,096 bytes"
+  },
+  {
+   "uri": "poltergeist://browse?serverId=123e4567-e89b-42d3-a456-426614174000&path=srv",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "invalidPath",
+   "note": "relative"
+  },
+  {
+   "uri": "poltergeist://browse?serverId=123e4567-e89b-42d3-a456-426614174000&path=/srv/",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "invalidPath",
+   "note": "a trailing slash"
+  },
+  {
+   "uri": "seance://connect?host=files.example&port=0&username=ops",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidPort",
+   "note": "port 0"
+  },
+  {
+   "uri": "seance://connect?host=files.example&port=65536&username=ops",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidPort",
+   "note": "port 65536"
+  },
+  {
+   "uri": "seance://connect?host=files.example&port=%2B22&username=ops",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidPort",
+   "note": "a + sign"
+  },
+  {
+   "uri": "seance://connect?host=files.example&port=%2022&username=ops",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidPort",
+   "note": "a leading space"
+  },
+  {
+   "uri": "seance://connect?host=files.example&port=+22&username=ops",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidPort",
+   "note": "a + that decodes to a space"
+  },
+  {
+   "uri": "seance://connect?host=files.example&port=0x16&username=ops",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidPort",
+   "note": "hexadecimal"
+  },
+  {
+   "uri": "seance://connect?host=files.example&port=&username=ops",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidPort",
+   "note": "empty"
+  },
+  {
+   "uri": "poltergeist://browse?host=files.example&port=0&username=ops&path=/",
+   "form": "poltergeist:identity",
+   "verdict": "refuse",
+   "kind": "invalidPort",
+   "note": "port 0"
+  },
+  {
+   "uri": "seance://connect?host=files.example&username=ops",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidPort",
+   "note": "no port"
+  },
+  {
+   "uri": "seance://connect?host=&port=22&username=ops",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "an empty host"
+  },
+  {
+   "uri": "seance://connect?host=files.example%2Fx&port=22&username=ops",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "a slash in the host"
+  },
+  {
+   "uri": "seance://connect?host=ops%40files.example&port=22&username=ops",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "an @ in the host"
+  },
+  {
+   "uri": "seance://connect?host=files.example&port=22&username=ops%E2%80%AE",
+   "form": "seance:identity",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "a bidi override in the username"
+  },
+  {
+   "uri": "klabautermann://server?serverId=123e4567-e89b-42d3-a456-426614174000",
+   "form": "reserved",
+   "verdict": "refuse",
+   "kind": "unsupportedLink"
+  },
+  {
+   "uri": "klabautermann://connect?serverId=123e4567-e89b-42d3-a456-426614174000",
+   "form": "reserved",
+   "verdict": "refuse",
+   "kind": "unsupportedLink"
+  }
+ ]
+}

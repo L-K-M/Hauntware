@@ -1,13 +1,17 @@
 // Ported from Séance app/seance_app/test/server_color_picker_test.dart @ f4d2f71; see docs/PORTS.md.
 // Divergence: the app is wrapped in AppLocalizations, which the picker's
 // ARB strings need. Since 2026-10-08 the picker is ghost_marks' and the
-// full suite lives there; this keeps the wrapper's cases.
+// full suite lives there; this keeps the cases of it opened as the server
+// editor opens it, in this app's words and monospace stack.
+import 'package:ghost_marks/ghost_marks.dart'
+    as marks
+    show showServerColorPicker;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/theme/app_theme.dart';
 import 'package:poltergeist_app/ui/server_appearance.dart';
-import 'package:poltergeist_app/ui/server_color_picker.dart';
+import 'package:poltergeist_app/ui/server_appearance_strings.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 /// Choosing a colour of one's own for a server. The dialog holds the colour
@@ -31,10 +35,17 @@ void main() {
           builder: (context) => Scaffold(
             body: TextButton(
               onPressed: () async => picked.add(
-                await showServerColorPicker(
+                await marks.showServerColorPicker(
                   context,
                   initial: start,
                   mark: const ServerGlyphMark(ServerIcon.rocket),
+                  strings: PoltergeistServerAppearanceStrings(
+                    AppLocalizations.of(context),
+                  ),
+                  colorStrings: PoltergeistColorPickerStrings(
+                    AppLocalizations.of(context),
+                  ),
+                  hexStyle: poltergeistMonoTextStyle,
                 ),
               ),
               child: const Text('open'),

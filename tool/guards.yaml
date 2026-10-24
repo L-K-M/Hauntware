@@ -75,6 +75,11 @@ products:
     forbidden_dependencies:
       "ghost_*": [seance_core]
       ghost_ui: [ghost_theme]
+    # The Klabautermann app reaches ghost_servers through its contract,
+    # so the package stays on the protocol records, the shared UI and the
+    # marks (docs/design/ghost-servers-part2.md, F5a-3).
+    allowed_dependencies:
+      ghost_servers: [flutter, ghost_ui, ghost_marks, seance_protocol]
     engine_protocol: null
     engine_protocol_callback_owners: {}
   # Klabautermann declares no exceptions: its pure packages take no dartssh2

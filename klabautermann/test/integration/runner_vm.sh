@@ -23,7 +23,15 @@
 # the runner's own engine (runner_vm_docker_test.dart, M4 E30): rank 3
 # through the password prelude, a root redeploy under systemd-run that
 # outlives a forced reconnect and whose root files go once admin mode is
-# back, and the login user's under systemd-run --uid and --user.
+# back, and the login user's under systemd-run --uid and --user; and the
+# privileged edits (runner_vm_edit_test.dart, M5 M20b): a root file's
+# owner, mode, ACL and xattr kept through the prelude with root's backup
+# and manifest, a unit file systemd-analyze verify refuses, a conflict,
+# and another account's crontab; and the v1 host rows
+# (runner_vm_v1_test.dart, M5 M28): unit enable, disable, mask, unmask
+# and reset-failed, the linger account's own units, unit files and
+# resources, the journal's boots and -g, a rotated .gz, anacron and a
+# cron line run now.
 #
 # run.sh calls it after the fixture suites. It creates accounts and runs
 # a root sshd, so it runs only on a GitHub-hosted runner, the ephemeral
@@ -47,6 +55,9 @@
 # homes of klab-vm-sudo and klab-vm-linger; the sshd on 127.0.0.1:2243 with its
 # root-owned directory under /tmp; a transient system timer; the
 # operation units and the root operation directory the S4 suite leaves;
+# the root backups and manifest the edit suite's edits leave, and the
+# root file and unit file it seeds; the system unit and rotated log the
+# v1 host suite seeds;
 # and its key and capture directories. klab-vm-sudo's password is made
 # at job start, as are klab-vm-linger's and klab-vm-nocache's, each kept
 # in a 0600 file in the
@@ -60,6 +71,7 @@
 # discarded with the job, as do the registry and busybox images the
 # Docker suite pulls. Signing in
 # leaves what any SSH login leaves: journal entries and logind sessions.
+# Without setfacl or setfattr, it installs acl or attr the same way.
 #
 # With KLABAUTERMANN_EVIDENCE_DIR set, its logs, test results and the
 # capture go to $KLABAUTERMANN_EVIDENCE_DIR/runner-vm/:
@@ -117,6 +129,18 @@ readonly sudoers_file='/etc/sudoers.d/klabautermann-runner-vm'
 # What root-run operations create: the wrapper makes
 # /var/lib/klabautermann/ops (03 §7.17), and teardown removes it all.
 readonly root_ops_parent='/var/lib/klabautermann'
+# What the edit suite's root edits leave (M5 M20b): the root footprint
+# manifest's directory beside the backups under root_ops_parent, and the
+# root file and unit file the suite seeds and removes itself; teardown
+# removes all three should a run end part-way.
+readonly root_manifest_dir='/etc/klabautermann'
+readonly edit_dir='/etc/klabautermann-vm-edit'
+readonly edit_unit='klabautermann-vm-edit.service'
+# What the v1 host suite seeds and removes itself (M5 M28): a system unit
+# and a rotated log under /var/log; teardown removes both should a run
+# end part-way.
+readonly v1_unit='klabautermann-vm-v1.service'
+readonly rotated_log='/var/log/klabautermann-vm.log.1.gz'
 # Root's Docker CLI directory, which the leg creates for the dead
 # default context and removes; one the image has is moved aside into the
 # sshd's root-owned directory meanwhile and put back.
@@ -131,6 +155,10 @@ readonly op_units='klabautermann-op-*.service'
 # leaves them loaded, as a transient unit would not be. They run as
 # nobody and print what the suite looks for in the journal.
 readonly unit_dir='/etc/systemd/system'
+# The v1 host suite's unit lives where packages install theirs: mask
+# writes its /dev/null link into unit_dir, which refuses a unit file of
+# the same name there.
+readonly vendor_unit_dir='/usr/lib/systemd/system'
 readonly test_service='klabautermann-vm-test.service'
 readonly job_service='klabautermann-vm-job.service'
 readonly job_timer='klabautermann-vm-job.timer'
@@ -192,7 +220,9 @@ for user in "${users[@]}"; do
     die "$user exists; this leg removes only accounts it created"
   fi
 done
-for path in "$sudoers_file" "$root_ops_parent" "${test_units[@]/#/$unit_dir/}"; do
+for path in "$sudoers_file" "$root_ops_parent" "$root_manifest_dir" \
+  "$edit_dir" "$unit_dir/$edit_unit" "$vendor_unit_dir/$v1_unit" \
+  "$rotated_log" "${test_units[@]/#/$unit_dir/}"; do
   if sudo -n test -e "$path"; then
     die "$path exists; this leg removes only what it created"
   fi
@@ -306,7 +336,11 @@ on_exit() {
   if ((suite_started)); then
     sudo -n systemctl stop "$op_units" 2>/dev/null || true
     sudo -n systemctl reset-failed "$op_units" 2>/dev/null || true
-    sudo -n rm -rf -- "$root_ops_parent" || cleanup=1
+    sudo -n rm -rf -- "$root_ops_parent" "$root_manifest_dir" "$edit_dir" \
+      "$unit_dir/$edit_unit" || cleanup=1
+    sudo -n systemctl unmask -- "$v1_unit" 2>/dev/null || true
+    sudo -n systemctl disable -- "$v1_unit" 2>/dev/null || true
+    sudo -n rm -f -- "$vendor_unit_dir/$v1_unit" "$rotated_log" || cleanup=1
   fi
   if ((units_installed)); then
     sudo -n systemctl stop "${test_units[@]}" 2>/dev/null || true
@@ -646,6 +680,14 @@ cron_preinstalled=yes
 if ! command -v crontab >/dev/null; then
   cron_preinstalled=no
   install_package cron
+fi
+# The edit suite's root file carries an ACL entry and an extended
+# attribute (D67).
+if ! command -v setfacl >/dev/null; then
+  install_package acl
+fi
+if ! command -v setfattr >/dev/null; then
+  install_package attr
 fi
 systemd_version="$(systemctl --version | sed -n '1s/^systemd \([0-9]*\).*/\1/p')"
 [[ -n "$systemd_version" ]] || die 'no systemd version from systemctl --version'

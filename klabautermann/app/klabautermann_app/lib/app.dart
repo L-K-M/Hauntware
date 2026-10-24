@@ -12,6 +12,7 @@ import 'package:klabautermann_core/klabautermann_core.dart'
 
 import 'controllers/admin_controller.dart';
 import 'controllers/announcement_controller.dart';
+import 'controllers/pin_publication_controller.dart';
 import 'controllers/safety_controller.dart';
 import 'controllers/appearance_controller.dart';
 import 'controllers/coverage_controller.dart';
@@ -20,6 +21,7 @@ import 'controllers/fleet_controller.dart';
 import 'controllers/monitoring_controller.dart';
 import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
+import 'controllers/server_editor_controller.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
 import 'l10n/app_localizations.dart';
@@ -34,6 +36,7 @@ import 'ui/macos_toolbar_band.dart';
 import 'ui/menus/app_commands.dart';
 import 'ui/menus/app_menu_host.dart';
 import 'ui/prompts/prompt_host.dart';
+import 'ui/server_editing.dart';
 import 'ui/server_safety.dart' show SafetyScope;
 import 'ui/server_surfaces.dart' show AppActivityReporter;
 import 'ui/settings_page.dart';
@@ -58,10 +61,12 @@ class KlabautermannApp extends StatelessWidget {
     required this.announcements,
     this.safety,
     this.syncSecrets,
+    this.pinPublication,
     this.admin,
     this.operations,
     required this.dockerNotice,
     this.sync,
+    this.serverEditor,
     this.settingsIssue,
     this.importStoreIssue,
     this.syncStoreIssues = const [],
@@ -97,6 +102,10 @@ class KlabautermannApp extends StatelessWidget {
   /// Sync settings tab is a placeholder.
   final SyncSecretsController? syncSecrets;
 
+  /// The host key sharing assertion (M5 plan M07), one engine run's like
+  /// [sync]; null in tests that leave it out.
+  final PinPublicationController? pinPublication;
+
   /// Admin mode per server (03 §8.2), one engine run's like [fleet]. Null
   /// in tests that leave it out, where the header shows no admin chip.
   final AdminController? admin;
@@ -112,6 +121,11 @@ class KlabautermannApp extends StatelessWidget {
   /// The sync account (03 §4.3), one engine run's like [fleet]; null in
   /// tests that leave sync out, which shows the sync control idle.
   final SyncController? sync;
+
+  /// In-app server editing over the engine (FL-03), one engine run's like
+  /// [sync]. Editing is offered only with both and an enrolled account
+  /// (P16); null in tests that leave it out.
+  final ServerEditorController? serverEditor;
 
   /// What went wrong opening `settings.json`, told once at startup.
   final DeviceSettingsIssue? settingsIssue;
@@ -190,6 +204,16 @@ class KlabautermannApp extends StatelessWidget {
     );
   }
 
+  /// Server editing, when both its controllers are given.
+  ServerEditing? get _serverEditing => switch ((serverEditor, sync)) {
+    (final editor?, final sync?) => ServerEditing(
+      editor: editor,
+      sync: sync,
+      fleet: fleet,
+    ),
+    _ => null,
+  };
+
   Widget _buildApp(BuildContext context) {
     return ListenableBuilder(
       listenable: appearance,
@@ -231,9 +255,16 @@ class KlabautermannApp extends StatelessWidget {
               final admin? => AdminScope(admin: admin, child: withOperations),
               null => withOperations,
             };
-            return switch (safety) {
+            final withSafety = switch (safety) {
               final safety? => SafetyScope(safety: safety, child: withAdmin),
               null => withAdmin,
+            };
+            return switch (_serverEditing) {
+              final editing? => ServerEditingScope(
+                editing: editing,
+                child: withSafety,
+              ),
+              null => withSafety,
             };
           },
           // The shell's settings callback and the menus' commands need a
@@ -268,12 +299,22 @@ class KlabautermannApp extends StatelessWidget {
                         onOpenSettings: openSettings,
                         appVersion: appVersion,
                       ),
-                      child: AdaptiveShell(
-                        fleet: fleet,
-                        monitoring: monitoring,
-                        coverage: coverage,
-                        onOpenSettings: openSettings,
-                        sync: sync,
+                      // The add verbs follow the enrollment (P16).
+                      child: ListenableBuilder(
+                        listenable: Listenable.merge([?sync]),
+                        builder: (context, _) => AdaptiveShell(
+                          fleet: fleet,
+                          monitoring: monitoring,
+                          coverage: coverage,
+                          onOpenSettings: openSettings,
+                          sync: sync,
+                          onAddServer: switch (_serverEditing) {
+                            final editing? when editing.enabled =>
+                              () =>
+                                  unawaited(openServerEditor(context, editing)),
+                            _ => null,
+                          },
+                        ),
                       ),
                     );
                   },
@@ -289,6 +330,7 @@ class KlabautermannApp extends StatelessWidget {
               monitorSet: fleet.monitorSettings,
               safety: safety,
               syncSecrets: syncSecrets,
+              pinPublication: pinPublication,
             ),
           },
         );

@@ -125,7 +125,7 @@ final class CrontabDocument {
     if (line.kind != CrontabLineKind.job) {
       throw ArgumentError.value(index, 'index', 'not a job line');
     }
-    final stamp = at.toUtc().toIso8601String().replaceFirst('.000', '');
+    final stamp = at.toUtc().toIso8601String().replaceFirst('.000Z', 'Z');
     return replace(index, '$kCrontabPauseMarker$stamp ${line.text}');
   }
 

@@ -14,9 +14,11 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         HostCommandError,
         HostCommands,
         encodeFootprintManifest,
+        kVerifyAsUnitSystemd,
         kRootBackupsDir,
         kRootManifestPath,
-        parseFootprintManifest;
+        parseFootprintManifest,
+        unitFileName;
 import 'package:seance_core/seance_core.dart'
     show RemoteCommandException, RemoteCommandResult, quoteShellWord;
 
@@ -149,6 +151,14 @@ Future<PlanAttempt> _planFile(
   final manifest = await _manifestStep(c, root: privileged, backups: backups);
   if (manifest case _ManifestRefused(:final reason)) return _refused(reason);
   final relabel = await _selinuxEnforcing(c);
+  // A unit file is checked as its unit before the rename where the
+  // host's systemd can load the temp under the unit's name; elsewhere the
+  // preview says it is not.
+  final unit = unitFileName(path);
+  final verifyUnit =
+      unit != null &&
+      !temp.contains(':') &&
+      (c.profile.systemdVersion ?? 0) >= kVerifyAsUnitSystemd;
 
   ShellStep step(List<String> argv, {List<int>? input, bool cas = false}) =>
       ShellStep(
@@ -168,6 +178,7 @@ Future<PlanAttempt> _planFile(
         if (manifest case _ManifestWrite(:final step)) step,
         step(EditCommands.writeTemp(temp), input: utf8.encode(intent.text)),
         if (_isSudoers(path)) step(['visudo', '-c', '-f', temp]),
+        if (verifyUnit) step(EditCommands.verifyUnit(temp, unit)),
         step(EditCommands.copyAttributes(path, temp)),
         // Status only: compose's errors can quote interpolated values.
         if (checkArgv != null)
@@ -189,6 +200,7 @@ Future<PlanAttempt> _planFile(
         HostWriteRow.loginRecords,
       ],
       protected: isProtectedEditPath(path) ? ProtectedReason.builtIn : null,
+      warnings: [if (unit != null && !verifyUnit) PlanWarning.unitNotVerified],
     ),
   );
 }
