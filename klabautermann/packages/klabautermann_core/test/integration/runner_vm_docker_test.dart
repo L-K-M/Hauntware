@@ -231,14 +231,19 @@ void main() {
       (e) => e.serverId == serverId,
     );
     // The action names the launch (03 §7.17): report what the log does
-    // hold when it is missing, which a lost launch note once produced.
-    return audit.records.singleWhere(
-      (r) => r.action == 'RedeployStack',
-      orElse: () => fail(
-        'no RedeployStack record among '
-        '${audit.records.map((r) => r.action).toList()}',
-      ),
-    );
+    // hold when the one record is missing or duplicated, which a lost
+    // launch note once produced.
+    final redeploys = [
+      for (final r in audit.records)
+        if (r.action == 'RedeployStack') r,
+    ];
+    if (redeploys.length != 1) {
+      fail(
+        'expected one RedeployStack record, found ${redeploys.length}, '
+        'among ${audit.records.map((r) => r.action).toList()}',
+      );
+    }
+    return redeploys.single;
   }
 
   test('rank 3 through the password prelude: the sudo relay reaches the '
