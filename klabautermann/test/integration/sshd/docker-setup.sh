@@ -60,3 +60,8 @@ ln -sfn "$socket" /var/run/docker.sock
 uid="$(id -u "$fixture_user")"
 install -d -m 0700 -o "$fixture_user" -g "$fixture_user" "/run/user/$uid"
 ln -sfn "$socket" "/run/user/$uid/docker.sock"
+
+# The host's syslog (M5 M20a): BusyBox syslogd writes /var/log/messages,
+# where the edit suite reads the `logger -t klabautermann` line (SAF-13).
+# A restart stops the daemon with the container, so each start runs one.
+syslogd
