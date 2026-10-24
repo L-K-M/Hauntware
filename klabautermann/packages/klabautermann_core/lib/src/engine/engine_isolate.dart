@@ -1266,7 +1266,9 @@ void engineMain(
           reject(message, 'invalid draft');
           return;
         }
-        final existing = synced.serverConfig(draft.id);
+        // The stored server, confirmed here or not: the user tests the
+        // endpoint the form shows.
+        final existing = await sync.storedServer(draft.id);
         final config = serverConfigOfDraft(
           draft,
           existing: existing,

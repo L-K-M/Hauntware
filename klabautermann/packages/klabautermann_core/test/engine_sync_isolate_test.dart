@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/catalog/klabautermann_records.dart';
 import 'package:klabautermann_core/src/engine/engine_isolate.dart';
+import 'package:seance_core/seance_core.dart' show AuthKind, AuthMethod;
 import 'package:test/test.dart';
 
 import 'support/fake_sync_server.dart';
@@ -223,6 +224,77 @@ void main() {
       if (events.current case final ServerDraftRead answer) read = answer;
     }
     expect(read?.draft?.host, 'web-3.example.com');
+  });
+
+  test('a connection test of a synced server this device never confirmed '
+      'keeps its stored fields (M5 M09b)', () async {
+    final server = await FakeSyncServer.create();
+    await server.seedServer(
+      fakeServer(
+        'srv-a',
+        'alpha',
+      ).copyWith(authMethod: AuthMethod.password, secretRef: 'sec-a'),
+    );
+    final client = await IsolateEngineClient.spawn(
+      supportDirectory: support.path,
+      supportDirectoryAccess: SupportDirectoryAccess.exclusive,
+      deviceId: _deviceId,
+      linksEnabled: true,
+      entryPoint: (start) => engineMain(
+        start,
+        syncTransport: server.transport,
+        // Accepts only the stored config: its vault entry is not in the
+        // draft the editor sends.
+        testAuthenticator:
+            ({
+              required hostKeys,
+              required onHostKey,
+              required onKeyboardInteractive,
+              required resolveJumpHost,
+            }) => (config, credentials, log) async {
+              if (config.secretRef != 'sec-a') throw StateError('no entry');
+              return AuthKind.promptedPassword;
+            },
+      ),
+    );
+    addTearDown(client.shutdown);
+    final events = StreamIterator(client.events);
+    addTearDown(events.cancel);
+    expect(await events.moveNext(), isTrue);
+    await untilSyncEnds(
+      client..send(
+        const EnrollSync(
+          baseUrl: 'https://sync.example.com',
+          username: fakeSyncUser,
+          password: fakeSyncPassword,
+          encryptionPassphrase: fakeSyncPassword,
+        ),
+      ),
+      events,
+      MemoryKeystore(),
+    );
+
+    client.send(
+      const TestServerConnection(
+        requestId: 'test-1',
+        draft: ServerDraft(
+          id: 'srv-a',
+          label: 'alpha',
+          host: 'alpha.example.com',
+          port: 22,
+          username: 'deploy',
+          auth: ServerDraftAuth.password,
+        ),
+        credential: ServerCredentialEntry(password: 'typed'),
+      ),
+    );
+    ServerConnectionTested? tested;
+    while (tested == null && await events.moveNext()) {
+      if (events.current case final ServerConnectionTested answer) {
+        tested = answer;
+      }
+    }
+    expect(tested?.ok, isTrue, reason: tested?.log);
   });
 
   test('synced preferences go out after the fleet, then only when they '
