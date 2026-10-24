@@ -185,7 +185,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
     await tester.pumpAndSettle();
-    expect(harness.engine.sentOfType<DeleteServer>(), hasLength(1));
+    final deleted =
+        harness.engine.sentOfType<DeleteServer>().single as DeleteServer;
+    expect(deleted.serverId, 'srv-1');
 
     // Prove the drive reached the engine, then judge every request.
     expect(harness.engine.sent, isNotEmpty);

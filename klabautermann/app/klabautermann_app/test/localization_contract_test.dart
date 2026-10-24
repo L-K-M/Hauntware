@@ -688,10 +688,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'['",
     r"'[$host]'",
   },
-  // An assert message; programmer diagnostic, never rendered.
   // A refusal's detail, which only the ARB's `other` branch shows: none,
   // or the error itself for one that is not a refusal.
   'lib/ui/server_editing.dart': {"''", r"'$error'"},
+  // An assert message; programmer diagnostic, never rendered.
   'lib/ui/server_surfaces.dart': {
     "'new controllers come with a new tree (KlabautermannApp, D44)'",
   },
