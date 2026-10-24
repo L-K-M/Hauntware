@@ -244,6 +244,29 @@ void main() {
       expect(applied.last.servers['srv-1']!.readOnly, isTrue);
     });
 
+    test('review fix: a refused write keeps a later reset counting', () async {
+      prefs
+        ..syncing.add('srv-1')
+        ..records['srv-1'] = const ServerPrefs(readOnly: true);
+      final safety = controller();
+      final first = prefs.gate = Completer<void>();
+      final clearing = safety.setServerSafety('srv-1', const ServerSafety());
+      await pumpEventQueue();
+      final second = prefs.gate = Completer<void>();
+      final again = safety.setServerSafety('srv-1', const ServerSafety());
+      await pumpEventQueue();
+
+      prefs.refuse = StateError('refused');
+      first.complete();
+      await expectLater(clearing, throwsA(isA<SafetyNotSavedException>()));
+      prefs.refuse = null;
+      expect(applied.last.servers['srv-1'], isNull);
+
+      second.complete();
+      await again;
+      expect(safety.value.servers['srv-1'], isNull);
+    });
+
     test('review fix: a server that stops syncing during a write keeps the '
         'written switch here', () async {
       prefs.syncing.add('srv-1');

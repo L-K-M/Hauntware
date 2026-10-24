@@ -101,6 +101,10 @@ final class SafetyController extends ChangeNotifier implements SafetySettings {
   /// the record and of anything still stored here until they answer.
   final Map<String, ServerPrefs?> _pending = {};
   final Set<String> _migrating = {};
+
+  /// Counts each server's record writes, so a write that answers clears
+  /// its pending value only when no later write replaced it.
+  final Map<String, int> _writeSerials = {};
   var _disposed = false;
 
   @override
@@ -157,6 +161,8 @@ final class SafetyController extends ChangeNotifier implements SafetySettings {
       marks: safety.marks,
     );
     final sealed = _isDefault(next) ? null : next;
+    final serial = (_writeSerials[serverId] ?? 0) + 1;
+    _writeSerials[serverId] = serial;
     _pending[serverId] = sealed;
     final local = _local.servers[serverId];
     final saving = local?.management == safety.management
@@ -191,7 +197,7 @@ final class SafetyController extends ChangeNotifier implements SafetySettings {
     } finally {
       // A later change of the same server may have replaced this write;
       // it keeps counting until it answers.
-      if (identical(_pending[serverId], sealed)) _pending.remove(serverId);
+      if (_writeSerials[serverId] == serial) _pending.remove(serverId);
       _refresh();
     }
     await _forgetStored(serverId);
