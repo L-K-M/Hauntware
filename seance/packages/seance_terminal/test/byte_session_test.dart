@@ -117,7 +117,7 @@ void main() {
     expect(transport.closes, 1);
   });
 
-  test('close twice closes the far end and disposes the engine once', () async {
+  test('closing twice closes the far end once', () async {
     await Future.wait([session.close(), session.close()]);
     await session.close();
 
