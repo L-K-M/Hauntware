@@ -62,3 +62,30 @@ jobs:
             --output /dev/null --silent --show-error \
             --write-out 'HTTP=%{http_code} bytes=%{size_download} bytes_per_second=%{speed_download} connect=%{time_connect}s first_byte=%{time_starttransfer}s total=%{time_total}s\n' \
             https://dl.flathub.org/repo/summary
+      - name: Compare isolated Flatpak installs
+        if: always()
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y eatmydata strace
+          base="$(mktemp -d "$RUNNER_TEMP/hauntware-flatpak-XXXXXX")"
+          trap 'rm -rf "$base"' EXIT
+          for mode in durable cache; do
+            export FLATPAK_USER_DIR="$base/$mode"
+            flatpak remote-add --user flathub https://flathub.org/repo/flathub.flatpakrepo
+            command=(flatpak)
+            if [ "$mode" = cache ]; then
+              command=(eatmydata flatpak)
+            fi
+            printf '\nCold install: %s\n' "$mode"
+            set +e
+            time timeout --kill-after=10s 180s strace -f -c -e fsync,fdatasync,syncfs \
+              "${command[@]}" install --user --noninteractive --no-deps --no-related \
+              flathub runtime/org.freedesktop.Platform.codecs-extra/x86_64/25.08-extra
+            result=$?
+            set -e
+            printf 'Install result: mode=%s status=%s\n' "$mode" "$result"
+            if [ "$mode" = cache ] && [ "$result" -ne 0 ]; then
+              exit "$result"
+            fi
+          done
