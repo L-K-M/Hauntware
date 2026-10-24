@@ -888,19 +888,9 @@ void engineMain(
       final EngineEvent answer;
       try {
         answer = await body();
-        if (answer is CatalogWritten) {
-          syncedServers = await sync.servers();
-          await relistSynced();
-          if (confirm != null) {
-            for (final pin in synced.pinsFor([confirm], DateTime.now())) {
-              await endpointPins.confirm(pin);
-            }
-            await relistSynced();
-          }
-        }
       } on Object catch (error) {
         // EngineSync answers every refusal itself; this keeps the chain
-        // alive should the fleet refresh or a pin's save throw.
+        // alive should a write slip past that.
         uiPort.send(
           CatalogWriteRefused(
             requestId: requestId,
@@ -911,8 +901,25 @@ void engineMain(
         return;
       }
       if (answer is CatalogWritten) {
-        uiPort.send(CatalogReplaced(fleetEntries()));
-        await sendServerPrefs();
+        // The write is sealed, so it is answered as written and pushed
+        // even when its fleet refresh, a pin's save or the preferences
+        // throw; the next round's refresh shows what this one missed. A
+        // throw here would also end the chain: a chained operation runs
+        // only after the one before it completes normally.
+        try {
+          syncedServers = await sync.servers();
+          await relistSynced();
+          if (confirm != null) {
+            for (final pin in synced.pinsFor([confirm], DateTime.now())) {
+              await endpointPins.confirm(pin);
+            }
+            await relistSynced();
+          }
+          uiPort.send(CatalogReplaced(fleetEntries()));
+          await sendServerPrefs();
+        } on Object {
+          // Recovered as above.
+        }
       }
       uiPort.send(answer);
       if (answer is CatalogWritten) runSync(SyncOperation.round, sync.runRound);
