@@ -509,6 +509,10 @@ dependency_overrides: {"dartssh2": any}
       final extended = await _Fixture.create(
         guardsConfig: _extendedGuardsConfig,
       );
+      // The package allowed_dependencies names; a missing one fails.
+      const view = '$_product/packages/poltergeist_view';
+      await extended.write('$view/pubspec.yaml', 'name: poltergeist_view\n');
+      await extended._register('poltergeist_view', view);
       try {
         await body(extended);
       } finally {
@@ -717,6 +721,32 @@ dependency_overrides: {"dartssh2": any}
             1,
             'poltergeist/packages/poltergeist_view/lib/view.dart: '
             'import/export bridge is not in its allowlist',
+          );
+        });
+      });
+
+      test('rejects a dev-only package imported from lib', () async {
+        await withFixture((f) async {
+          await viewPackage(f, 'dev_dependencies: {bridge: any}\n');
+          await f.write(
+            '$view/lib/view.dart',
+            "import 'package:bridge/bridge.dart';",
+          );
+          await f.expectExit(
+            1,
+            'poltergeist/packages/poltergeist_view/lib/view.dart: '
+            'import/export bridge is not in its allowlist',
+          );
+        });
+      });
+
+      test('rejects an allowlist naming no scanned package', () async {
+        await withFixture((f) async {
+          await Directory(p.join(f.root.path, view)).delete(recursive: true);
+          await f.expectExit(
+            1,
+            'poltergeist: allowed_dependencies names poltergeist_view, '
+            'which is not a scanned package',
           );
         });
       });

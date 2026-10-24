@@ -56,6 +56,18 @@ Future<List<String>> checkImports(
     }
   }
 
+  // An allowlist whose package was renamed or removed would otherwise
+  // stop applying without a word.
+  final scannedNames = {for (final package in packages.values) package.name};
+  for (final name in product.allowedDependencies.keys) {
+    if (!scannedNames.contains(name)) {
+      violations.add(
+        '${product.name}: allowed_dependencies names $name, which is not '
+        'a scanned package',
+      );
+    }
+  }
+
   for (final area in product.scan) {
     final directory = _scanRoot(productRoot, area);
     await for (final file in dartSources(
@@ -418,7 +430,8 @@ bool _insidePurePackage(ProductGuard product, String relative) {
 }
 
 /// The sections an allowlist limits; development dependencies serve
-/// tests and tooling only.
+/// tests and tooling only. Overrides count because pub resolves them into
+/// the runtime graph, so a package named only there is importable.
 const _runtimeDependencySections = ['dependencies', 'dependency_overrides'];
 
 bool _matchesAny(Set<String> patterns, String name) =>
