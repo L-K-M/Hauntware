@@ -16,6 +16,7 @@ import 'package:klabautermann_app/controllers/prompt_controller.dart';
 import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/controllers/server_editor_controller.dart';
 import 'package:klabautermann_app/controllers/sync_controller.dart';
+import 'package:klabautermann_app/services/hand_off.dart';
 import 'package:klabautermann_app/services/settings_window/settings_window_link.dart';
 import 'package:klabautermann_app/services/ssh_config_source.dart';
 import 'package:klabautermann_core/klabautermann_core.dart'
@@ -129,6 +130,7 @@ Future<AppHarness> pumpApp(
   OpenSettingsWindow? openSettingsWindow,
   ValueListenable<bool>? toolbarBand,
   String? appVersion,
+  HandOffLauncher? handOff,
   Duration linkGrace = Duration.zero,
 }) async {
   tester.view.physicalSize = size;
@@ -190,6 +192,7 @@ Future<AppHarness> pumpApp(
       openSettingsWindow: openSettingsWindow,
       toolbarBand: toolbarBand,
       appVersion: appVersion,
+      handOff: handOff,
     ),
   );
   await tester.pumpAndSettle();

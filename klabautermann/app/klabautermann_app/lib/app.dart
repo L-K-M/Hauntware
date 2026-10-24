@@ -27,12 +27,14 @@ import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'services/settings_window/settings_window_link.dart';
+import 'services/hand_off.dart' show HandOffLauncher;
 import 'theme/app_theme.dart';
 import 'ui/actions/action_entry.dart' show OperationsScope;
 import 'ui/actions/action_preview.dart' show ActionResultToasts;
 import 'ui/adaptive_shell.dart';
 import 'ui/admin_mode_chip.dart' show AdminScope;
 import 'ui/docker/docker_panel.dart' show DockerNoticeScope;
+import 'ui/hand_off_actions.dart' show HandOffScope;
 import 'ui/macos_toolbar_band.dart';
 import 'ui/menus/app_commands.dart';
 import 'ui/menus/app_menu_host.dart';
@@ -76,6 +78,7 @@ class KlabautermannApp extends StatelessWidget {
     this.openSettingsWindow,
     this.toolbarBand,
     this.appVersion,
+    this.handOff,
   });
 
   final FleetController fleet;
@@ -124,6 +127,10 @@ class KlabautermannApp extends StatelessWidget {
   /// Whether the Docker tab still shows SAF-08's notice on this device
   /// (03 §8.4); like [appearance], it outlives an engine run.
   final DockerNoticeController dockerNotice;
+
+  /// Opens hand-offs to Séance and Poltergeist (X-03, X-04, X-10); null in
+  /// tests that leave it out, where no hand-off is offered.
+  final HandOffLauncher? handOff;
 
   /// The sync account (03 §4.3), one engine run's like [fleet]; null in
   /// tests that leave sync out, which shows the sync control idle.
@@ -266,12 +273,19 @@ class KlabautermannApp extends StatelessWidget {
               final safety? => SafetyScope(safety: safety, child: withAdmin),
               null => withAdmin,
             };
-            return switch (_serverEditing) {
+            final withEditing = switch (_serverEditing) {
               final editing? => ServerEditingScope(
                 editing: editing,
                 child: withSafety,
               ),
               null => withSafety,
+            };
+            return switch (handOff) {
+              final handOff? => HandOffScope(
+                launcher: handOff,
+                child: withEditing,
+              ),
+              null => withEditing,
             };
           },
           // The shell's settings callback and the menus' commands need a

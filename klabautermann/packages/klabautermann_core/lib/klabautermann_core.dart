@@ -161,6 +161,17 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         HostPanel,
         evaluatePanel;
 export 'package:seance_core/seance_core.dart' show quoteShellWord;
+// Hand-offs to Séance and Poltergeist (X-03, X-04, X-10; D12): the suite's
+// link builders, which refuse anything but a server and a folder, so no
+// link can carry a command (X8).
+export 'package:seance_core/seance_core.dart'
+    show
+        buildPoltergeistBrowse,
+        buildSeanceConnect,
+        poltergeistBrowseRoute,
+        poltergeistDeepLinkScheme,
+        seanceConnectRoute,
+        seanceDeepLinkScheme;
 // A one-off command's words, split as a shell would without expanding
 // them (CTX-08).
 export 'src/operations/command_words.dart' show splitCommandWords;

@@ -8494,6 +8494,18 @@ abstract class AppLocalizations {
   /// **'Add a server to your sync account here. To edit or delete one, open its menu in the server list.'**
   String get settingsServersAccountDetail;
 
+  /// The server header's button that opens this server's terminal in the Séance app through a seance:// link (X-03). Shown only where Séance can receive the link.
+  ///
+  /// In en, this message translates to:
+  /// **'Open terminal in Séance'**
+  String get handOffOpenInSeance;
+
+  /// Toast when the operating system refused to open the seance:// link for the server header's Open terminal in Séance button.
+  ///
+  /// In en, this message translates to:
+  /// **'Séance did not open the link.'**
+  String get handOffSeanceNotOpened;
+
   /// Heading of the device name on the General settings tab (M5 plan Q6).
   ///
   /// In en, this message translates to:

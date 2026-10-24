@@ -28,6 +28,7 @@ import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
 import 'services/app_version.dart';
 import 'services/engine_keystore.dart';
+import 'services/hand_off.dart';
 import 'services/instance_guard.dart';
 import 'services/macos_titlebar.dart';
 import 'services/settings_window/settings_window_host.dart';
@@ -300,6 +301,13 @@ Future<void> main(List<String> args) async {
   // The About dialog's version (M16), read here once: the settings
   // window's engine has no plugins and gets it over the link.
   final appVersion = await readAppVersion();
+  // Which siblings can take a hand-off here, asked of the OS once.
+  final handOff = await UrlHandOffLauncher.probe(
+    platform: defaultTargetPlatform,
+    onError: (error, stack) => FlutterError.reportError(
+      FlutterErrorDetails(exception: error, stack: stack),
+    ),
+  );
 
   // Desktop only: the runners there host the settings window; phones keep
   // the settings route.
@@ -339,6 +347,7 @@ Future<void> main(List<String> args) async {
       openSettingsWindow: settingsWindow?.open,
       toolbarBand: toolbarBand,
       appVersion: appVersion,
+      handOff: handOff,
     ),
   );
 }

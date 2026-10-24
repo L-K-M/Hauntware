@@ -6399,6 +6399,12 @@ class AppLocalizationsEn extends AppLocalizations {
       'Add a server to your sync account here. To edit or delete one, open its menu in the server list.';
 
   @override
+  String get handOffOpenInSeance => 'Open terminal in Séance';
+
+  @override
+  String get handOffSeanceNotOpened => 'Séance did not open the link.';
+
+  @override
   String get settingsDeviceTitle => 'This device';
 
   @override
