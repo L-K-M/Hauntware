@@ -1,8 +1,8 @@
 name: seance_terminal
 description: >-
   Séance's terminal for the apps that host a shell: the xterm-backed
-  engine, the keyboard bar and the appearance mapping, with the
-  byte-transport and paste seams to follow
+  engine, the keyboard bar, the appearance mapping, and the
+  byte-transport and paste seams
   (docs/design/seance-terminal.md). A Flutter package outside the
   pure-Dart Séance workspace.
 version: 1.9.2
