@@ -41,10 +41,18 @@ void main() {
       expect(splitCommandWords('ls *; rm x'), ['ls', '*;', 'rm', 'x']);
     });
 
-    test('an open quote or no words is no command', () {
+    test('a backslash before a newline joins the lines, in double quotes '
+        'too', () {
+      expect(splitCommandWords('echo a\\\nb'), ['echo', 'ab']);
+      expect(splitCommandWords('echo \\\n x'), ['echo', 'x']);
+      expect(splitCommandWords('echo "a\\\nb"'), ['echo', 'ab']);
+    });
+
+    test('an open quote, a trailing backslash or no words is no command', () {
       expect(splitCommandWords("echo 'open"), isNull);
       expect(splitCommandWords('echo "open'), isNull);
       expect(splitCommandWords(r'echo "a\"'), isNull);
+      expect(splitCommandWords(r'echo \'), isNull);
       expect(splitCommandWords('   '), isNull);
       expect(splitCommandWords(''), isNull);
     });

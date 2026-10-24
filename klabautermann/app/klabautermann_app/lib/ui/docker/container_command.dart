@@ -140,6 +140,9 @@ class _ContainerCommandSheetState extends State<ContainerCommandSheet> {
         const SizedBox(height: 12),
         TextField(
           controller: _command,
+          onChanged: (_) {
+            if (_unparsed) setState(() => _unparsed = false);
+          },
           autocorrect: false,
           enableSuggestions: false,
           style: mono,
@@ -256,7 +259,11 @@ class _CommandResult extends StatelessWidget {
           Text(
             headline,
             style: theme.textTheme.titleSmall?.copyWith(
-              color: finished?.exitCode == 0 || end is RunInProgress
+              color:
+                  end is RunInProgress ||
+                      finished?.exitCode == 0 ||
+                      (finished?.exitCode == null &&
+                          finished?.outcome == ActionOutcome.succeeded)
                   ? null
                   : theme.colorScheme.error,
             ),

@@ -198,6 +198,21 @@ void main() {
     expect(find.text('Output'), findsNothing);
   });
 
+  testWidgets('a run that succeeded without an exit code is not shown as '
+      'an error', (tester) async {
+    await pumpSheet(tester);
+    await run(tester, 'true');
+    engine.emit(
+      const ActionFinished(planId: 'plan-1', outcome: ActionOutcome.succeeded),
+    );
+    await _settle(tester);
+    final headline = tester.widget<Text>(find.text('Done: web-db'));
+    final error = Theme.of(
+      tester.element(find.byType(ContainerCommandSheet)),
+    ).colorScheme.error;
+    expect(headline.style?.color, isNot(error));
+  });
+
   testWidgets('an open quote or an empty field plans nothing', (tester) async {
     await pumpSheet(tester);
     await tester.enterText(find.byType(TextField).first, "echo 'open");
@@ -206,6 +221,13 @@ void main() {
     expect(
       find.text('Enter a command, and close any open quote.'),
       findsOneWidget,
+    );
+    // Typing takes the complaint away until the next Run.
+    await tester.enterText(find.byType(TextField).first, "echo 'open'");
+    await tester.pump();
+    expect(
+      find.text('Enter a command, and close any open quote.'),
+      findsNothing,
     );
 
     await tester.enterText(find.byType(TextField).first, '   ');
