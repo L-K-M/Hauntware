@@ -96,39 +96,31 @@ jobs:
                       finally:
                           os.close(directory)
           PY
-      - name: Build twice with the production ZFS staging helper
+      - name: Inspect namespace policy
         shell: bash
         run: |
-          base="$(mktemp -d /tmp/hauntware-sdk-probe-XXXXXX)"
-          target="$(mktemp -d "$RUNNER_TOOL_CACHE/hauntware-sdk-copy-XXXXXX")"
-          trap 'rm -rf "$base" "$target"' EXIT
-          export RUNNER_TOOL_CACHE="$target"
-          export FLATPAK_USER_DIR="$target/flatpak-user"
-          export PROBE_MANIFEST="$base/manifest.yml"
           python3 - <<'PY'
           import os
           import pathlib
-          import shutil
+          import subprocess
 
-          stage = pathlib.Path(os.environ["RUNNER_TOOL_CACHE"], "work/stage")
-          stage.mkdir(parents=True)
-          shutil.copy2("/bin/true", stage / "hauntware_probe")
-          pathlib.Path(os.environ["PROBE_MANIFEST"]).write_text(f"""id: com.example.HauntwareProbe
-          runtime: org.gnome.Platform
-          runtime-version: '50'
-          sdk: org.gnome.Sdk
-          command: hauntware_probe
-          modules:
-            - name: probe
-              buildsystem: simple
-              sources:
-                - type: dir
-                  path: {stage}
-              build-commands:
-                - install -Dm755 hauntware_probe /app/bin/hauntware_probe
-          """)
+          print("Kernel:", os.uname().release, flush=True)
+          for name in (
+              "/sys/module/zfs/version",
+              "/proc/sys/user/max_user_namespaces",
+              "/proc/sys/kernel/unprivileged_userns_clone",
+              "/proc/sys/kernel/apparmor_restrict_unprivileged_userns",
+              "/proc/self/attr/current",
+          ):
+              path = pathlib.Path(name)
+              print(name, path.read_text().strip() if path.exists() else "absent", flush=True)
+          for line in pathlib.Path("/proc/self/status").read_text().splitlines():
+              if line.startswith(("Seccomp", "NoNewPrivs", "CapBnd")):
+                  print(line, flush=True)
+          for command in (
+              ["unshare", "--user", "--map-root-user", "/bin/true"],
+              ["sudo", "unshare", "--user", "--map-root-user", "/bin/true"],
+          ):
+              result = subprocess.run(command, text=True, capture_output=True, timeout=10)
+              print(command, "status:", result.returncode, "stderr:", result.stderr.strip(), flush=True)
           PY
-          die() { printf '%s\n' "$*" >&2; exit 1; }
-          source scripts/flatpak-repack.sh
-          time flatpak_build "$target/work" "$PROBE_MANIFEST" https://dl.flathub.org/repo/flathub.flatpakrepo
-          time flatpak_build "$target/work" "$PROBE_MANIFEST" https://dl.flathub.org/repo/flathub.flatpakrepo
