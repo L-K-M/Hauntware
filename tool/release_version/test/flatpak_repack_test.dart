@@ -191,6 +191,7 @@ void main() {
       String commandName = 'demo',
       String runtimeVersion = '50',
       String availableUpdates = '',
+      String updatesRequireFile = '',
       int dependencyExitCode = 0,
       int copyExitCode = 0,
       int updateQueryExitCode = 0,
@@ -210,7 +211,12 @@ set -euo pipefail
 die() { printf '%s\n' "$*" >&2; exit 1; }
 flatpak() {
   if [[ "$1" == remote-ls ]]; then
-    printf '%s' "$AVAILABLE_UPDATES"
+    for option in --user --all --updates --columns=ref; do
+      [[ " $* " == *" $option "* ]]
+    done
+    if [[ -z "$UPDATES_REQUIRE_FILE" || -f "$FLATPAK_USER_DIR/$UPDATES_REQUIRE_FILE" ]]; then
+      printf '%s' "$AVAILABLE_UPDATES"
+    fi
     return "$UPDATE_QUERY_EXIT_CODE"
   fi
   mkdir -p "$FLATPAK_USER_DIR"
@@ -280,6 +286,7 @@ flatpak_build "$2" "$3" https://example.test/flathub.flatpakrepo
           'COMMAND_NAME': commandName,
           'RUNTIME_VERSION': runtimeVersion,
           'AVAILABLE_UPDATES': availableUpdates,
+          'UPDATES_REQUIRE_FILE': updatesRequireFile,
           'DEPENDENCY_EXIT_CODE': '$dependencyExitCode',
           'COPY_EXIT_CODE': '$copyExitCode',
           'UPDATE_QUERY_EXIT_CODE': '$updateQueryExitCode',
@@ -407,8 +414,28 @@ flatpak_build "$2" "$3" https://example.test/flathub.flatpakrepo
         final result = await build(runtimeVersion: '51', revision: '2');
 
         expect(result.exitCode, 0, reason: result.stderr as String);
-        expect(result.stdout, 'deps:reuse\nflush\nbuild:cached\nsmoke\n');
+        expect(result.stdout, 'deps:fresh\nflush\nbuild:cached\nsmoke\n');
         expect(File(p.join(cache, 'runtime')).readAsStringSync(), '2');
+      },
+    );
+
+    test(
+      'retired dependency updates cannot disable the warm fast path',
+      () async {
+        expect((await build()).exitCode, 0);
+        final retiredSdk = File(p.join(cache, 'retired-sdk'))
+          ..writeAsStringSync('50');
+        expect((await build(runtimeVersion: '51')).exitCode, 0);
+        expect(retiredSdk.existsSync(), isFalse);
+
+        final result = await build(
+          runtimeVersion: '51',
+          availableUpdates: 'runtime/org.gnome.Platform/x86_64/50',
+          updatesRequireFile: 'retired-sdk',
+        );
+
+        expect(result.exitCode, 0, reason: result.stderr as String);
+        expect(result.stdout, 'build:cached\nsmoke\n');
       },
     );
 

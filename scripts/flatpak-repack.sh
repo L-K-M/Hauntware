@@ -94,6 +94,7 @@ flatpak_stage_deb() {
 _flatpak_stage_zfs_cache() (
   local manifest="$1" flathub_repo="$2"
   local cache="$FLATPAK_USER_DIR" scratch installation fingerprint updates
+  local cached_fingerprint=
   local -r marker_name=.hauntware-runtime-ready
 
   # App sources and permissions do not select installed runtime dependencies.
@@ -105,7 +106,10 @@ for key in ("id", "app-id", "command", "finish-args", "modules"):
 payload = json.dumps([sys.argv[1], manifest], sort_keys=True).encode()
 print(hashlib.sha256(payload).hexdigest())
 ' "$flathub_repo")"
-  if [[ -f "$cache/$marker_name" && "$(cat "$cache/$marker_name")" == "$fingerprint" ]]; then
+  if [[ -f "$cache/$marker_name" ]]; then
+    cached_fingerprint="$(cat "$cache/$marker_name")"
+  fi
+  if [[ "$cached_fingerprint" == "$fingerprint" ]]; then
     updates="$(flatpak remote-ls --user --all --updates --columns=ref flathub)"
     [[ -n "$updates" ]] || return 0
   fi
@@ -120,8 +124,8 @@ print(hashlib.sha256(payload).hexdigest())
   esac
 
   installation="$scratch/installation"
-  # An interrupted persistent copy is discarded, never reused as a snapshot.
-  if [[ -f "$cache/$marker_name" ]]; then
+  # Discard partial or different dependency sets so retired refs cannot linger.
+  if [[ "$cached_fingerprint" == "$fingerprint" ]]; then
     cp -a "$cache" "$installation"
     rm -f "$installation/$marker_name"
   fi
