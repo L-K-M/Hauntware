@@ -115,6 +115,29 @@ Future<void> openServerEditor(
   );
 }
 
+/// Copies [server] as a new synced server with a credential of its own,
+/// and says so; a refusal is told in a toast. The copy shows in the fleet
+/// once the engine sends it, before the answer.
+Future<void> duplicateServer(
+  BuildContext context,
+  ServerEditing editing,
+  FleetServer server,
+) async {
+  final l10n = AppLocalizations.of(context);
+  final overlay = Overlay.of(context, rootOverlay: true);
+  final String message;
+  try {
+    await editing.editor.duplicate(server.id);
+    message = l10n.serverDuplicated(server.displayName);
+  } on Object catch (error) {
+    if (overlay.mounted) {
+      showTopToast(overlay, message: serverEditFailureText(l10n, error));
+    }
+    return;
+  }
+  if (overlay.mounted) showTopToast(overlay, message: message);
+}
+
 /// Asks before deleting [server] from the account, naming it, then
 /// deletes it; a refusal is told in a toast.
 Future<void> confirmAndDeleteServer(

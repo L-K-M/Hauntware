@@ -17,8 +17,8 @@ final class ServerEditEngineStopped implements Exception {
 }
 
 /// In-app server editing over the engine (FL-03, M5 plan M09a): reads a
-/// synced server back as a draft, saves one, deletes one and tests a
-/// draft's connection (M09b). The engine
+/// synced server back as a draft, saves one, duplicates one, deletes one
+/// and tests a draft's connection (M09b). The engine
 /// plans the credential and seals the records; a round pushes them. One
 /// engine run's, like the fleet.
 ///
@@ -35,7 +35,7 @@ final class ServerEditorController {
 
   int _count = 0;
   final Map<String, Completer<ServerDraft?>> _reads = {};
-  final Map<String, Completer<bool>> _writes = {};
+  final Map<String, Completer<CatalogWritten>> _writes = {};
   final Map<String, Completer<ServerConnectionTested>> _tests = {};
   bool _stopped = false;
 
@@ -53,19 +53,29 @@ final class ServerEditorController {
   /// engine refuses it.
   Future<bool> save(ServerDraft draft, ServerCredentialEntry? credential) {
     final requestId = _nextId();
-    final answer = _writes[requestId] = Completer<bool>();
+    final answer = _writes[requestId] = Completer<CatalogWritten>();
     _send(
       SaveServer(requestId: requestId, draft: draft, credential: credential),
       requestId,
     );
-    return answer.future;
+    return answer.future.then((written) => written.credentialWritten);
+  }
+
+  /// Copies the synced server [serverId] as a new one with a credential of
+  /// its own, and completes with the copy's id. Throws [ServerEditRefused]
+  /// when the engine refuses it.
+  Future<String?> duplicate(String serverId) {
+    final requestId = _nextId();
+    final answer = _writes[requestId] = Completer<CatalogWritten>();
+    _send(DuplicateServer(requestId: requestId, serverId: serverId), requestId);
+    return answer.future.then((written) => written.serverId);
   }
 
   /// Deletes the synced server [serverId] from the account. Throws
   /// [ServerEditRefused] when the engine refuses it.
   Future<void> delete(String serverId) {
     final requestId = _nextId();
-    final answer = _writes[requestId] = Completer<bool>();
+    final answer = _writes[requestId] = Completer<CatalogWritten>();
     _send(DeleteServer(requestId: requestId, serverId: serverId), requestId);
     return answer.future;
   }
@@ -114,8 +124,8 @@ final class ServerEditorController {
     switch (event) {
       case ServerDraftRead(:final requestId, :final draft):
         _reads.remove(requestId)?.complete(draft);
-      case CatalogWritten(:final requestId, :final credentialWritten):
-        _writes.remove(requestId)?.complete(credentialWritten);
+      case CatalogWritten(:final requestId):
+        _writes.remove(requestId)?.complete(event);
       case CatalogWriteRefused(:final requestId, :final failure, :final detail):
         _writes
             .remove(requestId)
