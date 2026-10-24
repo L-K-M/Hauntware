@@ -64,25 +64,46 @@ jobs:
             --output /dev/null --silent --show-error \
             --write-out 'HTTP=%{http_code} bytes=%{size_download} bytes_per_second=%{speed_download} connect=%{time_connect}s first_byte=%{time_starttransfer}s total=%{time_total}s\n' \
             https://dl.flathub.org/repo/summary
-      - name: Trace RAM and disk installs
+      - name: Compare named and anonymous hard links
         if: always()
         shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y strace
-          for location in /tmp "$RUNNER_TOOL_CACHE" "$RUNNER_TEMP"; do
-            base="$(mktemp -d "$location/hauntware-flatpak-XXXXXX")"
-            trap 'rm -rf "$base"' EXIT
-            export FLATPAK_USER_DIR="$base/installation"
-            flatpak remote-add --user flathub https://flathub.org/repo/flathub.flatpakrepo
-            printf '\nStorage trace: %s\n' "$location"
-            set +e
-            time timeout --kill-after=10s 60s strace -f -w -c \
-              flatpak --verbose --ostree-verbose install \
-              --user --noninteractive --no-deps --no-related \
-              flathub runtime/org.freedesktop.Platform.codecs-extra/x86_64/25.08-extra
-            result=$?
-            set -e
-            printf 'Install result: location=%s status=%s\n' "$location" "$result"
-            rm -rf "$base"
-          done
+          timeout 90s python3 -u - <<'PY'
+          import os
+          import tempfile
+          import time
+
+          for location in ("/tmp", os.environ["RUNNER_TOOL_CACHE"]):
+              for size in (4096, 16 * 1024 * 1024):
+                  with tempfile.TemporaryDirectory(prefix="hauntware-link-probe-", dir=location) as work:
+                      directory = os.open(work, os.O_RDONLY | os.O_DIRECTORY)
+                      try:
+                          named = os.path.join(work, "named")
+                          with open(named, "wb") as stream:
+                              stream.write(b"x" * size)
+                          start = time.monotonic()
+                          os.link(named, "named-link", dst_dir_fd=directory)
+                          print(f"{location}: named link {size} bytes in {time.monotonic() - start:.6f}s", flush=True)
+
+                          anonymous = os.open(work, os.O_TMPFILE | os.O_WRONLY, 0o600)
+                          try:
+                              os.write(anonymous, b"x" * size)
+                              start = time.monotonic()
+                              os.link(f"/proc/self/fd/{anonymous}", "anonymous-link", dst_dir_fd=directory)
+                              print(f"{location}: anonymous link {size} bytes in {time.monotonic() - start:.6f}s", flush=True)
+                          finally:
+                              os.close(anonymous)
+                      finally:
+                          os.close(directory)
+          PY
+      - name: Install a cold SDK on tmpfs
+        shell: bash
+        run: |
+          base="$(mktemp -d /tmp/hauntware-sdk-probe-XXXXXX)"
+          trap 'rm -rf "$base"' EXIT
+          export FLATPAK_USER_DIR="$base/installation"
+          flatpak remote-add --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          time timeout --kill-after=10s 600s flatpak install --user --noninteractive \
+            --no-deps --no-related flathub runtime/org.gnome.Sdk/x86_64/50
+          flatpak info --user org.gnome.Sdk//50
+          du -sh "$FLATPAK_USER_DIR"
