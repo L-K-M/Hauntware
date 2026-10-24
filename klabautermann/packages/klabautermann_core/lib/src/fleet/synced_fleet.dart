@@ -87,6 +87,7 @@ final class SyncedFleet {
             },
             searchText: serverSearchHaystack(server),
             endpoint: states[server.id],
+            excludedFromSync: server.excludeFromSync,
           ),
       ]),
       byId,

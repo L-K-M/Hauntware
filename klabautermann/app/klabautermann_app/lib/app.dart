@@ -12,6 +12,7 @@ import 'package:klabautermann_core/klabautermann_core.dart'
 
 import 'controllers/admin_controller.dart';
 import 'controllers/announcement_controller.dart';
+import 'controllers/pin_publication_controller.dart';
 import 'controllers/safety_controller.dart';
 import 'controllers/appearance_controller.dart';
 import 'controllers/coverage_controller.dart';
@@ -21,6 +22,7 @@ import 'controllers/monitoring_controller.dart';
 import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
 import 'controllers/sync_controller.dart';
+import 'controllers/sync_secrets_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'services/hand_off.dart' show HandOffLauncher;
@@ -58,6 +60,8 @@ class KlabautermannApp extends StatelessWidget {
     required this.coverage,
     required this.announcements,
     this.safety,
+    this.syncSecrets,
+    this.pinPublication,
     this.admin,
     this.operations,
     required this.dockerNotice,
@@ -92,6 +96,15 @@ class KlabautermannApp extends StatelessWidget {
   /// safety out: Settings then shows its placeholder and the server header
   /// neither the Safety menu nor its notices.
   final SafetyController? safety;
+
+  /// The device's "sync passwords" switch (SYN-02); like [appearance], it
+  /// outlives an engine run. Null in tests that leave it out, where the
+  /// Sync settings tab is a placeholder.
+  final SyncSecretsController? syncSecrets;
+
+  /// The host key sharing assertion (M5 plan M07), one engine run's like
+  /// [sync]; null in tests that leave it out.
+  final PinPublicationController? pinPublication;
 
   /// Admin mode per server (03 §8.2), one engine run's like [fleet]. Null
   /// in tests that leave it out, where the header shows no admin chip.
@@ -255,6 +268,12 @@ class KlabautermannApp extends StatelessWidget {
             // its dialogs come up over Settings too.
             child: PromptHost(
               prompts: prompts,
+              labelOf: (serverId) =>
+                  fleet.servers
+                      .where((server) => server.id == serverId)
+                      .firstOrNull
+                      ?.displayName ??
+                  serverId,
               child: _withResultToasts(
                 Builder(
                   builder: (context) {
@@ -289,6 +308,8 @@ class KlabautermannApp extends StatelessWidget {
               appVersion: appVersion,
               monitorSet: fleet.monitorSettings,
               safety: safety,
+              syncSecrets: syncSecrets,
+              pinPublication: pinPublication,
             ),
           },
         );

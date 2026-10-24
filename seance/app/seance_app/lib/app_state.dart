@@ -1352,6 +1352,18 @@ class AppState extends ChangeNotifier {
   /// (⌘T, the tab strip's "+", the macOS New Tab item) pass the config an
   /// open tab connected with, which predates any edit made since.
   Future<void> newTab(ServerConfig config) async {
+    await _connect(_addTerminalTab(config));
+  }
+
+  /// [newTab] for a caller that follows the tab it opened (a link's starting
+  /// folder): returns the tab at once, connecting.
+  TerminalSession openTerminalTab(ServerConfig config) {
+    final tab = _addTerminalTab(config);
+    unawaited(_connect(tab));
+    return tab;
+  }
+
+  TerminalSession _addTerminalTab(ServerConfig config) {
     config = _configFor(config.id) ?? config;
     final id = uuidV4();
     final tab = TerminalSession(
@@ -1367,7 +1379,7 @@ class AppState extends ChangeNotifier {
     // The tab is `connecting` from here on — the anchor must be up before the
     // handshake starts, not after it finishes.
     _refreshKeepAlive();
-    await _connect(tab);
+    return tab;
   }
 
   /// Open another terminal beside [tab], of whatever kind it is. The

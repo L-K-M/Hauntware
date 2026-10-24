@@ -2419,19 +2419,12 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${config.username}@${config.host}'",
   },
   'lib/ui/server_editor.dart': {
-    // Controller seeds and fallbacks (empty strings and the loaded port)
-    // and error interpolations handed to ARB strings — machinery, not
-    // copy.
-    "''",
-    r"'${e?.port ?? 22}'",
+    // The error interpolation handed to ARB strings — machinery, not copy.
     r"'$error'",
-    r"'$e'",
     // D37's override menu: its key, and the fixed counts, which are bare
     // numbers rather than copy.
     "'serverEditor.transferLimit'",
     r"'$files'",
-    // The start folder field's key.
-    "'serverEditor.startDirectory'",
   },
   // D32 §11's platform integration: Dock progress diagnostics and the
   // file-manager reveal's process arguments (never user-facing copy).

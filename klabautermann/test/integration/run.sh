@@ -114,6 +114,36 @@ wait_for_sshd() {
   return 1
 }
 
+# The sync service's published address, which must be loopback.
+sync_address() {
+  local address
+  address="$(compose port sync 8787)"
+  if [[ "$address" != 127.0.0.1:* ]]; then
+    echo "unsafe published address for sync: $address" >&2
+    return 1
+  fi
+  echo "$address"
+}
+
+# Ready once the sync server answers HTTP: an unknown user's prelogin is
+# refused, which proves the server is up without making an account.
+wait_for_sync() {
+  local address attempt
+  address="$(sync_address)"
+  for ((attempt = 0; attempt < ready_attempts; attempt++)); do
+    if curl --silent --max-time 2 --output /dev/null \
+      --write-out '%{http_code}' -X POST \
+      -H 'content-type: application/json' \
+      --data '{"username":"klabautermann-readiness"}' \
+      "http://$address/v1/prelogin" | grep -q '^[1-4]'; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "sync on $address did not become ready" >&2
+  return 1
+}
+
 fingerprint() {
   ssh-keygen -lf "$1" | cut -d ' ' -f 2
 }
@@ -287,6 +317,7 @@ for service in "${services[@]}"; do
 done
 docker_port="$(published_port docker-sshd)"
 seed_docker_host
+wait_for_sync
 
 export KLABAUTERMANN_FIXTURE_COMPOSE_FILE="$compose_file"
 export KLABAUTERMANN_FIXTURE_COMPOSE_PROJECT="$compose_project"
@@ -302,6 +333,9 @@ export KLABAUTERMANN_FIXTURE_PORT KLABAUTERMANN_FIXTURE_JUMP_PORT \
   KLABAUTERMANN_FIXTURE_AGENT_FINGERPRINT
 export KLABAUTERMANN_FIXTURE_USER="$fixture_user"
 export KLABAUTERMANN_FIXTURE_IDENTITY_FILE="$runtime_dir/identity"
+# Assigned first: export would hide a failed lookup's status.
+sync_server="http://$(sync_address)"
+export KLABAUTERMANN_SYNC_SERVER="$sync_server"
 
 reporter=(--reporter expanded)
 if [[ -n "$evidence_dir" ]]; then

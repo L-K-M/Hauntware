@@ -17,6 +17,8 @@ import 'package:seance_core/seance_core.dart'
         KeyboardInteractiveChallenge,
         KeyboardInteractiveResponder,
         ResolvedSshHost,
+        Secret,
+        SecretKind,
         ServerConfig,
         SshConnectException,
         SshConnectFailureKind,
@@ -50,6 +52,7 @@ ServerConfig _server({
   AuthMethod authMethod = AuthMethod.agent,
   String? identityFilePath,
   String? jumpHostId,
+  String? secretRef,
 }) => ServerConfig(
   id: id,
   label: id,
@@ -59,6 +62,7 @@ ServerConfig _server({
   authMethod: authMethod,
   identityFilePath: identityFilePath,
   jumpHostId: jumpHostId,
+  secretRef: secretRef,
   createdAt: 0,
   updatedAt: 0,
 );
@@ -101,6 +105,11 @@ void main() {
   late Map<String, ServerConfig> hops;
   late PromptBroker broker;
 
+  // The vault the connector reads and saves through.
+  late Map<String, Secret> vault;
+  late List<Secret> saved;
+  late bool saveFails;
+
   setUp(() async {
     temp = await Directory.systemTemp.createTemp('klab-connector-');
     events = [];
@@ -109,6 +118,9 @@ void main() {
     onDial = (_) async => _FakeLink();
     hops = {};
     broker = PromptBroker(emit: events.add);
+    vault = {};
+    saved = [];
+    saveFails = false;
   });
 
   tearDown(() => temp.delete(recursive: true));
@@ -117,15 +129,23 @@ void main() {
     bool realDial = false,
     ServerConfig? Function(String id)? hopConfig,
     Map<String, String> environment = const {},
+    bool canSave = true,
   }) => LinkConnector(
     credentials: EngineCredentialSource(
       identityAuditLogIn(temp.path),
+      vault: (ref) async => vault[ref],
       environment: {'HOME': temp.path, ...environment},
       isMacOS: false,
     ),
     hostKeys: pins,
     prompts: broker,
     hopConfig: hopConfig ?? (id) => hops[id],
+    saveSecret: canSave
+        ? (secret) async {
+            if (saveFails) throw const FileSystemException('disk full');
+            saved.add(secret);
+          }
+        : null,
     dial: realDial
         ? SshLink.connect
         : ({
@@ -158,14 +178,20 @@ void main() {
     void Function(LinkStatus phase)? onPhase,
     void Function()? onDialing,
     Future<void>? abandoned,
-  }) => connector(realDial: realDial, environment: environment).connect(
-    server ?? _server(),
-    purpose: purpose,
-    changedKey: changedKey,
-    onPhase: onPhase,
-    onDialing: onDialing,
-    abandoned: abandoned,
-  );
+    bool canSave = true,
+  }) =>
+      connector(
+        realDial: realDial,
+        environment: environment,
+        canSave: canSave,
+      ).connect(
+        server ?? _server(),
+        purpose: purpose,
+        changedKey: changedKey,
+        onPhase: onPhase,
+        onDialing: onDialing,
+        abandoned: abandoned,
+      );
 
   /// Dials that present [key] as `SshLink.connect` does (seance_core's
   /// `_verifyHostKey`): a pinned key passes, any other asks, an approved
@@ -621,6 +647,126 @@ void main() {
     });
   });
 
+  group('a password the vault lacks (03 §4.5)', () {
+    final passwordServer = _server(
+      authMethod: AuthMethod.password,
+      secretRef: 'secret-web',
+    );
+
+    test('is asked for on an interactive connect, dialed, and saved when '
+        'the user says so', () async {
+      final result = connect(
+        server: passwordServer,
+        purpose: ConnectPurpose.interactive,
+      );
+      final prompt = await answerNext(
+        const PromptSecretAnswer('hunter2', save: true),
+      );
+
+      expect(await result, isA<LinkConnected>());
+      final request = prompt.request as CredentialPromptRequest;
+      expect((request.user, request.canSave), ('me', true));
+      expect(dials.single.credentials.password, 'hunter2');
+      expect(saved.single.id, 'secret-web');
+      expect(saved.single.kind, SecretKind.password);
+      expect(saved.single.value, 'hunter2');
+    });
+
+    test('is not saved unless the user says so', () async {
+      final result = connect(
+        server: passwordServer,
+        purpose: ConnectPurpose.interactive,
+      );
+      await answerNext(const PromptSecretAnswer('hunter2'));
+
+      expect(await result, isA<LinkConnected>());
+      expect(saved, isEmpty);
+    });
+
+    test('is not saved when the server refuses it', () async {
+      onDial = (_) async => throw _connectError(
+        Exception('auth'),
+        kind: SshConnectFailureKind.authenticationRejected,
+      );
+      final result = connect(
+        server: passwordServer,
+        purpose: ConnectPurpose.interactive,
+      );
+      await answerNext(const PromptSecretAnswer('wrong', save: true));
+
+      expect(_failure(await result), LinkFailureKind.authenticationRejected);
+      expect(saved, isEmpty);
+    });
+
+    test('a save that fails leaves the link standing', () async {
+      saveFails = true;
+      final result = connect(
+        server: passwordServer,
+        purpose: ConnectPurpose.interactive,
+      );
+      await answerNext(const PromptSecretAnswer('hunter2', save: true));
+
+      expect(await result, isA<LinkConnected>());
+    });
+
+    test('offers no save for a server that names no vault entry, or '
+        'without a vault to save to', () async {
+      for (final (server, canSave) in [
+        (_server(authMethod: AuthMethod.password), true),
+        (passwordServer, false),
+      ]) {
+        final result = connect(
+          server: server,
+          purpose: ConnectPurpose.interactive,
+          canSave: canSave,
+        );
+        final prompt = await answerNext(
+          const PromptSecretAnswer('hunter2', save: true),
+        );
+
+        expect(await result, isA<LinkConnected>());
+        expect((prompt.request as CredentialPromptRequest).canSave, isFalse);
+      }
+      expect(saved, isEmpty);
+    });
+
+    test('a stored password answers without a prompt', () async {
+      vault['secret-web'] = const Secret(
+        id: 'secret-web',
+        kind: SecretKind.password,
+        value: 'stored',
+      );
+
+      final result = await connect(
+        server: passwordServer,
+        purpose: ConnectPurpose.interactive,
+      );
+
+      expect(result, isA<LinkConnected>());
+      expect(events.whereType<Prompt>(), isEmpty);
+      expect(dials.single.credentials.password, 'stored');
+    });
+
+    test('a background connect never asks', () async {
+      final result = await connect(server: passwordServer);
+
+      expect(_failure(result), LinkFailureKind.credentialUnavailable);
+      expect(events.whereType<Prompt>(), isEmpty);
+      expect(dials, isEmpty);
+    });
+
+    test('a dismissed prompt fails before dialing', () async {
+      final result = connect(
+        server: passwordServer,
+        purpose: ConnectPurpose.interactive,
+      );
+      await answerNext(const PromptSecretAnswer(null));
+
+      expect(_failure(await result), LinkFailureKind.credentialUnavailable);
+      expect(dials, isEmpty);
+    });
+  });
+
   group('credentials', () {
     test('a key that cannot be read fails before dialing', () async {
       final result = await connect(
@@ -830,6 +976,10 @@ Host gw
           LinkFailureKind.unreachable,
         ),
         SshConnectFailureKind.timedOut: (refused, LinkFailureKind.timedOut),
+        SshConnectFailureKind.closedBeforeKeyExchange: (
+          Exception('transport closed'),
+          LinkFailureKind.unreachable,
+        ),
         SshConnectFailureKind.routeInvalid: (refused, null),
         SshConnectFailureKind.keyPassphraseRequired: (
           refused,

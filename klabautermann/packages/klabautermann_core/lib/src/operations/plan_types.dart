@@ -3,6 +3,8 @@
 // writes from 8.11, who runs the steps, and the typed facts the app words
 // itself (D35). Engine-side plans (operation_plan.dart) are built from
 // these, so the preview and the executed steps are one object.
+import 'dart:convert';
+
 import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
 import 'package:meta/meta.dart';
 import 'package:seance_core/seance_core.dart' show quoteShellWord;
@@ -22,21 +24,46 @@ sealed class PlanStep {
 
 /// A shell command, [argv] quoted word by word into [commandLine] under
 /// the C locale, the line the login shell (or, when [elevated], the
-/// elevation prelude) runs.
+/// elevation prelude) runs. [input], an edit's new content, goes to the
+/// command's stdin (after the password line when elevated); the preview
+/// shows its size, not the text, which the app's diff shows.
 final class ShellStep extends PlanStep {
   ShellStep(
     Iterable<String> argv, {
     this.elevated = false,
     this.discardOutput = false,
+    this.captureOutput = false,
+    Iterable<String>? shownArgv,
+    List<int>? input,
     Map<int, RevalidationFailure> exitMeanings = const {},
   }) : argv = List.unmodifiable(argv),
+       shownArgv = List.unmodifiable(shownArgv ?? argv),
+       input = input == null ? null : List.unmodifiable(input),
        exitMeanings = Map.unmodifiable(exitMeanings),
        commandLine =
            HostCommands.commandLine(List.of(argv), quote: quoteShellWord) +
+           (discardOutput ? _discarded : ''),
+       _shownLine =
+           HostCommands.commandLine(
+             List.of(shownArgv ?? argv),
+             quote: quoteShellWord,
+           ) +
            (discardOutput ? _discarded : '');
 
   final List<String> argv;
   final String commandLine;
+
+  /// [argv] as the preview, the linter and the audit show it: the same
+  /// words, with what 8.9 masks masked, as for a cron line's command.
+  final List<String> shownArgv;
+  final String _shownLine;
+
+  /// The runner keeps what the step printed, redacted and capped, for
+  /// [ActionFinished.output] (JOB-19).
+  final bool captureOutput;
+
+  /// What the command reads on stdin, or null for nothing.
+  final List<int>? input;
 
   /// The step's output goes to `/dev/null`, so only its exit status is
   /// read: `config -q`'s errors can quote interpolated secrets (STK-06).
@@ -51,7 +78,12 @@ final class ShellStep extends PlanStep {
   final Map<int, RevalidationFailure> exitMeanings;
 
   @override
-  String get display => elevated ? 'sudo: $commandLine' : commandLine;
+  String get display {
+    final line = elevated ? 'sudo: $_shownLine' : _shownLine;
+    final bytes = input?.length;
+    if (bytes == null) return line;
+    return '$line < new content ($bytes ${bytes == 1 ? 'byte' : 'bytes'})';
+  }
 }
 
 const _discarded = ' >/dev/null 2>&1';
@@ -73,6 +105,30 @@ final class ApiStep extends PlanStep {
   String get display => query.isEmpty
       ? '$method $path'
       : '$method $path?${Uri(queryParameters: query).query}';
+}
+
+/// A one-off command in a container (CTX-08): `POST
+/// /containers/{id}/exec` with [argv] and [user] at [path], then the
+/// exec's start, whose output the runner captures.
+final class ExecStep extends PlanStep {
+  ExecStep({
+    required this.path,
+    required this.containerId,
+    required Iterable<String> argv,
+    this.user,
+  }) : argv = List.unmodifiable(argv);
+
+  /// The create request's versioned path.
+  final String path;
+  final String containerId;
+  final List<String> argv;
+  final String? user;
+
+  /// The create request and its body, as the API sends them.
+  @override
+  String get display =>
+      'POST $path '
+      '${jsonEncode({'Cmd': argv, if (user != null) 'User': user, 'Tty': false})}';
 }
 
 /// What a plan needs of the session (03 §8.2): the login user's own
@@ -97,6 +153,24 @@ enum HostWriteRow {
 
   /// wtmp, lastlog and the auth log, from the SSH connection itself.
   loginRecords,
+
+  /// The edited file or crontab itself (v1, SAF-12).
+  editTarget,
+
+  /// `.<name>.klabautermann-tmp-<token>` beside the target, renamed over
+  /// it or removed (v1).
+  editTempFile,
+
+  /// `~/.local/state/klabautermann/backups/` and its index (v1).
+  userBackups,
+
+  /// `/var/lib/klabautermann/backups/`, root 0700, and its index (v1).
+  rootBackups,
+
+  /// `~/.config/klabautermann/manifest.json` or
+  /// `/etc/klabautermann/manifest.json`, written with the first backup
+  /// (v1, SAF-14).
+  footprintManifest,
 }
 
 /// How the steps reach their target.
@@ -145,6 +219,11 @@ enum PlanWarning {
   /// A `setsid` operation, which logind ends at logout under
   /// `KillUserProcesses=yes` (03 §7.17).
   mayDieAtLogout,
+
+  /// A unit file the host's systemd cannot check before the rename:
+  /// `systemd-analyze verify` reads a temp copy as the unit only from
+  /// systemd 250 (03 §8.5).
+  unitNotVerified,
 }
 
 /// The consequence a plan's impact line names (03 §8.6); the app words

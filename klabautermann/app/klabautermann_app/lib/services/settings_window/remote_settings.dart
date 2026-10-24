@@ -9,7 +9,9 @@ import 'package:ghost_theme/ghost_theme.dart';
 import '../../controllers/announcement_controller.dart';
 import '../../controllers/appearance_controller.dart';
 import '../../controllers/monitor_set.dart';
+import '../../controllers/pin_publication_controller.dart';
 import '../../controllers/safety_controller.dart';
+import '../../controllers/sync_secrets_controller.dart';
 import '../stored_safety.dart';
 import '../../theme/app_theme.dart';
 import 'settings_window_link.dart';
@@ -51,6 +53,16 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
         invoke(SettingsLinkMethod.setAnnounceThresholdBands.name, announce),
   );
 
+  /// The Sync tab's "sync passwords" switch, from the latest snapshot.
+  late final RemoteSyncSecrets syncSecrets = RemoteSyncSecrets._(
+    (enabled) => invoke(SettingsLinkMethod.setSyncSecrets.name, enabled),
+  );
+
+  /// The Sync tab's host key sharing switch, from the latest snapshot.
+  late final RemotePinPublication pinPublication = RemotePinPublication._(
+    (asserted) => invoke(SettingsLinkMethod.setPinPublication.name, asserted),
+  );
+
   /// The app's version for the about row, from the latest snapshot; null
   /// when the app could not tell.
   String? get appVersion => _appVersion;
@@ -81,6 +93,12 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     announcements._apply(
       snapshot[SettingsLinkKey.announceThresholdBands.name]! as bool,
     );
+    syncSecrets._apply(snapshot[SettingsLinkKey.syncSecrets.name]! as bool);
+    pinPublication._apply(
+      decodePinPublication(
+        snapshot[SettingsLinkKey.pinPublication.name] as Map<Object?, Object?>?,
+      ),
+    );
     monitorSet._apply(
       decodeMonitorCandidates(
         snapshot[SettingsLinkKey.monitorSet.name]! as List<Object?>,
@@ -98,6 +116,8 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
   void dispose() {
     appearance.dispose();
     announcements.dispose();
+    syncSecrets.dispose();
+    pinPublication.dispose();
     monitorSet.dispose();
     safety.dispose();
     super.dispose();
@@ -127,6 +147,58 @@ final class RemoteAnnouncements extends ChangeNotifier
   @override
   Future<void> setAnnounceThresholdBands(bool announce) async {
     await _call(announce);
+  }
+}
+
+/// [SyncSecretsSettings] over the link: the app's switch as the latest
+/// snapshot carries it, and changes that run in the app's isolate.
+final class RemoteSyncSecrets extends ChangeNotifier
+    implements SyncSecretsSettings {
+  RemoteSyncSecrets._(this._call);
+
+  final Future<Object?> Function(bool enabled) _call;
+
+  // The app's default until the first snapshot, which comes with hello.
+  bool _value = false;
+
+  void _apply(bool enabled) {
+    if (enabled == _value) return;
+    _value = enabled;
+    notifyListeners();
+  }
+
+  @override
+  bool get value => _value;
+
+  @override
+  Future<void> setSyncSecrets(bool enabled) async {
+    await _call(enabled);
+  }
+}
+
+/// [PinPublicationSettings] over the link: the app's state as the latest
+/// snapshot carries it, and changes that run in the app's isolate.
+final class RemotePinPublication extends ChangeNotifier
+    implements PinPublicationSettings {
+  RemotePinPublication._(this._call);
+
+  final Future<Object?> Function(bool asserted) _call;
+
+  // None offered until the first snapshot, which comes with hello.
+  PinPublication _value = const PinPublication();
+
+  void _apply(PinPublication value) {
+    if (value == _value) return;
+    _value = value;
+    notifyListeners();
+  }
+
+  @override
+  PinPublication get value => _value;
+
+  @override
+  Future<void> setAsserted(bool asserted) async {
+    await _call(asserted);
   }
 }
 

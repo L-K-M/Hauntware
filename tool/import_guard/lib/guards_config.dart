@@ -23,6 +23,7 @@ final class ProductGuard {
     required this.importExemptions,
     required this.noDartIo,
     required this.forbiddenDependencies,
+    required this.allowedDependencies,
     required this.seanceCoreImplementationImports,
     required this.standaloneResolutions,
     required this.engineProtocol,
@@ -61,6 +62,11 @@ final class ProductGuard {
   /// must not depend on directly or transitively. Every matching key's
   /// list applies.
   final Map<String, List<String>> forbiddenDependencies;
+
+  /// A map from a package name to the package names or globs it may
+  /// declare at runtime (`dependencies`, `dependency_overrides`) and
+  /// import from `lib/`. Development dependencies are not limited.
+  final Map<String, List<String>> allowedDependencies;
 
   /// Directories allowed to import `package:seance_core/src/...`; every
   /// other file in the product that does is a violation.
@@ -125,6 +131,11 @@ final class ProductGuard {
     }
     return patterns;
   }
+
+  /// The patterns [packageName] may depend on, or null when it has no
+  /// allowlist.
+  Set<String>? allowedDependenciesFor(String packageName) =>
+      allowedDependencies[packageName]?.toSet();
 }
 
 /// Whether the package [name] matches [pattern], where `*` matches any
@@ -210,6 +221,7 @@ const _optionalProductKeys = {
   'import_exemptions',
   'no_dart_io',
   'forbidden_dependencies',
+  'allowed_dependencies',
   'seance_core_implementation_imports',
 };
 const _productKeys = {..._requiredProductKeys, ..._optionalProductKeys};
@@ -269,6 +281,10 @@ ProductGuard _parseProduct(String name, Object? value, String source) {
       map['forbidden_dependencies'],
       '$label.forbidden_dependencies',
     ),
+    allowedDependencies: _allowedDependencies(
+      map['allowed_dependencies'],
+      '$label.allowed_dependencies',
+    ),
     seanceCoreImplementationImports: _pathList(
       map['seance_core_implementation_imports'],
       '$label.seance_core_implementation_imports',
@@ -302,6 +318,19 @@ Map<String, List<String>> _forbiddenDependencies(Object? value, String label) {
     result[key] = patterns;
   }
   return result;
+}
+
+/// `allowed_dependencies` is a map from a package name to the package
+/// names or globs it may depend on. Keys are exact names: two globs
+/// matching one package would leave its allowlist ambiguous.
+Map<String, List<String>> _allowedDependencies(Object? value, String label) {
+  final patterns = _forbiddenDependencies(value, label);
+  for (final key in patterns.keys) {
+    if (key.contains('*')) {
+      throw FormatException('$label: "$key" must be a package name');
+    }
+  }
+  return patterns;
 }
 
 /// Package patterns are `[A-Za-z0-9_]` with an optional `*` wildcard, and

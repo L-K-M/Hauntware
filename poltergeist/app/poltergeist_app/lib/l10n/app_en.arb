@@ -230,18 +230,6 @@
   "@connectionDisconnectedTitle": {
     "description": "Heading of the disconnected view."
   },
-  "connectionLogTitle": "Connection log",
-  "@connectionLogTitle": {
-    "description": "Header of the collapsible live transcript."
-  },
-  "connectionLogCopy": "Copy",
-  "@connectionLogCopy": {
-    "description": "Copies the transcript to the clipboard."
-  },
-  "connectionLogEmpty": "(no log captured)",
-  "@connectionLogEmpty": {
-    "description": "Placeholder when no transcript lines arrived."
-  },
   "connectionRetry": "Retry",
   "@connectionRetry": {
     "description": "Reopens the connection after a failure."

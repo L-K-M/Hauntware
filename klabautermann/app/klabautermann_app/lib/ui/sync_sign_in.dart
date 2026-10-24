@@ -107,6 +107,10 @@ class _SyncSignInDialogState extends State<SyncSignInDialog> {
 
   _Step _step = _Step.account;
   bool _fleetAsserted = false;
+
+  /// The optional host key assertion (M5 plan M07), offered only while the
+  /// engine names a release.
+  bool _pinsAsserted = false;
   bool _busy = false;
   String? _error;
 
@@ -157,6 +161,19 @@ class _SyncSignInDialogState extends State<SyncSignInDialog> {
       });
       return;
     }
+    final pins = widget.sync.pinPublication;
+    var pinsFailed = false;
+    if (_pinsAsserted && pins != null) {
+      // After the sign-in, which the assertion does not hold up: a failed
+      // one is said once, and Settings > Sync offers it again.
+      try {
+        await pins.setAsserted(true);
+      } on Exception catch (error) {
+        debugPrint('$error');
+        pinsFailed = true;
+      }
+      if (!mounted) return;
+    }
     Navigator.of(context).pop();
     showTopToast(
       overlay,
@@ -164,6 +181,9 @@ class _SyncSignInDialogState extends State<SyncSignInDialog> {
           ? l10n.syncPassphraseUnverified
           : l10n.syncSignedIn,
     );
+    if (pinsFailed) {
+      showTopToast(overlay, message: l10n.settingsPinPublicationNotChanged);
+    }
   }
 
   @override
@@ -280,10 +300,21 @@ class _SyncSignInDialogState extends State<SyncSignInDialog> {
       title: Text(l10n.syncFleetAssertion),
       subtitle: Text(l10n.syncFleetAssertionDetail),
     ),
+    if (widget.sync.pinPublication?.value.release case final release?)
+      CheckboxListTile(
+        value: _pinsAsserted,
+        onChanged: _busy
+            ? null
+            : (value) => setState(() => _pinsAsserted = value ?? false),
+        contentPadding: EdgeInsets.zero,
+        controlAffinity: ListTileControlAffinity.leading,
+        title: Text(l10n.syncPinPublicationAssertion(release)),
+        subtitle: Text(l10n.syncPinPublicationAssertionDetail),
+      ),
     const SizedBox(height: 8),
     Text(l10n.syncDisclosureAccountKey),
     const SizedBox(height: 8),
-    Text(l10n.syncDisclosurePullOnly),
+    Text(l10n.syncDisclosure),
     if (_busy) ...[const SizedBox(height: 16), const LinearProgressIndicator()],
   ];
 }
