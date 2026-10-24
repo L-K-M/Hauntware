@@ -224,6 +224,14 @@ void main() {
       ),
       findsOneWidget,
     );
+    // It wraps rather than clipping its last words.
+    expect(
+      tester
+          .widget<TextField>(find.byType(TextField).first)
+          .decoration
+          ?.errorMaxLines,
+      3,
+    );
     // Typing takes the complaint away until the next Run.
     await tester.enterText(find.byType(TextField).first, "echo 'open'");
     await tester.pump();

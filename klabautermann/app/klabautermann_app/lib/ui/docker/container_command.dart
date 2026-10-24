@@ -150,6 +150,7 @@ class _ContainerCommandSheetState extends State<ContainerCommandSheet> {
             labelText: l10n.dockerCommandLabel,
             helperText: l10n.dockerCommandHelper,
             helperMaxLines: 3,
+            errorMaxLines: 3,
             errorText: _unparsed ? l10n.dockerCommandUnparsed : null,
             border: const OutlineInputBorder(),
           ),
@@ -251,12 +252,13 @@ class _CommandResult extends StatelessWidget {
       ],
     );
 
-    return Semantics(
-      liveRegion: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Only the outcome is announced, not the output under it.
+        Semantics(
+          liveRegion: true,
+          child: Text(
             headline,
             style: theme.textTheme.titleSmall?.copyWith(
               color:
@@ -268,27 +270,27 @@ class _CommandResult extends StatelessWidget {
                   : theme.colorScheme.error,
             ),
           ),
-          if (output != null) ...[
-            if (output.stdout.isEmpty && output.stderr.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(l10n.dockerCommandNoOutput),
+        ),
+        if (output != null) ...[
+          if (output.stdout.isEmpty && output.stderr.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(l10n.dockerCommandNoOutput),
+            ),
+          if (output.stdout.isNotEmpty)
+            block(l10n.dockerCommandStdout, output.stdout),
+          if (output.stderr.isNotEmpty)
+            block(l10n.dockerCommandStderr, output.stderr),
+          if (output.truncated)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                l10n.dockerCommandTruncated,
+                style: theme.textTheme.bodySmall,
               ),
-            if (output.stdout.isNotEmpty)
-              block(l10n.dockerCommandStdout, output.stdout),
-            if (output.stderr.isNotEmpty)
-              block(l10n.dockerCommandStderr, output.stderr),
-            if (output.truncated)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  l10n.dockerCommandTruncated,
-                  style: theme.textTheme.bodySmall,
-                ),
-              ),
-          ],
+            ),
         ],
-      ),
+      ],
     );
   }
 }
