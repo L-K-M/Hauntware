@@ -1,0 +1,25 @@
+name: ghost_marks_picker
+description: >-
+  The platform image picker behind ghost_marks' mark picker for Seance and
+  Poltergeist, over file_picker. Kept out of ghost_marks so an app on
+  another picker, or on a win32 major file_picker 11 cannot share, takes
+  the shared appearance without it.
+version: 1.9.2
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+  flutter: '>=3.47.2'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  file_picker: ^11.0.2
+  # The badge image extensions the desktop picker offers.
+  ghost_ui:
+    path: ../ghost_ui
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

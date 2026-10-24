@@ -20,6 +20,7 @@ import 'dart:math' show min;
 import 'package:seance_protocol/seance_protocol.dart';
 
 import '../store/stores.dart';
+import '../sync/push_batcher.dart';
 import '../sync/sync_engine.dart';
 import 'catalog_controller.dart';
 import 'catalog_snapshot.dart';
@@ -90,6 +91,7 @@ final class SyncRoundResult {
     required this.report,
     required this.pushesHeld,
     required this.authFailed,
+    this.refusedIds = const [],
   });
 
   final int pulled;
@@ -106,6 +108,10 @@ final class SyncRoundResult {
   /// durable notice is raised on the enrollment state; there is no token
   /// refresh because server-side tokens never expire.
   final bool authFailed;
+
+  /// Records the server refused as too large to store (413), each sent
+  /// alone: they stay dirty, and every later round offers them again.
+  final List<String> refusedIds;
 }
 
 /// The id classes 04 §4.5's passphrase trial and deferred foreign-record
@@ -146,6 +152,10 @@ const _genericHandlerTraits = [
     trialDecryptable: SecretHandler.opensInTrial,
   ),
 ];
+
+/// The sync server's error code for a push it refuses as too large to
+/// store (`SyncEngine` answers the same code).
+const String _payloadTooLarge = 'payload_too_large';
 
 /// See the library doc. The coordinator never owns transport: [runRound]
 /// takes the [SyncApi] seam per call and tests fake it.
@@ -598,11 +608,16 @@ final class RecordCoordinator {
     var pushed = 0;
     var rounds = 0;
     var authFailed = false;
+    final refused = <String>{};
+    var limits = const PushLimits();
+    rounds:
     while (rounds < _maxRounds) {
       rounds++;
       final int roundPulled;
       try {
-        roundPulled = await _pullOnce(api);
+        final pull = await _pullOnce(api);
+        roundPulled = pull.pulled;
+        limits = pull.limits ?? limits;
       } on ApiError catch (error) {
         if (error.code != 'unauthorized') rethrow;
         authFailed = true;
@@ -613,17 +628,29 @@ final class RecordCoordinator {
       pulled += roundPulled;
       var progressed = roundPulled > 0;
       if (!_pullOnly && !await _pushesHeld()) {
-        final dirty = await _records.dirtyRecords();
-        if (dirty.isNotEmpty) {
+        final dirty = [
+          for (final record in await _records.dirtyRecords())
+            if (!refused.contains(record.id)) record,
+        ];
+        // Batched to the limits the pull advertised: one body past them
+        // would be refused whole, identically every round.
+        for (final batch in batchForPush(dirty, limits)) {
           final PushResponse response;
           try {
-            response = await api.push(dirty);
+            response = await api.push(batch);
           } on ApiError catch (error) {
-            if (error.code != 'unauthorized') rethrow;
-            authFailed = true;
-            break;
+            if (error.code == 'unauthorized') {
+              authFailed = true;
+              break rounds;
+            }
+            // The batcher sends a record past a cap alone and last, so a
+            // refused batch of one is that record's own failure: it stays
+            // dirty, and the batches the server took stay pushed.
+            if (error.code != _payloadTooLarge || batch.length != 1) rethrow;
+            refused.add(batch.single.id);
+            continue;
           }
-          final sentById = {for (final record in dirty) record.id: record};
+          final sentById = {for (final record in batch) record.id: record};
           for (final result in response.results) {
             // Unrequested and repeated results cannot settle another edit.
             final sent = sentById.remove(result.id);
@@ -671,6 +698,7 @@ final class RecordCoordinator {
       report: report,
       pushesHeld: await _pushesHeld(),
       authFailed: authFailed,
+      refusedIds: refused.toList(),
     );
   }
 
@@ -755,7 +783,7 @@ final class RecordCoordinator {
   /// The pull half of a round, with §3.1's one-time full-resync fallback:
   /// a rejected `since` cursor resets both cursors and re-pulls from zero,
   /// so `applyPulled` re-scans the lifetime set.
-  Future<int> _pullOnce(SyncApi api) async {
+  Future<({int pulled, PushLimits? limits})> _pullOnce(SyncApi api) async {
     PullResponse response;
     try {
       response = await api.pull(since: await _records.highWaterSeq());
@@ -772,7 +800,7 @@ final class RecordCoordinator {
       await _records.putRemote(remote);
     }
     await _records.setHighWaterSeq(snapshot);
-    return response.records.length;
+    return (pulled: response.records.length, limits: response.limits);
   }
 
   /// Materialize pulled records — see [applyPulled].

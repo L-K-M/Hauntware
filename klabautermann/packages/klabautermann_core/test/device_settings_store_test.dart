@@ -10,6 +10,7 @@ const _appearanceKey = 'klabautermann.appearance';
 const _firstRunCardKey = 'klabautermann.coverage.firstRunCardDismissed';
 const _rootNoticeKey = 'klabautermann.docker.rootEquivalenceNoticeDismissed';
 const _announceBandsKey = 'klabautermann.accessibility.announceThresholdBands';
+const _syncSecretsKey = 'klabautermann.sync.secrets';
 const _overridesKey = 'klabautermann.docker.endpointOverrides';
 const _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
 const _monitorSetKey = 'klabautermann.monitorSet';
@@ -204,6 +205,36 @@ void main() {
       expect(store.rootEquivalenceNoticeDismissed, isFalse);
     });
 
+    test('keeps stack folders per server across reloads; malformed '
+        'entries and relative paths are skipped, and none removes one '
+        '(STK-08)', () async {
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        'klabautermann.docker.stackFolders': {
+          'srv-9': 'not-a-list',
+          'srv-8': ['relative/stacks', 7],
+        },
+      });
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.stackFolders, isEmpty);
+      await store.setStackFolders('srv-1', ['/opt/stacks', '/srv/apps']);
+      final reopened = await DeviceSettingsStore.open(file);
+      expect(reopened.stackFolders, {
+        'srv-1': ['/opt/stacks', '/srv/apps'],
+      });
+
+      await reopened.setStackFolders('srv-1', const []);
+      final cleared = await DeviceSettingsStore.open(file);
+      expect(cleared.stackFolders, isEmpty);
+      expect(
+        (document()['klabautermann.docker.stackFolders'] as Map).keys,
+        containsAll(['srv-9', 'srv-8']),
+        reason: "other servers' entries stay as read",
+      );
+    });
+
     group('endpoint overrides (CN-09, D54)', () {
       const podman = DockerEndpointOverride(
         DockerEndpointDetected('/run/podman/podman.sock'),
@@ -385,6 +416,33 @@ void main() {
         expect(store.dockerEndpointOverrides, isEmpty);
         expect(file.readAsStringSync(), before);
       });
+    });
+
+    test('syncs no passwords until turned on, across reloads', () async {
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.syncSecrets, isFalse);
+      await store.setSyncSecrets(true);
+      final reopened = await DeviceSettingsStore.open(file);
+
+      expect(reopened.syncSecrets, isTrue);
+      expect(document(), {
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _syncSecretsKey: true,
+      });
+
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _syncSecretsKey: 'yes',
+      });
+      expect(
+        (await DeviceSettingsStore.open(file)).syncSecrets,
+        isFalse,
+        reason: 'a damaged value syncs nothing',
+      );
     });
 
     test(

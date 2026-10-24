@@ -19,6 +19,7 @@ import 'charts/charts.dart';
 import 'fleet_rail.dart' show FleetEmptyState, linkFailureText, linkStatusWord;
 import 'fleet_row_state.dart';
 import 'monitor_set_feedback.dart';
+import 'server_editing.dart';
 import 'sidebar_kit.dart';
 
 /// `ghost_servers`' words for a row whose link is [link] (03 §10.10's
@@ -209,12 +210,14 @@ class _FleetServerListState extends State<FleetServerList> {
   /// A row's verbs: a synced row pins to the top or comes off (an import
   /// is never pinned), and every row joins FL-21's monitor set or leaves
   /// it. Monitor is disabled for a server that cannot join; Settings >
-  /// Servers says why.
+  /// Servers says why. While an account is enrolled, a synced row is also
+  /// edited and deleted from here (FL-03, P16).
   List<SidebarMenuEntry> Function() _menuFor(FleetServer server) => () {
     final l10n = AppLocalizations.of(context);
     final fleet = widget.fleet;
     final pinned = fleet.pinnedServerIds.contains(server.id);
     final monitored = fleet.monitoredServerIds.contains(server.id);
+    final editing = ServerEditingScope.maybeOf(context);
     return [
       if (server.origin == FleetEntryOrigin.synced)
         SidebarMenuAction(
@@ -234,6 +237,19 @@ class _FleetServerListState extends State<FleetServerList> {
               )
             : null,
       ),
+      if (editing != null && editing.canEdit(server)) ...[
+        SidebarMenuAction(
+          label: l10n.fleetRowEdit,
+          onSelected: () => unawaited(
+            openServerEditor(context, editing, serverId: server.id),
+          ),
+        ),
+        SidebarMenuAction(
+          label: l10n.fleetRowDelete,
+          onSelected: () =>
+              unawaited(confirmAndDeleteServer(context, editing, server)),
+        ),
+      ],
     ];
   };
 

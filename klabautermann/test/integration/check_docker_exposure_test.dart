@@ -388,4 +388,56 @@ void main() {
       ]);
     });
   });
+
+  group('the sync service', () {
+    Map<String, Object?> sync({
+      Object? target = 8787,
+      Object? hostIp = '127.0.0.1',
+      String? dbPath = '',
+      List<Object?> volumes = const [],
+    }) => {
+      'image': 'klabautermann-sync:fixture',
+      'environment': {
+        'SEANCE_OPEN_REGISTRATION': '1',
+        if (dbPath != null) 'SEANCE_DB_PATH': dbPath,
+      },
+      'ports': [
+        {'target': target, 'host_ip': hostIp, 'published': '2251'},
+      ],
+      if (volumes.isNotEmpty) 'volumes': volumes,
+    };
+
+    List<String> errors(Map<String, Object?> service) =>
+        findDockerExposureErrors(_config(extra: {'sync': service}));
+
+    test('passes with its one port on loopback, in memory', () {
+      expect(errors(sync()), isEmpty);
+    });
+
+    test('rejects another container port', () {
+      expect(errors(sync(target: 22)), ['sync publishes container port 22']);
+    });
+
+    test('rejects a non-loopback address, and none', () {
+      expect(errors(sync(hostIp: '0.0.0.0')), [
+        'sync publishes beyond loopback',
+      ]);
+      expect(errors(sync(hostIp: null)), ['sync publishes beyond loopback']);
+    });
+
+    test('rejects a volume', () {
+      final volume = {'type': 'volume', 'source': 'data', 'target': '/data'};
+      expect(errors(sync(volumes: [volume])), ['sync mounts a volume']);
+    });
+
+    test('rejects storage on disk', () {
+      expect(errors(sync(dbPath: '/data/seance.sqlite')), [
+        'sync keeps its storage on disk',
+      ]);
+    });
+
+    test("rejects leaving the image's on-disk default in place", () {
+      expect(errors(sync(dbPath: null)), ['sync keeps its storage on disk']);
+    });
+  });
 }

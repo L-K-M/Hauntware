@@ -122,6 +122,12 @@ export 'package:seance_core/seance_core.dart'
         // shared so a new ServerConfig field is carried in one place.
         duplicateServerConfig,
         duplicateServerLabel,
+        // The editor's save rules (docs/design/ghost-servers-part2.md
+        // section 3): the credential a Save writes, whether it reads the
+        // stored entry, and the `updatedAt` stamp.
+        nextUpdatedAt,
+        plannedCredential,
+        plannedCredentialReadsStored,
         kMaxServerIconImageBytes,
         runConnectionTest,
         liveHostAuthenticator,

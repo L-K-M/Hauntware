@@ -23,7 +23,9 @@ concurrency:
 jobs:
   review:
     name: Review PR with GLM 5.3
-    runs-on: ubuntu-latest
+    # A ZAI_REVIEW_RUNNER repository variable (e.g. truenas) moves the review
+    # to self-hosted runners with that label; unset, GitHub hosts it.
+    runs-on: ${{ vars.ZAI_REVIEW_RUNNER || 'ubuntu-latest' }}
     # Backstop only. Each review attempt below carries the real budget and is
     # shorter, so a step timeout always fires first. That keeps running out of
     # time a step failure, which the retry/reporting steps can act on, and
@@ -107,7 +109,7 @@ jobs:
         # the first attempt — no review-semantics change.
         if: ${{ env.ZAI_API_KEY != '' && steps.review.outcome == 'failure' }}
         timeout-minutes: 170
-        # Same immutable pin as the first attempt (8e718ac = v0.0.13).
+        # Same immutable pin as the first attempt (13a9ddb = v0.0.15).
         uses: L-K-M/zai-code-review@13a9ddba4ff2e2086dbd91af184f74dee6587c17
         with:
           ZAI_API_KEY: ${{ env.ZAI_API_KEY }}

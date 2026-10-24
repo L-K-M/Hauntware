@@ -1,5 +1,48 @@
 # Séance ports and pin audits
 
+## Suite links, F5d (2026-10-21)
+
+The link grammar Poltergeist owned since "Cross-app deep links"
+(2026-10-02) moves into `seance_core`, and Séance gains the intake and
+native registration it lacked (`../../docs/design/suite-links.md`,
+sections 4 to 8).
+
+| Left | Now |
+|---|---|
+| `poltergeist_app/lib/services/deep_links.dart:17-415`, parsers, models and the display helpers, without the coordinator | `seance_core/lib/src/links/suite_links.dart` and `link_display.dart` |
+| `poltergeist_app/lib/services/seance_links.dart:7-36`, the outbound builders | `seance_core/lib/src/links/suite_links.dart` |
+| `poltergeist_core/lib/src/local_fs_safety.dart`, `validatePathComponent`, `maxFileNameBytes`, `utf8ByteLength` | `seance_core/lib/src/fs/path_component.dart` |
+
+- F5d-1 moves (D3): both app files stay at their paths and re-export the
+  moved names, `poltergeist_core` re-exports the path rule, and
+  `HostDeepLink.target` becomes an app extension. Poltergeist's four
+  link test files ran unchanged. Making `maxFileNameBytes` and
+  `utf8ByteLength` public is the one API widening; the alternative was
+  a private copy in each package.
+- F5d-2 adds `parseSeanceConnect`, `buildSeanceConnect`,
+  `buildPoltergeistBrowse`, the reserved `klabautermann` constants and
+  the link contract corpus (`seance_core/test/fixtures/suite_link_corpus.json`),
+  which Poltergeist's intake reads by relative path. The two outbound
+  Séance builders now throw `ArgumentError` on input the parser would
+  refuse; Poltergeist's launcher builds inside its guard.
+- F5d-3a and F5d-3b are Séance's own intake and Android, iOS and macOS
+  registration; no Poltergeist source is copied. Séance takes
+  `app_links` 7.2.1, Poltergeist's pin.
+- F5d-3c copies `poltergeist_app/windows/runner/deep_link_scheme.{h,cpp}`
+  into `seance_app/windows/runner/` with Séance's names
+  (`Software\Classes\seance`, `URL:Seance` in ASCII, the mutex and
+  window property `ch.lkmc.seance.deep-link-primary-v1`) and a
+  provenance comment; the logic is unchanged. Séance's Linux runner
+  follows Poltergeist's unique GApplication with `HANDLES_COMMAND_LINE |
+  HANDLES_OPEN` written in its own file.
+- D32: scheme runner code now exists in two apps. X-06 (v1.x) makes
+  Klabautermann the third, with an entry in
+  `klabautermann/docs/SHARED.md`; a fourth copy needs the shared-plugin
+  review D32 calls for first.
+- Pin audit: `scripts/audit-seance-pin.sh` matched this record after
+  each F5d branch; no contributor, licence text, vendored path or
+  gitlink changed, so the record itself stays as it is.
+
 ## Keystore move, F3c (2026-10-16)
 
 Poltergeist's `MasterKeyManager` moves into a new Planchette package,
@@ -1470,6 +1513,11 @@ counterpart is ported here.
 - Port-back candidates: the route snapshot belongs upstream in
   `testServerConnection`; the delegate seam itself, if Séance ever wants the
   editor testable without a full `AppState`.
+- Shared editor (2026-10-24): this file is unchanged by the move of the
+  form into `ghost_servers` ([design](../../docs/design/ghost-servers-part2.md)).
+  It still implements the app's `ServerEditorDelegate`, which
+  `lib/ui/server_editor.dart` adapts to `ghost_servers`'
+  `GhostServerEditorDelegate` (F5a-1c).
 
 ## app/poltergeist_app/lib/ui/connection_log_view.dart
 
@@ -1511,6 +1559,10 @@ counterpart is ported here.
   `lib/ui/server_appearance_strings.dart`) and `poltergeistMonoTextStyle`
   ([design](../../docs/design/server-appearance-package.md)). Its suite
   moved with it; this app keeps the wrapper's cases.
+- Deleted (2026-10-23, F5a-1b): the editor calls `ghost_marks`'
+  `showServerColorPicker` directly with `PoltergeistServerAppearanceStrings`
+  and `poltergeistMonoTextStyle`, so the wrapper went
+  ([design](../../docs/design/ghost-servers-part2.md)).
 
 ## app/poltergeist_app/lib/ui/server_mark_picker.dart
 
@@ -1533,6 +1585,9 @@ counterpart is ported here.
   strings. The incompressible-image message now reads as Séance's ("Try a
   simpler picture — a logo rather than a photograph."), as the design
   decided.
+- Deleted (2026-10-23, F5a-1b): the editor calls `ghost_marks`'
+  `showServerMarkPicker` directly with the ARB strings, so the wrapper went
+  ([design](../../docs/design/ghost-servers-part2.md)).
 
 ## app/poltergeist_app/test/ui/server_mark_picker_test.dart
 
@@ -1546,6 +1601,8 @@ counterpart is ported here.
 - 2026-10-08: the upstream suite and this regression now live in
   `ghost_marks`; this file checks the wrapper opens the picker in ARB words
   on the server's accent.
+- 2026-10-23 (F5a-1b): the wrapper is gone; the case opens `ghost_marks`'
+  picker with `PoltergeistServerAppearanceStrings`.
 
 ## SelectedTabView production and test pair
 
@@ -1595,6 +1652,18 @@ counterpart is ported here.
   `jumpHostId`).
 - Port-back candidates: the delegate seam (see the backend entry). The
   agent and jump-route behavior is upstream already.
+- Moved (2026-10-21 to 2026-10-24): the form is `ghost_servers`'
+  `showGhostServerEditor` (`lib/src/server_editor/`), shared with
+  Klabautermann ([design](../../docs/design/ghost-servers-part2.md)).
+  The save rules `plannedCredential`, `plannedCredentialReadsStored` and
+  `nextUpdatedAt` went to `seance_protocol`'s
+  `lib/src/models/server_editing.dart` first (F5a-1a), with Séance's copies;
+  the words became a `GhostServerEditorStrings` bag (F5a-1b); the form took
+  neutral drafts behind `GhostServerEditorDelegate`, with the
+  `ServerConfig` mapping in `package:ghost_servers/server_config_draft.dart`
+  (F5a-1c); the form itself moved last (F5a-2a). This file keeps the app's
+  `ServerEditorDelegate`, the session adapter over the shared delegate, the
+  `showServerEditor` entry point and the transfer limit section.
 
 ## app/poltergeist_app/test/services/server_duplication_test.dart
 
@@ -1623,6 +1692,11 @@ counterpart is ported here.
   The 2026-09-29 re-sync covers the agent default and absent warning, route
   preservation, and Test connection forwarding that route to the delegate.
 - Port-back candidates: none.
+- Shared editor: the save-rule groups moved to `seance_protocol`'s
+  `server_editing_test.dart` with the rules (2026-10-21, F5a-1a). This file
+  keeps the editor's cases through Poltergeist's adapter; `ghost_servers`'
+  `test/server_editor_test.dart` covers the shared form over a neutral
+  delegate (F5a-2b).
 
 ## app/poltergeist_app/lib/ui/top_toast.dart
 

@@ -58,6 +58,7 @@ final _sshdServices = [
 ];
 const _dind = 'dind';
 const _registry = 'registry';
+const _sync = 'sync';
 
 /// The dind socket's directory, on the volume the Docker host shares.
 const _socketVolume = 'docker-run:/run/docker-fixture';
@@ -269,7 +270,10 @@ void main() {
   test('every sshd service mounts the common config and publishes on '
       'loopback only', () {
     final all = services();
-    expect(all.keys, unorderedEquals([..._sshdServices, _dind, _registry]));
+    expect(
+      all.keys,
+      unorderedEquals([..._sshdServices, _dind, _registry, _sync]),
+    );
     for (final name in _sshdServices) {
       final service = all[name]!;
       expect((service['build'] as Map)['context'], 'sshd', reason: name);
@@ -310,10 +314,120 @@ void main() {
     final seed = read('klabautermann/test/integration/seed_docker.sh');
     expect(seed, contains("app_image='registry:5000/klab/app:1'"));
     expect(seed, contains(r'docker push --quiet "$app_image"'));
-    for (final stack in ['redeploy', 'orphans', 'managed']) {
+    for (final stack in [
+      'redeploy',
+      'orphans',
+      'managed',
+      // The v1 stack suite's (M5 M29); `idle` never runs.
+      'services',
+      'downable',
+      'override',
+      'profiled',
+      'idle',
+    ]) {
       expect(seed, contains('"\$stacks/$stack/compose.yaml"'), reason: stack);
     }
+    expect(seed, contains('--file "\$stacks/override/compose.override.yaml"'));
+    expect(seed, isNot(contains('--project-name idle')));
     expect(seed, contains('--name ssh-port --publish 22:22'));
+  });
+
+  test("the sync service builds Séance's server, in memory and on "
+      'loopback only, and run.sh hands it to the convergence suite', () {
+    final sync = services()[_sync]!;
+    final build = sync['build'] as YamlMap;
+    expect(build['context'], '../../../seance');
+    expect(build['dockerfile'], 'packages/seance_sync_server/Dockerfile');
+    expect(
+      File(
+        '${root.path}seance/packages/seance_sync_server/Dockerfile',
+      ).existsSync(),
+      isTrue,
+    );
+    final environment = sync['environment'] as YamlMap;
+    expect(environment['SEANCE_OPEN_REGISTRATION'], '1');
+    expect(environment['SEANCE_DB_PATH'], '');
+    expect(sync['volumes'], isNull);
+    expect(sync['network_mode'], isNull);
+    final ports = sync['ports'] as YamlList;
+    expect(ports, hasLength(1));
+    expect(ports.single['target'], 8787);
+    expect(ports.single['host_ip'], '127.0.0.1');
+
+    final run = read('klabautermann/test/integration/run.sh');
+    expect(run, contains('compose port sync 8787'));
+    expect(run, contains('\nwait_for_sync\n'));
+    expect(
+      run,
+      contains(
+        'sync_server="http://\$(sync_address)"\n'
+        r'export KLABAUTERMANN_SYNC_SERVER="$sync_server"',
+      ),
+    );
+    final suite = read(
+      'klabautermann/packages/klabautermann_core/test/integration/'
+      'sync_convergence_test.dart',
+    );
+    expect(suite, contains("_serverVariable = 'KLABAUTERMANN_SYNC_SERVER'"));
+    expect(suite, contains("@Tags(['integration', 'sync'])"));
+  });
+
+  test('run.sh builds the previous-release harness from packages the '
+      'harness pubspec names, outside the analyzed workspace (M08b)', () {
+    final run = read('klabautermann/test/integration/run.sh');
+    expect(
+      run.indexOf('\nwait_for_sync\n'),
+      lessThan(run.indexOf(r'"$previous_release_script"')),
+    );
+    expect(run, contains('export KLABAUTERMANN_PREVIOUS_RELEASE_HARNESS\n'));
+    final suite = read(
+      'klabautermann/packages/klabautermann_core/test/integration/'
+      'sync_convergence_test.dart',
+    );
+    expect(
+      suite,
+      contains("_harnessVariable = 'KLABAUTERMANN_PREVIOUS_RELEASE_HARNESS'"),
+    );
+
+    // Every archived package exists today, and the harness imports only
+    // the ones its generated pubspec depends on.
+    final script = read('klabautermann/test/integration/previous_release.sh');
+    final archived = RegExp(
+      r'^  (\w+/packages/\w+)$',
+      multiLine: true,
+    ).allMatches(script).map((m) => m[1]!).toList();
+    expect(archived, hasLength(4));
+    for (final package in archived) {
+      expect(
+        File('${root.path}$package/pubspec.yaml').existsSync(),
+        isTrue,
+        reason: package,
+      );
+    }
+    final dependencies = RegExp(
+      r'^  (\w+):\n    path: \$work_dir/src/',
+      multiLine: true,
+    ).allMatches(script).map((m) => m[1]!).toSet();
+    expect(dependencies, {
+      'seance_core',
+      'seance_protocol',
+      'poltergeist_core',
+    });
+    final harness = read(
+      'klabautermann/test/integration/previous_release_harness/bin/'
+      'harness.dart',
+    );
+    final imported = RegExp(
+      r"^import 'package:(\w+)/",
+      multiLine: true,
+    ).allMatches(harness).map((m) => m[1]!).toSet();
+    expect(dependencies, containsAll(imported));
+
+    final analysis = loadYaml(read('klabautermann/analysis_options.yaml'));
+    expect(
+      (analysis['analyzer']['exclude'] as YamlList),
+      contains('test/integration/previous_release_harness/**'),
+    );
   });
 
   test('dind listens on its Unix socket only, on the shared volume', () {

@@ -1,0 +1,102 @@
+# privileged_recipes.sh as root in mirror.gcr.io/library/debian:13@sha256:913f6706df59a68922d1dd08f78c2476560a8d367897200a6005b00e5f67c2d5, with acl attr
+## tools
+tee: present
+chown: present
+chmod: present
+mv: present
+cp: present
+stat: present
+sha256sum: present
+getfacl: present
+setfacl: present
+getfattr: present
+setfattr: present
+restorecon: absent
+getenforce: absent
+## options
+umask: 0022
+chown --reference: exit 0
+chmod --reference: exit 0
+cp --attributes-only --preserve=mode,ownership,xattr: exit 0
+mv -f: exit 0
+## selinux
+getenforce: absent
+/sys/fs/selinux/enforce: unreadable
+## baseline
+setup setfacl: exit 0
+setup setfattr: exit 0
+owner: root:adm
+mode: 640
+acl: user::rw-
+acl: user:klab:r--
+acl: group::r--
+acl: mask::r--
+acl: other::---
+xattr user.klab: spike
+content: 25718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218
+temp: gone
+## recipe a: tee, chown --reference, chmod --reference, mv
+setup setfacl: exit 0
+setup setfattr: exit 0
+tee: exit 0
+chown: exit 0
+chmod: exit 0
+mv: exit 0
+owner: root:adm
+mode: 640
+acl: user::rw-
+acl: group::r--
+acl: other::---
+xattr user.klab: none
+content: 68f01b289aedcf28e96fce1f9444365e83b9bfc7e1bf32df20f1f15966835316
+temp: gone
+## recipe b: tee, cp --attributes-only --preserve=mode,ownership,xattr, mv
+setup setfacl: exit 0
+setup setfattr: exit 0
+tee: exit 0
+cp: exit 0
+mv: exit 0
+owner: root:adm
+mode: 640
+acl: user::rw-
+acl: user:klab:r--
+acl: group::r--
+acl: mask::r--
+acl: other::---
+xattr user.klab: spike
+content: 68f01b289aedcf28e96fce1f9444365e83b9bfc7e1bf32df20f1f15966835316
+temp: gone
+## recipe c: recipe a, then getfacl | setfacl --set-file=- before mv
+setup setfacl: exit 0
+setup setfattr: exit 0
+tee: exit 0
+chown: exit 0
+chmod: exit 0
+getfacl | setfacl: exit 0
+mv: exit 0
+owner: root:adm
+mode: 640
+acl: user::rw-
+acl: user:klab:r--
+acl: group::r--
+acl: mask::r--
+acl: other::---
+xattr user.klab: none
+content: 68f01b289aedcf28e96fce1f9444365e83b9bfc7e1bf32df20f1f15966835316
+temp: gone
+## recipe d: umask 077 tee, chown and chmod from stat, mv
+setup setfacl: exit 0
+setup setfattr: exit 0
+tee: exit 0
+temp mode: 600
+chown: exit 0
+chmod: exit 0
+mv: exit 0
+owner: root:adm
+mode: 640
+acl: user::rw-
+acl: group::r--
+acl: other::---
+xattr user.klab: none
+content: 68f01b289aedcf28e96fce1f9444365e83b9bfc7e1bf32df20f1f15966835316
+temp: gone

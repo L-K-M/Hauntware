@@ -53,7 +53,7 @@
     "serverId": "123e4567-e89b-42d3-a456-426614174000",
     "cwd": "/srv/my app"
    },
-   "note": "a space, sent as +"
+   "note": "a space, sent as %20"
   },
   {
    "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/srv/it%27s%20%22quoted%22%20%24HOME%3B%2Bx",
@@ -214,6 +214,13 @@
    "note": "an escape that is not UTF-8"
   },
   {
+   "uri": "seance://connect?serverId=123e4567-e89b-42d3-a456-426614174000&cwd=/srv/%FFx",
+   "form": "seance:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "an escape that is not UTF-8, on a key the form uses"
+  },
+  {
    "uri": "ssh://connect?host=files.example&port=22&username=ops",
    "form": "seance:identity",
    "verdict": "refuse",
@@ -324,6 +331,13 @@
    "verdict": "refuse",
    "kind": "invalidParameters",
    "note": "an escape that is not UTF-8"
+  },
+  {
+   "uri": "poltergeist://browse?serverId=123e4567-e89b-42d3-a456-426614174000&path=/srv/%FFx",
+   "form": "poltergeist:id",
+   "verdict": "refuse",
+   "kind": "invalidParameters",
+   "note": "an escape that is not UTF-8, on a key the form uses"
   },
   {
    "uri": "ssh://browse?host=files.example&port=22&username=ops&path=/srv",

@@ -13,6 +13,9 @@ tags:
   # Spike S4's detached-runner cases on the runner VM (M4 E02), which
   # runner_vm.sh runs beside runner-vm; skipped without it.
   runner-vm-s4:
+  # Spike S6's privileged-file cases on the runner VM (M5 M01), which
+  # runner_vm.sh runs beside runner-vm; skipped without it.
+  runner-vm-s6:
   # The soak and 03 §11.4's budgets against the sshd fixture, which
   # run.sh's soak block runs alone; skipped without it.
   soak:
@@ -24,6 +27,10 @@ tags:
   # which run.sh's inventory leg runs alone between snapshots; skipped
   # without the fixture.
   inventory:
+  # Two-device convergence through Séance's sync server, which run.sh
+  # starts as the fixture's sync service; these also carry
+  # `integration`, and skip without the server (M5 plan M08a).
+  sync:
 # A wedged shell test (an unread pipe or a hung child shell) would pin the
 # VM; cap every test instead.
 timeout: 60s

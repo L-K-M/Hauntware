@@ -2,7 +2,8 @@
 // intent, built in the engine. Its preview and its execution read the same
 // steps, so what the user confirmed is what runs; the danger findings come
 // from the same steps' words.
-import 'package:klabautermann_host/klabautermann_host.dart' show DetachedRunner;
+import 'package:klabautermann_host/klabautermann_host.dart'
+    show DetachedRunner, UnitManager;
 import 'package:meta/meta.dart';
 import 'package:seance_core/seance_core.dart' show DangerFinding;
 
@@ -36,7 +37,9 @@ final class OperationPlan {
     Iterable<String> orphans = const [],
     Iterable<PlanWarning> warnings = const [],
     Iterable<Revalidation> revalidate = const [],
+    Iterable<ShellStep> cleanup = const [],
   }) : steps = List.unmodifiable(steps),
+       cleanup = List.unmodifiable(cleanup),
        hostWrites = List.unmodifiable(hostWrites),
        orphans = List.unmodifiable(orphans),
        warnings = Set.unmodifiable(warnings),
@@ -55,6 +58,10 @@ final class OperationPlan {
   final OperationKind kind;
   final String targetName;
   final List<PlanStep> steps;
+
+  /// What the runner runs, best effort, after a step fails, such as an
+  /// edit's temp file removal (03 §8.11); the preview does not list it.
+  final List<ShellStep> cleanup;
   final RequiredLevel requiredLevel;
   final RunnerFacts runner;
   final List<HostWriteRow> hostWrites;
@@ -83,6 +90,27 @@ final class OperationPlan {
 
   /// The tier [RunAction]'s confirmation must satisfy (03 §8.6).
   final ConfirmationTier tier;
+
+  /// This plan with [argv], the host syslog line (SAF-13), as a last
+  /// best-effort step and its row under the host writes.
+  OperationPlan withAuditLine(List<String> argv) => OperationPlan(
+    intent: intent,
+    kind: kind,
+    targetName: targetName,
+    steps: [...steps, ShellStep(argv, bestEffort: true)],
+    requiredLevel: requiredLevel,
+    runner: runner,
+    hostWrites: [...hostWrites, HostWriteRow.auditSyslog],
+    detachedRunner: detachedRunner,
+    impact: impact,
+    ownership: ownership,
+    protected: protected,
+    followUnit: followUnit,
+    orphans: orphans,
+    warnings: warnings,
+    revalidate: revalidate,
+    cleanup: cleanup,
+  );
 
   /// What [ActionPlanned] carries: the same step, host-write and finding
   /// lists, never copies.
@@ -114,11 +142,12 @@ sealed class Revalidation {
   const Revalidation();
 }
 
-/// The unit still loads.
+/// The unit still loads, or is masked, in [manager].
 final class UnitLoaded extends Revalidation {
-  const UnitLoaded(this.unit);
+  const UnitLoaded(this.unit, {this.manager = const UnitManager.system()});
 
   final String unit;
+  final UnitManager manager;
 }
 
 /// Process [pid] is still the one that started at [startTicks].
