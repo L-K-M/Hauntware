@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:test/test.dart';
@@ -457,17 +458,18 @@ void main() {
       // A basename-only target's parent is '.', and listing '.' yields
       // './incidents.json.tmp-…': an unresolved prefix matches nothing, so
       // the sweep would silently never run for a relative wiring.
-      final previous = Directory.current;
-      Directory.current = dir;
-      addTearDown(() => Directory.current = previous);
-
-      final abandoned = File('incidents.json.tmp-abandoned');
+      final abandoned = File('${dir.path}/incidents.json.tmp-abandoned');
       await abandoned.writeAsString('partial');
       await abandoned.setLastModified(DateTime.now().subtract(_agedTemp));
-      final live = File('incidents.json.tmp-live');
+      final live = File('${dir.path}/incidents.json.tmp-live');
       await live.writeAsString('partial');
 
-      expect(await FileIncidentStore(File('incidents.json')).load(), isEmpty);
+      final loaded = await _runHelper(
+        'connection/incident_sweep_helper.dart',
+        workingDirectory: dir.path,
+      );
+      expect(loaded.exitCode, 0, reason: '${loaded.stderr}');
+      expect(loaded.stdout, '0');
       expect(await abandoned.exists(), isFalse);
       expect(await live.exists(), isTrue);
     });
@@ -491,4 +493,21 @@ void main() {
 Future<bool> _runningAsRoot() async {
   final uid = await Process.run('id', ['-u']);
   return (uid.stdout as String).trim() == '0';
+}
+
+/// Runs [helper], a script under this package's test directory, in a
+/// process of its own: the only way to give it a working directory without
+/// moving the one every concurrently running suite shares.
+Future<ProcessResult> _runHelper(
+  String helper, {
+  required String workingDirectory,
+}) {
+  final library = Isolate.resolvePackageUriSync(
+    Uri.parse('package:poltergeist_core/poltergeist_core.dart'),
+  )!;
+  final packageConfig = Isolate.packageConfigSync;
+  return Process.run(Platform.resolvedExecutable, [
+    if (packageConfig != null) '--packages=${packageConfig.toFilePath()}',
+    File.fromUri(library.resolve('../test/$helper')).path,
+  ], workingDirectory: workingDirectory);
 }

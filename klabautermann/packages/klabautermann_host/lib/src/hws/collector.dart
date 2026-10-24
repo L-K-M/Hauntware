@@ -63,6 +63,13 @@ enum Collector {
   /// systemd timers (03 §6.4, §7.7).
   timers(SamplerKind.slow, [], guardedCommands: 2),
 
+  /// The login user's own systemd units and failed units, from its user
+  /// manager (03 §7.5, SVC-09).
+  userUnits(SamplerKind.slow, [], guardedCommands: 4, wireName: 'user_units'),
+
+  /// The login user's own systemd timers (03 §7.7, JOB-08).
+  userTimers(SamplerKind.slow, [], guardedCommands: 2, wireName: 'user_timers'),
+
   /// Cron jobs: own `crontab -l`, `/etc/crontab`, `/etc/cron.d/*` and the
   /// `cron.{hourly,daily,weekly,monthly}` directory names (03 §6.4, §7.7).
   cron(SamplerKind.slow, [], guardedCommands: 1),

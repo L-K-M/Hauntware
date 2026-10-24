@@ -2,11 +2,16 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:path/path.dart' as p;
+import 'package:seance_core/seance_core.dart'
+    show maxFileNameBytes, utf8ByteLength, validatePathComponent;
 
 // The owner-only chmod moved to seance_core beside restrictFileToOwner so
 // the catalog stores' writer can share it (docs/PORTS.md); re-exported so
 // this file's callers do not change.
 export 'package:seance_core/catalog.dart' show restrictLocalPathPermissions;
+// The path component rule moved to seance_core for the suite's link
+// parsers (docs/design/suite-links.md section 4); re-exported likewise.
+export 'package:seance_core/seance_core.dart' show validatePathComponent;
 
 // Ported from Séance
 // app/seance_app/lib/services/remote_files_controller.dart @ 2e6d1f1
@@ -33,11 +38,6 @@ const String _transferPrefix = '.poltergeist-';
 const String _backupSuffix = '.backup';
 const int _randomSuffixLength = 8;
 const int _archiveStageIdLength = 32;
-
-// NAME_MAX 255 is the floor across the supported platform matrix;
-// overshooting it fails the replace rather than truncating into a
-// collision (03 §2.3).
-const int _maxFileNameBytes = 255;
 
 /// `<name>.poltergeist-<8 hex>.backup` — the crash-recovery pattern,
 /// derived from the same constants the dance builds backup names from
@@ -71,34 +71,6 @@ final RegExp _trailingDotOrSpace = RegExp(r'[ .]+$');
 final RegExp _bidiControls = RegExp(
   r'[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]',
 );
-
-/// The lexical half of the local path safety rules (03 §2.3, 09 §3.5).
-///
-/// No empty component, no `.`/`..`, no separators. `\` is rejected
-/// everywhere on purpose: it is legal POSIX filename data, but a
-/// component carrying one is overwhelmingly an escaping bug, and it is
-/// the path separator on a Windows destination — a server-reported name
-/// like `..\..\x` that passes a `/`-only check becomes traversal the
-/// moment a Windows build joins it into a local path.
-void validatePathComponent(String component) {
-  if (component.isEmpty ||
-      component == '.' ||
-      component == '..' ||
-      component.contains('/') ||
-      component.contains(r'\') ||
-      component.contains('\x00')) {
-    throw FormatException('"$component" is not a safe path component.');
-  }
-  // 09 §3.5's boundary rule: an over-long component fails here with a
-  // clean FormatException instead of mid-transfer as an opaque
-  // ENAMETOOLONG — enforced at the component level so every caller of
-  // this half inherits it. POSIX NAME_MAX counts UTF-8 bytes.
-  if (_utf8ByteLength(component) > _maxFileNameBytes) {
-    throw FormatException(
-      '"$component" exceeds the $_maxFileNameBytes-byte file-name limit.',
-    );
-  }
-}
 
 /// [validatePathComponent] plus the Windows destination hazards:
 /// forbidden characters, a trailing dot or space (Win32 silently strips
@@ -284,20 +256,17 @@ Future<void> replaceLocalFile(File part, File target) async {
   // length is deterministic — fail fast, before any repair or probe
   // I/O, for a basename that cannot carry it (the effective replace
   // budget is NAME_MAX minus the suffix width).
-  if (_utf8ByteLength(p.basename(target.path)) +
+  if (utf8ByteLength(p.basename(target.path)) +
           _transferPrefix.length +
           _randomSuffixLength +
           _backupSuffix.length >
-      _maxFileNameBytes) {
+      maxFileNameBytes) {
     throw FileSystemException(
       'The backup name would exceed the filesystem file-name limit',
       target.path,
     );
   }
-  var targetType = await FileSystemEntity.type(
-    target.path,
-    followLinks: false,
-  );
+  var targetType = await FileSystemEntity.type(target.path, followLinks: false);
   if (targetType == FileSystemEntityType.notFound) {
     // Repair a stranded same-target orphan first (best effort), but
     // only when the target is absent: with the target present any
@@ -312,10 +281,7 @@ Future<void> replaceLocalFile(File part, File target) async {
       // A restored orphan flows into the normal dance below (backed
       // up, replaced, backup deleted) instead of being clobbered by
       // the plain-rename notFound branch.
-      targetType = await FileSystemEntity.type(
-        target.path,
-        followLinks: false,
-      );
+      targetType = await FileSystemEntity.type(target.path, followLinks: false);
     } on FileSystemException {
       // Best effort only — the replace itself must not fail on a
       // stranded sibling it could not repair.
@@ -360,7 +326,10 @@ Future<void> replaceLocalFile(File part, File target) async {
   // The check-then-rename gap is the walk's accepted advisory posture.
   var backupPath = p.join(
     p.dirname(target.path),
-    p.basename(target.path) + _transferPrefix + _randomHexString() + _backupSuffix,
+    p.basename(target.path) +
+        _transferPrefix +
+        _randomHexString() +
+        _backupSuffix,
   );
   while (await FileSystemEntity.type(backupPath, followLinks: false) !=
       FileSystemEntityType.notFound) {
@@ -501,30 +470,3 @@ String _randomHexString() => List.generate(
   _randomSuffixLength,
   (_) => _random.nextInt(16).toRadixString(16),
 ).join();
-
-/// UTF-8 byte count without transcoding: 1 per ASCII unit, 2/3 per BMP
-/// unit, 4 across a surrogate pair. A lone surrogate counts 3 — the
-/// encoder substitutes U+FFFD, itself a 3-byte sequence — so the
-/// NAME_MAX guard never under-counts.
-int _utf8ByteLength(String value) {
-  var total = 0;
-  final units = value.codeUnits;
-  for (var i = 0; i < units.length; i++) {
-    final unit = units[i];
-    if (unit < 0x80) {
-      total += 1;
-    } else if (unit < 0x800) {
-      total += 2;
-    } else if (unit >= 0xD800 &&
-        unit <= 0xDBFF &&
-        i + 1 < units.length &&
-        units[i + 1] >= 0xDC00 &&
-        units[i + 1] <= 0xDFFF) {
-      total += 4;
-      i++;
-    } else {
-      total += 3;
-    }
-  }
-  return total;
-}

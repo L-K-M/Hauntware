@@ -112,6 +112,7 @@ exit 1
         'seance/packages/seance_core/pubspec.yaml',
         'seance/packages/seance_protocol/pubspec.yaml',
         'seance/packages/seance_sync_server/pubspec.yaml',
+        'seance/packages/seance_terminal/pubspec.yaml',
         'poltergeist/app/poltergeist_app/pubspec.yaml',
         'poltergeist/packages/poltergeist_bench/pubspec.yaml',
         'poltergeist/packages/poltergeist_core/pubspec.yaml',

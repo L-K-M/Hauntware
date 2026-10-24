@@ -333,6 +333,37 @@ void main() {
   });
 
   group('one quota for the host and Docker (M9)', () {
+    test('relay: an exec connection holds a follower slot until it '
+        'closes; streamlocal holds none (CTX-07)', () async {
+      final h = _Harness(relay: true)..probed();
+      final exec = await h.docker.openExec(_srv);
+      expect(exec.rank, DockerRank.cliRelay);
+      expect(h.quota.held(ChannelShare.follower), 1);
+      await exec.lease.close();
+      expect(h.quota.held(ChannelShare.follower), 0);
+      await h.close();
+
+      final local = _Harness(relay: false)..probed();
+      final direct = await local.docker.openExec(_srv);
+      expect(direct.rank, DockerRank.streamlocal);
+      expect(local.quota.held(ChannelShare.follower), 0);
+      await direct.lease.close();
+      await local.close();
+    });
+
+    test('relay below the follower floor: no exec slot is free', () async {
+      final h = _Harness(
+        relay: true,
+        learnedLimit: kFollowerMinSessionLimit - 1,
+      )..probed();
+      await expectLater(
+        h.docker.openExec(_srv),
+        throwsA(isA<DockerChannelUnavailable>()),
+      );
+      expect(h.quota.held(ChannelShare.follower), 0);
+      await h.close();
+    });
+
     test('relay: a journal follow and a container follow fill the follower '
         'share, so the events stream polls and a second journal follow '
         'waits until the container follow closes', () async {

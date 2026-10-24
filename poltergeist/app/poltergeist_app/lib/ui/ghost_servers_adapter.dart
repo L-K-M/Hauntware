@@ -10,6 +10,7 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 import '../l10n/app_localizations.dart';
 import '../services/identity_file_reader.dart';
 import '../theme/app_theme.dart';
+import 'server_appearance_strings.dart' show PoltergeistColorPickerStrings;
 
 /// The status words in ARB. [status] picks the word for an attempt in
 /// flight: a recovery says "Reconnecting", a first connect "Connecting".
@@ -160,6 +161,97 @@ GhostCredentialStrings poltergeistCredentialStrings(AppLocalizations l10n) =>
       cancel: l10n.credentialCancel,
       connect: l10n.credentialConnect,
     );
+
+/// The connection log view's words in ARB.
+GhostConnectionLogStrings poltergeistConnectionLogStrings(
+  AppLocalizations l10n,
+) => GhostConnectionLogStrings(
+  title: l10n.connectionLogTitle,
+  copy: l10n.connectionLogCopy,
+  copied: l10n.connectionLogCopied,
+  copyFailed: l10n.connectionLogCopyFailed,
+  empty: l10n.connectionLogEmpty,
+);
+
+/// The test report's spoken outcomes in ARB.
+GhostConnectionTestStrings poltergeistConnectionTestStrings(
+  AppLocalizations l10n,
+) => GhostConnectionTestStrings(
+  succeeded: l10n.connectionTestSucceeded,
+  failed: l10n.connectionTestFailed,
+);
+
+/// A test result as the shared report takes it.
+GhostTestReport ghostTestReportOf(ConnectionTestResult result) =>
+    GhostTestReport(
+      ok: result.ok,
+      summary: result.summary,
+      notes: result.notes,
+      log: result.log,
+    );
+
+/// The server editor's words in ARB. Every member has a key of its own,
+/// and the custom colour picker takes the app's colour picker words.
+GhostServerEditorStrings poltergeistServerEditorStrings(
+  AppLocalizations l10n,
+) => GhostServerEditorStrings(
+  addTitle: l10n.serverEditorAddTitle,
+  editTitle: l10n.serverEditorEditTitle,
+  label: l10n.serverEditorLabel,
+  host: l10n.serverEditorHost,
+  port: l10n.serverEditorPort,
+  username: l10n.serverEditorUsername,
+  authentication: l10n.serverEditorAuthentication,
+  authAgent: l10n.serverEditorAuthAgent,
+  authPassword: l10n.serverEditorAuthPassword,
+  authPrivateKey: l10n.serverEditorAuthPrivateKey,
+  agentInfo: l10n.serverEditorAgentInfo,
+  passwordLabel: l10n.serverEditorPasswordLabel,
+  referenceKeyTitle: l10n.serverEditorReferenceKeyTitle,
+  referenceKeySubtitle: l10n.serverEditorReferenceKeySubtitle,
+  identityFilePath: l10n.serverEditorIdentityFilePath,
+  identityFileHint: l10n.serverEditorIdentityFileHint,
+  browse: l10n.serverEditorBrowse,
+  privateKeyPem: l10n.serverEditorPrivateKeyPem,
+  keyPassphrase: l10n.serverEditorKeyPassphrase,
+  startDirectory: l10n.serverEditorStartDirectory,
+  startDirectoryHint: l10n.serverEditorStartDirectoryHint,
+  startDirectoryNote: l10n.serverEditorStartDirectoryNote,
+  startDirectoryInvalid: l10n.serverEditorStartDirectoryInvalid,
+  loginScript: l10n.serverEditorLoginScript,
+  loginScriptHint: l10n.serverEditorLoginScriptHint,
+  loginScriptNote: l10n.serverEditorLoginScriptNote,
+  appearance: l10n.serverEditorAppearance,
+  group: l10n.serverEditorGroup,
+  groupHint: l10n.serverEditorGroupHint,
+  colour: l10n.serverEditorColour,
+  mark: l10n.serverEditorMark,
+  chooseMark: l10n.serverEditorChooseMark,
+  defaultMarkTooltip: l10n.serverEditorDefaultMarkTooltip,
+  customColour: l10n.serverEditorCustomColour,
+  syncSecretTitle: l10n.serverEditorSyncSecretTitle,
+  syncSecretExcluded: l10n.serverEditorSyncSecretExcluded,
+  syncSecretSubtitle: l10n.serverEditorSyncSecretSubtitle,
+  excludeTitle: l10n.serverEditorExcludeTitle,
+  excludeOnSubtitle: l10n.serverEditorExcludeOnSubtitle,
+  excludeOffSubtitle: l10n.serverEditorExcludeOffSubtitle,
+  excludeConfirmTitle: l10n.serverEditorExcludeConfirmTitle,
+  excludeConfirmBody: l10n.serverEditorExcludeConfirmBody,
+  excludeConfirmCancel: l10n.serverEditorExcludeConfirmCancel,
+  excludeConfirmAction: l10n.serverEditorExcludeConfirmAction,
+  test: l10n.serverEditorTest,
+  testing: l10n.serverEditorTesting,
+  testingSemantic: l10n.serverEditorTestingSemantic,
+  testFailedSummary: l10n.serverEditorTestFailedSummary,
+  testDisclaimer: l10n.serverEditorTestDisclaimer,
+  cancel: l10n.serverEditorCancel,
+  save: l10n.serverEditorSave,
+  required: l10n.serverEditorRequired,
+  portRange: l10n.serverEditorPortRange,
+  saveFailed: l10n.serverEditorSaveFailed,
+  customColourValue: l10n.serverEditorCustomColourValue,
+  colorPickerStrings: PoltergeistColorPickerStrings(l10n),
+);
 
 /// The chrome's status colours as the package takes them.
 GhostStatusColors poltergeistStatusColors(PoltergeistChrome chrome) =>
