@@ -21,6 +21,7 @@ import 'controllers/monitoring_controller.dart';
 import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
 import 'controllers/server_editor_controller.dart';
+import 'controllers/server_prefs_controller.dart';
 import 'controllers/stack_folders.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
@@ -237,9 +238,14 @@ Future<void> main(List<String> args) async {
     save: settings.setAnnounceThresholdBands,
   );
 
-  // The safety preferences (M4 plan M4), device-local in settings.json and
-  // applied to the engine now, since it starts with every server
-  // observe-only, and on every change.
+  // The synced servers' preferences (03 §4.8), as the engine reports their
+  // `pref` records.
+  final serverPrefs = ServerPrefsController(engine);
+
+  // The safety preferences (M4 plan M4), in settings.json and, for synced
+  // servers, their read-only switches and marks in their `pref` records
+  // (M5 plan M06); applied to the engine now, since it starts with every
+  // server observe-only, and on every change.
   final safety = safetyFromSettings(
     settings,
     engine,
@@ -249,6 +255,7 @@ Future<void> main(List<String> args) async {
             .firstOrNull
             ?.displayName ??
         serverId,
+    prefs: serverPrefs,
   );
 
   // The "sync passwords" switch (SYN-02), device-local in settings.json

@@ -48,6 +48,10 @@ void main() {
       findsOneWidget,
     );
     expect(
+      find.textContaining("each server's read-only switch and marks"),
+      findsOneWidget,
+    );
+    expect(
       find.textContaining('opens the records of every app on this account'),
       findsOneWidget,
     );

@@ -4177,7 +4177,7 @@ abstract class AppLocalizations {
   /// Disclosure on the sign-in's second step: what the app writes to the account, and what it does not.
   ///
   /// In en, this message translates to:
-  /// **'Klabautermann publishes only the servers you add, edit or delete here, with their passwords or keys when you let them sync. It publishes no host keys.'**
+  /// **'Klabautermann publishes only the servers you add, edit or delete here, with their passwords or keys when you let them sync, and each server\'s read-only switch and marks. It publishes no host keys.'**
   String get syncDisclosure;
 
   /// The button that sends the sign-in, enabled once the fleet assertion is ticked.

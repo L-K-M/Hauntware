@@ -3184,7 +3184,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get syncDisclosure =>
-      'Klabautermann publishes only the servers you add, edit or delete here, with their passwords or keys when you let them sync. It publishes no host keys.';
+      'Klabautermann publishes only the servers you add, edit or delete here, with their passwords or keys when you let them sync, and each server\'s read-only switch and marks. It publishes no host keys.';
 
   @override
   String get syncSignInAction => 'Sign in';
