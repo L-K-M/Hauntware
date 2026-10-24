@@ -1866,6 +1866,11 @@ is on main:
   re-pushes them; an unsealed forged tombstone is ignored and a sealed
   removal applied (X3); a first-seen pin installs on Séance and a
   conflicting one is reported and left out (X4).
+- Previous-release skip (M5 M08b, X2): `run.sh` builds the last release
+  tag's Séance and Poltergeist into one harness
+  (`previous_release.sh`), and the convergence suite checks from the
+  server that after both run a round on an account Klabautermann wrote
+  to, no `klabautermann:` record was re-pushed, changed or deleted.
 - Pause and Resume (M5 M27c, JOB-07): a cron line in the login user's
   crontab, or another user's in admin mode, pauses and resumes from its
   row menu or details as an edit of that crontab, previewed and backed

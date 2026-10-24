@@ -12,6 +12,10 @@
 //     SEANCE_DB_PATH= ./seance_sync_server
 //   KLABAUTERMANN_SYNC_SERVER=http://127.0.0.1:8799 dart test \
 //     --tags sync test/integration/sync_convergence_test.dart
+//
+// The previous-release case also needs KLABAUTERMANN_PREVIOUS_RELEASE_HARNESS,
+// the harness test/integration/previous_release.sh builds from the latest
+// release tag (X2); run.sh builds and exports it.
 @Tags(['integration', 'sync'])
 @Timeout(Duration(minutes: 3))
 library;
@@ -48,6 +52,7 @@ import 'package:test/test.dart';
 import '../support/fake_sync_server.dart' show MemoryKeystore;
 
 const _serverVariable = 'KLABAUTERMANN_SYNC_SERVER';
+const _harnessVariable = 'KLABAUTERMANN_PREVIOUS_RELEASE_HARNESS';
 const _password = 'correct horse battery staple';
 const _release = '2026.11.0';
 
@@ -55,6 +60,12 @@ void main() {
   final baseUrl = Platform.environment[_serverVariable] ?? '';
   final skip = baseUrl.isEmpty
       ? 'Set $_serverVariable to a running seance_sync_server to enable.'
+      : false;
+  final harness = Platform.environment[_harnessVariable] ?? '';
+  final previousSkip = skip != false
+      ? skip
+      : harness.isEmpty
+      ? 'Set $_harnessVariable to the previous-release harness to enable.'
       : false;
 
   late Directory support;
@@ -268,6 +279,72 @@ void main() {
     expect((await sync.serverPrefs())['srv-alpha']?.readOnly, isTrue);
     expect((await stored(sync, 'srv-alpha'))?.label, 'alpha edited');
   }, skip: skip);
+
+  test("the previous release's Séance and Poltergeist skip "
+      "Klabautermann's records (X2)", () async {
+    final seance = await seanceAccount([_server('srv-alpha', 'alpha')]);
+    final sync = await klabautermann(seance);
+    await sync.setServerPrefs(
+      const SetServerPrefs(
+        requestId: 'r1',
+        serverId: 'srv-alpha',
+        prefs: ServerPrefs(readOnly: true),
+      ),
+    );
+    await sync.putRule(
+      const PutRule(
+        requestId: 'r2',
+        ruleId: 'rule-1',
+        rule: ThresholdRule(
+          metric: 'cpu.busy',
+          op: ThresholdOp.greaterThan,
+          raise: ThresholdBound(value: 90, duration: Duration(minutes: 5)),
+          clear: ThresholdBound(value: 70, duration: Duration(minutes: 2)),
+        ),
+        target: 'srv-alpha',
+      ),
+    );
+    await round(sync);
+    final before = await seance.serverRecords();
+    final ids = [
+      for (final id in before.keys)
+        if (id.startsWith('klabautermann:')) id,
+    ];
+    expect(
+      ids,
+      containsAll([
+        'klabautermann:pref:srv-alpha',
+        'klabautermann:rule:rule-1',
+      ]),
+    );
+
+    // Each device pulls the account, pushes a record of its own and runs
+    // again, so a re-push of Klabautermann's records would show.
+    final run = await Process.run(harness, [
+      '--server',
+      baseUrl,
+      '--username',
+      seance.username,
+      '--password',
+      _password,
+    ]);
+    expect(run.exitCode, 0, reason: '${run.stderr}');
+    final pushed = (jsonDecode('${run.stdout}') as Map).cast<String, String>();
+
+    final after = await seance.serverRecords();
+    // Names a record the old release dropped before reading its fields.
+    expect(after.keys, containsAll([...pushed.values, ...ids]));
+    for (final id in ids) {
+      expect(after[id]!.seq, before[id]!.seq, reason: id);
+      expect(after[id]!.blob, before[id]!.blob, reason: id);
+      expect(after[id]!.deleted, isFalse, reason: id);
+    }
+
+    // Klabautermann still reads its settings, and the old Séance's server.
+    await round(sync);
+    expect((await sync.serverPrefs())['srv-alpha']?.readOnly, isTrue);
+    expect(await stored(sync, 'previous-seance-server'), isNotNull);
+  }, skip: previousSkip);
 
   test('a forged unsealed tombstone is ignored, and a sealed removal is '
       'applied (X3)', () async {
