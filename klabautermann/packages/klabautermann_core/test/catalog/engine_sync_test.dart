@@ -514,6 +514,57 @@ void main() {
       expect(tombstones['secret:${saved.secretRef}']!.deleted, isTrue);
     });
 
+    test('a duplicate is a new server with a numbered copy label and a '
+        'credential of its own (M5 M09b)', () async {
+      final sync = await enrolled();
+      await sync.saveServer(
+        const SaveServer(
+          requestId: 'r1',
+          draft: draft,
+          credential: ServerCredentialEntry(password: 'hunter2'),
+        ),
+      );
+      final source = (await stored(sync, 'srv-new'))!;
+
+      final first = await sync.duplicateServer(
+        const DuplicateServer(requestId: 'r2', serverId: 'srv-new'),
+      );
+      final second = await sync.duplicateServer(
+        const DuplicateServer(requestId: 'r3', serverId: 'srv-new'),
+      );
+
+      final copy = (await stored(sync, (first as CatalogWritten).serverId!))!;
+      final again = (await stored(sync, (second as CatalogWritten).serverId!))!;
+      expect(first.credentialWritten, isTrue);
+      expect(copy.id, isNot(source.id));
+      expect(copy.label, 'web-3 copy');
+      expect(again.label, 'web-3 copy 2');
+      expect(
+        (copy.host, copy.port, copy.authMethod),
+        (source.host, source.port, source.authMethod),
+      );
+      // Copied, never shared: deleting either keeps the other's.
+      expect(copy.secretRef, isNot(source.secretRef));
+      expect((await vault.read(copy.secretRef!))?.value, 'hunter2');
+      expect((await stored(sync, 'srv-new'))!.secretRef, source.secretRef);
+    });
+
+    test(
+      'a duplicate of a server the catalog no longer holds is refused',
+      () async {
+        final sync = await enrolled();
+
+        final answer = await sync.duplicateServer(
+          const DuplicateServer(requestId: 'r1', serverId: 'srv-gone'),
+        );
+
+        expect(
+          (answer as CatalogWriteRefused).failure,
+          CatalogWriteFailure.unknownTarget,
+        );
+      },
+    );
+
     test(
       'excluding a server retracts it with a strictly later stamp',
       () async {

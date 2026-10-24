@@ -7867,5 +7867,27 @@
   "connectionLogEmpty": "(no log captured)",
   "@connectionLogEmpty": {
     "description": "Shown in place of an empty connection log."
+  },
+  "fleetRowDuplicate": "Duplicate",
+  "@fleetRowDuplicate": {
+    "description": "A synced fleet row's menu verb that copies the server as a new one, with a copy of its credential (FL-03). Shown only while a sync account is enrolled."
+  },
+  "serverDuplicated": "Copied {name}",
+  "@serverDuplicated": {
+    "description": "Toast after a server was duplicated; the copy appears in the list as \"<name> copy\".",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "web-1"
+      }
+    }
+  },
+  "serverEditorImportKeyFile": "Import from file\u2026",
+  "@serverEditorImportKeyFile": {
+    "description": "Button under the pasted private key that reads a key file into it, so the key is stored in the app's vault."
+  },
+  "serverEditorKeyFileImportFailed": "Could not read that file as a key.",
+  "@serverEditorKeyFileImportFailed": {
+    "description": "Toast when a picked key file is too large or not text."
   }
 }

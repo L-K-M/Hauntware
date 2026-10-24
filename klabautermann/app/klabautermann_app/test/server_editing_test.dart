@@ -81,6 +81,7 @@ void main() {
     ReadServerDraft(:final requestId) ||
     SaveServer(:final requestId) ||
     TestServerConnection(:final requestId) ||
+    DuplicateServer(:final requestId) ||
     DeleteServer(:final requestId) => requestId,
     _ => throw StateError('$request carries no edit id'),
   };
@@ -196,6 +197,27 @@ void main() {
       );
       expect(harness.engine.sentOfType<SaveServer>(), isEmpty);
       expect(find.byType(Dialog), findsOneWidget);
+    });
+
+    testWidgets('a pasted key can be imported from a file (M09b)', (
+      tester,
+    ) async {
+      await pumpApp(
+        tester,
+        size: _desktop,
+        servers: _servers,
+        syncAccount: testSyncAccount,
+      );
+      await tester.tap(find.byTooltip('Add'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Add server'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('ssh-agent'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Private key').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Import from file…'), findsOneWidget);
     });
 
     testWidgets('a test the engine cannot run is a failed report, not a '
@@ -336,6 +358,43 @@ void main() {
       );
       expect(find.byType(Dialog), findsOneWidget);
       await outlastToasts(tester);
+    });
+
+    testWidgets('Duplicate copies the server through the engine and says '
+        'so (M09b)', (tester) async {
+      final harness = await pumpApp(
+        tester,
+        size: _desktop,
+        servers: _servers,
+        syncAccount: testSyncAccount,
+      );
+
+      await openRowMenu(tester, 'web-1');
+      await tester.tap(find.text('Duplicate'));
+      await tester.pumpAndSettle();
+      final duplicate =
+          harness.engine.sentOfType<DuplicateServer>().single
+              as DuplicateServer;
+      expect(duplicate.serverId, 'srv-1');
+
+      harness.engine.emit(
+        CatalogWritten(requestId: requestIdOf(duplicate), serverId: 'srv-2'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Copied web-1'), findsOneWidget);
+      await outlastToasts(tester);
+    });
+
+    testWidgets('an ssh_config import offers no Duplicate', (tester) async {
+      await pumpApp(
+        tester,
+        size: _desktop,
+        servers: _servers,
+        syncAccount: testSyncAccount,
+      );
+
+      await openRowMenu(tester, 'lab');
+      expect(find.text('Duplicate'), findsNothing);
     });
 
     testWidgets('deleting asks first, naming the server', (tester) async {

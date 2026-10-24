@@ -8595,6 +8595,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'(no log captured)'**
   String get connectionLogEmpty;
+
+  /// A synced fleet row's menu verb that copies the server as a new one, with a copy of its credential (FL-03). Shown only while a sync account is enrolled.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate'**
+  String get fleetRowDuplicate;
+
+  /// Toast after a server was duplicated; the copy appears in the list as "<name> copy".
+  ///
+  /// In en, this message translates to:
+  /// **'Copied {name}'**
+  String serverDuplicated(String name);
+
+  /// Button under the pasted private key that reads a key file into it, so the key is stored in the app's vault.
+  ///
+  /// In en, this message translates to:
+  /// **'Import from file…'**
+  String get serverEditorImportKeyFile;
+
+  /// Toast when a picked key file is too large or not text.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read that file as a key.'**
+  String get serverEditorKeyFileImportFailed;
 }
 
 class _AppLocalizationsDelegate

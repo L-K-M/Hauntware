@@ -245,6 +245,11 @@ class _FleetServerListState extends State<FleetServerList> {
           ),
         ),
         SidebarMenuAction(
+          label: l10n.fleetRowDuplicate,
+          onSelected: () =>
+              unawaited(duplicateServer(context, editing, server)),
+        ),
+        SidebarMenuAction(
           label: l10n.fleetRowDelete,
           onSelected: () =>
               unawaited(confirmAndDeleteServer(context, editing, server)),

@@ -596,7 +596,7 @@ class _ServerEditorState extends State<_ServerEditor> {
                 ],
               ],
             )
-          else
+          else ...[
             TextFormField(
               controller: _keyPem,
               maxLines: 5,
@@ -606,6 +606,16 @@ class _ServerEditorState extends State<_ServerEditor> {
                 border: const OutlineInputBorder(),
               ),
             ),
+            if (widget.delegate.canImportKeyFile)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                  onPressed: _busy ? null : _importKeyFile,
+                  icon: const Icon(Icons.upload_file, size: 18),
+                  label: Text(_strings.importKeyFile),
+                ),
+              ),
+          ],
           TextFormField(
             controller: _keyPassphrase,
             obscureText: true,
@@ -886,6 +896,23 @@ class _ServerEditorState extends State<_ServerEditor> {
     final picked = await widget.delegate.pickIdentityFile();
     if (picked == null || !mounted) return;
     setState(() => _keyPath.text = picked);
+  }
+
+  /// Reads a key file into the pasted-key box, which then saves and tests
+  /// as a pasted key does.
+  Future<void> _importKeyFile() async {
+    final String? text;
+    try {
+      text = await widget.delegate.importKeyFile();
+    } catch (_) {
+      if (mounted) {
+        showTopToastIn(context, message: _strings.keyFileImportFailed);
+      }
+      return;
+    }
+    if (text == null || !mounted) return;
+    setState(() => _keyPem.text = text!);
+    _dropTestResult();
   }
 
   String? _required(String? v) =>

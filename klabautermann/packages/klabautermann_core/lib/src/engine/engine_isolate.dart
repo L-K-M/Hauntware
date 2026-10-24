@@ -933,6 +933,7 @@ void engineMain(
     String requestId,
     Future<EngineEvent> Function() body, {
     String? confirm,
+    bool confirmWritten = false,
   }) {
     syncTail = syncTail.then((_) async {
       final EngineEvent answer;
@@ -959,8 +960,10 @@ void engineMain(
         try {
           syncedServers = await sync.servers();
           await relistSynced();
-          if (confirm != null) {
-            for (final pin in synced.pinsFor([confirm], DateTime.now())) {
+          final confirmed =
+              confirm ?? (confirmWritten ? answer.serverId : null);
+          if (confirmed != null) {
+            for (final pin in synced.pinsFor([confirmed], DateTime.now())) {
               await endpointPins.confirm(pin);
             }
             await relistSynced();
@@ -1251,6 +1254,14 @@ void engineMain(
         );
       case SaveServer(:final requestId, :final draft):
         runWrite(requestId, () => sync.saveServer(message), confirm: draft.id);
+      case DuplicateServer(:final requestId, :final serverId):
+        // A copy of an endpoint this device confirmed is confirmed too: it
+        // is the same endpoint, copied by the user.
+        runWrite(
+          requestId,
+          () => sync.duplicateServer(message),
+          confirmWritten: synced.confirmedIds.contains(serverId),
+        );
       case DeleteServer(:final requestId):
         runWrite(requestId, () => sync.deleteServer(message));
       case TestServerConnection(

@@ -31,6 +31,8 @@ final class GhostServerEditorStrings {
     this.identityFilePath = 'Identity file path',
     this.identityFileHint = '~/.ssh/id_ed25519',
     this.browse = 'Browse…',
+    this.importKeyFile = 'Import from file…',
+    this.keyFileImportFailed = 'Could not read that file as a key.',
     this.privateKeyPem = 'Private key (PEM/OpenSSH)',
     this.keyPassphrase = 'Key passphrase (optional)',
     this.startDirectory = 'Start folder (optional)',
@@ -123,6 +125,11 @@ final class GhostServerEditorStrings {
   final String identityFilePath;
   final String identityFileHint;
   final String browse;
+
+  /// The pasted-key box's file import, and the toast of a file it could
+  /// not read.
+  final String importKeyFile;
+  final String keyFileImportFailed;
 
   /// The pasted key and its passphrase.
   final String privateKeyPem;

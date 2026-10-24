@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert' show utf8;
 import 'dart:io' show Platform;
 import 'dart:typed_data';
 
@@ -115,6 +116,29 @@ Future<void> openServerEditor(
   );
 }
 
+/// Copies [server] as a new synced server with a credential of its own,
+/// and says so; a refusal is told in a toast. The copy shows in the fleet
+/// once the engine sends it, before the answer.
+Future<void> duplicateServer(
+  BuildContext context,
+  ServerEditing editing,
+  FleetServer server,
+) async {
+  final l10n = AppLocalizations.of(context);
+  final overlay = Overlay.of(context, rootOverlay: true);
+  final String message;
+  try {
+    await editing.editor.duplicate(server.id);
+    message = l10n.serverDuplicated(server.displayName);
+  } on Object catch (error) {
+    if (overlay.mounted) {
+      showTopToast(overlay, message: serverEditFailureText(l10n, error));
+    }
+    return;
+  }
+  if (overlay.mounted) showTopToast(overlay, message: message);
+}
+
 /// Asks before deleting [server] from the account, naming it, then
 /// deletes it; a refusal is told in a toast.
 Future<void> confirmAndDeleteServer(
@@ -195,6 +219,27 @@ final class _EngineEditorDelegate extends GhostServerEditorDelegate {
   bool get canPickIdentityFile =>
       Platform.isLinux || Platform.isMacOS || Platform.isWindows;
 
+  // Phones cannot reference a key file (03 §4.5), so the key goes into
+  // the vault; desktops may store one the same way.
+  @override
+  bool get canImportKeyFile => true;
+
+  /// The picked file's text. A private key is a few KiB; anything past
+  /// [_keyFileLimit], or not UTF-8, is no key file.
+  @override
+  Future<String?> importKeyFile() async {
+    if (Platform.isMacOS) await FilePicker.skipEntitlementsChecks();
+    final files = await FilePicker.pickFiles();
+    if (files.isEmpty) return null;
+    final file = files.first;
+    final length = await file.length();
+    if (length != null && length > _keyFileLimit) {
+      // The editor words the failure; no message of its own is shown.
+      throw const FormatException();
+    }
+    return utf8.decode(await file.readAsBytes());
+  }
+
   @override
   Future<String?> pickIdentityFile() async {
     // Unsandboxed on macOS (03 §10.2), as for the mark image's picker.
@@ -265,6 +310,9 @@ final class _SaveFailure implements Exception {
   @override
   String toString() => message;
 }
+
+/// The largest file Import from file reads as a private key.
+const int _keyFileLimit = 64 * 1024;
 
 /// The engine's draft as the shared editor's.
 GhostServerDraft ghostDraftOf(ServerDraft draft) => GhostServerDraft(
