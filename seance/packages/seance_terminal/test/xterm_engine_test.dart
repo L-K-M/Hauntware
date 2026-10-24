@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:seance_app/services/xterm_engine.dart';
+import 'package:seance_terminal/seance_terminal.dart';
 import 'package:xterm/xterm.dart';
 
 void main() {
