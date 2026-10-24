@@ -294,9 +294,10 @@ Iterable<String> _syncErrors(String name, Map<Object?, Object?> service) sync* {
   }
   final volumes = service['volumes'];
   if (volumes is List && volumes.isNotEmpty) yield '$name mounts a volume';
+  // The image defaults SEANCE_DB_PATH to a file under /data, so only an
+  // explicit empty value keeps the server in memory.
   final environment = service['environment'];
-  if (environment is Map &&
-      '${environment['SEANCE_DB_PATH'] ?? ''}'.isNotEmpty) {
+  if (environment is! Map || environment['SEANCE_DB_PATH'] != '') {
     yield '$name keeps its storage on disk';
   }
 }

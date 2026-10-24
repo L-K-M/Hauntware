@@ -359,7 +359,10 @@ void main() {
     expect(run, contains('\nwait_for_sync\n'));
     expect(
       run,
-      contains(r'export KLABAUTERMANN_SYNC_SERVER="http://$(sync_address)"'),
+      contains(
+        'sync_server="http://\$(sync_address)"\n'
+        r'export KLABAUTERMANN_SYNC_SERVER="$sync_server"',
+      ),
     );
     final suite = read(
       'klabautermann/packages/klabautermann_core/test/integration/'
