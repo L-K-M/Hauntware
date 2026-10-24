@@ -16,6 +16,12 @@ enum ActionEntryPoint {
   /// "Run now" on a timer (JOB-08).
   timerRunNow,
 
+  /// "Run now" on a cron line (JOB-19).
+  cronRunNow,
+
+  /// Pause and Resume on a cron line (JOB-07).
+  cronPause,
+
   /// A container's state verbs (CTR-02).
   containerVerb,
 
@@ -37,6 +43,20 @@ enum ActionEntryPoint {
 
   /// A stack's pull and redeploy (STK-06).
   stackRedeploy,
+
+  /// One service's start, stop, restart, pull, recreate and scale
+  /// (STK-23).
+  stackService,
+
+  /// Taking a whole stack down, never with its volumes (STK-23).
+  stackDown,
+
+  /// Editing a file or a crontab (SAF-12, X-05), or restoring a backup
+  /// into the editor.
+  fileEdit,
+
+  /// Keeping the newest backups, or removing a file's (SAF-14, Q11).
+  backupRemove,
 }
 
 /// The operations controller for every route, which action entries plan

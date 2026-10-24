@@ -1,12 +1,24 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/catalog/engine_sync.dart';
+import 'package:klabautermann_core/src/catalog/engine_vault.dart';
+import 'package:klabautermann_core/src/catalog/klabautermann_records.dart';
 import 'package:seance_core/catalog.dart'
-    show FileVaultStore, InMemoryConflictAwareHostKeyStore;
+    show FileVaultStore, InMemoryConflictAwareHostKeyStore, RecordCrypto;
 import 'package:seance_core/seance_core.dart'
-    show Argon2Params, Secret, SecretKind, SecretVault, secureRandomBytes;
+    show
+        Argon2Params,
+        DecryptedRecord,
+        EncryptedRecord,
+        RecordCodec,
+        Secret,
+        SecretKind,
+        SecretVault,
+        ServerConfig,
+        secureRandomBytes;
 import 'package:test/test.dart';
 
 import '../support/fake_sync_server.dart';
@@ -42,17 +54,30 @@ void main() {
 
   tearDown(() => support.deleteSync(recursive: true));
 
+  // The engine's vault; [open] wires it to the sync it returns.
+  late EngineVault vault;
+
   Future<EngineSync> open({
     SupportDirectoryAccess access = SupportDirectoryAccess.exclusive,
     String? deviceId = _deviceId,
-  }) => EngineSync.open(
-    supportDirectory: support,
-    access: access,
-    deviceId: deviceId,
-    hostKeys: InMemoryConflictAwareHostKeyStore(),
-    keystore: keystore,
-    transport: server.transport,
-  );
+  }) async {
+    late final EngineSync sync;
+    vault = EngineVault(
+      support,
+      access: access,
+      keystore: keystore,
+      enrolled: () => sync.account != null,
+    );
+    return sync = await EngineSync.open(
+      supportDirectory: support,
+      access: access,
+      deviceId: deviceId,
+      hostKeys: InMemoryConflictAwareHostKeyStore(),
+      keystore: keystore,
+      vault: vault,
+      transport: server.transport,
+    );
+  }
 
   File file(String name) => File('${support.path}/$name');
 
@@ -189,6 +214,482 @@ void main() {
     });
   });
 
+  group('synced secrets (03 §4.5, SYN-02)', () {
+    const secret = Secret(
+      id: 'secret-a',
+      kind: SecretKind.password,
+      value: 'from-seance',
+    );
+
+    Future<void> seed({int updatedAt = 1}) async {
+      await server.seedServer(
+        fakeServer(
+          'srv-a',
+          'alpha',
+        ).copyWith(secretRef: 'secret-a', syncSecret: true),
+      );
+      await server.seedSecret(secret, updatedAt: updatedAt);
+    }
+
+    test(
+      'with the switch off a pulled secret stays out of the vault',
+      () async {
+        await seed();
+        final sync = await open();
+
+        final status = await sync.enroll(_enroll);
+
+        expect(status.phase, SyncPhase.succeeded, reason: status.detail);
+        expect(await vault.read('secret-a'), isNull);
+      },
+    );
+
+    test('with the switch on enrollment applies a pulled secret', () async {
+      await seed();
+      final sync = await open();
+      await sync.setSyncSecrets(enabled: true);
+
+      await sync.enroll(_enroll);
+
+      expect((await vault.read('secret-a'))?.value, 'from-seance');
+      expect(server.pushes, 0);
+    });
+
+    test('turning the switch on applies what rounds skipped', () async {
+      await seed();
+      final sync = await open();
+      await sync.enroll(_enroll);
+      expect(await vault.read('secret-a'), isNull);
+
+      await sync.setSyncSecrets(enabled: true);
+
+      expect(sync.syncSecrets, isTrue);
+      expect((await vault.read('secret-a'))?.value, 'from-seance');
+    });
+
+    test('a local password is replaced only by a strictly newer one', () async {
+      final sync = await open();
+      await sync.setSyncSecrets(enabled: true);
+      await sync.enroll(_enroll);
+      await vault.save(secret.copyWith(value: 'typed-here'));
+      final local = (await vault.read('secret-a'))!.updatedAt;
+
+      await seed(updatedAt: local - 1);
+      await sync.runRound();
+      expect((await vault.read('secret-a'))?.value, 'typed-here');
+
+      await server.seedSecret(secret, updatedAt: local + 1);
+      await sync.runRound();
+      expect((await vault.read('secret-a'))?.value, 'from-seance');
+    });
+  });
+
+  test('a save asked for during a round waits for it, so a pulled secret '
+      'and a typed one never interleave on the vault file', () async {
+    final sync = await open();
+    await sync.setSyncSecrets(enabled: true);
+    await sync.enroll(_enroll);
+    await server.seedServer(
+      fakeServer(
+        'srv-a',
+        'alpha',
+      ).copyWith(secretRef: 'secret-a', syncSecret: true),
+    );
+    await server.seedSecret(
+      const Secret(
+        id: 'secret-a',
+        kind: SecretKind.password,
+        value: 'from-seance',
+      ),
+      updatedAt: 1,
+    );
+
+    // The save is asked for while the round waits on its pull, inside
+    // the round's turn on the vault.
+    final order = <String>[];
+    final gate = server.pullGate = Completer<void>();
+    final held = server.pullHeld = Completer<void>();
+    final round = sync.runRound().then((_) => order.add('round'));
+    await held.future;
+    final saving = vault
+        .save(Secret(id: 'secret-b', kind: SecretKind.password, value: 'typed'))
+        .then((_) => order.add('save'));
+    await pumpEventQueue();
+    expect(order, isEmpty);
+    gate.complete();
+    await Future.wait([round, saving]);
+
+    expect(order, ['round', 'save']);
+    expect((await vault.read('secret-a'))?.value, 'from-seance');
+    expect((await vault.read('secret-b'))?.value, 'typed');
+  });
+
+  group('catalog writes (03 §4.4, M5 plan M05)', () {
+    const draft = ServerDraft(
+      id: 'srv-new',
+      label: 'web-3',
+      host: 'web-3.example.com',
+      port: 2222,
+      username: 'deploy',
+      auth: ServerDraftAuth.password,
+    );
+
+    Future<DecryptedRecord> openRecord(EncryptedRecord record) async =>
+        await RecordCrypto(RecordCodec(server.keys.vaultKey)).open(record);
+
+    Future<ServerConfig?> stored(EngineSync sync, String id) async =>
+        (await sync.servers()).where((s) => s.id == id).firstOrNull;
+
+    // An account holding a server, whose record proves the passphrase:
+    // until one does, 04 §4.5 holds every push.
+    Future<EngineSync> enrolled() async {
+      if (server.record('srv-seed') == null) {
+        await server.seedServer(fakeServer('srv-seed', 'seed'));
+      }
+      final sync = await open();
+      await sync.enroll(_enroll);
+      return sync;
+    }
+
+    test('a save seals the server, and the next round pushes exactly its '
+        'record', () async {
+      final sync = await enrolled();
+
+      final answer = await sync.saveServer(
+        const SaveServer(requestId: 'r1', draft: draft),
+      );
+
+      expect(answer, isA<CatalogWritten>());
+      expect((answer as CatalogWritten).serverId, 'srv-new');
+      expect((await stored(sync, 'srv-new'))?.port, 2222);
+      expect(server.pushes, 0);
+
+      final status = await sync.runRound();
+      expect(status.phase, SyncPhase.succeeded, reason: status.detail);
+      expect([for (final r in server.pushed) r.id], ['srv-new']);
+      final sealed = await openRecord(server.record('srv-new')!);
+      expect(ServerConfig.fromJson(sealed.data).host, 'web-3.example.com');
+      expect(sealed.deviceId, _deviceId);
+    });
+
+    test('fields the editor does not show keep their stored values', () async {
+      await server.seedServer(
+        fakeServer(
+          'srv-a',
+          'alpha',
+          jumpHostId: 'srv-j',
+        ).copyWith(secretRef: 'secret-a', startDirectory: '/srv/app'),
+      );
+      final sync = await enrolled();
+      final shown = (await sync.serverDraft('srv-a'))!;
+      expect(shown.startDirectory, '/srv/app');
+
+      await sync.saveServer(
+        SaveServer(
+          requestId: 'r1',
+          draft: ServerDraft(
+            id: shown.id,
+            label: 'alpha-renamed',
+            host: shown.host,
+            port: shown.port,
+            username: shown.username,
+            auth: shown.auth,
+            startDirectory: shown.startDirectory,
+          ),
+        ),
+      );
+
+      final saved = (await stored(sync, 'srv-a'))!;
+      expect(saved.label, 'alpha-renamed');
+      expect(saved.jumpHostId, 'srv-j');
+      expect(saved.secretRef, 'secret-a');
+      expect(saved.createdAt, 1);
+      expect(saved.startDirectory, '/srv/app');
+    });
+
+    test('a save outranks the stored stamp even from a slow clock', () async {
+      final ahead = DateTime.now().millisecondsSinceEpoch + 3600000;
+      await server.seedServer(
+        fakeServer('srv-a', 'alpha').copyWith(updatedAt: ahead),
+        updatedAt: ahead,
+      );
+      final sync = await enrolled();
+      final before = (await stored(sync, 'srv-a'))!.updatedAt;
+
+      await sync.saveServer(
+        SaveServer(requestId: 'r1', draft: (await sync.serverDraft('srv-a'))!),
+      );
+
+      expect((await stored(sync, 'srv-a'))!.updatedAt, before + 1);
+    });
+
+    test("a typed password goes to the vault under the server's entry, and "
+        'syncs with it while the server opts in', () async {
+      final sync = await enrolled();
+      await sync.setSyncSecrets(enabled: true);
+
+      final answer = await sync.saveServer(
+        const SaveServer(
+          requestId: 'r1',
+          draft: ServerDraft(
+            id: 'srv-new',
+            label: 'web-3',
+            host: 'web-3.example.com',
+            port: 22,
+            username: 'deploy',
+            auth: ServerDraftAuth.password,
+            syncSecret: true,
+          ),
+          credential: ServerCredentialEntry(password: 'hunter2'),
+        ),
+      );
+
+      expect((answer as CatalogWritten).credentialWritten, isTrue);
+      final ref = (await stored(sync, 'srv-new'))!.secretRef!;
+      expect((await vault.read(ref))?.value, 'hunter2');
+      await sync.runRound();
+      expect([
+        for (final r in server.pushed) r.id,
+      ], unorderedEquals(['srv-new', 'secret:$ref']));
+    });
+
+    test('blank credential boxes keep the stored entry', () async {
+      final sync = await enrolled();
+      await sync.saveServer(
+        const SaveServer(
+          requestId: 'r1',
+          draft: draft,
+          credential: ServerCredentialEntry(password: 'hunter2'),
+        ),
+      );
+      final ref = (await stored(sync, 'srv-new'))!.secretRef;
+
+      final answer = await sync.saveServer(
+        const SaveServer(
+          requestId: 'r2',
+          draft: draft,
+          credential: ServerCredentialEntry(),
+        ),
+      );
+
+      expect((answer as CatalogWritten).credentialWritten, isFalse);
+      expect((await stored(sync, 'srv-new'))!.secretRef, ref);
+      expect((await vault.read(ref!))?.value, 'hunter2');
+    });
+
+    test('a delete persists its tombstone, past the last edit, and retracts '
+        'the credential no other server shares', () async {
+      final sync = await enrolled();
+      await sync.setSyncSecrets(enabled: true);
+      await sync.saveServer(
+        const SaveServer(
+          requestId: 'r1',
+          draft: ServerDraft(
+            id: 'srv-new',
+            label: 'web-3',
+            host: 'web-3.example.com',
+            port: 22,
+            username: 'deploy',
+            auth: ServerDraftAuth.password,
+            syncSecret: true,
+          ),
+          credential: ServerCredentialEntry(password: 'hunter2'),
+        ),
+      );
+      await sync.runRound();
+      final saved = (await stored(sync, 'srv-new'))!;
+      server.pushed.clear();
+
+      final answer = await sync.deleteServer(
+        const DeleteServer(requestId: 'r2', serverId: 'srv-new'),
+      );
+
+      expect(answer, isA<CatalogWritten>());
+      expect(await stored(sync, 'srv-new'), isNull);
+      await sync.runRound();
+      final tombstones = {for (final r in server.pushed) r.id: r};
+      expect(tombstones['srv-new']!.deleted, isTrue);
+      expect(tombstones['srv-new']!.updatedAt, greaterThan(saved.updatedAt));
+      expect(tombstones['secret:${saved.secretRef}']!.deleted, isTrue);
+    });
+
+    test(
+      'excluding a server retracts it with a strictly later stamp',
+      () async {
+        await server.seedServer(fakeServer('srv-a', 'alpha'), updatedAt: 5);
+        final sync = await enrolled();
+        final shown = (await sync.serverDraft('srv-a'))!;
+
+        await sync.saveServer(
+          SaveServer(
+            requestId: 'r1',
+            draft: ServerDraft(
+              id: shown.id,
+              label: shown.label,
+              host: shown.host,
+              port: shown.port,
+              username: shown.username,
+              auth: shown.auth,
+              excludeFromSync: true,
+            ),
+          ),
+        );
+        await sync.runRound();
+
+        final retraction = server.pushed.single;
+        expect(retraction.deleted, isTrue);
+        expect(retraction.updatedAt, greaterThan(5));
+        // The row stays on this device.
+        expect((await stored(sync, 'srv-a'))!.excludeFromSync, isTrue);
+      },
+    );
+
+    test("preferences seal as the server's pref record, and none removes "
+        'it', () async {
+      await server.seedServer(fakeServer('srv-a', 'alpha'));
+      final sync = await enrolled();
+
+      await sync.setServerPrefs(
+        const SetServerPrefs(
+          requestId: 'r1',
+          serverId: 'srv-a',
+          prefs: ServerPrefs(readOnly: true, marks: {'nginx'}),
+        ),
+      );
+      expect((await sync.serverPrefs())['srv-a']?.readOnly, isTrue);
+      await sync.runRound();
+      final sealed = await openRecord(
+        server.record('klabautermann:pref:srv-a')!,
+      );
+      expect(sealed.data['protectedTargets'], ['nginx']);
+
+      await sync.setServerPrefs(
+        const SetServerPrefs(requestId: 'r2', serverId: 'srv-a', prefs: null),
+      );
+      expect(await sync.serverPrefs(), isEmpty);
+      await sync.runRound();
+      final removal = await openRecord(
+        server.record('klabautermann:pref:srv-a')!,
+      );
+      expect(removal.data['removed'], isTrue);
+    });
+
+    test('an alert rule seals as its rule record', () async {
+      final sync = await enrolled();
+
+      final answer = await sync.putRule(
+        const PutRule(
+          requestId: 'r1',
+          ruleId: 'rule-1',
+          rule: ThresholdRule(
+            metric: 'cpu.busy',
+            op: ThresholdOp.greaterThan,
+            raise: ThresholdBound(value: 90, duration: Duration(minutes: 5)),
+            clear: ThresholdBound(value: 70, duration: Duration(minutes: 2)),
+          ),
+          target: 'srv-a',
+        ),
+      );
+
+      expect(answer, isA<CatalogWritten>());
+      await sync.runRound();
+      expect(
+        [for (final r in server.pushed) r.id],
+        ['klabautermann:rule:rule-1'],
+      );
+      expect(
+        await sync.removeRule(
+          const RemoveRule(requestId: 'r2', ruleId: 'rule-1'),
+        ),
+        isA<CatalogWritten>(),
+      );
+    });
+
+    test('writes are refused before anything is written', () async {
+      final unenrolled = await open();
+      expect(
+        (await unenrolled.saveServer(
+              const SaveServer(requestId: 'r1', draft: draft),
+            ))
+            as CatalogWriteRefused,
+        isA<CatalogWriteRefused>().having(
+          (r) => r.failure,
+          'failure',
+          CatalogWriteFailure.notEnrolled,
+        ),
+      );
+
+      final sync = await enrolled();
+      Future<CatalogWriteFailure> failure(Future<EngineEvent> answer) async =>
+          ((await answer) as CatalogWriteRefused).failure;
+      expect(
+        await failure(
+          sync.saveServer(
+            const SaveServer(
+              requestId: 'r2',
+              draft: ServerDraft(
+                id: 'srv-new',
+                label: 'web-3',
+                host: ' ',
+                port: 22,
+                username: 'deploy',
+                auth: ServerDraftAuth.agent,
+              ),
+            ),
+          ),
+        ),
+        CatalogWriteFailure.invalidDraft,
+      );
+      expect(
+        await failure(
+          sync.deleteServer(
+            const DeleteServer(requestId: 'r3', serverId: 'srv-none'),
+          ),
+        ),
+        CatalogWriteFailure.unknownTarget,
+      );
+      expect(
+        await failure(
+          sync.setServerPrefs(
+            const SetServerPrefs(
+              requestId: 'r4',
+              serverId: 'srv-none',
+              prefs: ServerPrefs(),
+            ),
+          ),
+        ),
+        CatalogWriteFailure.unknownTarget,
+      );
+      expect(
+        await failure(
+          sync.putRule(
+            const PutRule(
+              requestId: 'r5',
+              ruleId: 'rule-1',
+              rule: ThresholdRule(
+                metric: 'cpu.busy',
+                op: ThresholdOp.greaterThan,
+                raise: ThresholdBound(
+                  value: 90,
+                  duration: Duration(minutes: 5),
+                ),
+                clear: ThresholdBound(
+                  value: 70,
+                  duration: Duration(minutes: 2),
+                ),
+              ),
+              target: ' ',
+            ),
+          ),
+        ),
+        CatalogWriteFailure.invalidDraft,
+      );
+      expect([for (final s in await sync.servers()) s.id], ['srv-seed']);
+      await sync.runRound();
+      expect(server.pushed, isEmpty);
+    });
+  });
+
   group('rounds (03 §4.4, D14)', () {
     test('a round applies what changed and pushes nothing', () async {
       await server.seedServer(fakeServer('srv-a', 'alpha'));
@@ -205,6 +706,38 @@ void main() {
         ['alpha', 'bravo'],
       );
       expect(server.pushes, 0);
+    });
+
+    test('a pulled pref shows for its server once the server is in the '
+        'catalog, and the status carries the prefix budget', () async {
+      await server.seedKlabautermann(
+        KlabautermannRecordType.pref.idOf('srv-b'),
+        encodeServerPrefs('srv-b', const ServerPrefs(readOnly: true)),
+      );
+      await server.seedServer(fakeServer('srv-a', 'alpha'));
+      final sync = await open();
+
+      final enrolled = await sync.enroll(_enroll);
+      expect(enrolled.phase, SyncPhase.succeeded, reason: enrolled.detail);
+      // srv-b is absent: its pref waits.
+      expect(await sync.serverPrefs(), isEmpty);
+      expect(enrolled.prefixBudget?.usedBytes, greaterThan(0));
+      expect(enrolled.prefixBudget?.warns, isFalse);
+
+      await server.seedServer(fakeServer('srv-b', 'bravo'));
+      final round = await sync.runRound();
+      expect(round.phase, SyncPhase.succeeded, reason: round.detail);
+      expect((await sync.serverPrefs())['srv-b']?.readOnly, isTrue);
+      expect(file(klabautermannRecordsFileName).existsSync(), isTrue);
+
+      await server.seedKlabautermann(
+        KlabautermannRecordType.pref.idOf('srv-b'),
+        removedPayload(KlabautermannRecordType.pref.idOf('srv-b')),
+        updatedAt: 2,
+      );
+      final removal = await sync.runRound();
+      expect(removal.phase, SyncPhase.succeeded, reason: removal.detail);
+      expect(await sync.serverPrefs(), isEmpty);
     });
 
     test('a session the server rejects fails the round', () async {

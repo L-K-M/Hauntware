@@ -15,30 +15,42 @@ const double _sheetBelowWidth = 600;
 
 /// Plans and previews [intent], if an operations controller is in scope
 /// and no other preview is on its way (the preview is modal). [onRun]
-/// hears of the preview once its plan runs. Every action entry starts
-/// here.
+/// hears of the plan once it runs, and [onRefused], when given, of a
+/// refusal in place of its toast. Every action entry starts here.
 void startAction(
   BuildContext context,
   ActionIntent intent, {
   void Function(String planId, ActionPreview preview)? onRun,
+  ValueChanged<ActionRefusalReason>? onRefused,
 }) {
   final operations = OperationsScope.maybeOf(context);
   if (operations == null || operations.planning) return;
-  unawaited(previewAndRun(context, operations, intent, onRun: onRun));
+  unawaited(
+    previewAndRun(
+      context,
+      operations,
+      intent,
+      onRun: onRun,
+      onRefused: onRefused,
+    ),
+  );
 }
 
 /// Plans [intent] through [operations], shows the preview, and runs the
 /// plan once the user confirms (SAF-04, SAF-05). A refused plan says why
 /// in a toast; the run's progress and end come as toasts from
 /// [ActionResultToasts]. [onRun] hears of the plan and its preview once
-/// it runs, as JOB-08's and CTX-08's output sheets do. A preview that offers another intent
-/// (STK-06's orphan removal) plans that one and shows it instead.
-/// Returns once the preview is closed.
+/// it runs, as JOB-08's and CTX-08's output sheets and the editor do;
+/// [onRefused], when given, hears of a refusal instead of the toast, as
+/// the editor's conflict sheet does. A preview that offers another intent
+/// (STK-06's orphan removal) plans that one and shows it instead. Returns
+/// once the preview is closed.
 Future<void> previewAndRun(
   BuildContext context,
   OperationsController operations,
   ActionIntent intent, {
   void Function(String planId, ActionPreview preview)? onRun,
+  ValueChanged<ActionRefusalReason>? onRefused,
 }) async {
   final overlay = Overlay.of(context, rootOverlay: true);
   final l10n = AppLocalizations.of(context);
@@ -48,6 +60,8 @@ Future<void> previewAndRun(
     if (!context.mounted) return;
 
     switch (answer) {
+      case PlanRefused(:final reason) when onRefused != null:
+        onRefused(reason);
       case PlanRefused(:final reason):
         if (overlay.mounted) {
           showTopToast(overlay, message: l10n.actionRefused(reason.name));

@@ -143,11 +143,11 @@ ComposeInvocation composePs({
 }
 
 /// `... compose ... config` for source verification and viewing
-/// (03 §7.16 STK-01, STK-04, STK-06). Exactly one of [quiet], [hash],
-/// [services] or [formatJson] is expected; the interpolated plain output
-/// is never captured by the app (it can contain secrets). [envFiles]
-/// repeats `--env-file` for a project that recorded several; [profiles]
-/// enables profiles, `*` all of them.
+/// (03 §7.16 STK-01, STK-04, STK-06, STK-09). Exactly one of [quiet],
+/// [hash], [services], [listProfiles] or [formatJson] is expected; the
+/// interpolated plain output is never captured by the app (it can
+/// contain secrets). [envFiles] repeats `--env-file` for a project that
+/// recorded several; [profiles] enables profiles, `*` all of them.
 ComposeInvocation composeConfig({
   String binary = 'docker',
   required String socketPath,
@@ -159,6 +159,7 @@ ComposeInvocation composeConfig({
   bool quiet = false,
   String? hash,
   bool services = false,
+  bool listProfiles = false,
   List<String> profiles = const [],
   bool formatJson = false,
 }) {
@@ -174,6 +175,7 @@ ComposeInvocation composeConfig({
   )..add('config');
   if (quiet) argv.add('-q');
   if (services) argv.add('--services');
+  if (listProfiles) argv.add('--profiles');
   if (hash != null) {
     argv
       ..add('--hash')
@@ -187,8 +189,16 @@ ComposeInvocation composeConfig({
   return ComposeInvocation(argv);
 }
 
+/// The most replicas [composeUp]'s `scale` sets for one service (STK-23):
+/// a bound against a typo, not a Compose limit.
+const int kComposeMaxScale = 100;
+
 /// `... compose ... up -d` (03 §7.16 STK-06, STK-23). `--remove-orphans`
 /// is only added on explicit request; `-v` is never added.
+/// [forceRecreate] recreates [services] even when their configuration is
+/// unchanged, and [scale] sets a service's replica count. [noDeps] keeps
+/// `up` to [services] alone: without it, Compose also creates and starts
+/// their `depends_on` chain.
 ComposeInvocation composeUp({
   String binary = 'docker',
   required String socketPath,
@@ -200,6 +210,9 @@ ComposeInvocation composeUp({
   List<String> services = const [],
   bool detach = true,
   bool removeOrphans = false,
+  bool forceRecreate = false,
+  bool noDeps = false,
+  Map<String, int> scale = const {},
   bool plainProgress = true,
   bool noAnsi = true,
 }) {
@@ -216,6 +229,20 @@ ComposeInvocation composeUp({
   argv.add('up');
   if (detach) argv.add('-d');
   if (removeOrphans) argv.add('--remove-orphans');
+  if (forceRecreate) argv.add('--force-recreate');
+  if (noDeps) argv.add('--no-deps');
+  for (final MapEntry(key: service, value: replicas) in scale.entries) {
+    if (replicas < 0 || replicas > kComposeMaxScale) {
+      throw ArgumentError.value(
+        replicas,
+        'scale[$service]',
+        'not a replica count (0 to $kComposeMaxScale)',
+      );
+    }
+    argv
+      ..add('--scale')
+      ..add('${validateComposeServiceName(service)}=$replicas');
+  }
   argv.addAll(services.map(validateComposeServiceName));
   return ComposeInvocation(argv);
 }
@@ -228,6 +255,7 @@ ComposeInvocation composeDown({
   String? projectDirectory,
   List<String> configFiles = const [],
   String? envFile,
+  List<String> envFiles = const [],
   bool removeOrphans = false,
 }) {
   final argv = _sharedPrefix(
@@ -237,6 +265,7 @@ ComposeInvocation composeDown({
     projectDirectory: projectDirectory,
     configFiles: configFiles,
     envFile: envFile,
+    envFiles: envFiles,
   )..add('down');
   if (removeOrphans) argv.add('--remove-orphans');
   return ComposeInvocation(argv);

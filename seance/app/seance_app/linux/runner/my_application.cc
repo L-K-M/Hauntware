@@ -26,9 +26,33 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
 }
 
-// Implements GApplication::activate.
+// The main window, not Settings: Settings is transient for it, and a
+// link's review dialog belongs to the main window.
+static GtkWindow* main_window(GtkApplication* application) {
+  for (GList* cursor = gtk_application_get_windows(application);
+       cursor != nullptr; cursor = cursor->next) {
+    GtkWindow* window = GTK_WINDOW(cursor->data);
+    if (gtk_window_get_transient_for(window) != nullptr) {
+      continue;
+    }
+    return window;
+  }
+  return nullptr;
+}
+
+// Implements GApplication::activate. Séance is single-instance
+// (docs/design/suite-links.md section 7): a second launch, or a
+// seance:// link, activates the running one, which raises its window
+// instead of opening another engine over the same stores (STORE-02).
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
+
+  GtkWindow* existing = main_window(GTK_APPLICATION(application));
+  if (existing != nullptr) {
+    gtk_window_present(existing);
+    return;
+  }
+
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 
@@ -80,7 +104,10 @@ static gboolean my_application_local_command_line(GApplication* application,
   g_application_activate(application);
   *exit_status = 0;
 
-  return TRUE;
+  // Not handled here: GApplication goes on to forward the arguments to
+  // the primary instance's command-line handler, where app_links reads a
+  // seance:// link.
+  return FALSE;
 }
 
 // Implements GApplication::startup.
@@ -128,5 +155,7 @@ MyApplication* my_application_new() {
 
   return MY_APPLICATION(g_object_new(my_application_get_type(),
                                      "application-id", APPLICATION_ID, "flags",
-                                     G_APPLICATION_NON_UNIQUE, nullptr));
+                                     G_APPLICATION_HANDLES_COMMAND_LINE |
+                                         G_APPLICATION_HANDLES_OPEN,
+                                     nullptr));
 }

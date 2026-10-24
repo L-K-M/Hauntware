@@ -6,412 +6,48 @@ library;
 
 import 'dart:async';
 import 'dart:collection';
-import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:poltergeist_core/poltergeist_core.dart'
-    show validatePathComponent;
+    show
+        DeepLinkFailure,
+        DeepLinkFailureKind,
+        HostDeepLink,
+        ServerDeepLink,
+        parsePoltergeistDeepLink;
 
 import 'quick_connect_address.dart';
 
-const poltergeistDeepLinkScheme = 'poltergeist';
-const poltergeistBrowseRoute = 'browse';
+// The link grammar and display safety moved to seance_core
+// (docs/design/suite-links.md section 5); re-exported so this file's
+// importers do not change.
+export 'package:poltergeist_core/poltergeist_core.dart'
+    show
+        DeepLinkFailure,
+        DeepLinkFailureKind,
+        DeepLinkParse,
+        DeepLinkRequest,
+        HostDeepLink,
+        SafeDeepLinkDisplay,
+        SafeDeepLinkHostDisplay,
+        ServerDeepLink,
+        parsePoltergeistDeepLink,
+        poltergeistBrowseRoute,
+        poltergeistDeepLinkScheme,
+        safeDeepLinkDisplay,
+        safeDeepLinkHostDisplay;
+
 const deepLinkVisibleQueueLimit = 3;
-const _maxRemotePathBytes = 4096;
-const _maxEndpointValueLength = 1024;
 
-final _uuidPattern = RegExp(
-  r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
-  caseSensitive: false,
-);
-
-enum DeepLinkFailureKind {
-  unsupportedLink,
-  invalidParameters,
-  invalidPort,
-  invalidPath,
-  serverNotFound,
-}
-
-@immutable
-final class DeepLinkFailure {
-  const DeepLinkFailure(this.kind, {this.serverId});
-
-  final DeepLinkFailureKind kind;
-  final String? serverId;
-}
-
-sealed class DeepLinkRequest {
-  const DeepLinkRequest({required this.remotePath});
-
-  final String remotePath;
-}
-
-@immutable
-final class ServerDeepLink extends DeepLinkRequest {
-  const ServerDeepLink({required this.serverId, required super.remotePath});
-
-  final String serverId;
-}
-
-@immutable
-final class HostDeepLink extends DeepLinkRequest {
-  const HostDeepLink({
-    required this.host,
-    required this.port,
-    required this.username,
-    required super.remotePath,
-    this.activationCount = 1,
-  });
-
-  final String host;
-  final int port;
-  final String username;
-  final int activationCount;
-
-  ({String host, int port, String username}) get endpointKey =>
-      (host: _endpointHostKey(host), port: port, username: username);
-
+/// The Quick Connect target a host link opens; app-side because
+/// [QuickConnectTarget] is Poltergeist's.
+extension HostDeepLinkQuickConnect on HostDeepLink {
   QuickConnectTarget get target => QuickConnectTarget(
     username: username,
     host: host,
     port: port,
     remotePath: remotePath,
   );
-
-  HostDeepLink coalesce(HostDeepLink newer) => HostDeepLink(
-    host: newer.host,
-    port: newer.port,
-    username: newer.username,
-    remotePath: newer.remotePath,
-    activationCount: activationCount + newer.activationCount,
-  );
-}
-
-String _endpointHostKey(String host) {
-  final zoneStart = host.indexOf('%');
-  if (zoneStart < 0) return host.toLowerCase();
-
-  // IPv6 addresses are case-insensitive, but interface names are not.
-  return '${host.substring(0, zoneStart).toLowerCase()}'
-      '${host.substring(zoneStart)}';
-}
-
-@immutable
-final class DeepLinkParse {
-  const DeepLinkParse._({this.request, this.failure});
-
-  const DeepLinkParse.request(DeepLinkRequest request)
-    : this._(request: request);
-
-  const DeepLinkParse.failure(DeepLinkFailure failure)
-    : this._(failure: failure);
-
-  final DeepLinkRequest? request;
-  final DeepLinkFailure? failure;
-}
-
-DeepLinkParse parsePoltergeistDeepLink(Uri uri) {
-  if (uri.scheme.toLowerCase() != poltergeistDeepLinkScheme ||
-      uri.host.toLowerCase() != poltergeistBrowseRoute ||
-      (uri.path.isNotEmpty && uri.path != '/') ||
-      uri.hasFragment ||
-      uri.hasPort ||
-      uri.userInfo.isNotEmpty) {
-    return const DeepLinkParse.failure(
-      DeepLinkFailure(DeepLinkFailureKind.unsupportedLink),
-    );
-  }
-
-  late final Map<String, List<String>> parameters;
-  try {
-    parameters = uri.queryParametersAll;
-  } on FormatException {
-    return const DeepLinkParse.failure(
-      DeepLinkFailure(DeepLinkFailureKind.invalidParameters),
-    );
-  }
-  if (parameters.values.any((values) => values.length != 1)) {
-    return const DeepLinkParse.failure(
-      DeepLinkFailure(DeepLinkFailureKind.invalidParameters),
-    );
-  }
-
-  final keys = parameters.keys.toSet();
-  if (keys.contains('serverId')) {
-    if (!setEquals(keys, const {'serverId', 'path'})) {
-      return const DeepLinkParse.failure(
-        DeepLinkFailure(DeepLinkFailureKind.invalidParameters),
-      );
-    }
-    final serverId = parameters['serverId']!.single;
-    final path = parameters['path']!.single;
-    if (!_uuidPattern.hasMatch(serverId)) {
-      return const DeepLinkParse.failure(
-        DeepLinkFailure(DeepLinkFailureKind.invalidParameters),
-      );
-    }
-    if (!_validRemotePath(path)) {
-      return const DeepLinkParse.failure(
-        DeepLinkFailure(DeepLinkFailureKind.invalidPath),
-      );
-    }
-    return DeepLinkParse.request(
-      ServerDeepLink(serverId: serverId.toLowerCase(), remotePath: path),
-    );
-  }
-
-  if (!keys.contains('port') &&
-      keys.containsAll(const {'host', 'username', 'path'})) {
-    return const DeepLinkParse.failure(
-      DeepLinkFailure(DeepLinkFailureKind.invalidPort),
-    );
-  }
-  if (!setEquals(keys, const {'host', 'port', 'username', 'path'})) {
-    return const DeepLinkParse.failure(
-      DeepLinkFailure(DeepLinkFailureKind.invalidParameters),
-    );
-  }
-  final rawPort = parameters['port']!.single;
-  final port = _parseDecimalPort(rawPort);
-  if (port == null ||
-      port < quickConnectMinPort ||
-      port > quickConnectMaxPort) {
-    return const DeepLinkParse.failure(
-      DeepLinkFailure(DeepLinkFailureKind.invalidPort),
-    );
-  }
-  final host = parameters['host']!.single;
-  final username = parameters['username']!.single;
-  final path = parameters['path']!.single;
-  if (!_validHost(host) || !_validUsername(username)) {
-    return const DeepLinkParse.failure(
-      DeepLinkFailure(DeepLinkFailureKind.invalidParameters),
-    );
-  }
-  if (!_validRemotePath(path)) {
-    return const DeepLinkParse.failure(
-      DeepLinkFailure(DeepLinkFailureKind.invalidPath),
-    );
-  }
-  return DeepLinkParse.request(
-    HostDeepLink(host: host, port: port, username: username, remotePath: path),
-  );
-}
-
-int? _parseDecimalPort(String value) {
-  if (value.isEmpty) return null;
-
-  var port = 0;
-  for (final unit in value.codeUnits) {
-    if (unit < 0x30 || unit > 0x39) return null;
-    port = port * 10 + unit - 0x30;
-    if (port > quickConnectMaxPort) return null;
-  }
-  return port;
-}
-
-bool _validHost(String value) {
-  if (value.isEmpty || value.length > _maxEndpointValueLength) return false;
-  for (final rune in value.runes) {
-    if (rune <= 0x20 || _isUnsafeDisplayControl(rune)) return false;
-    if (const [0x2f, 0x5c, 0x40, 0x3f, 0x23, 0x26].contains(rune)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-bool _validUsername(String value) {
-  if (value.length > _maxEndpointValueLength) return false;
-  return value.runes.every((rune) => !_isUnsafeDisplayControl(rune));
-}
-
-bool _validRemotePath(String path) {
-  if (!path.startsWith('/') || utf8.encode(path).length > _maxRemotePathBytes) {
-    return false;
-  }
-  if (path == '/') return true;
-  final components = path.substring(1).split('/');
-  try {
-    for (final component in components) {
-      validatePathComponent(component);
-    }
-  } on FormatException {
-    return false;
-  }
-  return true;
-}
-
-@immutable
-class SafeDeepLinkDisplay {
-  const SafeDeepLinkDisplay({
-    required this.text,
-    required this.removedControls,
-  });
-
-  final String text;
-  final bool removedControls;
-}
-
-@immutable
-final class SafeDeepLinkHostDisplay extends SafeDeepLinkDisplay {
-  const SafeDeepLinkHostDisplay({
-    required super.text,
-    required super.removedControls,
-    required this.internationalized,
-    required this.mixedScripts,
-    required this.unrecognizedScripts,
-  });
-
-  final bool internationalized;
-  final bool mixedScripts;
-  final bool unrecognizedScripts;
-}
-
-SafeDeepLinkDisplay safeDeepLinkDisplay(String value) {
-  final safe = StringBuffer();
-  var removed = false;
-  for (final rune in value.runes) {
-    if (_isUnsafeDisplayControl(rune)) {
-      removed = true;
-      continue;
-    }
-    safe.writeCharCode(rune);
-  }
-  return SafeDeepLinkDisplay(text: safe.toString(), removedControls: removed);
-}
-
-SafeDeepLinkHostDisplay safeDeepLinkHostDisplay(String value) {
-  final safe = safeDeepLinkDisplay(value);
-  var internationalized = false;
-  var mixedScripts = false;
-  var unrecognizedScripts = false;
-  for (final label in safe.text.split(RegExp(r'[.\u3002\uff0e\uff61]'))) {
-    final scripts = <_WritingScript>{};
-    var hasUnclassified = false;
-    for (final rune in label.runes) {
-      if (rune > 0x7f) internationalized = true;
-      final script = _scriptOf(rune);
-      if (script != null) {
-        scripts.add(script);
-      } else if (_isUnclassifiedScriptCharacter(rune)) {
-        hasUnclassified = true;
-      }
-    }
-    mixedScripts |= _scriptsAreMixed(scripts);
-    unrecognizedScripts |= hasUnclassified;
-  }
-  return SafeDeepLinkHostDisplay(
-    text: safe.text,
-    removedControls: safe.removedControls,
-    internationalized: internationalized,
-    mixedScripts: mixedScripts,
-    unrecognizedScripts: unrecognizedScripts,
-  );
-}
-
-bool _scriptsAreMixed(Set<_WritingScript> scripts) {
-  if (scripts.length < 2) return false;
-  if (scripts.difference(const {
-    _WritingScript.han,
-    _WritingScript.hiragana,
-    _WritingScript.katakana,
-  }).isEmpty) {
-    return false;
-  }
-  if (scripts.difference(const {
-    _WritingScript.han,
-    _WritingScript.hangul,
-  }).isEmpty) {
-    return false;
-  }
-  return true;
-}
-
-bool _isUnclassifiedScriptCharacter(int rune) {
-  if (rune <= 0x7f) return false;
-  if ((rune >= 0x0300 && rune <= 0x036f) ||
-      (rune >= 0x1ab0 && rune <= 0x1aff) ||
-      (rune >= 0x1dc0 && rune <= 0x1dff) ||
-      (rune >= 0x20d0 && rune <= 0x20ff) ||
-      (rune >= 0xfe20 && rune <= 0xfe2f)) {
-    return false;
-  }
-  return true;
-}
-
-bool _isUnsafeDisplayControl(int rune) =>
-    rune < 0x20 ||
-    (rune >= 0x7f && rune <= 0x9f) ||
-    rune == 0x2028 ||
-    rune == 0x2029 ||
-    _isDefaultIgnorableFormat(rune);
-
-bool _isDefaultIgnorableFormat(int rune) =>
-    rune == 0x00ad ||
-    rune == 0x034f ||
-    rune == 0x061c ||
-    (rune >= 0x115f && rune <= 0x1160) ||
-    (rune >= 0x17b4 && rune <= 0x17b5) ||
-    (rune >= 0x180b && rune <= 0x180f) ||
-    (rune >= 0x200b && rune <= 0x200f) ||
-    (rune >= 0x202a && rune <= 0x202e) ||
-    (rune >= 0x2060 && rune <= 0x206f) ||
-    rune == 0x3164 ||
-    (rune >= 0xfe00 && rune <= 0xfe0f) ||
-    rune == 0xfeff ||
-    rune == 0xffa0 ||
-    (rune >= 0xfff0 && rune <= 0xfff8) ||
-    (rune >= 0x1bca0 && rune <= 0x1bcaf) ||
-    (rune >= 0x1d173 && rune <= 0x1d17a) ||
-    (rune >= 0xe0000 && rune <= 0xe0fff);
-
-enum _WritingScript {
-  latin,
-  greek,
-  cyrillic,
-  armenian,
-  georgian,
-  hebrew,
-  arabic,
-  devanagari,
-  han,
-  hiragana,
-  katakana,
-  hangul,
-}
-
-_WritingScript? _scriptOf(int rune) {
-  if ((rune >= 0x41 && rune <= 0x5a) ||
-      (rune >= 0x61 && rune <= 0x7a) ||
-      (rune >= 0x00c0 && rune <= 0x024f)) {
-    return _WritingScript.latin;
-  }
-  if (rune >= 0x0370 && rune <= 0x03ff) return _WritingScript.greek;
-  if (rune >= 0x0400 && rune <= 0x052f) return _WritingScript.cyrillic;
-  if (rune >= 0x0530 && rune <= 0x058f) return _WritingScript.armenian;
-  if ((rune >= 0x10a0 && rune <= 0x10ff) ||
-      (rune >= 0x1c90 && rune <= 0x1cbf)) {
-    return _WritingScript.georgian;
-  }
-  if (rune >= 0x0590 && rune <= 0x05ff) return _WritingScript.hebrew;
-  if ((rune >= 0x0600 && rune <= 0x06ff) ||
-      (rune >= 0x0750 && rune <= 0x077f)) {
-    return _WritingScript.arabic;
-  }
-  if (rune >= 0x0900 && rune <= 0x097f) return _WritingScript.devanagari;
-  if (rune >= 0x3040 && rune <= 0x309f) return _WritingScript.hiragana;
-  if (rune >= 0x30a0 && rune <= 0x30ff) return _WritingScript.katakana;
-  if ((rune >= 0x3400 && rune <= 0x4dbf) ||
-      (rune >= 0x4e00 && rune <= 0x9fff)) {
-    return _WritingScript.han;
-  }
-  if ((rune >= 0x1100 && rune <= 0x11ff) ||
-      (rune >= 0xac00 && rune <= 0xd7af)) {
-    return _WritingScript.hangul;
-  }
-  return null;
 }
 
 enum DeepLinkReviewDecision { connect, cancel, discardAllRemaining }

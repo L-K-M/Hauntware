@@ -103,6 +103,7 @@ exit 1
         'planchette/packages/ghost_fonts/pubspec.yaml',
         'planchette/packages/ghost_keystore/pubspec.yaml',
         'planchette/packages/ghost_marks/pubspec.yaml',
+        'planchette/packages/ghost_marks_picker/pubspec.yaml',
         'planchette/packages/ghost_servers/pubspec.yaml',
         'planchette/packages/ghost_theme/pubspec.yaml',
         'planchette/packages/ghost_ui/pubspec.yaml',

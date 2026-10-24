@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart'
-    show SidebarMenuAction, SidebarMenuEntry, SidebarMenuSubmenu;
+    show SidebarMenuAction, SidebarMenuEntry, SidebarMenuSubmenu, showTopToast;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -115,11 +115,27 @@ const _unitVerbs = [
   SystemctlVerb.reload,
 ];
 
+/// SVC-05's and SVC-06's verbs (v1), behind "More" on the page and in the
+/// row menu: they change the next boot or a unit's state rather than run
+/// it.
+const _moreUnitVerbs = [
+  SystemctlVerb.enable,
+  SystemctlVerb.disable,
+  SystemctlVerb.mask,
+  SystemctlVerb.unmask,
+  SystemctlVerb.resetFailed,
+];
+
 String _verbLabel(AppLocalizations l10n, SystemctlVerb verb) => switch (verb) {
   SystemctlVerb.start => l10n.unitStart,
   SystemctlVerb.stop => l10n.unitStop,
   SystemctlVerb.restart => l10n.unitRestart,
   SystemctlVerb.reload => l10n.unitReload,
+  SystemctlVerb.enable => l10n.unitEnable,
+  SystemctlVerb.disable => l10n.unitDisable,
+  SystemctlVerb.mask => l10n.unitMask,
+  SystemctlVerb.unmask => l10n.unitUnmask,
+  SystemctlVerb.resetFailed => l10n.unitResetFailed,
   _ => verb.name,
 };
 
@@ -129,18 +145,25 @@ List<SidebarMenuEntry> unitActionEntries(
   BuildContext context, {
   required String serverId,
   required String unit,
+  required UnitScope scope,
 }) {
   if (!actionsAllowedAt(context, serverId, ActionEntryPoint.unitVerb)) {
     return const [];
   }
   final l10n = AppLocalizations.of(context);
+  SidebarMenuAction act(SystemctlVerb verb) => SidebarMenuAction(
+    label: _verbLabel(l10n, verb),
+    onSelected: () => startAction(
+      context,
+      UnitAction(serverId, unit: unit, verb: verb, scope: scope),
+    ),
+  );
   return [
-    for (final verb in _unitVerbs)
-      SidebarMenuAction(
-        label: _verbLabel(l10n, verb),
-        onSelected: () =>
-            startAction(context, UnitAction(serverId, unit: unit, verb: verb)),
-      ),
+    for (final verb in _unitVerbs) act(verb),
+    SidebarMenuSubmenu(
+      label: l10n.unitMoreActions,
+      children: [for (final verb in _moreUnitVerbs) act(verb)],
+    ),
   ];
 }
 
@@ -150,10 +173,14 @@ class UnitActionButtons extends StatelessWidget {
     super.key,
     required this.serverId,
     required this.unit,
+    required this.scope,
   });
 
   final String serverId;
   final String unit;
+
+  /// The manager [unit] belongs to (SVC-09).
+  final UnitScope scope;
 
   @override
   Widget build(BuildContext context) {
@@ -169,13 +196,182 @@ class UnitActionButtons extends StatelessWidget {
             OutlinedButton(
               onPressed: () => startAction(
                 context,
-                UnitAction(serverId, unit: unit, verb: verb),
+                UnitAction(serverId, unit: unit, verb: verb, scope: scope),
               ),
               child: Text(_verbLabel(l10n, verb)),
             ),
+          MenuAnchor(
+            menuChildren: [
+              for (final verb in _moreUnitVerbs)
+                MenuItemButton(
+                  onPressed: () => startAction(
+                    context,
+                    UnitAction(serverId, unit: unit, verb: verb, scope: scope),
+                  ),
+                  child: Text(_verbLabel(l10n, verb)),
+                ),
+            ],
+            builder: (context, controller, _) => OutlinedButton.icon(
+              onPressed: () =>
+                  controller.isOpen ? controller.close() : controller.open(),
+              icon: const Icon(Icons.arrow_drop_down),
+              label: Text(l10n.unitMoreActions),
+            ),
+          ),
         ],
       ),
     );
+  }
+}
+
+/// A cron line's JOB-19 verb as a button in its details. [onRun] gets
+/// the plan id of the run it starts, whose output comes with its end.
+class CronRunButton extends StatelessWidget {
+  const CronRunButton({
+    super.key,
+    required this.serverId,
+    required this.source,
+    required this.raw,
+    required this.onRun,
+  });
+
+  final String serverId;
+
+  /// The line's source and the line as the row shows it ([RunCronJob]).
+  final String source;
+  final String raw;
+  final void Function(String planId, ActionPreview preview) onRun;
+
+  @override
+  Widget build(BuildContext context) => ActionEntry(
+    serverId: serverId,
+    point: ActionEntryPoint.cronRunNow,
+    child: Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: OutlinedButton.icon(
+        onPressed: () => startAction(
+          context,
+          RunCronJob(serverId, source: source, raw: raw),
+          onRun: onRun,
+        ),
+        icon: const Icon(Icons.play_arrow),
+        label: Text(AppLocalizations.of(context).jobsRunNow),
+      ),
+    ),
+  );
+}
+
+/// A cron line's JOB-19 verb for the Jobs table's row menu, or none where
+/// actions are not allowed.
+List<SidebarMenuEntry> cronActionEntries(
+  BuildContext context, {
+  required String serverId,
+  required String source,
+  required String raw,
+  required void Function(String planId, ActionPreview preview) onRun,
+}) {
+  if (!actionsAllowedAt(context, serverId, ActionEntryPoint.cronRunNow)) {
+    return const [];
+  }
+  return [
+    SidebarMenuAction(
+      label: AppLocalizations.of(context).jobsRunNow,
+      onSelected: () => startAction(
+        context,
+        RunCronJob(serverId, source: source, raw: raw),
+        onRun: onRun,
+      ),
+    ),
+  ];
+}
+
+/// [job]'s JOB-07 verb for the Jobs table's row menu: Pause, or Resume
+/// on a paused line. None where actions are not allowed, or on a line
+/// [cronPauseTarget] leaves alone.
+List<SidebarMenuEntry> cronPauseEntries(
+  BuildContext context, {
+  required String serverId,
+  required CronJob job,
+}) {
+  if (cronPauseTarget(job) == null ||
+      !actionsAllowedAt(context, serverId, ActionEntryPoint.cronPause)) {
+    return const [];
+  }
+  final l10n = AppLocalizations.of(context);
+  return [
+    SidebarMenuAction(
+      label: job.paused ? l10n.jobsResume : l10n.jobsPause,
+      onSelected: () => toggleCronPause(context, serverId: serverId, job: job),
+    ),
+  ];
+}
+
+/// [job]'s JOB-07 verb as a button in its details, or nothing where
+/// [cronPauseTarget] leaves the line alone. [onPressed] replaces
+/// [toggleCronPause] from this button's context, for details that close
+/// first and toggle from the view behind them.
+class CronPauseButton extends StatelessWidget {
+  const CronPauseButton({
+    super.key,
+    required this.serverId,
+    required this.job,
+    this.onPressed,
+  });
+
+  final String serverId;
+  final CronJob job;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    if (cronPauseTarget(job) == null) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context);
+    return ActionEntry(
+      serverId: serverId,
+      point: ActionEntryPoint.cronPause,
+      child: OutlinedButton.icon(
+        onPressed:
+            onPressed ??
+            () => toggleCronPause(context, serverId: serverId, job: job),
+        icon: Icon(job.paused ? Icons.play_circle_outline : Icons.pause),
+        label: Text(job.paused ? l10n.jobsResume : l10n.jobsPause),
+      ),
+    );
+  }
+}
+
+/// Pauses [job], or resumes it when it is paused (JOB-07): reads the
+/// crontab that holds it, toggles the line and plans the write as an
+/// edit, whose preview shows the steps and the backup before anything
+/// runs. The edit is planned against the hash of this read, so a crontab
+/// changed in between is refused as an edit's conflict. A read that
+/// fails, or a crontab that no longer holds the line, says so in a toast.
+Future<void> toggleCronPause(
+  BuildContext context, {
+  required String serverId,
+  required CronJob job,
+}) async {
+  final operations = OperationsScope.maybeOf(context);
+  final target = cronPauseTarget(job);
+  if (operations == null || target == null) return;
+  final l10n = AppLocalizations.of(context);
+  final overlay = Overlay.of(context, rootOverlay: true);
+
+  final read = await operations.readEditable(serverId, target);
+  if (!context.mounted) return;
+  switch (read) {
+    case EditReadFailed(:final failure):
+      showTopToast(overlay, message: l10n.editReadFailed(failure.name));
+    case EditContent(:final text, :final sha256):
+      final edited = togglePausedCronJob(text, job, at: DateTime.now());
+      if (edited == null) {
+        showTopToast(overlay, message: l10n.jobsPauseLineChanged);
+        return;
+      }
+      startAction(
+        context,
+        EditFile(serverId, target: target, text: edited, baseSha256: sha256),
+      );
   }
 }
 

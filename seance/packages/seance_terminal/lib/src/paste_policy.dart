@@ -87,7 +87,8 @@ final class TerminalPastePolicy {
       choice = await confirm(
         TerminalPasteReview(
           text: text,
-          lineCount: lines.length,
+          // Text ending in a line break splits into a last empty line.
+          lineCount: lines.last.isEmpty ? lines.length - 1 : lines.length,
           findings: findings == null ? null : List.unmodifiable(findings),
         ),
       );

@@ -81,7 +81,8 @@ final class TerminalByteSession implements SessionTransport {
   void resize(TerminalSize size) {
     if (_closed) return;
     _engine.resize(size);
-    _transport.resize(columns: size.cols, rows: size.rows);
+    // A far end that ended has no TTY left to size.
+    if (!_endedRemotely) _transport.resize(columns: size.cols, rows: size.rows);
   }
 
   @override

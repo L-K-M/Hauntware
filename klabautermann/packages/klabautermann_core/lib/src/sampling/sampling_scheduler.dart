@@ -42,9 +42,11 @@ Duration? samplingPeriod(SampleStream stream, CadenceProfile profile) {
     SampleStream.core => seconds(2, 3, 10),
     SampleStream.fs => seconds(30, 60, 120),
     SampleStream.procs => seconds(3, 5, 10),
-    SampleStream.units => 15,
+    SampleStream.units || SampleStream.userUnits => 15,
     SampleStream.failedUnits => 60,
-    SampleStream.timers || SampleStream.cron => seconds(60, 60, null),
+    SampleStream.timers ||
+    SampleStream.cron ||
+    SampleStream.userTimers => seconds(60, 60, null),
     SampleStream.identity => null,
   };
   return period == null ? null : Duration(seconds: period);

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:klabautermann_core/src/catalog/engine_sync.dart';
@@ -12,8 +13,8 @@ const fakeSyncPassword = 'correct horse';
 
 /// A Séance sync server in memory for one account: prelogin hands out the
 /// KDF salt, login checks the verifier and mints a token, pulls serve the
-/// seeded records in seq order, and a push is counted and refused, so a
-/// pull-only round that pushed would fail.
+/// held records in seq order, and a push merges each record under the
+/// same LWW the server runs, minting a seq for each it takes.
 final class FakeSyncServer {
   FakeSyncServer._(this.salt, this.keys);
 
@@ -43,15 +44,28 @@ final class FakeSyncServer {
   /// Thrown by the next pull, once.
   Object? nextPullError;
 
+  /// Holds every pull until it completes; [pullHeld] completes as one
+  /// waits, so a test can act in the middle of a round. Both stay null
+  /// unless a test sets them: completers cannot cross to an isolate.
+  Completer<void>? pullGate;
+  Completer<void>? pullHeld;
+
   /// Thrown by every call, as a server nobody can reach.
   Object? unreachable;
 
+  /// Push requests, and every record they carried, in order.
   var pushes = 0;
+  final pushed = <EncryptedRecord>[];
+
+  /// The held record [id], or null.
+  EncryptedRecord? record(String id) => _records[id];
   var transports = 0;
 
   /// Forgets the seeded records, so each test starts from an empty account.
   void clearRecords() {
     _records.clear();
+    pushed.clear();
+    pushes = 0;
     _seq = 0;
   }
 
@@ -68,6 +82,40 @@ final class FakeSyncServer {
       ),
     );
     _records[server.id] = sealed.withSeq(++_seq);
+  }
+
+  /// Seals [data] as a `klabautermann:` record under [id] and seeds it.
+  Future<void> seedKlabautermann(
+    String id,
+    Map<String, Object?> data, {
+    int updatedAt = 1,
+  }) async {
+    final sealed = await RecordCrypto(RecordCodec(keys.vaultKey)).seal(
+      DecryptedRecord(
+        id: id,
+        kind: RecordKind.klabautermann,
+        updatedAt: updatedAt,
+        deviceId: 'klabautermann-device',
+        data: data,
+      ),
+    );
+    _records[id] = sealed.withSeq(++_seq);
+  }
+
+  /// Seals [secret] as its `secret:` record under the account key and
+  /// seeds it, stamped [updatedAt].
+  Future<void> seedSecret(Secret secret, {int updatedAt = 1}) async {
+    final id = 'secret:${secret.id}';
+    final sealed = await RecordCrypto(RecordCodec(keys.vaultKey)).seal(
+      DecryptedRecord(
+        id: id,
+        kind: RecordKind.secret,
+        updatedAt: updatedAt,
+        deviceId: 'seance-device',
+        data: secret.toJson(),
+      ),
+    );
+    _records[id] = sealed.withSeq(++_seq);
   }
 
   /// The [SyncTransportFactory] over this server.
@@ -134,6 +182,12 @@ final class _FakeTransport implements SyncTransport {
       _server.nextPullError = null;
       throw error;
     }
+    if (_server.pullGate case final gate?) {
+      if (_server.pullHeld case final held? when !held.isCompleted) {
+        held.complete();
+      }
+      await gate.future;
+    }
     if (token != 'token-1') {
       throw const ApiError(code: 'unauthorized', message: 'Invalid token');
     }
@@ -145,8 +199,26 @@ final class _FakeTransport implements SyncTransport {
 
   @override
   Future<PushResponse> push(List<EncryptedRecord> records) async {
+    _reach();
+    if (token != 'token-1') {
+      throw const ApiError(code: 'unauthorized', message: 'Invalid token');
+    }
     _server.pushes++;
-    throw StateError('a pull-only client pushed ${records.length} records');
+    _server.pushed.addAll(records);
+    final results = <PushResult>[];
+    for (final incoming in records) {
+      final held = _server._records[incoming.id];
+      if (held != null && !identical(Lww.resolve(held, incoming), incoming)) {
+        results.add(
+          PushResult(id: incoming.id, seq: held.seq ?? 0, accepted: false),
+        );
+        continue;
+      }
+      final seq = ++_server._seq;
+      _server._records[incoming.id] = incoming.withSeq(seq);
+      results.add(PushResult(id: incoming.id, seq: seq, accepted: true));
+    }
+    return PushResponse(results: results, latestSeq: _server._seq);
   }
 
   @override
@@ -161,6 +233,9 @@ final class MemoryKeystore implements SyncKeystore {
   /// Makes every write throw, as the engine's port does for a locked
   /// keyring.
   bool refuseWrites = false;
+
+  /// Hears each master key written.
+  void Function(List<int> key)? onWrite;
 
   @override
   Future<void> putApiKey(String name, String value) async {
@@ -181,5 +256,6 @@ final class MemoryKeystore implements SyncKeystore {
   Future<void> writeMasterKey(List<int> key) async {
     if (refuseWrites) throw const SyncKeystoreRefusedException('locked');
     masterKey = List.of(key);
+    onWrite?.call(masterKey!);
   }
 }

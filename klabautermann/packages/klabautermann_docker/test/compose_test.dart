@@ -175,6 +175,19 @@ void main() {
       expect(pull.argv.last, 'pull');
     });
 
+    test('config lists the profiles the files name (STK-09)', () {
+      final profiles = composeConfig(
+        socketPath: '/run/docker.sock',
+        project: 'web',
+        configFiles: const ['/opt/web/compose.yaml'],
+        listProfiles: true,
+      );
+      expect(profiles.argv.sublist(profiles.argv.length - 2), [
+        'config',
+        '--profiles',
+      ]);
+    });
+
     test('config lists services, every profile with --profile *', () {
       final services = composeConfig(
         socketPath: '/run/docker.sock',
@@ -227,6 +240,72 @@ void main() {
           ]),
         );
       }
+    });
+
+    test('up recreates and scales only on request, within bounds', () {
+      final up = composeUp(
+        socketPath: '/run/docker.sock',
+        project: 'web',
+        forceRecreate: true,
+        noDeps: true,
+        scale: {'api': 3},
+        services: ['api'],
+      );
+      expect(up.argv.sublist(up.argv.indexOf('up')), [
+        'up',
+        '-d',
+        '--force-recreate',
+        '--no-deps',
+        '--scale',
+        'api=3',
+        'api',
+      ]);
+      for (final good in [0, kComposeMaxScale]) {
+        expect(
+          composeUp(
+            socketPath: '/run/docker.sock',
+            project: 'web',
+            scale: {'api': good},
+          ).argv,
+          contains('api=$good'),
+        );
+      }
+      for (final bad in [-1, kComposeMaxScale + 1]) {
+        expect(
+          () => composeUp(
+            socketPath: '/run/docker.sock',
+            project: 'web',
+            scale: {'api': bad},
+          ),
+          throwsArgumentError,
+        );
+      }
+      expect(
+        () => composeUp(
+          socketPath: '/run/docker.sock',
+          project: 'web',
+          scale: {'a pi': 1},
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('down names every env file', () {
+      final down = composeDown(
+        socketPath: '/run/docker.sock',
+        project: 'web',
+        envFiles: ['/srv/a.env', '/srv/b.env'],
+      );
+      expect(
+        down.argv,
+        containsAllInOrder([
+          '--env-file',
+          '/srv/a.env',
+          '--env-file',
+          '/srv/b.env',
+          'down',
+        ]),
+      );
     });
 
     test('down never adds -v', () {
