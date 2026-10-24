@@ -332,7 +332,8 @@ void main() {
     final pushed = (jsonDecode('${run.stdout}') as Map).cast<String, String>();
 
     final after = await seance.serverRecords();
-    expect(after.keys, containsAll(pushed.values));
+    // Names a record the old release dropped before reading its fields.
+    expect(after.keys, containsAll([...pushed.values, ...ids]));
     for (final id in ids) {
       expect(after[id]!.seq, before[id]!.seq, reason: id);
       expect(after[id]!.blob, before[id]!.blob, reason: id);
