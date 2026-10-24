@@ -162,6 +162,34 @@ GhostCredentialStrings poltergeistCredentialStrings(AppLocalizations l10n) =>
       connect: l10n.credentialConnect,
     );
 
+/// The connection log view's words in ARB.
+GhostConnectionLogStrings poltergeistConnectionLogStrings(
+  AppLocalizations l10n,
+) => GhostConnectionLogStrings(
+  title: l10n.connectionLogTitle,
+  copy: l10n.connectionLogCopy,
+  copied: l10n.connectionLogCopied,
+  copyFailed: l10n.connectionLogCopyFailed,
+  empty: l10n.connectionLogEmpty,
+);
+
+/// The test report's spoken outcomes in ARB.
+GhostConnectionTestStrings poltergeistConnectionTestStrings(
+  AppLocalizations l10n,
+) => GhostConnectionTestStrings(
+  succeeded: l10n.connectionTestSucceeded,
+  failed: l10n.connectionTestFailed,
+);
+
+/// A test result as the shared report takes it.
+GhostTestReport ghostTestReportOf(ConnectionTestResult result) =>
+    GhostTestReport(
+      ok: result.ok,
+      summary: result.summary,
+      notes: result.notes,
+      log: result.log,
+    );
+
 /// The server editor's words in ARB. Every member has a key of its own,
 /// and the custom colour picker takes the app's colour picker words.
 GhostServerEditorStrings poltergeistServerEditorStrings(
