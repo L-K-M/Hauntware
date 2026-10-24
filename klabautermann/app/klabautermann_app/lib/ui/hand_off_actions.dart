@@ -100,6 +100,24 @@ class FolderHandOffs extends StatelessWidget {
   }
 }
 
+/// A file's hand-off (X-10): "Open in Poltergeist" as an icon button,
+/// hidden where Poltergeist has no intake or handler or could not name
+/// [path] on [serverId].
+class FileHandOff extends StatelessWidget {
+  const FileHandOff({super.key, required this.serverId, required this.path});
+
+  final String serverId;
+  final String path;
+
+  @override
+  Widget build(BuildContext context) => HandOffButton.icon(
+    target: HandOffTarget.poltergeist,
+    link: poltergeistHandOff(serverId, path: path),
+    icon: Icons.open_in_new,
+    label: (l10n) => l10n.handOffOpenInPoltergeist,
+  );
+}
+
 /// Opens [link] in [target]'s app. Hidden without a launcher in scope,
 /// where [target] has no intake or handler, or when [link] is null: the
 /// app could not name what it would open. A link the OS refuses says so
@@ -111,7 +129,17 @@ class HandOffButton extends StatelessWidget {
     required this.link,
     required this.icon,
     required this.label,
-  });
+  }) : compact = false;
+
+  /// An icon button with [label] as its tooltip, for rows with no room
+  /// for words.
+  const HandOffButton.icon({
+    super.key,
+    required this.target,
+    required this.link,
+    required this.icon,
+    required this.label,
+  }) : compact = true;
 
   final HandOffTarget target;
   final Uri? link;
@@ -120,6 +148,9 @@ class HandOffButton extends StatelessWidget {
   /// The button's words, read only once it shows.
   final String Function(AppLocalizations l10n) label;
 
+  /// Whether the button is an icon only.
+  final bool compact;
+
   @override
   Widget build(BuildContext context) {
     final link = this.link;
@@ -127,10 +158,15 @@ class HandOffButton extends StatelessWidget {
       return const SizedBox.shrink();
     }
     final launcher = HandOffScope.maybeOf(context)!;
+    final words = label(AppLocalizations.of(context));
+    void open() => unawaited(_open(context, launcher, link));
+    if (compact) {
+      return IconButton(tooltip: words, icon: Icon(icon), onPressed: open);
+    }
     return TextButton.icon(
-      onPressed: () => unawaited(_open(context, launcher, link)),
+      onPressed: open,
       icon: Icon(icon, size: 18),
-      label: Text(label(AppLocalizations.of(context))),
+      label: Text(words),
     );
   }
 

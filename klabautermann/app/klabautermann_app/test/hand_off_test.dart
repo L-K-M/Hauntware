@@ -9,6 +9,10 @@ import 'package:klabautermann_app/services/hand_off.dart';
 import 'package:klabautermann_app/ui/docker/stacks_panel.dart'
     show StackOverview;
 import 'package:klabautermann_app/ui/hand_off_actions.dart';
+import 'package:klabautermann_app/ui/logs/logs_panel.dart' show LogFilePicker;
+import 'package:klabautermann_core/klabautermann_core.dart'
+    show HostResult, VarLogFiles;
+import 'package:klabautermann_host/klabautermann_host.dart' show LogFileEntry;
 
 import 'support/docker.dart';
 import 'support/fake_engine.dart';
@@ -277,6 +281,67 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(FolderHandOffs), findsNothing);
+    });
+  });
+
+  group('log folders and files (X-04, X-10)', () {
+    Future<void> browse(WidgetTester tester, HandOffLauncher? launcher) async {
+      final picker = SingleChildScrollView(
+        child: LogFilePicker(
+          serverId: _catalogId,
+          selected: '/var/log/syslog',
+          files: Future.value(
+            HostResult(
+              serverId: _catalogId,
+              queryId: 'var-log',
+              payload: VarLogFiles([
+                LogFileEntry(
+                  path: '/var/log/syslog',
+                  bytes: 2048,
+                  modified: DateTime.utc(2026, 10, 21),
+                  readable: true,
+                ),
+              ]),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpWidget(
+        _localized(
+          launcher == null
+              ? picker
+              : HandOffScope(launcher: launcher, child: picker),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the /var/log browser opens the folder and each file', (
+      tester,
+    ) async {
+      final launcher = _Launcher({
+        HandOffTarget.seance,
+        HandOffTarget.poltergeist,
+      });
+      await browse(tester, launcher);
+      expect(find.text('Open terminal here'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Open in Poltergeist'));
+      await tester.pumpAndSettle();
+      expect(launcher.opened, [
+        Uri.parse(
+          'poltergeist://browse?serverId=$_catalogId&path=%2Fvar%2Flog%2Fsyslog',
+        ),
+      ]);
+    });
+
+    testWidgets('without a launcher the browser offers no hand-off', (
+      tester,
+    ) async {
+      await browse(tester, null);
+      expect(find.text('/var/log/syslog'), findsOneWidget);
+      expect(find.byType(TextButton), findsNothing);
+      expect(find.byTooltip('Open in Poltergeist'), findsNothing);
     });
   });
 }
