@@ -188,12 +188,16 @@ void main() {
       String scratchFilesystem = 'tmpfs',
       String? userInstallation,
       String revision = '1',
+      String commandName = 'demo',
+      String runtimeVersion = '50',
+      String availableUpdates = '',
       int dependencyExitCode = 0,
       int copyExitCode = 0,
+      int updateQueryExitCode = 0,
     }) async {
       Directory(scratch).createSync(recursive: true);
       final manifest = File(p.join(sandbox.path, 'manifest.yml'))
-        ..writeAsStringSync('command: demo\n');
+        ..writeAsStringSync('command: $commandName\n');
       final environment = Map<String, String>.of(Platform.environment)
         ..remove('FLATPAK_USER_DIR');
 
@@ -204,7 +208,13 @@ void main() {
           r'''
 set -euo pipefail
 die() { printf '%s\n' "$*" >&2; exit 1; }
-flatpak() { mkdir -p "$FLATPAK_USER_DIR"; }
+flatpak() {
+  if [[ "$1" == remote-ls ]]; then
+    printf '%s' "$AVAILABLE_UPDATES"
+    return "$UPDATE_QUERY_EXIT_CODE"
+  fi
+  mkdir -p "$FLATPAK_USER_DIR"
+}
 stat() {
   if [[ "${@: -1}" == "$TMPDIR/"* ]]; then
     printf '%s\n' "$SCRATCH_FILESYSTEM"
@@ -228,6 +238,9 @@ cp() {
 }
 flatpak-builder() {
   case " $* " in
+    *' --show-manifest '*)
+      printf '{"id":"com.example.%s","command":"%s","runtime":"org.gnome.Platform","runtime-version":"%s","sdk":"org.gnome.Sdk","modules":[{"name":"%s"}]}\n' \
+        "$COMMAND_NAME" "$COMMAND_NAME" "$RUNTIME_VERSION" "$COMMAND_NAME" ;;
     *' --install-deps-only '*)
       [[ "$FLATPAK_USER_DIR" == "$TMPDIR/"* ]]
       if [[ -f "$FLATPAK_USER_DIR/runtime" ]]; then
@@ -264,8 +277,12 @@ flatpak_build "$2" "$3" https://example.test/flathub.flatpakrepo
           'CACHE_FILESYSTEM': cacheFilesystem,
           'SCRATCH_FILESYSTEM': scratchFilesystem,
           'DEPENDENCY_REVISION': revision,
+          'COMMAND_NAME': commandName,
+          'RUNTIME_VERSION': runtimeVersion,
+          'AVAILABLE_UPDATES': availableUpdates,
           'DEPENDENCY_EXIT_CODE': '$dependencyExitCode',
           'COPY_EXIT_CODE': '$copyExitCode',
+          'UPDATE_QUERY_EXIT_CODE': '$updateQueryExitCode',
           if (userInstallation != null) 'FLATPAK_USER_DIR': userInstallation,
         },
         includeParentEnvironment: false,
@@ -288,7 +305,10 @@ flatpak_build "$2" "$3" https://example.test/flathub.flatpakrepo
     test('reuses cached runtimes and stages their updates off ZFS', () async {
       expect((await build()).exitCode, 0);
 
-      final result = await build(revision: '2');
+      final result = await build(
+        revision: '2',
+        availableUpdates: 'runtime/org.gnome.Sdk/x86_64/50',
+      );
 
       expect(result.exitCode, 0, reason: result.stderr as String);
       expect(result.stdout, 'deps:reuse\nflush\nbuild:cached\nsmoke\n');
@@ -300,7 +320,10 @@ flatpak_build "$2" "$3" https://example.test/flathub.flatpakrepo
       expect((await build()).exitCode, 0);
       const dependencyFailure = 23;
 
-      final result = await build(dependencyExitCode: dependencyFailure);
+      final result = await build(
+        dependencyExitCode: dependencyFailure,
+        availableUpdates: 'runtime/org.gnome.Sdk/x86_64/50',
+      );
 
       expect(result.exitCode, dependencyFailure);
       expect(result.stdout, 'deps:reuse\n');
@@ -313,7 +336,9 @@ flatpak_build "$2" "$3" https://example.test/flathub.flatpakrepo
       final obsolete = File(p.join(cache, 'obsolete'))
         ..writeAsStringSync('old');
 
-      final result = await build();
+      final result = await build(
+        availableUpdates: 'runtime/org.gnome.Sdk/x86_64/50',
+      );
 
       expect(result.exitCode, 0, reason: result.stderr as String);
       expect(obsolete.existsSync(), isFalse);
@@ -338,7 +363,10 @@ flatpak_build "$2" "$3" https://example.test/flathub.flatpakrepo
       expect((await build()).exitCode, 0);
       const copyFailure = 28;
 
-      final failed = await build(copyExitCode: copyFailure);
+      final failed = await build(
+        copyExitCode: copyFailure,
+        availableUpdates: 'runtime/org.gnome.Sdk/x86_64/50',
+      );
 
       expect(failed.exitCode, copyFailure);
       expect(Directory(scratch).listSync(), isEmpty);
@@ -347,6 +375,51 @@ flatpak_build "$2" "$3" https://example.test/flathub.flatpakrepo
 
       expect(retried.exitCode, 0, reason: retried.stderr as String);
       expect(retried.stdout, 'deps:fresh\nflush\nbuild:cached\nsmoke\n');
+      expect(File(p.join(cache, 'runtime')).readAsStringSync(), '1');
+    });
+
+    test('skips all cache copies when dependencies are current', () async {
+      expect((await build()).exitCode, 0);
+      const unexpectedCopyFailure = 28;
+
+      final result = await build(copyExitCode: unexpectedCopyFailure);
+
+      expect(result.exitCode, 0, reason: result.stderr as String);
+      expect(result.stdout, 'build:cached\nsmoke\n');
+      expect(File(p.join(cache, 'runtime')).readAsStringSync(), '1');
+      expect(Directory(scratch).listSync(), isEmpty);
+    });
+
+    test('app metadata does not invalidate the runtime snapshot', () async {
+      expect((await build()).exitCode, 0);
+
+      final result = await build(commandName: 'another_app');
+
+      expect(result.exitCode, 0, reason: result.stderr as String);
+      expect(result.stdout, 'build:cached\nsmoke\n');
+    });
+
+    test(
+      'changed runtime dependencies are staged even without updates',
+      () async {
+        expect((await build()).exitCode, 0);
+
+        final result = await build(runtimeVersion: '51', revision: '2');
+
+        expect(result.exitCode, 0, reason: result.stderr as String);
+        expect(result.stdout, 'deps:reuse\nflush\nbuild:cached\nsmoke\n');
+        expect(File(p.join(cache, 'runtime')).readAsStringSync(), '2');
+      },
+    );
+
+    test('fails closed when checking upstream updates fails', () async {
+      expect((await build()).exitCode, 0);
+      const queryFailure = 17;
+
+      final result = await build(updateQueryExitCode: queryFailure);
+
+      expect(result.exitCode, queryFailure);
+      expect(result.stdout, isEmpty);
       expect(File(p.join(cache, 'runtime')).readAsStringSync(), '1');
     });
 

@@ -93,8 +93,23 @@ flatpak_stage_deb() {
 # file. Stage runtime updates elsewhere, then persist them as named files.
 _flatpak_stage_zfs_cache() (
   local manifest="$1" flathub_repo="$2"
-  local cache="$FLATPAK_USER_DIR" scratch installation
+  local cache="$FLATPAK_USER_DIR" scratch installation fingerprint updates
   local -r marker_name=.hauntware-runtime-ready
+
+  # App sources and permissions do not select installed runtime dependencies.
+  fingerprint="$(flatpak-builder --show-manifest "$manifest" | python3 -c '
+import hashlib, json, sys
+manifest = json.load(sys.stdin)
+for key in ("id", "app-id", "command", "finish-args", "modules"):
+    manifest.pop(key, None)
+payload = json.dumps([sys.argv[1], manifest], sort_keys=True).encode()
+print(hashlib.sha256(payload).hexdigest())
+' "$flathub_repo")"
+  if [[ -f "$cache/$marker_name" && "$(cat "$cache/$marker_name")" == "$fingerprint" ]]; then
+    updates="$(flatpak remote-ls --user --all --updates --columns=ref flathub)"
+    [[ -n "$updates" ]] || return 0
+  fi
+
   scratch="$(mktemp -d "${TMPDIR:-/tmp}/hauntware-flatpak-XXXXXX")"
   trap 'rm -rf "$scratch"' EXIT
   trap 'exit 1' HUP INT TERM
@@ -120,7 +135,7 @@ _flatpak_stage_zfs_cache() (
   rm -rf "$cache"
   cp -a "$installation" "$cache"
   sync -f "$cache"
-  touch "$cache/$marker_name"
+  printf '%s\n' "$fingerprint" > "$cache/$marker_name"
 )
 
 # Builds <work>/stage per <manifest> into <work>/build and <work>/repo, with
