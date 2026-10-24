@@ -33,6 +33,7 @@ X display, e.g. under xvfb-run, and xdotool) and the .exe on Windows.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import plistlib
@@ -352,6 +353,21 @@ def summarize_crash_report(body: dict) -> None:
     show(body["threads"][faulting]["frames"])
 
 
+@contextlib.contextmanager
+def scratch_directory():
+    """A temporary directory whose cleanup ignores errors: a killed app can
+    still hold its output file open briefly on Windows.
+
+    TemporaryDirectory(ignore_cleanup_errors=True) does the same but needs
+    Python 3.10, newer than the self-hosted Linux runners' python3.
+    """
+    path = tempfile.mkdtemp(prefix="desktop-launch-")
+    try:
+        yield path
+    finally:
+        shutil.rmtree(path, ignore_errors=True)
+
+
 def title_pattern(value: str) -> re.Pattern[str]:
     try:
         return re.compile(value)
@@ -383,10 +399,7 @@ def main() -> int:
     if not binary.is_file():
         sys.exit(f"Missing {binary}. Build the release app first.")
 
-    # A killed app can still hold its output file open briefly on Windows.
-    with tempfile.TemporaryDirectory(
-        prefix="desktop-launch-", ignore_cleanup_errors=True
-    ) as scratch:
+    with scratch_directory() as scratch:
         work = Path(scratch)
         if sys.platform == "darwin":
             probe = MacProbe(work)

@@ -287,9 +287,16 @@ void main() {
     await tester.pump();
     await tester.runAsync(() async {
       await tester.tap(find.byTooltip('Save locally'));
-      await settle(
-        () => file.readAsStringSync(encoding: latin1).contains('uno'),
-      );
+      // The saver moves the original aside while it checks the backup
+      // (planchette_core's saveTextDocument), so a poll can land in that
+      // window and find no file; that reads as not saved yet.
+      await settle(() {
+        try {
+          return file.readAsStringSync(encoding: latin1).contains('uno');
+        } on PathNotFoundException {
+          return false;
+        }
+      });
     });
 
     final saved = file.readAsBytesSync();

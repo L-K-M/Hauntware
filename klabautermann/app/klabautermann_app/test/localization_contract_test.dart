@@ -203,6 +203,12 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // next fleet then drops. Never shown.
     "''",
   },
+  'lib/controllers/container_terminals.dart': {
+    // A terminal id the engine keys a shell's events by (03 §7.13), and
+    // the rejected request's class name, which RequestRejected carries.
+    r"'shell-${_count++}'",
+    r"'$OpenTerminal'",
+  },
   'lib/controllers/log_streams.dart': {
     // A log stream id the engine keys a stream's events by (03 §10.1), and
     // the rejected request's class name, which RequestRejected carries.
@@ -408,6 +414,18 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'WorkingDir'",
     "'  '",
     r"'${variable.name}=${variable.value.display}'",
+  },
+  'lib/ui/docker/container_terminal.dart': {
+    // Shell paths the picker offers, run as typed, and the empty field
+    // that leaves the choice to the engine.
+    "'/bin/bash'",
+    "'/bin/sh'",
+    "'/bin/ash'",
+    "''",
+    // The separator of the command's words, as the exec runs them.
+    "' '",
+    // The select key whose ARB branch says the engine stopped.
+    "'engineStopped'",
   },
   'lib/ui/docker/container_logs.dart': {
     // The logging driver Docker names `none`, matched, never shown, and

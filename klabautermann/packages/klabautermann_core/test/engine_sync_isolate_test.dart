@@ -165,6 +165,7 @@ void main() {
     final round = await untilSyncEnds(client, events, keystore);
     final roundStatus = round.last as SyncStatus;
     expect(roundStatus.phase, SyncPhase.succeeded, reason: roundStatus.detail);
+    expect(server.pushed, isEmpty, reason: 'nothing was written');
   });
 
   test('a saved server shows in the fleet, confirmed on this device, '
@@ -217,12 +218,11 @@ void main() {
     client.send(
       const ReadServerDraft(requestId: 'read-1', serverId: 'srv-new'),
     );
-    while (await events.moveNext()) {
-      if (events.current case ServerDraftRead(:final draft)) {
-        expect(draft?.host, 'web-3.example.com');
-        break;
-      }
+    ServerDraftRead? read;
+    while (read == null && await events.moveNext()) {
+      if (events.current case final ServerDraftRead answer) read = answer;
     }
+    expect(read?.draft?.host, 'web-3.example.com');
   });
 
   test('synced preferences go out after the fleet, then only when they '
