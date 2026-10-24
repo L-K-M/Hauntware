@@ -5119,6 +5119,116 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerLogsShow => 'Show logs';
 
   @override
+  String get dockerShellOpen => 'Open a shell';
+
+  @override
+  String get dockerShellHide => 'Show details';
+
+  @override
+  String dockerShellTitle(String container) {
+    return 'Shell in $container';
+  }
+
+  @override
+  String get dockerShellShellLabel => 'Shell';
+
+  @override
+  String get dockerShellShellAuto => 'Automatic: /bin/bash, then /bin/sh';
+
+  @override
+  String get dockerShellUserLabel => 'User';
+
+  @override
+  String get dockerShellUserHint => 'The container\'s user';
+
+  @override
+  String get dockerShellStart => 'Open shell';
+
+  @override
+  String get dockerShellOpening => 'Opening the shell…';
+
+  @override
+  String dockerShellRunning(String command) {
+    return 'Running $command';
+  }
+
+  @override
+  String dockerShellEnded(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'exited': 'The shell exited.',
+      'closed': 'The shell was closed.',
+      'observeOnly': 'Management is off for this server, so no shell opens.',
+      'readOnly': 'Read-only mode is on, so no shell opens.',
+      'notInFleet': 'This server is no longer in the fleet.',
+      'endpointUnavailable':
+          'The server\'s Docker endpoint could not be reached.',
+      'noChannel':
+          'No session channel was free on the server. Close another view or shell and try again.',
+      'tooMany':
+          'This server already has the most shells open. Close one first.',
+      'refused': 'The container is gone, or Docker refused the shell.',
+      'linkLost': 'The connection to the server was lost.',
+      'adminEnded': 'Admin mode ended, and the shell with it.',
+      'failed': 'The shell failed.',
+      'other': 'The engine stopped, and the shell with it.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerShellExitCode(int code) {
+    return 'Exit code $code.';
+  }
+
+  @override
+  String get dockerShellReopen => 'Open again';
+
+  @override
+  String get dockerShellChange => 'Change shell';
+
+  @override
+  String get dockerShellClose => 'Close the shell';
+
+  @override
+  String get dockerShellCopy => 'Copy';
+
+  @override
+  String get dockerShellPaste => 'Paste';
+
+  @override
+  String dockerShellPasteTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Paste $count lines?',
+      one: 'Paste 1 line?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerShellPasteFindings =>
+      'Some of these lines look dangerous. Each line runs as you paste it.';
+
+  @override
+  String get dockerShellPasteUnchecked =>
+      'These lines could not be checked. Each line runs as you paste it.';
+
+  @override
+  String dockerShellPasteFinding(int line, String explanation) {
+    return 'Line $line: $explanation';
+  }
+
+  @override
+  String get dockerShellPasteAll => 'Paste all';
+
+  @override
+  String get dockerShellPasteFirstLine => 'First line only';
+
+  @override
+  String get dockerShellPasteCancel => 'Cancel';
+
+  @override
   String get dockerLogsTitle => 'Logs';
 
   @override
