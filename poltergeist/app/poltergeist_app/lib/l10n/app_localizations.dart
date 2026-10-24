@@ -388,24 +388,6 @@ abstract class AppLocalizations {
   /// **'Disconnected'**
   String get connectionDisconnectedTitle;
 
-  /// Title of the collapsible transcript under a connection-test result.
-  ///
-  /// In en, this message translates to:
-  /// **'Connection log'**
-  String get connectionLogTitle;
-
-  /// Button that copies the transcript to the clipboard.
-  ///
-  /// In en, this message translates to:
-  /// **'Copy'**
-  String get connectionLogCopy;
-
-  /// Placeholder inside the transcript card when there is nothing to show.
-  ///
-  /// In en, this message translates to:
-  /// **'(no log captured)'**
-  String get connectionLogEmpty;
-
   /// Reopens the connection after a failure.
   ///
   /// In en, this message translates to:
@@ -9555,6 +9537,18 @@ abstract class AppLocalizations {
   /// **'Use colour'**
   String get colorPickerUse;
 
+  /// Title of the collapsible transcript under a connection-test result.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection log'**
+  String get connectionLogTitle;
+
+  /// Button that copies the transcript to the clipboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get connectionLogCopy;
+
   /// Toast after the transcript was copied.
   ///
   /// In en, this message translates to:
@@ -9566,6 +9560,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not copy the log'**
   String get connectionLogCopyFailed;
+
+  /// Placeholder inside the transcript card when there is nothing to show.
+  ///
+  /// In en, this message translates to:
+  /// **'(no log captured)'**
+  String get connectionLogEmpty;
 
   /// Screen-reader label of the success icon in the connection-test report.
   ///

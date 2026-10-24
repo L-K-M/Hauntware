@@ -16,6 +16,13 @@ dependencies:
   # to Poltergeist's version so the plugin's native code and default
   # options match the sibling's.
   flutter_secure_storage: 10.3.1
+  # LOG-10's export (M5 plan P15): the save dialog and the share sheet.
+  # Not the siblings' file_picker 11.0.3 and share_plus 12.0.2: both need
+  # win32 5, which package_info_plus 10.2.2 above rules out for the same
+  # flutter_secure_storage_windows reason; these are the first releases
+  # on win32 6.
+  file_picker: 13.1.0
+  share_plus: 13.3.1
   # gen-l10n's generated localizations use intl primitives.
   intl: 0.20.3
   # The engine-isolate protocol and client the app composes over (03 D18).
@@ -32,6 +39,11 @@ dependencies:
   # (test/architecture_contract_test.dart).
   ghost_servers:
     path: ../../../planchette/packages/ghost_servers
+  # The container shell (03 §7.13, CTX-07): Séance's xterm engine,
+  # keyboard bar, appearance mapping and paste policy, reached only
+  # through its barrel (test/architecture_contract_test.dart).
+  seance_terminal:
+    path: ../../../seance/packages/seance_terminal
   # The theme model and builder: the brand style, presets and appearance
   # value the light and dark themes are built from (03 D9, §10.9).
   ghost_theme:

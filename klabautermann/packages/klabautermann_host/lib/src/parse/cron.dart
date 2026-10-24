@@ -7,7 +7,9 @@ library;
 
 import 'package:meta/meta.dart';
 
+import '../cron/document.dart' show CrontabLine, kCrontabPauseMarker;
 import '../cron/expression.dart';
+import '../cron/managed.dart';
 import '../hws/collector.dart' show ArgValidators;
 import '../hws/program.dart' show kTimeoutAbsentMarker;
 import 'models.dart' show splitBlocks;
@@ -36,6 +38,8 @@ final class CronJob {
     this.expression,
     this.user,
     this.cronTz,
+    this.paused = false,
+    this.managedBy,
   });
 
   /// Where the line came from: `crontab`, `/etc/crontab`, or a
@@ -59,8 +63,30 @@ final class CronJob {
   /// The `CRON_TZ` in effect at this line, when set.
   final String? cronTz;
 
-  /// The original line, for display.
+  /// The original line, for display: for a paused job, the whole
+  /// comment that holds it.
   final String raw;
+
+  /// The line is a job this app paused (JOB-07, [kCrontabPauseMarker]),
+  /// which cron skips until it is resumed.
+  final bool paused;
+
+  /// The manager whose block holds the line (JOB-09), which makes it
+  /// read-only; null for one no manager owns.
+  final CrontabManager? managedBy;
+
+  /// This job as [user]'s.
+  CronJob withUser(String user) => CronJob(
+    source: source,
+    schedule: schedule,
+    command: command,
+    raw: raw,
+    expression: expression,
+    user: user,
+    cronTz: cronTz,
+    paused: paused,
+    managedBy: managedBy,
+  );
 
   Map<String, Object?> toJson() => {
     'source': source,
@@ -70,6 +96,8 @@ final class CronJob {
     'cronTz': cronTz,
     'expression': expression?.toJson(),
     'raw': raw,
+    if (paused) 'paused': true,
+    'managedBy': ?managedBy?.name,
   };
 }
 
@@ -186,19 +214,36 @@ ParseResult<List<CronJob>> parseUserCrontab(
     table: _CronTable.user,
     jobs: parsed,
     warnings: warnings,
+    user: user,
   );
-  return ParseResult([
-    for (final job in parsed)
-      CronJob(
-        source: job.source,
-        schedule: job.schedule,
-        command: job.command,
-        raw: job.raw,
-        expression: job.expression,
-        user: user,
-        cronTz: job.cronTz,
-      ),
-  ], warnings);
+  return ParseResult([for (final job in parsed) job.withUser(user)], warnings);
+}
+
+/// Parses one cron source's [text], as `crontab -l` printed it or as the
+/// file reads (JOB-19): a system table (`/etc/crontab`, `/etc/cron.d/*`)
+/// when [systemTable], whose lines name their user, otherwise a user
+/// table whose jobs carry [user]. Each job carries [source]. Never
+/// throws.
+List<CronJob> parseCrontabText(
+  String text, {
+  required String source,
+  required bool systemTable,
+  String? user,
+}) {
+  final parsed = <CronJob>[];
+  _parseCrontab(
+    text.split('\n'),
+    source: source,
+    table: systemTable ? _CronTable.system : _CronTable.user,
+    jobs: parsed,
+    warnings: [],
+    user: systemTable ? null : user,
+    cronDFile: source.startsWith(_cronDPrefix)
+        ? source.substring(_cronDPrefix.length)
+        : null,
+  );
+  if (systemTable || user == null) return parsed;
+  return [for (final job in parsed) job.withUser(user)];
 }
 
 /// The `crontab_meta` block: `tool=missing` or `rc=<n>`. rc 0 means a
@@ -242,17 +287,25 @@ final _envLine = RegExp(r'^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$');
 /// user's `crontab -l` has none (03 §7.7).
 enum _CronTable { user, system }
 
-/// Parses crontab-formatted lines of a [table] into [jobs].
+/// Where the `/etc/cron.d` files' sources start.
+const _cronDPrefix = '/etc/cron.d/';
+
+/// Parses crontab-formatted lines of a [table] into [jobs], each with the
+/// manager [crontabOwners] finds for its line in [user]'s crontab or the
+/// cron.d file [cronDFile].
 void _parseCrontab(
   List<String> lines, {
   required String source,
   required _CronTable table,
   required List<CronJob> jobs,
   required List<String> warnings,
+  String? user,
+  String? cronDFile,
 }) {
   final env = <String, String>{};
-  for (final line in lines) {
-    _cronLine(line, source, table, env, jobs, warnings);
+  final owners = crontabOwners(lines, user: user, cronDFile: cronDFile);
+  for (final (i, line) in lines.indexed) {
+    _cronLine(line, source, table, env, jobs, warnings, owners[i]);
   }
 }
 
@@ -264,8 +317,9 @@ void _parseCronD(
   List<CronJob> jobs,
   List<String> warnings,
 ) {
-  final env = <String, String>{};
-  var file = '';
+  // Each file is a table of its own: its environment and its managers'
+  // blocks start afresh.
+  final files = <String, List<String>>{};
   for (final line in lines) {
     final tab = line.indexOf('\t');
     if (tab < 0) {
@@ -274,24 +328,23 @@ void _parseCronD(
       }
       continue;
     }
-    final name = line.substring(0, tab);
-    if (name != file) {
-      file = name;
-      env.clear();
-    }
-    _cronLine(
-      line.substring(tab + 1),
-      '/etc/cron.d/$name',
-      _CronTable.system,
-      env,
-      jobs,
-      warnings,
+    (files[line.substring(0, tab)] ??= []).add(line.substring(tab + 1));
+  }
+  for (final MapEntry(key: name, value: fileLines) in files.entries) {
+    _parseCrontab(
+      fileLines,
+      source: '$_cronDPrefix$name',
+      table: _CronTable.system,
+      jobs: jobs,
+      warnings: warnings,
+      cronDFile: name,
     );
   }
 }
 
 /// One crontab line: skip blank/comments, record env assignments
-/// (`CRON_TZ` scopes the jobs after it), else parse the job.
+/// (`CRON_TZ` scopes the jobs after it), else parse the job, which a
+/// paused job's comment holds (JOB-07).
 void _cronLine(
   String line,
   String source,
@@ -299,8 +352,25 @@ void _cronLine(
   Map<String, String> env,
   List<CronJob> jobs,
   List<String> warnings,
+  CrontabManager? managedBy,
 ) {
   final t = line.trim();
+  if (CrontabLine(line).pausedJob case final held?) {
+    final job = held.trim();
+    if (job.isEmpty || job.startsWith('#') || _envLine.hasMatch(held)) return;
+    _cronJob(
+      job,
+      line,
+      source,
+      table,
+      env['CRON_TZ'],
+      jobs,
+      warnings,
+      managedBy: managedBy,
+      paused: true,
+    );
+    return;
+  }
   if (t.isEmpty || t.startsWith('#')) return;
   final envMatch = _envLine.firstMatch(line);
   if (envMatch != null) {
@@ -314,7 +384,16 @@ void _cronLine(
     env[envMatch[1]!] = value;
     return;
   }
-  _cronJob(t, line, source, table, env['CRON_TZ'], jobs, warnings);
+  _cronJob(
+    t,
+    line,
+    source,
+    table,
+    env['CRON_TZ'],
+    jobs,
+    warnings,
+    managedBy: managedBy,
+  );
 }
 
 /// A trimmed job line [t]: an `@` macro or five fields, a system table's
@@ -331,8 +410,10 @@ void _cronJob(
   _CronTable table,
   String? cronTz,
   List<CronJob> jobs,
-  List<String> warnings,
-) {
+  List<String> warnings, {
+  CrontabManager? managedBy,
+  bool paused = false,
+}) {
   final macro = t.startsWith('@');
   final system = table == _CronTable.system;
   final split = _leadingFields(t, (macro ? 1 : 5) + (system ? 1 : 0));
@@ -356,6 +437,8 @@ void _cronJob(
       expression: expression,
       user: user,
       cronTz: cronTz,
+      paused: paused,
+      managedBy: managedBy,
     ),
   );
 }

@@ -87,9 +87,14 @@ void main() {
   test('gio trash delivers a file and it restores from the listing', () async {
     final backend = GioTrashBackend();
 
-    final fixture = await Directory.systemTemp.createTemp(
-      'poltergeist-trash-roundtrip-',
-    );
+    // Under the home directory, not the system temp: gio refuses to trash
+    // from a mount it counts as system internal ("Trashing on system
+    // internal mounts is not supported"), which a separately mounted /tmp
+    // is on some CI runners. A file on the home's filesystem always goes
+    // to the home trash.
+    final fixture = await Directory(
+      Platform.environment['HOME']!,
+    ).createTemp('.poltergeist-trash-roundtrip-');
     addTearDown(() async {
       if (fixture.existsSync()) await fixture.delete(recursive: true);
     });

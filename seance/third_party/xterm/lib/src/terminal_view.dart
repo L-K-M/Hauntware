@@ -28,6 +28,17 @@ import 'package:xterm/src/ui/themes.dart';
 
 enum _SelectionHandle { start, end }
 
+/// [seance fork] The keys [TerminalViewState._linkModifierOutranksRemote]
+/// reads.
+final _linkModifierKeys = {
+  LogicalKeyboardKey.metaLeft,
+  LogicalKeyboardKey.metaRight,
+  LogicalKeyboardKey.shiftLeft,
+  LogicalKeyboardKey.shiftRight,
+  LogicalKeyboardKey.altLeft,
+  LogicalKeyboardKey.altRight,
+};
+
 class TerminalView extends StatefulWidget {
   const TerminalView(
     this.terminal, {
@@ -186,8 +197,19 @@ class TerminalViewState extends State<TerminalView> {
   String? _composingText;
 
   int _tapCount = 0;
+
+  /// [seance fork] The link the press now down opens instead of reaching a
+  /// mouse-reporting remote, captured at mouse-down, or null when that press
+  /// reaches the remote; see [_claimPressForLink].
+  Uri? _pressOpensLink;
+
   Uri? _hoveredLink;
   bool _hoverInvalidationPending = false;
+
+  /// [seance fork] Global position of the mouse hovering the view, or null
+  /// once it leaves. Holding Cmd changes which links show, and the pointer
+  /// may not move when it does.
+  Offset? _hoverPosition;
 
   /// [seance fork] The cell of the last plain primary click, kept as a
   /// content-glued buffer anchor so a later shift-click can select the range
@@ -212,6 +234,7 @@ class TerminalViewState extends State<TerminalView> {
     _controller.addListener(_updateSelectionHandles);
     widget.terminal.addListener(_updateSelectionHandles);
     _focusNode.addListener(_onSelectionFocusChange);
+    HardwareKeyboard.instance.addHandler(_onLinkModifierKey);
     _shortcutManager = ShortcutManager(
       shortcuts: widget.shortcuts ?? defaultTerminalShortcuts,
     );
@@ -280,6 +303,7 @@ class TerminalViewState extends State<TerminalView> {
     _controller.removeListener(_invalidateLinkHover);
     _controller.removeListener(_updateSelectionHandles);
     _focusNode.removeListener(_onSelectionFocusChange);
+    HardwareKeyboard.instance.removeHandler(_onLinkModifierKey);
     if (widget.focusNode == null) {
       _focusNode.dispose();
     }
@@ -395,6 +419,7 @@ class TerminalViewState extends State<TerminalView> {
       onSecondaryTapUp:
           widget.onSecondaryTapUp != null ? _onSecondaryTapUp : null,
       onLongPressEnd: (_) => _onTouchSelectionEnd(),
+      claimPressForLink: _claimPressForLink,
       readOnly: widget.readOnly,
       child: child,
     );
@@ -404,7 +429,10 @@ class TerminalViewState extends State<TerminalView> {
           ? SystemMouseCursors.click
           : widget.mouseCursor,
       onHover: widget.onLinkTap == null ? null : _onLinkHover,
-      onExit: (_) => _setHoveredLink(null),
+      onExit: (_) {
+        _hoverPosition = null;
+        _setHoveredLink(null);
+      },
       child: child,
     );
 
@@ -435,10 +463,28 @@ class TerminalViewState extends State<TerminalView> {
   }
 
   void _onLinkHover(PointerHoverEvent event) {
+    _hoverPosition = event.position;
+    _refreshLinkHover();
+  }
+
+  /// [seance fork] Re-reads the hovered link when a modifier that decides
+  /// it goes up or down, so the hand follows Cmd without the pointer moving.
+  bool _onLinkModifierKey(KeyEvent event) {
+    if (_hoverPosition != null &&
+        widget.onLinkTap != null &&
+        _linkModifierKeys.contains(event.logicalKey)) {
+      _refreshLinkHover();
+    }
+    return false;
+  }
+
+  void _refreshLinkHover() {
+    final position = _hoverPosition;
+    if (position == null) return;
     final offset = renderTerminal.getCellOffset(
-      renderTerminal.globalToLocal(event.position),
+      renderTerminal.globalToLocal(position),
     );
-    _setHoveredLink(_remoteOwnsTapAt(offset)
+    _setHoveredLink(_remoteOwnsTapAt(offset) && !_linkModifierOutranksRemote
         ? null
         : widget.terminal.buffer.getLinkAt(offset));
   }
@@ -448,6 +494,58 @@ class TerminalViewState extends State<TerminalView> {
       _controller.shouldSendPointerInput(PointerInput.tap) &&
       widget.terminal.mouseMode != MouseMode.none &&
       offset.y >= widget.terminal.buffer.scrollBack;
+
+  bool get _isApplePlatform =>
+      defaultTargetPlatform == TargetPlatform.macOS ||
+      defaultTargetPlatform == TargetPlatform.iOS;
+
+  /// [seance fork] Cmd has no bit in the mouse protocol, so a remote that
+  /// reports clicks (tmux with `mouse on`, a TUI) would read a Cmd-click as a
+  /// plain one. On Apple platforms the link modifier outranks mouse reporting,
+  /// as in other macOS terminals. Ctrl, the link modifier elsewhere, is a
+  /// reportable modifier, so there the remote keeps the click.
+  bool get _linkModifierOutranksRemote {
+    final keys = HardwareKeyboard.instance;
+    return _isApplePlatform &&
+        keys.isMetaPressed &&
+        !keys.isShiftPressed &&
+        !keys.isAltPressed;
+  }
+
+  /// [seance fork] Decides, as a primary press goes down at [press], whether
+  /// it opens a link instead of reaching a mouse-reporting remote. The
+  /// gesture handler asks at the raw pointer layer — before any recognizer
+  /// resolves, so the decision sees the modifiers the press started with —
+  /// and a claimed press reaches the remote neither down nor up. The release
+  /// then honours the same decision: Cmd pressed only after a reported press
+  /// opens nothing, and a claimed press opens its link even when the
+  /// modifiers change before its release. Without the capture a press the
+  /// remote never saw would be re-decided at mouse-up and vanish whenever
+  /// the modifiers drifted — and for a quick click the tap's own down only
+  /// resolves at mouse-up, so even its claim would come too late.
+  bool _claimPressForLink(PointerDownEvent press, int tapCount) {
+    // Every press re-decides: one that does not claim clears the claim, so
+    // no release can act on a stale one.
+    _pressOpensLink = null;
+
+    if (widget.onLinkTap == null || tapCount != 1) return false;
+
+    final keys = HardwareKeyboard.instance;
+    final linkGesture = press.kind == PointerDeviceKind.touch ||
+        (_isApplePlatform ? keys.isMetaPressed : keys.isControlPressed);
+    if (!linkGesture || keys.isShiftPressed || keys.isAltPressed) return false;
+
+    final offset = renderTerminal.getCellOffset(press.localPosition);
+    // Cmd outranks a mouse-reporting remote on Apple. Everywhere else a
+    // link modifier is reportable and a remote that owns the tap keeps it,
+    // but a press nobody owns (no mouse reporting, or the scrollback) has
+    // to decide here — its release must open the link whatever the
+    // modifiers do in between.
+    if (!_linkModifierOutranksRemote && _remoteOwnsTapAt(offset)) return false;
+
+    _pressOpensLink = widget.terminal.buffer.getLinkAt(offset);
+    return _pressOpensLink != null;
+  }
 
   void _invalidateLinkHover() {
     if (_hoveredLink == null || _hoverInvalidationPending) return;
@@ -468,24 +566,34 @@ class TerminalViewState extends State<TerminalView> {
 
   void _onTapUp(TapUpDetails details) {
     final offset = renderTerminal.getCellOffset(details.localPosition);
-    final keys = HardwareKeyboard.instance;
-    final apple =
-        defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.iOS;
-    final linkGesture =
-        details.kind == PointerDeviceKind.touch ||
-        (apple ? keys.isMetaPressed : keys.isControlPressed);
+    // [seance fork] The press decides: a claimed press opens its link even
+    // when the link modifier is gone (or Shift/Alt is down) at mouse-up.
+    // The remote never saw that press, so a release that opens nothing here
+    // would lose the click entirely.
+    final claimedLink = _pressOpensLink;
+    _pressOpensLink = null;
+    if (claimedLink != null) {
+      // Intentionally no re-validation at release: the press decided, and a
+      // link that scrolled away between the press and its release must not
+      // eat the click.
+      widget.onLinkTap?.call(claimedLink);
+    } else {
+      final keys = HardwareKeyboard.instance;
+      final linkGesture = details.kind == PointerDeviceKind.touch ||
+          (_isApplePlatform ? keys.isMetaPressed : keys.isControlPressed);
 
-    // Click-only mouse reporting consumes DOWN but not UP. Keep that release
-    // from opening a browser even when the gesture handler passes it through.
-    if (widget.onLinkTap != null &&
-        _tapCount == 1 &&
-        linkGesture &&
-        !keys.isShiftPressed &&
-        !keys.isAltPressed &&
-        !_remoteOwnsTapAt(offset)) {
-      final link = widget.terminal.buffer.getLinkAt(offset);
-      if (link != null) widget.onLinkTap!(link);
+      // Click-only mouse reporting consumes DOWN but not UP. Keep that
+      // release from opening a browser even when the gesture handler passes
+      // it through.
+      if (widget.onLinkTap != null &&
+          _tapCount == 1 &&
+          linkGesture &&
+          !keys.isShiftPressed &&
+          !keys.isAltPressed &&
+          !_remoteOwnsTapAt(offset)) {
+        final link = widget.terminal.buffer.getLinkAt(offset);
+        if (link != null) widget.onLinkTap!(link);
+      }
     }
     widget.onTapUp?.call(details, offset);
 

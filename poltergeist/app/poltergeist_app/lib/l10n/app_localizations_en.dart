@@ -168,15 +168,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectionDisconnectedTitle => 'Disconnected';
 
   @override
-  String get connectionLogTitle => 'Connection log';
-
-  @override
-  String get connectionLogCopy => 'Copy';
-
-  @override
-  String get connectionLogEmpty => '(no log captured)';
-
-  @override
   String get connectionRetry => 'Retry';
 
   @override
@@ -6776,10 +6767,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get colorPickerUse => 'Use colour';
 
   @override
+  String get connectionLogTitle => 'Connection log';
+
+  @override
+  String get connectionLogCopy => 'Copy';
+
+  @override
   String get connectionLogCopied => 'Log copied';
 
   @override
   String get connectionLogCopyFailed => 'Could not copy the log';
+
+  @override
+  String get connectionLogEmpty => '(no log captured)';
 
   @override
   String get connectionTestSucceeded => 'Connection test succeeded';
