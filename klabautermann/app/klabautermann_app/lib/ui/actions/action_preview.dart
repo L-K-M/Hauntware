@@ -39,12 +39,12 @@ void startAction(
 /// Plans [intent] through [operations], shows the preview, and runs the
 /// plan once the user confirms (SAF-04, SAF-05). A refused plan says why
 /// in a toast; the run's progress and end come as toasts from
-/// [ActionResultToasts]. [onRun] hears of the plan once it runs, as
-/// JOB-08's output sheet and the editor do; [onRefused], when given,
-/// hears of a refusal instead of the toast, as the editor's conflict
-/// sheet does. A preview that offers another intent (STK-06's orphan
-/// removal) plans that one and shows it instead. Returns once the
-/// preview is closed.
+/// [ActionResultToasts]. [onRun] hears of the plan and its preview once
+/// it runs, as JOB-08's and CTX-08's output sheets and the editor do;
+/// [onRefused], when given, hears of a refusal instead of the toast, as
+/// the editor's conflict sheet does. A preview that offers another intent
+/// (STK-06's orphan removal) plans that one and shows it instead. Returns
+/// once the preview is closed.
 Future<void> previewAndRun(
   BuildContext context,
   OperationsController operations,

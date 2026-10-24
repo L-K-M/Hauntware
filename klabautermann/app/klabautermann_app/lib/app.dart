@@ -12,6 +12,7 @@ import 'package:klabautermann_core/klabautermann_core.dart'
 
 import 'controllers/admin_controller.dart';
 import 'controllers/announcement_controller.dart';
+import 'controllers/pin_publication_controller.dart';
 import 'controllers/safety_controller.dart';
 import 'controllers/appearance_controller.dart';
 import 'controllers/coverage_controller.dart';
@@ -60,6 +61,7 @@ class KlabautermannApp extends StatelessWidget {
     required this.announcements,
     this.safety,
     this.syncSecrets,
+    this.pinPublication,
     this.admin,
     this.operations,
     required this.dockerNotice,
@@ -99,6 +101,10 @@ class KlabautermannApp extends StatelessWidget {
   /// outlives an engine run. Null in tests that leave it out, where the
   /// Sync settings tab is a placeholder.
   final SyncSecretsController? syncSecrets;
+
+  /// The host key sharing assertion (M5 plan M07), one engine run's like
+  /// [sync]; null in tests that leave it out.
+  final PinPublicationController? pinPublication;
 
   /// Admin mode per server (03 §8.2), one engine run's like [fleet]. Null
   /// in tests that leave it out, where the header shows no admin chip.
@@ -324,6 +330,7 @@ class KlabautermannApp extends StatelessWidget {
               monitorSet: fleet.monitorSettings,
               safety: safety,
               syncSecrets: syncSecrets,
+              pinPublication: pinPublication,
             ),
           },
         );

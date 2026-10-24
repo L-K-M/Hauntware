@@ -11,6 +11,7 @@ import 'package:klabautermann_app/controllers/docker_notice_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/controllers/operations_controller.dart';
+import 'package:klabautermann_app/controllers/pin_publication_controller.dart';
 import 'package:klabautermann_app/controllers/prompt_controller.dart';
 import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/controllers/server_editor_controller.dart';
@@ -22,6 +23,7 @@ import 'package:klabautermann_core/klabautermann_core.dart'
         DeviceSettingsIssue,
         ImportStoreIssue,
         InstanceLockUnavailable,
+        PinPublicationState,
         SyncAccountInfo,
         SyncStoreIssue;
 
@@ -66,6 +68,11 @@ final class AppHarness {
     coverage.dispose();
     announcements.dispose();
     dockerNotice.dispose();
+    switch (sync.pinPublication) {
+      case final PinPublicationController controller:
+        controller.dispose();
+      case _:
+    }
     sync.dispose();
     serverEditor.dispose();
     admin?.dispose();
@@ -117,6 +124,7 @@ Future<AppHarness> pumpApp(
   ImportStoreIssue? importStoreIssue,
   InstanceLockUnavailable? instanceLockIssue,
   SyncAccountInfo? syncAccount,
+  PinPublicationState? pinPublication,
   List<SyncStoreIssue> syncStoreIssues = const [],
   OpenSettingsWindow? openSettingsWindow,
   ValueListenable<bool>? toolbarBand,
@@ -141,7 +149,13 @@ Future<AppHarness> pumpApp(
     coverage: coverage ?? CoverageController(firstRunCardDismissed: true),
     announcements: announcements ?? AnnouncementController(),
     dockerNotice: dockerNotice ?? DockerNoticeController(),
-    sync: SyncController(engine, account: syncAccount),
+    sync: SyncController(
+      engine,
+      account: syncAccount,
+      pinPublication: pinPublication == null
+          ? null
+          : PinPublicationController(engine, initial: pinPublication),
+    ),
     serverEditor: ServerEditorController(engine),
     admin: admin ? AdminController(engine) : null,
     operations: operations ? OperationsController(engine) : null,
@@ -165,6 +179,10 @@ Future<AppHarness> pumpApp(
       dockerNotice: harness.dockerNotice,
       sync: harness.sync,
       serverEditor: harness.serverEditor,
+      pinPublication: switch (harness.sync.pinPublication) {
+        final PinPublicationController controller => controller,
+        _ => null,
+      },
       settingsIssue: settingsIssue,
       importStoreIssue: importStoreIssue,
       syncStoreIssues: syncStoreIssues,
