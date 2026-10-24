@@ -6431,4 +6431,25 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsDeviceNameNotChanged =>
       'The device name could not be changed.';
+
+  @override
+  String get serverEditorTestSucceeded => 'Connection test succeeded';
+
+  @override
+  String get serverEditorTestFailed => 'Connection test failed';
+
+  @override
+  String get connectionLogTitle => 'Connection log';
+
+  @override
+  String get connectionLogCopy => 'Copy';
+
+  @override
+  String get connectionLogCopied => 'Log copied';
+
+  @override
+  String get connectionLogCopyFailed => 'Could not copy the log';
+
+  @override
+  String get connectionLogEmpty => '(no log captured)';
 }

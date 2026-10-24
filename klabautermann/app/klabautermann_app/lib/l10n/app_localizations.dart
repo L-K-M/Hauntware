@@ -8553,6 +8553,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The device name could not be changed.'**
   String get settingsDeviceNameNotChanged;
+
+  /// Headline of the inline report when the server accepted the test's sign-in.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection test succeeded'**
+  String get serverEditorTestSucceeded;
+
+  /// Headline of the inline report when the server or the network refused the test.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection test failed'**
+  String get serverEditorTestFailed;
+
+  /// Title of the collapsible SSH transcript under a connection test's report.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection log'**
+  String get connectionLogTitle;
+
+  /// Button that copies the connection log.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get connectionLogCopy;
+
+  /// Toast after the connection log was copied.
+  ///
+  /// In en, this message translates to:
+  /// **'Log copied'**
+  String get connectionLogCopied;
+
+  /// Toast when copying the connection log failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not copy the log'**
+  String get connectionLogCopyFailed;
+
+  /// Shown in place of an empty connection log.
+  ///
+  /// In en, this message translates to:
+  /// **'(no log captured)'**
+  String get connectionLogEmpty;
 }
 
 class _AppLocalizationsDelegate

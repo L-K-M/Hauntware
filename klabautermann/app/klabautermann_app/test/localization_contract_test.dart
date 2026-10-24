@@ -100,9 +100,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'prefs-${_count++}'",
     r"'ServerPrefsNotSavedException: $failure, $detail'",
   },
-  // A server edit's request id, matched in the engine's answer.
+  // A server edit's request id, matched in the engine's answer, and the
+  // rejected request's class name, which RequestRejected carries.
   'lib/controllers/server_editor_controller.dart': {
     r"'server-edit-${_count++}'",
+    r"'$TestServerConnection'",
   },
   // The not-saved diagnostic; the Sync tab prints it and shows its own
   // ARB text (settingsSyncSecretsNotSaved).

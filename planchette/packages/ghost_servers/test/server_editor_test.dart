@@ -434,6 +434,22 @@ void main() {
       expect(find.text('Browse…'), findsNothing);
     });
 
+    testWidgets('on a narrow phone Test connection wraps above Cancel and '
+        'Save instead of overflowing', (tester) async {
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await openEditor(tester);
+
+      final testButton = find.widgetWithText(OutlinedButton, 'Test connection');
+      await scrollTo(tester, saveButton);
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.getBottomLeft(testButton).dy,
+        lessThanOrEqualTo(tester.getTopLeft(saveButton).dy),
+      );
+    });
+
     testWidgets('a host without a connection test hides Test and its note', (
       tester,
     ) async {

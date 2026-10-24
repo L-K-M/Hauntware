@@ -346,6 +346,29 @@ void main() {
       expect(unlinked.reason, 'no connection to ssh-config:web');
     });
 
+    test('a connection test is rejected while links are off, since '
+        'nothing then dials (FL-03)', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+
+      client.send(
+        const TestServerConnection(
+          requestId: 't-1',
+          draft: ServerDraft(
+            id: 'srv-1',
+            label: 'web',
+            host: '192.0.2.10',
+            port: 22,
+            username: 'me',
+            auth: ServerDraftAuth.agent,
+          ),
+        ),
+      );
+      final answer = (await next(events)) as RequestRejected;
+      expect(answer.requestName, 'TestServerConnection');
+      expect(answer.reason, contains('links are off'));
+    });
+
     test('an endpoint choice is rejected while links are off', () async {
       final client = await spawnEngine();
       final (:events, fleet: _) = await started(client);
