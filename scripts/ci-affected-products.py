@@ -45,6 +45,9 @@ _FILE_READERS = {
     # klabautermann/test/integration mounts Poltergeist's sshd fixture
     # config and runs its check_config.dart.
     "poltergeist/test/integration/": ("klabautermann",),
+    # Its fixture's sync service builds Séance's sync server, which no
+    # Klabautermann package depends on (M5 plan M08a).
+    "seance/packages/seance_sync_server/": ("klabautermann",),
     # The app's architecture contract reads seance_terminal's barrel to
     # check what it passes on, before the app depends on the package. It
     # names the directory, so the prefix has no trailing slash.

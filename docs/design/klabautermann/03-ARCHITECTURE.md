@@ -1617,7 +1617,7 @@ klabautermann/
                          format v1, HTTPS posting), crates/klabautermann-notify
                          (T1 helper binary), crates/klabautermann-companion (M9:
                          collectors, parsers, rules, inbox producer)
-  test/integration/      sshd + docker:dind fixture: Compose files, run.sh (11.3, D53); sync server (v1.x)
+  test/integration/      sshd + docker:dind fixture: Compose files, run.sh (11.3, D53); sync server (M5)
   scripts/               build.sh, release.sh (forwarder), package-linux.sh (thin
                          wrapper), build-flatpak.sh, test-macos-keyboard.{sh,mm}
   flatpak/ch.lkmc.klabautermann.yml
@@ -7425,6 +7425,23 @@ its files and writes an audit record whose three steps carry `--host
 unix:///var/run/docker.sock`. A refused `RunAction` takes its plan, so a
 second run of it reads `unknownPlan`. Locally the suite takes about 90 s,
 40 s of it the stack stop waiting out each container's grace period.
+
+As built in M5 (M08a), the sync service arrives ahead of v1.x: a `sync`
+service built from `seance/packages/seance_sync_server/Dockerfile` with
+`seance/` as the context, as `ci.yml` builds it, runs in memory
+(`SEANCE_DB_PATH=`) with open registration and publishes port 8787 on
+127.0.0.1 only. `check_docker_exposure.dart` rejects a sync service that
+publishes another port or beyond loopback, mounts a volume or stores on
+disk. `run.sh` waits until it answers a prelogin and exports its address
+as `KLABAUTERMANN_SYNC_SERVER`, and `klabautermann_core/test/integration/
+sync_convergence_test.dart` (tags `integration` and `sync`) runs a
+Séance `SyncCoordinator` and the engine's sync on one account over
+HTTP: server edits, deletes and exclusions both ways; `pref` and `rule`
+records Séance neither applies nor re-pushes; a forged unsealed
+tombstone ignored and a sealed removal applied (X3); a first-seen pin
+installed through `putIfNoConflict` and a conflicting one reported in
+`pinConflicts` and left out of the store (X4). The v1.x alert delivery
+still adds TLS and reachability from the sshd host to this service.
 
 As built in M5 (M29), `seed_docker.sh` adds the v1 stacks: `services`
 (`app` and `worker`), `downable`, `override` (deployed from

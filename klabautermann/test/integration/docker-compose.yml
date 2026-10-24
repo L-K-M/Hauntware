@@ -165,6 +165,26 @@ services:
         published: "2250"
         protocol: tcp
 
+  # Séance's sync server, for the two-device convergence suite (M5 plan
+  # M08a, 03 §11.3): built from its own Dockerfile with the Séance
+  # workspace as the context, as ci.yml builds it, with open registration
+  # and in-memory storage, so nothing outlives the container. It
+  # publishes its one port on loopback and mounts nothing
+  # (check_docker_exposure.dart).
+  sync:
+    image: klabautermann-sync:fixture
+    build:
+      context: ../../../seance
+      dockerfile: packages/seance_sync_server/Dockerfile
+    environment:
+      SEANCE_OPEN_REGISTRATION: "1"
+      SEANCE_DB_PATH: ""
+    ports:
+      - target: 8787
+        host_ip: 127.0.0.1
+        published: "2251"
+        protocol: tcp
+
 volumes:
   # dind's socket directory, shared with the Docker host.
   docker-run:

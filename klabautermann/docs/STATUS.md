@@ -1857,6 +1857,15 @@ is on main:
   ghost_theme's shared editor (presets, mode, colours, font, corners,
   copy, paste and reset), in the app and in the desktop settings window,
   in Klabautermann's words.
+- Sync convergence (M5 M08a): the fixture runs Séance's sync server as
+  a `sync` service, in memory with open registration and published on
+  loopback only, and `sync_convergence_test.dart` signs a Séance
+  `SyncCoordinator` and the engine's sync into one account on it. Server
+  edits, deletes and exclusions converge both ways; Klabautermann's
+  `pref` and `rule` records reach Séance, which neither applies nor
+  re-pushes them; an unsealed forged tombstone is ignored and a sealed
+  removal applied (X3); a first-seen pin installs on Séance and a
+  conflicting one is reported and left out (X4).
 - Pause and Resume (M5 M27c, JOB-07): a cron line in the login user's
   crontab, or another user's in admin mode, pauses and resumes from its
   row menu or details as an edit of that crontab, previewed and backed
