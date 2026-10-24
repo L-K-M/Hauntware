@@ -248,6 +248,36 @@ void main() {
       await tester.pumpAndSettle();
       expect(launcher.opened.single.queryParameters['path'], '/srv/web');
     });
+
+    testWidgets("a stack's overview leaves the row out where neither app "
+        'takes links', (tester) async {
+      final engine = FakeEngineClient();
+      final monitoring = MonitoringController(engine);
+      addTearDown(() async {
+        monitoring.dispose();
+        await engine.close();
+      });
+      await tester.pumpWidget(
+        _localized(
+          HandOffScope(
+            launcher: _Launcher(const {}),
+            child: StackOverview(
+              monitoring: monitoring,
+              serverId: _catalogId,
+              project: 'web',
+            ),
+          ),
+        ),
+      );
+      engine.emit(
+        dockerStackList(_catalogId, [
+          dockerStack('web', []),
+        ], at: DateTime(2026, 10, 21)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(FolderHandOffs), findsNothing);
+    });
   });
 }
 

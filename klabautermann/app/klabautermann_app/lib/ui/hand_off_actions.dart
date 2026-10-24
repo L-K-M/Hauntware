@@ -38,20 +38,31 @@ class OpenInSeanceButton extends StatelessWidget {
   );
 }
 
+/// The link [target]'s app opens for [folder] on [serverId], or null when
+/// that app could not name it.
+Uri? _folderLink(HandOffTarget target, String serverId, String folder) =>
+    switch (target) {
+      HandOffTarget.seance => seanceHandOff(serverId, folder: folder),
+      HandOffTarget.poltergeist => poltergeistHandOff(serverId, path: folder),
+    };
+
+/// Whether a [HandOffButton] for [target] opening [link] shows: the one
+/// rule the buttons and [folderHandOffsShown] share.
+bool _handOffShown(BuildContext context, HandOffTarget target, Uri? link) {
+  final launcher = HandOffScope.maybeOf(context);
+  return launcher != null && link != null && launcher.available(target);
+}
+
 /// Whether [FolderHandOffs] for [folder] on [serverId] shows anything,
 /// so a layout that spaces its children leaves no gap where it would not.
 bool folderHandOffsShown(
   BuildContext context, {
   required String serverId,
   required String folder,
-}) {
-  final launcher = HandOffScope.maybeOf(context);
-  if (launcher == null) return false;
-  return launcher.available(HandOffTarget.seance) &&
-          seanceHandOff(serverId, folder: folder) != null ||
-      launcher.available(HandOffTarget.poltergeist) &&
-          poltergeistHandOff(serverId, path: folder) != null;
-}
+}) => HandOffTarget.values.any(
+  (target) =>
+      _handOffShown(context, target, _folderLink(target, serverId, folder)),
+);
 
 /// A folder's hand-offs (X-04, X-10): "Open terminal here" in Séance and
 /// "Open in Poltergeist", each hidden where its app has no intake or
@@ -74,13 +85,13 @@ class FolderHandOffs extends StatelessWidget {
       children: [
         HandOffButton(
           target: HandOffTarget.seance,
-          link: seanceHandOff(serverId, folder: folder),
+          link: _folderLink(HandOffTarget.seance, serverId, folder),
           icon: Icons.terminal,
           label: (l10n) => l10n.handOffOpenTerminalHere,
         ),
         HandOffButton(
           target: HandOffTarget.poltergeist,
-          link: poltergeistHandOff(serverId, path: folder),
+          link: _folderLink(HandOffTarget.poltergeist, serverId, folder),
           icon: Icons.folder_open_outlined,
           label: (l10n) => l10n.handOffOpenInPoltergeist,
         ),
@@ -111,11 +122,11 @@ class HandOffButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final launcher = HandOffScope.maybeOf(context);
     final link = this.link;
-    if (launcher == null || link == null || !launcher.available(target)) {
+    if (link == null || !_handOffShown(context, target, link)) {
       return const SizedBox.shrink();
     }
+    final launcher = HandOffScope.maybeOf(context)!;
     return TextButton.icon(
       onPressed: () => unawaited(_open(context, launcher, link)),
       icon: Icon(icon, size: 18),
