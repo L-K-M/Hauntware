@@ -13,17 +13,25 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_marks/ghost_marks.dart'
+    as marks
+    show ServerAppearanceStrings, showServerColorPicker, showServerMarkPicker;
+import 'package:ghost_marks_picker/ghost_marks_picker.dart'
+    show pickServerMarkImage;
+import 'package:ghost_servers/ghost_servers.dart';
+import 'package:ghost_servers/server_config_draft.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/application_error_reporter.dart';
 import '../services/transfer_limits_controller.dart'
     show transferConcurrencyChoices;
 import '../services/uuid.dart';
 import '../theme/app_theme.dart' show poltergeistMonoTextStyle;
-import 'connection_test_report.dart';
+import 'ghost_servers_adapter.dart'
+    show ghostTestReportOf, poltergeistServerEditorStrings;
 import 'server_appearance.dart';
-import 'server_color_picker.dart';
-import 'server_mark_picker.dart';
+import 'server_appearance_strings.dart';
 import 'top_toast.dart';
 
 /// What the editor needs from the application layer — the seams Séance's
@@ -78,24 +86,15 @@ abstract class ServerEditorDelegate {
   });
 }
 
-/// Whether turning "exclude from sync" on needs confirming before it takes.
-///
-/// Only when there is something to retract: a server being added has never
-/// been anywhere, one already excluded has been retracted once already, and
-/// with no sync account configured there is no other device that could lose
-/// it. Turning the switch back off is never destructive.
-///
-/// [syncConfigured] is read as it is *now*, which is not quite the same
-/// question. A server that synced before the account was unlinked still has a
-/// copy out there, and the stored exclusion would retract it on the first
-/// round after re-linking, unprompted. Answering that properly needs a "has
-/// ever synced" bit this device does not keep, and the alternative — always
-/// confirming — puts a dialog in front of someone who has never had a sync
-/// account at all. The narrow gap is recorded here rather than papered over.
+/// Whether turning "exclude from sync" on needs confirming before it takes:
+/// ghost_servers' [ghostExcludingNeedsConfirmation], over a stored config.
 bool excludingNeedsConfirmation({
   required ServerConfig? existing,
   required bool syncConfigured,
-}) => existing != null && !existing.excludeFromSync && syncConfigured;
+}) => ghostExcludingNeedsConfirmation(
+  existing: existing == null ? null : ghostServerDraftOf(existing),
+  syncConfigured: syncConfigured,
+);
 
 /// The dialog [excludingNeedsConfirmation] gates, as a function so a test can
 /// tap its buttons without standing up an editor.
@@ -103,21 +102,23 @@ bool excludingNeedsConfirmation({
 /// Dismissing it — barrier tap, Escape — resolves to null, which has to read
 /// as "no": the caller is about to delete data on other devices, and the one
 /// input that means the user never answered must not be the one that proceeds.
-Future<bool> confirmSyncExclusion(BuildContext context) async {
-  final l10n = AppLocalizations.of(context);
+Future<bool> confirmSyncExclusion(
+  BuildContext context,
+  GhostServerEditorStrings strings,
+) async {
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
-      title: Text(l10n.serverEditorExcludeConfirmTitle),
-      content: Text(l10n.serverEditorExcludeConfirmBody),
+      title: Text(strings.excludeConfirmTitle),
+      content: Text(strings.excludeConfirmBody),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: Text(l10n.serverEditorExcludeConfirmCancel),
+          child: Text(strings.excludeConfirmCancel),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, true),
-          child: Text(l10n.serverEditorExcludeConfirmAction),
+          child: Text(strings.excludeConfirmAction),
         ),
       ],
     ),
@@ -132,27 +133,293 @@ Future<void> showServerEditor(
   ServerEditorDelegate delegate,
   ServerConfig? existing,
 ) {
+  final l10n = AppLocalizations.of(context);
+  final strings = poltergeistServerEditorStrings(l10n);
   return showDialog<void>(
     context: context,
     builder: (_) => Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
-        child: _ServerEditor(delegate: delegate, existing: existing),
+        child: _ServerEditor(
+          delegate: _PoltergeistEditorSession(delegate, existing, strings),
+          existing: existing == null ? null : ghostServerDraftOf(existing),
+          strings: strings,
+          appearanceStrings: PoltergeistServerAppearanceStrings(l10n),
+          monoStyle: poltergeistMonoTextStyle,
+          hexStyle: poltergeistMonoTextStyle,
+          // Poltergeist shows the start folder; Séance's editor hides it.
+          fields: const {GhostServerOptionalField.startDirectory},
+          sections: [_TransferLimitSection(delegate, existing?.id, l10n)],
+          onCopyError: ApplicationErrorReporter().report,
+        ),
       ),
     ),
   );
 }
 
+/// One editor's session over the app's [ServerEditorDelegate]: the stored
+/// config the draft edits, the save rules that turn a draft and the boxes
+/// as typed into a config and a credential, and the connection test's log.
+final class _PoltergeistEditorSession extends GhostServerEditorDelegate {
+  _PoltergeistEditorSession(this._delegate, this._existing, this._strings);
+
+  final ServerEditorDelegate _delegate;
+  final ServerConfig? _existing;
+  final GhostServerEditorStrings _strings;
+
+  @override
+  List<String> get serverGroups => existingServerGroups(_delegate.servers);
+
+  @override
+  bool get syncConfigured => _delegate.syncConfigured;
+
+  @override
+  Color get themeSeed => _delegate.themeSeed;
+
+  @override
+  String newId() => uuidV4();
+
+  @override
+  Future<String?> pickIdentityFile() => _delegate.pickIdentityFile();
+
+  /// Nothing is awaited before the stamp and the config are built, and the
+  /// draft and the boxes were read when Save was pressed, so an edit made
+  /// while the keyring answers is not saved without passing validation.
+  @override
+  Future<bool> save(GhostServerSave save) async {
+    final existing = _existing;
+    // Against the freshest copy this device holds, not the one captured when
+    // the editor opened: a round that pulled a newer record meanwhile is
+    // exactly the record this stamp has to outrank.
+    final latest = existing == null
+        ? null
+        : _delegate.servers
+              .where((s) => s.id == existing.id)
+              .map((s) => s.updatedAt)
+              .fold<int>(existing.updatedAt, math.max);
+    final now = nextUpdatedAt(
+      latest,
+      now: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    final existingRef = existing?.secretRef;
+    final entry = save.credential;
+    final auth = authMethodOfGhost(save.draft.authMethod);
+    // Its `secretRef` is the one thing that cannot be known yet — whether a
+    // credential is written depends on what the vault answers — so it is
+    // built against the existing ref and corrected below.
+    final formConfig = serverConfigOfGhostDraft(
+      save.draft,
+      existing: existing,
+      secretRef: existingRef,
+      now: now,
+    );
+    // Only when a referenced key's passphrase is about to be written over an
+    // entry that may hold a PEM: every other branch replaces the entry whole.
+    // A locked keyring throws, and the editor reports it like a failed save
+    // rather than writing the passphrase over the key it was stored beside.
+    Secret? stored;
+    if (existingRef != null &&
+        plannedCredentialReadsStored(
+          auth: auth,
+          referenceKeyFile: entry.referenceKeyFile,
+          keyPassphrase: entry.keyPassphrase,
+        )) {
+      stored = await _delegate.readSecret(existingRef);
+    }
+    final secretId = existingRef ?? save.draftSecretId;
+    final secret = plannedCredential(
+      auth: auth,
+      referenceKeyFile: entry.referenceKeyFile,
+      password: entry.password,
+      keyPem: entry.keyPem,
+      keyPassphrase: entry.keyPassphrase,
+      secretId: secretId,
+      stored: stored,
+    );
+
+    final config = secret != null && secretId != existingRef
+        // `updatedAt` is not restated here: the draft's config already
+        // carries the same `now`.
+        ? formConfig.copyWith(secretRef: secretId)
+        : formConfig;
+    // The vault write inside throws when the OS keyring is unavailable.
+    await _delegate.save(config, secret: secret);
+    return secret != null;
+  }
+
+  @override
+  Future<GhostTestReport> testConnection(
+    GhostServerDraft draft,
+    GhostCredentialDraft credential,
+  ) async {
+    final log = SshConnectionLog();
+    final config = serverConfigOfGhostDraft(
+      draft,
+      existing: _existing,
+      secretRef: _existing?.secretRef,
+      now: DateTime.now().millisecondsSinceEpoch,
+    );
+    try {
+      final result = await _delegate.testConnection(
+        config,
+        draftPassword: credential.password,
+        draftPrivateKey: credential.privateKeyPem,
+        draftKeyPassphrase: credential.keyPassphrase,
+        log: log,
+      );
+      log.freeze();
+      return ghostTestReportOf(result);
+    } catch (error) {
+      // runConnectionTest turns every failure it can see into a result, so
+      // reaching here means something outside it went wrong. The same inline
+      // report an expected failure gets, not a toast: what went wrong is by
+      // definition unexpected, so it is the detail worth keeping.
+      log.freeze();
+      return GhostTestReport(
+        ok: false,
+        summary: _strings.testFailedSummary,
+        notes: ['$error'],
+        log: log.toString(),
+      );
+    }
+  }
+}
+
+/// D37's override: how many files the queue moves to or from this server at
+/// once. Kept apart from the connection fields it sits near because it never
+/// reaches the config — it is stored on this device alone — and written only
+/// after the server saved, and only when the choice changed, so a settings
+/// file that cannot be written does not fail a Save that never touched it.
+final class _TransferLimitSection implements GhostServerEditorSection {
+  _TransferLimitSection(this._delegate, String? serverId, this._l10n)
+    : _stored = serverId == null
+          ? null
+          : _delegate.transferConcurrencyFor(serverId) {
+    _chosen = _stored;
+  }
+
+  final ServerEditorDelegate _delegate;
+  final AppLocalizations _l10n;
+
+  /// This server's own cap, null to follow the default; and the one stored,
+  /// so a Save writes it only when it changed.
+  TransferConcurrency? _stored;
+  TransferConcurrency? _chosen;
+
+  @override
+  Widget build(BuildContext context) => _TransferLimitField(section: this);
+
+  @override
+  Future<void> Function(String serverId)? capture() {
+    final chosen = _chosen;
+    if (chosen == _stored) return null;
+    return (serverId) async {
+      await _delegate.saveTransferConcurrency(serverId, chosen);
+      _stored = chosen;
+    };
+  }
+
+  @override
+  String failureMessage(Object error) =>
+      _l10n.serverEditorTransferLimitSaveFailed('$error');
+}
+
+class _TransferLimitField extends StatefulWidget {
+  const _TransferLimitField({required this.section});
+
+  final _TransferLimitSection section;
+
+  @override
+  State<_TransferLimitField> createState() => _TransferLimitFieldState();
+}
+
+class _TransferLimitFieldState extends State<_TransferLimitField> {
+  @override
+  Widget build(BuildContext context) {
+    final section = widget.section;
+    final l10n = AppLocalizations.of(context);
+    String describe(TransferConcurrency value) =>
+        value.files?.toString() ?? l10n.transferLimitAutomatic;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Divider(),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<_TransferLimitChoice>(
+          key: const ValueKey('serverEditor.transferLimit'),
+          initialValue: _TransferLimitChoice(section._chosen),
+          decoration: InputDecoration(
+            labelText: l10n.serverEditorTransferLimit,
+          ),
+          items: [
+            DropdownMenuItem(
+              value: const _TransferLimitChoice(null),
+              child: Text(
+                l10n.serverEditorTransferLimitDefault(
+                  describe(section._delegate.defaultTransferConcurrency),
+                ),
+              ),
+            ),
+            DropdownMenuItem(
+              value: const _TransferLimitChoice(
+                TransferConcurrency.automatic(),
+              ),
+              child: Text(l10n.transferLimitAutomatic),
+            ),
+            for (final files in transferConcurrencyChoices)
+              DropdownMenuItem(
+                value: _TransferLimitChoice(TransferConcurrency.fixed(files)),
+                child: Text('$files'),
+              ),
+          ],
+          onChanged: (choice) => setState(() => section._chosen = choice?.own),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          l10n.serverEditorTransferLimitNote,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
+        ),
+      ],
+    );
+  }
+}
+
+/// The editor's form, over [GhostServerEditorDelegate] and neutral drafts so
+/// it can move into ghost_servers unchanged (docs/design/
+/// ghost-servers-part2.md, F5a-2a).
 class _ServerEditor extends StatefulWidget {
-  final ServerEditorDelegate delegate;
-  final ServerConfig? existing;
-  const _ServerEditor({required this.delegate, this.existing});
+  final GhostServerEditorDelegate delegate;
+  final GhostServerDraft? existing;
+  final GhostServerEditorStrings strings;
+  final marks.ServerAppearanceStrings appearanceStrings;
+  final TextStyle monoStyle;
+  final TextStyle? hexStyle;
+  final Set<GhostServerOptionalField> fields;
+  final List<GhostServerEditorSection> sections;
+  final void Function(Object error, StackTrace stackTrace)? onCopyError;
+  const _ServerEditor({
+    required this.delegate,
+    this.existing,
+    required this.strings,
+    required this.appearanceStrings,
+    required this.monoStyle,
+    this.hexStyle,
+    required this.fields,
+    this.sections = const [],
+    this.onCopyError,
+  });
 
   @override
   State<_ServerEditor> createState() => _ServerEditorState();
 }
 
 class _ServerEditorState extends State<_ServerEditor> {
+  GhostServerEditorStrings get _strings => widget.strings;
+
   final _form = GlobalKey<FormState>();
   late final TextEditingController _label;
   late final TextEditingController _host;
@@ -180,11 +447,6 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// the precedence between them lives in one place (see [ServerMark]).
   late ServerMark _mark;
   bool _referenceKeyFile = true;
-
-  /// This server's own D37 cap, null to follow the default; and the one it
-  /// had when the editor opened, so a Save writes it only when it changed.
-  TransferConcurrency? _transferLimit;
-  TransferConcurrency? _storedTransferLimit;
   late bool _syncSecret;
   late bool _excludeFromSync;
   bool _busy = false;
@@ -192,7 +454,7 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// The id a *new* server will be saved under, minted once rather than per
   /// save so a test connection and the save that follows describe one server,
   /// and so a save that failed and is retried does not mint a second identity.
-  final String _draftId = uuidV4();
+  late final String _draftId;
 
   /// The vault id a *new* server's credential is saved under, minted once for
   /// the same reason as [_draftId] and one the credential needs more:
@@ -200,36 +462,46 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// stored the secret and then failed on the config write left an entry
   /// behind — and a retry minting a fresh id orphaned it in the keyring with
   /// nothing pointing at it and nothing that would ever clean it up.
-  final String _draftSecretId = uuidV4();
+  late final String _draftSecretId;
 
   /// The connection test: whether one is running, what the last one found,
   /// and which attempt is current. The counter is the cancellation flag — the
   /// SSH layer has no cancel seam, so a superseded or abandoned attempt is
   /// left to finish and its result dropped.
   bool _testing = false;
-  ConnectionTestResult? _testResult;
+  GhostTestReport? _testResult;
   int _testAttempt = 0;
 
   @override
   void initState() {
     super.initState();
     final e = widget.existing;
+    _draftId = widget.delegate.newId();
+    _draftSecretId = widget.delegate.newId();
     _label = TextEditingController(text: e?.label ?? '');
     _host = TextEditingController(text: e?.host ?? '');
     _port = TextEditingController(text: '${e?.port ?? 22}');
     _user = TextEditingController(text: e?.username ?? '');
     _group = TextEditingController(text: e?.group ?? '');
-    _tint = e == null ? ServerTint.none : ServerTint.of(e);
-    _mark = e?.mark ?? _defaultMark;
-    _auth = e?.authMethod ?? AuthMethod.agent;
+    // As `ServerTint.of` and `ServerConfig.mark` read the stored fields.
+    _tint = e == null
+        ? ServerTint.none
+        : ServerTint(
+            named: ServerColor.values.asNameMap()[e.colorName],
+            custom: parseServerCustomColor(e.customColor),
+          );
+    _mark = e == null
+        ? _defaultMark
+        : ServerMark.resolve(
+            icon: ServerIcon.values.asNameMap()[e.iconName],
+            emoji: e.iconEmoji,
+            image: e.iconImage,
+          );
+    _auth = e == null ? AuthMethod.agent : authMethodOfGhost(e.authMethod);
     _keyPath.text = e?.identityFilePath ?? '';
     _referenceKeyFile = e?.identityFilePath != null;
     _loginScript.text = e?.loginScript ?? '';
     _startDirectory.text = e?.startDirectory ?? '';
-    _storedTransferLimit = e == null
-        ? null
-        : widget.delegate.transferConcurrencyFor(e.id);
-    _transferLimit = _storedTransferLimit;
     // New credentials default to syncable (a no-op until the global "sync
     // saved passwords & keys" is on); existing servers keep their stored
     // choice.
@@ -354,10 +626,12 @@ class _ServerEditorState extends State<_ServerEditor> {
         // The chord editors use for "submit despite being multi-line", on
         // both modifier conventions, since the shortcut is unbound otherwise
         // and a macOS user's hands expect the one, a Linux user's the other.
-        SingleActivator(LogicalKeyboardKey.enter, control: true):
-            _SaveIntent(anywhere: true),
-        SingleActivator(LogicalKeyboardKey.enter, meta: true):
-            _SaveIntent(anywhere: true),
+        SingleActivator(LogicalKeyboardKey.enter, control: true): _SaveIntent(
+          anywhere: true,
+        ),
+        SingleActivator(LogicalKeyboardKey.enter, meta: true): _SaveIntent(
+          anywhere: true,
+        ),
         SingleActivator(LogicalKeyboardKey.numpadEnter, control: true):
             _SaveIntent(anywhere: true),
         SingleActivator(LogicalKeyboardKey.numpadEnter, meta: true):
@@ -371,7 +645,6 @@ class _ServerEditorState extends State<_ServerEditor> {
   }
 
   Widget _body(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Form(
@@ -381,15 +654,13 @@ class _ServerEditorState extends State<_ServerEditor> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              widget.existing == null
-                  ? l10n.serverEditorAddTitle
-                  : l10n.serverEditorEditTitle,
+              widget.existing == null ? _strings.addTitle : _strings.editTitle,
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _label,
-              decoration: InputDecoration(labelText: l10n.serverEditorLabel),
+              decoration: InputDecoration(labelText: _strings.label),
               validator: _required,
             ),
             Row(
@@ -398,9 +669,7 @@ class _ServerEditorState extends State<_ServerEditor> {
                   flex: 3,
                   child: TextFormField(
                     controller: _host,
-                    decoration: InputDecoration(
-                      labelText: l10n.serverEditorHost,
-                    ),
+                    decoration: InputDecoration(labelText: _strings.host),
                     validator: _required,
                   ),
                 ),
@@ -408,9 +677,7 @@ class _ServerEditorState extends State<_ServerEditor> {
                 Expanded(
                   child: TextFormField(
                     controller: _port,
-                    decoration: InputDecoration(
-                      labelText: l10n.serverEditorPort,
-                    ),
+                    decoration: InputDecoration(labelText: _strings.port),
                     keyboardType: TextInputType.number,
                     validator: _validatePort,
                   ),
@@ -419,27 +686,25 @@ class _ServerEditorState extends State<_ServerEditor> {
             ),
             TextFormField(
               controller: _user,
-              decoration: InputDecoration(labelText: l10n.serverEditorUsername),
+              decoration: InputDecoration(labelText: _strings.username),
               validator: _required,
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<AuthMethod>(
               initialValue: _auth,
-              decoration: InputDecoration(
-                labelText: l10n.serverEditorAuthentication,
-              ),
+              decoration: InputDecoration(labelText: _strings.authentication),
               items: [
                 DropdownMenuItem(
                   value: AuthMethod.agent,
-                  child: Text(l10n.serverEditorAuthAgent),
+                  child: Text(_strings.authAgent),
                 ),
                 DropdownMenuItem(
                   value: AuthMethod.password,
-                  child: Text(l10n.serverEditorAuthPassword),
+                  child: Text(_strings.authPassword),
                 ),
                 DropdownMenuItem(
                   value: AuthMethod.privateKey,
-                  child: Text(l10n.serverEditorAuthPrivateKey),
+                  child: Text(_strings.authPrivateKey),
                 ),
               ],
               // Through _dropTestResult, not a bare clear: the auth method is
@@ -456,12 +721,18 @@ class _ServerEditorState extends State<_ServerEditor> {
             const SizedBox(height: 20),
             ..._syncFields(),
             const SizedBox(height: 20),
-            ..._startDirectoryFields(),
-            const SizedBox(height: 20),
+            if (widget.fields.contains(
+              GhostServerOptionalField.startDirectory,
+            )) ...[
+              ..._startDirectoryFields(),
+              const SizedBox(height: 20),
+            ],
             ..._loginScriptFields(),
             const SizedBox(height: 20),
-            ..._transferFields(),
-            const SizedBox(height: 20),
+            for (final section in widget.sections) ...[
+              section.build(context),
+              const SizedBox(height: 20),
+            ],
             ..._appearanceFields(),
             const SizedBox(height: 20),
             Row(
@@ -485,16 +756,11 @@ class _ServerEditorState extends State<_ServerEditor> {
                               // test from a button that did nothing.
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                semanticsLabel:
-                                    l10n.serverEditorTestingSemantic,
+                                semanticsLabel: _strings.testingSemantic,
                               ),
                             )
                           : const Icon(Icons.wifi_tethering, size: 18),
-                      label: Text(
-                        _testing
-                            ? l10n.serverEditorTesting
-                            : l10n.serverEditorTest,
-                      ),
+                      label: Text(_testing ? _strings.testing : _strings.test),
                     ),
                   ),
                 ),
@@ -505,7 +771,7 @@ class _ServerEditorState extends State<_ServerEditor> {
                 // finish unwatched.
                 TextButton(
                   onPressed: _busy ? null : () => Navigator.of(context).pop(),
-                  child: Text(l10n.serverEditorCancel),
+                  child: Text(_strings.cancel),
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
@@ -516,16 +782,16 @@ class _ServerEditorState extends State<_ServerEditor> {
                   // supersedes the attempt, and the save pops the editor, so
                   // the late result is discarded by the mounted check.
                   onPressed: _busy ? null : _save,
-                  child: Text(l10n.serverEditorSave),
+                  child: Text(_strings.save),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Text(
-              l10n.serverEditorTestDisclaimer,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
+              _strings.testDisclaimer,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).hintColor,
+              ),
             ),
             if (_testResult != null) const SizedBox(height: 12),
             // The spinner announces that a test started; without this the one
@@ -538,7 +804,13 @@ class _ServerEditorState extends State<_ServerEditor> {
               liveRegion: true,
               child: _testResult == null
                   ? const SizedBox.shrink()
-                  : ConnectionTestReport(result: _testResult!),
+                  : GhostConnectionTestReport(
+                      report: _testResult!,
+                      monoStyle: widget.monoStyle,
+                      strings: _strings.testStrings,
+                      logStrings: _strings.logStrings,
+                      onCopyError: widget.onCopyError,
+                    ),
             ),
           ],
         ),
@@ -547,18 +819,15 @@ class _ServerEditorState extends State<_ServerEditor> {
   }
 
   List<Widget> _authFields() {
-    final l10n = AppLocalizations.of(context);
     switch (_auth) {
       case AuthMethod.agent:
-        return [Text(l10n.serverEditorAgentInfo)];
+        return [Text(_strings.agentInfo)];
       case AuthMethod.password:
         return [
           TextFormField(
             controller: _password,
             obscureText: true,
-            decoration: InputDecoration(
-              labelText: l10n.serverEditorPasswordLabel,
-            ),
+            decoration: InputDecoration(labelText: _strings.passwordLabel),
           ),
           _syncSecretToggle(),
         ];
@@ -566,8 +835,8 @@ class _ServerEditorState extends State<_ServerEditor> {
         return [
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: Text(l10n.serverEditorReferenceKeyTitle),
-            subtitle: Text(l10n.serverEditorReferenceKeySubtitle),
+            title: Text(_strings.referenceKeyTitle),
+            subtitle: Text(_strings.referenceKeySubtitle),
             value: _referenceKeyFile,
             // Same as the auth dropdown: this switches the test between the
             // key on disk and the pasted one, so an attempt already running
@@ -585,34 +854,34 @@ class _ServerEditorState extends State<_ServerEditor> {
                   child: TextFormField(
                     controller: _keyPath,
                     decoration: InputDecoration(
-                      labelText: l10n.serverEditorIdentityFilePath,
-                      hintText: l10n.serverEditorIdentityFileHint,
+                      labelText: _strings.identityFilePath,
+                      hintText: _strings.identityFileHint,
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                OutlinedButton(
-                  onPressed: _busy ? null : _browseForKey,
-                  child: Text(l10n.serverEditorBrowse),
-                ),
+                if (widget.delegate.canPickIdentityFile) ...[
+                  const SizedBox(width: 8),
+                  OutlinedButton(
+                    onPressed: _busy ? null : _browseForKey,
+                    child: Text(_strings.browse),
+                  ),
+                ],
               ],
             )
           else
             TextFormField(
               controller: _keyPem,
               maxLines: 5,
-              style: poltergeistMonoTextStyle.copyWith(fontSize: 12),
+              style: widget.monoStyle.copyWith(fontSize: 12),
               decoration: InputDecoration(
-                labelText: l10n.serverEditorPrivateKeyPem,
+                labelText: _strings.privateKeyPem,
                 border: const OutlineInputBorder(),
               ),
             ),
           TextFormField(
             controller: _keyPassphrase,
             obscureText: true,
-            decoration: InputDecoration(
-              labelText: l10n.serverEditorKeyPassphrase,
-            ),
+            decoration: InputDecoration(labelText: _strings.keyPassphrase),
           ),
           // Only the stored key (not the referenced-file case) is a secret
           // that could sync.
@@ -626,7 +895,6 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// synced config, so every device opens the same folder; Séance carries
   /// it without showing it.
   List<Widget> _startDirectoryFields() {
-    final l10n = AppLocalizations.of(context);
     return [
       const Divider(),
       const SizedBox(height: 8),
@@ -634,14 +902,14 @@ class _ServerEditorState extends State<_ServerEditor> {
         key: const ValueKey('serverEditor.startDirectory'),
         controller: _startDirectory,
         decoration: InputDecoration(
-          labelText: l10n.serverEditorStartDirectory,
-          hintText: l10n.serverEditorStartDirectoryHint,
+          labelText: _strings.startDirectory,
+          hintText: _strings.startDirectoryHint,
         ),
         validator: _validateStartDirectory,
       ),
       const SizedBox(height: 4),
       Text(
-        l10n.serverEditorStartDirectoryNote,
+        _strings.startDirectoryNote,
         style: Theme.of(
           context,
         ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
@@ -654,7 +922,6 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// Séance does with it when the server opens a terminal there; Poltergeist
   /// stores and syncs the field so a round trip preserves it.
   List<Widget> _loginScriptFields() {
-    final l10n = AppLocalizations.of(context);
     return [
       const Divider(),
       const SizedBox(height: 8),
@@ -662,61 +929,16 @@ class _ServerEditorState extends State<_ServerEditor> {
         controller: _loginScript,
         maxLines: 3,
         minLines: 1,
-        style: poltergeistMonoTextStyle.copyWith(fontSize: 12),
+        style: widget.monoStyle.copyWith(fontSize: 12),
         decoration: InputDecoration(
-          labelText: l10n.serverEditorLoginScript,
-          hintText: l10n.serverEditorLoginScriptHint,
+          labelText: _strings.loginScript,
+          hintText: _strings.loginScriptHint,
           border: const OutlineInputBorder(),
         ),
       ),
       const SizedBox(height: 4),
       Text(
-        l10n.serverEditorLoginScriptNote,
-        style: Theme.of(
-          context,
-        ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
-      ),
-    ];
-  }
-
-  /// D37's override: how many files the queue moves to or from this server
-  /// at once. Kept apart from the connection fields it sits near because it
-  /// never reaches the config — it is stored on this device alone.
-  List<Widget> _transferFields() {
-    final l10n = AppLocalizations.of(context);
-    String describe(TransferConcurrency value) =>
-        value.files?.toString() ?? l10n.transferLimitAutomatic;
-    return [
-      const Divider(),
-      const SizedBox(height: 8),
-      DropdownButtonFormField<_TransferLimitChoice>(
-        key: const ValueKey('serverEditor.transferLimit'),
-        initialValue: _TransferLimitChoice(_transferLimit),
-        decoration: InputDecoration(labelText: l10n.serverEditorTransferLimit),
-        items: [
-          DropdownMenuItem(
-            value: const _TransferLimitChoice(null),
-            child: Text(
-              l10n.serverEditorTransferLimitDefault(
-                describe(widget.delegate.defaultTransferConcurrency),
-              ),
-            ),
-          ),
-          DropdownMenuItem(
-            value: const _TransferLimitChoice(TransferConcurrency.automatic()),
-            child: Text(l10n.transferLimitAutomatic),
-          ),
-          for (final files in transferConcurrencyChoices)
-            DropdownMenuItem(
-              value: _TransferLimitChoice(TransferConcurrency.fixed(files)),
-              child: Text('$files'),
-            ),
-        ],
-        onChanged: (choice) => setState(() => _transferLimit = choice?.own),
-      ),
-      const SizedBox(height: 4),
-      Text(
-        l10n.serverEditorTransferLimitNote,
+        _strings.loginScriptNote,
         style: Theme.of(
           context,
         ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
@@ -729,8 +951,7 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// the connection is made — they exist so a list of thirty boxes can be read
   /// at a glance, and so "am I on prod?" has an answer you don't have to read.
   List<Widget> _appearanceFields() {
-    final l10n = AppLocalizations.of(context);
-    final existing = existingServerGroups(widget.delegate.servers);
+    final existing = widget.delegate.serverGroups;
     return [
       const Divider(),
       const SizedBox(height: 8),
@@ -744,7 +965,7 @@ class _ServerEditorState extends State<_ServerEditor> {
           ServerBadge(tint: _tint, mark: _mark),
           const SizedBox(width: 12),
           Text(
-            l10n.serverEditorAppearance,
+            _strings.appearance,
             style: Theme.of(context).textTheme.titleSmall,
           ),
         ],
@@ -753,8 +974,8 @@ class _ServerEditorState extends State<_ServerEditor> {
       TextFormField(
         controller: _group,
         decoration: InputDecoration(
-          labelText: l10n.serverEditorGroup,
-          hintText: l10n.serverEditorGroupHint,
+          labelText: _strings.group,
+          hintText: _strings.groupHint,
         ),
       ),
       if (existing.isNotEmpty) ...[
@@ -776,10 +997,7 @@ class _ServerEditorState extends State<_ServerEditor> {
         ),
       ],
       const SizedBox(height: 16),
-      Text(
-        l10n.serverEditorColour,
-        style: Theme.of(context).textTheme.labelMedium,
-      ),
+      Text(_strings.colour, style: Theme.of(context).textTheme.labelMedium),
       const SizedBox(height: 6),
       Wrap(
         spacing: 8,
@@ -793,14 +1011,15 @@ class _ServerEditorState extends State<_ServerEditor> {
             ),
           // Last, after the named ten: the picker is the way past them, not
           // the first thing to reach for.
-          _CustomColorSwatch(color: _tint.custom, onTap: _pickCustomColor),
+          _CustomColorSwatch(
+            color: _tint.custom,
+            onTap: _pickCustomColor,
+            strings: _strings,
+          ),
         ],
       ),
       const SizedBox(height: 16),
-      Text(
-        l10n.serverEditorMark,
-        style: Theme.of(context).textTheme.labelMedium,
-      ),
+      Text(_strings.mark, style: Theme.of(context).textTheme.labelMedium),
       const SizedBox(height: 6),
       // A button rather than the grid this used to be: the glyphs alone no
       // longer fit a form field, and emoji and imported images need room of
@@ -818,11 +1037,11 @@ class _ServerEditorState extends State<_ServerEditor> {
           OutlinedButton.icon(
             onPressed: _pickMark,
             icon: const Icon(Icons.palette_outlined),
-            label: Text(l10n.serverEditorChooseMark),
+            label: Text(_strings.chooseMark),
           ),
           if (_mark != _defaultMark)
             IconButton(
-              tooltip: l10n.serverEditorDefaultMarkTooltip,
+              tooltip: _strings.defaultMarkTooltip,
               icon: const Icon(Icons.backspace_outlined),
               onPressed: () => setState(() => _mark = _defaultMark),
             ),
@@ -832,10 +1051,12 @@ class _ServerEditorState extends State<_ServerEditor> {
   }
 
   Future<void> _pickMark() async {
-    final chosen = await showServerMarkPicker(
+    final chosen = await marks.showServerMarkPicker(
       context,
       current: _mark,
       accent: _tint,
+      strings: widget.appearanceStrings,
+      readImage: pickServerMarkImage,
     );
     if (chosen == null || !mounted) return;
     setState(() => _mark = chosen);
@@ -846,14 +1067,15 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// starts from teal — else the app's own seed.
   Future<void> _pickCustomColor() async {
     final named = _tint.named;
-    final chosen = await showServerColorPicker(
+    final chosen = await marks.showServerColorPicker(
       context,
       initial:
           _tint.custom ??
-          (named == null
-              ? widget.delegate.themeSeed
-              : serverColorSeed(named)),
+          (named == null ? widget.delegate.themeSeed : serverColorSeed(named)),
       mark: _mark,
+      strings: widget.appearanceStrings,
+      colorStrings: _strings.colorPickerStrings,
+      hexStyle: widget.hexStyle,
     );
     if (chosen == null || !mounted) return;
     setState(() => _tint = ServerTint.custom(chosen));
@@ -869,14 +1091,13 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// has to give them back the answer they picked, not silently opt their
   /// credential out on the way through.
   Widget _syncSecretToggle() {
-    final l10n = AppLocalizations.of(context);
     return SwitchListTile(
       contentPadding: EdgeInsets.zero,
-      title: Text(l10n.serverEditorSyncSecretTitle),
+      title: Text(_strings.syncSecretTitle),
       subtitle: Text(
         _excludeFromSync
-            ? l10n.serverEditorSyncSecretExcluded
-            : l10n.serverEditorSyncSecretSubtitle,
+            ? _strings.syncSecretExcluded
+            : _strings.syncSecretSubtitle,
       ),
       value: _syncSecret && !_excludeFromSync,
       onChanged: _excludeFromSync
@@ -892,16 +1113,15 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// tombstone, so the other devices lose their copy. Only this device keeps
   /// one, which is the point — but it is not something to find out afterwards.
   List<Widget> _syncFields() {
-    final l10n = AppLocalizations.of(context);
     return [
       const Divider(),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
-        title: Text(l10n.serverEditorExcludeTitle),
+        title: Text(_strings.excludeTitle),
         subtitle: Text(
           _excludeFromSync
-              ? l10n.serverEditorExcludeOnSubtitle
-              : l10n.serverEditorExcludeOffSubtitle,
+              ? _strings.excludeOnSubtitle
+              : _strings.excludeOffSubtitle,
         ),
         value: _excludeFromSync,
         onChanged: (v) async {
@@ -924,11 +1144,12 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// has never been anywhere, and with no sync account configured there is no
   /// other device to lose it. Turning the switch back off is not destructive
   /// either way.
-  Future<bool> _confirmExclusion() => excludingNeedsConfirmation(
-    existing: widget.existing,
-    syncConfigured: widget.delegate.syncConfigured,
-  )
-      ? confirmSyncExclusion(context)
+  Future<bool> _confirmExclusion() =>
+      ghostExcludingNeedsConfirmation(
+        existing: widget.existing,
+        syncConfigured: widget.delegate.syncConfigured,
+      )
+      ? confirmSyncExclusion(context, _strings)
       : Future<bool>.value(true);
 
   /// Pick an identity file: "reference, don't store" mode reads the key from
@@ -940,14 +1161,12 @@ class _ServerEditorState extends State<_ServerEditor> {
   }
 
   String? _required(String? v) =>
-      (v == null || v.trim().isEmpty)
-          ? AppLocalizations.of(context).serverEditorRequired
-          : null;
+      (v == null || v.trim().isEmpty) ? _strings.required : null;
 
   String? _validatePort(String? v) {
     final port = int.tryParse((v ?? '').trim());
     if (port == null || port < 1 || port > 65535) {
-      return AppLocalizations.of(context).serverEditorPortRange;
+      return _strings.portRange;
     }
     return null;
   }
@@ -958,28 +1177,26 @@ class _ServerEditorState extends State<_ServerEditor> {
     final value = v ?? '';
     if (value.trim().isEmpty) return null;
     if (normalizeServerStartDirectory(value) != null) return null;
-    return AppLocalizations.of(context).serverEditorStartDirectoryInvalid;
+    return _strings.startDirectoryInvalid;
   }
 
-  /// The server the form currently describes, with [secretRef] as its
-  /// credential reference. Shared by Save and Test connection so a test can
-  /// never run against a different server than the one about to be saved.
-  ServerConfig _formConfig({required String? secretRef, required int now}) {
+  /// The server the form currently describes, trimmed and normalized as it
+  /// would be stored. Shared by Save and Test connection so a test can never
+  /// run against a different server than the one about to be saved.
+  GhostServerDraft _formDraft() {
     final existing = widget.existing;
+    // Read once rather than per field: encoding an image mark for storage is
+    // not free, and the fields have to come from one reading anyway so they
+    // cannot disagree about which is in force.
     final mark = _mark.stored;
     final tint = _tint.stored;
-    return ServerConfig(
+    return GhostServerDraft(
       id: existing?.id ?? _draftId,
       label: _label.text.trim(),
       host: _host.text.trim(),
       port: int.tryParse(_port.text.trim()) ?? 22,
       username: _user.text.trim(),
-      authMethod: _auth,
-      secretRef: secretRef,
-      // ProxyJump editing is not exposed yet; preserve the saved route.
-      // Séance reads this same record, so dropping it here would take the
-      // route away on every device (Séance #131's fix, X-02).
-      jumpHostId: existing?.jumpHostId,
+      authMethod: ghostAuthMethodOf(_auth),
       // Blank reads as "no file referenced", not as a path made of nothing:
       // the validator blocks an empty path, and a caller that ever reached
       // here without it would otherwise ask the SSH layer to read `''`.
@@ -994,19 +1211,18 @@ class _ServerEditorState extends State<_ServerEditor> {
       // space typed into the group name can't fork a second section that
       // looks identical to the one the user meant to join.
       group: normalizeServerGroup(_group.text),
-      color: tint.color,
+      colorName: tint.color?.name,
       customColor: tint.customColor,
-      // Read once rather than three times: encoding an image mark for storage
-      // is not free, and the three have to come from one reading anyway so
-      // they cannot disagree about which is in force.
-      icon: mark.icon,
+      iconName: mark.icon?.name,
       iconEmoji: mark.emoji,
       iconImage: mark.image,
       loginScript: normalizeLoginScript(_loginScript.text),
-      startDirectory: normalizeServerStartDirectory(_startDirectory.text),
+      // A field the host hides keeps the value it was opened with.
+      startDirectory:
+          widget.fields.contains(GhostServerOptionalField.startDirectory)
+          ? normalizeServerStartDirectory(_startDirectory.text)
+          : existing?.startDirectory,
       excludeFromSync: _excludeFromSync,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
     );
   }
 
@@ -1022,54 +1238,43 @@ class _ServerEditorState extends State<_ServerEditor> {
       _testResult = null;
     });
 
-    final log = SshConnectionLog();
-    final config = _formConfig(
-      secretRef: widget.existing?.secretRef,
-      now: DateTime.now().millisecondsSinceEpoch,
-    );
-    final ConnectionTestResult result;
+    final GhostTestReport result;
     try {
       result = await widget.delegate.testConnection(
-        config,
+        _formDraft(),
         // A credential box is hidden (and stale) once the auth method stops
         // using it, and the PEM box also while the key is referenced from
         // disk; passing either then would test text the user cannot see.
-        // The credential resolver reads each draft only under its own auth
-        // method, so this changes nothing it does — it makes the call site
-        // say what it means. The passphrase stays with the method, not the
-        // reference toggle: it decrypts the on-disk key too.
-        draftPassword: _auth == AuthMethod.password ? _password.text : null,
-        draftPrivateKey: _auth == AuthMethod.privateKey && !_referenceKeyFile
-            ? _keyPem.text
-            : null,
-        draftKeyPassphrase: _auth == AuthMethod.privateKey
-            ? _keyPassphrase.text
-            : null,
-        log: log,
+        // The passphrase stays with the method, not the reference toggle: it
+        // decrypts the on-disk key too.
+        GhostCredentialDraft(
+          password: _auth == AuthMethod.password ? _password.text : null,
+          privateKeyPem: _auth == AuthMethod.privateKey && !_referenceKeyFile
+              ? _keyPem.text
+              : null,
+          keyPassphrase: _auth == AuthMethod.privateKey
+              ? _keyPassphrase.text
+              : null,
+        ),
       );
     } catch (error) {
-      // runConnectionTest turns every failure it can see into a result, so
+      // The delegate turns every failure it can see into a report, so
       // reaching here means something outside it went wrong. Belt and braces,
       // because the alternative is the wedged editor `_save` is careful to
       // avoid: _testing stuck on, Save disabled, and Cancel — which throws
       // away everything just typed — as the only way out.
-      log.freeze();
       if (!mounted || attempt != _testAttempt) return;
-      // The same inline report an expected failure gets, not a toast: what
-      // went wrong is by definition unexpected, so it is the detail worth
-      // keeping — and a toast fades with it.
       setState(() {
         _testing = false;
-        _testResult = ConnectionTestResult(
+        _testResult = GhostTestReport(
           ok: false,
-          summary: AppLocalizations.of(context).serverEditorTestFailedSummary,
+          summary: _strings.testFailedSummary,
           notes: ['$error'],
-          log: log.toString(),
+          log: '',
         );
       });
       return;
     }
-    log.freeze();
     // Superseded by a newer attempt, or the dialog is gone: drop it.
     if (!mounted || attempt != _testAttempt) return;
     setState(() {
@@ -1081,118 +1286,49 @@ class _ServerEditorState extends State<_ServerEditor> {
   Future<void> _save() async {
     if (!_form.currentState!.validate()) return;
     setState(() => _busy = true);
-    final existing = widget.existing;
-    // Against the freshest copy this device holds, not the one captured when
-    // the editor opened: a round that pulled a newer record meanwhile is
-    // exactly the record this stamp has to outrank.
-    final latest = existing == null
-        ? null
-        : widget.delegate.servers
-            .where((s) => s.id == existing.id)
-            .map((s) => s.updatedAt)
-            .fold<int>(existing.updatedAt, math.max);
-    final now = nextUpdatedAt(
-      latest,
-      now: DateTime.now().millisecondsSinceEpoch,
+    // Everything the form says, read here — before anything is awaited.
+    // `_busy` disables the buttons, not the fields, so a keyring that prompts
+    // (macOS) or is slow to answer leaves them editable for as long as it
+    // takes: read afterwards, a keystroke landing in that window is saved
+    // without ever passing the `validate()` this method opened with, and a
+    // host cleared after Save was pressed is written empty. The auth
+    // dropdown and the reference switch too, which the credential is planned
+    // from after that wait.
+    final save = GhostServerSave(
+      draft: _formDraft(),
+      credential: GhostCredentialEntry(
+        referenceKeyFile: _referenceKeyFile,
+        password: _password.text,
+        keyPem: _keyPem.text,
+        keyPassphrase: _keyPassphrase.text,
+      ),
+      draftSecretId: _draftSecretId,
     );
-
-    final existingRef = existing?.secretRef;
-    // Everything the form says, read here — before the awaited vault call
-    // below. `_busy` disables the buttons, not the fields, so a keyring that
-    // prompts (macOS) or is slow to answer leaves them editable for as long
-    // as it takes: read afterwards, a keystroke landing in that window is
-    // saved without ever passing the `validate()` this method opened with,
-    // and a host cleared after Save was pressed is written empty.
-    final password = _password.text;
-    final keyPem = _keyPem.text;
-    final keyPassphrase = _keyPassphrase.text;
-    // The auth dropdown and the reference switch too, and for the same
-    // reason: they are as enabled as the text boxes while `_busy`, and the
-    // credential is planned *after* the vault read below. Flipped in that
-    // window, `plannedCredential` would describe a different server than the
-    // config being saved — password material written over a stored PEM while
-    // the config saves as key auth, which is the exact cross-method
-    // corruption the carry-over logic exists to prevent.
-    final auth = _auth;
-    final referenceKeyFile = _referenceKeyFile;
-    final transferLimit = _transferLimit;
-    // The config too, and not only the credential fields: it reads seven more
-    // controllers. Its `secretRef` is the one thing that cannot be known yet
-    // — whether a credential is written depends on what the vault answers —
-    // so it is built against the existing ref and corrected below, which is
-    // a field this form does not own rather than one the user could edit.
-    final formConfig = _formConfig(secretRef: existingRef, now: now);
-    // Only when a referenced key's passphrase is about to be written over an
-    // entry that may hold a PEM: every other branch replaces the entry whole.
-    Secret? stored;
-    if (existingRef != null &&
-        plannedCredentialReadsStored(
-          auth: auth,
-          referenceKeyFile: referenceKeyFile,
-          keyPassphrase: keyPassphrase,
-        )) {
-      try {
-        stored = await widget.delegate.readSecret(existingRef);
-      } catch (e) {
-        // A locked keyring, reported like the save failure below rather than
-        // silently writing the passphrase over the key it was stored beside.
-        if (!mounted) return;
-        setState(() => _busy = false);
-        showTopToastIn(
-          context,
-          message: AppLocalizations.of(context).serverEditorSaveFailed('$e'),
-        );
-        return;
-      }
-    }
-    final secretId = existingRef ?? _draftSecretId;
-    final secret = plannedCredential(
-      auth: auth,
-      referenceKeyFile: referenceKeyFile,
-      password: password,
-      keyPem: keyPem,
-      keyPassphrase: keyPassphrase,
-      secretId: secretId,
-      stored: stored,
-    );
-
-    final config = secret != null && secretId != existingRef
-        // `updatedAt` is not restated here: `_formConfig` already stamped it
-        // with the same `now`, and repeating it reads as though a save that
-        // reuses its secret entry keeps an older one.
-        ? formConfig.copyWith(secretRef: secretId)
-        : formConfig;
+    final writes = [
+      for (final section in widget.sections) (section, section.capture()),
+    ];
     try {
-      // The vault write inside throws when the OS keyring is unavailable —
-      // tell the user instead of wedging the editor with _busy stuck on.
-      await widget.delegate.save(config, secret: secret);
+      // Throws when the OS keyring is unavailable or the write fails — tell
+      // the user instead of wedging the editor with _busy stuck on.
+      await widget.delegate.save(save);
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
-      showTopToastIn(
-        context,
-        message: AppLocalizations.of(context).serverEditorSaveFailed('$e'),
-      );
+      showTopToastIn(context, message: _strings.saveFailed('$e'));
       return;
     }
-    // After the config, so a server that failed to save never gains a cap,
-    // and only when the choice changed, so a settings file that cannot be
-    // written does not fail a Save that never touched it.
-    if (transferLimit != _storedTransferLimit) {
+    // After the server, so one that failed to save never gains a section's
+    // setting.
+    for (final (section, write) in writes) {
+      if (write == null) continue;
       try {
-        await widget.delegate.saveTransferConcurrency(config.id, transferLimit);
-        _storedTransferLimit = transferLimit;
+        await write(save.draft.id);
       } catch (e) {
         // The server is saved; the editor stays open so Save retries the
         // part that failed.
         if (!mounted) return;
         setState(() => _busy = false);
-        showTopToastIn(
-          context,
-          message: AppLocalizations.of(
-            context,
-          ).serverEditorTransferLimitSaveFailed('$e'),
-        );
+        showTopToastIn(context, message: section.failureMessage(e));
         return;
       }
     }
@@ -1315,8 +1451,13 @@ class _CustomColorSwatch extends StatelessWidget {
   /// The custom colour in force, or null when a named accent (or none) is.
   final Color? color;
   final VoidCallback onTap;
+  final GhostServerEditorStrings strings;
 
-  const _CustomColorSwatch({required this.color, required this.onTap});
+  const _CustomColorSwatch({
+    required this.color,
+    required this.onTap,
+    required this.strings,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1331,10 +1472,8 @@ class _CustomColorSwatch extends StatelessWidget {
       selected: selected,
       child: Tooltip(
         message: chosen == null
-            ? AppLocalizations.of(context).serverEditorCustomColour
-            : AppLocalizations.of(
-                context,
-              ).serverEditorCustomColourValue(formatServerCustomColor(chosen)),
+            ? strings.customColour
+            : strings.customColourValue(formatServerCustomColor(chosen)),
         child: InkWell(
           onTap: onTap,
           customBorder: const CircleBorder(),
@@ -1348,8 +1487,12 @@ class _CustomColorSwatch extends StatelessWidget {
                   : SweepGradient(
                       colors: [
                         for (var hue = 0; hue <= 360; hue += 60)
-                          HSVColor.fromAHSV(1, hue.toDouble(), 0.6, 0.95)
-                              .toColor(),
+                          HSVColor.fromAHSV(
+                            1,
+                            hue.toDouble(),
+                            0.6,
+                            0.95,
+                          ).toColor(),
                       ],
                     ),
               shape: BoxShape.circle,

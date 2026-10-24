@@ -1,5 +1,48 @@
 # Séance ports and pin audits
 
+## Suite links, F5d (2026-10-21)
+
+The link grammar Poltergeist owned since "Cross-app deep links"
+(2026-10-02) moves into `seance_core`, and Séance gains the intake and
+native registration it lacked (`../../docs/design/suite-links.md`,
+sections 4 to 8).
+
+| Left | Now |
+|---|---|
+| `poltergeist_app/lib/services/deep_links.dart:17-415`, parsers, models and the display helpers, without the coordinator | `seance_core/lib/src/links/suite_links.dart` and `link_display.dart` |
+| `poltergeist_app/lib/services/seance_links.dart:7-36`, the outbound builders | `seance_core/lib/src/links/suite_links.dart` |
+| `poltergeist_core/lib/src/local_fs_safety.dart`, `validatePathComponent`, `maxFileNameBytes`, `utf8ByteLength` | `seance_core/lib/src/fs/path_component.dart` |
+
+- F5d-1 moves (D3): both app files stay at their paths and re-export the
+  moved names, `poltergeist_core` re-exports the path rule, and
+  `HostDeepLink.target` becomes an app extension. Poltergeist's four
+  link test files ran unchanged. Making `maxFileNameBytes` and
+  `utf8ByteLength` public is the one API widening; the alternative was
+  a private copy in each package.
+- F5d-2 adds `parseSeanceConnect`, `buildSeanceConnect`,
+  `buildPoltergeistBrowse`, the reserved `klabautermann` constants and
+  the link contract corpus (`seance_core/test/fixtures/suite_link_corpus.json`),
+  which Poltergeist's intake reads by relative path. The two outbound
+  Séance builders now throw `ArgumentError` on input the parser would
+  refuse; Poltergeist's launcher builds inside its guard.
+- F5d-3a and F5d-3b are Séance's own intake and Android, iOS and macOS
+  registration; no Poltergeist source is copied. Séance takes
+  `app_links` 7.2.1, Poltergeist's pin.
+- F5d-3c copies `poltergeist_app/windows/runner/deep_link_scheme.{h,cpp}`
+  into `seance_app/windows/runner/` with Séance's names
+  (`Software\Classes\seance`, `URL:Seance` in ASCII, the mutex and
+  window property `ch.lkmc.seance.deep-link-primary-v1`) and a
+  provenance comment; the logic is unchanged. Séance's Linux runner
+  follows Poltergeist's unique GApplication with `HANDLES_COMMAND_LINE |
+  HANDLES_OPEN` written in its own file.
+- D32: scheme runner code now exists in two apps. X-06 (v1.x) makes
+  Klabautermann the third, with an entry in
+  `klabautermann/docs/SHARED.md`; a fourth copy needs the shared-plugin
+  review D32 calls for first.
+- Pin audit: `scripts/audit-seance-pin.sh` matched this record after
+  each F5d branch; no contributor, licence text, vendored path or
+  gitlink changed, so the record itself stays as it is.
+
 ## Keystore move, F3c (2026-10-16)
 
 Poltergeist's `MasterKeyManager` moves into a new Planchette package,

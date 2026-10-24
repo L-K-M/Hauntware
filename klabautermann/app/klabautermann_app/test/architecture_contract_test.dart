@@ -19,6 +19,10 @@ final _packageImport = RegExp(
   multiLine: true,
 );
 final _dependencyEntry = RegExp(r'^  ([a-z0-9_]+):', multiLine: true);
+final _configDraftImport = RegExp(
+  r'''^\s*(?:import|export)\s+['"]package:ghost_servers/server_config_draft\.dart''',
+  multiLine: true,
+);
 
 /// Every directory of the app's Dart sources, the frame-timing test's
 /// (spike S5) included.
@@ -73,6 +77,29 @@ void main() {
         }
       }
     }
+
+    expect(offenders, isEmpty);
+  });
+
+  // ghost_servers maps its editor drafts to protocol configs in a library
+  // of its own, kept out of the barrel for hosts that may import
+  // seance_protocol (docs/design/ghost-servers-part2.md, section 2).
+  test('imports no protocol-typed ghost_servers library', () {
+    expect(
+      _configDraftImport.hasMatch(
+        "import 'package:ghost_servers/server_config_draft.dart';",
+      ),
+      isTrue,
+    );
+    final offenders = [
+      for (final path in _sourceDirectories)
+        if (Directory(path).existsSync())
+          for (final entity in Directory(path).listSync(recursive: true))
+            if (entity is File &&
+                entity.path.endsWith('.dart') &&
+                _configDraftImport.hasMatch(entity.readAsStringSync()))
+              entity.path,
+    ];
 
     expect(offenders, isEmpty);
   });

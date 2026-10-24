@@ -369,6 +369,7 @@ jobs:
           (cd planchette/app/planchette_app && flutter analyze --no-pub && flutter test --no-pub)
       - name: Séance — analyze and test app and vendored xterm fork
         run: |
+          (cd seance/packages/seance_terminal && flutter pub get && flutter analyze --no-pub && flutter test --no-pub)
           (cd seance/app/seance_app && flutter pub get && flutter analyze --no-pub && flutter test --no-pub)
           (cd seance/third_party/xterm && flutter pub get && flutter test --no-pub)
       - name: Poltergeist — analyze and test app

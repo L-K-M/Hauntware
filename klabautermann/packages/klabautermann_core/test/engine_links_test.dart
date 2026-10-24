@@ -723,6 +723,29 @@ void main() {
     });
   });
 
+  group('host queries (03 §7.6)', () {
+    test('a query names a fleet server, and one without a link is answered '
+        'at once', () async {
+      final engine = await startEngine();
+      await engine.import(_webConfig);
+
+      engine.send(
+        const HostQuery(serverId: 'other', queryId: 'h-0', query: BootsQuery()),
+      );
+      expect(await engine.rejected(), 'HostQuery');
+
+      engine.send(
+        const HostQuery(serverId: _web, queryId: 'h-1', query: VarLogQuery()),
+      );
+      final result = await engine.until<HostResult>();
+      expect(result.queryId, 'h-1');
+      expect(
+        (result.payload as HostQueryFailed).failure,
+        HostQueryFailure.noLink,
+      );
+    });
+  });
+
   group('Docker queries and watches (03 §5.9, §7.12, §10.1)', () {
     DockerQuery query(String queryId, {String serverId = _web}) => DockerQuery(
       serverId: serverId,

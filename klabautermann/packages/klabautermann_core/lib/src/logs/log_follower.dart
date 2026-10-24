@@ -194,6 +194,9 @@ final class LogFollower {
     return switch (spec.source) {
       // No --since: up to systemd 253 journalctl seeks it before -n and
       // prints the oldest records in range. The batches apply it instead.
+      // A past boot no longer grows.
+      JournalLogSource(boot: _?) || KernelLogSource(boot: _?) =>
+        throw const HostCommandError('a follow reads the current boot'),
       final JournalLogSource s => HostCommands.journalctl(
         unit: s.unit,
         identifier: s.identifier,
@@ -206,12 +209,17 @@ final class LogFollower {
         cursor: after,
         lines: count,
         order: JournalOrder.follow,
+        grep: s.grep,
       ),
       KernelLogSource() => HostCommands.journalctl(
         kernel: true,
         cursor: after,
         lines: count,
         order: JournalOrder.follow,
+      ),
+      // A rotated file no longer grows.
+      FileLogSource(compressed: true) => throw const HostCommandError(
+        'a compressed file is not followed',
       ),
       FileLogSource(:final path) =>
         after == null
