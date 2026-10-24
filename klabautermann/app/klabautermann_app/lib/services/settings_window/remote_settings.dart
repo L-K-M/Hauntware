@@ -178,9 +178,21 @@ final class RemoteDeviceName extends ChangeNotifier
   @override
   String get value => _value;
 
+  // As the app's controller reports it through its last answer here.
+  bool _saved = true;
+
+  @override
+  bool get saved => _saved;
+
   @override
   Future<void> setDeviceName(String name) async {
-    await _call(name);
+    try {
+      await _call(name);
+      _saved = true;
+    } on DeviceNameNotSavedException {
+      _saved = false;
+      rethrow;
+    }
   }
 }
 

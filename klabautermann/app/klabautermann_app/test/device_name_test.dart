@@ -115,6 +115,29 @@ void main() {
     await tester.pumpAndSettle();
     expect(settings.calls, ['Laptop']);
   });
+
+  testWidgets('review fix: submitting the same name again retries a save '
+      'that failed', (tester) async {
+    final settings = _CountingName('Desk')..failSave = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(body: DeviceNameField(deviceName: settings)),
+      ),
+    );
+
+    await tester.enterText(find.byType(DeviceNameField), 'Laptop');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    settings.failSave = false;
+    await tester.showKeyboard(find.byType(DeviceNameField));
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(settings.calls, ['Laptop', 'Laptop']);
+    expect(settings.saved, isTrue);
+  });
 }
 
 /// A device name that records each set, as the window's link would send
@@ -124,6 +147,10 @@ final class _CountingName extends ChangeNotifier implements DeviceNameSettings {
 
   String _value;
   final calls = <String>[];
+  var failSave = false;
+
+  @override
+  bool saved = true;
 
   @override
   String get value => _value;
@@ -133,6 +160,8 @@ final class _CountingName extends ChangeNotifier implements DeviceNameSettings {
     calls.add(name);
     await Future<void>.delayed(Duration.zero);
     _value = name.trim();
+    saved = !failSave;
     notifyListeners();
+    if (failSave) throw const DeviceNameNotSavedException('disk full');
   }
 }

@@ -300,7 +300,8 @@ class _DeviceNameFieldState extends State<DeviceNameField> {
   /// would otherwise send a change that is none.
   Future<void> _apply() async {
     if (!mounted || _applying) return;
-    if (_text.text.trim() == widget.deviceName.value) {
+    if (_text.text.trim() == widget.deviceName.value &&
+        widget.deviceName.saved) {
       _text.text = widget.deviceName.value;
       return;
     }

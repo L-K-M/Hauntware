@@ -30,6 +30,10 @@ abstract interface class DeviceNameSettings implements ValueListenable<String> {
   /// throws [DeviceNameNotSavedException], in the app and, over the link,
   /// in the window; any other throw means it did not apply.
   Future<void> setDeviceName(String name);
+
+  /// Whether [value] is saved; false after a save failed, so setting the
+  /// same name again retries it.
+  bool get saved;
 }
 
 /// A device name that applied but was not saved: it lasts until the app
@@ -72,6 +76,9 @@ final class DeviceNameController extends ChangeNotifier
 
   @override
   String get value => _value;
+
+  @override
+  bool get saved => _saved;
 
   @override
   Future<void> setDeviceName(String name) async {
