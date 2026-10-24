@@ -77,7 +77,7 @@ void main() {
     );
   });
 
-  test("the line keeps the plan's cleanup, so a failed edit still removes "
+  test("the line keeps the plan's cleanup, so a failed step still removes "
       'its temp file (M5 M20a)', () {
     final cleanup = ShellStep(['rm', '-f', '--', '/srv/.app.conf.tmp']);
     final plain = OperationPlan(
@@ -100,6 +100,8 @@ void main() {
 
     expect(plan, isNot(same(plain)));
     expect(plan.cleanup, [same(cleanup)]);
+    expect(plain.steps, hasLength(1));
+    expect(plain.cleanup, [same(cleanup)]);
   });
 
   test('a blank device name logs the line without one', () {

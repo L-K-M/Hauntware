@@ -81,6 +81,21 @@ void main() {
 
   Future<String> cat(String path) => host('cat -- "$path"');
 
+  /// The klabautermann syslog lines from line [from] on, polled until
+  /// one contains [line] because syslogd writes after logger returns.
+  Future<String> syslogSince(int from, String line) async {
+    var lines = '';
+    for (var attempt = 0; attempt < 25; attempt++) {
+      lines = await host(
+        'tail -n +$from /var/log/messages | grep -F -- "klabautermann: " '
+        '|| true',
+      );
+      if (lines.contains(line)) return lines;
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+    return lines;
+  }
+
   /// The temp files an edit left beside [path]'s file.
   Future<String> leftovers(String path) => host(
     'cd -- "\$(dirname -- "$path")" && '
@@ -135,6 +150,11 @@ void main() {
       (e) => e.requestId == requestId,
       actionWait,
     );
+    expect(
+      answer.result,
+      isA<EditContent>(),
+      reason: 'reading $target failed: ${answer.result}',
+    );
     return answer.result as EditContent;
   }
 
@@ -171,6 +191,9 @@ void main() {
     await verified(engine);
     const target = StackFileTarget(project: 'edits', path: _compose);
     final attributes = await host('stat -c "%u %g %a" -- "$_compose"');
+    // Only this run's lines count; a reused fixture keeps earlier ones.
+    final logged = await host('cat /var/log/messages 2>/dev/null | wc -l');
+    final logFrom = int.parse(logged.trim()) + 1;
 
     final content = await read(engine, target);
     expect(content.text, await cat(_compose));
@@ -216,10 +239,8 @@ void main() {
     expect(await cat(_compose), edited);
     expect(await host('stat -c "%u %g %a" -- "$_compose"'), attributes);
     expect(await leftovers(_compose), isEmpty);
-    expect(
-      await host('grep -F -- "klabautermann: " /var/log/messages || true'),
-      contains('klabautermann: editFile $_compose by $_device'),
-    );
+    const auditLine = 'klabautermann: editFile $_compose by $_device';
+    expect(await syslogSince(logFrom, auditLine), contains(auditLine));
 
     // A candidate compose cannot read fails its check and replaces
     // nothing.

@@ -234,13 +234,20 @@ void main() {
     final read = await engine.until<EditRead>(
       (e) => e.requestId == 'inventory-edit',
     );
+    expect(
+      read.result,
+      isA<EditContent>(),
+      reason: 'reading $_editedFile failed: ${read.result}',
+    );
     final content = read.result as EditContent;
+    final edited = content.text.replaceFirst('seeded', 'edited');
+    expect(edited, isNot(content.text), reason: 'the edit must change it');
     await planAndRun(
       engine,
       EditFile(
         dockerServer,
         target: const FileTarget(_editedFile),
-        text: content.text.replaceFirst('seeded', 'edited'),
+        text: edited,
         baseSha256: content.sha256,
       ),
     );
