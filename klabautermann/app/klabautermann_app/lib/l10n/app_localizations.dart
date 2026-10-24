@@ -6754,10 +6754,10 @@ abstract class AppLocalizations {
   /// **'Runs without a shell or terminal. Quote words as in a shell; for pipes and variables, run sh -c \'…\'.'**
   String get dockerCommandHelper;
 
-  /// Error under the command field when it is empty or a quote is left open (CTX-08).
+  /// Error under the command field when it is empty, a quote is left open or it ends with a backslash (CTX-08).
   ///
   /// In en, this message translates to:
-  /// **'Enter a command, and close any open quote.'**
+  /// **'Enter a complete command: close any open quote and remove a trailing backslash.'**
   String get dockerCommandUnparsed;
 
   /// Button that plans the one-off command, shows its preview and runs it once confirmed (CTX-08).

@@ -219,15 +219,30 @@ void main() {
     await tester.tap(_runButton);
     await tester.pump();
     expect(
-      find.text('Enter a command, and close any open quote.'),
+      find.text(
+        'Enter a complete command: close any open quote and remove a trailing backslash.',
+      ),
       findsOneWidget,
     );
     // Typing takes the complaint away until the next Run.
     await tester.enterText(find.byType(TextField).first, "echo 'open'");
     await tester.pump();
     expect(
-      find.text('Enter a command, and close any open quote.'),
+      find.text(
+        'Enter a complete command: close any open quote and remove a trailing backslash.',
+      ),
       findsNothing,
+    );
+
+    await tester.enterText(find.byType(TextField).first, r'echo \');
+    await tester.tap(_runButton);
+    await tester.pump();
+    expect(
+      find.text(
+        'Enter a complete command: close any open quote and remove a '
+        'trailing backslash.',
+      ),
+      findsOneWidget,
     );
 
     await tester.enterText(find.byType(TextField).first, '   ');

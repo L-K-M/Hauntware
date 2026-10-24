@@ -5135,7 +5135,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dockerCommandUnparsed =>
-      'Enter a command, and close any open quote.';
+      'Enter a complete command: close any open quote and remove a trailing backslash.';
 
   @override
   String get dockerCommandRun => 'Run';

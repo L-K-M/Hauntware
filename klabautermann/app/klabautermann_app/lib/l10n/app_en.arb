@@ -6255,9 +6255,9 @@
   "@dockerCommandHelper": {
     "description": "Helper under the command field: the words run as typed, without a shell expanding them (CTX-08)."
   },
-  "dockerCommandUnparsed": "Enter a command, and close any open quote.",
+  "dockerCommandUnparsed": "Enter a complete command: close any open quote and remove a trailing backslash.",
   "@dockerCommandUnparsed": {
-    "description": "Error under the command field when it is empty or a quote is left open (CTX-08)."
+    "description": "Error under the command field when it is empty, a quote is left open or it ends with a backslash (CTX-08)."
   },
   "dockerCommandRun": "Run",
   "@dockerCommandRun": {
