@@ -14,6 +14,7 @@ import 'package:klabautermann_app/controllers/operations_controller.dart';
 import 'package:klabautermann_app/controllers/pin_publication_controller.dart';
 import 'package:klabautermann_app/controllers/prompt_controller.dart';
 import 'package:klabautermann_app/controllers/safety_controller.dart';
+import 'package:klabautermann_app/controllers/server_editor_controller.dart';
 import 'package:klabautermann_app/controllers/sync_controller.dart';
 import 'package:klabautermann_app/services/hand_off.dart';
 import 'package:klabautermann_app/services/settings_window/settings_window_link.dart';
@@ -42,6 +43,7 @@ final class AppHarness {
     required this.announcements,
     required this.dockerNotice,
     required this.sync,
+    required this.serverEditor,
     this.admin,
     this.operations,
   });
@@ -55,6 +57,7 @@ final class AppHarness {
   final AnnouncementController announcements;
   final DockerNoticeController dockerNotice;
   final SyncController sync;
+  final ServerEditorController serverEditor;
   final AdminController? admin;
   final OperationsController? operations;
 
@@ -72,6 +75,7 @@ final class AppHarness {
       case _:
     }
     sync.dispose();
+    serverEditor.dispose();
     admin?.dispose();
     operations?.dispose();
   }
@@ -154,6 +158,7 @@ Future<AppHarness> pumpApp(
           ? null
           : PinPublicationController(engine, initial: pinPublication),
     ),
+    serverEditor: ServerEditorController(engine),
     admin: admin ? AdminController(engine) : null,
     operations: operations ? OperationsController(engine) : null,
   );
@@ -175,6 +180,7 @@ Future<AppHarness> pumpApp(
       operations: harness.operations,
       dockerNotice: harness.dockerNotice,
       sync: harness.sync,
+      serverEditor: harness.serverEditor,
       pinPublication: switch (harness.sync.pinPublication) {
         final PinPublicationController controller => controller,
         _ => null,

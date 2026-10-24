@@ -15,13 +15,18 @@ const actionWait = Duration(seconds: 60);
 const _adminWait = Duration(seconds: 60);
 
 /// Turns management on for [servers], so their plans may run; every other
-/// server stays observe-only (SAF-01).
-void manage(FixtureEngine engine, Iterable<String> servers) => engine.send(
+/// server stays observe-only (SAF-01). The host syslog line (SAF-13) is
+/// off unless [hostAuditLine], so a plan holds only its action's steps.
+void manage(
+  FixtureEngine engine,
+  Iterable<String> servers, {
+  bool hostAuditLine = false,
+}) => engine.send(
   SetSafetyPolicy(
     SafetyPolicy(
       servers: {
         for (final server in servers)
-          server: const ServerSafety(management: true),
+          server: ServerSafety(management: true, hostAuditLine: hostAuditLine),
       },
     ),
   ),

@@ -349,6 +349,56 @@ void main() {
     });
   });
 
+  group('audit line (SAF-13)', () {
+    test('names the action, the target and the device after --', () {
+      expect(HostCommands.auditLine('restart', 'nginx.service', 'Laptop'), [
+        'logger',
+        '-t',
+        'klabautermann',
+        '--',
+        'restart nginx.service by Laptop',
+      ]);
+    });
+
+    test('drops control characters and caps each part', () {
+      final argv = HostCommands.auditLine(
+        'kill',
+        'evil\nklabautermann: fake ${'x' * 300}',
+        '-n Laptop',
+      );
+      final message = argv.last;
+      expect(message, isNot(contains('\n')));
+      expect(message, startsWith('kill evil klabautermann: fake x'));
+      expect(message, endsWith(' by -n Laptop'));
+      expect(message.length, lessThan(2 * kAuditLinePartMax + 20));
+    });
+
+    test('review fix: drops C1 controls and Unicode line breaks too, and '
+        'never ends a capped part in a space', () {
+      final message = HostCommands.auditLine(
+        'stop',
+        'a\u0085b\u009bc\u2028d\u2029e',
+        'Laptop',
+      ).last;
+      expect(message, 'stop a b c d e by Laptop');
+
+      final capped = HostCommands.auditLine(
+        'stop',
+        '${'x' * (kAuditLinePartMax - 1)}\u0085y',
+        'Laptop',
+      ).last;
+      expect(capped, 'stop ${'x' * (kAuditLinePartMax - 1)} by Laptop');
+    });
+
+    test('a blank target is refused, and no device leaves out "by"', () {
+      expect(
+        () => HostCommands.auditLine('start', '  ', 'Laptop'),
+        throwsA(isA<HostCommandError>()),
+      );
+      expect(HostCommands.auditLine('start', 'web', '').last, 'start web');
+    });
+  });
+
   group('commandLine', () {
     String quote(String w) => '<$w>';
 

@@ -12,6 +12,7 @@ import 'app.dart';
 import 'controllers/admin_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/coverage_controller.dart';
+import 'controllers/device_name.dart';
 import 'controllers/pin_publication_controller.dart';
 import 'controllers/docker_endpoint_choices.dart';
 import 'controllers/docker_notice_controller.dart';
@@ -20,6 +21,7 @@ import 'controllers/monitor_set.dart';
 import 'controllers/monitoring_controller.dart';
 import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
+import 'controllers/server_editor_controller.dart';
 import 'controllers/server_prefs_controller.dart';
 import 'controllers/stack_folders.dart';
 import 'controllers/sync_controller.dart';
@@ -218,6 +220,8 @@ Future<void> main(List<String> args) async {
     account: engine.ready.syncAccount,
     pinPublication: pinPublication,
   );
+  // In-app server editing (FL-03): offered while enrolled (P16).
+  final serverEditor = ServerEditorController(engine);
   EngineKeystoreResponder(engine, klabautermannMasterKeyManager());
   for (final issue in engine.ready.syncStoreIssues) {
     debugPrint('${issue.fileName}: ${issue.kind.name} ${issue.detail ?? ''}');
@@ -255,6 +259,10 @@ Future<void> main(List<String> args) async {
         serverId,
     prefs: serverPrefs,
   );
+
+  // The device name the host syslog line gives (SAF-13, M5 plan Q6),
+  // until the user can name the device.
+  engine.send(SetDeviceName(defaultDeviceName(defaultTargetPlatform)));
 
   // The "sync passwords" switch (SYN-02), device-local in settings.json
   // and applied to the engine now, since it starts with the switch off.
@@ -316,6 +324,7 @@ Future<void> main(List<String> args) async {
       operations: operations,
       dockerNotice: dockerNotice,
       sync: sync,
+      serverEditor: serverEditor,
       settingsIssue: settings.issue,
       importStoreIssue: importStoreIssue,
       syncStoreIssues: engine.ready.syncStoreIssues,

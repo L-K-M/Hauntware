@@ -196,8 +196,9 @@ void main() {
 
     test('shows each barrel name, none of them seance_core\'s or '
         'seance_protocol\'s', () {
-      final barrel = File('$_terminalPackage/lib/seance_terminal.dart')
-          .readAsStringSync();
+      final barrel = File(
+        '$_terminalPackage/lib/seance_terminal.dart',
+      ).readAsStringSync();
       final exports = _exportDirective.allMatches(barrel).toList();
       expect(exports, isNotEmpty);
 

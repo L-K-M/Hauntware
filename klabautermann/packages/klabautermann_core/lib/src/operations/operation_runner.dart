@@ -193,6 +193,7 @@ final class OperationRunner {
         };
       }
 
+      final skipped = <int>[];
       for (var i = 0; i < plan.steps.length; i++) {
         _emit(
           ActionProgress(
@@ -202,6 +203,8 @@ final class OperationRunner {
           ),
         );
         switch (plan.steps[i]) {
+          case ShellStep(bestEffort: true) && final step:
+            if (!await _tryStep(link, step)) skipped.add(i);
           case final ShellStep step:
             final result = await _runShell(link, step, session);
             if (step.captureOutput) {
@@ -270,6 +273,13 @@ final class OperationRunner {
             }
         }
       }
+      return ActionFinished(
+        planId: planId,
+        outcome: ActionOutcome.succeeded,
+        exitCode: exitCode,
+        output: output,
+        skippedSteps: skipped,
+      );
     } on ElevationException {
       await _cleanUp(link, plan, session);
       return failed(ActionFailure.elevationRefused);
@@ -286,12 +296,20 @@ final class OperationRunner {
       await _cleanUp(link, plan, session);
       return failed(ActionFailure.transport);
     }
-    return ActionFinished(
-      planId: planId,
-      outcome: ActionOutcome.succeeded,
-      exitCode: exitCode,
-      output: output,
-    );
+  }
+
+  /// Whether the best-effort [step] ran and exited 0. Its failure, even a
+  /// lost channel, leaves the run's own outcome as it was (SAF-13).
+  static Future<bool> _tryStep(SshLink link, ShellStep step) async {
+    assert(!step.elevated, 'a best-effort step runs with the session');
+    try {
+      final result = await link.run(step.commandLine, stdin: const []);
+      return result.exitCode == 0;
+    } on RemoteCommandException {
+      return false;
+    } on ChannelOpenException {
+      return false;
+    }
   }
 
   /// Runs [step] over [link], or through [session]'s elevation, with its

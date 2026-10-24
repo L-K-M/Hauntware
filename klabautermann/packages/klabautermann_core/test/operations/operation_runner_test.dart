@@ -131,6 +131,60 @@ void main() {
     expect(link.commands, hasLength(1), reason: 'nothing ran after it');
   });
 
+  group('the host syslog line (SAF-13)', () {
+    final plan = _plan([
+      ShellStep(['systemctl', 'restart', 'nginx.service']),
+    ]).withAuditLine(['logger', '-t', 'klabautermann', '--', 'restart x']);
+
+    test(
+      'a failing line leaves the run succeeded, recording it skipped',
+      () async {
+        final link = _Link(
+          (command, _) => command.contains('logger')
+              ? const RemoteCommandResult(exitCode: 127, stderr: 'not found')
+              : _ok,
+        );
+
+        final finished = await runner(link).run('plan-1', plan);
+
+        expect(finished.outcome, ActionOutcome.succeeded);
+        expect(finished.skippedSteps, [1]);
+        expect(link.commands, hasLength(2));
+      },
+    );
+
+    test('so does a channel the line cannot open', () async {
+      final link = _Link(
+        (command, _) => command.contains('logger')
+            ? throw const ChannelOpenException(
+                ChannelRefusal.sessionLimit,
+                'no session channel',
+              )
+            : _ok,
+      );
+
+      final finished = await runner(link).run('plan-1', plan);
+
+      expect(finished.outcome, ActionOutcome.succeeded);
+      expect(finished.skippedSteps, [1]);
+    });
+
+    test('a line that runs is not skipped, and a failed action ends the run '
+        'before it', () async {
+      final written = await runner(_Link((_, _) => _ok)).run('plan-1', plan);
+      expect(written.skippedSteps, isEmpty);
+
+      final link = _Link(
+        (command, _) => command.contains('restart')
+            ? const RemoteCommandResult(exitCode: 1)
+            : _ok,
+      );
+      final failed = await runner(link).run('plan-2', plan);
+      expect(failed.failure, ActionFailure.stepFailed);
+      expect(link.commands, hasLength(1));
+    });
+  });
+
   group('re-validates before the first step (03 §8.5)', () {
     Future<(ActionFinished, _Link)> check(
       Revalidation revalidation,

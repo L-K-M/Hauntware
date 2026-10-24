@@ -19,6 +19,7 @@ import 'package:seance_core/seance_core.dart'
 
 import '../admin/admin_mode.dart';
 import '../audit/audit_log.dart';
+import '../audit/host_audit_line.dart';
 import '../admin/safety_policy.dart';
 import '../admin/user_crontabs.dart';
 import '../capabilities/capability_cache.dart';
@@ -232,6 +233,7 @@ void engineMain(
   // while links are off. It opens with the support directory's files.
   OperationTracker? operations;
   var safetyPolicy = const SafetyPolicy();
+  var deviceName = '';
   // Previewed plans and the runner of confirmed ones (03 §8.5). A plan
   // runs only on the link generation it was planned on: each server's
   // generation counts the times its link became ready.
@@ -1390,8 +1392,15 @@ void engineMain(
               refuse(attempt.refusal!);
               return;
             }
-            final planId = plans.hold(plan, linkGeneration: generation);
-            uiPort.send(ActionPlanned(planId, plan.preview));
+            // The switch and name as they are now, when the user sees
+            // the plan; the preview lists the line among the steps.
+            final held = withHostAuditLine(
+              plan,
+              enabled: safetyPolicy.servers[serverId]?.hostAuditLine ?? true,
+              deviceName: deviceName,
+            );
+            final planId = plans.hold(held, linkGeneration: generation);
+            uiPort.send(ActionPlanned(planId, held.preview));
           }),
         );
       case FootprintQuery(:final serverId):
@@ -1553,6 +1562,8 @@ void engineMain(
         for (final serverId in [...?admin?.servers]) {
           if (adminRefusal(policy, serverId) != null) admin?.disable(serverId);
         }
+      case SetDeviceName(:final name):
+        deviceName = name;
       case SetPinPublication(:final asserted):
         final release = start.pinPublicationRelease;
         if (release == null) {

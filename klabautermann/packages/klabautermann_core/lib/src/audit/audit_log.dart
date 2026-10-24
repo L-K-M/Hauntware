@@ -75,6 +75,7 @@ final class AuditLog {
         failedStep: finished.failedStep,
         exitCode: finished.exitCode,
         httpStatus: finished.httpStatus,
+        skippedSteps: finished.skippedSteps,
       ),
     );
   }
@@ -206,6 +207,7 @@ final class AuditLog {
     'failedStep': ?r.failedStep,
     'exit': ?r.exitCode,
     'http': ?r.httpStatus,
+    if (r.skippedSteps.isNotEmpty) 'skipped': r.skippedSteps,
   };
 
   static AuditRecord? _decode(String line) {
@@ -231,6 +233,9 @@ final class AuditLog {
         failedStep: json['failedStep'] as int?,
         exitCode: json['exit'] as int?,
         httpStatus: json['http'] as int?,
+        skippedSteps: [
+          for (final step in json['skipped'] as List? ?? const []) step as int,
+        ],
       );
     } on Object {
       return null;

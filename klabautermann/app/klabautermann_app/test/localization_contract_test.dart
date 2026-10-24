@@ -73,10 +73,21 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/announcement_controller.dart': {
     r"'The announcement setting was not saved: $error'",
   },
-  // The not-saved diagnostic; the Safety tab and the header's Safety menu
-  // print it and show their own ARB text (settingsSafetyNotSaved).
+  // The host syslog line's device name, written into host journals in
+  // one form (M5 plan Q6).
+  'lib/controllers/device_name.dart': {
+    r"'Klabautermann on $name'",
+    "'Android'",
+    "'Fuchsia'",
+    "'iOS'",
+    "'Linux'",
+    "'macOS'",
+    "'Windows'",
+  },
   // A job history read's request id, matched in the engine's answer.
   'lib/controllers/job_history_reads.dart': {r"'history-${_count++}'"},
+  // The not-saved diagnostic; the Safety tab and the header's Safety menu
+  // print it and show their own ARB text (settingsSafetyNotSaved).
   'lib/controllers/safety_controller.dart': {
     r"'The safety settings were not saved: $error'",
     // A migration the engine refused, printed; it is tried again.
@@ -86,6 +97,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/server_prefs_controller.dart': {
     r"'prefs-${_count++}'",
     r"'ServerPrefsNotSavedException: $failure, $detail'",
+  },
+  // A server edit's request id, matched in the engine's answer.
+  'lib/controllers/server_editor_controller.dart': {
+    r"'server-edit-${_count++}'",
   },
   // The not-saved diagnostic; the Sync tab prints it and shows its own
   // ARB text (settingsSyncSecretsNotSaved).
@@ -702,6 +717,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'['",
     r"'[$host]'",
   },
+  // A refusal's detail, which only the ARB's `other` branch shows: none,
+  // or the error itself for one that is not a refusal.
+  'lib/ui/server_editing.dart': {"''", r"'$error'"},
   // An assert message; programmer diagnostic, never rendered.
   'lib/ui/server_surfaces.dart': {
     "'new controllers come with a new tree (KlabautermannApp, D44)'",

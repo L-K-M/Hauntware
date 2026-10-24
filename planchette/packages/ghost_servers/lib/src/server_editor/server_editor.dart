@@ -357,6 +357,7 @@ class _ServerEditorState extends State<_ServerEditor> {
   }
 
   Widget _body(BuildContext context) {
+    final canTest = widget.delegate.canTestConnection;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Form(
@@ -449,34 +450,39 @@ class _ServerEditorState extends State<_ServerEditor> {
             const SizedBox(height: 20),
             Row(
               children: [
-                // Flexible, so the row never overflows: on a phone at a large
-                // text scale the three buttons are wider than the dialog, and
-                // this is the one whose label can wrap onto a second line
-                // without changing what the row means.
-                Flexible(
-                  child: Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: OutlinedButton.icon(
-                      onPressed: _busy || _testing ? null : _testConnection,
-                      icon: _testing
-                          ? SizedBox(
-                              width: 16,
-                              height: 16,
-                              // Labelled like the outcome icons: a spinner is
-                              // the one state with nothing to read, so without
-                              // this a screen-reader user cannot tell a running
-                              // test from a button that did nothing.
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                semanticsLabel: _strings.testingSemantic,
-                              ),
-                            )
-                          : const Icon(Icons.wifi_tethering, size: 18),
-                      label: Text(_testing ? _strings.testing : _strings.test),
+                if (canTest) ...[
+                  // Flexible, so the row never overflows: on a phone at a large
+                  // text scale the three buttons are wider than the dialog, and
+                  // this is the one whose label can wrap onto a second line
+                  // without changing what the row means.
+                  Flexible(
+                    child: Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: OutlinedButton.icon(
+                        onPressed: _busy || _testing ? null : _testConnection,
+                        icon: _testing
+                            ? SizedBox(
+                                width: 16,
+                                height: 16,
+                                // Labelled like the outcome icons: a spinner is
+                                // the one state with nothing to read, so without
+                                // this a screen-reader user cannot tell a running
+                                // test from a button that did nothing.
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  semanticsLabel: _strings.testingSemantic,
+                                ),
+                              )
+                            : const Icon(Icons.wifi_tethering, size: 18),
+                        label: Text(
+                          _testing ? _strings.testing : _strings.test,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
+                  const SizedBox(width: 8),
+                ] else
+                  const Spacer(),
                 // Cancel stays live during a test: the attempt cannot be
                 // stopped, but being unable to leave the dialog for the five
                 // minutes an authentication may take is worse than letting it
@@ -498,13 +504,15 @@ class _ServerEditorState extends State<_ServerEditor> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              _strings.testDisclaimer,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).hintColor,
+            if (canTest) ...[
+              const SizedBox(height: 8),
+              Text(
+                _strings.testDisclaimer,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).hintColor,
+                ),
               ),
-            ),
+            ],
             if (_testResult != null) const SizedBox(height: 12),
             // The spinner announces that a test started; without this the one
             // thing that matters — how it ended — arrives silently, and a

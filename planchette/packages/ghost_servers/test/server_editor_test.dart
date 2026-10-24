@@ -31,6 +31,7 @@ final class _FakeDelegate extends GhostServerEditorDelegate {
   Object? saveFailure;
   bool configured = false;
   bool canPick = true;
+  bool canTest = true;
   int testCalls = 0;
   Future<GhostTestReport> Function()? testReply;
   int _ids = 0;
@@ -49,6 +50,9 @@ final class _FakeDelegate extends GhostServerEditorDelegate {
 
   @override
   bool get canPickIdentityFile => canPick;
+
+  @override
+  bool get canTestConnection => canTest;
 
   @override
   Future<String?> pickIdentityFile() async => null;
@@ -428,6 +432,21 @@ void main() {
 
       expect(field('Identity file path'), findsOneWidget);
       expect(find.text('Browse…'), findsNothing);
+    });
+
+    testWidgets('a host without a connection test hides Test and its note', (
+      tester,
+    ) async {
+      delegate.canTest = false;
+      await openEditor(tester);
+      await fillRequired(tester);
+      await scrollTo(tester, saveButton);
+
+      expect(find.text('Test connection'), findsNothing);
+      expect(find.textContaining('Testing authenticates'), findsNothing);
+      // Saving still works without it.
+      await tapSave(tester);
+      expect(delegate.saves, hasLength(1));
     });
 
     testWidgets('a hidden start folder keeps the value it opened with', (

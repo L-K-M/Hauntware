@@ -1,6 +1,10 @@
 include: package:lints/recommended.yaml
 
 analyzer:
+  # Built against the previous release's packages, not this checkout's,
+  # by test/integration/previous_release.sh (M5 plan M08b).
+  exclude:
+    - test/integration/previous_release_harness/**
   language:
     strict-casts: true
   errors:

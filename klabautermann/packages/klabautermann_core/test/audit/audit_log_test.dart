@@ -117,6 +117,43 @@ void main() {
     expect(read.deviceId, 'device-1');
   });
 
+  test('keeps the skipped syslog line of a run that succeeded', () async {
+    final audit = log();
+    final plan = OperationPlan(
+      intent: const UnitAction(
+        _server,
+        unit: 'app.service',
+        verb: SystemctlVerb.restart,
+      ),
+      kind: OperationKind.restart,
+      targetName: 'app.service',
+      steps: [
+        ShellStep(['systemctl', 'restart', 'app.service']),
+      ],
+      requiredLevel: RequiredLevel.login,
+      runner: const RunnerFacts(identity: 'deploy'),
+    ).withAuditLine(['logger', '-t', 'klabautermann', '--', 'restart']);
+    await audit.recordRun((
+      planId: 'plan-1',
+      plan: plan,
+      finished: const ActionFinished(
+        planId: 'plan-1',
+        outcome: ActionOutcome.succeeded,
+        skippedSteps: [1],
+      ),
+      startedAt: now,
+      endedAt: now,
+    ));
+    await audit.append(record(now));
+
+    final [plain, skipped] = (await audit.query(_server)).records;
+    expect(skipped.steps, hasLength(2));
+    expect(skipped.skippedSteps, [1]);
+    expect(skipped.toJson()['skippedSteps'], [1]);
+    expect(plain.skippedSteps, isEmpty);
+    expect(plain.toJson(), isNot(contains('skippedSteps')));
+  });
+
   test('prunes records older than 90 days at start', () async {
     final audit = log();
     await audit.append(record(now.subtract(const Duration(days: 91))));

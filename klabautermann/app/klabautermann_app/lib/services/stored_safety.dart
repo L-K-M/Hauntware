@@ -14,7 +14,7 @@ import '../controllers/safety_controller.dart';
 enum _SafetyKey { globalReadOnly, adminExpiryMinutes, servers }
 
 /// The keys of one server's entry under [_SafetyKey.servers].
-enum _ServerKey { management, readOnly, marks }
+enum _ServerKey { management, readOnly, marks, hostAuditLine }
 
 /// The app's safety preferences over [settings], applied to [engine] at
 /// once and on every change, and saved on every change.
@@ -80,10 +80,12 @@ Map<String, Object?> encodeServerSafety(ServerSafety safety) => {
   _ServerKey.management.name: safety.management,
   _ServerKey.readOnly.name: safety.readOnly,
   _ServerKey.marks.name: safety.marks.toList()..sort(),
+  _ServerKey.hostAuditLine.name: safety.hostAuditLine,
 };
 
 /// The inverse of [encodeServerSafety], as leniently as
-/// [decodeStoredSafety]: a damaged read-only switch turns management off.
+/// [decodeStoredSafety]: a damaged read-only switch turns management off,
+/// and the syslog line is off only when stored as false.
 ServerSafety decodeServerSafety(Map<String, Object?> json) {
   final readOnly = json[_ServerKey.readOnly.name];
   final damaged = readOnly != null && readOnly is! bool;
@@ -94,6 +96,7 @@ ServerSafety decodeServerSafety(Map<String, Object?> json) {
       final List<Object?> marks => Set.unmodifiable(marks.whereType<String>()),
       _ => const {},
     },
+    hostAuditLine: json[_ServerKey.hostAuditLine.name] != false,
   );
 }
 

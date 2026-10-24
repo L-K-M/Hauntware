@@ -855,6 +855,15 @@ final class SetSyncSecrets extends EngineRequest {
   final bool enabled;
 }
 
+/// The name the host syslog line gives this device (SAF-13, M5 plan Q6),
+/// sent at spawn and on every change. Until it arrives, or while blank,
+/// the line names no device.
+final class SetDeviceName extends EngineRequest {
+  const SetDeviceName(this.name);
+
+  final String name;
+}
+
 /// The suite release whose Séance carries the #56 fix (D15, FL-22): the
 /// release a pin publication assertion names. Null until a suite release
 /// carries the fix (M5 plan Q1), so no assertion is offered and the
@@ -986,7 +995,8 @@ final class ReadServerDraft extends EngineRequest {
 /// (03 §4.4, FL-03). The saved endpoint counts as confirmed on this
 /// device (M5 plan P16). Answered by [CatalogWritten] or
 /// [CatalogWriteRefused]; a written one sends the fleet and the
-/// preferences just before its answer, and a round's [SyncStatus] after.
+/// preferences just before its answer when they can be read (else the
+/// next round's refresh does), and a round's [SyncStatus] after.
 final class SaveServer extends EngineRequest {
   const SaveServer({
     required this.requestId,
@@ -1331,15 +1341,20 @@ final class ServerPrefs {
   /// Absolute directories the stack scan looks in (STK-01).
   final List<String> stackScanDirs;
 
-  /// These preferences with the safety fields replaced (M5 plan M06).
-  ServerPrefs copyWith({bool? readOnly, Set<String>? marks}) => ServerPrefs(
+  /// These preferences with the safety fields replaced (M5 plan M06,
+  /// M19).
+  ServerPrefs copyWith({
+    bool? readOnly,
+    Set<String>? marks,
+    bool? hostAuditLine,
+  }) => ServerPrefs(
     readOnly: readOnly ?? this.readOnly,
     cadence: cadence,
     pinnedUnits: pinnedUnits,
     pinnedContainers: pinnedContainers,
     marks: marks ?? this.marks,
     panelOrder: panelOrder,
-    hostAuditLine: hostAuditLine,
+    hostAuditLine: hostAuditLine ?? this.hostAuditLine,
     stackScanDirs: stackScanDirs,
   );
 }
@@ -2120,6 +2135,7 @@ final class ActionFinished extends EngineEvent {
     this.httpStatus,
     this.revalidation,
     this.operationId,
+    this.skippedSteps = const [],
     this.output,
   });
 
@@ -2146,6 +2162,10 @@ final class ActionFinished extends EngineEvent {
   /// The detached operation a started plan runs as, which
   /// [OperationsChanged] lists.
   final String? operationId;
+
+  /// The indexes of best-effort steps that failed without failing the
+  /// run, such as the host syslog line (SAF-13).
+  final List<int> skippedSteps;
 
   /// What a [ContainerExec] or a [RunCronJob] printed, whether it
   /// succeeded or failed.
@@ -2499,7 +2519,9 @@ final class AuditRecord {
     this.failedStep,
     this.exitCode,
     this.httpStatus,
-  }) : steps = List.unmodifiable(steps);
+    Iterable<int> skippedSteps = const [],
+  }) : steps = List.unmodifiable(steps),
+       skippedSteps = List.unmodifiable(skippedSteps);
 
   final String serverId;
 
@@ -2519,6 +2541,9 @@ final class AuditRecord {
   final int? exitCode;
   final int? httpStatus;
 
+  /// The best-effort steps that failed without failing the run (SAF-13).
+  final List<int> skippedSteps;
+
   /// The record as the Activity page's export carries it (SAF-11): every
   /// field, its steps redacted as stored, times in UTC.
   Map<String, Object?> toJson() => {
@@ -2535,6 +2560,7 @@ final class AuditRecord {
     'failedStep': ?failedStep,
     'exitCode': ?exitCode,
     'httpStatus': ?httpStatus,
+    if (skippedSteps.isNotEmpty) 'skippedSteps': skippedSteps,
   };
 }
 
@@ -4455,15 +4481,32 @@ final class ServerSafety {
     this.management = false,
     this.readOnly = false,
     this.marks = const {},
+    this.hostAuditLine = true,
   });
 
   final bool management;
   final bool readOnly;
 
+  /// Whether a run writes the host syslog line (SAF-13): on by default,
+  /// and the synced `pref` record's value for a synced server.
+  final bool hostAuditLine;
+
   /// Targets the user marked protected on this device (SAF-22): unit,
   /// container and stack names. They stay device-local until v1's `pref`
   /// records (M4 plan Q1).
   final Set<String> marks;
+
+  ServerSafety copyWith({
+    bool? management,
+    bool? readOnly,
+    Set<String>? marks,
+    bool? hostAuditLine,
+  }) => ServerSafety(
+    management: management ?? this.management,
+    readOnly: readOnly ?? this.readOnly,
+    marks: marks ?? this.marks,
+    hostAuditLine: hostAuditLine ?? this.hostAuditLine,
+  );
 }
 
 /// Admin mode's default inactivity expiry [E] (03 §8.2).

@@ -222,8 +222,9 @@ class _RemoteEditorState extends State<RemoteEditor> {
     if (answer is EditReadFailed && keepMine && _editor != null) {
       showTopToast(
         Overlay.of(context, rootOverlay: true),
-        message: AppLocalizations.of(context)
-            .editReadFailed(answer.failure.name),
+        message: AppLocalizations.of(
+          context,
+        ).editReadFailed(answer.failure.name),
       );
       return false;
     }

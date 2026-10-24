@@ -4985,6 +4985,25 @@ CI.
   - The log stores redacted steps only, so E24's export has nothing
     secret to include.
 
+As built in M5 (M19), the host line:
+- The engine ends each inline plan with
+  `logger -t klabautermann -- '<kind> <target> by <device>'`
+  (`HostCommands.auditLine`), at delivery, so the preview lists it among
+  the steps and `auditSyslog` among the host writes. Each part loses its
+  control characters and is capped at 200 characters [E].
+- The step is best-effort: a failure, even a lost channel, leaves the
+  run's outcome as it was, and `ActionFinished.skippedSteps` and the
+  device record name it. The danger linter skips it. A run that fails
+  stops before it, so the line marks completed actions only.
+- The switch is `ServerSafety.hostAuditLine`, on by default, in the
+  server header's Safety menu. A synced server keeps it in its `pref`
+  record; merged with a stored one, off wins, as read-only does.
+- The device is named by `SetDeviceName`; until Settings names it
+  (M19b), the app sends "Klabautermann on <platform>" (Q6), never the
+  hostname.
+- Detached plans carry no line yet: their steps run on the host past the
+  session, where no step is best-effort.
+
 As built in M4 (E24), the server header's Safety menu opens Activity: a
 sortable table of each record's time, target, action, confirmation and
 result, newest first, whose rows open the run's redacted steps and how
@@ -7442,6 +7461,22 @@ tombstone ignored and a sealed removal applied (X3); a first-seen pin
 installed through `putIfNoConflict` and a conflicting one reported in
 `pinConflicts` and left out of the store (X4). The v1.x alert delivery
 still adds TLS and reachability from the sshd host to this service.
+
+As built in M5 (M08b), 11.2 item 2's previous-release skip runs on the
+same service. `test/integration/previous_release.sh` takes the highest
+`vMAJOR.MINOR.PATCH` tag on origin, extracts that release's
+`seance_core`, `seance_protocol`, `poltergeist_core` and
+`planchette_core` with `git archive`, and compiles
+`previous_release_harness/bin/harness.dart` against them with a pubspec
+it writes (the analyzer excludes the harness, which is not a package of
+the checkout). `run.sh` builds it after the sync service answers and
+exports its path as `KLABAUTERMANN_PREVIOUS_RELEASE_HARNESS`. The
+convergence suite writes Klabautermann's `pref` and `rule` records, runs
+the harness, which signs in as that release's Séance and Poltergeist and
+pushes a server and a bookmark of their own, and then reads from the
+server that every `klabautermann:` record keeps its sequence number and
+blob and is not deleted, and that Klabautermann still syncs. Against
+v1.9.2, which predates the kind, Séance decodes it as `unknown`.
 
 As built in M5 (M29), `seed_docker.sh` adds the v1 stacks: `services`
 (`app` and `worker`), `downable`, `override` (deployed from
