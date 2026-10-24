@@ -668,10 +668,13 @@ jobs:
           files: ${{ matrix.files }}
           fail_on_unmatched_files: true
 
-  # Repack the Planchette Linux .deb as a Flatpak bundle — the same
-  # files the .deb installs, relaid under the /app prefix. A separate
-  # leg (as in the module workflow): the flatpak builder needs its own
-  # toolchain and the client leg already ships three assets.
+  # Repack the Linux .deb as a Flatpak bundle — the same files the .deb
+  # installs, relaid under the /app prefix. A separate leg per product
+  # (as in the module workflow): the flatpak builder needs its own
+  # toolchain, the client leg already ships three assets, and a slow
+  # Flathub fill of the runtimes must not take those down. These legs
+  # run on hosted runners with links of their own, so unlike ci.yml's
+  # client legs they need no shared download queue.
   flatpak_planchette:
     name: Planchette Linux Flatpak
     needs: [test, flutter]
@@ -747,6 +750,156 @@ jobs:
           files: planchette-linux-x64.flatpak
           fail_on_unmatched_files: true
 
+  flatpak_seance:
+    name: Séance Linux Flatpak
+    needs: [test, flutter]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45   # first run downloads the Flutter toolchain
+    permissions:
+      contents: write
+    steps:
+      - name: Resolve the checkout ref
+        id: checkout-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --retry 3 -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/git/ref/tags/$RELEASE_TAG")
+          case "$code" in
+            200) echo "ref=$RELEASE_TAG" >> "$GITHUB_OUTPUT" ;;
+            404) echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "tag ref lookup failed for $RELEASE_TAG (HTTP $code)" >&2
+              exit 1
+              ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
+        with:
+          ref: ${{ steps.checkout-ref.outputs.ref }}
+      # GTK toolchain for the Flutter Linux embedder, plus libsecret/jsoncpp
+      # for flutter_secure_storage's keyring backend; flatpak-builder repacks
+      # the .deb.
+      - name: Install Linux desktop toolchain
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          libsecret-1-dev libjsoncpp-dev imagemagick file
+          flatpak flatpak-builder elfutils
+          && { sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true; }
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - name: Resolve workspace
+        working-directory: seance
+        run: dart pub get
+      - name: Resolve app dependencies
+        working-directory: seance/app/seance_app
+        run: flutter pub get
+      - name: Build
+        working-directory: seance/app/seance_app
+        run: flutter build linux --release
+      - name: Package and repack
+        working-directory: seance
+        shell: bash
+        run: |
+          shopt -s nullglob
+          bundles=(app/seance_app/build/linux/*/release/bundle)
+          [[ ${#bundles[@]} -eq 1 ]] || { echo "expected one linux bundle, found ${#bundles[@]}" >&2; exit 1; }
+          scripts/package-linux.sh \
+            --bundle "${bundles[0]}" \
+            --output-dir . --skip-appimage
+          scripts/build-flatpak.sh "$(find . -maxdepth 1 -type f -name 'seance_*.deb' -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
+          mv dist/seance-linux-x64.flatpak "$GITHUB_WORKSPACE/"
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned)
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          draft: true
+          prerelease: >-
+            ${{ startsWith(inputs.tag || github.ref_name, 'v0.') }}
+          files: seance-linux-x64.flatpak
+          fail_on_unmatched_files: true
+
+  flatpak_poltergeist:
+    name: Poltergeist Linux Flatpak
+    needs: [test, flutter]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45   # first run downloads the Flutter toolchain
+    permissions:
+      contents: write
+    steps:
+      - name: Resolve the checkout ref
+        id: checkout-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --retry 3 -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/git/ref/tags/$RELEASE_TAG")
+          case "$code" in
+            200) echo "ref=$RELEASE_TAG" >> "$GITHUB_OUTPUT" ;;
+            404) echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "tag ref lookup failed for $RELEASE_TAG (HTTP $code)" >&2
+              exit 1
+              ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
+        with:
+          ref: ${{ steps.checkout-ref.outputs.ref }}
+      # GTK toolchain for the Flutter Linux embedder, plus libsecret/jsoncpp
+      # for flutter_secure_storage's keyring backend; flatpak-builder repacks
+      # the .deb.
+      - name: Install Linux desktop toolchain
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          libsecret-1-dev libjsoncpp-dev imagemagick file
+          flatpak flatpak-builder elfutils
+          && { sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true; }
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - name: Resolve workspace
+        working-directory: poltergeist
+        run: dart pub get
+      - name: Resolve app dependencies
+        working-directory: poltergeist/app/poltergeist_app
+        run: flutter pub get
+      - name: Build
+        working-directory: poltergeist/app/poltergeist_app
+        run: flutter build linux --release
+      - name: Package and repack
+        working-directory: poltergeist
+        shell: bash
+        run: |
+          shopt -s nullglob
+          bundles=(app/poltergeist_app/build/linux/*/release/bundle)
+          [[ ${#bundles[@]} -eq 1 ]] || { echo "expected one linux bundle, found ${#bundles[@]}" >&2; exit 1; }
+          scripts/package-linux.sh \
+            --bundle "${bundles[0]}" \
+            --output-dir . --skip-appimage
+          scripts/build-flatpak.sh "$(find . -maxdepth 1 -type f -name 'poltergeist_*.deb' -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
+          mv dist/poltergeist-linux-x64.flatpak "$GITHUB_WORKSPACE/"
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned)
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          draft: true
+          prerelease: >-
+            ${{ startsWith(inputs.tag || github.ref_name, 'v0.') }}
+          files: poltergeist-linux-x64.flatpak
+          fail_on_unmatched_files: true
+
   client_seance:
     name: Séance client (${{ matrix.target }})
     needs: [test, flutter]
@@ -780,7 +933,6 @@ jobs:
               seance-linux-x64.tar.gz
               seance_*.deb
               seance-linux-x64.AppImage
-              seance-linux-x64.flatpak
           - os: macos-latest
             target: macos
             build: macos --release
@@ -933,17 +1085,10 @@ jobs:
               # point the packager at it explicitly (--bundle asks the ELF for
               # its arch).
               seance/scripts/package-linux.sh --bundle "seance-linux-${{ matrix.flavor }}" --output-dir .
-              # The .flatpak is the same .deb's payload staged under /app —
-              # one packaging path, four assets.
-              sudo apt-get update
-              sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
-              # Ubuntu 24.04 denies the unprivileged user namespaces
-              # bubblewrap (flatpak's sandbox helper) builds in.
-              sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
-              deb="$(find . -maxdepth 1 -name 'seance_*.deb' -type f -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
-              [ -n "$deb" ] || { echo "::error::no seance_*.deb found" >&2; exit 1; }
-              seance/scripts/build-flatpak.sh "$deb"
-              mv seance/dist/seance-linux-x64.flatpak .
+              # The .flatpak rides in its own leg (flatpak_seance): the
+              # repack needs its own toolchain and a Flathub fill of its
+              # runtimes, and a slow one must not take this leg's other
+              # assets down with it.
               ;;
             macos)
               # Xcode builds the ASCII "Seance.app" (codesign rejects accented
@@ -1014,7 +1159,6 @@ jobs:
               poltergeist-linux-x64.tar.gz
               poltergeist_*.deb
               poltergeist-linux-x64.AppImage
-              poltergeist-linux-x64.flatpak
           - os: macos-latest
             target: macos
             build: macos --release
@@ -1172,14 +1316,10 @@ jobs:
               # point the packager at it explicitly (--bundle asks the ELF for
               # its arch).
               poltergeist/scripts/package-linux.sh --bundle "poltergeist-linux-${{ matrix.flavor }}" --output-dir .
-              # The .flatpak is the same .deb's payload staged under /app —
-              # one packaging path, four assets.
-              sudo apt-get update && sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
-              # Ubuntu 24.04 denies the unprivileged user namespaces
-              # bubblewrap (flatpak's sandbox helper) builds in.
-              sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
-              poltergeist/scripts/build-flatpak.sh "$(find . -maxdepth 1 -type f -name 'poltergeist_*.deb' -print -quit)"
-              mv poltergeist/dist/poltergeist-linux-x64.flatpak .
+              # The .flatpak rides in its own leg (flatpak_poltergeist):
+              # the repack needs its own toolchain and a Flathub fill of
+              # its runtimes, and a slow one must not take this leg's
+              # other assets down with it.
               ;;
             macos)
               # ditto keeps the bundle's symlinks and metadata intact inside
@@ -1453,6 +1593,8 @@ jobs:
       - client_poltergeist
       - client_klabautermann
       - flatpak_planchette
+      - flatpak_seance
+      - flatpak_poltergeist
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -1532,6 +1674,8 @@ jobs:
       - client_poltergeist
       - client_klabautermann
       - flatpak_planchette
+      - flatpak_seance
+      - flatpak_poltergeist
       - docker
     runs-on: ubuntu-latest
     timeout-minutes: 15
