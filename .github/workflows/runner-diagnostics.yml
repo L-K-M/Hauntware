@@ -10,12 +10,14 @@ permissions:
 jobs:
   diagnose:
     runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
+      - uses: actions/checkout@v7
       - name: Mounts and Flatpak cache
         shell: bash
         run: |
           id
+          printf 'Runner environment: %s\n' "$RUNNER_ENVIRONMENT"
           for path in /tmp "$HOME" "$RUNNER_TOOL_CACHE"; do
             printf '\nPath: %s\n' "$path"
             findmnt -T "$path"
@@ -89,3 +91,15 @@ jobs:
               exit "$result"
             fi
           done
+      - name: Fill the real SDK cache without per-file flushes
+        shell: bash
+        run: |
+          export FLATPAK_USER_DIR="$RUNNER_TOOL_CACHE/flatpak-user"
+          eatmydata flatpak remote-add --user --if-not-exists flathub \
+            https://dl.flathub.org/repo/flathub.flatpakrepo
+          time timeout --kill-after=10s 900s eatmydata flatpak-builder \
+            --user --install-deps-from=flathub --install-deps-only \
+            "$RUNNER_TEMP/flatpak-sdk-probe" \
+            "$GITHUB_WORKSPACE/planchette/flatpak/ch.lkmc.planchette.yml"
+          flatpak info --user org.gnome.Sdk//50
+          flatpak info --user org.gnome.Platform//50
