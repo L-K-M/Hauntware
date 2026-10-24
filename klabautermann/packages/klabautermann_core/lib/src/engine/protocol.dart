@@ -252,6 +252,10 @@ import '../operations/plan_types.dart';
 /// [ReadServerDraft], [SaveServer], [DeleteServer], [SetServerPrefs],
 /// [PutRule] and [RemoveRule], answered by [ServerDraftRead],
 /// [CatalogWritten] and [CatalogWriteRefused].
+///
+/// The editor's connection test then joined v3 the same way (FL-03, M5
+/// plan M09b): [TestServerConnection], answered by
+/// [ServerConnectionTested].
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -1011,6 +1015,26 @@ final class SaveServer extends EngineRequest {
   final ServerCredentialEntry? credential;
 }
 
+/// Tries [draft] with [credential]'s boxes the way a connect would,
+/// saving neither (FL-03, M5 plan M09b): the server's host key, every jump
+/// host's and the sign-in, with the connect's prompts, then closes the
+/// connection. A host key the user trusts during the test holds for that
+/// attempt only, so the first real connect asks again. Answered by
+/// [ServerConnectionTested]; refused while links are off.
+final class TestServerConnection extends EngineRequest {
+  const TestServerConnection({
+    required this.requestId,
+    required this.draft,
+    this.credential = const ServerCredentialEntry(),
+  });
+
+  final String requestId;
+  final ServerDraft draft;
+
+  /// The boxes as typed; blank ones fall back to the stored credential.
+  final ServerCredentialEntry credential;
+}
+
 /// Deletes the synced server [serverId]: its tombstone is persisted
 /// before its row drops, and its credential's record is retracted unless
 /// another synced server shares it (03 §4.4). Answered as [SaveServer].
@@ -1390,6 +1414,28 @@ final class ServerDraftRead extends EngineEvent {
 
   final String requestId;
   final ServerDraft? draft;
+}
+
+/// The answer to a [TestServerConnection]. [summary] and [notes] are
+/// seance_core's sentences, which Séance's and Poltergeist's editors show
+/// too, and [log] the redacted transcript: the report quotes them as the
+/// SSH layer wrote them.
+final class ServerConnectionTested extends EngineEvent {
+  const ServerConnectionTested({
+    required this.requestId,
+    required this.ok,
+    required this.summary,
+    required this.log,
+    this.notes = const [],
+  });
+
+  final String requestId;
+
+  /// Whether the server accepted the sign-in.
+  final bool ok;
+  final String summary;
+  final List<String> notes;
+  final String log;
 }
 
 /// A catalog write ([SaveServer], [DeleteServer], [SetServerPrefs],

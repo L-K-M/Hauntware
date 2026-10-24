@@ -1886,6 +1886,15 @@ is on main:
   both in every step, a stack's profiles are read, a folder scan finds a
   stack that never ran, and `down` needs the typed name and keeps the
   volumes.
+- Test connection and key files (M5 M09b, FL-03): the server editor's
+  Test connection sends the form's draft and typed credential to the
+  engine, which runs seance_core's `runConnectionTest` over the links'
+  vault, pins and prompts, trusts a host key for that attempt only, and
+  answers with the report the editor shows; the Docker fixture's sshd
+  test asks for its key, pins nothing and reports a refused user. Browse
+  picks an identity file on desktops; phones keep pasting the key. The
+  shared editor's buttons now wrap on a narrow phone instead of
+  overflowing. Duplicate and phone key import follow.
 - X-03 hand-off (M5 M31a): the server header's "Open terminal in
   Séance" opens a catalog server in Séance through a `seance://connect`
   link built by `buildSeanceConnect`, which carries the server id only.

@@ -17,12 +17,14 @@ final class ServerEditEngineStopped implements Exception {
 }
 
 /// In-app server editing over the engine (FL-03, M5 plan M09a): reads a
-/// synced server back as a draft, saves one and deletes one. The engine
+/// synced server back as a draft, saves one, deletes one and tests a
+/// draft's connection (M09b). The engine
 /// plans the credential and seals the records; a round pushes them. One
 /// engine run's, like the fleet.
 ///
 /// Each request carries an id of its own and the engine answers it once,
-/// with [ServerDraftRead], [CatalogWritten] or [CatalogWriteRefused].
+/// with [ServerDraftRead], [CatalogWritten], [CatalogWriteRefused] or
+/// [ServerConnectionTested].
 final class ServerEditorController {
   ServerEditorController(this._engine) {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
@@ -34,6 +36,7 @@ final class ServerEditorController {
   int _count = 0;
   final Map<String, Completer<ServerDraft?>> _reads = {};
   final Map<String, Completer<bool>> _writes = {};
+  final Map<String, Completer<ServerConnectionTested>> _tests = {};
   bool _stopped = false;
 
   /// The synced server [serverId] as the editor shows it, or null when the
@@ -67,6 +70,26 @@ final class ServerEditorController {
     return answer.future;
   }
 
+  /// Tries [draft] with [credential]'s boxes, saving neither. Throws
+  /// [ServerEditRefused] when the engine cannot test, such as while its
+  /// links are off.
+  Future<ServerConnectionTested> test(
+    ServerDraft draft,
+    ServerCredentialEntry credential,
+  ) {
+    final requestId = _nextId();
+    final answer = _tests[requestId] = Completer<ServerConnectionTested>();
+    _send(
+      TestServerConnection(
+        requestId: requestId,
+        draft: draft,
+        credential: credential,
+      ),
+      requestId,
+    );
+    return answer.future;
+  }
+
   String _nextId() => 'server-edit-${_count++}';
 
   void _send(EngineRequest request, String requestId) {
@@ -84,6 +107,7 @@ final class ServerEditorController {
   void _fail(String requestId, Object error) {
     _reads.remove(requestId)?.completeError(error);
     _writes.remove(requestId)?.completeError(error);
+    _tests.remove(requestId)?.completeError(error);
   }
 
   void _onEngineEvent(EngineEvent event) {
@@ -96,6 +120,15 @@ final class ServerEditorController {
         _writes
             .remove(requestId)
             ?.completeError(ServerEditRefused(failure, detail));
+      case ServerConnectionTested(:final requestId):
+        _tests.remove(requestId)?.complete(event);
+      // A rejection names no request, but tests are the only requests here
+      // the engine rejects, and only all of them alike.
+      case RequestRejected(:final requestName, :final reason)
+          when requestName == '$TestServerConnection':
+        for (final id in [..._tests.keys]) {
+          _fail(id, ServerEditRefused(CatalogWriteFailure.other, reason));
+        }
       default:
         break;
     }
@@ -105,7 +138,7 @@ final class ServerEditorController {
   /// engine stops.
   void _onEngineDone() {
     _stopped = true;
-    for (final id in [..._reads.keys, ..._writes.keys]) {
+    for (final id in [..._reads.keys, ..._writes.keys, ..._tests.keys]) {
       _fail(id, const ServerEditEngineStopped());
     }
   }

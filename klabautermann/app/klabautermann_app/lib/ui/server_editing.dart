@@ -189,15 +189,20 @@ final class _EngineEditorDelegate extends GhostServerEditorDelegate {
   @override
   String newId() => uuidV4();
 
-  // Identity files and the connection test arrive with M09b.
+  // A key file is read by its path at connect time, which phones cannot
+  // offer (03 §4.5): a picked file there is a cached copy.
   @override
-  bool get canPickIdentityFile => false;
+  bool get canPickIdentityFile =>
+      Platform.isLinux || Platform.isMacOS || Platform.isWindows;
 
   @override
-  bool get canTestConnection => false;
-
-  @override
-  Future<String?> pickIdentityFile() async => null;
+  Future<String?> pickIdentityFile() async {
+    // Unsandboxed on macOS (03 §10.2), as for the mark image's picker.
+    if (Platform.isMacOS) await FilePicker.skipEntitlementsChecks();
+    final files = await FilePicker.pickFiles();
+    if (files.isEmpty) return null;
+    return files.single.path;
+  }
 
   @override
   Future<bool> save(GhostServerSave save) async {
@@ -217,11 +222,38 @@ final class _EngineEditorDelegate extends GhostServerEditorDelegate {
     }
   }
 
+  /// The engine tests the draft as typed, prompting as a connect does, and
+  /// pins nothing. One it cannot run is reported, not thrown.
   @override
   Future<GhostTestReport> testConnection(
     GhostServerDraft draft,
     GhostCredentialDraft credential,
-  ) async => throw UnimplementedError();
+  ) async {
+    try {
+      final tested = await _editing.editor.test(
+        serverDraftOf(draft),
+        ServerCredentialEntry(
+          referenceKeyFile: credential.privateKeyPem == null,
+          password: credential.password ?? '',
+          keyPem: credential.privateKeyPem ?? '',
+          keyPassphrase: credential.keyPassphrase ?? '',
+        ),
+      );
+      return GhostTestReport(
+        ok: tested.ok,
+        summary: tested.summary,
+        notes: tested.notes,
+        log: tested.log,
+      );
+    } on Object catch (error) {
+      return GhostTestReport(
+        ok: false,
+        summary: _l10n.serverEditorTestFailedSummary,
+        notes: [serverEditFailureText(_l10n, error)],
+        log: '',
+      );
+    }
+  }
 }
 
 /// A failed save whose text is the toast's: the editor shows it as is.

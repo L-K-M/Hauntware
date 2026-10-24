@@ -3,7 +3,11 @@
 // colour pickers and ghost_ui's colour picker take string bags, and these
 // fill them. Ported from Poltergeist's adapters, key for key.
 import 'package:ghost_marks/ghost_marks.dart';
-import 'package:ghost_servers/ghost_servers.dart' show GhostServerEditorStrings;
+import 'package:ghost_servers/ghost_servers.dart'
+    show
+        GhostConnectionLogStrings,
+        GhostConnectionTestStrings,
+        GhostServerEditorStrings;
 import 'package:ghost_ui/ghost_ui.dart'
     show BadgeImageFailure, ColorPickerStrings;
 
@@ -11,8 +15,8 @@ import '../l10n/app_localizations.dart';
 
 /// The server editor's words in ARB. Every member has a key of its own,
 /// and the custom colour picker takes the app's colour picker words. The
-/// connection test's report and transcript keep the package's English
-/// until Test connection arrives (M5 plan M09b).
+/// connection test's summary and transcript are the SSH layer's own
+/// (`ServerConnectionTested`); its headline and log controls are here.
 GhostServerEditorStrings klabautermannServerEditorStrings(
   AppLocalizations l10n,
 ) => GhostServerEditorStrings(
@@ -72,6 +76,17 @@ GhostServerEditorStrings klabautermannServerEditorStrings(
   saveFailed: l10n.serverEditorSaveFailed,
   customColourValue: l10n.serverEditorCustomColourValue,
   colorPickerStrings: KlabautermannColorPickerStrings(l10n),
+  testStrings: GhostConnectionTestStrings(
+    succeeded: l10n.serverEditorTestSucceeded,
+    failed: l10n.serverEditorTestFailed,
+  ),
+  logStrings: GhostConnectionLogStrings(
+    title: l10n.connectionLogTitle,
+    copy: l10n.connectionLogCopy,
+    copied: l10n.connectionLogCopied,
+    copyFailed: l10n.connectionLogCopyFailed,
+    empty: l10n.connectionLogEmpty,
+  ),
 );
 
 /// [ServerAppearanceStrings] from the ARB catalog.

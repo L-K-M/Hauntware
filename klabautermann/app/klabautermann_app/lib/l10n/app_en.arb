@@ -7807,5 +7807,33 @@
   "handOffSeanceNotOpened": "Séance did not open the link.",
   "@handOffSeanceNotOpened": {
     "description": "Toast when the operating system refused to open the seance:// link for the server header's Open terminal in Séance button."
+  },
+  "serverEditorTestSucceeded": "Connection test succeeded",
+  "@serverEditorTestSucceeded": {
+    "description": "Headline of the inline report when the server accepted the test's sign-in."
+  },
+  "serverEditorTestFailed": "Connection test failed",
+  "@serverEditorTestFailed": {
+    "description": "Headline of the inline report when the server or the network refused the test."
+  },
+  "connectionLogTitle": "Connection log",
+  "@connectionLogTitle": {
+    "description": "Title of the collapsible SSH transcript under a connection test's report."
+  },
+  "connectionLogCopy": "Copy",
+  "@connectionLogCopy": {
+    "description": "Button that copies the connection log."
+  },
+  "connectionLogCopied": "Log copied",
+  "@connectionLogCopied": {
+    "description": "Toast after the connection log was copied."
+  },
+  "connectionLogCopyFailed": "Could not copy the log",
+  "@connectionLogCopyFailed": {
+    "description": "Toast when copying the connection log failed."
+  },
+  "connectionLogEmpty": "(no log captured)",
+  "@connectionLogEmpty": {
+    "description": "Shown in place of an empty connection log."
   }
 }

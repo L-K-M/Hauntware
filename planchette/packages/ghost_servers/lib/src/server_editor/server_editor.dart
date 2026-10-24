@@ -448,59 +448,63 @@ class _ServerEditorState extends State<_ServerEditor> {
             ],
             ..._appearanceFields(),
             const SizedBox(height: 20),
-            Row(
+            // A wrap, so the row never overflows: on a phone, or at a large
+            // text scale, Test connection moves above Cancel and Save, which
+            // stay together. Side by side, Test sits at the start and the
+            // pair at the end.
+            Wrap(
+              alignment: canTest
+                  ? WrapAlignment.spaceBetween
+                  : WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                if (canTest) ...[
-                  // Flexible, so the row never overflows: on a phone at a large
-                  // text scale the three buttons are wider than the dialog, and
-                  // this is the one whose label can wrap onto a second line
-                  // without changing what the row means.
-                  Flexible(
-                    child: Align(
-                      alignment: AlignmentDirectional.centerStart,
-                      child: OutlinedButton.icon(
-                        onPressed: _busy || _testing ? null : _testConnection,
-                        icon: _testing
-                            ? SizedBox(
-                                width: 16,
-                                height: 16,
-                                // Labelled like the outcome icons: a spinner is
-                                // the one state with nothing to read, so without
-                                // this a screen-reader user cannot tell a running
-                                // test from a button that did nothing.
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  semanticsLabel: _strings.testingSemantic,
-                                ),
-                              )
-                            : const Icon(Icons.wifi_tethering, size: 18),
-                        label: Text(
-                          _testing ? _strings.testing : _strings.test,
-                        ),
-                      ),
-                    ),
+                if (canTest)
+                  OutlinedButton.icon(
+                    onPressed: _busy || _testing ? null : _testConnection,
+                    icon: _testing
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            // Labelled like the outcome icons: a spinner is
+                            // the one state with nothing to read, so without
+                            // this a screen-reader user cannot tell a running
+                            // test from a button that did nothing.
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              semanticsLabel: _strings.testingSemantic,
+                            ),
+                          )
+                        : const Icon(Icons.wifi_tethering, size: 18),
+                    label: Text(_testing ? _strings.testing : _strings.test),
                   ),
-                  const SizedBox(width: 8),
-                ] else
-                  const Spacer(),
-                // Cancel stays live during a test: the attempt cannot be
-                // stopped, but being unable to leave the dialog for the five
-                // minutes an authentication may take is worse than letting it
-                // finish unwatched.
-                TextButton(
-                  onPressed: _busy ? null : () => Navigator.of(context).pop(),
-                  child: Text(_strings.cancel),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  // Not disabled while a test runs: an attempt can take
-                  // minutes, and the only other way out was typing a character
-                  // into any field to drop the test. Saving mid-test is sound
-                  // — any edit that could make the two disagree already
-                  // supersedes the attempt, and the save pops the editor, so
-                  // the late result is discarded by the mounted check.
-                  onPressed: _busy ? null : _save,
-                  child: Text(_strings.save),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Cancel stays live during a test: the attempt cannot be
+                    // stopped, but being unable to leave the dialog for the
+                    // five minutes an authentication may take is worse than
+                    // letting it finish unwatched.
+                    TextButton(
+                      onPressed: _busy
+                          ? null
+                          : () => Navigator.of(context).pop(),
+                      child: Text(_strings.cancel),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      // Not disabled while a test runs: an attempt can take
+                      // minutes, and the only other way out was typing a
+                      // character into any field to drop the test. Saving
+                      // mid-test is sound — any edit that could make the two
+                      // disagree already supersedes the attempt, and the save
+                      // pops the editor, so the late result is discarded by
+                      // the mounted check.
+                      onPressed: _busy ? null : _save,
+                      child: Text(_strings.save),
+                    ),
+                  ],
                 ),
               ],
             ),
