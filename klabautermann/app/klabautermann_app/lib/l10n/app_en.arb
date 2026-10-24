@@ -7808,6 +7808,18 @@
   "@handOffSeanceNotOpened": {
     "description": "Toast when the operating system refused to open the seance:// link for the server header's Open terminal in Séance button."
   },
+  "handOffOpenTerminalHere": "Open terminal here",
+  "@handOffOpenTerminalHere": {
+    "description": "Hand-off (X-04): opens Séance on this server with a cd to this folder typed at the prompt, which the user runs."
+  },
+  "handOffOpenInPoltergeist": "Open in Poltergeist",
+  "@handOffOpenInPoltergeist": {
+    "description": "Hand-off (X-04, X-10): opens this folder or file on this server in Poltergeist, the suite's file transfer app."
+  },
+  "handOffPoltergeistNotOpened": "Poltergeist did not open the link.",
+  "@handOffPoltergeistNotOpened": {
+    "description": "Toast when the operating system refused to open a poltergeist:// hand-off link."
+  },
   "settingsDeviceTitle": "This device",
   "@settingsDeviceTitle": {
     "description": "Heading of the device name on the General settings tab (M5 plan Q6)."

@@ -6405,6 +6405,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get handOffSeanceNotOpened => 'Séance did not open the link.';
 
   @override
+  String get handOffOpenTerminalHere => 'Open terminal here';
+
+  @override
+  String get handOffOpenInPoltergeist => 'Open in Poltergeist';
+
+  @override
+  String get handOffPoltergeistNotOpened =>
+      'Poltergeist did not open the link.';
+
+  @override
   String get settingsDeviceTitle => 'This device';
 
   @override

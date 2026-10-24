@@ -1900,8 +1900,13 @@ is on main:
   It shows where Séance takes links (every platform but Fuchsia, now
   that its Linux and Windows runners forward links to one instance) and
   the OS reports a handler, and never for an ssh_config import, whose id
-  Séance cannot know. The folder hand-offs (X-04, X-10) follow with the
-  stack and log views.
+  Séance cannot know.
+- Stack folder hand-offs (M5 M31b; X-04, X-10): a stack's overview
+  offers "Open terminal here", a `seance://connect` link with the
+  working directory as `cwd` (Séance types the `cd` and does not run
+  it), and "Open in Poltergeist", a `poltergeist://browse` link to the
+  folder, each where its app takes links and the builders can name the
+  folder. The `/var/log` browser follows.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container

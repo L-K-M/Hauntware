@@ -3,9 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart'
     show FleetServer;
+import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/services/hand_off.dart';
+import 'package:klabautermann_app/ui/docker/stacks_panel.dart'
+    show StackOverview;
 import 'package:klabautermann_app/ui/hand_off_actions.dart';
 
+import 'support/docker.dart';
+import 'support/fake_engine.dart';
 import 'support/harness.dart';
 
 const _catalogId = '123e4567-e89b-42d3-a456-426614174000';
@@ -159,6 +165,143 @@ void main() {
       expect(find.byType(TextButton), findsNothing);
     });
   });
+
+  group('folders (X-04, X-10)', () {
+    testWidgets('open a terminal there in Séance and the folder in '
+        'Poltergeist', (tester) async {
+      final launcher = _Launcher({
+        HandOffTarget.seance,
+        HandOffTarget.poltergeist,
+      });
+      await _folder(tester, launcher, folder: '/srv/web');
+
+      await tester.tap(find.text('Open terminal here'));
+      await tester.tap(find.text('Open in Poltergeist'));
+      await tester.pumpAndSettle();
+
+      expect(launcher.opened, [
+        Uri.parse('seance://connect?serverId=$_catalogId&cwd=%2Fsrv%2Fweb'),
+        Uri.parse(
+          'poltergeist://browse?serverId=$_catalogId&path=%2Fsrv%2Fweb',
+        ),
+      ]);
+    });
+
+    testWidgets('each follows its own app, and says when the OS refuses', (
+      tester,
+    ) async {
+      final launcher = _Launcher({HandOffTarget.poltergeist}, opens: false);
+      await _folder(tester, launcher, folder: '/srv/web');
+      expect(find.text('Open terminal here'), findsNothing);
+
+      await tester.tap(find.text('Open in Poltergeist'));
+      await tester.pumpAndSettle();
+      expect(find.text('Poltergeist did not open the link.'), findsOneWidget);
+    });
+
+    testWidgets('a folder or server the siblings cannot name offers '
+        'nothing', (tester) async {
+      final launcher = _Launcher({
+        HandOffTarget.seance,
+        HandOffTarget.poltergeist,
+      });
+      await _folder(tester, launcher, folder: 'srv/web');
+      expect(find.byType(TextButton), findsNothing);
+
+      await _folder(tester, launcher, folder: '/srv/web', id: 'ssh-config:web');
+      expect(find.byType(TextButton), findsNothing);
+    });
+
+    testWidgets("a stack's overview offers its working directory", (
+      tester,
+    ) async {
+      final engine = FakeEngineClient();
+      final monitoring = MonitoringController(engine);
+      addTearDown(() async {
+        monitoring.dispose();
+        await engine.close();
+      });
+      final launcher = _Launcher({
+        HandOffTarget.seance,
+        HandOffTarget.poltergeist,
+      });
+      await tester.pumpWidget(
+        _localized(
+          HandOffScope(
+            launcher: launcher,
+            child: StackOverview(
+              monitoring: monitoring,
+              serverId: _catalogId,
+              project: 'web',
+            ),
+          ),
+        ),
+      );
+      engine.emit(
+        dockerStackList(_catalogId, [
+          dockerStack('web', []),
+        ], at: DateTime(2026, 10, 21)),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Open in Poltergeist'));
+      await tester.pumpAndSettle();
+      expect(launcher.opened.single.queryParameters['path'], '/srv/web');
+    });
+
+    testWidgets("a stack's overview leaves the row out where neither app "
+        'takes links', (tester) async {
+      final engine = FakeEngineClient();
+      final monitoring = MonitoringController(engine);
+      addTearDown(() async {
+        monitoring.dispose();
+        await engine.close();
+      });
+      await tester.pumpWidget(
+        _localized(
+          HandOffScope(
+            launcher: _Launcher(const {}),
+            child: StackOverview(
+              monitoring: monitoring,
+              serverId: _catalogId,
+              project: 'web',
+            ),
+          ),
+        ),
+      );
+      engine.emit(
+        dockerStackList(_catalogId, [
+          dockerStack('web', []),
+        ], at: DateTime(2026, 10, 21)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(FolderHandOffs), findsNothing);
+    });
+  });
+}
+
+Widget _localized(Widget child) => MaterialApp(
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
+  home: Scaffold(body: child),
+);
+
+Future<void> _folder(
+  WidgetTester tester,
+  HandOffLauncher launcher, {
+  required String folder,
+  String id = _catalogId,
+}) async {
+  await tester.pumpWidget(
+    _localized(
+      HandOffScope(
+        launcher: launcher,
+        child: FolderHandOffs(serverId: id, folder: folder),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
 }
 
 Future<void> _openServer(
