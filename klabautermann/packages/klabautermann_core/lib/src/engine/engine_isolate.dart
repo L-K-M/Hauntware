@@ -9,6 +9,7 @@ import 'package:seance_core/catalog.dart'
     show EndpointPin, EndpointPinStore, endpointPinsFileName;
 import 'package:seance_core/seance_core.dart'
     show
+        HostKey,
         ImportedHost,
         Prober,
         SecretRedactor,
@@ -89,6 +90,7 @@ final class EngineStart {
     this.probesEnabled = false,
     this.supportDirectoryAccess = SupportDirectoryAccess.unguarded,
     this.deviceId,
+    this.pinPublicationRelease = kPinPublicationRelease,
   });
 
   /// The client isolate's port.
@@ -125,6 +127,10 @@ final class EngineStart {
   /// taking the instance lock; null when that file gave none, and sync is
   /// then refused.
   final String? deviceId;
+
+  /// The release a pin publication assertion names (D15, M5 plan M07):
+  /// [kPinPublicationRelease], which tests replace; null offers none.
+  final String? pinPublicationRelease;
 }
 
 /// The engine isolate's entry point (03 D18): one isolate owns the SSH links,
@@ -322,6 +328,9 @@ void engineMain(
     start.supportDirectory,
     access: start.supportDirectoryAccess,
   );
+  // A pin the user confirms on a link (D15, M5 plan M07), published once
+  // sync is open, on its operation chain below.
+  var pinConfirmed = (HostKey _) {};
 
   // One link per server (03 §5.1, §5.12), dialed through the connector.
   // None while links are off, so nothing in the engine can dial. Pins go
@@ -335,7 +344,10 @@ void engineMain(
               vault: vault.read,
             ),
             saveSecret: vault.save,
-            hostKeys: hostKeys,
+            hostKeys: PublishingHostKeyStore(
+              hostKeys,
+              (pin) => pinConfirmed(pin),
+            ),
             prompts: prompts,
             hopConfig: configOf,
             dial: dial,
@@ -834,6 +846,22 @@ void engineMain(
   // a key derivation and the app's keystore answers, which arrive as
   // requests, and links, sampling and imports go on meanwhile.
   var syncTail = Future<void>.value();
+  pinConfirmed = (pin) {
+    if (!syncOpened) return;
+    syncTail = syncTail.then(
+      (_) => sync.publishPin(pin, release: start.pinPublicationRelease),
+    );
+  };
+  // Null while no release is offered: the app's default state says so.
+  PinPublicationState? pinPublicationState() {
+    final release = start.pinPublicationRelease;
+    if (release == null) return null;
+    return PinPublicationState(
+      release: release,
+      asserted: sync.pinPublicationAsserted(release),
+    );
+  }
+
   void runSync(SyncOperation operation, Future<SyncStatus> Function() body) {
     syncTail = syncTail.then((_) async {
       uiPort.send(
@@ -946,6 +974,7 @@ void engineMain(
             syncAccount: sync.account,
             syncStoreIssues: sync.issues,
             auditInMemory: audit.storage == AuditStorage.memory,
+            pinPublication: pinPublicationState(),
           ),
         );
         // The fleet as the engine starts: the servers the last sync left
@@ -1524,6 +1553,22 @@ void engineMain(
         for (final serverId in [...?admin?.servers]) {
           if (adminRefusal(policy, serverId) != null) admin?.disable(serverId);
         }
+      case SetPinPublication(:final asserted):
+        final release = start.pinPublicationRelease;
+        if (release == null) {
+          reject(message, 'no release is offered for pin publication');
+          return;
+        }
+        syncTail = syncTail.then((_) async {
+          try {
+            await sync.setPinPublication(asserted ? release : null);
+          } on Object {
+            // The enrollment keeps an unsaved change in memory and saves it
+            // with the next change (sync_state_file.dart), so the event
+            // reports what this session goes by.
+          }
+          if (pinPublicationState() case final state?) uiPort.send(state);
+        });
       case SetSyncSecrets(:final enabled):
         // Behind any sync operation already queued, which runs under the
         // switch as it was when it was asked for.

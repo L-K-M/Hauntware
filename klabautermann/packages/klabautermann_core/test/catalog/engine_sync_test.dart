@@ -13,6 +13,7 @@ import 'package:seance_core/seance_core.dart'
         Argon2Params,
         DecryptedRecord,
         EncryptedRecord,
+        HostKey,
         RecordCodec,
         Secret,
         SecretKind,
@@ -687,6 +688,106 @@ void main() {
       expect([for (final s in await sync.servers()) s.id], ['srv-seed']);
       await sync.runRound();
       expect(server.pushed, isEmpty);
+    });
+  });
+
+  group('pin publication (D15, M5 plan M07)', () {
+    const release = '2026.11.0';
+
+    HostKey pin(String host) => HostKey(
+      host: host,
+      port: 22,
+      type: 'ssh-ed25519',
+      fingerprintSha256: 'SHA256:$host',
+      pinnedAt: 1000,
+    );
+
+    ServerConfig excluded(ServerConfig config) =>
+        ServerConfig.fromJson({...config.toJson(), 'excludeFromSync': true});
+
+    /// An account holding alpha, bravo through the hop, and xray through
+    /// the jump. The hop, the jump and xray are excluded from sync, so
+    /// only bravo's route reaches the hop.
+    Future<EngineSync> enrolled() async {
+      await server.seedServer(fakeServer('srv-a', 'alpha'));
+      await server.seedServer(excluded(fakeServer('srv-h', 'hop')));
+      await server.seedServer(
+        fakeServer('srv-b', 'bravo', jumpHostId: 'srv-h'),
+      );
+      await server.seedServer(excluded(fakeServer('srv-j', 'jump')));
+      await server.seedServer(
+        excluded(fakeServer('srv-x', 'xray', jumpHostId: 'srv-j')),
+      );
+      final sync = await open();
+      await sync.enroll(_enroll);
+      return sync;
+    }
+
+    test('nothing publishes without the assertion, or with no release '
+        'offered', () async {
+      final sync = await enrolled();
+
+      expect(
+        await sync.publishPin(pin('alpha.example.com'), release: release),
+        isFalse,
+      );
+      await sync.setPinPublication(release);
+      expect(
+        await sync.publishPin(pin('alpha.example.com'), release: null),
+        isFalse,
+      );
+      expect(
+        await sync.publishPin(pin('alpha.example.com'), release: '2027.1.0'),
+        isFalse,
+        reason: 'an assertion names one release',
+      );
+      expect((await sync.runRound()).phase, SyncPhase.succeeded);
+      expect(server.pushed, isEmpty);
+    });
+
+    test('with the assertion a synced server\'s pin and its hop\'s publish, '
+        'but not one only an excluded server uses', () async {
+      final sync = await enrolled();
+      await sync.setPinPublication(release);
+      expect(sync.pinPublicationAsserted(release), isTrue);
+
+      for (final (host, published) in [
+        ('alpha.example.com', true),
+        ('hop.example.com', true),
+        ('xray.example.com', false),
+        ('jump.example.com', false),
+        ('elsewhere.example.com', false),
+      ]) {
+        expect(
+          await sync.publishPin(pin(host), release: release),
+          published,
+          reason: host,
+        );
+      }
+      expect((await sync.runRound()).phase, SyncPhase.succeeded);
+      expect(
+        {for (final r in server.pushed) r.id},
+        {'hostkey:alpha.example.com:22', 'hostkey:hop.example.com:22'},
+      );
+
+      // A withdrawal stops publication; what went stays.
+      await sync.setPinPublication(null);
+      expect(
+        await sync.publishPin(pin('bravo.example.com'), release: release),
+        isFalse,
+      );
+    });
+
+    test('the assertion outlives the engine', () async {
+      final sync = await enrolled();
+      await sync.setPinPublication(release);
+
+      final reopened = await open();
+      expect(reopened.pinPublicationAsserted(release), isTrue);
+      expect(
+        jsonDecode(file('sync_enrollment.json').readAsStringSync()),
+        containsPair('seance56Asserted', release),
+      );
     });
   });
 

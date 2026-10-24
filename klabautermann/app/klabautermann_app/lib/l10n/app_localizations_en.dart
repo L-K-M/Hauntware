@@ -2853,6 +2853,22 @@ class AppLocalizationsEn extends AppLocalizations {
       'The setting could not be changed.';
 
   @override
+  String get settingsPinPublicationTitle => 'Host keys';
+
+  @override
+  String settingsPinPublication(String release) {
+    return 'Every device runs Séance $release or later';
+  }
+
+  @override
+  String get settingsPinPublicationDetail =>
+      'While on, host keys you confirm are shared with your other devices, so they can check a server the first time they connect. Turning it off stops sharing; keys already shared stay.';
+
+  @override
+  String get settingsPinPublicationNotChanged =>
+      'The host key setting could not be changed.';
+
+  @override
   String get settingsAboutTitle => 'About';
 
   @override
@@ -3152,6 +3168,15 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get syncFleetAssertionDetail =>
       'Older Séance releases can mistake records from other apps for servers.';
+
+  @override
+  String syncPinPublicationAssertion(String release) {
+    return 'Every device on this account runs Séance $release or later';
+  }
+
+  @override
+  String get syncPinPublicationAssertionDetail =>
+      'Then host keys you confirm are shared with them. Older releases accept a shared key without checking it.';
 
   @override
   String get syncDisclosureAccountKey =>

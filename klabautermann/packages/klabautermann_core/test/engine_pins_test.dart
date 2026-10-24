@@ -8,6 +8,8 @@ import 'package:klabautermann_core/src/engine/engine_isolate.dart';
 import 'package:klabautermann_core/src/fleet/ssh_config_import_store.dart'
     show sshConfigImportsFileName;
 import 'package:klabautermann_core/src/links/host_key_pins.dart';
+import 'package:seance_core/catalog.dart'
+    show InMemoryConflictAwareHostKeyStore;
 import 'package:seance_core/seance_core.dart'
     show
         HostKey,
@@ -394,5 +396,29 @@ void main() {
     // An id outside the fleet is no server the app lists.
     engine.send(const Connect('ssh-config:gone'));
     expect((await engine.next() as RequestRejected).requestName, 'Connect');
+  });
+
+  test('a pin the user confirms is handed on once stored, and a read hands '
+      'nothing on (D15, M5 plan M07)', () async {
+    final pins = InMemoryConflictAwareHostKeyStore();
+    final handed = <HostKey>[];
+    final store = PublishingHostKeyStore(pins, (pin) async {
+      // Stored before it is handed on.
+      expect(await pins.get(pin.host, pin.port), isNotNull);
+      handed.add(pin);
+    });
+    const key = HostKey(
+      host: 'web.example.com',
+      port: 22,
+      type: 'ssh-ed25519',
+      fingerprintSha256: 'SHA256:web',
+      pinnedAt: 1000,
+    );
+
+    expect(await store.get('web.example.com', 22), isNull);
+    await store.put(key);
+    expect(await store.all(), [key]);
+    await pumpEventQueue();
+    expect(handed, [key]);
   });
 }

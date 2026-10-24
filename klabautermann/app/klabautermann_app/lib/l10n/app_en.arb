@@ -3469,6 +3469,25 @@
   "@settingsSyncSecretsNotChanged": {
     "description": "Toast when the app did not take a change of the sync passwords switch."
   },
+  "settingsPinPublicationTitle": "Host keys",
+  "@settingsPinPublicationTitle": {
+    "description": "Heading of the Sync tab's host key sharing section, shown once a Séance release with the shared host key fix is named."
+  },
+  "settingsPinPublication": "Every device runs Séance {release} or later",
+  "@settingsPinPublication": {
+    "description": "Switch asserting that every device on the account runs a Séance release that checks shared host keys; while on, host keys the user confirms are shared.",
+    "placeholders": {
+      "release": {"type": "String", "example": "2026.11.0"}
+    }
+  },
+  "settingsPinPublicationDetail": "While on, host keys you confirm are shared with your other devices, so they can check a server the first time they connect. Turning it off stops sharing; keys already shared stay.",
+  "@settingsPinPublicationDetail": {
+    "description": "What the host key sharing switch does, under it."
+  },
+  "settingsPinPublicationNotChanged": "The host key setting could not be changed.",
+  "@settingsPinPublicationNotChanged": {
+    "description": "Toast when the engine did not take or keep a change of the host key sharing switch."
+  },
   "settingsAboutTitle": "About",
   "@settingsAboutTitle": {
     "description": "Heading of the about row on the General settings tab, which shows the app's title and version and opens the About dialog."
@@ -3827,6 +3846,17 @@
   "syncFleetAssertionDetail": "Older Séance releases can mistake records from other apps for servers.",
   "@syncFleetAssertionDetail": {
     "description": "Why the fleet assertion matters, under its checkbox."
+  },
+  "syncPinPublicationAssertion": "Every device on this account runs Séance {release} or later",
+  "@syncPinPublicationAssertion": {
+    "description": "Optional checkbox at sign-in asserting the release that checks shared host keys; ticked, host keys the user confirms are shared.",
+    "placeholders": {
+      "release": {"type": "String", "example": "2026.11.0"}
+    }
+  },
+  "syncPinPublicationAssertionDetail": "Then host keys you confirm are shared with them. Older releases accept a shared key without checking it.",
+  "@syncPinPublicationAssertionDetail": {
+    "description": "Why the host key assertion matters, under its checkbox."
   },
   "syncDisclosureAccountKey": "Your encryption passphrase opens the records of every app on this account, Séance and Poltergeist included.",
   "@syncDisclosureAccountKey": {
