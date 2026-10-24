@@ -37,6 +37,8 @@ GhostServerEditorStrings klabautermannServerEditorStrings(
   identityFilePath: l10n.serverEditorIdentityFilePath,
   identityFileHint: l10n.serverEditorIdentityFileHint,
   browse: l10n.serverEditorBrowse,
+  importKeyFile: l10n.serverEditorImportKeyFile,
+  keyFileImportFailed: l10n.serverEditorKeyFileImportFailed,
   privateKeyPem: l10n.serverEditorPrivateKeyPem,
   keyPassphrase: l10n.serverEditorKeyPassphrase,
   startDirectory: l10n.serverEditorStartDirectory,

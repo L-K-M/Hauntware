@@ -7881,5 +7881,13 @@
         "example": "web-1"
       }
     }
+  },
+  "serverEditorImportKeyFile": "Import from file\u2026",
+  "@serverEditorImportKeyFile": {
+    "description": "Button under the pasted private key that reads a key file into it, so the key is stored in the app's vault."
+  },
+  "serverEditorKeyFileImportFailed": "Could not read that file as a key.",
+  "@serverEditorKeyFileImportFailed": {
+    "description": "Toast when a picked key file is too large or not text."
   }
 }

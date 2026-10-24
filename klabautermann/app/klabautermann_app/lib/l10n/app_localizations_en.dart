@@ -6460,4 +6460,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String serverDuplicated(String name) {
     return 'Copied $name';
   }
+
+  @override
+  String get serverEditorImportKeyFile => 'Import from file…';
+
+  @override
+  String get serverEditorKeyFileImportFailed =>
+      'Could not read that file as a key.';
 }

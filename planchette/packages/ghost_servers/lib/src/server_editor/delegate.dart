@@ -31,6 +31,16 @@ abstract class GhostServerEditorDelegate {
   /// Picks a "reference, don't store" identity file; null when cancelled.
   Future<String?> pickIdentityFile();
 
+  /// Whether Import from file is offered under the pasted key: a host
+  /// whose key files cannot be referenced, such as a phone's, reads one
+  /// into the box instead, and the key is stored as a pasted one is.
+  bool get canImportKeyFile => false;
+
+  /// The text of a private key file the user picks, for the pasted-key
+  /// box; null when cancelled. Throws when the file cannot be read as
+  /// text, and the editor says so.
+  Future<String?> importKeyFile() async => null;
+
   /// Plans and writes the credential, then the server. Throws on failure,
   /// and the editor shows `saveFailed` and stays open. Returns whether a
   /// credential was written.

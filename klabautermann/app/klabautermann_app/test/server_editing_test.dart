@@ -199,6 +199,27 @@ void main() {
       expect(find.byType(Dialog), findsOneWidget);
     });
 
+    testWidgets('a pasted key can be imported from a file (M09b)', (
+      tester,
+    ) async {
+      await pumpApp(
+        tester,
+        size: _desktop,
+        servers: _servers,
+        syncAccount: testSyncAccount,
+      );
+      await tester.tap(find.byTooltip('Add'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Add server'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('ssh-agent'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Private key').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Import from file…'), findsOneWidget);
+    });
+
     testWidgets('a test the engine cannot run is a failed report, not a '
         'crash (M09b)', (tester) async {
       final harness = await pumpApp(
