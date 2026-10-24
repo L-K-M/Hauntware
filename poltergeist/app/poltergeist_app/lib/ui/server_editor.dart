@@ -15,19 +15,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_marks/ghost_marks.dart'
     as marks
-    show showServerColorPicker, showServerMarkPicker;
+    show ServerAppearanceStrings, showServerColorPicker, showServerMarkPicker;
 import 'package:ghost_marks_picker/ghost_marks_picker.dart'
     show pickServerMarkImage;
-import 'package:ghost_servers/ghost_servers.dart' show GhostServerEditorStrings;
+import 'package:ghost_servers/ghost_servers.dart';
+import 'package:ghost_servers/server_config_draft.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/application_error_reporter.dart';
 import '../services/transfer_limits_controller.dart'
     show transferConcurrencyChoices;
 import '../services/uuid.dart';
 import '../theme/app_theme.dart' show poltergeistMonoTextStyle;
-import 'connection_test_report.dart';
-import 'ghost_servers_adapter.dart' show poltergeistServerEditorStrings;
+import 'ghost_servers_adapter.dart'
+    show ghostTestReportOf, poltergeistServerEditorStrings;
 import 'server_appearance.dart';
 import 'server_appearance_strings.dart';
 import 'top_toast.dart';
@@ -84,24 +86,15 @@ abstract class ServerEditorDelegate {
   });
 }
 
-/// Whether turning "exclude from sync" on needs confirming before it takes.
-///
-/// Only when there is something to retract: a server being added has never
-/// been anywhere, one already excluded has been retracted once already, and
-/// with no sync account configured there is no other device that could lose
-/// it. Turning the switch back off is never destructive.
-///
-/// [syncConfigured] is read as it is *now*, which is not quite the same
-/// question. A server that synced before the account was unlinked still has a
-/// copy out there, and the stored exclusion would retract it on the first
-/// round after re-linking, unprompted. Answering that properly needs a "has
-/// ever synced" bit this device does not keep, and the alternative — always
-/// confirming — puts a dialog in front of someone who has never had a sync
-/// account at all. The narrow gap is recorded here rather than papered over.
+/// Whether turning "exclude from sync" on needs confirming before it takes:
+/// ghost_servers' [ghostExcludingNeedsConfirmation], over a stored config.
 bool excludingNeedsConfirmation({
   required ServerConfig? existing,
   required bool syncConfigured,
-}) => existing != null && !existing.excludeFromSync && syncConfigured;
+}) => ghostExcludingNeedsConfirmation(
+  existing: existing == null ? null : ghostServerDraftOf(existing),
+  syncConfigured: syncConfigured,
+);
 
 /// The dialog [excludingNeedsConfirmation] gates, as a function so a test can
 /// tap its buttons without standing up an editor.
@@ -140,29 +133,284 @@ Future<void> showServerEditor(
   ServerEditorDelegate delegate,
   ServerConfig? existing,
 ) {
+  final l10n = AppLocalizations.of(context);
+  final strings = poltergeistServerEditorStrings(l10n);
   return showDialog<void>(
     context: context,
     builder: (_) => Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
         child: _ServerEditor(
-          delegate: delegate,
-          existing: existing,
-          strings: poltergeistServerEditorStrings(AppLocalizations.of(context)),
+          delegate: _PoltergeistEditorSession(delegate, existing, strings),
+          existing: existing == null ? null : ghostServerDraftOf(existing),
+          strings: strings,
+          appearanceStrings: PoltergeistServerAppearanceStrings(l10n),
+          monoStyle: poltergeistMonoTextStyle,
+          hexStyle: poltergeistMonoTextStyle,
+          // Poltergeist shows the start folder; Séance's editor hides it.
+          fields: const {GhostServerOptionalField.startDirectory},
+          sections: [_TransferLimitSection(delegate, existing?.id, l10n)],
+          onCopyError: ApplicationErrorReporter().report,
         ),
       ),
     ),
   );
 }
 
+/// One editor's session over the app's [ServerEditorDelegate]: the stored
+/// config the draft edits, the save rules that turn a draft and the boxes
+/// as typed into a config and a credential, and the connection test's log.
+final class _PoltergeistEditorSession extends GhostServerEditorDelegate {
+  _PoltergeistEditorSession(this._delegate, this._existing, this._strings);
+
+  final ServerEditorDelegate _delegate;
+  final ServerConfig? _existing;
+  final GhostServerEditorStrings _strings;
+
+  @override
+  List<String> get serverGroups => existingServerGroups(_delegate.servers);
+
+  @override
+  bool get syncConfigured => _delegate.syncConfigured;
+
+  @override
+  Color get themeSeed => _delegate.themeSeed;
+
+  @override
+  String newId() => uuidV4();
+
+  @override
+  Future<String?> pickIdentityFile() => _delegate.pickIdentityFile();
+
+  /// Nothing is awaited before the stamp and the config are built, and the
+  /// draft and the boxes were read when Save was pressed, so an edit made
+  /// while the keyring answers is not saved without passing validation.
+  @override
+  Future<bool> save(GhostServerSave save) async {
+    final existing = _existing;
+    // Against the freshest copy this device holds, not the one captured when
+    // the editor opened: a round that pulled a newer record meanwhile is
+    // exactly the record this stamp has to outrank.
+    final latest = existing == null
+        ? null
+        : _delegate.servers
+              .where((s) => s.id == existing.id)
+              .map((s) => s.updatedAt)
+              .fold<int>(existing.updatedAt, math.max);
+    final now = nextUpdatedAt(
+      latest,
+      now: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    final existingRef = existing?.secretRef;
+    final entry = save.credential;
+    final auth = authMethodOfGhost(save.draft.authMethod);
+    // Its `secretRef` is the one thing that cannot be known yet — whether a
+    // credential is written depends on what the vault answers — so it is
+    // built against the existing ref and corrected below.
+    final formConfig = serverConfigOfGhostDraft(
+      save.draft,
+      existing: existing,
+      secretRef: existingRef,
+      now: now,
+    );
+    // Only when a referenced key's passphrase is about to be written over an
+    // entry that may hold a PEM: every other branch replaces the entry whole.
+    // A locked keyring throws, and the editor reports it like a failed save
+    // rather than writing the passphrase over the key it was stored beside.
+    Secret? stored;
+    if (existingRef != null &&
+        plannedCredentialReadsStored(
+          auth: auth,
+          referenceKeyFile: entry.referenceKeyFile,
+          keyPassphrase: entry.keyPassphrase,
+        )) {
+      stored = await _delegate.readSecret(existingRef);
+    }
+    final secretId = existingRef ?? save.draftSecretId;
+    final secret = plannedCredential(
+      auth: auth,
+      referenceKeyFile: entry.referenceKeyFile,
+      password: entry.password,
+      keyPem: entry.keyPem,
+      keyPassphrase: entry.keyPassphrase,
+      secretId: secretId,
+      stored: stored,
+    );
+
+    final config = secret != null && secretId != existingRef
+        // `updatedAt` is not restated here: the draft's config already
+        // carries the same `now`.
+        ? formConfig.copyWith(secretRef: secretId)
+        : formConfig;
+    // The vault write inside throws when the OS keyring is unavailable.
+    await _delegate.save(config, secret: secret);
+    return secret != null;
+  }
+
+  @override
+  Future<GhostTestReport> testConnection(
+    GhostServerDraft draft,
+    GhostCredentialDraft credential,
+  ) async {
+    final log = SshConnectionLog();
+    final config = serverConfigOfGhostDraft(
+      draft,
+      existing: _existing,
+      secretRef: _existing?.secretRef,
+      now: DateTime.now().millisecondsSinceEpoch,
+    );
+    try {
+      final result = await _delegate.testConnection(
+        config,
+        draftPassword: credential.password,
+        draftPrivateKey: credential.privateKeyPem,
+        draftKeyPassphrase: credential.keyPassphrase,
+        log: log,
+      );
+      log.freeze();
+      return ghostTestReportOf(result);
+    } catch (error) {
+      // runConnectionTest turns every failure it can see into a result, so
+      // reaching here means something outside it went wrong. The same inline
+      // report an expected failure gets, not a toast: what went wrong is by
+      // definition unexpected, so it is the detail worth keeping.
+      log.freeze();
+      return GhostTestReport(
+        ok: false,
+        summary: _strings.testFailedSummary,
+        notes: ['$error'],
+        log: log.toString(),
+      );
+    }
+  }
+}
+
+/// D37's override: how many files the queue moves to or from this server at
+/// once. Kept apart from the connection fields it sits near because it never
+/// reaches the config — it is stored on this device alone — and written only
+/// after the server saved, and only when the choice changed, so a settings
+/// file that cannot be written does not fail a Save that never touched it.
+final class _TransferLimitSection implements GhostServerEditorSection {
+  _TransferLimitSection(this._delegate, String? serverId, this._l10n)
+    : _stored = serverId == null
+          ? null
+          : _delegate.transferConcurrencyFor(serverId) {
+    _chosen = _stored;
+  }
+
+  final ServerEditorDelegate _delegate;
+  final AppLocalizations _l10n;
+
+  /// This server's own cap, null to follow the default; and the one stored,
+  /// so a Save writes it only when it changed.
+  TransferConcurrency? _stored;
+  TransferConcurrency? _chosen;
+
+  @override
+  Widget build(BuildContext context) => _TransferLimitField(section: this);
+
+  @override
+  Future<void> Function(String serverId)? capture() {
+    final chosen = _chosen;
+    if (chosen == _stored) return null;
+    return (serverId) async {
+      await _delegate.saveTransferConcurrency(serverId, chosen);
+      _stored = chosen;
+    };
+  }
+
+  @override
+  String failureMessage(Object error) =>
+      _l10n.serverEditorTransferLimitSaveFailed('$error');
+}
+
+class _TransferLimitField extends StatefulWidget {
+  const _TransferLimitField({required this.section});
+
+  final _TransferLimitSection section;
+
+  @override
+  State<_TransferLimitField> createState() => _TransferLimitFieldState();
+}
+
+class _TransferLimitFieldState extends State<_TransferLimitField> {
+  @override
+  Widget build(BuildContext context) {
+    final section = widget.section;
+    final l10n = AppLocalizations.of(context);
+    String describe(TransferConcurrency value) =>
+        value.files?.toString() ?? l10n.transferLimitAutomatic;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Divider(),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<_TransferLimitChoice>(
+          key: const ValueKey('serverEditor.transferLimit'),
+          initialValue: _TransferLimitChoice(section._chosen),
+          decoration: InputDecoration(
+            labelText: l10n.serverEditorTransferLimit,
+          ),
+          items: [
+            DropdownMenuItem(
+              value: const _TransferLimitChoice(null),
+              child: Text(
+                l10n.serverEditorTransferLimitDefault(
+                  describe(section._delegate.defaultTransferConcurrency),
+                ),
+              ),
+            ),
+            DropdownMenuItem(
+              value: const _TransferLimitChoice(
+                TransferConcurrency.automatic(),
+              ),
+              child: Text(l10n.transferLimitAutomatic),
+            ),
+            for (final files in transferConcurrencyChoices)
+              DropdownMenuItem(
+                value: _TransferLimitChoice(TransferConcurrency.fixed(files)),
+                child: Text('$files'),
+              ),
+          ],
+          onChanged: (choice) => setState(() => section._chosen = choice?.own),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          l10n.serverEditorTransferLimitNote,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
+        ),
+      ],
+    );
+  }
+}
+
+/// The editor's form, over [GhostServerEditorDelegate] and neutral drafts so
+/// it can move into ghost_servers unchanged (docs/design/
+/// ghost-servers-part2.md, F5a-2a).
 class _ServerEditor extends StatefulWidget {
-  final ServerEditorDelegate delegate;
-  final ServerConfig? existing;
+  final GhostServerEditorDelegate delegate;
+  final GhostServerDraft? existing;
   final GhostServerEditorStrings strings;
+  final marks.ServerAppearanceStrings appearanceStrings;
+  final TextStyle monoStyle;
+  final TextStyle? hexStyle;
+  final Set<GhostServerOptionalField> fields;
+  final List<GhostServerEditorSection> sections;
+  final void Function(Object error, StackTrace stackTrace)? onCopyError;
   const _ServerEditor({
     required this.delegate,
     this.existing,
     required this.strings,
+    required this.appearanceStrings,
+    required this.monoStyle,
+    this.hexStyle,
+    required this.fields,
+    this.sections = const [],
+    this.onCopyError,
   });
 
   @override
@@ -199,11 +447,6 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// the precedence between them lives in one place (see [ServerMark]).
   late ServerMark _mark;
   bool _referenceKeyFile = true;
-
-  /// This server's own D37 cap, null to follow the default; and the one it
-  /// had when the editor opened, so a Save writes it only when it changed.
-  TransferConcurrency? _transferLimit;
-  TransferConcurrency? _storedTransferLimit;
   late bool _syncSecret;
   late bool _excludeFromSync;
   bool _busy = false;
@@ -211,7 +454,7 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// The id a *new* server will be saved under, minted once rather than per
   /// save so a test connection and the save that follows describe one server,
   /// and so a save that failed and is retried does not mint a second identity.
-  final String _draftId = uuidV4();
+  late final String _draftId;
 
   /// The vault id a *new* server's credential is saved under, minted once for
   /// the same reason as [_draftId] and one the credential needs more:
@@ -219,36 +462,46 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// stored the secret and then failed on the config write left an entry
   /// behind — and a retry minting a fresh id orphaned it in the keyring with
   /// nothing pointing at it and nothing that would ever clean it up.
-  final String _draftSecretId = uuidV4();
+  late final String _draftSecretId;
 
   /// The connection test: whether one is running, what the last one found,
   /// and which attempt is current. The counter is the cancellation flag — the
   /// SSH layer has no cancel seam, so a superseded or abandoned attempt is
   /// left to finish and its result dropped.
   bool _testing = false;
-  ConnectionTestResult? _testResult;
+  GhostTestReport? _testResult;
   int _testAttempt = 0;
 
   @override
   void initState() {
     super.initState();
     final e = widget.existing;
+    _draftId = widget.delegate.newId();
+    _draftSecretId = widget.delegate.newId();
     _label = TextEditingController(text: e?.label ?? '');
     _host = TextEditingController(text: e?.host ?? '');
     _port = TextEditingController(text: '${e?.port ?? 22}');
     _user = TextEditingController(text: e?.username ?? '');
     _group = TextEditingController(text: e?.group ?? '');
-    _tint = e == null ? ServerTint.none : ServerTint.of(e);
-    _mark = e?.mark ?? _defaultMark;
-    _auth = e?.authMethod ?? AuthMethod.agent;
+    // As `ServerTint.of` and `ServerConfig.mark` read the stored fields.
+    _tint = e == null
+        ? ServerTint.none
+        : ServerTint(
+            named: ServerColor.values.asNameMap()[e.colorName],
+            custom: parseServerCustomColor(e.customColor),
+          );
+    _mark = e == null
+        ? _defaultMark
+        : ServerMark.resolve(
+            icon: ServerIcon.values.asNameMap()[e.iconName],
+            emoji: e.iconEmoji,
+            image: e.iconImage,
+          );
+    _auth = e == null ? AuthMethod.agent : authMethodOfGhost(e.authMethod);
     _keyPath.text = e?.identityFilePath ?? '';
     _referenceKeyFile = e?.identityFilePath != null;
     _loginScript.text = e?.loginScript ?? '';
     _startDirectory.text = e?.startDirectory ?? '';
-    _storedTransferLimit = e == null
-        ? null
-        : widget.delegate.transferConcurrencyFor(e.id);
-    _transferLimit = _storedTransferLimit;
     // New credentials default to syncable (a no-op until the global "sync
     // saved passwords & keys" is on); existing servers keep their stored
     // choice.
@@ -468,12 +721,18 @@ class _ServerEditorState extends State<_ServerEditor> {
             const SizedBox(height: 20),
             ..._syncFields(),
             const SizedBox(height: 20),
-            ..._startDirectoryFields(),
-            const SizedBox(height: 20),
+            if (widget.fields.contains(
+              GhostServerOptionalField.startDirectory,
+            )) ...[
+              ..._startDirectoryFields(),
+              const SizedBox(height: 20),
+            ],
             ..._loginScriptFields(),
             const SizedBox(height: 20),
-            ..._transferFields(),
-            const SizedBox(height: 20),
+            for (final section in widget.sections) ...[
+              section.build(context),
+              const SizedBox(height: 20),
+            ],
             ..._appearanceFields(),
             const SizedBox(height: 20),
             Row(
@@ -545,7 +804,13 @@ class _ServerEditorState extends State<_ServerEditor> {
               liveRegion: true,
               child: _testResult == null
                   ? const SizedBox.shrink()
-                  : ConnectionTestReport(result: _testResult!),
+                  : GhostConnectionTestReport(
+                      report: _testResult!,
+                      monoStyle: widget.monoStyle,
+                      strings: _strings.testStrings,
+                      logStrings: _strings.logStrings,
+                      onCopyError: widget.onCopyError,
+                    ),
             ),
           ],
         ),
@@ -594,18 +859,20 @@ class _ServerEditorState extends State<_ServerEditor> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                OutlinedButton(
-                  onPressed: _busy ? null : _browseForKey,
-                  child: Text(_strings.browse),
-                ),
+                if (widget.delegate.canPickIdentityFile) ...[
+                  const SizedBox(width: 8),
+                  OutlinedButton(
+                    onPressed: _busy ? null : _browseForKey,
+                    child: Text(_strings.browse),
+                  ),
+                ],
               ],
             )
           else
             TextFormField(
               controller: _keyPem,
               maxLines: 5,
-              style: poltergeistMonoTextStyle.copyWith(fontSize: 12),
+              style: widget.monoStyle.copyWith(fontSize: 12),
               decoration: InputDecoration(
                 labelText: _strings.privateKeyPem,
                 border: const OutlineInputBorder(),
@@ -662,7 +929,7 @@ class _ServerEditorState extends State<_ServerEditor> {
         controller: _loginScript,
         maxLines: 3,
         minLines: 1,
-        style: poltergeistMonoTextStyle.copyWith(fontSize: 12),
+        style: widget.monoStyle.copyWith(fontSize: 12),
         decoration: InputDecoration(
           labelText: _strings.loginScript,
           hintText: _strings.loginScriptHint,
@@ -679,57 +946,12 @@ class _ServerEditorState extends State<_ServerEditor> {
     ];
   }
 
-  /// D37's override: how many files the queue moves to or from this server
-  /// at once. Kept apart from the connection fields it sits near because it
-  /// never reaches the config — it is stored on this device alone.
-  List<Widget> _transferFields() {
-    final l10n = AppLocalizations.of(context);
-    String describe(TransferConcurrency value) =>
-        value.files?.toString() ?? l10n.transferLimitAutomatic;
-    return [
-      const Divider(),
-      const SizedBox(height: 8),
-      DropdownButtonFormField<_TransferLimitChoice>(
-        key: const ValueKey('serverEditor.transferLimit'),
-        initialValue: _TransferLimitChoice(_transferLimit),
-        decoration: InputDecoration(labelText: l10n.serverEditorTransferLimit),
-        items: [
-          DropdownMenuItem(
-            value: const _TransferLimitChoice(null),
-            child: Text(
-              l10n.serverEditorTransferLimitDefault(
-                describe(widget.delegate.defaultTransferConcurrency),
-              ),
-            ),
-          ),
-          DropdownMenuItem(
-            value: const _TransferLimitChoice(TransferConcurrency.automatic()),
-            child: Text(l10n.transferLimitAutomatic),
-          ),
-          for (final files in transferConcurrencyChoices)
-            DropdownMenuItem(
-              value: _TransferLimitChoice(TransferConcurrency.fixed(files)),
-              child: Text('$files'),
-            ),
-        ],
-        onChanged: (choice) => setState(() => _transferLimit = choice?.own),
-      ),
-      const SizedBox(height: 4),
-      Text(
-        l10n.serverEditorTransferLimitNote,
-        style: Theme.of(
-          context,
-        ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
-      ),
-    ];
-  }
-
   /// How this server is filed and marked in the list: its group, its accent
   /// colour, and its icon. All three are optional and none of them affect how
   /// the connection is made — they exist so a list of thirty boxes can be read
   /// at a glance, and so "am I on prod?" has an answer you don't have to read.
   List<Widget> _appearanceFields() {
-    final existing = existingServerGroups(widget.delegate.servers);
+    final existing = widget.delegate.serverGroups;
     return [
       const Divider(),
       const SizedBox(height: 8),
@@ -833,7 +1055,7 @@ class _ServerEditorState extends State<_ServerEditor> {
       context,
       current: _mark,
       accent: _tint,
-      strings: PoltergeistServerAppearanceStrings(AppLocalizations.of(context)),
+      strings: widget.appearanceStrings,
       readImage: pickServerMarkImage,
     );
     if (chosen == null || !mounted) return;
@@ -851,9 +1073,9 @@ class _ServerEditorState extends State<_ServerEditor> {
           _tint.custom ??
           (named == null ? widget.delegate.themeSeed : serverColorSeed(named)),
       mark: _mark,
-      strings: PoltergeistServerAppearanceStrings(AppLocalizations.of(context)),
+      strings: widget.appearanceStrings,
       colorStrings: _strings.colorPickerStrings,
-      hexStyle: poltergeistMonoTextStyle,
+      hexStyle: widget.hexStyle,
     );
     if (chosen == null || !mounted) return;
     setState(() => _tint = ServerTint.custom(chosen));
@@ -923,7 +1145,7 @@ class _ServerEditorState extends State<_ServerEditor> {
   /// other device to lose it. Turning the switch back off is not destructive
   /// either way.
   Future<bool> _confirmExclusion() =>
-      excludingNeedsConfirmation(
+      ghostExcludingNeedsConfirmation(
         existing: widget.existing,
         syncConfigured: widget.delegate.syncConfigured,
       )
@@ -958,25 +1180,23 @@ class _ServerEditorState extends State<_ServerEditor> {
     return _strings.startDirectoryInvalid;
   }
 
-  /// The server the form currently describes, with [secretRef] as its
-  /// credential reference. Shared by Save and Test connection so a test can
-  /// never run against a different server than the one about to be saved.
-  ServerConfig _formConfig({required String? secretRef, required int now}) {
+  /// The server the form currently describes, trimmed and normalized as it
+  /// would be stored. Shared by Save and Test connection so a test can never
+  /// run against a different server than the one about to be saved.
+  GhostServerDraft _formDraft() {
     final existing = widget.existing;
+    // Read once rather than per field: encoding an image mark for storage is
+    // not free, and the fields have to come from one reading anyway so they
+    // cannot disagree about which is in force.
     final mark = _mark.stored;
     final tint = _tint.stored;
-    return ServerConfig(
+    return GhostServerDraft(
       id: existing?.id ?? _draftId,
       label: _label.text.trim(),
       host: _host.text.trim(),
       port: int.tryParse(_port.text.trim()) ?? 22,
       username: _user.text.trim(),
-      authMethod: _auth,
-      secretRef: secretRef,
-      // ProxyJump editing is not exposed yet; preserve the saved route.
-      // Séance reads this same record, so dropping it here would take the
-      // route away on every device (Séance #131's fix, X-02).
-      jumpHostId: existing?.jumpHostId,
+      authMethod: ghostAuthMethodOf(_auth),
       // Blank reads as "no file referenced", not as a path made of nothing:
       // the validator blocks an empty path, and a caller that ever reached
       // here without it would otherwise ask the SSH layer to read `''`.
@@ -991,19 +1211,18 @@ class _ServerEditorState extends State<_ServerEditor> {
       // space typed into the group name can't fork a second section that
       // looks identical to the one the user meant to join.
       group: normalizeServerGroup(_group.text),
-      color: tint.color,
+      colorName: tint.color?.name,
       customColor: tint.customColor,
-      // Read once rather than three times: encoding an image mark for storage
-      // is not free, and the three have to come from one reading anyway so
-      // they cannot disagree about which is in force.
-      icon: mark.icon,
+      iconName: mark.icon?.name,
       iconEmoji: mark.emoji,
       iconImage: mark.image,
       loginScript: normalizeLoginScript(_loginScript.text),
-      startDirectory: normalizeServerStartDirectory(_startDirectory.text),
+      // A field the host hides keeps the value it was opened with.
+      startDirectory:
+          widget.fields.contains(GhostServerOptionalField.startDirectory)
+          ? normalizeServerStartDirectory(_startDirectory.text)
+          : existing?.startDirectory,
       excludeFromSync: _excludeFromSync,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
     );
   }
 
@@ -1019,54 +1238,43 @@ class _ServerEditorState extends State<_ServerEditor> {
       _testResult = null;
     });
 
-    final log = SshConnectionLog();
-    final config = _formConfig(
-      secretRef: widget.existing?.secretRef,
-      now: DateTime.now().millisecondsSinceEpoch,
-    );
-    final ConnectionTestResult result;
+    final GhostTestReport result;
     try {
       result = await widget.delegate.testConnection(
-        config,
+        _formDraft(),
         // A credential box is hidden (and stale) once the auth method stops
         // using it, and the PEM box also while the key is referenced from
         // disk; passing either then would test text the user cannot see.
-        // The credential resolver reads each draft only under its own auth
-        // method, so this changes nothing it does — it makes the call site
-        // say what it means. The passphrase stays with the method, not the
-        // reference toggle: it decrypts the on-disk key too.
-        draftPassword: _auth == AuthMethod.password ? _password.text : null,
-        draftPrivateKey: _auth == AuthMethod.privateKey && !_referenceKeyFile
-            ? _keyPem.text
-            : null,
-        draftKeyPassphrase: _auth == AuthMethod.privateKey
-            ? _keyPassphrase.text
-            : null,
-        log: log,
+        // The passphrase stays with the method, not the reference toggle: it
+        // decrypts the on-disk key too.
+        GhostCredentialDraft(
+          password: _auth == AuthMethod.password ? _password.text : null,
+          privateKeyPem: _auth == AuthMethod.privateKey && !_referenceKeyFile
+              ? _keyPem.text
+              : null,
+          keyPassphrase: _auth == AuthMethod.privateKey
+              ? _keyPassphrase.text
+              : null,
+        ),
       );
     } catch (error) {
-      // runConnectionTest turns every failure it can see into a result, so
+      // The delegate turns every failure it can see into a report, so
       // reaching here means something outside it went wrong. Belt and braces,
       // because the alternative is the wedged editor `_save` is careful to
       // avoid: _testing stuck on, Save disabled, and Cancel — which throws
       // away everything just typed — as the only way out.
-      log.freeze();
       if (!mounted || attempt != _testAttempt) return;
-      // The same inline report an expected failure gets, not a toast: what
-      // went wrong is by definition unexpected, so it is the detail worth
-      // keeping — and a toast fades with it.
       setState(() {
         _testing = false;
-        _testResult = ConnectionTestResult(
+        _testResult = GhostTestReport(
           ok: false,
           summary: _strings.testFailedSummary,
           notes: ['$error'],
-          log: log.toString(),
+          log: '',
         );
       });
       return;
     }
-    log.freeze();
     // Superseded by a newer attempt, or the dialog is gone: drop it.
     if (!mounted || attempt != _testAttempt) return;
     setState(() {
@@ -1078,112 +1286,49 @@ class _ServerEditorState extends State<_ServerEditor> {
   Future<void> _save() async {
     if (!_form.currentState!.validate()) return;
     setState(() => _busy = true);
-    final existing = widget.existing;
-    // Against the freshest copy this device holds, not the one captured when
-    // the editor opened: a round that pulled a newer record meanwhile is
-    // exactly the record this stamp has to outrank.
-    final latest = existing == null
-        ? null
-        : widget.delegate.servers
-              .where((s) => s.id == existing.id)
-              .map((s) => s.updatedAt)
-              .fold<int>(existing.updatedAt, math.max);
-    final now = nextUpdatedAt(
-      latest,
-      now: DateTime.now().millisecondsSinceEpoch,
+    // Everything the form says, read here — before anything is awaited.
+    // `_busy` disables the buttons, not the fields, so a keyring that prompts
+    // (macOS) or is slow to answer leaves them editable for as long as it
+    // takes: read afterwards, a keystroke landing in that window is saved
+    // without ever passing the `validate()` this method opened with, and a
+    // host cleared after Save was pressed is written empty. The auth
+    // dropdown and the reference switch too, which the credential is planned
+    // from after that wait.
+    final save = GhostServerSave(
+      draft: _formDraft(),
+      credential: GhostCredentialEntry(
+        referenceKeyFile: _referenceKeyFile,
+        password: _password.text,
+        keyPem: _keyPem.text,
+        keyPassphrase: _keyPassphrase.text,
+      ),
+      draftSecretId: _draftSecretId,
     );
-
-    final existingRef = existing?.secretRef;
-    // Everything the form says, read here — before the awaited vault call
-    // below. `_busy` disables the buttons, not the fields, so a keyring that
-    // prompts (macOS) or is slow to answer leaves them editable for as long
-    // as it takes: read afterwards, a keystroke landing in that window is
-    // saved without ever passing the `validate()` this method opened with,
-    // and a host cleared after Save was pressed is written empty.
-    final password = _password.text;
-    final keyPem = _keyPem.text;
-    final keyPassphrase = _keyPassphrase.text;
-    // The auth dropdown and the reference switch too, and for the same
-    // reason: they are as enabled as the text boxes while `_busy`, and the
-    // credential is planned *after* the vault read below. Flipped in that
-    // window, `plannedCredential` would describe a different server than the
-    // config being saved — password material written over a stored PEM while
-    // the config saves as key auth, which is the exact cross-method
-    // corruption the carry-over logic exists to prevent.
-    final auth = _auth;
-    final referenceKeyFile = _referenceKeyFile;
-    final transferLimit = _transferLimit;
-    // The config too, and not only the credential fields: it reads seven more
-    // controllers. Its `secretRef` is the one thing that cannot be known yet
-    // — whether a credential is written depends on what the vault answers —
-    // so it is built against the existing ref and corrected below, which is
-    // a field this form does not own rather than one the user could edit.
-    final formConfig = _formConfig(secretRef: existingRef, now: now);
-    // Only when a referenced key's passphrase is about to be written over an
-    // entry that may hold a PEM: every other branch replaces the entry whole.
-    Secret? stored;
-    if (existingRef != null &&
-        plannedCredentialReadsStored(
-          auth: auth,
-          referenceKeyFile: referenceKeyFile,
-          keyPassphrase: keyPassphrase,
-        )) {
-      try {
-        stored = await widget.delegate.readSecret(existingRef);
-      } catch (e) {
-        // A locked keyring, reported like the save failure below rather than
-        // silently writing the passphrase over the key it was stored beside.
-        if (!mounted) return;
-        setState(() => _busy = false);
-        showTopToastIn(context, message: _strings.saveFailed('$e'));
-        return;
-      }
-    }
-    final secretId = existingRef ?? _draftSecretId;
-    final secret = plannedCredential(
-      auth: auth,
-      referenceKeyFile: referenceKeyFile,
-      password: password,
-      keyPem: keyPem,
-      keyPassphrase: keyPassphrase,
-      secretId: secretId,
-      stored: stored,
-    );
-
-    final config = secret != null && secretId != existingRef
-        // `updatedAt` is not restated here: `_formConfig` already stamped it
-        // with the same `now`, and repeating it reads as though a save that
-        // reuses its secret entry keeps an older one.
-        ? formConfig.copyWith(secretRef: secretId)
-        : formConfig;
+    final writes = [
+      for (final section in widget.sections) (section, section.capture()),
+    ];
     try {
-      // The vault write inside throws when the OS keyring is unavailable —
-      // tell the user instead of wedging the editor with _busy stuck on.
-      await widget.delegate.save(config, secret: secret);
+      // Throws when the OS keyring is unavailable or the write fails — tell
+      // the user instead of wedging the editor with _busy stuck on.
+      await widget.delegate.save(save);
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
       showTopToastIn(context, message: _strings.saveFailed('$e'));
       return;
     }
-    // After the config, so a server that failed to save never gains a cap,
-    // and only when the choice changed, so a settings file that cannot be
-    // written does not fail a Save that never touched it.
-    if (transferLimit != _storedTransferLimit) {
+    // After the server, so one that failed to save never gains a section's
+    // setting.
+    for (final (section, write) in writes) {
+      if (write == null) continue;
       try {
-        await widget.delegate.saveTransferConcurrency(config.id, transferLimit);
-        _storedTransferLimit = transferLimit;
+        await write(save.draft.id);
       } catch (e) {
         // The server is saved; the editor stays open so Save retries the
         // part that failed.
         if (!mounted) return;
         setState(() => _busy = false);
-        showTopToastIn(
-          context,
-          message: AppLocalizations.of(
-            context,
-          ).serverEditorTransferLimitSaveFailed('$e'),
-        );
+        showTopToastIn(context, message: section.failureMessage(e));
         return;
       }
     }

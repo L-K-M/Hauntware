@@ -1,5 +1,8 @@
 import 'package:ghost_ui/ghost_ui.dart' show ColorPickerStrings;
 
+import '../connection_log_view.dart' show GhostConnectionLogStrings;
+import '../connection_test_report.dart' show GhostConnectionTestStrings;
+
 /// The server editor's words, as one bag (docs/design/ghost-servers-part2.md,
 /// section 4). The defaults are Séance's literals, which match Poltergeist's
 /// English catalog word for word; the start folder's members, which Séance
@@ -86,6 +89,8 @@ final class GhostServerEditorStrings {
     this.saveFailed = _saveFailed,
     this.customColourValue = _customColourValue,
     this.colorPickerStrings = const ColorPickerStrings(),
+    this.testStrings = const GhostConnectionTestStrings(),
+    this.logStrings = const GhostConnectionLogStrings(),
   });
 
   /// The titles over a new and an existing server.
@@ -187,6 +192,10 @@ final class GhostServerEditorStrings {
 
   /// The custom colour picker's words.
   final ColorPickerStrings colorPickerStrings;
+
+  /// The connection test report's words, and its transcript's.
+  final GhostConnectionTestStrings testStrings;
+  final GhostConnectionLogStrings logStrings;
 }
 
 String _saveFailed(String error) => 'Could not save: $error';
