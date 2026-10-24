@@ -508,8 +508,9 @@ class _ServerEditorState extends State<_ServerEditor> {
               const SizedBox(height: 8),
               Text(
                 _strings.testDisclaimer,
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: Theme.of(context).hintColor),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).hintColor,
+                ),
               ),
             ],
             if (_testResult != null) const SizedBox(height: 12),
@@ -629,8 +630,9 @@ class _ServerEditorState extends State<_ServerEditor> {
       const SizedBox(height: 4),
       Text(
         _strings.startDirectoryNote,
-        style: Theme.of(context).textTheme.bodySmall
-            ?.copyWith(color: Theme.of(context).hintColor),
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
       ),
     ];
   }
@@ -657,8 +659,9 @@ class _ServerEditorState extends State<_ServerEditor> {
       const SizedBox(height: 4),
       Text(
         _strings.loginScriptNote,
-        style: Theme.of(context).textTheme.bodySmall
-            ?.copyWith(color: Theme.of(context).hintColor),
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
       ),
     ];
   }
