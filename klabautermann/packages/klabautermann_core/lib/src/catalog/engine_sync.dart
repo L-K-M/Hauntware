@@ -464,6 +464,16 @@ final class EngineSync {
     return null;
   }
 
+  /// The synced server [serverId] as the catalog stores it, or null when
+  /// it holds none or cannot be read.
+  Future<ServerConfig?> storedServer(String serverId) async {
+    try {
+      return await _servers.byId(serverId);
+    } on Object {
+      return null;
+    }
+  }
+
   /// Saves [request]'s draft (03 §4.4, FL-03). The credential goes first,
   /// so the stored config never names an entry the vault lacks; then the
   /// config, sealed with its `serverConfig` record and, while the server

@@ -7819,5 +7819,53 @@
   "handOffPoltergeistNotOpened": "Poltergeist did not open the link.",
   "@handOffPoltergeistNotOpened": {
     "description": "Toast when the operating system refused to open a poltergeist:// hand-off link."
+  },
+  "settingsDeviceTitle": "This device",
+  "@settingsDeviceTitle": {
+    "description": "Heading of the device name on the General settings tab (M5 plan Q6)."
+  },
+  "settingsDeviceName": "Device name",
+  "@settingsDeviceName": {
+    "description": "Label of the device name field on the General settings tab."
+  },
+  "settingsDeviceNameDetail": "Servers' system logs name this device beside each action you take there. Leave it blank for the default.",
+  "@settingsDeviceNameDetail": {
+    "description": "Helper text under the device name field (SAF-13): the name appears in host logs."
+  },
+  "settingsDeviceNameNotSaved": "The device name changed, but it could not be saved, so it will not be kept after a restart.",
+  "@settingsDeviceNameNotSaved": {
+    "description": "Toast when the device name applied but settings.json could not be written."
+  },
+  "settingsDeviceNameNotChanged": "The device name could not be changed.",
+  "@settingsDeviceNameNotChanged": {
+    "description": "Toast when the app did not take a change of the device name."
+  },
+  "serverEditorTestSucceeded": "Connection test succeeded",
+  "@serverEditorTestSucceeded": {
+    "description": "Headline of the inline report when the server accepted the test's sign-in."
+  },
+  "serverEditorTestFailed": "Connection test failed",
+  "@serverEditorTestFailed": {
+    "description": "Headline of the inline report when the server or the network refused the test."
+  },
+  "connectionLogTitle": "Connection log",
+  "@connectionLogTitle": {
+    "description": "Title of the collapsible SSH transcript under a connection test's report."
+  },
+  "connectionLogCopy": "Copy",
+  "@connectionLogCopy": {
+    "description": "Button that copies the connection log."
+  },
+  "connectionLogCopied": "Log copied",
+  "@connectionLogCopied": {
+    "description": "Toast after the connection log was copied."
+  },
+  "connectionLogCopyFailed": "Could not copy the log",
+  "@connectionLogCopyFailed": {
+    "description": "Toast when copying the connection log failed."
+  },
+  "connectionLogEmpty": "(no log captured)",
+  "@connectionLogEmpty": {
+    "description": "Shown in place of an empty connection log."
   }
 }

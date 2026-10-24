@@ -80,6 +80,7 @@ void main() {
   String requestIdOf(EngineRequest request) => switch (request) {
     ReadServerDraft(:final requestId) ||
     SaveServer(:final requestId) ||
+    TestServerConnection(:final requestId) ||
     DeleteServer(:final requestId) => requestId,
     _ => throw StateError('$request carries no edit id'),
   };
@@ -119,8 +120,7 @@ void main() {
       await tester.tap(find.widgetWithText(MenuItemButton, 'Add server'));
       await tester.pumpAndSettle();
       expect(find.byType(Dialog), findsOneWidget);
-      // No connection test yet (M09b), and no start folder here.
-      expect(find.text('Test connection'), findsNothing);
+      // No start folder here.
       expect(field('Start folder (optional)'), findsNothing);
 
       await tester.enterText(field('Label'), 'box');
@@ -143,6 +143,90 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byType(Dialog), findsNothing);
+    });
+
+    testWidgets('Test connection tries the typed draft through the engine, '
+        'saves nothing and reports its answer (M09b)', (tester) async {
+      final harness = await pumpApp(
+        tester,
+        size: _desktop,
+        servers: _servers,
+        syncAccount: testSyncAccount,
+      );
+      await tester.tap(find.byTooltip('Add'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Add server'));
+      await tester.pumpAndSettle();
+      await tester.enterText(field('Label'), 'box');
+      await tester.enterText(field('Host'), 'box.example.com');
+      await tester.enterText(field('Username'), 'ops');
+      await tester.tap(find.text('ssh-agent'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Password').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(field('Password'), 'typed');
+
+      final testButton = find.widgetWithText(OutlinedButton, 'Test connection');
+      await tester.ensureVisible(testButton);
+      await tester.tap(testButton);
+      await tester.pump();
+      final sent =
+          harness.engine.sentOfType<TestServerConnection>().single
+              as TestServerConnection;
+      expect(sent.draft.host, 'box.example.com');
+      expect(sent.draft.auth, ServerDraftAuth.password);
+      expect(sent.credential.password, 'typed');
+
+      harness.engine.emit(
+        ServerConnectionTested(
+          requestId: sent.requestId,
+          ok: true,
+          summary: 'Authenticated as ops@box.example.com:22 (password).',
+          log: 'auth ok',
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.bySemanticsLabel('Connection test succeeded'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Authenticated as ops@box.example.com:22 (password).'),
+        findsOneWidget,
+      );
+      expect(harness.engine.sentOfType<SaveServer>(), isEmpty);
+      expect(find.byType(Dialog), findsOneWidget);
+    });
+
+    testWidgets('a test the engine cannot run is a failed report, not a '
+        'crash (M09b)', (tester) async {
+      final harness = await pumpApp(
+        tester,
+        size: _desktop,
+        servers: _servers,
+        syncAccount: testSyncAccount,
+      );
+      await tester.tap(find.byTooltip('Add'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Add server'));
+      await tester.pumpAndSettle();
+      await tester.enterText(field('Label'), 'box');
+      await tester.enterText(field('Host'), 'box.example.com');
+      await tester.enterText(field('Username'), 'ops');
+
+      final testButton = find.widgetWithText(OutlinedButton, 'Test connection');
+      await tester.ensureVisible(testButton);
+      await tester.tap(testButton);
+      await tester.pump();
+      harness.engine.emit(
+        const RequestRejected(
+          'TestServerConnection',
+          'links are off in this engine',
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('Connection test failed'), findsOneWidget);
+      expect(find.text('Could not test the connection.'), findsOneWidget);
     });
 
     testWidgets('editing starts from the stored server and keeps what the '
@@ -370,6 +454,32 @@ void main() {
         );
       },
     );
+
+    test('a connection test completes with its answer, and a rejection '
+        'fails it', () async {
+      final engine = FakeEngineClient();
+      final editor = ServerEditorController(engine);
+      addTearDown(() async {
+        editor.dispose();
+        await engine.close();
+      });
+
+      final answered = editor.test(_stored, const ServerCredentialEntry());
+      final rejected = editor.test(_stored, const ServerCredentialEntry());
+      final first = engine.sent[0] as TestServerConnection;
+      expect(first.draft, _stored);
+      final tested = ServerConnectionTested(
+        requestId: first.requestId,
+        ok: false,
+        summary: 'Authentication failed.',
+        log: 'denied',
+      );
+      engine.emit(tested);
+      expect(await answered, same(tested));
+
+      engine.emit(const RequestRejected('TestServerConnection', 'links off'));
+      await expectLater(rejected, throwsA(isA<ServerEditRefused>()));
+    });
 
     test('answers find their requests by id', () async {
       final engine = FakeEngineClient();

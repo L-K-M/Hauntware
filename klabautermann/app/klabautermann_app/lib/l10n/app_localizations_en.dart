@@ -6413,4 +6413,43 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get handOffPoltergeistNotOpened =>
       'Poltergeist did not open the link.';
+
+  @override
+  String get settingsDeviceTitle => 'This device';
+
+  @override
+  String get settingsDeviceName => 'Device name';
+
+  @override
+  String get settingsDeviceNameDetail =>
+      'Servers\' system logs name this device beside each action you take there. Leave it blank for the default.';
+
+  @override
+  String get settingsDeviceNameNotSaved =>
+      'The device name changed, but it could not be saved, so it will not be kept after a restart.';
+
+  @override
+  String get settingsDeviceNameNotChanged =>
+      'The device name could not be changed.';
+
+  @override
+  String get serverEditorTestSucceeded => 'Connection test succeeded';
+
+  @override
+  String get serverEditorTestFailed => 'Connection test failed';
+
+  @override
+  String get connectionLogTitle => 'Connection log';
+
+  @override
+  String get connectionLogCopy => 'Copy';
+
+  @override
+  String get connectionLogCopied => 'Log copied';
+
+  @override
+  String get connectionLogCopyFailed => 'Could not copy the log';
+
+  @override
+  String get connectionLogEmpty => '(no log captured)';
 }

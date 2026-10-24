@@ -4997,8 +4997,9 @@ As built in M5 (M19), the host line:
 - The switch is `ServerSafety.hostAuditLine`, on by default, in the
   server header's Safety menu. A synced server keeps it in its `pref`
   record; merged with a stored one, off wins, as read-only does.
-- The device is named by `SetDeviceName`; until Settings names it
-  (M19b), the app sends "Klabautermann on <platform>" (Q6), never the
+- The device is named by `SetDeviceName`, from Settings > General's
+  device name (`klabautermann.audit.deviceName` in `settings.json`); a
+  blank one means "Klabautermann on <platform>" (Q6), never the
   hostname.
 - Detached plans carry no line yet: their steps run on the host past the
   session, where no step is best-effort.
@@ -5628,6 +5629,7 @@ shows there.
 |---|---|
 | `EnrollSync(baseUrl, username, password, encryptionPassphrase)`, `RunSyncRound` | `CatalogReplaced(entries)`, `SyncStatus(phase, operation, account, failure, passphraseUnverified)` |
 | `ReadServerDraft(requestId, serverId)`; `SaveServer(requestId, draft, credential?)`, `DeleteServer(requestId, serverId)`, `SetServerPrefs(requestId, serverId, prefs?)`, `PutRule(requestId, ruleId, rule, target?)`, `RemoveRule(requestId, ruleId)` (M05) | `ServerDraftRead(requestId, draft?)`; `CatalogReplaced`, then `CatalogWritten(requestId, serverId?, credentialWritten)` or `CatalogWriteRefused(requestId, failure, detail?)`, then the round's `SyncStatus` |
+| `TestServerConnection(requestId, draft, credential)` (M09b): the editor's Test connection over the links' credentials, pins and prompts; a host key trusted during it holds for that attempt only; rejected while links are off | `Prompt`s as a connect sends them, then `ServerConnectionTested(requestId, ok, summary, notes, log)`, the summary, notes and redacted transcript as seance_core's `runConnectionTest` words them |
 | `AnswerKeystore(requestId, result)` (D62) | `KeystoreRequest(requestId, operation)`: the engine asks the app for the OS keystore |
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)` (K41, 4.7) | `CatalogReplaced(entries)` with each synced entry's `endpoint`, after `RequestRejected` when a pin could not be saved; `EndpointChanged(serverId)` when a sync changes a confirmed endpoint |

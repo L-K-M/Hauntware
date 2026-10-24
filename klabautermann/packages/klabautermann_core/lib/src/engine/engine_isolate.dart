@@ -9,6 +9,7 @@ import 'package:seance_core/catalog.dart'
     show EndpointPin, EndpointPinStore, endpointPinsFileName;
 import 'package:seance_core/seance_core.dart'
     show
+        CredentialDraft,
         HostKey,
         ImportedHost,
         Prober,
@@ -26,6 +27,8 @@ import '../capabilities/capability_cache.dart';
 import '../catalog/engine_sync.dart';
 import '../catalog/engine_vault.dart';
 import '../catalog/klabautermann_records.dart' show diffServerPrefs;
+import '../catalog/server_drafts.dart'
+    show serverConfigOfDraft, serverDraftProblem;
 import '../catalog/keystore_channel.dart';
 import '../docker/docker_router.dart';
 import '../docker/exec_sessions.dart';
@@ -39,6 +42,7 @@ import '../fleet/synced_fleet.dart';
 import '../links/credential_source.dart';
 import '../links/host_key_pins.dart';
 import '../links/channel_quota.dart';
+import '../links/connection_tester.dart';
 import '../links/link_connector.dart';
 import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
@@ -182,7 +186,8 @@ final class EngineStart {
 /// loses its confirmation is no longer probed (03 §4.7, §5.12).
 ///
 /// [dial] replaces `SshLink.connect`, so tests can run the engine's links
-/// without a network, [prober] the probes' TCP connect, and
+/// without a network, [testAuthenticator] the editor's connection test's
+/// sign-in, [prober] the probes' TCP connect, and
 /// [syncTransport] the sync server's HTTP client.
 /// [subscriptions], when given, holds the sampling subscriptions, so
 /// tests can read them, and [endpointPinStore] replaces the endpoint pins
@@ -190,6 +195,7 @@ final class EngineStart {
 void engineMain(
   EngineStart start, {
   @visibleForTesting LinkDialer dial = SshLink.connect,
+  @visibleForTesting TestAuthenticatorFactory? testAuthenticator,
   @visibleForTesting Prober prober = const TcpBannerProber(),
   @visibleForTesting SyncTransportFactory syncTransport = httpSyncTransport,
   @visibleForTesting SamplingSubscriptions? subscriptions,
@@ -338,13 +344,14 @@ void engineMain(
   // None while links are off, so nothing in the engine can dial. Pins go
   // to the shared host-key store above. Phones close their links in the
   // background (D34); desktops keep them.
+  final credentials = EngineCredentialSource(
+    identityAuditLogIn(start.supportDirectory),
+    vault: vault.read,
+  );
   final links = start.linksEnabled
       ? LinkSupervisor(
           connect: LinkConnector(
-            credentials: EngineCredentialSource(
-              identityAuditLogIn(start.supportDirectory),
-              vault: vault.read,
-            ),
+            credentials: credentials,
             saveSecret: vault.save,
             hostKeys: PublishingHostKeyStore(
               hostKeys,
@@ -381,6 +388,19 @@ void engineMain(
           policy: Platform.isAndroid || Platform.isIOS
               ? BackgroundLinkPolicy.closeAfterGrace
               : BackgroundLinkPolicy.keepOpen,
+        )
+      : null;
+
+  // The server editor's Test connection (FL-03): the links' credentials,
+  // pins and prompts, never their pin publishing, since a test pins
+  // nothing. None while links are off, as nothing then dials.
+  final tester = start.linksEnabled
+      ? ConnectionTester(
+          credentials: credentials,
+          hostKeys: hostKeys,
+          prompts: prompts,
+          hopConfig: configOf,
+          authenticator: testAuthenticator ?? liveTestAuthenticator,
         )
       : null;
 
@@ -1233,6 +1253,54 @@ void engineMain(
         runWrite(requestId, () => sync.saveServer(message), confirm: draft.id);
       case DeleteServer(:final requestId):
         runWrite(requestId, () => sync.deleteServer(message));
+      case TestServerConnection(
+        :final requestId,
+        :final draft,
+        :final credential,
+      ):
+        if (tester == null) {
+          reject(message, 'links are off in this engine');
+          return;
+        }
+        if (serverDraftProblem(draft) != null) {
+          reject(message, 'invalid draft');
+          return;
+        }
+        // The stored server, confirmed here or not: the user tests the
+        // endpoint the form shows.
+        final existing = await sync.storedServer(draft.id);
+        final config = serverConfigOfDraft(
+          draft,
+          existing: existing,
+          secretRef: existing?.secretRef,
+          now: DateTime.now(),
+        );
+        // Off the request loop: the test waits on the network and on the
+        // user's answers to its prompts.
+        unawaited(
+          tester
+              .test(
+                config,
+                CredentialDraft(
+                  password: credential.password,
+                  privateKeyPem: credential.referenceKeyFile
+                      ? null
+                      : credential.keyPem,
+                  keyPassphrase: credential.keyPassphrase,
+                ),
+              )
+              .then(
+                (result) => uiPort.send(
+                  ServerConnectionTested(
+                    requestId: requestId,
+                    ok: result.ok,
+                    summary: result.summary,
+                    notes: result.notes,
+                    log: result.log,
+                  ),
+                ),
+              ),
+        );
       case SetServerPrefs(:final requestId):
         runWrite(requestId, () => sync.setServerPrefs(message));
       case PutRule(:final requestId):
