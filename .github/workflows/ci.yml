@@ -1523,8 +1523,8 @@ jobs:
     if: needs.affected.outputs.planchette == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
     # Runtime updates stage off ZFS to avoid O_TMPFILE publication stalls.
-    # Linux retains room for cold compilation; other targets keep 120.
-    timeout-minutes: ${{ matrix.target == 'linux' && 75 || 120 }}
+    # Retain cold-build budgets until full packaging is verified.
+    timeout-minutes: ${{ matrix.target == 'linux' && 240 || 120 }}
     # Serialize self-hosted staging: the GNOME installation needs ~4 GB
     # of scratch RAM. Use a new group so fixed jobs can run while old
     # download jobs drain. Membership mirrors runs-on above; fork legs
@@ -1642,8 +1642,8 @@ jobs:
     needs: affected
     if: needs.affected.outputs.seance == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    # Runtime staging avoids ZFS stalls; leave room for cold compilation.
-    timeout-minutes: ${{ matrix.target == 'linux' && 75 || 120 }}
+    # Runtime staging and cold-build budgets follow planchette_client.
+    timeout-minutes: ${{ matrix.target == 'linux' && 240 || 120 }}
     # Serialize runtime staging with the other client jobs;
     # see planchette_client.
     concurrency:
@@ -1789,8 +1789,8 @@ jobs:
     needs: affected
     if: needs.affected.outputs.poltergeist == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    # Runtime staging avoids ZFS stalls; leave room for cold compilation.
-    timeout-minutes: ${{ matrix.target == 'linux' && 75 || 120 }}
+    # Runtime staging and cold-build budgets follow planchette_client.
+    timeout-minutes: ${{ matrix.target == 'linux' && 240 || 120 }}
     # Serialize runtime staging with the other client jobs;
     # see planchette_client.
     concurrency:
@@ -1929,8 +1929,8 @@ jobs:
     needs: affected
     if: needs.affected.outputs.klabautermann == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    # Runtime staging avoids ZFS stalls; leave room for cold compilation.
-    timeout-minutes: ${{ matrix.target == 'linux' && 75 || 120 }}
+    # Runtime staging and cold-build budgets follow planchette_client.
+    timeout-minutes: ${{ matrix.target == 'linux' && 240 || 120 }}
     # Serialize runtime staging with the other client jobs;
     # see planchette_client.
     concurrency:
