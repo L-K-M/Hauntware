@@ -1563,7 +1563,9 @@ void engineMain(
           try {
             await sync.setPinPublication(asserted ? release : null);
           } on Object {
-            // The file kept its last state, which the event reports.
+            // The enrollment keeps an unsaved change in memory and saves it
+            // with the next change (sync_state_file.dart), so the event
+            // reports what this session goes by.
           }
           if (pinPublicationState() case final state?) uiPort.send(state);
         });
