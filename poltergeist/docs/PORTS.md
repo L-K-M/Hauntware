@@ -1513,6 +1513,11 @@ counterpart is ported here.
 - Port-back candidates: the route snapshot belongs upstream in
   `testServerConnection`; the delegate seam itself, if Séance ever wants the
   editor testable without a full `AppState`.
+- Shared editor (2026-10-24): this file is unchanged by the move of the
+  form into `ghost_servers` ([design](../../docs/design/ghost-servers-part2.md)).
+  It still implements the app's `ServerEditorDelegate`, which
+  `lib/ui/server_editor.dart` adapts to `ghost_servers`'
+  `GhostServerEditorDelegate` (F5a-1c).
 
 ## app/poltergeist_app/lib/ui/connection_log_view.dart
 
@@ -1554,6 +1559,10 @@ counterpart is ported here.
   `lib/ui/server_appearance_strings.dart`) and `poltergeistMonoTextStyle`
   ([design](../../docs/design/server-appearance-package.md)). Its suite
   moved with it; this app keeps the wrapper's cases.
+- Deleted (2026-10-23, F5a-1b): the editor calls `ghost_marks`'
+  `showServerColorPicker` directly with `PoltergeistServerAppearanceStrings`
+  and `poltergeistMonoTextStyle`, so the wrapper went
+  ([design](../../docs/design/ghost-servers-part2.md)).
 
 ## app/poltergeist_app/lib/ui/server_mark_picker.dart
 
@@ -1576,6 +1585,9 @@ counterpart is ported here.
   strings. The incompressible-image message now reads as Séance's ("Try a
   simpler picture — a logo rather than a photograph."), as the design
   decided.
+- Deleted (2026-10-23, F5a-1b): the editor calls `ghost_marks`'
+  `showServerMarkPicker` directly with the ARB strings, so the wrapper went
+  ([design](../../docs/design/ghost-servers-part2.md)).
 
 ## app/poltergeist_app/test/ui/server_mark_picker_test.dart
 
@@ -1589,6 +1601,8 @@ counterpart is ported here.
 - 2026-10-08: the upstream suite and this regression now live in
   `ghost_marks`; this file checks the wrapper opens the picker in ARB words
   on the server's accent.
+- 2026-10-23 (F5a-1b): the wrapper is gone; the case opens `ghost_marks`'
+  picker with `PoltergeistServerAppearanceStrings`.
 
 ## SelectedTabView production and test pair
 
@@ -1638,6 +1652,18 @@ counterpart is ported here.
   `jumpHostId`).
 - Port-back candidates: the delegate seam (see the backend entry). The
   agent and jump-route behavior is upstream already.
+- Moved (2026-10-21 to 2026-10-24): the form is `ghost_servers`'
+  `showGhostServerEditor` (`lib/src/server_editor/`), shared with
+  Klabautermann ([design](../../docs/design/ghost-servers-part2.md)).
+  The save rules `plannedCredential`, `plannedCredentialReadsStored` and
+  `nextUpdatedAt` went to `seance_protocol`'s
+  `lib/src/models/server_editing.dart` first (F5a-1a), with Séance's copies;
+  the words became a `GhostServerEditorStrings` bag (F5a-1b); the form took
+  neutral drafts behind `GhostServerEditorDelegate`, with the
+  `ServerConfig` mapping in `package:ghost_servers/server_config_draft.dart`
+  (F5a-1c); the form itself moved last (F5a-2a). This file keeps the app's
+  `ServerEditorDelegate`, the session adapter over the shared delegate, the
+  `showServerEditor` entry point and the transfer limit section.
 
 ## app/poltergeist_app/test/services/server_duplication_test.dart
 
@@ -1666,6 +1692,11 @@ counterpart is ported here.
   The 2026-09-29 re-sync covers the agent default and absent warning, route
   preservation, and Test connection forwarding that route to the delegate.
 - Port-back candidates: none.
+- Shared editor: the save-rule groups moved to `seance_protocol`'s
+  `server_editing_test.dart` with the rules (2026-10-21, F5a-1a). This file
+  keeps the editor's cases through Poltergeist's adapter; `ghost_servers`'
+  `test/server_editor_test.dart` covers the shared form over a neutral
+  delegate (F5a-2b).
 
 ## app/poltergeist_app/lib/ui/top_toast.dart
 

@@ -41,6 +41,8 @@ products:
     forbidden_dependencies:
       "ghost_*": [seance_core]
       ghost_ui: [ghost_theme]
+    allowed_dependencies:
+      ghost_servers: [flutter, "ghost_*", seance_protocol]
     seance_core_implementation_imports: [packages/seance_core]
     engine_protocol: null
     engine_protocol_callback_owners: {}
@@ -344,6 +346,7 @@ products:
     expect(product.importExemptions, isEmpty);
     expect(product.noDartIo, isEmpty);
     expect(product.forbiddenDependencies, isEmpty);
+    expect(product.allowedDependencies, isEmpty);
     expect(product.seanceCoreImplementationImports, isEmpty);
   });
 
@@ -359,6 +362,19 @@ products:
       'ghost_*': ['seance_core'],
       'ghost_ui': ['ghost_theme'],
     });
+    expect(product.allowedDependencies, {
+      'ghost_servers': ['flutter', 'ghost_*', 'seance_protocol'],
+    });
+  });
+
+  test('gives only a listed package an allowlist', () {
+    final product = _parse(_extended).product('seance');
+    expect(product.allowedDependenciesFor('ghost_servers'), {
+      'flutter',
+      'ghost_*',
+      'seance_protocol',
+    });
+    expect(product.allowedDependenciesFor('ghost_ui'), isNull);
   });
 
   test('unions every matching forbidden-dependency key', () {
@@ -427,6 +443,26 @@ products:
             '    forbidden_dependencies:\n'
                 '      "ghost_*": [seance_core]\n'
                 '      ghost_ui: [ghost_theme]',
+            '    $entry',
+          ),
+        ),
+        throwsFormatException,
+      );
+    });
+  }
+
+  for (final entry in [
+    'allowed_dependencies: {"ghost_*": [ghost_ui]}',
+    'allowed_dependencies: {ghost_servers: ["*"]}',
+    'allowed_dependencies: {ghost_servers: [""]}',
+    'allowed_dependencies: [ghost_servers]',
+  ]) {
+    test('rejects an invalid allowed dependency entry: $entry', () {
+      expect(
+        () => _parse(
+          _extended.replaceFirst(
+            '    allowed_dependencies:\n'
+                '      ghost_servers: [flutter, "ghost_*", seance_protocol]',
             '    $entry',
           ),
         ),

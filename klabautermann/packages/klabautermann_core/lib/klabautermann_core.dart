@@ -161,6 +161,9 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         HostPanel,
         evaluatePanel;
 export 'package:seance_core/seance_core.dart' show quoteShellWord;
+// A one-off command's words, split as a shell would without expanding
+// them (CTX-08).
+export 'src/operations/command_words.dart' show splitCommandWords;
 // The sync sign-in form (03 §4.3 step 1) checks its fields with the
 // suite's enrollment rule before the engine is asked, and the pull-only
 // test names the push policy.
