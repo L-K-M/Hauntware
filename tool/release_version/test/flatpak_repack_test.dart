@@ -173,6 +173,166 @@ void main() {
     });
   });
 
+  group('ZFS runtime cache', () {
+    late String cache;
+    late String scratch;
+
+    setUp(() {
+      cache = p.join(sandbox.path, 'tools/flatpak-user');
+      scratch = p.join(sandbox.path, 'scratch');
+    });
+
+    Future<ProcessResult> build({
+      String runnerEnvironment = 'self-hosted',
+      String cacheFilesystem = 'zfs',
+      String scratchFilesystem = 'tmpfs',
+      String? userInstallation,
+      String revision = '1',
+      int dependencyExitCode = 0,
+    }) async {
+      Directory(scratch).createSync(recursive: true);
+      final manifest = File(p.join(sandbox.path, 'manifest.yml'))
+        ..writeAsStringSync('command: demo\n');
+      final environment = Map<String, String>.of(Platform.environment)
+        ..remove('FLATPAK_USER_DIR');
+
+      return Process.run(
+        'bash',
+        [
+          '-c',
+          r'''
+set -euo pipefail
+die() { printf '%s\n' "$*" >&2; exit 1; }
+flatpak() { mkdir -p "$FLATPAK_USER_DIR"; }
+stat() {
+  if [[ "${@: -1}" == "$TMPDIR/"* ]]; then
+    printf '%s\n' "$SCRATCH_FILESYSTEM"
+    return
+  fi
+  printf '%s\n' "$CACHE_FILESYSTEM"
+}
+sync() {
+  [[ "$1" == -f && "$2" == "$RUNNER_TOOL_CACHE/flatpak-user" ]]
+  printf 'flush\n'
+}
+flatpak-builder() {
+  case " $* " in
+    *' --install-deps-only '*)
+      [[ "$FLATPAK_USER_DIR" == "$TMPDIR/"* ]]
+      if [[ -f "$FLATPAK_USER_DIR/runtime" ]]; then
+        printf 'deps:reuse\n'
+      else
+        printf 'deps:fresh\n'
+      fi
+      if [[ "$DEPENDENCY_EXIT_CODE" != 0 ]]; then
+        return "$DEPENDENCY_EXIT_CODE"
+      fi
+      rm -f "$FLATPAK_USER_DIR/runtime"
+      printf '%s' "$DEPENDENCY_REVISION" > "$FLATPAK_USER_DIR/runtime"
+      chmod 444 "$FLATPAK_USER_DIR/runtime"
+      ln -sfn runtime "$FLATPAK_USER_DIR/active" ;;
+    *' --run '*) printf 'smoke\n' ;;
+    *' --install-deps-from=flathub '*) printf 'build:pull\n' ;;
+    *) printf 'build:cached\n' ;;
+  esac
+}
+source "$1"
+flatpak_build "$2" "$3" https://example.test/flathub.flatpakrepo
+''',
+          '_',
+          _repackScript,
+          p.join(sandbox.path, 'work'),
+          manifest.path,
+        ],
+        environment: {
+          ...environment,
+          'RUNNER_ENVIRONMENT': runnerEnvironment,
+          'RUNNER_TOOL_CACHE': p.join(sandbox.path, 'tools'),
+          'TMPDIR': scratch,
+          'CACHE_FILESYSTEM': cacheFilesystem,
+          'SCRATCH_FILESYSTEM': scratchFilesystem,
+          'DEPENDENCY_REVISION': revision,
+          'DEPENDENCY_EXIT_CODE': '$dependencyExitCode',
+          if (userInstallation != null) 'FLATPAK_USER_DIR': userInstallation,
+        },
+        includeParentEnvironment: false,
+      );
+    }
+
+    test(
+      'fills off ZFS, persists, then builds from the original cache',
+      () async {
+        final result = await build();
+
+        expect(result.exitCode, 0, reason: result.stderr as String);
+        expect(result.stdout, 'deps:fresh\nflush\nbuild:cached\nsmoke\n');
+        expect(File(p.join(cache, 'runtime')).readAsStringSync(), '1');
+        expect(Link(p.join(cache, 'active')).targetSync(), 'runtime');
+        expect(Directory(scratch).listSync(), isEmpty);
+      },
+    );
+
+    test('reuses cached runtimes and stages their updates off ZFS', () async {
+      expect((await build()).exitCode, 0);
+
+      final result = await build(revision: '2');
+
+      expect(result.exitCode, 0, reason: result.stderr as String);
+      expect(result.stdout, 'deps:reuse\nflush\nbuild:cached\nsmoke\n');
+      expect(File(p.join(cache, 'active')).readAsStringSync(), '2');
+      expect(Directory(scratch).listSync(), isEmpty);
+    });
+
+    test('preserves the cache and stops when dependency setup fails', () async {
+      expect((await build()).exitCode, 0);
+      const dependencyFailure = 23;
+
+      final result = await build(dependencyExitCode: dependencyFailure);
+
+      expect(result.exitCode, dependencyFailure);
+      expect(result.stdout, 'deps:reuse\n');
+      expect(File(p.join(cache, 'runtime')).readAsStringSync(), '1');
+      expect(Directory(scratch).listSync(), isEmpty);
+    });
+
+    for (final environment in ['', 'github-hosted']) {
+      test('keeps normal dependency setup for "$environment" builds', () async {
+        final result = await build(runnerEnvironment: environment);
+
+        expect(result.exitCode, 0, reason: result.stderr as String);
+        expect(result.stdout, 'build:pull\nsmoke\n');
+      });
+    }
+
+    test('keeps normal setup for a non-ZFS runner cache', () async {
+      final result = await build(cacheFilesystem: 'ext2/ext3');
+
+      expect(result.exitCode, 0, reason: result.stderr as String);
+      expect(result.stdout, 'build:pull\nsmoke\n');
+    });
+
+    test('respects a caller-chosen installation', () async {
+      final result = await build(
+        userInstallation: p.join(sandbox.path, 'installation'),
+      );
+
+      expect(result.exitCode, 0, reason: result.stderr as String);
+      expect(result.stdout, 'build:pull\nsmoke\n');
+    });
+
+    test(
+      'rejects slow scratch storage before installing dependencies',
+      () async {
+        final result = await build(scratchFilesystem: 'zfs');
+
+        expect(result.exitCode, isNot(0));
+        expect(result.stderr, contains('TMPDIR'));
+        expect(result.stdout, isEmpty);
+        expect(Directory(scratch).listSync(), isEmpty);
+      },
+    );
+  });
+
   final dpkgDeb = Process.runSync('bash', ['-c', 'command -v dpkg-deb']);
   group(
     'staging a .deb',

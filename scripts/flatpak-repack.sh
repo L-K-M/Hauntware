@@ -21,9 +21,8 @@
 # every later job on that runner instead of one per job. A local build
 # has no tool cache and keeps flatpak's own default. The directory needs
 # no lock: it is one per runner, and a runner executes one job at a time,
-# so no two jobs ever write the same installation. The ci.yml
-# flatpak-runtime-download concurrency group serializes the downloads
-# for the shared uplink, not to protect this directory.
+# so no two jobs ever write the same installation. CI serializes runtime
+# staging to bound scratch memory across the runner pool.
 if [[ -z "${FLATPAK_USER_DIR:-}" && -n "${RUNNER_TOOL_CACHE:-}" ]]; then
   export FLATPAK_USER_DIR="$RUNNER_TOOL_CACHE/flatpak-user"
 fi
@@ -90,14 +89,47 @@ flatpak_stage_deb() {
   fi
 }
 
+# ZFS publishes O_TMPFILE inodes by waiting for a pool transaction per
+# file. Stage runtime updates elsewhere, then persist them as named files.
+_flatpak_stage_zfs_cache() (
+  local manifest="$1" cache="$FLATPAK_USER_DIR" scratch installation
+  scratch="$(mktemp -d "${TMPDIR:-/tmp}/hauntware-flatpak-XXXXXX")"
+  trap 'rm -rf "$scratch"' EXIT
+  trap 'exit 1' HUP INT TERM
+
+  case "$(stat -f -c %T "$scratch")" in
+    tmpfs|ramfs|ext2/ext3|xfs|btrfs) ;;
+    *) die 'set TMPDIR to tmpfs, ext4, XFS or Btrfs for Flatpak runtime staging' ;;
+  esac
+
+  installation="$scratch/installation"
+  cp -a "$cache" "$installation"
+  FLATPAK_USER_DIR="$installation" flatpak-builder \
+    --user --install-deps-from=flathub --install-deps-only \
+    "$scratch/build" "$manifest"
+  # Existing OSTree objects are read-only; replace them with named files too.
+  cp -a --remove-destination "$installation/." "$cache/"
+  sync -f "$cache"
+)
+
 # Builds <work>/stage per <manifest> into <work>/build and <work>/repo, with
 # the runtime from <flathub-repo>, then runs the smoke check in the result.
 flatpak_build() {
   local work="$1" manifest="$2" flathub_repo="$3" command_name
+  local -a dependency_options=(--install-deps-from=flathub)
   flatpak remote-add --user --if-not-exists flathub "$flathub_repo"
+
+  if [[ "${RUNNER_ENVIRONMENT:-}" == self-hosted &&
+        -n "${RUNNER_TOOL_CACHE:-}" &&
+        "$FLATPAK_USER_DIR" == "$RUNNER_TOOL_CACHE/flatpak-user" ]] &&
+      [[ "$(stat -f -c %T "$FLATPAK_USER_DIR")" == zfs ]]; then
+    _flatpak_stage_zfs_cache "$manifest"
+    dependency_options=()
+  fi
+
   # --disable-rofiles-fuse: containers (CI) have no FUSE, and a copy-only
   # build gains nothing from it.
-  flatpak-builder --user --install-deps-from=flathub --force-clean \
+  flatpak-builder --user "${dependency_options[@]}" --force-clean \
     --disable-rofiles-fuse \
     --state-dir="$work/state" --repo="$work/repo" \
     "$work/build" "$manifest"

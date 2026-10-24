@@ -96,21 +96,39 @@ jobs:
                       finally:
                           os.close(directory)
           PY
-      - name: Fill in RAM and persist with named files
+      - name: Build twice with the production ZFS staging helper
         shell: bash
         run: |
           base="$(mktemp -d /tmp/hauntware-sdk-probe-XXXXXX)"
           target="$(mktemp -d "$RUNNER_TOOL_CACHE/hauntware-sdk-copy-XXXXXX")"
           trap 'rm -rf "$base" "$target"' EXIT
-          export FLATPAK_USER_DIR="$base/installation"
-          flatpak remote-add --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          time timeout --kill-after=10s 600s flatpak-builder \
-            --user --install-deps-from=flathub --install-deps-only \
-            "$base/build" "$GITHUB_WORKSPACE/planchette/flatpak/ch.lkmc.planchette.yml"
-          du -sh "$FLATPAK_USER_DIR"
-          time cp -a "$FLATPAK_USER_DIR/." "$target/"
-          export FLATPAK_USER_DIR="$target"
-          flatpak info --user org.gnome.Sdk//50
-          flatpak info --user org.gnome.Platform//50
-          time flatpak-builder --user --install-deps-from=flathub --install-deps-only \
-            "$base/build" "$GITHUB_WORKSPACE/planchette/flatpak/ch.lkmc.planchette.yml"
+          export RUNNER_TOOL_CACHE="$target"
+          export FLATPAK_USER_DIR="$target/flatpak-user"
+          export PROBE_MANIFEST="$base/manifest.yml"
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import shutil
+
+          stage = pathlib.Path(os.environ["RUNNER_TOOL_CACHE"], "work/stage")
+          stage.mkdir(parents=True)
+          shutil.copy2("/bin/true", stage / "hauntware_probe")
+          pathlib.Path(os.environ["PROBE_MANIFEST"]).write_text(f"""id: com.example.HauntwareProbe
+          runtime: org.gnome.Platform
+          runtime-version: '50'
+          sdk: org.gnome.Sdk
+          command: hauntware_probe
+          modules:
+            - name: probe
+              buildsystem: simple
+              sources:
+                - type: dir
+                  path: {stage}
+              build-commands:
+                - install -Dm755 hauntware_probe /app/bin/hauntware_probe
+          """)
+          PY
+          die() { printf '%s\n' "$*" >&2; exit 1; }
+          source scripts/flatpak-repack.sh
+          time flatpak_build "$target/work" "$PROBE_MANIFEST" https://dl.flathub.org/repo/flathub.flatpakrepo
+          time flatpak_build "$target/work" "$PROBE_MANIFEST" https://dl.flathub.org/repo/flathub.flatpakrepo
