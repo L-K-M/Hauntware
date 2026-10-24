@@ -448,8 +448,11 @@ void main() {
         startedAt: DateTime.utc(2026, 10, 18, 9),
       ),
     );
-    // The note is there until the grace passes, and the passing itself
-    // is what drops it: assert both ends of the window.
+    // The note is there until the grace passes: a listing inside the
+    // window spares it, and the first listing after it drops it. Assert
+    // all three points.
+    expect(store.notesOf(_s1), isNotEmpty);
+    await tracker.listed(_s1, _section());
     expect(store.notesOf(_s1), isNotEmpty);
     await clock.elapse(kLaunchListingGrace + const Duration(seconds: 1));
     await tracker.listed(_s1, _section());
