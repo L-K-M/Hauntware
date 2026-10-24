@@ -16,6 +16,7 @@ import '../../controllers/announcement_controller.dart'
     show AnnouncementNotSavedException;
 import '../../controllers/appearance_controller.dart'
     show AppearanceNotSavedException;
+import '../../controllers/device_name.dart' show DeviceNameNotSavedException;
 import '../../controllers/monitor_set.dart';
 import '../../controllers/pin_publication_controller.dart' show PinPublication;
 import '../../controllers/safety_controller.dart' show SafetyNotSavedException;
@@ -61,6 +62,10 @@ enum SettingsLinkMethod {
   /// The General tab's A11Y-15 switch; the argument is a bool (D60).
   setAnnounceThresholdBands,
 
+  /// The General tab's device name (M5 plan Q6); the argument is a
+  /// string, blank for the default.
+  setDeviceName,
+
   /// The Sync tab's "sync passwords" switch (SYN-02); the argument is a
   /// bool.
   setSyncSecrets,
@@ -92,6 +97,7 @@ enum SettingsLinkKey {
   palette,
   mode,
   announceThresholdBands,
+  deviceName,
   syncSecrets,
 
   /// The host key sharing assertion, an object of [release] and
@@ -203,6 +209,10 @@ enum SettingsLinkError {
   /// the [SyncSecretsNotSavedException].
   syncSecretsNotSaved,
 
+  /// As [notSaved], for the device name: the window rebuilds the
+  /// [DeviceNameNotSavedException].
+  deviceNameNotSaved,
+
   /// Anything else: the change did not happen.
   failed,
 }
@@ -219,6 +229,7 @@ PlatformException encodeLinkError(Object error) => PlatformException(
     SafetyNotSavedException() => SettingsLinkError.safetyNotSaved.name,
     SyncSecretsNotSavedException() =>
       SettingsLinkError.syncSecretsNotSaved.name,
+    DeviceNameNotSavedException() => SettingsLinkError.deviceNameNotSaved.name,
     _ => SettingsLinkError.failed.name,
   },
   message: '$error',
@@ -238,6 +249,9 @@ Exception decodeLinkError(PlatformException error) {
     ),
     SettingsLinkError.safetyNotSaved => SafetyNotSavedException(message),
     SettingsLinkError.syncSecretsNotSaved => SyncSecretsNotSavedException(
+      message,
+    ),
+    SettingsLinkError.deviceNameNotSaved => DeviceNameNotSavedException(
       message,
     ),
     SettingsLinkError.failed || null => SettingsLinkException(message),

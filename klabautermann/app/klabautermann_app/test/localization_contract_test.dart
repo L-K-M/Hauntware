@@ -77,6 +77,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // one form (M5 plan Q6).
   'lib/controllers/device_name.dart': {
     r"'Klabautermann on $name'",
+    // The not-saved diagnostic; General shows its own ARB toast.
+    r"'The device name was not saved: $error'",
     "'Android'",
     "'Fuchsia'",
     "'iOS'",
@@ -302,6 +304,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   'lib/services/settings_window/remote_settings.dart': {
     "'Settings link closed'",
+    // The device name until the first snapshot, which comes with hello.
+    "''",
   },
   // A keystore failure's text, which the answer carries to the engine as
   // a diagnostic; surfaces show ARB text (syncFailedKeystore).
@@ -586,6 +590,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/logs/logs_panel.dart': {
     // The empty server pattern, which reads the whole journal again.
     "''",
+    // The folder LOG-08 browses, a path on the server handed to the
+    // siblings (X-10), never shown.
+    "'/var/log'",
   },
   'lib/ui/logs/log_query.dart': {
     // PCRE2's inline flags that pin journalctl's case rule (LOG-06):

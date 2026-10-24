@@ -1,4 +1,4 @@
-# The host writes 03 §8.11 allows in the MVP, for inventory.dart: per
+# The host writes 03 §8.11 allows in the MVP and v1, for inventory.dart: per
 # line the row a change belongs to, then an absolute path glob (`*` and
 # `?` within one path segment, `**` across segments). A change no line
 # covers fails the run. inventory.sh already leaves out what 8.11
@@ -23,3 +23,27 @@ detached-root   /var/lib/klabautermann
 detached-root   /var/lib/klabautermann/ops
 detached-root   /var/lib/klabautermann/ops/*.json
 detached-root   /var/lib/klabautermann/ops/*.log
+
+# The edit itself (v1, SAF-12): the plain file seed_docker.sh writes and
+# the session edits. Its atomic-replace temp file is renamed over it, so
+# no snapshot sees it.
+edit-target     /home/*/edits/app.conf
+
+# Backups of files the user owns and of crontabs (v1, SAF-14): the
+# directory, its index and each backup, which the session's backup
+# removal deletes again. Its parents are the detached rows' above.
+user-backups    /home/*/.local/state/klabautermann/backups
+user-backups    /home/*/.local/state/klabautermann/backups/index
+user-backups    /home/*/.local/state/klabautermann/backups/*
+
+# The footprint manifest (v1, SAF-14), written with the scope's first
+# backup.
+footprint-manifest  /home/*/.config
+footprint-manifest  /home/*/.config/klabautermann
+footprint-manifest  /home/*/.config/klabautermann/manifest.json
+
+# The audit syslog line (v1, SAF-13): BusyBox syslogd's file and its
+# rotation. On a host with no auth log of its own it also takes sshd's
+# login lines, 8.11's login records.
+audit-syslog    /var/log/messages
+audit-syslog    /var/log/messages.0

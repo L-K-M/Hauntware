@@ -8506,6 +8506,54 @@ abstract class AppLocalizations {
   /// **'Séance did not open the link.'**
   String get handOffSeanceNotOpened;
 
+  /// Hand-off (X-04): opens Séance on this server with a cd to this folder typed at the prompt, which the user runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Open terminal here'**
+  String get handOffOpenTerminalHere;
+
+  /// Hand-off (X-04, X-10): opens this folder or file on this server in Poltergeist, the suite's file transfer app.
+  ///
+  /// In en, this message translates to:
+  /// **'Open in Poltergeist'**
+  String get handOffOpenInPoltergeist;
+
+  /// Toast when the operating system refused to open a poltergeist:// hand-off link.
+  ///
+  /// In en, this message translates to:
+  /// **'Poltergeist did not open the link.'**
+  String get handOffPoltergeistNotOpened;
+
+  /// Heading of the device name on the General settings tab (M5 plan Q6).
+  ///
+  /// In en, this message translates to:
+  /// **'This device'**
+  String get settingsDeviceTitle;
+
+  /// Label of the device name field on the General settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Device name'**
+  String get settingsDeviceName;
+
+  /// Helper text under the device name field (SAF-13): the name appears in host logs.
+  ///
+  /// In en, this message translates to:
+  /// **'Servers\' system logs name this device beside each action you take there. Leave it blank for the default.'**
+  String get settingsDeviceNameDetail;
+
+  /// Toast when the device name applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The device name changed, but it could not be saved, so it will not be kept after a restart.'**
+  String get settingsDeviceNameNotSaved;
+
+  /// Toast when the app did not take a change of the device name.
+  ///
+  /// In en, this message translates to:
+  /// **'The device name could not be changed.'**
+  String get settingsDeviceNameNotChanged;
+
   /// Headline of the inline report when the server accepted the test's sign-in.
   ///
   /// In en, this message translates to:

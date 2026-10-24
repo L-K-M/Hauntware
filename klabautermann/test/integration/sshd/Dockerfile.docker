@@ -18,6 +18,11 @@ COPY sshd_config.docker sshd_config.neg-* /etc/klabautermann/
 
 RUN chmod 0755 /usr/local/bin/fixture-entrypoint /usr/local/bin/fixture-setup \
       /usr/local/libexec/fixture-nocli-shell
+# BusyBox's crontab installs a user's table only when setuid, as Alpine's
+# busybox-suid package makes it, so the edit suite (M5 M20a) can write
+# the fixture user's crontab through `crontab -`. A setuid copy of the
+# multi-call binary drops root for every applet but the ones that need it.
+RUN rm /usr/bin/crontab && install -m 4755 /bin/busybox /usr/bin/crontab
 
 EXPOSE 22
 

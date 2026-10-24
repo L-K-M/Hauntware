@@ -1881,6 +1881,14 @@ is on main:
   Klabautermann's palettes do not carry, are dropped.
   `theme_paste_fixtures_test.dart` replays each app's exact Copy theme
   text from `test/fixtures/theme_paste/`.
+- Edit pipeline suite (M5 M20a): on the Docker fixture, a stack's
+  compose file and `.env` are edited through the `compose config -q`
+  check, a candidate compose cannot read replaces nothing, a file changed
+  before the run keeps the outside change, the fixture user's crontab is
+  paused and resumed with its comments kept, and the next connect
+  verifies the backups, reports one changed on the host, keeps the
+  newest and removes a file's. The syslog line reaches BusyBox syslogd,
+  and the host write inventory covers an edit and a backup removal.
 - v1 stack suite (M5 M29): on the Docker fixture, a service stops,
   restarts and is recreated alone, a stack deployed from two files names
   both in every step, a stack's profiles are read, a folder scan finds a
@@ -1901,8 +1909,14 @@ is on main:
   It shows where Séance takes links (every platform but Fuchsia, now
   that its Linux and Windows runners forward links to one instance) and
   the OS reports a handler, and never for an ssh_config import, whose id
-  Séance cannot know. The folder hand-offs (X-04, X-10) follow with the
-  stack and log views.
+  Séance cannot know.
+- Stack folder hand-offs (M5 M31b; X-04, X-10): a stack's overview
+  offers "Open terminal here", a `seance://connect` link with the
+  working directory as `cwd` (Séance types the `cd` and does not run
+  it), and "Open in Poltergeist", a `poltergeist://browse` link to the
+  folder, each where its app takes links and the builders can name the
+  folder. The `/var/log` browser (LOG-08) offers the same two for the
+  folder, and each file a compact "Open in Poltergeist" beside it.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container
