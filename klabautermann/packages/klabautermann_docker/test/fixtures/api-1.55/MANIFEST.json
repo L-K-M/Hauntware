@@ -1,7 +1,7 @@
 {
   "format": 1,
   "corpus": "api-1.55",
-  "capturedAt": "2026-10-17T16:14:25.824986Z",
+  "capturedAt": "2026-10-20T17:14:28.522521Z",
   "daemon": {
     "runtime": "docker",
     "version": "29.7.2",
@@ -20,28 +20,28 @@
   "images": {
     "seed": "mirror.gcr.io/library/busybox:1.37.0@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e",
     "seedId": "sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e",
-    "dangling": "sha256:b7e975884d897dd76bc1304cb6316480d8fc06762968b8c8e2b215a3ee85e652"
+    "dangling": "sha256:8301f80c0caca8668fe28e926e19d00767d426b1a8e8a20a4ae2c2bcc4e8f000"
   },
   "seeded": {
     "containers": {
-      "web": "e026126ba22f5db4cbda15e943b5ba4168a7f5fca7d1185b190deb9cabfe3db1",
-      "worker": "cc13a1000aa313546dfa9324f4b67aece6e8714d4be4ef4a37c70cb6df852a79",
-      "job": "f2eaca0eaff59e519928f786e01645664d9e36db615a5b2c464d453e23ce00fc",
-      "tty": "0fb12037249daad31b5e22578b9cbbd1171025b406ec91ec1c0bef98767057cd",
-      "paused": "0c384e940bb75dc9c64c49cf66a764ab1c5da2a3687cf84e95eb9c093530c6b4",
-      "demo-web-1": "16b47a778e3782cb96f56e356e220c1bb03780ba4ad13a3aeb20170043a62bcd",
-      "demo-cache-1": "20b48df98077ee0c1a42fa7314d9113dd6b065ffc1bc4121e61c1ce5b6b715a4",
-      "coolify-app": "b799a1af4dfbdb3a4a47951aeb7d69eb3499e255d175feaa25907a1947866431"
+      "web": "a42c8fc08ea57dacc11990d3c19695089ce85d57c34d6a2f1eb0dcb708e4485d",
+      "worker": "03f1fd4e8e0c7bde79449b903bda291ec2f4beafe2ad82e0324fa634aedbfff9",
+      "job": "9da24466970fc936b73c76051137714f87e39e405df6835c495ca3bf9317b066",
+      "tty": "5f2604176057448a628993006740ddef06e85bc13af83b74aa89857101c15ae0",
+      "paused": "59794ba1e85fd85ba37ee6d0f8e10c47656532047388ad9c4468e44360ae0902",
+      "demo-web-1": "9fa7a24b7920ad9e9dbe1bcc9b317d06e433195c5d682c99b9c8e686fc10dc95",
+      "demo-cache-1": "281647e6a56136def601875196eae470c5de276e536c9acdc9cdfaebad0d413e",
+      "coolify-app": "2d77e3749bad469ad67df823b6eaa810b38829a5a4d1a25ad97660c919f414c8"
     },
     "networks": {
-      "demo_default": "da6273ea87998e9bd2eb5424aa2bfc413858b83e069ce29eff829528a479335b"
+      "demo_default": "eedd746e95bb8d34a047ebb86932959ce83314de37365736f79aa7db331f7571"
     },
     "volumes": [
       "demo_data"
     ],
     "eventsWindow": {
-      "since": 1792253649,
-      "until": 1792253664
+      "since": 1792516456,
+      "until": 1792516467
     }
   },
   "exchanges": [
@@ -209,7 +209,7 @@
     {
       "name": "logs-since",
       "file": "logs-since.http",
-      "request": "GET /v1.55/containers/job/logs?stdout=1&stderr=1&timestamps=1&since=1792253658.551883750",
+      "request": "GET /v1.55/containers/job/logs?stdout=1&stderr=1&timestamps=1&since=1792516463.101499801",
       "status": 200,
       "contentType": "application/vnd.docker.multiplexed-stream",
       "framing": "chunked"
@@ -257,7 +257,7 @@
     {
       "name": "events",
       "file": "events.http",
-      "request": "GET /v1.55/events?since=1792253649&until=1792253664",
+      "request": "GET /v1.55/events?since=1792516456&until=1792516467",
       "status": 200,
       "contentType": "application/jsonl",
       "framing": "chunked"
@@ -285,6 +285,38 @@
       "status": 200,
       "contentType": "application/json",
       "framing": "chunked"
+    },
+    {
+      "name": "exec-create",
+      "file": "exec-create.http",
+      "request": "POST /v1.55/containers/web/exec",
+      "status": 201,
+      "contentType": "application/json",
+      "framing": "length"
+    },
+    {
+      "name": "exec-start",
+      "file": "exec-start.http",
+      "request": "POST /v1.55/exec/abf5ba78e8e9ac18e2083091be734ed9f6196121763bf85dde10e8bb40e9257b/start",
+      "status": 101,
+      "contentType": "application/vnd.docker.multiplexed-stream",
+      "framing": "upgraded"
+    },
+    {
+      "name": "exec-inspect",
+      "file": "exec-inspect.http",
+      "request": "GET /v1.55/exec/abf5ba78e8e9ac18e2083091be734ed9f6196121763bf85dde10e8bb40e9257b/json",
+      "status": 200,
+      "contentType": "application/json",
+      "framing": "length"
+    },
+    {
+      "name": "exec-resize",
+      "file": "exec-resize.http",
+      "request": "POST /v1.55/exec/82a36cf568b18cc889915551678471881d9e384f4631989a82ebee57719a1671/resize?h=40&w=120",
+      "status": 200,
+      "contentType": null,
+      "framing": "length"
     }
   ]
 }

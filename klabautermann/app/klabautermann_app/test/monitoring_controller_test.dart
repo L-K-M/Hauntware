@@ -1165,4 +1165,83 @@ void main() {
       expect(timed.backgroundPause.value?.serverIds, {'srv-1'});
     });
   });
+
+  group('host queries (LOG-08, LOG-09)', () {
+    test('each query is answered by its own result', () async {
+      final boots = monitoring.queryHost('srv-1', const BootsQuery());
+      final files = monitoring.queryHost('srv-1', const VarLogQuery());
+      final sent = engine.sentOfType<HostQuery>().cast<HostQuery>().toList();
+      expect(sent.map((query) => query.query.runtimeType), [
+        BootsQuery,
+        VarLogQuery,
+      ]);
+      expect(sent[0].queryId, isNot(sent[1].queryId));
+
+      engine
+        ..emit(
+          HostResult(
+            serverId: 'srv-1',
+            queryId: sent[1].queryId,
+            payload: const VarLogFiles([]),
+          ),
+        )
+        ..emit(
+          HostResult(
+            serverId: 'srv-1',
+            queryId: sent[0].queryId,
+            payload: const JournalBoots([]),
+          ),
+        );
+      expect((await boots).payload, isA<JournalBoots>());
+      expect((await files).payload, isA<VarLogFiles>());
+    });
+
+    test('a stopped engine answers no link, and so does one that stops '
+        'before answering', () async {
+      final waiting = monitoring.queryHost('srv-1', const BootsQuery());
+      await engine.close();
+      await settle();
+      expect(
+        ((await waiting).payload as HostQueryFailed).failure,
+        HostQueryFailure.noLink,
+      );
+
+      final later = await monitoring.queryHost('srv-1', const BootsQuery());
+      expect(
+        (later.payload as HostQueryFailed).failure,
+        HostQueryFailure.noLink,
+      );
+    });
+  });
+
+  group('export redaction (LOG-10)', () {
+    test('each request is answered by its own redacted text', () async {
+      final first = monitoring.redactLines(['a', 'b']);
+      final second = monitoring.redactLines(['c']);
+      final sent = engine
+          .sentOfType<RedactLines>()
+          .cast<RedactLines>()
+          .toList();
+      expect(sent.map((r) => r.lines), [
+        ['a', 'b'],
+        ['c'],
+      ]);
+      expect(sent[0].requestId, isNot(sent[1].requestId));
+
+      engine
+        ..emit(RedactedLines(sent[1].requestId, 'C'))
+        ..emit(RedactedLines(sent[0].requestId, 'A\nB'));
+      expect(await first, 'A\nB');
+      expect(await second, 'C');
+    });
+
+    test('a stopped engine redacts nothing, and so does one that stops '
+        'before answering', () async {
+      final waiting = monitoring.redactLines(['token=abc']);
+      await engine.close();
+      await settle();
+      expect(await waiting, isNull);
+      expect(await monitoring.redactLines(['token=abc']), isNull);
+    });
+  });
 }

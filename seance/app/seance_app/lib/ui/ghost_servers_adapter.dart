@@ -4,6 +4,8 @@
 /// package's surfaces draw with.
 library;
 
+import 'dart:developer' as developer;
+
 import 'package:flutter/widgets.dart';
 import 'package:ghost_servers/ghost_servers.dart';
 import 'package:seance_core/seance_core.dart';
@@ -109,3 +111,23 @@ GhostStatusColors seanceStatusColors(BuildContext context) => GhostStatusColors(
   connecting: StatusColors.connecting(context),
   offline: StatusColors.offline(context),
 );
+
+/// Why copying a connection log failed, for the report that follows the
+/// toast.
+void logConnectionLogCopyError(Object error, StackTrace stackTrace) =>
+    developer.log(
+      'Could not copy the connection log',
+      name: 'seance.app',
+      level: 900,
+      error: error,
+      stackTrace: stackTrace,
+    );
+
+/// A test result as the shared report takes it.
+GhostTestReport ghostTestReportOf(ConnectionTestResult result) =>
+    GhostTestReport(
+      ok: result.ok,
+      summary: result.summary,
+      notes: result.notes,
+      log: result.log,
+    );

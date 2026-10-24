@@ -14,6 +14,9 @@ const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 const _webId = '123e4567-e89b-42d3-a456-426614174000';
 
 void main() {
+  // The handler group's plain tests use the binding's messenger too.
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('SeanceLinkReviewDialog', () {
     testWidgets('shows the saved server and the cleaned folder', (
       tester,
