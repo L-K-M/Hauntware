@@ -6424,4 +6424,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get connectionLogEmpty => '(no log captured)';
+
+  @override
+  String get fleetRowDuplicate => 'Duplicate';
+
+  @override
+  String serverDuplicated(String name) {
+    return 'Copied $name';
+  }
 }

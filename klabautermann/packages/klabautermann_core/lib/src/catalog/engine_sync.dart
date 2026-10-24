@@ -37,6 +37,8 @@ import 'package:seance_core/seance_core.dart'
         Secret,
         SecretVault,
         ServerConfig,
+        duplicateServerConfig,
+        duplicateServerLabel,
         nextUpdatedAt,
         plannedCredential,
         plannedCredentialReadsStored,
@@ -550,6 +552,52 @@ final class EngineSync {
       stored: readsStored ? await vault.getSecret(secretId) : null,
     );
   }
+
+  /// Duplicates the synced server [request] names (FL-03, M5 plan M09b):
+  /// the credential is copied into a vault entry of the copy's own first,
+  /// so the stored config never names an entry the vault lacks, then the
+  /// copy is sealed as a new server. A source entry this device lacks
+  /// copies as no credential, as Séance's duplicate does.
+  Future<EngineEvent> duplicateServer(DuplicateServer request) =>
+      _write(request.requestId, (writes) async {
+        final source = await _servers.byId(request.serverId);
+        if (source == null) {
+          return _refused(request.requestId, CatalogWriteFailure.unknownTarget);
+        }
+        final writer = writes.coordinator.writer;
+        final now = writer.now().millisecondsSinceEpoch;
+        final sourceRef = source.secretRef;
+        final stored = sourceRef == null
+            ? null
+            : await writes.vault.getSecret(sourceRef);
+        final secret = stored?.copyWith(id: uuidV4());
+        if (secret != null) {
+          await writes.vault.putLocalSecret(secret, updatedAt: now);
+        }
+
+        final config = duplicateServerConfig(
+          source,
+          id: uuidV4(),
+          label: duplicateServerLabel(source.label, [
+            for (final server in await servers()) server.label,
+          ]),
+          secretRef: secret?.id,
+          now: now,
+        );
+        if (await writer.saveServer(config) == WriteOutcome.refusedPullOnly) {
+          return _refused(
+            request.requestId,
+            CatalogWriteFailure.other,
+            'pull-only',
+          );
+        }
+        if (secret != null) await writer.secretSaved(secret.id);
+        return CatalogWritten(
+          requestId: request.requestId,
+          serverId: config.id,
+          credentialWritten: secret != null,
+        );
+      });
 
   /// Deletes the synced server [request] names: its tombstone persists
   /// before its row drops, its credential's record is retracted unless

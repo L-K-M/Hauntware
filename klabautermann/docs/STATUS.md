@@ -1894,7 +1894,9 @@ is on main:
   test asks for its key, pins nothing and reports a refused user. Browse
   picks an identity file on desktops; phones keep pasting the key. The
   shared editor's buttons now wrap on a narrow phone instead of
-  overflowing. Duplicate and phone key import follow.
+  overflowing. A synced row's Duplicate copies the server with
+  `duplicateServerConfig`: a numbered "copy" label and a vault entry of
+  its own, confirmed when its source was. Phone key import follows.
 - X-03 hand-off (M5 M31a): the server header's "Open terminal in
   Séance" opens a catalog server in Séance through a `seance://connect`
   link built by `buildSeanceConnect`, which carries the server id only.

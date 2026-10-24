@@ -255,7 +255,8 @@ import '../operations/plan_types.dart';
 ///
 /// The editor's connection test then joined v3 the same way (FL-03, M5
 /// plan M09b): [TestServerConnection], answered by
-/// [ServerConnectionTested].
+/// [ServerConnectionTested]. [DuplicateServer] then joined it, answered
+/// as [SaveServer].
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -1035,6 +1036,18 @@ final class TestServerConnection extends EngineRequest {
   final ServerCredentialEntry credential;
 }
 
+/// Copies the synced server [serverId] as a new one (FL-03, M5 plan M09b):
+/// its own id and timestamps, a free "copy" label, and its own copy of
+/// the credential, never a vault entry the two share (seance_protocol's
+/// `duplicateServerConfig`). Answered as [SaveServer], with the copy's
+/// id.
+final class DuplicateServer extends EngineRequest {
+  const DuplicateServer({required this.requestId, required this.serverId});
+
+  final String requestId;
+  final String serverId;
+}
+
 /// Deletes the synced server [serverId]: its tombstone is persisted
 /// before its row drops, and its credential's record is retracted unless
 /// another synced server shares it (03 §4.4). Answered as [SaveServer].
@@ -1438,7 +1451,7 @@ final class ServerConnectionTested extends EngineEvent {
   final String log;
 }
 
-/// A catalog write ([SaveServer], [DeleteServer], [SetServerPrefs],
+/// A catalog write ([SaveServer], [DuplicateServer], [DeleteServer], [SetServerPrefs],
 /// [PutRule], [RemoveRule]) is sealed on this device; the round the
 /// engine runs next pushes it.
 final class CatalogWritten extends EngineEvent {
