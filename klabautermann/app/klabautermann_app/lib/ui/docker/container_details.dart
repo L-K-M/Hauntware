@@ -16,6 +16,7 @@ import '../actions/docker_actions.dart'
 import '../processes_panel.dart' show kRevealDuration;
 import '../processes_view.dart' show argumentText, clipProcessText;
 import 'container_details_view.dart';
+import 'container_command.dart';
 import 'container_logs.dart';
 import 'container_terminal.dart';
 import 'containers_panel.dart' show ContainerHealthBadge;
@@ -181,6 +182,10 @@ class _ContainerInspectorBodyState extends State<ContainerInspectorBody> {
                     container: container,
                   ),
                 ),
+                ContainerCommandButton(
+                  serverId: serverId,
+                  container: container,
+                ),
                 ActionEntry(
                   serverId: serverId,
                   point: ActionEntryPoint.containerShell,
@@ -255,6 +260,10 @@ class ContainerDetailsPage extends StatelessWidget {
               container: container,
             ),
           ),
+        ),
+        Builder(
+          builder: (context) =>
+              ContainerCommandButton(serverId: serverId, container: container),
         ),
         ActionEntry(
           serverId: serverId,

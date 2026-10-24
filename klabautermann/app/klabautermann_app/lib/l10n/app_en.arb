@@ -6263,6 +6263,56 @@
   "@dockerLogsShow": {
     "description": "Tooltip of the button on a container's details, and the container row's menu item, that opens the container's logs (CTX-01)."
   },
+  "dockerCommandOpen": "Run a command",
+  "@dockerCommandOpen": {
+    "description": "Tooltip of the button on a container's details that opens the one-off command sheet (CTX-08)."
+  },
+  "dockerCommandTitle": "Run a command in {container}",
+  "@dockerCommandTitle": {
+    "description": "Title of the one-off command sheet (CTX-08).",
+    "placeholders": {
+      "container": {
+        "type": "String",
+        "example": "web-1"
+      }
+    }
+  },
+  "dockerCommandLabel": "Command",
+  "@dockerCommandLabel": {
+    "description": "Label of the one-off command's field (CTX-08)."
+  },
+  "dockerCommandHelper": "Runs without a shell or terminal. Quote words as in a shell; for pipes and variables, run sh -c '…'.",
+  "@dockerCommandHelper": {
+    "description": "Helper under the command field: the words run as typed, without a shell expanding them (CTX-08)."
+  },
+  "dockerCommandUnparsed": "Enter a complete command: close any open quote and remove a trailing backslash.",
+  "@dockerCommandUnparsed": {
+    "description": "Error under the command field when it is empty, a quote is left open or it ends with a backslash (CTX-08)."
+  },
+  "dockerCommandRun": "Run",
+  "@dockerCommandRun": {
+    "description": "Button that plans the one-off command, shows its preview and runs it once confirmed (CTX-08)."
+  },
+  "dockerCommandRunning": "Running…",
+  "@dockerCommandRunning": {
+    "description": "Status of the one-off command sheet while the command runs (CTX-08)."
+  },
+  "dockerCommandStdout": "Output",
+  "@dockerCommandStdout": {
+    "description": "Label over the command's standard output (CTX-08)."
+  },
+  "dockerCommandStderr": "Errors",
+  "@dockerCommandStderr": {
+    "description": "Label over the command's standard error (CTX-08)."
+  },
+  "dockerCommandNoOutput": "The command printed nothing.",
+  "@dockerCommandNoOutput": {
+    "description": "Shown when the finished command wrote nothing to stdout or stderr (CTX-08)."
+  },
+  "dockerCommandTruncated": "The output was longer than 1 MiB; the rest was dropped.",
+  "@dockerCommandTruncated": {
+    "description": "Shown when the command's output exceeded the kept maximum (CTX-08)."
+  },
   "dockerShellOpen": "Open a shell",
   "@dockerShellOpen": {
     "description": "Tooltip of the button on a container's details that opens a shell in the container (CTX-07)."

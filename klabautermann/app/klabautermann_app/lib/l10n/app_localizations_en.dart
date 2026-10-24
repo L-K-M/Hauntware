@@ -5144,6 +5144,44 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerLogsShow => 'Show logs';
 
   @override
+  String get dockerCommandOpen => 'Run a command';
+
+  @override
+  String dockerCommandTitle(String container) {
+    return 'Run a command in $container';
+  }
+
+  @override
+  String get dockerCommandLabel => 'Command';
+
+  @override
+  String get dockerCommandHelper =>
+      'Runs without a shell or terminal. Quote words as in a shell; for pipes and variables, run sh -c \'…\'.';
+
+  @override
+  String get dockerCommandUnparsed =>
+      'Enter a complete command: close any open quote and remove a trailing backslash.';
+
+  @override
+  String get dockerCommandRun => 'Run';
+
+  @override
+  String get dockerCommandRunning => 'Running…';
+
+  @override
+  String get dockerCommandStdout => 'Output';
+
+  @override
+  String get dockerCommandStderr => 'Errors';
+
+  @override
+  String get dockerCommandNoOutput => 'The command printed nothing.';
+
+  @override
+  String get dockerCommandTruncated =>
+      'The output was longer than 1 MiB; the rest was dropped.';
+
+  @override
   String get dockerShellOpen => 'Open a shell';
 
   @override
