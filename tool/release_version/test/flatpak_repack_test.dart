@@ -189,6 +189,7 @@ void main() {
       String? userInstallation,
       String revision = '1',
       int dependencyExitCode = 0,
+      int copyExitCode = 0,
     }) async {
       Directory(scratch).createSync(recursive: true);
       final manifest = File(p.join(sandbox.path, 'manifest.yml'))
@@ -215,6 +216,16 @@ sync() {
   [[ "$1" == -f && "$2" == "$RUNNER_TOOL_CACHE/flatpak-user" ]]
   printf 'flush\n'
 }
+cp() {
+  local destination="${@: -1}"
+  if [[ "${destination%/}" == "$RUNNER_TOOL_CACHE/flatpak-user" && "$COPY_EXIT_CODE" != 0 ]]; then
+    rm -rf "$destination"
+    mkdir -p "$destination"
+    printf incomplete > "$destination/runtime"
+    return "$COPY_EXIT_CODE"
+  fi
+  command cp "$@"
+}
 flatpak-builder() {
   case " $* " in
     *' --install-deps-only '*)
@@ -227,6 +238,7 @@ flatpak-builder() {
       if [[ "$DEPENDENCY_EXIT_CODE" != 0 ]]; then
         return "$DEPENDENCY_EXIT_CODE"
       fi
+      rm -f "$FLATPAK_USER_DIR/obsolete"
       rm -f "$FLATPAK_USER_DIR/runtime"
       printf '%s' "$DEPENDENCY_REVISION" > "$FLATPAK_USER_DIR/runtime"
       chmod 444 "$FLATPAK_USER_DIR/runtime"
@@ -253,6 +265,7 @@ flatpak_build "$2" "$3" https://example.test/flathub.flatpakrepo
           'SCRATCH_FILESYSTEM': scratchFilesystem,
           'DEPENDENCY_REVISION': revision,
           'DEPENDENCY_EXIT_CODE': '$dependencyExitCode',
+          'COPY_EXIT_CODE': '$copyExitCode',
           if (userInstallation != null) 'FLATPAK_USER_DIR': userInstallation,
         },
         includeParentEnvironment: false,
@@ -293,6 +306,48 @@ flatpak_build "$2" "$3" https://example.test/flathub.flatpakrepo
       expect(result.stdout, 'deps:reuse\n');
       expect(File(p.join(cache, 'runtime')).readAsStringSync(), '1');
       expect(Directory(scratch).listSync(), isEmpty);
+    });
+
+    test('propagates runtime removals back to the persistent cache', () async {
+      expect((await build()).exitCode, 0);
+      final obsolete = File(p.join(cache, 'obsolete'))
+        ..writeAsStringSync('old');
+
+      final result = await build();
+
+      expect(result.exitCode, 0, reason: result.stderr as String);
+      expect(obsolete.existsSync(), isFalse);
+    });
+
+    test(
+      'rebuilds an installation without a completed cache snapshot',
+      () async {
+        File(p.join(cache, 'runtime'))
+          ..createSync(recursive: true)
+          ..writeAsStringSync('incomplete');
+
+        final result = await build();
+
+        expect(result.exitCode, 0, reason: result.stderr as String);
+        expect(result.stdout, 'deps:fresh\nflush\nbuild:cached\nsmoke\n');
+        expect(File(p.join(cache, 'runtime')).readAsStringSync(), '1');
+      },
+    );
+
+    test('recovers from a failed persistent copy on the next build', () async {
+      expect((await build()).exitCode, 0);
+      const copyFailure = 28;
+
+      final failed = await build(copyExitCode: copyFailure);
+
+      expect(failed.exitCode, copyFailure);
+      expect(Directory(scratch).listSync(), isEmpty);
+
+      final retried = await build();
+
+      expect(retried.exitCode, 0, reason: retried.stderr as String);
+      expect(retried.stdout, 'deps:fresh\nflush\nbuild:cached\nsmoke\n');
+      expect(File(p.join(cache, 'runtime')).readAsStringSync(), '1');
     });
 
     for (final environment in ['', 'github-hosted']) {

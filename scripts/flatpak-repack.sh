@@ -92,7 +92,9 @@ flatpak_stage_deb() {
 # ZFS publishes O_TMPFILE inodes by waiting for a pool transaction per
 # file. Stage runtime updates elsewhere, then persist them as named files.
 _flatpak_stage_zfs_cache() (
-  local manifest="$1" cache="$FLATPAK_USER_DIR" scratch installation
+  local manifest="$1" flathub_repo="$2"
+  local cache="$FLATPAK_USER_DIR" scratch installation
+  local -r marker_name=.hauntware-runtime-ready
   scratch="$(mktemp -d "${TMPDIR:-/tmp}/hauntware-flatpak-XXXXXX")"
   trap 'rm -rf "$scratch"' EXIT
   trap 'exit 1' HUP INT TERM
@@ -103,28 +105,41 @@ _flatpak_stage_zfs_cache() (
   esac
 
   installation="$scratch/installation"
-  cp -a "$cache" "$installation"
+  # An interrupted persistent copy is discarded, never reused as a snapshot.
+  if [[ -f "$cache/$marker_name" ]]; then
+    cp -a "$cache" "$installation"
+    rm -f "$installation/$marker_name"
+  fi
+  FLATPAK_USER_DIR="$installation" flatpak remote-add \
+    --user --if-not-exists flathub "$flathub_repo"
   FLATPAK_USER_DIR="$installation" flatpak-builder \
     --user --install-deps-from=flathub --install-deps-only \
     "$scratch/build" "$manifest"
-  # Existing OSTree objects are read-only; replace them with named files too.
-  cp -a --remove-destination "$installation/." "$cache/"
+
+  # Replace the managed cache so removed runtimes cannot accumulate.
+  rm -rf "$cache"
+  cp -a "$installation" "$cache"
   sync -f "$cache"
+  touch "$cache/$marker_name"
 )
 
 # Builds <work>/stage per <manifest> into <work>/build and <work>/repo, with
 # the runtime from <flathub-repo>, then runs the smoke check in the result.
 flatpak_build() {
-  local work="$1" manifest="$2" flathub_repo="$3" command_name
+  local work="$1" manifest="$2" flathub_repo="$3" command_name cache_filesystem=
   local -a dependency_options=(--install-deps-from=flathub)
-  flatpak remote-add --user --if-not-exists flathub "$flathub_repo"
 
   if [[ "${RUNNER_ENVIRONMENT:-}" == self-hosted &&
         -n "${RUNNER_TOOL_CACHE:-}" &&
-        "$FLATPAK_USER_DIR" == "$RUNNER_TOOL_CACHE/flatpak-user" ]] &&
-      [[ "$(stat -f -c %T "$FLATPAK_USER_DIR")" == zfs ]]; then
-    _flatpak_stage_zfs_cache "$manifest"
+        "$FLATPAK_USER_DIR" == "$RUNNER_TOOL_CACHE/flatpak-user" ]]; then
+    mkdir -p "$FLATPAK_USER_DIR"
+    cache_filesystem="$(stat -f -c %T "$FLATPAK_USER_DIR")"
+  fi
+  if [[ "$cache_filesystem" == zfs ]]; then
+    _flatpak_stage_zfs_cache "$manifest" "$flathub_repo"
     dependency_options=()
+  else
+    flatpak remote-add --user --if-not-exists flathub "$flathub_repo"
   fi
 
   # --disable-rofiles-fuse: containers (CI) have no FUSE, and a copy-only
