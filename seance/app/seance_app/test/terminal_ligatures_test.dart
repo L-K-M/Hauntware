@@ -22,7 +22,7 @@ void main() {
     String family = '',
   }) async {
     await tester.runAsync(loadBundledMonoFonts);
-    final appearance = TerminalAppearance.resolve(
+    final appearance = resolveTerminalAppearance(
       AppSettings(terminalFontFamily: family, terminalLigatures: ligatures),
       Brightness.dark,
     );
