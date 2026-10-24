@@ -1,6 +1,7 @@
 import 'dart:async' show unawaited;
 import 'dart:io' show Platform;
 
+import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -27,10 +28,14 @@ import 'ui/top_toast.dart';
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 /// `seance://connect` links (docs/design/suite-links.md section 6). Links
-/// queue here from launch and are reviewed once the app has loaded; the OS
-/// delivery that feeds [SeanceLinkIntake.add] arrives with the scheme
-/// registration.
+/// queue here from launch and are reviewed once the app has loaded.
 final SeanceLinkIntake linkIntake = SeanceLinkIntake();
+
+/// The platforms that register the `seance` scheme (section 7). Linux and
+/// Windows need single-instance forwarding first, or a link would start a
+/// second Séance writing the same stores.
+bool get _receivesLinks =>
+    !kIsWeb && (Platform.isAndroid || Platform.isIOS || Platform.isMacOS);
 
 /// Opens Settings in its own window, on desktop once the app has started.
 /// Null on mobile, where Settings is a route, and before bootstrap finishes.
@@ -43,6 +48,20 @@ Future<void> main(List<String> args) async {
   if (args.contains(settingsWindowArgument)) {
     await runSettingsWindow();
     return;
+  }
+  // Before the first frame, so a link that launched the app is queued;
+  // the settings window above never subscribes.
+  if (_receivesLinks) {
+    AppLinks().uriLinkStream.listen(
+      linkIntake.add,
+      onError: (Object error, StackTrace stack) => FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stack,
+          library: 'seance link intake',
+        ),
+      ),
+    );
   }
   // macOS: the integrated titlebar goes in while the window is still
   // hidden, so it never shows the standard one first.

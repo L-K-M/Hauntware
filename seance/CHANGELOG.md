@@ -12,8 +12,8 @@
   and types the `cd` at the first prompt without pressing Enter, which
   needs shell integration; otherwise it says so and offers to copy the
   path. Up to 16 links wait behind the one under review, and the review
-  says how many more were ignored. The operating systems learn the
-  scheme in a following release.
+  says how many more were ignored. Android, iOS and macOS open these
+  links in Séance; Linux and Windows follow in a later release.
 - A double-click in the Files pane opens its row even while the machine
   is busy. The pane timed the two presses against the wall clock as it
   handled them, so a stalled moment in between lost the double-click and
