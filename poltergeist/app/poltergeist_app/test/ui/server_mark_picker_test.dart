@@ -27,10 +27,10 @@ void main() {
                 context,
                 current: const ServerGlyphMark(null),
                 accent: accent,
-                readImage: () async => null,
                 strings: PoltergeistServerAppearanceStrings(
                   AppLocalizations.of(context),
                 ),
+                readImage: () async => null,
               ),
               child: const Text('open'),
             ),

@@ -196,10 +196,12 @@ if [[ "$scope" != dart ]]; then
       packages/ghost_keystore packages/ghost_apk_update app/planchette_app
   )
 
-  # ---- Séance: app plus the vendored xterm fork (its tests are not
-  # discovered through the app suite).
+  # ---- Séance: the terminal package, the app, and the vendored xterm
+  # fork (its tests are not discovered through the app suite).
   (
     cd seance
+    (cd packages/seance_terminal && run flutter pub get && run flutter analyze \
+      && run flutter test && run dart format --set-exit-if-changed --output=none .)
     (cd app/seance_app && run flutter pub get && run flutter analyze && run flutter test)
     (cd third_party/xterm && run flutter pub get && run flutter test)
   )

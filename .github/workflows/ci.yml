@@ -51,8 +51,10 @@ env:
 # that need Docker (the self-hosted runners have no daemon; contracts'
 # actionlint is a container action), seance_dart (pinned sudo texts),
 # klabautermann_dart (its host-sampling and owner-only file tests need
-# a VM with systemd and a non-root user) and the timing measurements,
-# whose budgets assume GitHub's runner images.
+# a VM with systemd and a non-root user), poltergeist_dart (its native
+# archive I/O binds fstat, a symbol glibc exports only from 2.33 and
+# the runner images lack) and the timing measurements, whose budgets
+# assume GitHub's runner images.
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -313,7 +315,7 @@ jobs:
     name: Poltergeist pure-Dart packages (${{ matrix.os }})
     needs: affected
     if: needs.affected.outputs.poltergeist == 'true'
-    runs-on: ${{ matrix.os == 'ubuntu-latest' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -1424,6 +1426,19 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
+      # The shared terminal package first, one resolution at a time.
+      - name: Resolve terminal package dependencies
+        working-directory: seance/packages/seance_terminal
+        run: flutter pub get
+      - name: Analyze terminal package
+        working-directory: seance/packages/seance_terminal
+        run: flutter analyze
+      - name: Test terminal package
+        working-directory: seance/packages/seance_terminal
+        run: flutter test
+      - name: Check terminal package formatting
+        working-directory: seance/packages/seance_terminal
+        run: dart format --set-exit-if-changed --output=none .
       - name: Resolve app dependencies
         working-directory: seance/app/seance_app
         run: flutter pub get
@@ -1499,7 +1514,28 @@ jobs:
     needs: affected
     if: needs.affected.outputs.planchette == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    timeout-minutes: 35
+    # Cold linux legs: build ~25 min plus a ~2 GB Flatpak runtime fill
+    # that measures 250-300 KB/s on the runner box (run 39959324171 spent
+    # 100 min on org.gnome.Sdk alone), so they need ~2.5 h. The other
+    # targets never fill and keep 120. Bounded, not generous: tighten
+    # linux to ~75 once every runner container's cache is warm, or drop
+    # the download entirely by baking org.gnome.Sdk//50 and
+    # org.gnome.Platform//50 into the runner image. Only the self-hosted
+    # tool cache persists, so a timed-out run still advances the next;
+    # fork PRs on hosted runners re-download every run.
+    timeout-minutes: ${{ matrix.target == 'linux' && 240 || 120 }}
+    # One Flatpak bundle at a time repo-wide: the bundle pulls ~2.5 GB of
+    # GNOME runtimes, and four at once split the runner box's uplink and
+    # disk until none finishes. The group membership mirrors this job's
+    # runs-on routing above — only the legs on the shared self-hosted uplink join,
+    # fork legs on hosted runners keep a run-unique group. queue: max
+    # queues every waiter instead of cancelling the pending one (actionlint
+    # v1.7.12 predates the key; .github/actionlint.yaml scopes the
+    # exception).
+    concurrency:
+      group: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && 'flatpak-runtime-download' || format('planchette-client-{0}-{1}', matrix.target, github.run_id) }}
+      cancel-in-progress: false
+      queue: max
     strategy:
       fail-fast: false
       matrix:
@@ -1606,7 +1642,22 @@ jobs:
     needs: affected
     if: needs.affected.outputs.seance == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    timeout-minutes: 45   # first run downloads the Flutter toolchain
+    # Cold linux legs: build ~25 min plus a ~2 GB Flatpak runtime fill
+    # that measures 250-300 KB/s on the runner box (run 39959324171 spent
+    # 100 min on org.gnome.Sdk alone), so they need ~2.5 h. The other
+    # targets never fill and keep 120. Bounded, not generous: tighten
+    # linux to ~75 once every runner container's cache is warm, or drop
+    # the download entirely by baking org.gnome.Sdk//50 and
+    # org.gnome.Platform//50 into the runner image. Only the self-hosted
+    # tool cache persists, so a timed-out run still advances the next;
+    # fork PRs on hosted runners re-download every run.
+    timeout-minutes: ${{ matrix.target == 'linux' && 240 || 120 }}
+    # Serialize Flatpak bundle downloads with the other client jobs;
+    # see planchette_client.
+    concurrency:
+      group: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && 'flatpak-runtime-download' || format('seance-client-{0}-{1}', matrix.target, github.run_id) }}
+      cancel-in-progress: false
+      queue: max
     strategy:
       fail-fast: false
       matrix:
@@ -1746,7 +1797,22 @@ jobs:
     needs: affected
     if: needs.affected.outputs.poltergeist == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    timeout-minutes: 45   # first run downloads the Flutter toolchain
+    # Cold linux legs: build ~25 min plus a ~2 GB Flatpak runtime fill
+    # that measures 250-300 KB/s on the runner box (run 39959324171 spent
+    # 100 min on org.gnome.Sdk alone), so they need ~2.5 h. The other
+    # targets never fill and keep 120. Bounded, not generous: tighten
+    # linux to ~75 once every runner container's cache is warm, or drop
+    # the download entirely by baking org.gnome.Sdk//50 and
+    # org.gnome.Platform//50 into the runner image. Only the self-hosted
+    # tool cache persists, so a timed-out run still advances the next;
+    # fork PRs on hosted runners re-download every run.
+    timeout-minutes: ${{ matrix.target == 'linux' && 240 || 120 }}
+    # Serialize Flatpak bundle downloads with the other client jobs;
+    # see planchette_client.
+    concurrency:
+      group: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && 'flatpak-runtime-download' || format('poltergeist-client-{0}-{1}', matrix.target, github.run_id) }}
+      cancel-in-progress: false
+      queue: max
     strategy:
       fail-fast: false
       matrix:
@@ -1879,7 +1945,22 @@ jobs:
     needs: affected
     if: needs.affected.outputs.klabautermann == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    timeout-minutes: 45   # first run downloads the Flutter toolchain
+    # Cold linux legs: build ~25 min plus a ~2 GB Flatpak runtime fill
+    # that measures 250-300 KB/s on the runner box (run 39959324171 spent
+    # 100 min on org.gnome.Sdk alone), so they need ~2.5 h. The other
+    # targets never fill and keep 120. Bounded, not generous: tighten
+    # linux to ~75 once every runner container's cache is warm, or drop
+    # the download entirely by baking org.gnome.Sdk//50 and
+    # org.gnome.Platform//50 into the runner image. Only the self-hosted
+    # tool cache persists, so a timed-out run still advances the next;
+    # fork PRs on hosted runners re-download every run.
+    timeout-minutes: ${{ matrix.target == 'linux' && 240 || 120 }}
+    # Serialize Flatpak bundle downloads with the other client jobs;
+    # see planchette_client.
+    concurrency:
+      group: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && 'flatpak-runtime-download' || format('klabautermann-client-{0}-{1}', matrix.target, github.run_id) }}
+      cancel-in-progress: false
+      queue: max
     strategy:
       fail-fast: false
       matrix:

@@ -1341,35 +1341,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'sftp://${split.username}@${split.hostport}$suffix'",
     r"'/$path'",
   },
-  // Deep-link schemes, routes, query keys, path grammar, and display-safe
-  // endpoint composition. User-facing explanations live in ARB.
-  'lib/services/deep_links.dart': {
-    "'poltergeist'",
-    "'browse'",
-    r"r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'",
-    r"r'[.\u3002\uff0e\uff61]'",
-    "'unknown deep-link request'",
-    "'%'",
-    r"'${host.substring(0, zoneStart).toLowerCase()}'",
-    r"'${host.substring(zoneStart)}'",
-    "'/'",
-    "'serverId'",
-    "'path'",
-    "'port'",
-    "'host'",
-    "'username'",
-  },
-  // The outbound sibling-app URI grammar and programmer diagnostics.
+  // The deep-link queue's programmer diagnostic; the link grammar moved to
+  // seance_core (docs/design/suite-links.md section 5).
+  'lib/services/deep_links.dart': {"'unknown deep-link request'"},
+  // The Séance launcher's programmer diagnostic.
   'lib/services/seance_links.dart': {
-    "'seance'",
-    "'connect'",
-    "'A remote bookmark must carry a server reference.'",
-    "'serverId'",
-    "'A server reference must carry an id or identity.'",
-    "'host'",
-    "'port'",
-    r"'${identity.port}'",
-    "'username'",
     "'The Séance link handler refused the request.'",
   },
   // Machine-derived ids and endpoint labels shared with Quick Connect.

@@ -2,6 +2,7 @@
 # and the capture tool's runs against dash and bash), the `integration`
 # tag of the sshd fixture tests, the `runner-vm` tag of the runner VM's
 # systemd tests, the `runner-vm-s4` tag of spike S4's cases there, the
+# `runner-vm-s6` tag of spike S6's, the
 # `soak` tag of the fixture soak, the `docker` tag of the Docker host's
 # tests, which carry `integration` too, and the `inventory` tag of the
 # host write inventory's session. package:test
@@ -13,6 +14,7 @@ tags:
   integration:
   runner-vm:
   runner-vm-s4:
+  runner-vm-s6:
   soak:
   docker:
   inventory:

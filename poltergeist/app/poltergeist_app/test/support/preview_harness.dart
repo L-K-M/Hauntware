@@ -95,7 +95,11 @@ final class FakePreviewProducer implements PreviewProducer {
   /// Writes [bytes] to the spec's destination (the slot's temp file)
   /// and completes the ticket — the session's `slot.commit` then lands
   /// the bytes under the cache key.
+  ///
+  /// The session reports `producing` before its cache slot opens and
+  /// `start` runs, so wait for spec [index] rather than assume it.
   Future<void> complete(int index, List<int> bytes) async {
+    await untilTrue(() => specs.length > index);
     final spec = specs[index];
     await File(spec.destinationPath).writeAsBytes(bytes, flush: true);
     _completers['produce-$index']!.complete(

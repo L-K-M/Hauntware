@@ -42,6 +42,9 @@ dependencies:
   # a thin UI over it. Re-exports seance_protocol.
   seance_core:
     path: ../../packages/seance_core
+  # The terminal engine (docs/design/seance-terminal.md).
+  seance_terminal:
+    path: ../../packages/seance_terminal
   # Terminal widget — Séance's vendored fork of xterm.dart 4.0.0 (selection
   # fixes upstream's private gesture wiring makes unreachable from the app;
   # see third_party/xterm/PATCHES.md). libghostty swaps in behind
@@ -79,6 +82,9 @@ dependencies:
   share_plus: ^12.0.2
   # Opens the releases page in the browser when an update is available.
   url_launcher: ^6.3.0
+  # Delivers seance://connect links to the link intake (lib/services/
+  # link_intake.dart). Pinned to the version Poltergeist runs.
+  app_links: 7.2.1
   # Persists/restores the desktop window's frame, monitor, and maximized/
   # full-screen state across launches (lib/services/window_state.dart).
   window_manager: ^0.5.2
