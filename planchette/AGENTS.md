@@ -28,7 +28,10 @@ packages/
                           stack; outside the workspace, Flutter only
   ghost_marks/            server badges, accents and glyph tables shared by
                           Séance and Poltergeist, over seance_protocol;
-                          outside the workspace
+                          outside the workspace; no platform picker: each
+                          app passes the mark picker its image reader
+  ghost_marks_picker/     that reader over file_picker 11, for Séance and
+                          Poltergeist; outside the workspace
   ghost_theme/            the editable theme palette, its stored/pasted JSON
                           form, the shipped presets, the theme builders and
                           chrome extension, the per-app style and codec
@@ -79,6 +82,7 @@ dart test    packages/planchette_core
 (cd packages/ghost_ui && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_fonts && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_marks && flutter pub get && flutter analyze && flutter test)
+(cd packages/ghost_marks_picker && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_theme && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_servers && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_keystore && flutter pub get && flutter analyze && flutter test)

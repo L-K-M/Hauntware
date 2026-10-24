@@ -175,13 +175,15 @@ if [[ "$scope" != dart ]]; then
     # planchette_core is pure Dart; the rest resolve through Flutter.
     (cd packages/planchette_core && run dart pub get)
     for dir in packages/ghost_ui packages/ghost_fonts packages/planchette_editor \
-               packages/ghost_desktop packages/ghost_marks packages/ghost_theme \
+               packages/ghost_desktop packages/ghost_marks \
+               packages/ghost_marks_picker packages/ghost_theme \
                packages/ghost_servers packages/ghost_keystore \
                packages/ghost_apk_update app/planchette_app; do
       (cd "$dir" && run flutter pub get)
     done
     for dir in packages/ghost_ui packages/ghost_fonts packages/planchette_editor \
-               packages/ghost_desktop packages/ghost_marks packages/ghost_theme \
+               packages/ghost_desktop packages/ghost_marks \
+               packages/ghost_marks_picker packages/ghost_theme \
                packages/ghost_servers packages/ghost_keystore \
                packages/ghost_apk_update app/planchette_app; do
       (cd "$dir" && run flutter analyze && run flutter test)
@@ -189,7 +191,8 @@ if [[ "$scope" != dart ]]; then
     run dart format --set-exit-if-changed --output=none \
       packages/planchette_core packages/planchette_editor \
       packages/ghost_ui packages/ghost_fonts packages/ghost_desktop \
-      packages/ghost_marks packages/ghost_theme packages/ghost_servers \
+      packages/ghost_marks packages/ghost_marks_picker packages/ghost_theme \
+      packages/ghost_servers \
       packages/ghost_keystore packages/ghost_apk_update app/planchette_app
   )
 

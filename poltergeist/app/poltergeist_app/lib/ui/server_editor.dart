@@ -16,6 +16,8 @@ import 'package:flutter/services.dart';
 import 'package:ghost_marks/ghost_marks.dart'
     as marks
     show ServerAppearanceStrings, showServerColorPicker, showServerMarkPicker;
+import 'package:ghost_marks_picker/ghost_marks_picker.dart'
+    show pickServerMarkImage;
 import 'package:ghost_servers/ghost_servers.dart';
 import 'package:ghost_servers/server_config_draft.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
@@ -1054,6 +1056,7 @@ class _ServerEditorState extends State<_ServerEditor> {
       current: _mark,
       accent: _tint,
       strings: widget.appearanceStrings,
+      readImage: pickServerMarkImage,
     );
     if (chosen == null || !mounted) return;
     setState(() => _mark = chosen);

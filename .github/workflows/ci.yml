@@ -51,8 +51,10 @@ env:
 # that need Docker (the self-hosted runners have no daemon; contracts'
 # actionlint is a container action), seance_dart (pinned sudo texts),
 # klabautermann_dart (its host-sampling and owner-only file tests need
-# a VM with systemd and a non-root user) and the timing measurements,
-# whose budgets assume GitHub's runner images.
+# a VM with systemd and a non-root user), poltergeist_dart (its native
+# archive I/O binds fstat, a symbol glibc exports only from 2.33 and
+# the runner images lack) and the timing measurements, whose budgets
+# assume GitHub's runner images.
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -313,7 +315,7 @@ jobs:
     name: Poltergeist pure-Dart packages (${{ matrix.os }})
     needs: affected
     if: needs.affected.outputs.poltergeist == 'true'
-    runs-on: ${{ matrix.os == 'ubuntu-latest' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -1339,6 +1341,7 @@ jobs:
           (cd planchette/packages/planchette_editor && flutter pub get)
           (cd planchette/packages/ghost_desktop && flutter pub get)
           (cd planchette/packages/ghost_marks && flutter pub get)
+          (cd planchette/packages/ghost_marks_picker && flutter pub get)
           (cd planchette/packages/ghost_theme && flutter pub get)
           (cd planchette/packages/ghost_servers && flutter pub get)
           (cd planchette/packages/ghost_keystore && flutter pub get)
@@ -1366,6 +1369,11 @@ jobs:
           flutter test --no-pub
       - name: Shared server appearance
         working-directory: planchette/packages/ghost_marks
+        run: |
+          flutter analyze --no-pub
+          flutter test --no-pub
+      - name: Shared mark image picker
+        working-directory: planchette/packages/ghost_marks_picker
         run: |
           flutter analyze --no-pub
           flutter test --no-pub
@@ -1401,7 +1409,8 @@ jobs:
           planchette/packages/planchette_core planchette/packages/planchette_editor
           planchette/packages/ghost_ui planchette/packages/ghost_fonts
           planchette/packages/ghost_desktop
-          planchette/packages/ghost_marks planchette/packages/ghost_theme
+          planchette/packages/ghost_marks planchette/packages/ghost_marks_picker
+          planchette/packages/ghost_theme
           planchette/packages/ghost_servers planchette/packages/ghost_keystore
           planchette/packages/ghost_apk_update planchette/app/planchette_app
 
