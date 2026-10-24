@@ -419,7 +419,14 @@ Proposals awaiting the owner close the section; they are not decisions.
   shared handlers and never seals a dirty record; a test proves it. Writes
   arrive in v1 with the shared editor and the record kind. Accepted by the
   owner on 2026-10-10. *Rejected:* MVP writes (fleet-corruption risk while
-  the extraction matures).
+  the extraction matures). *As built in v1 (M5 plan M05), pull-only ends:*
+  `engineSyncPushPolicy` is `PushPolicy.normal`. The catalog writes
+  (`SaveServer`, `DeleteServer`, `SetServerPrefs`, `PutRule`,
+  `RemoveRule`, 10.1) run on the engine's sync chain with the vault held,
+  answer `CatalogWritten` or `CatalogWriteRefused`, and queue a round,
+  which pushes the sealed records in batches within the limits the pull
+  advertised. The app's `catalog_writes_test.dart` replaced the pull-only
+  test: it names the requests that write.
 - **D15. Host keys: quarantine; publication once Séance #56 is fixed.**
   `TofuVerifier` never auto-repins. Pulled pins go through the quarantine
   handler. Séance's missing conflict check for pulled pins (#56) is fixed in F3
@@ -2330,8 +2337,9 @@ set, and it never opens records for the passphrase trial, since the v1.x
 `sudo` and `registry` types carry credentials. The engine sends each
 server's preferences as `ServerPrefsChanged` after its fleet, then only
 changes, a null for a removal, and every succeeded sync status carries
-the prefix budget. Retracting an excluded server's `pref` is written but
-refused until pushes are on (M05).
+the prefix budget. Since M05, `SetServerPrefs` seals a `pref` record or
+its removal, kept in the record store at once; saving a server newly
+excluded from sync, or deleting one, seals its `pref` removal.
 
 ### 4.9 What never syncs
 
@@ -5573,6 +5581,7 @@ shows there.
 | Requests (UI to engine) | Events (engine to UI) |
 |---|---|
 | `EnrollSync(baseUrl, username, password, encryptionPassphrase)`, `RunSyncRound` | `CatalogReplaced(entries)`, `SyncStatus(phase, operation, account, failure, passphraseUnverified)` |
+| `ReadServerDraft(requestId, serverId)`; `SaveServer(requestId, draft, credential?)`, `DeleteServer(requestId, serverId)`, `SetServerPrefs(requestId, serverId, prefs?)`, `PutRule(requestId, ruleId, rule, target?)`, `RemoveRule(requestId, ruleId)` (M05) | `ServerDraftRead(requestId, draft?)`; `CatalogReplaced`, then `CatalogWritten(requestId, serverId?, credentialWritten)` or `CatalogWriteRefused(requestId, failure, detail?)`, then the round's `SyncStatus` |
 | `AnswerKeystore(requestId, result)` (D62) | `KeystoreRequest(requestId, operation)`: the engine asks the app for the OS keystore |
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)` (K41, 4.7) | `CatalogReplaced(entries)` with each synced entry's `endpoint`, after `RequestRejected` when a pin could not be saved; `EndpointChanged(serverId)` when a sync changes a confirmed endpoint |
