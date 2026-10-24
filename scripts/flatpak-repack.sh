@@ -14,6 +14,20 @@
 #   $work/stage  ->  flatpak_build: flatpak-builder, then the smoke check
 #                    inside the built sandbox
 
+# The Flathub runtimes this pulls (org.gnome.Sdk and the GL extension,
+# ~2 GB) make the bundle the longest step of a CI job. Keep the flatpak
+# user installation on the runner's tool cache — the durable volume the
+# Flutter toolchain and pub cache already use — so one download serves
+# every later job on that runner instead of one per job. A local build
+# has no tool cache and keeps flatpak's own default. The directory needs
+# no lock: it is one per runner, and a runner executes one job at a time,
+# so no two jobs ever write the same installation. The ci.yml
+# flatpak-runtime-download concurrency group serializes the downloads
+# for the shared uplink, not to protect this directory.
+if [[ -z "${FLATPAK_USER_DIR:-}" && -n "${RUNNER_TOOL_CACHE:-}" ]]; then
+  export FLATPAK_USER_DIR="$RUNNER_TOOL_CACHE/flatpak-user"
+fi
+
 # The smoke check run inside the built sandbox, as `sh -c` with $1 the
 # manifest's command and $2 the prefix (/app). The command is the .deb's
 # wrapper script, so the check follows its exec line to the real binary:

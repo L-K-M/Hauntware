@@ -282,14 +282,25 @@ class XtermTerminalEngine implements TerminalEngine {
         // Read before the phase is overwritten below: only an Enter at an
         // accepting prompt submits a *command*. An Enter while a command is
         // already executing is input to that program, not a new command.
-        final atPrompt =
-            shellIntegration.value.phase == TerminalPromptPhase.acceptingInput;
+        final phase = shellIntegration.value.phase;
+        final atPrompt = phase == TerminalPromptPhase.acceptingInput;
+        // Once the shell has shown an integrated prompt, `executing` is
+        // known rather than assumed: the line goes to a running program (a
+        // password prompt, a REPL) and is no command to suggest. That also
+        // covers a nested `ssh` or `su` without integration, whose own
+        // password prompt cannot be told from its commands, and a PS2
+        // continuation line, which was only ever a fragment. A line typed
+        // after `133;D` is not dropped: that marker leaves the phase `done`.
+        // Without integration every Enter leaves the phase `executing`, so
+        // that case keeps reporting.
+        final toProgram =
+            _hasAcceptedPrompt && phase == TerminalPromptPhase.executing;
         _submittedSincePrompt = true;
         shellIntegration.value = shellIntegration.value.copyWith(
           phase: TerminalPromptPhase.executing,
           inputSincePrompt: true,
         );
-        _submitPending(atPrompt: atPrompt);
+        _submitPending(atPrompt: atPrompt, toProgram: toProgram);
       } else if (r == 0x7f || r == 0x08) {
         if (_pendingInput.isNotEmpty) {
           _pendingInput = _pendingInput.substring(0, _pendingInput.length - 1);
@@ -309,9 +320,11 @@ class XtermTerminalEngine implements TerminalEngine {
   /// Enter arrived. Only then is the line a command (see [activeCommand]);
   /// `acceptingInput` is only ever set from a `133;B` marker, so this gate
   /// also implies the integration that will later deliver the clearing `D`.
-  void _submitPending({required bool atPrompt}) {
+  /// [toProgram] — the line was typed into a running program, so it is not
+  /// reported at all.
+  void _submitPending({required bool atPrompt, required bool toProgram}) {
     final line = _pendingInput.trim();
-    if (line.isNotEmpty) {
+    if (line.isNotEmpty && !toProgram) {
       onCommand?.call(line);
       if (atPrompt) activeCommand.value = line;
     }

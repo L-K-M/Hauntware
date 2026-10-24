@@ -427,6 +427,22 @@ int nextUpdatedAt(int? existingUpdatedAt, {required int now});
 `seance_protocol` has no `meta` dependency (its pubspec), and the
 functions become production API for the adapters and the engine.
 
+As built in F5a-1b and F5a-1c, the API differs from the sketch above in
+these ways:
+
+- `GhostServerEditorDelegate.serverGroups` is `List<String>`: the distinct
+  names to offer, in display order. Poltergeist's session answers
+  `existingServerGroups`, so the dedupe stays in `seance_protocol`.
+- The form keeps the protocol's `AuthMethod` for its dropdown and maps it
+  at the draft's edge. Poltergeist's editor test finds the dropdown by that
+  type, and the form already uses the protocol's colour, icon and mark
+  types inside.
+- `GhostServerEditorStrings` also carries `testStrings` and `logStrings`
+  for the report the form mounts.
+- The mark picker's `ServerAppearanceStrings` comes in as a form parameter,
+  since `ghost_servers` declares `ghost_marks` only in F5a-2a. The form
+  also takes `onCopyError` for the report's transcript.
+
 ## 6. Per-app adapters
 
 Poltergeist (`lib/ui/server_editor.dart`, which keeps its path and the
