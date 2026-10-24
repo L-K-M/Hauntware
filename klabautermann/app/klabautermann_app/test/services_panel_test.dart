@@ -9,9 +9,11 @@ import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/actions/action_entry.dart';
 import 'package:klabautermann_app/ui/logs/log_view.dart';
+import 'package:klabautermann_app/ui/processes_panel.dart' show kRevealDuration;
 import 'package:klabautermann_app/ui/server_safety.dart';
 import 'package:klabautermann_app/ui/services_panel.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:planchette_editor/planchette_editor.dart' show PlanchetteEditor;
 
 import 'support/charts.dart'
     show goldenFontFamily, goldensCompareHere, loadGoldenFonts;
@@ -117,6 +119,19 @@ final class _Panel {
     for (final close in engine.sentOfType<CloseStream>())
       (close as CloseStream).streamId,
   ];
+
+  /// Answers the latest unit read with [payload].
+  Future<void> answerUnit(WidgetTester tester, UnitPayload payload) {
+    final query = engine.sentOfType<UnitQuery>().cast<UnitQuery>().last;
+    return emit(
+      tester,
+      UnitQueryResult(
+        serverId: query.serverId,
+        requestId: query.requestId,
+        payload: payload,
+      ),
+    );
+  }
 
   Future<void> report(WidgetTester tester, LogStreamStatus status) =>
       emit(tester, LogStreamState(opens.last.streamId, status));
@@ -565,8 +580,14 @@ void main() {
     await _open(tester, 'cron.service');
     expect(_row('backup.service'), findsNothing);
 
-    // The keys reach the page's close button, not the hidden table.
+    // The keys stay on the page, never reaching the hidden table: down
+    // moves to the page's own controls, and up comes back to its close
+    // button.
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    expect(_row('backup.service'), findsNothing);
+    expect(panel.opened, ['cron.service']);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
     await tester.sendKeyEvent(LogicalKeyboardKey.space);
     await tester.pumpAndSettle();
     expect(panel.opened, ['cron.service']);
@@ -731,6 +752,19 @@ void main() {
         final panel = await _pump(tester, brightness: brightness);
         await panel.sample(tester);
         await _open(tester, 'nginx.service');
+        await panel.answerUnit(
+          tester,
+          const UnitResourcesPayload(
+            UnitResources(
+              memoryBytes: 12 * 1024 * 1024,
+              cpu: Duration(milliseconds: 4200),
+              tasks: 3,
+              restarts: 0,
+              mainPid: 812,
+              // Shown in local time, which a golden cannot pin.
+            ),
+          ),
+        );
         await panel.readLines(tester);
         await expectLater(
           find.byType(ServicesPanel),
@@ -820,4 +854,244 @@ void main() {
       expect(find.widgetWithText(OutlinedButton, 'Restart'), findsNothing);
     });
   });
+
+  group('the v1 unit page (SVC-05 to SVC-08)', () {
+    testWidgets('reads the unit\'s resources beside its states', (
+      tester,
+    ) async {
+      final panel = await _pump(tester);
+      await panel.sample(tester);
+      await _open(tester, 'nginx.service');
+
+      final query = panel.engine.sentOfType<UnitQuery>().cast<UnitQuery>();
+      expect((query.single.query as UnitResourcesQuery).unit, 'nginx.service');
+      await panel.answerUnit(
+        tester,
+        const UnitResourcesPayload(
+          UnitResources(memoryBytes: 2 * 1024 * 1024, tasks: 4, restarts: 1),
+        ),
+      );
+      expect(find.text('2 MiB'), findsOneWidget);
+      expect(find.text('Tasks'), findsOneWidget);
+      expect(find.text('4'), findsOneWidget);
+
+      // A unit read that fails says why in the same place.
+      await _open(tester, 'cron.service');
+      await panel.answerUnit(
+        tester,
+        const UnitQueryFailed(UnitQueryFailure.notFound),
+      );
+      expect(find.text('The manager has no such unit.'), findsOneWidget);
+    });
+
+    testWidgets('the unit file shows masked, reveals for a while and hides '
+        'again', (tester) async {
+      final panel = await _pump(tester);
+      await panel.sample(tester);
+      await _open(tester, 'nginx.service');
+
+      await tester.tap(find.byTooltip('Show unit file'));
+      await tester.pumpAndSettle();
+      final query = panel.engine.sentOfType<UnitQuery>().cast<UnitQuery>().last;
+      expect((query.query as UnitFileQuery).unit, 'nginx.service');
+      await panel.answerUnit(
+        tester,
+        UnitFilePayload([
+          MaskedValue.plain('[Service]\nEnvironment='),
+          MaskedValue.secret('TOKEN=abc'),
+          MaskedValue.plain('\n'),
+        ]),
+      );
+
+      String text() => tester
+          .widget<PlanchetteEditor>(find.byType(PlanchetteEditor))
+          .controller
+          .text
+          .text;
+      expect(find.text('nginx.service file'), findsOneWidget);
+      expect(text(), '[Service]\nEnvironment=********\n');
+      await tester.tap(find.text('Reveal values'));
+      await tester.pumpAndSettle();
+      expect(text(), '[Service]\nEnvironment=TOKEN=abc\n');
+
+      // The reveal ends by itself after kRevealDuration.
+      await tester.pump(kRevealDuration);
+      await tester.pumpAndSettle();
+      expect(text(), '[Service]\nEnvironment=********\n');
+      expect(find.text('Reveal values'), findsOneWidget);
+
+      await tester.tap(find.text('Reveal values'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Hide values'));
+      await tester.pumpAndSettle();
+      expect(text(), '[Service]\nEnvironment=********\n');
+    });
+
+    testWidgets('the unit file dialog fits a window narrower than its size', (
+      tester,
+    ) async {
+      const window = Size(700, 560);
+      final panel = await _pump(tester, size: window);
+      await panel.sample(tester);
+      await _open(tester, 'nginx.service');
+
+      await tester.tap(find.byTooltip('Show unit file'));
+      await tester.pumpAndSettle();
+      await panel.answerUnit(
+        tester,
+        UnitFilePayload([MaskedValue.plain('[Service]\n')]),
+      );
+      expect(tester.takeException(), isNull);
+      final dialog = tester.getRect(find.byType(Dialog));
+      expect(Offset.zero & window, _contains(dialog));
+      final close = tester.getRect(find.byTooltip('Close'));
+      expect(dialog, _contains(close));
+    });
+
+    testWidgets('"More" plans the v1 verbs where actions are allowed', (
+      tester,
+    ) async {
+      final panel = await _pump(
+        tester,
+        safety: const SafetyPolicy(
+          servers: {'srv-1': ServerSafety(management: true)},
+        ),
+      );
+      await panel.sample(tester);
+      await _open(tester, 'nginx.service');
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'More'));
+      await tester.pumpAndSettle();
+      for (final label in [
+        'Enable',
+        'Disable',
+        'Mask',
+        'Unmask',
+        'Reset failed state',
+      ]) {
+        expect(find.text(label), findsOneWidget, reason: label);
+      }
+      await tester.tap(find.text('Enable'));
+      await tester.pump();
+
+      final plan = panel.engine.sentOfType<PlanAction>().cast<PlanAction>();
+      final intent = plan.single.intent as UnitAction;
+      expect(
+        (intent.unit, intent.verb),
+        ('nginx.service', SystemctlVerb.enable),
+      );
+    });
+  });
+
+  group('your own units (SVC-09)', () {
+    testWidgets('"Yours" reads the user manager while it shows, and its '
+        'unit acts and reads in that manager', (tester) async {
+      final panel = await _pump(
+        tester,
+        safety: const SafetyPolicy(
+          servers: {'srv-1': ServerSafety(management: true)},
+        ),
+      );
+      await panel.sample(tester);
+
+      await tester.tap(find.text('Yours'));
+      await tester.pumpAndSettle();
+      final subscribe = panel.engine
+          .sentOfType<Subscribe>()
+          .cast<Subscribe>()
+          .last;
+      expect(subscribe.streams, {SampleStream.userUnits});
+      // The panel's own id, so another panel on the server cannot end it.
+      expect(subscribe.subscriptionId, startsWith('services.user-'));
+      expect(find.text('Waiting for the first list of units…'), findsOneWidget);
+
+      await panel.emit(
+        tester,
+        Sample(
+          serverId: 'srv-1',
+          stream: SampleStream.userUnits,
+          seq: 9,
+          at: DateTime.utc(2026, 10, 15, 12),
+          result: _result(
+            units: [
+              _unit('syncthing.service', 'active', 'running', 'Syncthing'),
+            ],
+          ),
+        ),
+      );
+      expect(_row('syncthing.service'), findsOneWidget);
+      expect(_row('cron.service'), findsNothing);
+
+      await _open(tester, 'syncthing.service');
+      final query = panel.engine.sentOfType<UnitQuery>().cast<UnitQuery>();
+      expect(query.last.query.scope, UnitScope.user);
+      expect(
+        find.text('The logs of your own units are not shown here yet.'),
+        findsOneWidget,
+      );
+      expect(panel.opens, isEmpty);
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Restart'));
+      await tester.pump();
+      final plan = panel.engine.sentOfType<PlanAction>().cast<PlanAction>();
+      expect((plan.single.intent as UnitAction).scope, UnitScope.user);
+      panel.engine.emit(
+        ActionRefused(ActionRefusalReason.noLink, intent: plan.single.intent),
+      );
+      await tester.pumpAndSettle();
+
+      // Back to the system's units: the user manager is read no more.
+      await tester.tap(find.text('System'));
+      await tester.pumpAndSettle();
+      expect(
+        panel.engine
+            .sentOfType<Unsubscribe>()
+            .cast<Unsubscribe>()
+            .last
+            .subscriptionId,
+        subscribe.subscriptionId,
+      );
+      expect(_row('cron.service'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 10));
+    });
+
+    testWidgets('a user manager that cannot be reached says why', (
+      tester,
+    ) async {
+      final panel = await _pump(tester);
+      await tester.tap(find.text('Yours'));
+      await tester.pumpAndSettle();
+      await panel.emit(
+        tester,
+        Sample(
+          serverId: 'srv-1',
+          stream: SampleStream.userUnits,
+          seq: 9,
+          at: DateTime.utc(2026, 10, 15, 12),
+          result: const CollectorUnavailable(
+            CollectorUnavailableReason.error,
+            detail: 'Failed to connect to bus: No medium found',
+          ),
+        ),
+      );
+      expect(
+        find.textContaining('Your own units could not be read.'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Failed to connect to bus', findRichText: true),
+        findsOneWidget,
+      );
+    });
+  });
 }
+
+/// Matches a [Rect] that lies wholly inside the expected one.
+Matcher _contains(Rect inner) => predicate<Rect>(
+  (outer) =>
+      outer.left <= inner.left &&
+      outer.top <= inner.top &&
+      outer.right >= inner.right &&
+      outer.bottom >= inner.bottom,
+  'contains $inner',
+);

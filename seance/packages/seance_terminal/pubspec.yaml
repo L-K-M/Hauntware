@@ -1,0 +1,38 @@
+name: seance_terminal
+description: >-
+  Séance's terminal for the apps that host a shell: the xterm-backed
+  engine, the keyboard bar, the appearance mapping, and the
+  byte-transport and paste seams
+  (docs/design/seance-terminal.md). A Flutter package outside the
+  pure-Dart Séance workspace.
+version: 1.9.2
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+  flutter: '>=3.47.2'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # The bundled terminal and code faces, and the family's monospace stack.
+  ghost_fonts:
+    path: ../../../planchette/packages/ghost_fonts
+  # ThemeTerminalColors, a theme's own terminal block.
+  ghost_theme:
+    path: ../../../planchette/packages/ghost_theme
+  # contrastRatio, for the derived search-highlight text colour.
+  ghost_ui:
+    path: ../../../planchette/packages/ghost_ui
+  # TerminalEngine, TerminalSize and the change-directory builder the
+  # engine implements and calls.
+  seance_core:
+    path: ../seance_core
+  # Séance's fork of xterm.dart; vendored, not owned.
+  xterm:
+    path: ../../third_party/xterm
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0

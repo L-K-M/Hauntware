@@ -1,6 +1,7 @@
 import 'dart:async' show unawaited;
 import 'dart:io' show Platform;
 
+import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -8,6 +9,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'app_state.dart';
 import 'services/app_services.dart';
 import 'services/app_lock.dart';
+import 'services/link_intake.dart';
 import 'services/macos_titlebar.dart';
 import 'services/secure_master_key.dart';
 import 'services/settings_window.dart';
@@ -19,10 +21,21 @@ import 'ui/adaptive_shell.dart';
 import 'ui/app_menus.dart';
 import 'ui/host_key_dialog.dart';
 import 'ui/keyboard_interactive_dialog.dart';
+import 'ui/link_review_dialog.dart';
 import 'ui/macos_toolbar_band.dart';
 import 'ui/top_toast.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+/// `seance://connect` links (docs/design/suite-links.md section 6). Links
+/// queue here from launch and are reviewed once the app has loaded.
+final SeanceLinkIntake linkIntake = SeanceLinkIntake();
+
+/// The platforms that register the `seance` scheme (section 7): every
+/// native one. On Linux and Windows the runner forwards a second launch to
+/// the running Séance, so a link never starts a second one writing the
+/// same stores.
+bool get _receivesLinks => !kIsWeb;
 
 /// Opens Settings in its own window, on desktop once the app has started.
 /// Null on mobile, where Settings is a route, and before bootstrap finishes.
@@ -35,6 +48,20 @@ Future<void> main(List<String> args) async {
   if (args.contains(settingsWindowArgument)) {
     await runSettingsWindow();
     return;
+  }
+  // Before the first frame, so a link that launched the app is queued;
+  // the settings window above never subscribes.
+  if (_receivesLinks) {
+    AppLinks().uriLinkStream.listen(
+      linkIntake.add,
+      onError: (Object error, StackTrace stack) => FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stack,
+          library: 'seance link intake',
+        ),
+      ),
+    );
   }
   // macOS: the integrated titlebar goes in while the window is still
   // hidden, so it never shows the standard one first.
@@ -101,6 +128,7 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   AppState? _state;
   AppState? _loadingState;
   Object? _error;
+  SeanceLinkHandler? _linkHandler;
 
   /// The theme until the state exists to say otherwise: the settings are
   /// read during bootstrap, so the spinner is drawn in the default theme.
@@ -118,6 +146,8 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    final linkHandler = _linkHandler;
+    if (linkHandler != null) linkIntake.deactivate(linkHandler);
     _bootAppearance.dispose();
     super.dispose();
   }
@@ -132,7 +162,15 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   Future<void> _start() async {
     try {
       final state = await (widget.initOverride ?? _init)();
-      if (mounted) setState(() => _state = state);
+      if (!mounted) return;
+      setState(() => _state = state);
+      // Bound only once the app's own window can carry the review.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final handler = SeanceAppLinkHandler(state, navigatorKey);
+        _linkHandler = handler;
+        linkIntake.activate(handler);
+      });
     } catch (e) {
       if (mounted) setState(() => _error = e);
     }
