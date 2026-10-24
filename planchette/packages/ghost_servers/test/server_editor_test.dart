@@ -441,11 +441,11 @@ void main() {
       addTearDown(tester.view.reset);
       await openEditor(tester);
 
-      final test = find.widgetWithText(OutlinedButton, 'Test connection');
+      final testButton = find.widgetWithText(OutlinedButton, 'Test connection');
       await scrollTo(tester, saveButton);
       expect(tester.takeException(), isNull);
       expect(
-        tester.getBottomLeft(test).dy,
+        tester.getBottomLeft(testButton).dy,
         lessThanOrEqualTo(tester.getTopLeft(saveButton).dy),
       );
     });

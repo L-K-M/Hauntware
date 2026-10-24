@@ -77,6 +77,33 @@ void main() {
     );
   });
 
+  test("the line keeps the plan's cleanup, so a failed step still removes "
+      'its temp file (M5 M20a)', () {
+    final cleanup = ShellStep(['rm', '-f', '--', '/srv/.app.conf.tmp']);
+    final plain = OperationPlan(
+      intent: const UnitAction(
+        'srv-1',
+        unit: 'nginx.service',
+        verb: SystemctlVerb.restart,
+      ),
+      kind: OperationKind.restart,
+      targetName: 'nginx.service',
+      steps: [
+        ShellStep(['systemctl', 'restart', 'nginx.service']),
+      ],
+      requiredLevel: RequiredLevel.login,
+      runner: const RunnerFacts(identity: 'deploy'),
+      cleanup: [cleanup],
+    );
+
+    final plan = withHostAuditLine(plain, enabled: true, deviceName: 'd');
+
+    expect(plan, isNot(same(plain)));
+    expect(plan.cleanup, [same(cleanup)]);
+    expect(plain.steps, hasLength(1));
+    expect(plain.cleanup, [same(cleanup)]);
+  });
+
   test('a blank device name logs the line without one', () {
     final plan = withHostAuditLine(_plan(), enabled: true, deviceName: ' ');
 

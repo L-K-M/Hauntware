@@ -11,6 +11,7 @@ const _firstRunCardKey = 'klabautermann.coverage.firstRunCardDismissed';
 const _rootNoticeKey = 'klabautermann.docker.rootEquivalenceNoticeDismissed';
 const _announceBandsKey = 'klabautermann.accessibility.announceThresholdBands';
 const _syncSecretsKey = 'klabautermann.sync.secrets';
+const _deviceNameKey = 'klabautermann.audit.deviceName';
 const _overridesKey = 'klabautermann.docker.endpointOverrides';
 const _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
 const _monitorSetKey = 'klabautermann.monitorSet';
@@ -443,6 +444,28 @@ void main() {
         isFalse,
         reason: 'a damaged value syncs nothing',
       );
+    });
+
+    test('keeps a device name across reloads, and none reads as the '
+        'default (M5 plan Q6)', () async {
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.deviceName, isNull);
+      await store.setDeviceName('Laptop');
+      expect((await DeviceSettingsStore.open(file)).deviceName, 'Laptop');
+
+      await store.setDeviceName(null);
+      expect(document(), {_versionKey: 1, _deviceIdKey: 'device-a'});
+
+      for (final damaged in [3, '  ']) {
+        writeDocument({
+          _versionKey: 1,
+          _deviceIdKey: 'device-a',
+          _deviceNameKey: damaged,
+        });
+        expect((await DeviceSettingsStore.open(file)).deviceName, isNull);
+      }
     });
 
     test(

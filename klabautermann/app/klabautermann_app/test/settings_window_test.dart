@@ -13,6 +13,7 @@ import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/sync_secrets_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
+import 'package:klabautermann_app/controllers/device_name.dart';
 import 'package:klabautermann_app/controllers/docker_notice_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitor_set.dart';
@@ -128,16 +129,28 @@ void main() {
     return syncSecrets;
   }
 
+  /// A device name applying to nothing, disposed after the test.
+  DeviceNameController newDeviceName() {
+    final deviceName = DeviceNameController(
+      fallback: 'Klabautermann on Linux',
+      apply: (_) {},
+    );
+    addTearDown(deviceName.dispose);
+    return deviceName;
+  }
+
   SettingsWindowHost newHost(
     AppearanceSettings appearance, [
     AnnouncementSettings? announcements,
     MonitorSetSettings? monitorSet,
     SafetySettings? safety,
     SyncSecretsSettings? syncSecrets,
+    DeviceNameSettings? deviceName,
   ]) {
     final host = SettingsWindowHost(
       appearance: appearance,
       announcements: announcements ?? AnnouncementController(),
+      deviceName: deviceName ?? newDeviceName(),
       appVersion: _appVersion,
       monitorSet: monitorSet ?? newFleet().monitorSettings,
       safety: safety ?? newSafety(),
@@ -241,6 +254,7 @@ void main() {
             platform,
             appearance: appearance,
             announcements: announcements,
+            deviceName: newDeviceName(),
             appVersion: _appVersion,
             monitorSet: newFleet().monitorSettings,
             safety: newSafety(),
@@ -259,6 +273,7 @@ void main() {
           platform,
           appearance: appearance,
           announcements: announcements,
+          deviceName: newDeviceName(),
           appVersion: _appVersion,
           monitorSet: newFleet().monitorSettings,
           safety: newSafety(),
@@ -290,6 +305,8 @@ void main() {
     late List<SafetyPolicy> applied;
     late SyncSecretsController syncSecrets;
     late List<bool> syncApplied;
+    late DeviceNameController deviceName;
+    late List<String> namesApplied;
     late SettingsWindowHost host;
 
     setUp(() {
@@ -318,12 +335,19 @@ void main() {
       syncApplied = [];
       syncSecrets = SyncSecretsController(apply: syncApplied.add);
       addTearDown(syncSecrets.dispose);
+      namesApplied = [];
+      deviceName = DeviceNameController(
+        fallback: 'Klabautermann on Linux',
+        apply: namesApplied.add,
+      );
+      addTearDown(deviceName.dispose);
       host = newHost(
         appearance,
         announcements,
         fleet.monitorSettings,
         safety,
         syncSecrets,
+        deviceName,
       );
     });
 
@@ -580,6 +604,51 @@ void main() {
       expect(windowSwitch(), isTrue);
     });
 
+    testWidgets('the General tab\'s device name changes the app\'s through '
+        'the link, and blank means the default (M5 plan Q6)', (tester) async {
+      final remote = await pumpBothWindows(
+        tester,
+        appearance,
+        tab: SettingsTab.general,
+      );
+      Finder windowField() => find.descendant(
+        of: find.byType(SettingsWindowApp),
+        matching: find.byType(TextField),
+      );
+      expect(remote.deviceName.value, 'Klabautermann on Linux');
+      await tester.scrollUntilVisible(
+        windowField(),
+        100,
+        scrollable: find
+            .descendant(
+              of: find.descendant(
+                of: find.byType(SettingsWindowApp),
+                matching: find.byType(GeneralTab),
+              ),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+
+      await tester.enterText(windowField(), '  Laptop  ');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+      expect(deviceName.value, 'Laptop');
+      expect(namesApplied, ['Klabautermann on Linux', 'Laptop']);
+      expect(remote.deviceName.value, 'Laptop');
+
+      await tester.enterText(windowField(), ' ');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+      expect(deviceName.value, 'Klabautermann on Linux');
+      expect(
+        tester.widget<TextField>(windowField()).controller!.text,
+        'Klabautermann on Linux',
+      );
+    });
+
     testWidgets('the Sync tab\'s switch changes the app\'s sync passwords '
         'through the link (SYN-02)', (tester) async {
       final remote = await pumpBothWindows(
@@ -796,6 +865,14 @@ void main() {
       expect(
         roundTrip(const AnnouncementNotSavedException('disk full')),
         isA<AnnouncementNotSavedException>().having(
+          (error) => error.message,
+          'message',
+          'disk full',
+        ),
+      );
+      expect(
+        roundTrip(const DeviceNameNotSavedException('disk full')),
+        isA<DeviceNameNotSavedException>().having(
           (error) => error.message,
           'message',
           'disk full',
