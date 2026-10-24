@@ -1,0 +1,64 @@
+name: Runner diagnostics
+
+on:
+  push:
+    branches: [ci/runner-recovery]
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    steps:
+      - name: Mounts and Flatpak cache
+        shell: bash
+        run: |
+          id
+          for path in /tmp "$HOME" "$RUNNER_TOOL_CACHE"; do
+            printf '\nPath: %s\n' "$path"
+            findmnt -T "$path"
+            stat -c 'device=%d mount=%m path=%n' "$path"
+          done
+          flatpak --version
+          export FLATPAK_USER_DIR="$RUNNER_TOOL_CACHE/flatpak-user"
+          printf '\nFlatpak installation: %s\n' "$FLATPAK_USER_DIR"
+          flatpak list --user --columns=ref,size
+          flatpak remotes --user --columns=name,url
+          if [ -f "$FLATPAK_USER_DIR/repo/config" ]; then
+            cat "$FLATPAK_USER_DIR/repo/config"
+          fi
+      - name: Compare buffered writes and durable flushes
+        if: always()
+        shell: bash
+        run: |
+          timeout 90s python3 -u - <<'PY'
+          import os
+          import tempfile
+          import time
+
+          for path in ("/tmp", os.environ["HOME"], os.environ["RUNNER_TOOL_CACHE"]):
+              with tempfile.TemporaryDirectory(prefix="hauntware-io-probe-", dir=path) as work:
+                  start = time.monotonic()
+                  with open(os.path.join(work, "buffered"), "wb") as stream:
+                      for _ in range(64):
+                          stream.write(b"x" * 1024 * 1024)
+                  print(f"{path}: buffered 64 MiB in {time.monotonic() - start:.3f}s", flush=True)
+
+                  for sample in range(8):
+                      start = time.monotonic()
+                      with open(os.path.join(work, f"flush-{sample}"), "wb") as stream:
+                          stream.write(b"x" * 4096)
+                          stream.flush()
+                          os.fsync(stream.fileno())
+                      print(f"{path}: fsync {sample + 1}/8 in {time.monotonic() - start:.3f}s", flush=True)
+          PY
+      - name: Measure Flathub download
+        if: always()
+        shell: bash
+        run: |
+          curl --fail --location --max-time 60 --range 0-8388607 \
+            --output /dev/null --silent --show-error \
+            --write-out 'HTTP=%{http_code} bytes=%{size_download} bytes_per_second=%{speed_download} connect=%{time_connect}s first_byte=%{time_starttransfer}s total=%{time_total}s\n' \
+            https://dl.flathub.org/repo/summary
