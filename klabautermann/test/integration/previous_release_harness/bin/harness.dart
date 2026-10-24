@@ -46,8 +46,10 @@ _Options _options(List<String> arguments) {
   }
   String required(String name) =>
       values['--$name'] ??
-      (throw ArgumentError('usage: harness --server URL --username NAME '
-          '--password SECRET (missing --$name)'));
+      (throw ArgumentError(
+        'usage: harness --server URL --username NAME '
+        '--password SECRET (missing --$name)',
+      ));
   return (
     server: required('server'),
     username: required('username'),
@@ -204,8 +206,7 @@ final class _MemoryEnrollmentState implements SyncEnrollmentState {
   @override
   Future<bool> passphraseUnverified() async => unverified;
   @override
-  Future<void> setPassphraseUnverified(bool value) async =>
-      unverified = value;
+  Future<void> setPassphraseUnverified(bool value) async => unverified = value;
   @override
   Future<Set<String>> notices() async => Set.of(raised);
   @override
