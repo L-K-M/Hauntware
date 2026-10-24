@@ -344,8 +344,8 @@ final class OperationTracker {
   /// up or the prune removed. A launch no listing has shown yet is
   /// spared: an ops read in flight when the launch landed also reads to
   /// its end without the record, and losing the note there would audit
-  /// the result without its launch facts. The launch grace ([_Server
-  /// .unlisted]) bounds this exactly as it bounds the re-reads.
+  /// the result without its launch facts. The launch grace
+  /// ([_Server.unlisted]) bounds this exactly as it bounds the re-reads.
   Future<void> _forgetCleaned(String serverId, OpsListing listing) async {
     final server = _servers[serverId];
     final listed = {
@@ -364,7 +364,8 @@ final class OperationTracker {
           in _store.notesOf(serverId).entries)
         if (!listed.contains(id) &&
             !(server?.unlisted.containsKey(id) ?? false) &&
-            readToEnd(note.directory)) id,
+            readToEnd(note.directory))
+          id,
     ];
     await _quietly(() => _store.remove(serverId, gone));
   }

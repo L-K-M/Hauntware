@@ -435,8 +435,7 @@ void main() {
     expect(record.steps, ['docker compose pull']);
   });
 
-  test('a launch the grace passes without showing forgets its note',
-      () async {
+  test('a launch the grace passes without showing forgets its note', () async {
     await tracker.launched(
       _s1,
       _done,
@@ -449,7 +448,10 @@ void main() {
         startedAt: DateTime.utc(2026, 10, 18, 9),
       ),
     );
-    await clock.elapse(const Duration(minutes: 1));
+    // The note is there until the grace passes, and the passing itself
+    // is what drops it: assert both ends of the window.
+    expect(store.notesOf(_s1), isNotEmpty);
+    await clock.elapse(kLaunchListingGrace + const Duration(seconds: 1));
     await tracker.listed(_s1, _section());
     expect(store.notesOf(_s1), isEmpty);
   });
