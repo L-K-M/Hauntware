@@ -35,6 +35,13 @@
 # - a folder `idle` holding a compose file that never ran, which only a
 #   folder scan finds (STK-08).
 #
+# and, for the edit suite (M5 M20a), with the same image:
+#
+# - stack `edits`, whose compose file carries a comment the suite edits
+#   and whose `.env` sets a variable no service reads, so neither edit
+#   changes `config --hash`;
+# - `~/edits/app.conf`, a plain file the inventory session edits.
+#
 # Only the fixture's registry is pulled from: the engine has no route to
 # any other it may rely on.
 #
@@ -177,6 +184,16 @@ done
 docker compose --project-name override \
   --file "$stacks/override/compose.yaml" \
   --file "$stacks/override/compose.override.yaml" up --detach
+mkdir -p "$stacks/edits" "$HOME/edits"
+{
+  echo '# klabautermann edit suite: seeded'
+  echo services:
+  app_service app
+} >"$stacks/edits/compose.yaml"
+printf 'EDIT_NOTE=seeded\n' >"$stacks/edits/.env"
+docker compose --project-name edits --file "$stacks/edits/compose.yaml" \
+  up --detach
+printf 'setting=seeded\n' >"$HOME/edits/app.conf"
 
 # Port 22 on dind's own network namespace, which nothing publishes.
 docker run --detach --pull never --name ssh-port --publish 22:22 "$image" \

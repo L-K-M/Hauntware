@@ -32,6 +32,7 @@ const String _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
 const String _monitorSetKey = 'klabautermann.monitorSet';
 const String _safetyKey = 'klabautermann.safety';
 const String _syncSecretsKey = 'klabautermann.sync.secrets';
+const String _deviceNameKey = 'klabautermann.audit.deviceName';
 
 const String _endpointOverridesKey = 'klabautermann.docker.endpointOverrides';
 const String _stackFoldersKey = 'klabautermann.docker.stackFolders';
@@ -320,6 +321,26 @@ final class DeviceSettingsStore {
   /// way.
   Future<void> setSyncSecrets(bool enabled) async {
     _values[_syncSecretsKey] = enabled;
+    await _save();
+  }
+
+  /// The name the host syslog line gives this device (SAF-13, M5 plan
+  /// Q6), `klabautermann.audit.deviceName`; null for the app's default,
+  /// as is anything but a non-blank string.
+  String? get deviceName => switch (_values[_deviceNameKey]) {
+    final String name when name.trim().isNotEmpty => name,
+    _ => null,
+  };
+
+  /// Stores [name], null removing it, and writes the document. Throws
+  /// when the write fails or this session is read-only; the value stays
+  /// in memory either way.
+  Future<void> setDeviceName(String? name) async {
+    if (name == null) {
+      _values.remove(_deviceNameKey);
+    } else {
+      _values[_deviceNameKey] = name;
+    }
     await _save();
   }
 

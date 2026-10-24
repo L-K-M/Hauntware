@@ -30,19 +30,143 @@ class OpenInSeanceButton extends StatelessWidget {
   final String serverId;
 
   @override
+  Widget build(BuildContext context) => HandOffButton(
+    target: HandOffTarget.seance,
+    link: seanceHandOff(serverId),
+    icon: Icons.terminal,
+    label: (l10n) => l10n.handOffOpenInSeance,
+  );
+}
+
+/// The link [target]'s app opens for [folder] on [serverId], or null when
+/// that app could not name it.
+Uri? _folderLink(HandOffTarget target, String serverId, String folder) =>
+    switch (target) {
+      HandOffTarget.seance => seanceHandOff(serverId, folder: folder),
+      HandOffTarget.poltergeist => poltergeistHandOff(serverId, path: folder),
+    };
+
+/// Whether a [HandOffButton] for [target] opening [link] shows: the one
+/// rule the buttons and [folderHandOffsShown] share.
+bool _handOffShown(BuildContext context, HandOffTarget target, Uri? link) {
+  final launcher = HandOffScope.maybeOf(context);
+  return launcher != null && link != null && launcher.available(target);
+}
+
+/// Whether [FolderHandOffs] for [folder] on [serverId] shows anything,
+/// so a layout that spaces its children leaves no gap where it would not.
+bool folderHandOffsShown(
+  BuildContext context, {
+  required String serverId,
+  required String folder,
+}) => HandOffTarget.values.any(
+  (target) =>
+      _handOffShown(context, target, _folderLink(target, serverId, folder)),
+);
+
+/// A folder's hand-offs (X-04, X-10): "Open terminal here" in Séance and
+/// "Open in Poltergeist", each hidden where its app has no intake or
+/// handler or could not name [folder] on [serverId]. Stack folders show
+/// it beside the folder they name.
+class FolderHandOffs extends StatelessWidget {
+  const FolderHandOffs({
+    super.key,
+    required this.serverId,
+    required this.folder,
+  });
+
+  final String serverId;
+  final String folder;
+
+  @override
   Widget build(BuildContext context) {
-    final launcher = HandOffScope.maybeOf(context);
-    final link = seanceHandOff(serverId);
-    if (launcher == null ||
-        link == null ||
-        !launcher.available(HandOffTarget.seance)) {
+    return Wrap(
+      spacing: 8,
+      children: [
+        HandOffButton(
+          target: HandOffTarget.seance,
+          link: _folderLink(HandOffTarget.seance, serverId, folder),
+          icon: Icons.terminal,
+          label: (l10n) => l10n.handOffOpenTerminalHere,
+        ),
+        HandOffButton(
+          target: HandOffTarget.poltergeist,
+          link: _folderLink(HandOffTarget.poltergeist, serverId, folder),
+          icon: Icons.folder_open_outlined,
+          label: (l10n) => l10n.handOffOpenInPoltergeist,
+        ),
+      ],
+    );
+  }
+}
+
+/// A file's hand-off (X-10): "Open in Poltergeist" as an icon button,
+/// hidden where Poltergeist has no intake or handler or could not name
+/// [path] on [serverId].
+class FileHandOff extends StatelessWidget {
+  const FileHandOff({super.key, required this.serverId, required this.path});
+
+  final String serverId;
+  final String path;
+
+  @override
+  Widget build(BuildContext context) => HandOffButton.icon(
+    target: HandOffTarget.poltergeist,
+    link: poltergeistHandOff(serverId, path: path),
+    icon: Icons.open_in_new,
+    label: (l10n) => l10n.handOffOpenInPoltergeist,
+  );
+}
+
+/// Opens [link] in [target]'s app. Hidden without a launcher in scope,
+/// where [target] has no intake or handler, or when [link] is null: the
+/// app could not name what it would open. A link the OS refuses says so
+/// in a toast.
+class HandOffButton extends StatelessWidget {
+  const HandOffButton({
+    super.key,
+    required this.target,
+    required this.link,
+    required this.icon,
+    required this.label,
+  }) : compact = false;
+
+  /// An icon button with [label] as its tooltip, for rows with no room
+  /// for words.
+  const HandOffButton.icon({
+    super.key,
+    required this.target,
+    required this.link,
+    required this.icon,
+    required this.label,
+  }) : compact = true;
+
+  final HandOffTarget target;
+  final Uri? link;
+  final IconData icon;
+
+  /// The button's words, read only once it shows.
+  final String Function(AppLocalizations l10n) label;
+
+  /// Whether the button is an icon only.
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final link = this.link;
+    if (link == null || !_handOffShown(context, target, link)) {
       return const SizedBox.shrink();
     }
-    final l10n = AppLocalizations.of(context);
+    final launcher = HandOffScope.maybeOf(context)!;
+    final words = label(AppLocalizations.of(context));
+    void open() => unawaited(_open(context, launcher, link));
+    if (compact) {
+      return IconButton(tooltip: words, icon: Icon(icon), onPressed: open);
+    }
     return TextButton.icon(
-      onPressed: () => unawaited(_open(context, launcher, link)),
-      icon: const Icon(Icons.terminal, size: 18),
-      label: Text(l10n.handOffOpenInSeance),
+      onPressed: open,
+      icon: Icon(icon, size: 18),
+      label: Text(words),
     );
   }
 
@@ -52,7 +176,11 @@ class OpenInSeanceButton extends StatelessWidget {
     Uri link,
   ) async {
     final overlay = Overlay.of(context, rootOverlay: true);
-    final notOpened = AppLocalizations.of(context).handOffSeanceNotOpened;
+    final l10n = AppLocalizations.of(context);
+    final notOpened = switch (target) {
+      HandOffTarget.seance => l10n.handOffSeanceNotOpened,
+      HandOffTarget.poltergeist => l10n.handOffPoltergeistNotOpened,
+    };
     var opened = false;
     try {
       opened = await launcher.open(link);

@@ -165,20 +165,41 @@ deep   /var/lib/klabautermann/**
       }
     });
 
-    test('the committed list covers only 8.11\'s MVP rows', () async {
+    test('the committed list covers only 8.11\'s MVP and v1 rows', () async {
       final allowlist = InventoryAllowlist.parse(
         await File('test/integration/inventory_allowlist.txt').readAsString(),
       );
       expect(allowlist.rules.map((r) => r.row).toSet(), {
         'detached-user',
         'detached-root',
+        'edit-target',
+        'user-backups',
+        'footprint-manifest',
+        'audit-syslog',
       });
-      for (final path in [
-        '/home/klab/.local/state/klabautermann/ops/20261018-1.json',
-        '/home/klab/.local/state/klabautermann/ops/20261018-1.log',
-        '/var/lib/klabautermann/ops/20261018-2.json',
+      for (final (path, row) in [
+        (
+          '/home/klab/.local/state/klabautermann/ops/20261018-1.json',
+          'detached-user',
+        ),
+        (
+          '/home/klab/.local/state/klabautermann/ops/20261018-1.log',
+          'detached-user',
+        ),
+        ('/var/lib/klabautermann/ops/20261018-2.json', 'detached-root'),
+        ('/home/klab/edits/app.conf', 'edit-target'),
+        (
+          '/home/klab/.local/state/klabautermann/backups/'
+              '${'0' * 64}-1792571400',
+          'user-backups',
+        ),
+        (
+          '/home/klab/.config/klabautermann/manifest.json',
+          'footprint-manifest',
+        ),
+        ('/var/log/messages', 'audit-syslog'),
       ]) {
-        expect(allowlist.rowFor(path), isNotNull, reason: path);
+        expect(allowlist.rowFor(path), row, reason: path);
       }
       // 8.11's "never written".
       for (final path in [
@@ -187,6 +208,10 @@ deep   /var/lib/klabautermann/**
         '/tmp/klabautermann-probe.sh',
         '/usr/local/bin/klabautermann-notify',
         '/etc/sudoers.d/klabautermann-readonly',
+        // A temp file left beside the target, and another file the user
+        // owns.
+        '/home/klab/edits/.app.conf.klabautermann-tmp-0011223344556677',
+        '/home/klab/edits/other.conf',
       ]) {
         expect(allowlist.rowFor(path), isNull, reason: path);
       }

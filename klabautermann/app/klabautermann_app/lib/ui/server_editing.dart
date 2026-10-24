@@ -246,7 +246,7 @@ final class _EngineEditorDelegate extends GhostServerEditorDelegate {
     if (Platform.isMacOS) await FilePicker.skipEntitlementsChecks();
     final files = await FilePicker.pickFiles();
     if (files.isEmpty) return null;
-    return files.single.path;
+    return files.first.path;
   }
 
   @override

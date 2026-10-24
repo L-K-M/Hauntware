@@ -479,8 +479,13 @@ class _ServerEditorState extends State<_ServerEditor> {
                         : const Icon(Icons.wifi_tethering, size: 18),
                     label: Text(_testing ? _strings.testing : _strings.test),
                   ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+                // A wrap too, so the pair stacks rather than overflows
+                // when large text or long words make it wider than the
+                // dialog.
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     // Cancel stays live during a test: the attempt cannot be
                     // stopped, but being unable to leave the dialog for the
@@ -492,7 +497,6 @@ class _ServerEditorState extends State<_ServerEditor> {
                           : () => Navigator.of(context).pop(),
                       child: Text(_strings.cancel),
                     ),
-                    const SizedBox(width: 8),
                     FilledButton(
                       // Not disabled while a test runs: an attempt can take
                       // minutes, and the only other way out was typing a

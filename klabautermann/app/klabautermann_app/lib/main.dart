@@ -261,8 +261,21 @@ Future<void> main(List<String> args) async {
   );
 
   // The device name the host syslog line gives (SAF-13, M5 plan Q6),
-  // until the user can name the device.
-  engine.send(SetDeviceName(defaultDeviceName(defaultTargetPlatform)));
+  // device-local in settings.json and applied to the engine now, since it
+  // names no device until told.
+  final deviceName = DeviceNameController(
+    stored: settings.deviceName,
+    fallback: defaultDeviceName(defaultTargetPlatform),
+    apply: (name) {
+      try {
+        engine.send(SetDeviceName(name));
+      } on StateError {
+        // A stopped engine runs nothing; the next one gets the name at
+        // its spawn.
+      }
+    },
+    save: settings.setDeviceName,
+  );
 
   // The "sync passwords" switch (SYN-02), device-local in settings.json
   // and applied to the engine now, since it starts with the switch off.
@@ -302,6 +315,7 @@ Future<void> main(List<String> args) async {
     defaultTargetPlatform,
     appearance: appearance,
     announcements: announcements,
+    deviceName: deviceName,
     appVersion: appVersion,
     monitorSet: fleet.monitorSettings,
     safety: safety,
@@ -317,6 +331,7 @@ Future<void> main(List<String> args) async {
       appearance: appearance,
       coverage: coverage,
       announcements: announcements,
+      deviceName: deviceName,
       safety: safety,
       syncSecrets: syncSecrets,
       pinPublication: pinPublication,
