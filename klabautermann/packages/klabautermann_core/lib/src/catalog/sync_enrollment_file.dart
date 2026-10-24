@@ -25,10 +25,12 @@ const String _accountKey = 'account';
 const String _baseUrlKey = 'baseUrl';
 const String _usernameKey = 'username';
 const String _modeKey = 'mode';
+const String _pinAssertionKey = 'seance56Asserted';
 
 /// `sync_enrollment.json`: `{"version": 1, "passphraseUnverified": bool,
-/// "notices": [notice keys], "account": {"baseUrl", "username", "mode"}}`,
-/// the notices sorted and the account left out before enrollment. It holds
+/// "notices": [notice keys], "account": {"baseUrl", "username", "mode"},
+/// "seance56Asserted": release}`, the notices sorted and the account and
+/// the assertion left out while unset. It holds
 /// no secret: the session token and the vault key live only in the OS
 /// keystore (`SyncCredentialStore`, 03 §4.5).
 ///
@@ -45,6 +47,7 @@ final class FileSyncEnrollmentState implements SyncEnrollmentState {
     this._unverified,
     this._notices,
     this._account,
+    this._pinAssertion,
   );
 
   final SyncStateFile _file;
@@ -52,6 +55,7 @@ final class FileSyncEnrollmentState implements SyncEnrollmentState {
   bool _unverified;
   final Set<String> _notices;
   SyncAccount? _account;
+  String? _pinAssertion;
 
   /// Opens `sync_enrollment.json` in [supportDirectory]. A file it cannot
   /// use leaves the store empty and is reported in [issue]; the only throw
@@ -85,6 +89,7 @@ final class FileSyncEnrollmentState implements SyncEnrollmentState {
       body?.unverified ?? false,
       body?.notices ?? {},
       body?.account,
+      body?.pinAssertion,
     );
   }
 
@@ -129,6 +134,20 @@ final class FileSyncEnrollmentState implements SyncEnrollmentState {
     return _save();
   }
 
+  /// The suite release the user asserted every enrolled device runs, or
+  /// later (FL-22, D15): the first with Séance #56 fixed, which first-seen
+  /// pin publication needs. Null while not asserted.
+  String? get pinPublicationAssertion => _pinAssertion;
+
+  /// Records [release] as asserted, or withdraws the assertion with null.
+  Future<void> setPinPublicationAssertion(String? release) {
+    if (_pinAssertion == release && !_file.hasUnsavedChanges) {
+      return Future.value();
+    }
+    _pinAssertion = release;
+    return _save();
+  }
+
   static bool _sameAccount(SyncAccount? a, SyncAccount? b) =>
       a?.baseUrl == b?.baseUrl &&
       a?.username == b?.username &&
@@ -145,15 +164,20 @@ final class FileSyncEnrollmentState implements SyncEnrollmentState {
           _usernameKey: account.username,
           _modeKey: account.mode.name,
         },
+      _pinAssertionKey: ?_pinAssertion,
     });
   }
 
   /// The body's state, or a [FormatException] for any field this build
   /// cannot use, an unknown account mode included: a guess at the account
   /// would point rounds at the wrong server or posture.
-  static ({bool unverified, Set<String> notices, SyncAccount? account}) _decode(
-    Map<String, Object?> body,
-  ) {
+  static ({
+    bool unverified,
+    Set<String> notices,
+    SyncAccount? account,
+    String? pinAssertion,
+  })
+  _decode(Map<String, Object?> body) {
     final unverified = switch (body[_passphraseUnverifiedKey]) {
       null => false,
       final bool value => value,
@@ -183,10 +207,17 @@ final class FileSyncEnrollmentState implements SyncEnrollmentState {
         throw const FormatException('account is not a usable account');
     }
 
+    final pinAssertion = switch (body[_pinAssertionKey]) {
+      null => null,
+      final String release when release.isNotEmpty => release,
+      _ => throw const FormatException('seance56Asserted is not a release'),
+    };
+
     return (
       unverified: unverified,
       notices: decodeStringList(body, _noticesKey).toSet(),
       account: account,
+      pinAssertion: pinAssertion,
     );
   }
 }

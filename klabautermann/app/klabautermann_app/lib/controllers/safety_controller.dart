@@ -106,6 +106,11 @@ final class SafetyController extends ChangeNotifier implements SafetySettings {
   final Map<String, ServerPrefs?> _pending = {};
   final Set<String> _migrating = {};
 
+  /// Counts each server's record writes, so a write that answers clears
+  /// its pending value only when no later write replaced it.
+  final Map<String, int> _writeSerials = {};
+  var _disposed = false;
+
   @override
   SafetyPolicy get value => _value;
 
@@ -160,7 +165,10 @@ final class SafetyController extends ChangeNotifier implements SafetySettings {
       marks: safety.marks,
       hostAuditLine: safety.hostAuditLine,
     );
-    _pending[serverId] = _isDefault(next) ? null : next;
+    final sealed = _isDefault(next) ? null : next;
+    final serial = (_writeSerials[serverId] ?? 0) + 1;
+    _writeSerials[serverId] = serial;
+    _pending[serverId] = sealed;
     final local = _local.servers[serverId];
     final saving = local?.management == safety.management
         ? null
@@ -172,15 +180,27 @@ final class SafetyController extends ChangeNotifier implements SafetySettings {
               ),
             ),
           );
+    // Awaited once the record is written; until then a failed save must
+    // not count as uncaught.
+    saving?.ignore();
     _refresh();
     try {
-      await prefs.write(serverId, _pending[serverId]);
+      await prefs.write(serverId, sealed);
     } on Object catch (error) {
+      // The caller hears of the refused write; a failed management save
+      // beside it is logged rather than left unobserved.
+      unawaited(
+        saving?.catchError(
+          (Object saveError) => debugPrint(saveError.toString()),
+        ),
+      );
       throw SafetyNotSavedException(
         'The safety settings were not saved: $error',
       );
     } finally {
-      _pending.remove(serverId);
+      // A later change of the same server may have replaced this write;
+      // it keeps counting until it answers.
+      if (_writeSerials[serverId] == serial) _pending.remove(serverId);
       _refresh();
     }
     await _forgetStored(serverId);
@@ -240,6 +260,8 @@ final class SafetyController extends ChangeNotifier implements SafetySettings {
   }
 
   void _refresh() {
+    // A write can answer after the screen that owned this went away.
+    if (_disposed) return;
     _value = _merged();
     _apply(_value);
     notifyListeners();
@@ -324,8 +346,10 @@ final class SafetyController extends ChangeNotifier implements SafetySettings {
   }
 
   /// Drops [serverId]'s stored switches and marks, which its record now
-  /// holds, keeping management.
+  /// holds, keeping management. A server that stopped syncing while the
+  /// record was written keeps them here instead.
   Future<void> _forgetStored(String serverId) async {
+    if (!(_prefs?.syncs(serverId) ?? false)) return;
     final stored = _local.servers[serverId];
     if (stored == null || !_holdsSynced(stored)) return;
     _local = _withLocal(serverId, ServerSafety(management: stored.management));
@@ -375,6 +399,7 @@ final class SafetyController extends ChangeNotifier implements SafetySettings {
 
   @override
   void dispose() {
+    _disposed = true;
     _prefs?.removeListener(_prefsChanged);
     super.dispose();
   }

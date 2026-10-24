@@ -267,7 +267,13 @@ void main() {
         utf8.encode('ab'),
         utf8.encode('cdef'),
       ]);
-      await _until(() => controller.left.phase == SyncComparePhase.gateConfirm);
+      // The local side reads its file in parallel; wait for both, as the
+      // known-size test above does.
+      await _until(
+        () =>
+            controller.left.phase == SyncComparePhase.gateConfirm &&
+            controller.right.phase == SyncComparePhase.ready,
+      );
       expect(controller.left.transferred, 6);
       expect(controller.right.phase, SyncComparePhase.ready);
 

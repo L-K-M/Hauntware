@@ -4,14 +4,21 @@ import 'dart:typed_data';
 // `Collector` (its argument validators) and `ServerZone` (`offsetAt`) do.
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
+        AnacronJob,
+        BackupEntry,
         CpuPercentages,
         CronSnapshot,
         DiskRate,
+        FootprintRow,
         FsSnapshot,
         HostProfile,
         JobEntry,
+        JournalBoot,
+        JournalBootEntry,
         KillSignal,
         LoadAvg,
+        LogFileEntry,
+        LoggedCronRun,
         NetRate,
         OpDirectoryKind,
         OpDirectoryListing,
@@ -19,7 +26,10 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         SystemdUnit,
         SystemctlVerb,
         ThresholdRule,
+        TimerLastRun,
         TimersSnapshot,
+        UnitResources,
+        UnitSocket,
         UnitsSnapshot,
         EngineMode,
         EngineRuntime;
@@ -189,15 +199,68 @@ import '../operations/plan_types.dart';
 /// [CredentialPromptRequest] gained `canSave` and [PromptSecretAnswer]
 /// `save`, which keeps a login password in the vault.
 ///
+/// Container shells then joined v3 the same way (03 §7.13 CTX-07):
+/// [OpenTerminal], [TerminalInput], [TerminalResize], [TerminalEndInput]
+/// and [CloseTerminal] run one, answered by [TerminalOpened],
+/// [TerminalBytes] and [TerminalClosed]. One-off commands joined next
+/// (CTX-08): [ContainerExec] is planned as an action, and
+/// [ActionFinished] gained the [ExecOutput] it captured.
+///
 /// Synced settings then joined v3 the same way (03 §4.8, M5 plan M04):
 /// [ServerPrefsChanged] carries a server's pulled `pref` record as
 /// [ServerPrefs], and [SyncStatus] gained [SyncStatus.prefixBudget].
+///
+/// The v1 log sources then joined v3 the same way (03 §7.6, LOG-06 to
+/// LOG-10): [JournalLogSource] gained `grep` and `boot`,
+/// [KernelLogSource] `boot`, [FileLogSource] `compressed`, and
+/// [LogStreamEndReason] `searchUnsupported`; [HostQuery], answered by
+/// [HostResult], lists `/var/log` and the journal's boots; and
+/// [RedactLines], answered by [RedactedLines], redacts an export.
+///
+/// The v1 unit rows then joined v3 the same way (03 §7.5, SVC-05 to
+/// SVC-10): [UnitAction] and [StartTimer] gained a [UnitScope], and
+/// [UnitQuery], answered by [UnitQueryResult], reads a unit's file, its
+/// resources or the sockets. [SampleStream] gained `userUnits` and
+/// `userTimers`, the login user's own manager's units and timers, which
+/// cross as [UnitsResult] and [TimersResult].
+///
+/// Job history then joined v3 the same way (03 §7.7, JOB-04, JOB-05):
+/// [JobHistoryQuery], answered by [JobHistoryResult], reads anacron's
+/// jobs and stamps, a timer's last run, or the runs cron logged.
+///
+/// The edit pipeline then joined v3 the same way (03 §8.5, SAF-12):
+/// [ReadEditable], answered by [EditRead], reads an [EditTarget] for the
+/// editor; the [EditFile] intent plans its write; [RevalidationFailure]
+/// gained `contentChanged` for a target changed under the write.
+///
+/// The footprint then joined v3 the same way (03 §8.11, SAF-14):
+/// [FootprintQuery], answered by [FootprintState], which the engine also
+/// sends unasked; the [KeepLastBackups] and [RemoveBackups] intents plan
+/// backup removal.
+///
+/// Running a cron line now then joined v3 the same way (03 §7.7,
+/// JOB-19): [RunCronJob] is planned as a host action, and reports its
+/// output as [ContainerExec] does.
+///
+/// Stack files and folders then joined v3 the same way (03 §7.16 STK-07
+/// to STK-09): a [StackFileTarget] edits a verified stack's file through
+/// the same pipeline, [DockerStackProfilesQuery] lists the profiles its
+/// files name, and [DockerStackScanQuery] finds compose files in the
+/// folders the user chose.
 ///
 /// Catalog writes then joined v3 the same way (03 §4.4, M5 plan M05):
 /// [ReadServerDraft], [SaveServer], [DeleteServer], [SetServerPrefs],
 /// [PutRule] and [RemoveRule], answered by [ServerDraftRead],
 /// [CatalogWritten] and [CatalogWriteRefused].
 const int kEngineProtocolVersion = 3;
+
+/// The most container shells one server holds open at once [E]: each on a
+/// relay holds a session channel (03 §5.2).
+const int kTerminalsPerServerMax = 4;
+
+/// The largest terminal [OpenTerminal] and [TerminalResize] take, in
+/// either dimension.
+const int kTerminalDimensionMax = 1000;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
 /// only: no function-typed fields, no Futures, no `dartssh2` or `seance_core`
@@ -444,6 +507,121 @@ final class CloseStream extends EngineRequest {
   final String streamId;
 }
 
+/// Reads one unit's details, or the sockets, on [serverId] (03 §7.5,
+/// SVC-07, SVC-08, SVC-10), answered by one [UnitQueryResult] with
+/// [requestId]. Each reads as the login user, never through sudo.
+final class UnitQuery extends EngineRequest {
+  const UnitQuery({
+    required this.serverId,
+    required this.requestId,
+    required this.query,
+  });
+
+  final String serverId;
+  final String requestId;
+  final UnitQuerySpec query;
+}
+
+/// What a [UnitQuery] reads.
+@immutable
+sealed class UnitQuerySpec {
+  const UnitQuerySpec({this.scope = UnitScope.system});
+
+  final UnitScope scope;
+}
+
+/// [unit]'s file and drop-ins (`systemctl cat`, SVC-07), answered by
+/// [UnitFilePayload].
+final class UnitFileQuery extends UnitQuerySpec {
+  const UnitFileQuery(this.unit, {super.scope});
+
+  final String unit;
+}
+
+/// [unit]'s resources (`systemctl show`, SVC-08), answered by
+/// [UnitResourcesPayload].
+final class UnitResourcesQuery extends UnitQuerySpec {
+  const UnitResourcesQuery(this.unit, {super.scope});
+
+  final String unit;
+}
+
+/// The manager's sockets (`systemctl list-sockets`, SVC-10), answered by
+/// [UnitSocketsPayload].
+final class SocketsQuery extends UnitQuerySpec {
+  const SocketsQuery({super.scope});
+}
+
+/// Reads one piece of [serverId]'s job history (03 §7.7, JOB-04, JOB-05),
+/// answered by one [JobHistoryResult] with [requestId]. Each reads as the
+/// login user, or through admin mode when it is on, which the journal of
+/// cron's runs may need.
+final class JobHistoryQuery extends EngineRequest {
+  const JobHistoryQuery({
+    required this.serverId,
+    required this.requestId,
+    required this.query,
+  });
+
+  final String serverId;
+  final String requestId;
+  final JobHistorySpec query;
+}
+
+/// What a [JobHistoryQuery] reads.
+@immutable
+sealed class JobHistorySpec {
+  const JobHistorySpec();
+}
+
+/// `/etc/anacrontab` with each job's stamp (JOB-04), answered by
+/// [AnacronPayload].
+final class AnacronQuery extends JobHistorySpec {
+  const AnacronQuery();
+}
+
+/// [timer]'s last trigger and how [service]'s run ended (JOB-05),
+/// answered by [TimerLastRunPayload].
+final class TimerLastRunQuery extends JobHistorySpec {
+  const TimerLastRunQuery({required this.timer, required this.service});
+
+  final String timer;
+  final String service;
+}
+
+/// The newest [lines] job starts cron logged (JOB-05), answered by
+/// [CronRunsPayload].
+final class CronRunsQuery extends JobHistorySpec {
+  const CronRunsQuery({this.lines = 50});
+
+  final int lines;
+}
+
+/// Reads [target] on [serverId] for an edit (03 §8.5, SAF-12), answered
+/// by one [EditRead] with [requestId]: the content and its SHA-256,
+/// which an [EditFile] names, and who owns it. A file the login user
+/// cannot read is read through admin mode when it is on.
+final class ReadEditable extends EngineRequest {
+  const ReadEditable({
+    required this.serverId,
+    required this.requestId,
+    required this.target,
+  });
+
+  final String serverId;
+  final String requestId;
+  final EditTarget target;
+}
+
+/// Verifies [serverId]'s footprint again (SAF-14, P13): answered by a
+/// [FootprintState]. The engine also verifies it on every connect, and
+/// root's part when admin mode turns on.
+final class FootprintQuery extends EngineRequest {
+  const FootprintQuery(this.serverId);
+
+  final String serverId;
+}
+
 /// Runs one read-only Docker Engine query on [serverId]'s engine (03
 /// §7.12 to §7.14, §10.1), answered by one [DockerResult] with [queryId].
 /// The first query for a server has the engine find its route and
@@ -464,6 +642,53 @@ final class DockerQuery extends EngineRequest {
   final String queryId;
 
   final DockerQuerySpec query;
+}
+
+/// Runs one read-only host query on [serverId] over its link (03 §7.6),
+/// answered by one [HostResult] with [queryId]. A server without a ready
+/// link is answered at once with [HostQueryFailure.noLink].
+final class HostQuery extends EngineRequest {
+  const HostQuery({
+    required this.serverId,
+    required this.queryId,
+    required this.query,
+  });
+
+  final String serverId;
+
+  /// The app's own id for the query, which its [HostResult] carries.
+  final String queryId;
+
+  final HostQuerySpec query;
+}
+
+/// What a [HostQuery] reads.
+@immutable
+sealed class HostQuerySpec {
+  const HostQuerySpec();
+}
+
+/// The regular files under `/var/log`, two levels deep (LOG-08), as
+/// [VarLogFiles].
+final class VarLogQuery extends HostQuerySpec {
+  const VarLogQuery();
+}
+
+/// The journal's boots (LOG-09), as [JournalBoots]: `journalctl
+/// --list-boots` as JSON on systemd 251 and later, the text table on
+/// older ones and where the probe found no version.
+final class BootsQuery extends HostQuerySpec {
+  const BootsQuery();
+}
+
+/// Redacts [lines] the app holds for an export (LOG-10, 03 §8.9) through
+/// the engine's secret redactor, which the app cannot import, answered
+/// by [RedactedLines] with [requestId].
+final class RedactLines extends EngineRequest {
+  const RedactLines(this.requestId, this.lines);
+
+  final String requestId;
+  final List<String> lines;
 }
 
 /// Watches [lists] on [serverId]'s engine (03 §7.12 DKE-02, CST-01), as
@@ -552,6 +777,74 @@ final class SetSafetyPolicy extends EngineRequest {
   final SafetyPolicy policy;
 }
 
+/// Opens a shell in [containerId] on [serverId] (03 §7.13, CTX-07): an
+/// exec with a TTY over the API upgrade (03 §5.7). [shell] null runs
+/// `/bin/bash` where the container has it and `/bin/sh` otherwise;
+/// [user] null runs as the container's user. Refused, as an action is,
+/// on an observe-only or read-only server. Answered by [TerminalOpened],
+/// then [TerminalBytes], and by [TerminalClosed] once, also when the
+/// shell never starts. The id is the app's and must be new.
+final class OpenTerminal extends EngineRequest {
+  const OpenTerminal({
+    required this.terminalId,
+    required this.serverId,
+    required this.containerId,
+    this.shell,
+    this.user,
+    required this.columns,
+    required this.rows,
+  });
+
+  final String terminalId;
+  final String serverId;
+  final String containerId;
+  final String? shell;
+  final String? user;
+
+  /// The terminal's size, at most [kTerminalDimensionMax] each.
+  final int columns;
+  final int rows;
+}
+
+/// Keystrokes and pastes for [terminalId]'s shell, as the terminal
+/// encoded them.
+final class TerminalInput extends EngineRequest {
+  const TerminalInput(this.terminalId, this.bytes);
+
+  final String terminalId;
+  final Uint8List bytes;
+}
+
+/// [terminalId]'s terminal changed size. The engine passes each size on
+/// in the order it came, columns as Docker's `w` and rows as its `h`.
+final class TerminalResize extends EngineRequest {
+  const TerminalResize(
+    this.terminalId, {
+    required this.columns,
+    required this.rows,
+  });
+
+  final String terminalId;
+  final int columns;
+  final int rows;
+}
+
+/// Ends [terminalId]'s input: stdin EOF as a half-close (03 §5.7), while
+/// its output keeps coming until the shell exits.
+final class TerminalEndInput extends EngineRequest {
+  const TerminalEndInput(this.terminalId);
+
+  final String terminalId;
+}
+
+/// Closes [terminalId]'s shell; [TerminalClosed] follows with
+/// [TerminalCloseReason.closed]. An id with no open shell does nothing.
+final class CloseTerminal extends EngineRequest {
+  const CloseTerminal(this.terminalId);
+
+  final String terminalId;
+}
+
 /// The device's "sync passwords" switch (03 §4.5, SYN-02), which the app
 /// keeps in `settings.json` as `klabautermann.sync.secrets`, sent at spawn
 /// and on every change. Until it arrives the switch is off: sync rounds
@@ -569,6 +862,23 @@ final class SetDeviceName extends EngineRequest {
   const SetDeviceName(this.name);
 
   final String name;
+}
+
+/// The suite release whose Séance carries the #56 fix (D15, FL-22): the
+/// release a pin publication assertion names. Null until a suite release
+/// carries the fix (M5 plan Q1), so no assertion is offered and the
+/// engine publishes no pin.
+const String? kPinPublicationRelease = null;
+
+/// Asserts that every device on the account runs the release
+/// [PinPublicationState.release] names or later, or withdraws that with
+/// [asserted] false (D15, M5 plan M07). While asserted, a pin the user
+/// confirms is published; a withdrawal stops publication, and pins sent
+/// stay. Refused while no release is offered.
+final class SetPinPublication extends EngineRequest {
+  const SetPinPublication({required this.asserted});
+
+  final bool asserted;
 }
 
 /// How a [ServerDraft]'s server signs in, as the server editor offers it
@@ -684,7 +994,9 @@ final class ReadServerDraft extends EngineRequest {
 /// with the credential [credential] plans, for the next round to push
 /// (03 §4.4, FL-03). The saved endpoint counts as confirmed on this
 /// device (M5 plan P16). Answered by [CatalogWritten] or
-/// [CatalogWriteRefused], then the fleet, then a round's [SyncStatus].
+/// [CatalogWriteRefused]; a written one sends the fleet and the
+/// preferences just before its answer when they can be read (else the
+/// next round's refresh does), and a round's [SyncStatus] after.
 final class SaveServer extends EngineRequest {
   const SaveServer({
     required this.requestId,
@@ -824,18 +1136,6 @@ final class HandleAlert extends EngineRequest {
   final AlertAction action;
 }
 
-/// Opens a container or host shell stream (v1, 03 §10.1); bytes arrive as
-/// [TerminalBytes] until [TerminalClosed].
-final class OpenTerminal extends EngineRequest {
-  const OpenTerminal({required this.serverId, this.containerId, this.shell});
-
-  final String serverId;
-
-  /// Null means the host shell, not a container.
-  final String? containerId;
-  final String? shell;
-}
-
 /// Every message the engine sends the UI isolate (03 §10.1, D18). Same plain
 /// -data rules as [EngineRequest].
 @immutable
@@ -854,6 +1154,7 @@ final class EngineReady extends EngineEvent {
     this.syncAccount,
     this.syncStoreIssues = const [],
     this.auditInMemory = false,
+    this.pinPublication,
   });
 
   final int protocolVersion;
@@ -875,6 +1176,11 @@ final class EngineReady extends EngineEvent {
   /// support directory (03 §4.10), so this one writes no audit file. The
   /// app says so once (M4 plan M12).
   final bool auditInMemory;
+
+  /// The pin publication state the engine started with (D15, M5 plan
+  /// M07), or null while no release is offered. Later changes arrive in
+  /// [PinPublicationState].
+  final PinPublicationState? pinPublication;
 }
 
 /// The engine refused a request it does not serve (yet). The 03 §10.1 table
@@ -1053,6 +1359,18 @@ final class ServerPrefs {
   );
 }
 
+/// Whether pins the user confirms publish (D15, M5 plan M07): [release]
+/// is the release an assertion names, null while none is offered, and
+/// [asserted] whether this device's enrollment holds the assertion for
+/// it. [EngineReady.pinPublication] holds the state at start; this is
+/// sent after each [SetPinPublication] while a release is offered.
+final class PinPublicationState extends EngineEvent {
+  const PinPublicationState({this.release, this.asserted = false});
+
+  final String? release;
+  final bool asserted;
+}
+
 /// The synced preferences of the fleet server [serverId] changed (03
 /// §4.8): a pulled `pref` record applied, was removed, or its server
 /// arrived or left. [prefs] is null when the server has no record, or a
@@ -1225,7 +1543,9 @@ final class Sample extends EngineEvent {
              (stream == SampleStream.failedUnits &&
                  result is FailedUnitsResult) ||
              (stream == SampleStream.timers && result is TimersResult) ||
-             (stream == SampleStream.cron && result is CronResult),
+             (stream == SampleStream.cron && result is CronResult) ||
+             (stream == SampleStream.userUnits && result is UnitsResult) ||
+             (stream == SampleStream.userTimers && result is TimersResult),
          'result must be the variant for stream, or CollectorUnavailable',
        );
 
@@ -1355,6 +1675,143 @@ final class LogStreamState extends EngineEvent {
   final LogStreamStatus status;
 }
 
+/// The answer to the [UnitQuery] [requestId] on [serverId]: what it read,
+/// or [UnitQueryFailed] with why, plus the parser's warnings.
+final class UnitQueryResult extends EngineEvent {
+  UnitQueryResult({
+    required this.serverId,
+    required this.requestId,
+    required this.payload,
+    Iterable<String> warnings = const [],
+  }) : warnings = List.unmodifiable(warnings);
+
+  final String serverId;
+  final String requestId;
+  final UnitPayload payload;
+  final List<String> warnings;
+}
+
+/// What a [UnitQuery] found.
+@immutable
+sealed class UnitPayload {
+  const UnitPayload();
+}
+
+/// A unit's file and drop-ins as `systemctl cat` prints them, each after
+/// a `# <path>` line, with `Environment=` values and secrets in `Exec`
+/// lines masked (03 §8.9).
+final class UnitFilePayload extends UnitPayload {
+  UnitFilePayload(Iterable<MaskedValue> text) : text = List.unmodifiable(text);
+
+  final List<MaskedValue> text;
+}
+
+final class UnitResourcesPayload extends UnitPayload {
+  const UnitResourcesPayload(this.resources);
+
+  final UnitResources resources;
+}
+
+final class UnitSocketsPayload extends UnitPayload {
+  UnitSocketsPayload(Iterable<UnitSocket> sockets)
+    : sockets = List.unmodifiable(sockets);
+
+  final List<UnitSocket> sockets;
+}
+
+/// Why a [UnitQuery] read nothing.
+enum UnitQueryFailure {
+  /// The server is not in the fleet, or has no ready link or probe.
+  noLink,
+
+  /// The unit name is not a unit's (03 §8.8).
+  invalidUnit,
+
+  /// The manager has no such unit.
+  notFound,
+
+  /// The login user's manager could not be reached: no user session and
+  /// no linger (SVC-09).
+  managerUnavailable,
+
+  /// The command failed otherwise; the detail says how.
+  failed,
+}
+
+final class UnitQueryFailed extends UnitPayload {
+  const UnitQueryFailed(this.failure, {this.detail});
+
+  final UnitQueryFailure failure;
+
+  /// The host's error text, for [UnitQueryFailure.failed].
+  final String? detail;
+}
+
+/// The answer to the [JobHistoryQuery] [requestId] on [serverId]: what
+/// it read, or [JobHistoryFailed] with why, plus the parser's warnings.
+final class JobHistoryResult extends EngineEvent {
+  JobHistoryResult({
+    required this.serverId,
+    required this.requestId,
+    required this.payload,
+    Iterable<String> warnings = const [],
+  }) : warnings = List.unmodifiable(warnings);
+
+  final String serverId;
+  final String requestId;
+  final JobHistoryPayload payload;
+  final List<String> warnings;
+}
+
+/// What a [JobHistoryQuery] found.
+@immutable
+sealed class JobHistoryPayload {
+  const JobHistoryPayload();
+}
+
+/// anacron's jobs, their commands masked (03 §8.9).
+final class AnacronPayload extends JobHistoryPayload {
+  AnacronPayload(Iterable<AnacronJob> jobs) : jobs = List.unmodifiable(jobs);
+
+  final List<AnacronJob> jobs;
+}
+
+final class TimerLastRunPayload extends JobHistoryPayload {
+  const TimerLastRunPayload(this.lastRun);
+
+  final TimerLastRun lastRun;
+}
+
+/// cron's logged job starts, newest first, their commands masked.
+final class CronRunsPayload extends JobHistoryPayload {
+  CronRunsPayload(Iterable<LoggedCronRun> runs)
+    : runs = List.unmodifiable(runs);
+
+  final List<LoggedCronRun> runs;
+}
+
+/// Why a [JobHistoryQuery] read nothing.
+enum JobHistoryFailure {
+  /// The server is not in the fleet, or has no ready link.
+  noLink,
+
+  /// A timer or unit name is not a unit's (03 §8.8).
+  invalidTarget,
+
+  /// The host has no `/etc/anacrontab`, so anacron is not installed.
+  notInstalled,
+
+  /// The command failed otherwise; the detail says how.
+  failed,
+}
+
+final class JobHistoryFailed extends JobHistoryPayload {
+  const JobHistoryFailed(this.failure, {this.detail});
+
+  final JobHistoryFailure failure;
+  final String? detail;
+}
+
 /// The answer to the [DockerQuery] [queryId] on [serverId] (03 §10.1):
 /// what it read, or [DockerQueryFailed] with why, plus the parser's
 /// warnings (03 §3.4's ParseResult convention).
@@ -1370,6 +1827,75 @@ final class DockerResult extends EngineEvent {
   final String queryId;
   final DockerPayload payload;
   final List<String> warnings;
+}
+
+/// The answer to the [HostQuery] with [queryId]. [warnings] name the rows
+/// the parser skipped.
+final class HostResult extends EngineEvent {
+  const HostResult({
+    required this.serverId,
+    required this.queryId,
+    required this.payload,
+    this.warnings = const [],
+  });
+
+  final String serverId;
+  final String queryId;
+  final HostPayload payload;
+  final List<String> warnings;
+}
+
+/// What a [HostResult] carries.
+@immutable
+sealed class HostPayload {
+  const HostPayload();
+}
+
+/// [VarLogQuery]'s files, sorted by path.
+final class VarLogFiles extends HostPayload {
+  const VarLogFiles(this.files);
+
+  final List<LogFileEntry> files;
+}
+
+/// [BootsQuery]'s boots, oldest first, as journalctl lists them.
+final class JournalBoots extends HostPayload {
+  const JournalBoots(this.boots);
+
+  final List<JournalBootEntry> boots;
+}
+
+/// A [HostQuery] that read nothing; [detail] is the end of its stderr,
+/// or the text of an error the read threw (a timeout or a lost link).
+final class HostQueryFailed extends HostPayload {
+  const HostQueryFailed(this.failure, {this.detail});
+
+  final HostQueryFailure failure;
+  final String? detail;
+}
+
+/// Why a [HostQuery] read nothing.
+enum HostQueryFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// The host refused the read.
+  denied,
+
+  /// The tool the query runs is absent on the host.
+  missing,
+
+  /// The read failed otherwise: a timeout, a lost link, or an exit the
+  /// query does not expect.
+  failed,
+}
+
+/// [RedactLines]' lines, redacted, joined with newlines.
+final class RedactedLines extends EngineEvent {
+  const RedactedLines(this.requestId, this.text);
+
+  final String requestId;
+  final String text;
 }
 
 /// What the engine knows of [serverId]'s Docker endpoint (03 §5.8, §5.9),
@@ -1470,6 +1996,132 @@ final class ActionProgress extends EngineEvent {
   final String? message;
 }
 
+/// The answer to the [ReadEditable] with [requestId].
+final class EditRead extends EngineEvent {
+  const EditRead({
+    required this.serverId,
+    required this.requestId,
+    required this.result,
+  });
+
+  final String serverId;
+  final String requestId;
+  final EditReadResult result;
+}
+
+/// What an [EditRead] carries.
+@immutable
+sealed class EditReadResult {
+  const EditReadResult();
+}
+
+/// The target's [text], whose UTF-8 bytes hash to [sha256]. A file has
+/// its numeric [uid], [gid] and permission [mode]; a crontab has none.
+/// [privileged] says a write needs admin mode: the file belongs to
+/// another account, or the crontab is another account's.
+final class EditContent extends EditReadResult {
+  const EditContent({
+    required this.text,
+    required this.sha256,
+    required this.privileged,
+    this.uid,
+    this.gid,
+    this.mode,
+  });
+
+  final String text;
+  final String sha256;
+  final bool privileged;
+  final int? uid, gid, mode;
+}
+
+/// A [ReadEditable] that read nothing; [detail] is the end of stderr.
+final class EditReadFailed extends EditReadResult {
+  const EditReadFailed(this.failure, {this.detail});
+
+  final EditReadFailure failure;
+  final String? detail;
+}
+
+/// Why a [ReadEditable] read nothing.
+enum EditReadFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// The engine refused the target before reading (03 §8.8).
+  invalidTarget,
+
+  /// The file does not exist.
+  notFound,
+
+  /// Only root may read it, and admin mode is off.
+  adminRequired,
+
+  /// The file is larger than the editor takes (`kEditReadCap`).
+  tooLarge,
+
+  /// The file is not UTF-8 text.
+  notText,
+
+  /// A [StackFileTarget]'s project is not a verified source (STK-07).
+  stackUnverified,
+
+  /// The read failed otherwise.
+  failed,
+}
+
+/// What Klabautermann keeps on [serverId] (SAF-14, 03 §8.11, P13): the
+/// manifest rows and whether each is there, and every backup the indexes
+/// record with whether its content still has the recorded hash. Root's
+/// part is [rootUnchecked] until admin mode reads it.
+final class FootprintState extends EngineEvent {
+  const FootprintState(
+    this.serverId, {
+    this.files = const [],
+    this.backups = const [],
+    this.rootUnchecked = false,
+    this.warnings = const [],
+  });
+
+  final String serverId;
+  final List<FootprintFile> files;
+  final List<FootprintBackup> backups;
+  final bool rootUnchecked;
+  final List<String> warnings;
+}
+
+/// One manifest row and whether its path exists.
+@immutable
+final class FootprintFile {
+  const FootprintFile(this.scope, this.row, {required this.present});
+
+  final FootprintScope scope;
+  final FootprintRow row;
+  final bool present;
+}
+
+/// One backup an index records, and what verification found.
+@immutable
+final class FootprintBackup {
+  const FootprintBackup(this.scope, this.entry, this.status);
+
+  final FootprintScope scope;
+  final BackupEntry entry;
+  final FootprintBackupStatus status;
+}
+
+/// What verification found of a backup.
+enum FootprintBackupStatus {
+  /// Its content has the hash its index records.
+  intact,
+
+  /// Its content changed on the host ("modified on host").
+  modified,
+
+  /// The index records it, but the file is gone.
+  missing,
+}
+
 /// A plan finished, one way or another (03 §10.1). A failed plan says
 /// why in typed facts the app words (D35): which step, its exit status or
 /// HTTP status, and what re-validation found.
@@ -1484,6 +2136,7 @@ final class ActionFinished extends EngineEvent {
     this.revalidation,
     this.operationId,
     this.skippedSteps = const [],
+    this.output,
   });
 
   final String planId;
@@ -1496,8 +2149,8 @@ final class ActionFinished extends EngineEvent {
   /// The index of the step that failed, in the preview's steps.
   final int? failedStep;
 
-  /// A failed shell step's exit status; null when the channel ended
-  /// without one.
+  /// A failed shell step's exit status, or a [ContainerExec]'s whether
+  /// it failed or not; null when the channel ended without one.
   final int? exitCode;
 
   /// A failed API step's HTTP status.
@@ -1513,7 +2166,32 @@ final class ActionFinished extends EngineEvent {
   /// The indexes of best-effort steps that failed without failing the
   /// run, such as the host syslog line (SAF-13).
   final List<int> skippedSteps;
+
+  /// What a [ContainerExec] or a [RunCronJob] printed, whether it
+  /// succeeded or failed.
+  final ExecOutput? output;
 }
+
+/// A one-off command's output (CTX-08, JOB-19), with secrets redacted as the
+/// audit log redacts them, at most [kExecOutputMax] bytes in all.
+@immutable
+final class ExecOutput {
+  const ExecOutput({
+    required this.stdout,
+    required this.stderr,
+    this.truncated = false,
+  });
+
+  final String stdout;
+  final String stderr;
+
+  /// Whether the command printed more than [kExecOutputMax] bytes, the
+  /// rest of which was read and dropped.
+  final bool truncated;
+}
+
+/// The most a one-off command's output keeps [E] (CTX-08).
+const int kExecOutputMax = 1024 * 1024;
 
 /// Why a plan failed.
 enum ActionFailure {
@@ -1562,6 +2240,11 @@ enum RevalidationFailure {
 
   /// The container id or the stack's configuration changed.
   targetChanged,
+
+  /// An edited file or crontab no longer has the hash the edit started
+  /// from: someone else changed it (03 §8.5). The app reads it again and
+  /// shows the difference.
+  contentChanged,
 
   /// The check could not read what it compares.
   unreadable,
@@ -1881,6 +2564,85 @@ final class AuditRecord {
   };
 }
 
+/// [terminalId]'s shell started: [command] is what runs, as the exec
+/// was created.
+final class TerminalOpened extends EngineEvent {
+  TerminalOpened(this.terminalId, Iterable<String> command)
+    : command = List.unmodifiable(command);
+
+  final String terminalId;
+  final List<String> command;
+}
+
+/// Output of [terminalId]'s shell, raw as the TTY wrote it, in order.
+/// The engine sends at most 20 a second, as it does [LogBatch]es.
+final class TerminalBytes extends EngineEvent {
+  const TerminalBytes(this.terminalId, this.bytes);
+
+  final String terminalId;
+  final Uint8List bytes;
+}
+
+/// [terminalId]'s shell ended, or never started, and why. Sent once;
+/// the id may be used again after it.
+final class TerminalClosed extends EngineEvent {
+  const TerminalClosed(
+    this.terminalId,
+    this.reason, {
+    this.exitCode,
+    this.detail,
+  });
+
+  final String terminalId;
+  final TerminalCloseReason reason;
+
+  /// The shell's exit code, with [TerminalCloseReason.exited] when the
+  /// daemon reported one.
+  final int? exitCode;
+
+  /// The daemon's message or the error, for the app to show as is.
+  final String? detail;
+}
+
+/// Why a container shell ended or never started.
+enum TerminalCloseReason {
+  /// The shell exited; [TerminalClosed.exitCode] says how.
+  exited,
+
+  /// [CloseTerminal] closed it.
+  closed,
+
+  /// The server is observe-only (SAF-01).
+  observeOnly,
+
+  /// Read-only mode is on (SAF-06).
+  readOnly,
+
+  /// The server is not in the fleet.
+  notInFleet,
+
+  /// The server's Docker endpoint could not be reached.
+  endpointUnavailable,
+
+  /// No session channel was free on the server's relay (03 §5.2).
+  noChannel,
+
+  /// The server already holds [kTerminalsPerServerMax] shells.
+  tooMany,
+
+  /// The container is gone, or the daemon refused the exec.
+  refused,
+
+  /// The server's link was lost.
+  linkLost,
+
+  /// Admin mode ended, and with it the sudo relay the shell ran over.
+  adminEnded,
+
+  /// Anything else; [TerminalClosed.detail] says what.
+  failed,
+}
+
 /// Where admin mode stands on [serverId] (03 §8.2, M4 plan M5). The app
 /// shows the chip and its countdown from [expiresAt] while [phase] is
 /// [AdminModePhase.on]. No field ever holds the password.
@@ -2031,22 +2793,6 @@ final class AlertStatusChanged extends EngineEvent {
 
   final String alertRef;
   final AlertStatus status;
-}
-
-/// Output bytes from an [OpenTerminal] stream (v1, 03 §10.1).
-final class TerminalBytes extends EngineEvent {
-  const TerminalBytes(this.terminalId, this.bytes);
-
-  final String terminalId;
-  final Uint8List bytes;
-}
-
-/// The terminal stream ended (v1, 03 §10.1).
-final class TerminalClosed extends EngineEvent {
-  const TerminalClosed(this.terminalId, {this.reason});
-
-  final String terminalId;
-  final String? reason;
 }
 
 /// The port SSH uses when a config names none (RFC 4253, section 4.1).
@@ -2322,17 +3068,18 @@ sealed class LogSource {
 
 /// The systemd journal through `journalctl -o json`, read as
 /// [JournalRecord]s, with LOG-01's filters; SVC-04's unit logs filter by
-/// [unit]. A null filter matches every record. There is no text filter:
-/// LOG-05 searches the records the view holds, and `journalctl -g`
-/// arrives with LOG-06 (v1).
+/// [unit]. A null filter matches every record. LOG-05 searches the
+/// records the view holds; [grep] has journalctl match them (LOG-06).
 final class JournalLogSource extends LogSource {
   const JournalLogSource({
     this.unit,
     this.identifier,
     this.priority,
     this.currentBootOnly = false,
+    this.boot,
     this.since,
     this.until,
+    this.grep,
   });
 
   /// A systemd unit name (`-u`).
@@ -2344,30 +3091,46 @@ final class JournalLogSource extends LogSource {
   /// The least urgent priority shown (`-p`): records at it or more urgent.
   final LogPriority? priority;
 
-  /// Only the current boot's records (`-b`); past boots arrive with
-  /// LOG-09's boot picker (v1).
+  /// Only the current boot's records (`-b`).
   final bool currentBootOnly;
+
+  /// Only [boot]'s records (`-b <boot>`, LOG-09), picked from a
+  /// [BootsQuery]; not with [currentBootOnly]. A follow reads the
+  /// current boot, so it takes no [boot].
+  final JournalBoot? boot;
 
   /// The time range (`--since`, `--until`). A follow takes no [until],
   /// since it reads up to the present.
   final DateTime? since, until;
+
+  /// A PCRE2 pattern journalctl matches against each record's message
+  /// (`-g`, LOG-06), case-insensitive while it is all lower case. A
+  /// journalctl built without pattern matching ends the read
+  /// [LogStreamEndReason.searchUnsupported].
+  final String? grep;
 }
 
-/// The kernel's messages for the current boot (LOG-03): `journalctl -k`,
-/// read as [JournalRecord]s, with `dmesg --json --decode` only as a
-/// fallback, read as [KernelRecord]s. Past boots arrive with LOG-09 (v1).
+/// The kernel's messages for the current boot (LOG-03), or for [boot]
+/// (LOG-09): `journalctl -k`, read as [JournalRecord]s, with
+/// `dmesg --json --decode` only as the current boot's fallback, read as
+/// [KernelRecord]s.
 final class KernelLogSource extends LogSource {
-  const KernelLogSource();
+  const KernelLogSource({this.boot});
+
+  /// A past boot, picked from a [BootsQuery]; null for the current one.
+  /// A follow reads the current boot, so it takes none.
+  final JournalBoot? boot;
 }
 
 /// One file's lines as [FileRecord]s (LOG-22): `tail -n` for a window,
 /// and `tail -F`, which follows the file by name across rotation, for a
-/// follow. No archives.
+/// follow. A [compressed] rotated file (LOG-08) reads as a window only.
 final class FileLogSource extends LogSource {
   const FileLogSource(
     this.path, {
     this.redacted = false,
     this.elevated = false,
+    this.compressed = false,
   });
 
   /// The absolute path, typed or picked from the common paths; the engine
@@ -2383,6 +3146,12 @@ final class FileLogSource extends LogSource {
   /// [LogStreamEndReason.denied]. Without admin mode it ends denied, and
   /// a follow ends so when admin mode does.
   final bool elevated;
+
+  /// [path] is a rotated `.gz` or `.xz` file, read through `zcat` or
+  /// `xzcat` (LOG-08): its last [LogStreamSpec.window] lines, within the
+  /// engine's output cap, never followed. A decompressor the host lacks
+  /// ends the read [LogStreamEndReason.missing].
+  final bool compressed;
 }
 
 /// A detached operation's output (03 §7.17): the engine reads its
@@ -2655,6 +3424,11 @@ enum LogStreamEndReason {
   /// cache disabled, or on Podman, which has no such cache, any but
   /// `k8s-file`, `json-file` and `journald`. [LogStreamEnded.detail] names the driver.
   logDriverUnreadable,
+
+  /// The host's journalctl cannot match a [JournalLogSource.grep]
+  /// pattern: it was built without PCRE2, or cannot load it (LOG-06).
+  /// The view's own search (LOG-05) still works.
+  searchUnsupported,
 }
 
 /// What a [DockerQuery] reads (03 §7.12 to §7.14).
@@ -2711,6 +3485,32 @@ final class DockerStackFileQuery extends DockerQuerySpec {
   /// The file's absolute path, as the project's labels name it.
   final String path;
 }
+
+/// The profiles a verified project's files name (03 §7.16 STK-09), for
+/// STK-23's `--profile` choices: `compose config --profiles`. Answered
+/// by [DockerStackProfilesPayload], by [DockerStackFileFailed] when the
+/// project is unknown or unverified, or by [DockerQueryFailed] when the
+/// CLI could not list them.
+final class DockerStackProfilesQuery extends DockerQuerySpec {
+  const DockerStackProfilesQuery(this.project);
+
+  final String project;
+}
+
+/// The compose files in [directories] and the folders right below them
+/// (03 §7.16 STK-08): `find <dir> -maxdepth 2` for `compose*.y*ml` and
+/// `docker-compose*.y*ml`, run as the login user, for stacks with no
+/// containers. Answered by [DockerStackScanPayload].
+final class DockerStackScanQuery extends DockerQuerySpec {
+  DockerStackScanQuery(Iterable<String> directories)
+    : directories = List.unmodifiable(directories);
+
+  /// Absolute paths, at most [kStackScanDirectoriesMax].
+  final List<String> directories;
+}
+
+/// The most folders one [DockerStackScanQuery] searches [E].
+const int kStackScanDirectoriesMax = 16;
 
 /// The compose CLIs on the server (03 §7.16 STK-05), for the Access tab's
 /// compose row (CN-24) without a stacks watch: looked for once per
@@ -2939,6 +3739,30 @@ final class DockerStackFilePayload extends DockerPayload {
   /// Whether the file is over [kStackFileMaxBytes], so [text] holds only
   /// its complete lines within that many bytes.
   final bool truncated;
+}
+
+/// The profiles a [DockerStackProfilesQuery] found, sorted.
+final class DockerStackProfilesPayload extends DockerPayload {
+  DockerStackProfilesPayload({
+    required this.project,
+    required Iterable<String> profiles,
+  }) : profiles = List.unmodifiable(profiles);
+
+  final String project;
+  final List<String> profiles;
+}
+
+/// The compose files a [DockerStackScanQuery] found, sorted.
+final class DockerStackScanPayload extends DockerPayload {
+  DockerStackScanPayload(Iterable<String> files, {this.incomplete = false})
+    : files = List.unmodifiable(files);
+
+  /// Absolute paths; a stack's folder is a file's directory.
+  final List<String> files;
+
+  /// Whether a folder could not be read, or the list was cut at the
+  /// output cap, so stacks may be missing.
+  final bool incomplete;
 }
 
 /// The most bytes of a stack file the engine reads (M11 [E]).
@@ -3344,17 +4168,57 @@ final class KillProcess extends ActionIntent {
 
 /// Starts, stops, restarts or reloads a system unit (SVC-03).
 final class UnitAction extends ActionIntent {
-  const UnitAction(super.serverId, {required this.unit, required this.verb});
+  const UnitAction(
+    super.serverId, {
+    required this.unit,
+    required this.verb,
+    this.scope = UnitScope.system,
+  });
 
   final String unit;
   final SystemctlVerb verb;
+  final UnitScope scope;
 }
 
-/// Runs a system timer's service now (JOB-08).
+/// Runs a timer's service now (JOB-08), the system's or the login
+/// user's.
 final class StartTimer extends ActionIntent {
-  const StartTimer(super.serverId, {required this.timer});
+  const StartTimer(
+    super.serverId, {
+    required this.timer,
+    this.scope = UnitScope.system,
+  });
 
   final String timer;
+  final UnitScope scope;
+}
+
+/// Which systemd manager a unit action or query addresses (03 §7.5,
+/// SVC-09).
+enum UnitScope {
+  /// The system manager.
+  system,
+
+  /// The login user's own manager (`systemctl --user`). Its actions run
+  /// as the login user, never through sudo, which would address root's
+  /// manager instead.
+  user,
+}
+
+/// Runs a cron line's command once, now, as the user cron runs it as
+/// (03 §7.7, JOB-19): `sh -c` with the line's `%` text on standard input,
+/// and its output in [ActionFinished.output]. [source] and [raw] name the
+/// line as the jobs list shows it, masked; the engine reads the source
+/// again and finds the line by its masked form.
+final class RunCronJob extends ActionIntent {
+  const RunCronJob(super.serverId, {required this.source, required this.raw});
+
+  /// [CronJob.source]: `crontab`, `crontab -u <user>`, `/etc/crontab` or
+  /// an `/etc/cron.d/` file.
+  final String source;
+
+  /// The line as the jobs list shows it, masked.
+  final String raw;
 }
 
 /// What [ContainerAction] does to a container (CTR-02).
@@ -3373,6 +4237,22 @@ final class ContainerAction extends ActionIntent {
   final String containerId;
   final ContainerVerb verb;
   final KillSignal? signal;
+}
+
+/// Runs [argv] once in [containerId] without a TTY (03 §7.13, CTX-08), as
+/// [user] where set, and reports its output and exit code in
+/// [ActionFinished.output] and [ActionFinished.exitCode].
+final class ContainerExec extends ActionIntent {
+  ContainerExec(
+    super.serverId, {
+    required this.containerId,
+    required Iterable<String> argv,
+    this.user,
+  }) : argv = List.unmodifiable(argv);
+
+  final String containerId;
+  final List<String> argv;
+  final String? user;
 }
 
 /// Removes a container (CTR-05), its anonymous volumes with [volumes],
@@ -3465,6 +4345,111 @@ final class RedeployStack extends ActionIntent {
 
   final String project;
   final bool removeOrphans;
+}
+
+/// What an edit reads and writes (03 §8.5, SAF-12, X-05).
+@immutable
+sealed class EditTarget {
+  const EditTarget();
+}
+
+/// A file by its absolute, normalized path (03 §8.8).
+final class FileTarget extends EditTarget {
+  const FileTarget(this.path);
+
+  final String path;
+
+  @override
+  bool operator ==(Object other) => other is FileTarget && other.path == path;
+
+  @override
+  int get hashCode => path.hashCode;
+}
+
+/// A crontab (JOB-04 to JOB-07): the login user's, or [user]'s, which
+/// another account's needs admin mode.
+final class CrontabTarget extends EditTarget {
+  const CrontabTarget({this.user});
+
+  final String? user;
+
+  @override
+  bool operator ==(Object other) =>
+      other is CrontabTarget && other.user == user;
+
+  @override
+  int get hashCode => Object.hash(CrontabTarget, user);
+}
+
+/// One file of the compose project [project] (03 §7.16 STK-07): a config
+/// or environment file its containers recorded, or the `.env` in its
+/// working directory, as [DockerStackFileQuery] reads them. Only a
+/// verified project's files are read or written, and a write checks the
+/// candidate with `compose config -q` before it replaces the file.
+final class StackFileTarget extends EditTarget {
+  const StackFileTarget({required this.project, required this.path});
+
+  final String project;
+
+  /// The file's absolute path, as the project's labels name it.
+  final String path;
+
+  @override
+  bool operator ==(Object other) =>
+      other is StackFileTarget &&
+      other.project == project &&
+      other.path == path;
+
+  @override
+  int get hashCode => Object.hash(StackFileTarget, project, path);
+}
+
+/// Replaces [target]'s content with [text] (SAF-12, X-05), only while the
+/// target still has [baseSha256], the hash its [ReadEditable] read. The
+/// plan backs the target up first, writes a temp file beside it, carries
+/// its owner, mode, ACL and xattrs over (D67) and renames it over the
+/// target; a crontab goes through `crontab -`.
+final class EditFile extends ActionIntent {
+  const EditFile(
+    super.serverId, {
+    required this.target,
+    required this.text,
+    required this.baseSha256,
+  });
+
+  final EditTarget target;
+  final String text;
+  final String baseSha256;
+}
+
+/// Whose backups a footprint action or row is (03 §8.11): the login
+/// user's, under its home, or root's under `/var/lib`, which needs admin
+/// mode.
+enum FootprintScope { user, root }
+
+/// Keeps the newest [count] backups of each file in [scope]'s backup
+/// directory and removes the rest, with their index lines (SAF-14,
+/// "keep last N"; tier 1).
+final class KeepLastBackups extends ActionIntent {
+  const KeepLastBackups(super.serverId, {required this.scope, this.count = 5})
+    : assert(count >= 1, 'keep at least one');
+
+  final FootprintScope scope;
+  final int count;
+}
+
+/// Removes every backup of [source], a path or `crontab:<user>`, from
+/// [scope]'s backup directory (SAF-14). They are the only undo of the
+/// edits they back up, so this needs the typed confirmation.
+final class RemoveBackups extends ActionIntent {
+  const RemoveBackups(
+    super.serverId, {
+    required this.scope,
+    required this.source,
+  });
+
+  final FootprintScope scope;
+  final String source;
 }
 
 /// The app's safety preferences (M4 plan M4, SAF-01, SAF-06): per server,
@@ -3951,7 +4936,8 @@ enum LinkClosedReason {
 /// connect failures protocol version 3 classifies (03 §10.1); the last
 /// three are 03 §5.3's client limitations.
 enum LinkFailureKind {
-  /// The connection was refused, or the host had no route or no address.
+  /// The connection was refused, or the host had no route or no address,
+  /// or its SSH service closed the connection before the handshake began.
   unreachable,
 
   /// Connecting or the handshake ran past its deadline.
@@ -4240,6 +5226,13 @@ enum SampleStream {
 
   /// Cron jobs ([CronResult]).
   cron,
+
+  /// The login user's own systemd units, from its user manager
+  /// ([UnitsResult], 7.5, SVC-09).
+  userUnits,
+
+  /// The login user's own systemd timers ([TimersResult], 7.7, JOB-08).
+  userTimers,
 }
 
 /// The 03 §6.4 cadence columns [SetCadenceProfile] picks among.

@@ -143,11 +143,11 @@ ComposeInvocation composePs({
 }
 
 /// `... compose ... config` for source verification and viewing
-/// (03 §7.16 STK-01, STK-04, STK-06). Exactly one of [quiet], [hash],
-/// [services] or [formatJson] is expected; the interpolated plain output
-/// is never captured by the app (it can contain secrets). [envFiles]
-/// repeats `--env-file` for a project that recorded several; [profiles]
-/// enables profiles, `*` all of them.
+/// (03 §7.16 STK-01, STK-04, STK-06, STK-09). Exactly one of [quiet],
+/// [hash], [services], [listProfiles] or [formatJson] is expected; the
+/// interpolated plain output is never captured by the app (it can
+/// contain secrets). [envFiles] repeats `--env-file` for a project that
+/// recorded several; [profiles] enables profiles, `*` all of them.
 ComposeInvocation composeConfig({
   String binary = 'docker',
   required String socketPath,
@@ -159,6 +159,7 @@ ComposeInvocation composeConfig({
   bool quiet = false,
   String? hash,
   bool services = false,
+  bool listProfiles = false,
   List<String> profiles = const [],
   bool formatJson = false,
 }) {
@@ -174,6 +175,7 @@ ComposeInvocation composeConfig({
   )..add('config');
   if (quiet) argv.add('-q');
   if (services) argv.add('--services');
+  if (listProfiles) argv.add('--profiles');
   if (hash != null) {
     argv
       ..add('--hash')

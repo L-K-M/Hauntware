@@ -27,7 +27,9 @@ const _lockLine = "readonly lock_file='/tmp/klabautermann-fixture.lock'";
 /// `--tags inventory`, `dart test` plays the inventory session and exits
 /// at once with `$STUB_INVENTORY_EXIT` (default 0); `dart run` of
 /// inventory.dart plays its check, exiting with
-/// `$STUB_INVENTORY_CHECK_EXIT` (default 0).
+/// `$STUB_INVENTORY_CHECK_EXIT` (default 0). `curl` plays the sync
+/// service answering its readiness probe, and a stand-in beside the copy
+/// plays previous_release.sh, printing a harness path.
 const _stubs = {
   'docker': r'''
 echo "docker $*" >>"$STUB_LOG"
@@ -48,6 +50,10 @@ echo "ssh-agent $*" >>"$STUB_LOG"
 if [[ "$1" == -s ]]; then echo 'SSH_AGENT_PID=0; export SSH_AGENT_PID;'; fi
 ''',
   'ssh-add': '',
+  'curl': r'''
+echo "curl $*" >>"$STUB_LOG"
+echo 404
+''',
   'ssh': r'''
 echo "ssh $*" >>"$STUB_LOG"
 cat >/dev/null
@@ -81,6 +87,9 @@ on_term() {
   exit 143
 }
 trap on_term TERM
+if [[ "$run" == suites ]]; then
+  echo "harness ${KLABAUTERMANN_PREVIOUS_RELEASE_HARNESS:-}" >>"$STUB_LOG"
+fi
 echo "$run started" >>"$STUB_LOG"
 if [[ "$run" == soak && -z "${STUB_SOAK_NO_EVIDENCE:-}" ]]; then
   echo '{}' >"$KLABAUTERMANN_SOAK_DIR/soak.json"
@@ -149,10 +158,17 @@ void main() {
     // What run.sh pipes to the Docker host, which the stand-in ignores.
     File('${integration.path}/seed_docker.sh').writeAsStringSync('exit 0\n');
     File('${integration.path}/inventory.sh').writeAsStringSync('exit 0\n');
+    final previousRelease = File('${integration.path}/previous_release.sh')
+      ..writeAsStringSync(
+        '#!/usr/bin/env bash\n'
+        'echo "previous-release \$*" >>"\$STUB_LOG"\n'
+        'echo /stub/previous-release/harness\n',
+      );
     final chmod = await Process.run('chmod', [
       '+x',
       for (final name in _stubs.keys) '${bin.path}/$name',
       runnerVm.path,
+      previousRelease.path,
     ]);
     expect(chmod.exitCode, 0, reason: '${chmod.stderr}');
   });
@@ -443,6 +459,26 @@ void main() {
           startsWith('ssh '),
           endsWith(' klab@127.0.0.1 sh -s -- sha256:stub'),
         ),
+        'suites started',
+      ]),
+    );
+  });
+
+  test('run.sh builds the previous-release harness once the sync service '
+      'answers, and hands its path to the suites', () async {
+    final (process: _, :exitCode, :output) = await startRun(suitesExit: '0');
+
+    expect(
+      await exitCode.timeout(const Duration(seconds: 20)),
+      0,
+      reason: '$output',
+    );
+    expect(
+      fixtureLifetime(),
+      containsAllInOrder([
+        startsWith('curl '),
+        allOf(startsWith('previous-release '), endsWith('/previous-release')),
+        'harness /stub/previous-release/harness',
         'suites started',
       ]),
     );

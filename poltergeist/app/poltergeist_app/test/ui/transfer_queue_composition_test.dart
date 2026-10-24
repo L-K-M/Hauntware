@@ -289,6 +289,10 @@ void main() {
       final guard = QuitGuard(
         navigatorKey: navigatorKey,
         onError: (error, _) => errors.add(error),
+        // This test proves what the flush makes durable, not its deadline
+        // (quit_guard_test covers that); a loaded CI runner can take past
+        // the 2 s default to fsync the journal.
+        flushTimeout: const Duration(seconds: 30),
       );
       await tester.pumpWidget(
         PoltergeistApp(

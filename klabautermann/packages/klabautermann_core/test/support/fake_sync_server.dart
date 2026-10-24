@@ -65,6 +65,7 @@ final class FakeSyncServer {
   void clearRecords() {
     _records.clear();
     pushed.clear();
+    pushes = 0;
     _seq = 0;
   }
 

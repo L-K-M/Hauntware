@@ -40,6 +40,20 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- seance://connect links (D12) reach Dart through app_links,
+                 whose intake reviews every link before anything connects.
+                 Flutter's own deep linking would push the link as a route
+                 instead, so it stays off. -->
+            <meta-data
+              android:name="flutter_deeplinking_enabled"
+              android:value="false"
+              />
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="seance" android:host="connect"/>
+            </intent-filter>
         </activity>
         <!-- Keeps the process anchored while SSH sessions are live so
              backgrounding the app doesn't freeze it and drop every connection.

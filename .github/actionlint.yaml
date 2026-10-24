@@ -1,0 +1,9 @@
+# GitHub added `concurrency.queue` (May 2026) so a concurrency group can
+# queue more than one waiting job; actionlint v1.7.12 predates the key and
+# rejects it as unknown. GitHub accepts it (probe run 39955294820 queued
+# three jobs in one group and ran them in turn), so ignore exactly that
+# error. Every other actionlint check still runs.
+paths:
+  .github/workflows/**/*.{yml,yaml}:
+    ignore:
+      - 'unexpected key "queue" for "concurrency" section.+'

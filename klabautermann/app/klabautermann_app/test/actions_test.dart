@@ -338,6 +338,10 @@ void main() {
     };
 
     Future<void> pumpEntries(WidgetTester tester, SafetyPolicy? policy) async {
+      // Tall enough that the list builds every entry.
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       final entries = ListView(
         children: [
           for (final point in ActionEntryPoint.values)

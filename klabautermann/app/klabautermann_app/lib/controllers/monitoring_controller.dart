@@ -5,10 +5,13 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../ui/charts/series_ring.dart';
 import '../ui/charts/time_series.dart';
+import 'container_terminals.dart';
 import 'docker_controller.dart';
 import 'docker_endpoint_choices.dart';
+import 'job_history_reads.dart';
 import 'log_reads.dart';
 import 'log_streams.dart';
+import 'stack_folders.dart';
 
 /// How long a server's link outlives the last view that opened it, as long
 /// as the grace 03 §5.1 and D34 give a backgrounded phone's link: stepping
@@ -141,14 +144,20 @@ final class MonitoringController extends ChangeNotifier {
   /// once. [now] is what [clock] reads. [dockerEndpointChoices], the
   /// Docker sockets chosen on this device (CN-09), outlives this run and
   /// goes to [docker]; without it the choices last this run.
+  /// [stackFolders], the folders STK-08 scans on each server, outlives it
+  /// the same way.
   MonitoringController(
     this._engine, {
     this._linkGrace = kLinkLeaveGrace,
     DateTime Function() now = DateTime.now,
     DockerEndpointChoices? dockerEndpointChoices,
-  }) : _clock = _FreshnessClock(now) {
+    StackFolders? stackFolders,
+  }) : _clock = _FreshnessClock(now),
+       stackFolders = stackFolders ?? StackFolders() {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
     logs = LogStreams(_engine);
+    terminals = ContainerTerminals(_engine);
+    jobHistory = JobHistoryReads(_engine);
     docker = DockerController(
       _engine,
       endpointChoices: dockerEndpointChoices,
@@ -156,12 +165,24 @@ final class MonitoringController extends ChangeNotifier {
     );
   }
 
+  /// The folders the Stacks sub-tab scans for stacks without containers
+  /// (STK-08), chosen on this device.
+  final StackFolders stackFolders;
+
   /// The log streams panels open, and each server's journal access for
   /// LOG-04's notice (03 §10.1, §10.8): a concern of its own that lasts
   /// this engine run, listening to the engine beside this controller. It
   /// sends every [OpenLogStream] the app sends, [openLogRead]'s included,
   /// since a rejection names no stream.
   late final LogStreams logs;
+
+  /// The container shells views open (03 §7.13, CTX-07): a concern of
+  /// its own for this engine run, listening beside [logs].
+  late final ContainerTerminals terminals;
+
+  /// The Jobs tab's last runs (JOB-05), a concern of its own beside
+  /// [logs].
+  late final JobHistoryReads jobHistory;
 
   /// Each server's Docker endpoint, which the server header names, and
   /// the engine details the Docker tab shows (03 §5.9, §10.2): a concern
@@ -174,6 +195,18 @@ final class MonitoringController extends ChangeNotifier {
   late final StreamSubscription<EngineEvent> _events;
 
   final Map<String, _ServerReadings> _readings = {};
+
+  /// The host queries waiting for their answers, by query id.
+  final Map<String, (String, Completer<HostResult>)> _hostQueries = {};
+  int _nextHostQuery = 0;
+
+  /// Unit reads waiting on the engine, by request id.
+  final Map<String, (String, Completer<UnitQueryResult>)> _unitQueries = {};
+  int _nextUnitQuery = 0;
+
+  /// The [redactLines] requests waiting for the engine, by request id.
+  final Map<String, Completer<String?>> _redactions = {};
+  int _nextRedaction = 0;
 
   /// The refreshes waiting for their readings.
   final Set<_PendingRefresh> _refreshes = {};
@@ -334,6 +367,35 @@ final class MonitoringController extends ChangeNotifier {
     _send(Unsubscribe(serverId: serverId, subscriptionId: subscriptionId));
   }
 
+  /// Reads [query] on [serverId]: the files under `/var/log` or the
+  /// journal's boots (LOG-08, LOG-09). A stopped engine answers no link.
+  Future<HostResult> queryHost(String serverId, HostQuerySpec query) {
+    final queryId = 'host-${_nextHostQuery++}';
+    if (_engineStopped) return Future.value(_noHostLink(serverId, queryId));
+    final answer = Completer<HostResult>();
+    _hostQueries[queryId] = (serverId, answer);
+    _send(HostQuery(serverId: serverId, queryId: queryId, query: query));
+    return answer.future;
+  }
+
+  /// [lines] joined by newlines, through the engine's secret redactor
+  /// (LOG-10, 03 §8.9), which the app cannot import; null when the engine
+  /// has stopped, so nothing is exported unredacted by accident.
+  Future<String?> redactLines(List<String> lines) {
+    if (_engineStopped) return Future.value();
+    final requestId = 'redact-${_nextRedaction++}';
+    final answer = Completer<String?>();
+    _redactions[requestId] = answer;
+    _send(RedactLines(requestId, lines));
+    return answer.future;
+  }
+
+  static HostResult _noHostLink(String serverId, String queryId) => HostResult(
+    serverId: serverId,
+    queryId: queryId,
+    payload: const HostQueryFailed(HostQueryFailure.noLink),
+  );
+
   /// Asks the engine to read the streams of [serverId]'s subscription
   /// [subscriptionId] at once (PLT-02's pull to refresh). Completes once
   /// each has a newer sample, failed readings included, once the server
@@ -401,6 +463,25 @@ final class MonitoringController extends ChangeNotifier {
   /// returned [LogRead] reports its records and state; the caller closes
   /// it once it no longer shows it.
   LogRead openLogRead(LogStreamSpec spec) => LogRead(logs, spec);
+
+  /// Reads [query] on [serverId]: a unit's file, its resources or the
+  /// sockets (03 §7.5, SVC-07, SVC-08, SVC-10). A stopped engine answers
+  /// no link.
+  Future<UnitQueryResult> queryUnit(String serverId, UnitQuerySpec query) {
+    final requestId = 'unit-${_nextUnitQuery++}';
+    if (_engineStopped) return Future.value(_noUnitLink(serverId, requestId));
+    final answer = Completer<UnitQueryResult>();
+    _unitQueries[requestId] = (serverId, answer);
+    _send(UnitQuery(serverId: serverId, requestId: requestId, query: query));
+    return answer.future;
+  }
+
+  static UnitQueryResult _noUnitLink(String serverId, String requestId) =>
+      UnitQueryResult(
+        serverId: serverId,
+        requestId: requestId,
+        payload: const UnitQueryFailed(UnitQueryFailure.noLink),
+      );
 
   /// A view of [serverId] opened (the desktop workspace, the phone's pushed
   /// screen). The first sends [Connect]; within the grace after the last
@@ -529,6 +610,10 @@ final class MonitoringController extends ChangeNotifier {
 
   void _onEngineEvent(EngineEvent event) {
     switch (event) {
+      case HostResult(:final queryId):
+        _hostQueries.remove(queryId)?.$2.complete(event);
+      case RedactedLines(:final requestId, :final text):
+        _redactions.remove(requestId)?.complete(text);
       case Sample(:final serverId):
         // One still in flight when its server left the fleet would bring
         // back what the purge dropped.
@@ -586,6 +671,8 @@ final class MonitoringController extends ChangeNotifier {
         // As for a sample: a server that left the fleet stays purged.
         if (_fleetIds case final ids? when !ids.contains(serverId)) return;
         _server(serverId).gap(event);
+      case UnitQueryResult(:final requestId):
+        _unitQueries.remove(requestId)?.$2.complete(event);
       case EngineEvent():
         break;
     }
@@ -635,6 +722,20 @@ final class MonitoringController extends ChangeNotifier {
 
   void _onEngineDone() {
     _engineStopped = true;
+    for (final MapEntry(key: queryId, value: (serverId, answer))
+        in _hostQueries.entries) {
+      answer.complete(_noHostLink(serverId, queryId));
+    }
+    _hostQueries.clear();
+    for (final MapEntry(key: requestId, value: (serverId, answer))
+        in _unitQueries.entries) {
+      answer.complete(_noUnitLink(serverId, requestId));
+    }
+    _unitQueries.clear();
+    for (final answer in _redactions.values) {
+      answer.complete(null);
+    }
+    _redactions.clear();
     for (final timer in _leaving.values) {
       timer.cancel();
     }
@@ -648,6 +749,8 @@ final class MonitoringController extends ChangeNotifier {
   void dispose() {
     unawaited(_events.cancel());
     logs.dispose();
+    terminals.dispose();
+    jobHistory.dispose();
     docker.dispose();
     _onEngineDone();
     for (final refresh in _refreshes.toList()) {

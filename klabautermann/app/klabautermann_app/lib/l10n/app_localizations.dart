@@ -2608,11 +2608,41 @@ abstract class AppLocalizations {
   /// **'{level, select, emergency{Emergency} alert{Alert and above} critical{Critical and above} error{Error and above} warning{Warning and above} notice{Notice and above} info{Info and above} other{Debug and above}}'**
   String logsPanelPriorityLevel(String level);
 
-  /// Toggle of the Logs panel's journal filters that shows only entries since the server last started.
+  /// Tooltip and title of the Logs panel's boot picker, which chooses the server start whose journal or kernel entries are shown.
   ///
   /// In en, this message translates to:
-  /// **'Current boot only'**
-  String get logsPanelCurrentBoot;
+  /// **'Boot'**
+  String get logsPanelBoot;
+
+  /// The boot picker's choice: every boot the journal keeps, or only the one since the server last started.
+  ///
+  /// In en, this message translates to:
+  /// **'{choice, select, all{All boots} current{This boot} other{Boot}}'**
+  String logsPanelBootChoice(String choice);
+
+  /// A past boot in the boot picker, counted back from the current one.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Previous boot} other{{count} boots ago}}'**
+  String logsPanelBootPast(int count);
+
+  /// When a boot's first and last journal entries were written, under its name in the boot picker.
+  ///
+  /// In en, this message translates to:
+  /// **'{start} to {end}'**
+  String logsPanelBootSpan(String start, String end);
+
+  /// Shown in the boot picker while the server lists its boots.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the server\'s boots…'**
+  String get logsPanelBootsLoading;
+
+  /// Shown in the boot picker when the server's boots could not be listed.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected to the server.} denied{The server denied access to its boot list.} missing{The server has no journal to list boots from.} other{Reading the server\'s boots failed.}}'**
+  String logsPanelBootsFailed(String failure);
 
   /// Label of the Logs panel's time range filter.
   ///
@@ -2650,6 +2680,126 @@ abstract class AppLocalizations {
   /// **'Common paths'**
   String get logsPanelCommonPaths;
 
+  /// Button beside the file path field that lists the server's log files under /var/log (LOG-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Browse /var/log'**
+  String get logsPanelBrowseFiles;
+
+  /// Title of the sheet listing the server's log files under /var/log.
+  ///
+  /// In en, this message translates to:
+  /// **'Files in /var/log'**
+  String get logsPanelFiles;
+
+  /// Label of the field that narrows the /var/log listing to paths containing its text.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter by name'**
+  String get logsPanelFilesFilter;
+
+  /// Shown in the /var/log browser while the server lists its files.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing the server\'s log files…'**
+  String get logsPanelFilesLoading;
+
+  /// Shown in the /var/log browser when the server's files could not be listed.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected to the server.} denied{The server denied access to /var/log.} missing{The server cannot list /var/log.} other{Listing the server\'s log files failed.}}'**
+  String logsPanelFilesFailed(String failure);
+
+  /// Shown in the /var/log browser when the listing is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'The server has no files under /var/log.'**
+  String get logsPanelFilesEmpty;
+
+  /// Shown in the /var/log browser when the filter matches no file.
+  ///
+  /// In en, this message translates to:
+  /// **'No file path contains this text.'**
+  String get logsPanelFilesNoMatch;
+
+  /// Under a file's path in the /var/log browser: its size and when it last changed.
+  ///
+  /// In en, this message translates to:
+  /// **'{size}, changed {modified}'**
+  String logsPanelFileDetails(String size, String modified);
+
+  /// Under a rotated .gz or .xz file in the /var/log browser.
+  ///
+  /// In en, this message translates to:
+  /// **'Compressed: reads its last lines, without following'**
+  String get logsPanelFileCompressed;
+
+  /// Under a file in the /var/log browser that the server account may not read.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account cannot read it; admin mode can'**
+  String get logsPanelFileUnreadable;
+
+  /// Tooltip of the Logs panel's button that exports the lines it holds (LOG-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Export'**
+  String get logsExport;
+
+  /// Title of the log export sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Export 1 line} other{Export {count} lines}}'**
+  String logsExportTitle(int count);
+
+  /// Switch in the log export sheet that turns off redaction.
+  ///
+  /// In en, this message translates to:
+  /// **'Include secrets'**
+  String get logsExportIncludeSecrets;
+
+  /// Under the Include secrets switch while it is off.
+  ///
+  /// In en, this message translates to:
+  /// **'Passwords, tokens and keys are replaced before the lines leave the app.'**
+  String get logsExportSecretsRedacted;
+
+  /// Under the Include secrets switch while it is on.
+  ///
+  /// In en, this message translates to:
+  /// **'The lines leave the app as they are, secrets included.'**
+  String get logsExportSecretsIncluded;
+
+  /// A button in the log export sheet: copy to the clipboard, save to a file, or open the share sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{target, select, copy{Copy} save{Save…} other{Share…}}'**
+  String logsExportAction(String target);
+
+  /// Toast after the log export copied or saved the lines.
+  ///
+  /// In en, this message translates to:
+  /// **'{target, select, copy{Copied the lines.} other{Saved the lines.}}'**
+  String logsExportDone(String target);
+
+  /// Toast when the log export failed.
+  ///
+  /// In en, this message translates to:
+  /// **'{target, select, copy{The lines could not be copied.} save{The lines could not be saved.} other{The lines could not be shared.}}'**
+  String logsExportFailed(String target);
+
+  /// Toast when the engine could not redact the lines; the export never falls back to the unredacted text.
+  ///
+  /// In en, this message translates to:
+  /// **'The lines could not be redacted, so nothing was exported.'**
+  String get logsExportNotRedacted;
+
+  /// The suggested file name for a saved log export. Keep it a valid file name.
+  ///
+  /// In en, this message translates to:
+  /// **'{source, select, journal{journal} kernel{kernel} other{log}}.log'**
+  String logsExportFileName(String source);
+
   /// Button that reads the log again with the filters or path entered.
   ///
   /// In en, this message translates to:
@@ -2674,6 +2824,18 @@ abstract class AppLocalizations {
   /// **'Follow new entries as the server writes them'**
   String get logsPanelLiveTooltip;
 
+  /// Tooltip of the Logs panel's Live chip while it is off because a past boot is shown.
+  ///
+  /// In en, this message translates to:
+  /// **'A past boot has no new entries to follow'**
+  String get logsPanelLivePastBoot;
+
+  /// Tooltip of the Logs panel's Live chip while it is off because a compressed rotated file is shown.
+  ///
+  /// In en, this message translates to:
+  /// **'A compressed file has no new lines to follow'**
+  String get logsPanelLiveCompressed;
+
   /// Notice above the journal when the server shows the signed-in account only its own entries. The group names are names on the server and stay as they are.
   ///
   /// In en, this message translates to:
@@ -2689,7 +2851,7 @@ abstract class AppLocalizations {
   /// Status line above the log saying what reading it is doing or why it stopped.
   ///
   /// In en, this message translates to:
-  /// **'{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} gap{Following again. Lines written while it was paused or disconnected may be missing.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} other{Choose or type the absolute path of a file to tail.}}'**
+  /// **'{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} gap{Following again. Lines written while it was paused or disconnected may be missing.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} searchUnsupported{This server\'s journal cannot search. Clear the server search to read the log.} other{Choose or type the absolute path of a file to tail.}}'**
   String logsPanelStatus(String status);
 
   /// Button that opens the log again after it stopped or was refused.
@@ -2727,6 +2889,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Match case'**
   String get logsPanelSearchCase;
+
+  /// Tooltip of the toggle that makes the log search read its text as a regular expression.
+  ///
+  /// In en, this message translates to:
+  /// **'Regular expression'**
+  String get logsPanelSearchRegex;
+
+  /// Error under the log search field when its text, read as a regular expression, does not compile.
+  ///
+  /// In en, this message translates to:
+  /// **'Not a valid regular expression'**
+  String get logsPanelSearchInvalid;
+
+  /// Tooltip of the button that reads only the journal entries matching the search, matched by the server, rather than searching the entries already shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Search the whole journal on the server'**
+  String get logsPanelSearchServer;
+
+  /// Chip above the log while the server reads only the journal entries matching a pattern; the pattern is shown as sent.
+  ///
+  /// In en, this message translates to:
+  /// **'Server search: {pattern}'**
+  String logsPanelServerMatch(String pattern);
+
+  /// Tooltip of the button on the server-search chip that reads the whole journal again.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the server search'**
+  String get logsPanelServerMatchClear;
 
   /// How many matches the log search found, before one is selected.
   ///
@@ -3283,13 +3475,13 @@ abstract class AppLocalizations {
   /// Why a job lists no next runs (03 §7.7); reason is the engine's JobRunsUnknown name, and other is noDriver. limit is how many cron lines a reading works out runs for, and years how far ahead it looks.
   ///
   /// In en, this message translates to:
-  /// **'{reason, select, reboot{Runs when cron starts, not at a time.} unparsed{The schedule does not parse, so its runs are unknown.} timeZoneUnresolved{This device does not know the CRON_TZ zone, so its runs are unknown.} serverZoneUnknown{The server\'s time zone is not known yet, so its runs are unknown.} noRunInHorizon{No run falls in the next {years} years.} notEvaluated{Runs are worked out for the first {limit} cron lines only.} anacron{anacron runs this directory; its timing is not shown in this version.} other{No cron line runs this directory.}}'**
+  /// **'{reason, select, reboot{Runs when cron starts, not at a time.} unparsed{The schedule does not parse, so its runs are unknown.} timeZoneUnresolved{This device does not know the CRON_TZ zone, so its runs are unknown.} serverZoneUnknown{The server\'s time zone is not known yet, so its runs are unknown.} noRunInHorizon{No run falls in the next {years} years.} notEvaluated{Runs are worked out for the first {limit} cron lines only.} anacron{anacron runs this directory; its timing is not shown in this version.} paused{Paused: cron skips this job until it is resumed.} other{No cron line runs this directory.}}'**
   String jobsRunsUnknown(String reason, int limit, int years);
 
   /// A job's next-run cell in the jobs table when it lists no runs: jobsRunsUnknown cut short to fit the column, which stays at phone width. reason is the engine's JobRunsUnknown name, and other is noDriver; years is how far ahead the engine looks. The job's details give the full reason.
   ///
   /// In en, this message translates to:
-  /// **'{reason, select, reboot{At cron start} unparsed{Unreadable schedule} timeZoneUnresolved{Zone not known} serverZoneUnknown{Zone not known yet} noRunInHorizon{None in {years} years} notEvaluated{Not worked out} anacron{Timed by anacron} other{Not run}}'**
+  /// **'{reason, select, reboot{At cron start} unparsed{Unreadable schedule} timeZoneUnresolved{Zone not known} serverZoneUnknown{Zone not known yet} noRunInHorizon{None in {years} years} notEvaluated{Not worked out} anacron{Timed by anacron} paused{Paused} other{Not run}}'**
   String jobsNextRunUnknown(String reason, int years);
 
   /// Beside a cron run that a DST change skips: time is the clock time the line was written for; the run time shown is the change.
@@ -3604,35 +3796,29 @@ abstract class AppLocalizations {
   /// **'The setting could not be changed.'**
   String get settingsSyncSecretsNotChanged;
 
-  /// Heading of the device name on the General settings tab (M5 plan Q6).
+  /// Heading of the Sync tab's host key sharing section, shown once a Séance release with the shared host key fix is named.
   ///
   /// In en, this message translates to:
-  /// **'This device'**
-  String get settingsDeviceTitle;
+  /// **'Host keys'**
+  String get settingsPinPublicationTitle;
 
-  /// Label of the device name field on the General settings tab.
+  /// Switch asserting that every device on the account runs a Séance release that checks shared host keys; while on, host keys the user confirms are shared.
   ///
   /// In en, this message translates to:
-  /// **'Device name'**
-  String get settingsDeviceName;
+  /// **'Every device runs Séance {release} or later'**
+  String settingsPinPublication(String release);
 
-  /// Helper text under the device name field (SAF-13): the name appears in host logs.
+  /// What the host key sharing switch does, under it.
   ///
   /// In en, this message translates to:
-  /// **'Servers\' system logs name this device beside each action you take there. Leave it blank for the default.'**
-  String get settingsDeviceNameDetail;
+  /// **'While on, host keys you confirm are shared with your other devices, so they can check a server the first time they connect. Turning it off stops sharing; keys already shared stay.'**
+  String get settingsPinPublicationDetail;
 
-  /// Toast when the device name applied but settings.json could not be written.
+  /// Toast when the engine did not take or keep a change of the host key sharing switch.
   ///
   /// In en, this message translates to:
-  /// **'The device name changed, but it could not be saved, so it will not be kept after a restart.'**
-  String get settingsDeviceNameNotSaved;
-
-  /// Toast when the app did not take a change of the device name.
-  ///
-  /// In en, this message translates to:
-  /// **'The device name could not be changed.'**
-  String get settingsDeviceNameNotChanged;
+  /// **'The host key setting could not be changed.'**
+  String get settingsPinPublicationNotChanged;
 
   /// Heading of the about row on the General settings tab, which shows the app's title and version and opens the About dialog.
   ///
@@ -3970,6 +4156,18 @@ abstract class AppLocalizations {
   /// **'Older Séance releases can mistake records from other apps for servers.'**
   String get syncFleetAssertionDetail;
 
+  /// Optional checkbox at sign-in asserting the release that checks shared host keys; ticked, host keys the user confirms are shared.
+  ///
+  /// In en, this message translates to:
+  /// **'Every device on this account runs Séance {release} or later'**
+  String syncPinPublicationAssertion(String release);
+
+  /// Why the host key assertion matters, under its checkbox.
+  ///
+  /// In en, this message translates to:
+  /// **'Then host keys you confirm are shared with them. Older releases accept a shared key without checking it.'**
+  String get syncPinPublicationAssertionDetail;
+
   /// Disclosure on the sign-in's second step: the account key decrypts every app's records. Séance and Poltergeist are the sibling apps.
   ///
   /// In en, this message translates to:
@@ -3979,7 +4177,7 @@ abstract class AppLocalizations {
   /// Disclosure on the sign-in's second step: what the app writes to the account, and what it does not.
   ///
   /// In en, this message translates to:
-  /// **'Klabautermann keeps its own settings in this account: each server\'s read-only switch and marks. It publishes no servers, host keys or passwords.'**
+  /// **'Klabautermann publishes only the servers you add, edit or delete here, with their passwords or keys when you let them sync, and each server\'s read-only switch and marks. It publishes no host keys.'**
   String get syncDisclosure;
 
   /// The button that sends the sign-in, enabled once the fleet assertion is ticked.
@@ -4393,7 +4591,7 @@ abstract class AppLocalizations {
   /// One host write in the action preview; row is the engine's HostWriteRow name.
   ///
   /// In en, this message translates to:
-  /// **'{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine\'s own state} loginRecords{Login records, as every SSH command leaves} auditSyslog{One line in the system log naming this action and this device} other{A change on the server}}'**
+  /// **'{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine\'s own state} loginRecords{Login records, as every SSH command leaves} editTarget{The file or crontab you edited} editTempFile{A temporary copy beside the file, renamed over it or removed} userBackups{A backup in your Klabautermann backups folder} rootBackups{A backup under /var/lib/klabautermann/backups} footprintManifest{The list of what Klabautermann keeps on the server} auditSyslog{One line in the system log naming this action and this device} other{A change on the server}}'**
   String actionPreviewHostWrite(String row);
 
   /// The action's impact in the preview; kind is the engine's ImpactKind name and count a number of containers.
@@ -4441,7 +4639,7 @@ abstract class AppLocalizations {
   /// A warning in the action preview; warning is the engine's PlanWarning name.
   ///
   /// In en, this message translates to:
-  /// **'{warning, select, profileGatedServices{Some running services are enabled only by a compose profile, which Klabautermann cannot see. The redeploy leaves them as they are.} profilesUnknown{The compose CLI could not list every profile\'s services, so some of these containers may belong to a service a profile enables.} mayDieAtLogout{This server ends your processes when you log out, which can stop the operation before it finishes.} other{}}'**
+  /// **'{warning, select, profileGatedServices{Some running services are enabled only by a compose profile, which Klabautermann cannot see. The redeploy leaves them as they are.} profilesUnknown{The compose CLI could not list every profile\'s services, so some of these containers may belong to a service a profile enables.} mayDieAtLogout{This server ends your processes when you log out, which can stop the operation before it finishes.} unitNotVerified{This server\'s systemd is not known to be version 250 or later, so the unit file is not checked before it is replaced.} other{}}'**
   String actionPreviewWarning(String warning);
 
   /// Toast when a detached operation started on the server; its result shows under Operations.
@@ -4660,11 +4858,143 @@ abstract class AppLocalizations {
   /// **'Actions'**
   String get dockerActions;
 
+  /// A jobs table cell as a screen reader hears it: the job's name, then a badge such as jobsPaused.
+  ///
+  /// In en, this message translates to:
+  /// **'{text}, {badge}'**
+  String jobsBadged(String text, String badge);
+
+  /// Screen-reader name of the icon on a paused cron line's row (JOB-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get jobsPaused;
+
+  /// Note in a paused cron line's details (JOB-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Paused: cron skips this line until it is resumed.'**
+  String get jobsPausedDetail;
+
+  /// Screen-reader name of the icon on a cron line another manager owns (JOB-09); manager is the engine's CrontabManager name.
+  ///
+  /// In en, this message translates to:
+  /// **'{manager, select, dokku{Managed by Dokku} coolify{Managed by Coolify} dokploy{Managed by Dokploy} runtipi{Managed by Runtipi} other{Managed by another tool}}'**
+  String jobsManagedBy(String manager);
+
+  /// Note in the details of a cron line another manager owns (JOB-09); manager is the engine's CrontabManager name.
+  ///
+  /// In en, this message translates to:
+  /// **'{manager, select, dokku{Dokku} coolify{Coolify} dokploy{Dokploy} runtipi{Runtipi} other{Another tool}} manages this line. Change it there; a change here may be overwritten.'**
+  String jobsManagedDetail(String manager);
+
+  /// Label of a job's last run in its details (JOB-05).
+  ///
+  /// In en, this message translates to:
+  /// **'Last run'**
+  String get jobsLastRun;
+
+  /// A job's last run while it is being read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading…'**
+  String get jobsLastRunReading;
+
+  /// A timer's last run when it never triggered.
+  ///
+  /// In en, this message translates to:
+  /// **'Never triggered.'**
+  String get jobsLastRunNever;
+
+  /// Note under a timer's last run when its service succeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'It succeeded.'**
+  String get jobsLastRunSucceeded;
+
+  /// Note under a timer's last run when its service failed; result is systemd's Result word, such as exit-code.
+  ///
+  /// In en, this message translates to:
+  /// **'It ended as {result}, exit status {status}.'**
+  String jobsLastRunExited(String result, int status);
+
+  /// Note under a timer's last run when its service ended without an exit status; result is systemd's Result word.
+  ///
+  /// In en, this message translates to:
+  /// **'It ended as {result}.'**
+  String jobsLastRunEnded(String result);
+
+  /// Note under a cron line's last run (JOB-05).
+  ///
+  /// In en, this message translates to:
+  /// **'When cron started it; cron logs no exit status.'**
+  String get jobsLastRunNoStatus;
+
+  /// A cron line's last run when the log holds no start of it.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{cron logged no job starts that can be read.} =1{Not among the 1 newest job start cron logged.} other{Not among the {count} newest job starts cron logged.}}'**
+  String jobsLastRunNotLogged(int count);
+
+  /// A job's last run when its read failed; failure is the engine's JobHistoryFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Connect to the server to read the last run.} invalidTarget{This job\'s last run cannot be read.} other{The last run could not be read.}}'**
+  String jobsLastRunFailed(String failure);
+
+  /// Status in a cron line's run output sheet while it runs (JOB-19).
+  ///
+  /// In en, this message translates to:
+  /// **'Running…'**
+  String get jobsCronRunRunning;
+
+  /// Status in a cron line's run output sheet when the command succeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'It finished with exit status 0.'**
+  String get jobsCronRunSucceeded;
+
+  /// Status in a cron line's run output sheet when the command exited non-zero.
+  ///
+  /// In en, this message translates to:
+  /// **'It finished with exit status {status}.'**
+  String jobsCronRunExited(int status);
+
+  /// A cron line's run output when the command printed nothing.
+  ///
+  /// In en, this message translates to:
+  /// **'It printed nothing.'**
+  String get jobsCronRunNoOutput;
+
+  /// Note under a cron line's run output when the engine capped it.
+  ///
+  /// In en, this message translates to:
+  /// **'The output was longer than this; the rest was dropped.'**
+  String get jobsCronRunTruncated;
+
   /// Timer action (JOB-08): starts the unit the timer activates now.
   ///
   /// In en, this message translates to:
   /// **'Run now'**
   String get jobsRunNow;
+
+  /// Cron line action (JOB-07): comments the line out, through an edit of the crontab, so cron skips it until it is resumed.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get jobsPause;
+
+  /// Paused cron line action (JOB-07): restores the line Pause commented out, through an edit of the crontab.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get jobsResume;
+
+  /// Toast when Pause or Resume reads the crontab and the line has changed or gone since the Jobs tab read it (JOB-07).
+  ///
+  /// In en, this message translates to:
+  /// **'The crontab no longer holds this line as shown. Wait for the next reading and try again.'**
+  String get jobsPauseLineChanged;
 
   /// Title of the sheet that follows a timer run's journal; unit is the service the timer started.
   ///
@@ -4795,7 +5125,7 @@ abstract class AppLocalizations {
   /// An activity log row's action; action is the engine's intent type name.
   ///
   /// In en, this message translates to:
-  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} StackAction{Stack action} RedeployStack{Redeploy stack} other{Action}}'**
+  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
   String activityAction(String action);
 
   /// An activity log row's confirmation; tier is the engine's ConfirmationTier name.
@@ -6442,6 +6772,216 @@ abstract class AppLocalizations {
   /// **'Show logs'**
   String get dockerLogsShow;
 
+  /// Tooltip of the button on a container's details that opens the one-off command sheet (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Run a command'**
+  String get dockerCommandOpen;
+
+  /// Title of the one-off command sheet (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Run a command in {container}'**
+  String dockerCommandTitle(String container);
+
+  /// Label of the one-off command's field (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Command'**
+  String get dockerCommandLabel;
+
+  /// Helper under the command field: the words run as typed, without a shell expanding them (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Runs without a shell or terminal. Quote words as in a shell; for pipes and variables, run sh -c \'…\'.'**
+  String get dockerCommandHelper;
+
+  /// Error under the command field when it is empty, a quote is left open or it ends with a backslash (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a complete command: close any open quote and remove a trailing backslash.'**
+  String get dockerCommandUnparsed;
+
+  /// Button that plans the one-off command, shows its preview and runs it once confirmed (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Run'**
+  String get dockerCommandRun;
+
+  /// Status of the one-off command sheet while the command runs (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Running…'**
+  String get dockerCommandRunning;
+
+  /// Label over the command's standard output (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Output'**
+  String get dockerCommandStdout;
+
+  /// Label over the command's standard error (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Errors'**
+  String get dockerCommandStderr;
+
+  /// Shown when the finished command wrote nothing to stdout or stderr (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'The command printed nothing.'**
+  String get dockerCommandNoOutput;
+
+  /// Shown when the command's output exceeded the kept maximum (CTX-08).
+  ///
+  /// In en, this message translates to:
+  /// **'The output was longer than 1 MiB; the rest was dropped.'**
+  String get dockerCommandTruncated;
+
+  /// Tooltip of the button on a container's details that opens a shell in the container (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Open a shell'**
+  String get dockerShellOpen;
+
+  /// Tooltip of the inspector button that swaps a container shell back for the container's details, closing the shell (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Show details'**
+  String get dockerShellHide;
+
+  /// Title of the page that shows a shell in a container (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Shell in {container}'**
+  String dockerShellTitle(String container);
+
+  /// Label of the field that picks the shell program to run in a container (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Shell'**
+  String get dockerShellShellLabel;
+
+  /// Hint and menu item of the shell field when no shell is chosen: the engine runs /bin/bash where the container has it, otherwise /bin/sh (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic: /bin/bash, then /bin/sh'**
+  String get dockerShellShellAuto;
+
+  /// Label of the field naming the user a container shell runs as (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'User'**
+  String get dockerShellUserLabel;
+
+  /// Hint of the empty user field: the shell runs as the container's configured user (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'The container\'s user'**
+  String get dockerShellUserHint;
+
+  /// Button that opens the shell in the container with the chosen shell and user (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Open shell'**
+  String get dockerShellStart;
+
+  /// Status above a container shell while the engine starts it (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Opening the shell…'**
+  String get dockerShellOpening;
+
+  /// Status above a running container shell, naming the command the exec runs (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Running {command}'**
+  String dockerShellRunning(String command);
+
+  /// Status above a container shell that ended or never started, by the engine's reason (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, exited{The shell exited.} closed{The shell was closed.} observeOnly{Management is off for this server, so no shell opens.} readOnly{Read-only mode is on, so no shell opens.} notInFleet{This server is no longer in the fleet.} endpointUnavailable{The server\'s Docker endpoint could not be reached.} noChannel{No session channel was free on the server. Close another view or shell and try again.} tooMany{This server already has the most shells open. Close one first.} refused{The container is gone, or Docker refused the shell.} linkLost{The connection to the server was lost.} adminEnded{Admin mode ended, and the shell with it.} failed{The shell failed.} other{The engine stopped, and the shell with it.}}'**
+  String dockerShellEnded(String reason);
+
+  /// Follows the ended status when the shell reported its exit code (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Exit code {code}.'**
+  String dockerShellExitCode(int code);
+
+  /// Button that opens the container shell again with the same shell and user after it ended (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Open again'**
+  String get dockerShellReopen;
+
+  /// Button that goes back to the shell and user fields after a container shell ended (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Change shell'**
+  String get dockerShellChange;
+
+  /// Tooltip of the button that ends a running container shell (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Close the shell'**
+  String get dockerShellClose;
+
+  /// Context menu item that copies the selected terminal text (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get dockerShellCopy;
+
+  /// Button tooltip and context menu item that pastes the clipboard into a container shell, checked first when it has several lines (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Paste'**
+  String get dockerShellPaste;
+
+  /// Title of the dialog that asks before pasting several lines into a container shell (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Paste 1 line?} other{Paste {count} lines?}}'**
+  String dockerShellPasteTitle(int count);
+
+  /// Body of the paste dialog when the danger linter flagged lines (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Some of these lines look dangerous. Each line runs as you paste it.'**
+  String get dockerShellPasteFindings;
+
+  /// Body of the paste dialog when the danger check failed: unknown, not clean (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'These lines could not be checked. Each line runs as you paste it.'**
+  String get dockerShellPasteUnchecked;
+
+  /// One danger finding in the paste dialog: the pasted line it is on and the linter's explanation (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Line {line}: {explanation}'**
+  String dockerShellPasteFinding(int line, String explanation);
+
+  /// Paste dialog button that pastes every line (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Paste all'**
+  String get dockerShellPasteAll;
+
+  /// Paste dialog button that pastes the first line without its line break (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'First line only'**
+  String get dockerShellPasteFirstLine;
+
+  /// Paste dialog button that pastes nothing (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get dockerShellPasteCancel;
+
   /// Under a container's name above its logs, in the Docker tab's log pane on desktops and in the bottom sheet on phones.
   ///
   /// In en, this message translates to:
@@ -6717,6 +7257,1272 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server\'s capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} daemonError{The engine refused or failed to list the stack\'s containers.} connectionFailed{The connection to the engine failed while reading the file.} cancelled{The read stopped before it ran.} other{The file could not be read.}}'**
   String dockerStackFileQueryFailed(String reason);
+
+  /// Remote editor: closes the editor dialog; asks first when changes are not saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get editClose;
+
+  /// Remote editor: the title for a file (SAF-12). name is the file name.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit {name}'**
+  String editTitleFile(String name);
+
+  /// Remote editor: the title for the login user's crontab (JOB-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Edit your crontab'**
+  String get editTitleOwnCrontab;
+
+  /// Remote editor: the title for another account's crontab (JOB-06). user is the account name.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit {user}\'s crontab'**
+  String editTitleCrontab(String user);
+
+  /// Remote editor: reads the file again after a failed read.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get editRetry;
+
+  /// Remote editor: shown while the engine reads the file.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the file…'**
+  String get editReading;
+
+  /// Remote editor: why the engine read nothing. reason is the engine's EditReadFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{There is no connection to this server.} invalidTarget{Klabautermann does not edit this path.} notFound{There is no file at this path on the host.} adminRequired{Only root can read this file. Turn on admin mode to edit it.} tooLarge{This file is too large for the editor.} notText{This file is not text.} stackUnverified{This stack\'s files are not its verified source, so Klabautermann does not edit them.} failed{The file could not be read.} other{The file could not be read.}}'**
+  String editReadFailed(String reason);
+
+  /// Remote editor: chip on a file only root may write; saving it runs through admin mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Root\'s file'**
+  String get editRootFile;
+
+  /// Remote editor: shown while the text differs from the server's.
+  ///
+  /// In en, this message translates to:
+  /// **'Not saved'**
+  String get editUnsaved;
+
+  /// Remote editor: accessibility label of the editor. path is the file being edited.
+  ///
+  /// In en, this message translates to:
+  /// **'Editor for {path}'**
+  String editEditorLabel(String path);
+
+  /// Remote editor: drops the changes for the server's text.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard changes'**
+  String get editDiscard;
+
+  /// Remote editor: shows the diff and the format checks before saving.
+  ///
+  /// In en, this message translates to:
+  /// **'Review changes'**
+  String get editReview;
+
+  /// Remote editor: title of the confirmation before changes are dropped.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard your changes?'**
+  String get editDiscardTitle;
+
+  /// Remote editor: body of the confirmation before changes are dropped.
+  ///
+  /// In en, this message translates to:
+  /// **'Your changes are not saved to the server and will be lost.'**
+  String get editDiscardBody;
+
+  /// Remote editor: closes a dialog and returns to the editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep editing'**
+  String get editKeepEditing;
+
+  /// Remote editor: title of the conflict sheet, when the file changed since it was read.
+  ///
+  /// In en, this message translates to:
+  /// **'The file changed on the server'**
+  String get editConflictTitle;
+
+  /// Remote editor: body of the conflict sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'It changed since you opened it, so your save did not run. Your changes are still here.'**
+  String get editConflictBody;
+
+  /// Remote editor: conflict sheet; replaces the user's text with the server's.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard mine'**
+  String get editConflictDiscard;
+
+  /// Remote editor: conflict sheet; reads the server's text and reviews the user's text against it.
+  ///
+  /// In en, this message translates to:
+  /// **'Reload and compare'**
+  String get editConflictCompare;
+
+  /// Remote editor review: one format problem. line is 1-based; kind is the TextProblemKind name; subject is the key, tag or parser detail, or empty.
+  ///
+  /// In en, this message translates to:
+  /// **'{line, plural, other{Line {line}}}: {kind, select, syntaxError{does not parse} duplicateKey{key set again} duplicateTable{table declared again} duplicateAttribute{attribute given twice} jsonComment{comment in JSON} jsonTrailingComma{trailing comma in JSON} unterminatedQuote{quote never closed} tabIndentation{tab indentation} mismatchedClosingTag{closing tag does not match} unclosedElement{element never closed} unexpectedClosingTag{closing tag without an open element} mergeConflict{merge conflict marker} other{problem}} {subject}'**
+  String editProblem(int line, String kind, String subject);
+
+  /// Remote editor review: plans the save, whose preview shows every step before it runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Save to server'**
+  String get editSave;
+
+  /// Remote editor review: saves although the format checks found problems.
+  ///
+  /// In en, this message translates to:
+  /// **'Save anyway'**
+  String get editSaveAnyway;
+
+  /// Remote editor review: shown while the diff is computed.
+  ///
+  /// In en, this message translates to:
+  /// **'Comparing…'**
+  String get editDiffing;
+
+  /// Remote editor review: why no diff shows. status is the UnifiedDiffStatus name.
+  ///
+  /// In en, this message translates to:
+  /// **'{status, select, identical{Your text is the same as the server\'s.} tooLarge{The change is too large to show as a diff.} timedOut{The comparison took too long to show.} failed{The comparison failed.} other{The change cannot be shown.}}'**
+  String editDiffStatus(String status);
+
+  /// Remote editor review: accessibility label of the diff.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes to the file'**
+  String get editDiffLabel;
+
+  /// Tooltip of a compose service's action menu on the stack overview (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Actions for {service}'**
+  String dockerStackServiceActions(String service);
+
+  /// Service menu item that pulls the service's image (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Pull image'**
+  String get dockerStackServicePull;
+
+  /// Service menu item that recreates the service's containers even when unchanged (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Recreate'**
+  String get dockerStackServiceRecreate;
+
+  /// Service menu item, and the scale dialog's confirm button, that sets the service's container count (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Scale'**
+  String get dockerStackServiceScale;
+
+  /// Title of the dialog that asks how many containers a service runs (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Scale {service}'**
+  String dockerStackScaleTitle(String service);
+
+  /// Label of the scale dialog's container count field (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Containers'**
+  String get dockerStackScaleLabel;
+
+  /// Error under the scale dialog's field when it is not a whole number in range (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a number from 0 to {max}.'**
+  String dockerStackScaleRange(int max);
+
+  /// Scale dialog button that scales nothing (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get dockerStackScaleCancel;
+
+  /// Stack overview button that takes the whole stack down, its containers and networks but never its volumes; the preview asks for the typed confirmation (STK-23).
+  ///
+  /// In en, this message translates to:
+  /// **'Down'**
+  String get dockerStackDown;
+
+  /// Label over the profiles a verified stack's compose files name (STK-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Profiles'**
+  String get dockerStackProfiles;
+
+  /// Shown under Profiles while the engine lists them (STK-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Reading…'**
+  String get dockerStackProfilesReading;
+
+  /// Shown under Profiles when compose could not list them (STK-09).
+  ///
+  /// In en, this message translates to:
+  /// **'The profiles could not be listed.'**
+  String get dockerStackProfilesFailed;
+
+  /// Heading of the section listing compose files found in the chosen folders that no running or stopped stack accounts for (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Stacks without containers'**
+  String get dockerStacksUnlisted;
+
+  /// Shown when no scan folders are chosen for this server (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Name the folders your stacks live in, such as /opt/stacks, to find stacks that have no containers.'**
+  String get dockerStackFoldersNone;
+
+  /// The scan folders chosen for this server (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Folders: {folders}'**
+  String dockerStackFoldersList(String folders);
+
+  /// Button that opens the dialog naming the folders to scan for stacks (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Choose folders'**
+  String get dockerStackFoldersChoose;
+
+  /// Button that scans the chosen folders again (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Scan again'**
+  String get dockerStackFoldersScanAgain;
+
+  /// Shown while the folders are scanned (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Scanning the folders…'**
+  String get dockerStackFoldersScanning;
+
+  /// Shown when the scan could not run (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'The folders could not be scanned.'**
+  String get dockerStackFoldersScanFailed;
+
+  /// Shown when the scan found no compose file that a listed stack does not account for (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Every stack in these folders has containers.'**
+  String get dockerStackFoldersNoneFound;
+
+  /// Shown under the scan's results when a folder could not be read (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'A folder could not be read, so some stacks may be missing.'**
+  String get dockerStackFoldersIncomplete;
+
+  /// Title of the dialog naming the folders to scan for stacks on this server (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Stack folders'**
+  String get dockerStackFoldersTitle;
+
+  /// Helper under the stack folders field (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'One absolute path per line, at most {max}. The folders and the folders right below them are searched for compose files. Kept on this device.'**
+  String dockerStackFoldersHelper(int max);
+
+  /// Error under the stack folders field (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'{problem, select, notAbsolute{Each folder must be an absolute path, such as /opt/stacks.} tooMany{Name at most {max} folders.} other{These folders cannot be scanned.}}'**
+  String dockerStackFoldersProblem(String problem, int max);
+
+  /// Stack folders dialog button that keeps the folders as they were (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get dockerStackFoldersCancel;
+
+  /// Stack folders dialog button that keeps the folders on this device and scans them (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get dockerStackFoldersSave;
+
+  /// Toast when settings.json could not be written; the folders hold in memory (STK-08).
+  ///
+  /// In en, this message translates to:
+  /// **'The folders could not be saved on this device. They apply until the app quits.'**
+  String get dockerStackFoldersNotSaved;
+
+  /// Stack file view: opens the file shown in the editor (STK-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get dockerStackFileEdit;
+
+  /// Jobs tab: opens the login user's crontab in the editor (JOB-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Edit your crontab'**
+  String get jobsEditOwnCrontab;
+
+  /// Remote editor review: the diff's label for the server's text. path is the file.
+  ///
+  /// In en, this message translates to:
+  /// **'{path} (server)'**
+  String editDiffServerLabel(String path);
+
+  /// Remote editor review: the diff's label for the user's text. path is the file.
+  ///
+  /// In en, this message translates to:
+  /// **'{path} (yours)'**
+  String editDiffYourLabel(String path);
+
+  /// Server Safety menu: opens what Klabautermann keeps on the server (SAF-14).
+  ///
+  /// In en, this message translates to:
+  /// **'Footprint'**
+  String get footprintMenu;
+
+  /// Footprint page title. server is the server's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Footprint on {server}'**
+  String footprintTitle(String server);
+
+  /// Footprint page: asks the engine to verify the footprint again.
+  ///
+  /// In en, this message translates to:
+  /// **'Check again'**
+  String get footprintVerify;
+
+  /// Footprint page: shown until the engine answers.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking what Klabautermann keeps on this server…'**
+  String get footprintChecking;
+
+  /// Footprint page: the engine refused the check, as for a server with no connection.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann cannot check what it keeps on this server without a connection. Connect, then check again.'**
+  String get footprintUnavailable;
+
+  /// Footprint page: root's part is not read without admin mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Root\'s backups and manifest are checked in admin mode.'**
+  String get footprintRootUnchecked;
+
+  /// Footprint page: one problem the check found, in the engine's words.
+  ///
+  /// In en, this message translates to:
+  /// **'The check reported: {warning}'**
+  String footprintWarning(String warning);
+
+  /// Footprint page: no manifest rows and no backups.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann keeps nothing on this server.'**
+  String get footprintNone;
+
+  /// Footprint page: a scope's heading. scope is the FootprintScope name.
+  ///
+  /// In en, this message translates to:
+  /// **'{scope, select, user{Your account} root{Root} other{Other}}'**
+  String footprintScope(String scope);
+
+  /// Footprint page: a manifest row's kind and whether it is on the host. kind is the FootprintKind name; present is true or false.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, backupDirectory{Backup directory} backupIndex{Backup index} other{File}} · {present, select, true{present} other{missing on the host}}'**
+  String footprintFile(String kind, String present);
+
+  /// Footprint page: removes older backups (Q11, tier 1).
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Keep only the newest backup of each file} other{Keep the newest {count} backups of each file}}'**
+  String footprintKeepLast(int count);
+
+  /// Footprint page: removes every backup of one file (Q11, typed confirmation).
+  ///
+  /// In en, this message translates to:
+  /// **'Remove all backups'**
+  String get footprintRemoveAll;
+
+  /// Footprint page: the heading of a crontab's backups. user is the account.
+  ///
+  /// In en, this message translates to:
+  /// **'{user}\'s crontab'**
+  String footprintCrontabSource(String user);
+
+  /// Footprint page: a backup's short hash and whether it still has the recorded content. status is the FootprintBackupStatus name.
+  ///
+  /// In en, this message translates to:
+  /// **'{hash} · {status, select, intact{unchanged} modified{changed on the host since it was recorded} missing{missing on the host} other{unknown}}'**
+  String footprintBackup(String hash, String status);
+
+  /// Footprint page: opens the file's editor with this backup as the new text, to review and save.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore…'**
+  String get footprintRestore;
+
+  /// Footprint page: the backup read back does not have its recorded hash.
+  ///
+  /// In en, this message translates to:
+  /// **'The backup changed since it was checked, so it was not opened.'**
+  String get footprintRestoreChanged;
+
+  /// Unit action (SVC-05): starts the unit at boot.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable'**
+  String get unitEnable;
+
+  /// Unit action (SVC-05): stops starting the unit at boot.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable'**
+  String get unitDisable;
+
+  /// Unit action (SVC-06): prevents the unit from being started at all.
+  ///
+  /// In en, this message translates to:
+  /// **'Mask'**
+  String get unitMask;
+
+  /// Unit action (SVC-06): lets a masked unit start again.
+  ///
+  /// In en, this message translates to:
+  /// **'Unmask'**
+  String get unitUnmask;
+
+  /// Unit action (SVC-06): clears the unit's failed state.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset failed state'**
+  String get unitResetFailed;
+
+  /// Unit page and row menu: the v1 unit actions (SVC-05, SVC-06).
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get unitMoreActions;
+
+  /// Unit page: why a unit read found nothing. reason is the engine's UnitQueryFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{There is no connection to this server.} invalidUnit{This is not a unit name.} notFound{The manager has no such unit.} managerUnavailable{Your user manager cannot be reached: you need a login session or lingering.} failed{The read failed.} other{The read failed.}}'**
+  String unitQueryFailed(String reason);
+
+  /// Unit page: the unit's current memory use.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get unitResourcesMemory;
+
+  /// Unit page: the CPU time the unit used.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU time'**
+  String get unitResourcesCpu;
+
+  /// Unit page: CPU time in seconds. seconds is formatted with one decimal.
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds} s'**
+  String unitResourcesCpuSeconds(String seconds);
+
+  /// Unit page: the unit's current tasks.
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks'**
+  String get unitResourcesTasks;
+
+  /// Unit page: how often systemd restarted the unit.
+  ///
+  /// In en, this message translates to:
+  /// **'Restarts'**
+  String get unitResourcesRestarts;
+
+  /// Unit page: the unit's main process ID.
+  ///
+  /// In en, this message translates to:
+  /// **'Main PID'**
+  String get unitResourcesMainPid;
+
+  /// Unit page: when the unit last became active.
+  ///
+  /// In en, this message translates to:
+  /// **'Active since'**
+  String get unitResourcesActiveSince;
+
+  /// Unit page: opens the unit file and its drop-ins (SVC-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Show unit file'**
+  String get unitFileShow;
+
+  /// Unit file view title. unit is the unit name.
+  ///
+  /// In en, this message translates to:
+  /// **'{unit} file'**
+  String unitFileTitle(String unit);
+
+  /// Unit file view: closes the dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get unitFileClose;
+
+  /// Unit file view: shown while the file is read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the unit file…'**
+  String get unitFileReading;
+
+  /// Unit file view: how many values the engine masked, and how long a reveal lasts.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 value is masked.} other{{count} values are masked.}} Reveal shows them for {seconds} seconds.'**
+  String unitFileMasked(int count, int seconds);
+
+  /// Unit file view: shows the masked values for a while.
+  ///
+  /// In en, this message translates to:
+  /// **'Reveal values'**
+  String get unitFileReveal;
+
+  /// Unit file view: masks the revealed values again.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide values'**
+  String get unitFileHide;
+
+  /// Unit file view: accessibility label of the read-only editor.
+  ///
+  /// In en, this message translates to:
+  /// **'File of {unit}'**
+  String unitFileEditorLabel(String unit);
+
+  /// Services tab: lists the system manager's units.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get servicesScopeSystem;
+
+  /// Services tab: lists the login user's own units (SVC-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Yours'**
+  String get servicesScopeUser;
+
+  /// Unit page of a user unit: its journal lines are not read (SVC-09).
+  ///
+  /// In en, this message translates to:
+  /// **'The logs of your own units are not shown here yet.'**
+  String get servicesUserLogsAbsent;
+
+  /// Services tab, Yours: the user manager could not be reached (SVC-09).
+  ///
+  /// In en, this message translates to:
+  /// **'Your own units could not be read. Your user manager runs only while you are logged in, or with lingering enabled.'**
+  String get servicesUserUnavailable;
+
+  /// Title of the server editor for a new server.
+  ///
+  /// In en, this message translates to:
+  /// **'Add server'**
+  String get serverEditorAddTitle;
+
+  /// Title of the server editor for an existing server.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit server'**
+  String get serverEditorEditTitle;
+
+  /// Label of the server-name field.
+  ///
+  /// In en, this message translates to:
+  /// **'Label'**
+  String get serverEditorLabel;
+
+  /// Label of the hostname field.
+  ///
+  /// In en, this message translates to:
+  /// **'Host'**
+  String get serverEditorHost;
+
+  /// Label of the port field.
+  ///
+  /// In en, this message translates to:
+  /// **'Port'**
+  String get serverEditorPort;
+
+  /// Label of the username field.
+  ///
+  /// In en, this message translates to:
+  /// **'Username'**
+  String get serverEditorUsername;
+
+  /// Label of the auth-method dropdown.
+  ///
+  /// In en, this message translates to:
+  /// **'Authentication'**
+  String get serverEditorAuthentication;
+
+  /// Auth-method choice: the system ssh-agent.
+  ///
+  /// In en, this message translates to:
+  /// **'ssh-agent'**
+  String get serverEditorAuthAgent;
+
+  /// Auth-method choice: a stored password.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get serverEditorAuthPassword;
+
+  /// Auth-method choice: a private key, pasted or referenced.
+  ///
+  /// In en, this message translates to:
+  /// **'Private key'**
+  String get serverEditorAuthPrivateKey;
+
+  /// Explainer under the ssh-agent auth choice.
+  ///
+  /// In en, this message translates to:
+  /// **'Keys are provided by your ssh-agent; nothing is stored.'**
+  String get serverEditorAgentInfo;
+
+  /// Label of the password field.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get serverEditorPasswordLabel;
+
+  /// Title of the switch that keeps the private key on disk rather than storing it.
+  ///
+  /// In en, this message translates to:
+  /// **'Reference a key file on disk'**
+  String get serverEditorReferenceKeyTitle;
+
+  /// Subtitle of the reference-key switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t store the key — read it at connect'**
+  String get serverEditorReferenceKeySubtitle;
+
+  /// Placeholder in the identity-file path field — a conventional key path, not a default.
+  ///
+  /// In en, this message translates to:
+  /// **'~/.ssh/id_ed25519'**
+  String get serverEditorIdentityFileHint;
+
+  /// Label of the referenced-key path field.
+  ///
+  /// In en, this message translates to:
+  /// **'Identity file path'**
+  String get serverEditorIdentityFilePath;
+
+  /// Button beside the identity-file path field that opens the file picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse…'**
+  String get serverEditorBrowse;
+
+  /// Label of the paste-a-key field.
+  ///
+  /// In en, this message translates to:
+  /// **'Private key (PEM/OpenSSH)'**
+  String get serverEditorPrivateKeyPem;
+
+  /// Label of the key-passphrase field.
+  ///
+  /// In en, this message translates to:
+  /// **'Key passphrase (optional)'**
+  String get serverEditorKeyPassphrase;
+
+  /// Label of the start-folder field: the remote folder a Poltergeist pane opens when it connects to this server. Klabautermann keeps the value but does not show the field.
+  ///
+  /// In en, this message translates to:
+  /// **'Start folder (optional)'**
+  String get serverEditorStartDirectory;
+
+  /// Hint inside the start-folder field, which Klabautermann does not show.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. ~/sites or /var/www'**
+  String get serverEditorStartDirectoryHint;
+
+  /// Explainer under the start-folder field, which Klabautermann does not show.
+  ///
+  /// In en, this message translates to:
+  /// **'Opens when you connect to this server. A relative path starts in your home folder. Blank opens your home folder.'**
+  String get serverEditorStartDirectoryNote;
+
+  /// Validation error when the start folder contains control characters or names another user's home (~name). The field is hidden in Klabautermann.
+  ///
+  /// In en, this message translates to:
+  /// **'Use an absolute path such as /var/www, or one in your own home such as ~/sites.'**
+  String get serverEditorStartDirectoryInvalid;
+
+  /// Label of the login-script field: a command Séance types into the server's shell after connecting. Klabautermann stores and syncs it but never runs it.
+  ///
+  /// In en, this message translates to:
+  /// **'Login script (optional)'**
+  String get serverEditorLoginScript;
+
+  /// Hint inside the login-script field.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. cd ~/work && tmux attach -t work || tmux new -s work'**
+  String get serverEditorLoginScriptHint;
+
+  /// Explainer under the login-script field: Séance runs the script, Klabautermann only keeps it.
+  ///
+  /// In en, this message translates to:
+  /// **'Séance runs this as if typed at the prompt right after connecting. Klabautermann keeps it with the server and never runs it. Keep secrets out of it. Blank for none.'**
+  String get serverEditorLoginScriptNote;
+
+  /// Heading of the group/colour/mark section.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get serverEditorAppearance;
+
+  /// Label of the group-name field.
+  ///
+  /// In en, this message translates to:
+  /// **'Group'**
+  String get serverEditorGroup;
+
+  /// Hint inside the group-name field.
+  ///
+  /// In en, this message translates to:
+  /// **'Production, Home lab, … — blank for none'**
+  String get serverEditorGroupHint;
+
+  /// Heading of the accent-colour row.
+  ///
+  /// In en, this message translates to:
+  /// **'Colour'**
+  String get serverEditorColour;
+
+  /// Heading of the mark row (glyph, emoji or imported image).
+  ///
+  /// In en, this message translates to:
+  /// **'Mark'**
+  String get serverEditorMark;
+
+  /// Button that opens the mark picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose…'**
+  String get serverEditorChooseMark;
+
+  /// Tooltip of the button that resets the mark to the default glyph.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the default mark'**
+  String get serverEditorDefaultMarkTooltip;
+
+  /// Title of the per-server credential-sync switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow this credential to sync'**
+  String get serverEditorSyncSecretTitle;
+
+  /// Subtitle of the credential-sync switch while the server is excluded.
+  ///
+  /// In en, this message translates to:
+  /// **'Not used while this server is excluded from sync.'**
+  String get serverEditorSyncSecretExcluded;
+
+  /// Subtitle of the credential-sync switch.
+  ///
+  /// In en, this message translates to:
+  /// **'End-to-end encrypted. Also needs sync set up with \"Sync saved passwords & keys\" enabled.'**
+  String get serverEditorSyncSecretSubtitle;
+
+  /// Title of the whole-server sync-exclusion switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Exclude from sync'**
+  String get serverEditorExcludeTitle;
+
+  /// Subtitle of the exclusion switch while it is on.
+  ///
+  /// In en, this message translates to:
+  /// **'Kept on this device only. A copy that synced earlier is removed from the sync server and from your other devices.'**
+  String get serverEditorExcludeOnSubtitle;
+
+  /// Subtitle of the exclusion switch while it is off.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep this server on this device only — never upload it.'**
+  String get serverEditorExcludeOffSubtitle;
+
+  /// Button that authenticates against the form's draft values without saving.
+  ///
+  /// In en, this message translates to:
+  /// **'Test connection'**
+  String get serverEditorTest;
+
+  /// Label of the test button while a test runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Testing…'**
+  String get serverEditorTesting;
+
+  /// Screen-reader label of the spinner while a connection test runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Testing connection'**
+  String get serverEditorTestingSemantic;
+
+  /// Closes the server editor without saving.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get serverEditorCancel;
+
+  /// Saves the server and closes the editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get serverEditorSave;
+
+  /// Small print under the test button.
+  ///
+  /// In en, this message translates to:
+  /// **'Testing authenticates without opening a shell or running the login script. A host key you approve here is trusted for the test only — the first real connection asks again.'**
+  String get serverEditorTestDisclaimer;
+
+  /// Validator message under a blank required field.
+  ///
+  /// In en, this message translates to:
+  /// **'Required'**
+  String get serverEditorRequired;
+
+  /// Validator message under an out-of-range port.
+  ///
+  /// In en, this message translates to:
+  /// **'1–65535'**
+  String get serverEditorPortRange;
+
+  /// Headline of the inline report when the test itself failed (not the host's answer).
+  ///
+  /// In en, this message translates to:
+  /// **'Could not test the connection.'**
+  String get serverEditorTestFailedSummary;
+
+  /// Toast when saving the server failed. {error} is the failure detail.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save: {error}'**
+  String serverEditorSaveFailed(String error);
+
+  /// Title of the confirmation shown before excluding a synced server.
+  ///
+  /// In en, this message translates to:
+  /// **'Exclude from sync?'**
+  String get serverEditorExcludeConfirmTitle;
+
+  /// Body of the exclusion confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'If this server synced earlier, it is removed from the sync server and from your other devices, along with any credential that synced with it. This device keeps its copy.'**
+  String get serverEditorExcludeConfirmBody;
+
+  /// Declines the exclusion confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get serverEditorExcludeConfirmCancel;
+
+  /// Confirms the exclusion.
+  ///
+  /// In en, this message translates to:
+  /// **'Exclude'**
+  String get serverEditorExcludeConfirmAction;
+
+  /// Tooltip of the spectrum swatch that opens the custom colour picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom colour…'**
+  String get serverEditorCustomColour;
+
+  /// Tooltip of the custom-colour swatch once a colour is chosen. {hex} is the stored #RRGGBB string.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom colour ({hex})'**
+  String serverEditorCustomColourValue(String hex);
+
+  /// Title of the mark picker dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Server mark'**
+  String get serverMarkPickerTitle;
+
+  /// Tab of the mark picker listing the built-in glyphs.
+  ///
+  /// In en, this message translates to:
+  /// **'Icons'**
+  String get serverMarkPickerIconsTab;
+
+  /// Tab of the mark picker for an emoji mark.
+  ///
+  /// In en, this message translates to:
+  /// **'Emoji'**
+  String get serverMarkPickerEmojiTab;
+
+  /// Tab of the mark picker for an imported image.
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get serverMarkPickerImageTab;
+
+  /// Dismisses the mark picker without choosing.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get serverMarkPickerCancel;
+
+  /// Hint inside the icon-tab search field.
+  ///
+  /// In en, this message translates to:
+  /// **'Search icons — try k8s, psql, prod…'**
+  String get serverMarkPickerSearchHint;
+
+  /// Empty state of the icon search.
+  ///
+  /// In en, this message translates to:
+  /// **'No icon matches.'**
+  String get serverMarkPickerNoMatch;
+
+  /// Heading of the no-mark icon section.
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get serverMarkPickerDefault;
+
+  /// How to reach the OS emoji picker on macOS.
+  ///
+  /// In en, this message translates to:
+  /// **'Press Control-Command-Space for the system emoji picker.'**
+  String get serverMarkPickerEmojiHintMacOS;
+
+  /// How to reach the OS emoji picker on Windows.
+  ///
+  /// In en, this message translates to:
+  /// **'Press Windows-. for the system emoji picker.'**
+  String get serverMarkPickerEmojiHintWindows;
+
+  /// How to reach the OS emoji picker on Linux.
+  ///
+  /// In en, this message translates to:
+  /// **'Your desktop may offer an emoji picker with Control-Shift-E or Control-.'**
+  String get serverMarkPickerEmojiHintLinux;
+
+  /// How to reach the emoji input on platforms without a picker chord (mobile).
+  ///
+  /// In en, this message translates to:
+  /// **'Switch your keyboard to emoji.'**
+  String get serverMarkPickerEmojiHintOther;
+
+  /// Label of the free-text emoji field.
+  ///
+  /// In en, this message translates to:
+  /// **'Any emoji'**
+  String get serverMarkPickerAnyEmoji;
+
+  /// Error under the emoji field when it holds text that is not a single emoji.
+  ///
+  /// In en, this message translates to:
+  /// **'One emoji, please.'**
+  String get serverMarkPickerOneEmoji;
+
+  /// Button that confirms the typed emoji.
+  ///
+  /// In en, this message translates to:
+  /// **'Use'**
+  String get serverMarkPickerUse;
+
+  /// Caveat under the emoji grid explaining cross-device rendering and the glyph fallback.
+  ///
+  /// In en, this message translates to:
+  /// **'An emoji is drawn with the system’s own emoji font, so a device without one shows a box — the icon chosen under Icons is what it falls back to there.'**
+  String get serverMarkPickerEmojiFontNote;
+
+  /// Error shown when the picked image file could not be read.
+  ///
+  /// In en, this message translates to:
+  /// **'That file could not be opened. Try another.'**
+  String get serverMarkPickerOpenFailed;
+
+  /// Error shown when the picked image exceeds the decode bound.
+  ///
+  /// In en, this message translates to:
+  /// **'That file is too big to read. Crop or export it smaller first.'**
+  String get serverMarkPickerTooLarge;
+
+  /// Error shown when the picked file is not a decodable image.
+  ///
+  /// In en, this message translates to:
+  /// **'That file could not be read as an image.'**
+  String get serverMarkPickerUndecodable;
+
+  /// Error shown when the picked image could not be re-encoded.
+  ///
+  /// In en, this message translates to:
+  /// **'That image could not be prepared. Try again, or pick another.'**
+  String get serverMarkPickerEncodeFailed;
+
+  /// Error shown when the re-encoded image still exceeds the record-size bound.
+  ///
+  /// In en, this message translates to:
+  /// **'That image would not fit in a server record even at badge size. Try a simpler picture — a logo rather than a photograph.'**
+  String get serverMarkPickerIncompressible;
+
+  /// Caption beside the badge on the image tab when no image is set.
+  ///
+  /// In en, this message translates to:
+  /// **'No image on this server yet.'**
+  String get serverMarkPickerNoImage;
+
+  /// Caption beside the badge on the image tab when an image is set.
+  ///
+  /// In en, this message translates to:
+  /// **'This server carries an image.'**
+  String get serverMarkPickerHasImage;
+
+  /// Button that imports an image when none is set.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose image…'**
+  String get serverMarkPickerChooseImage;
+
+  /// Button that imports an image when one is already set.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace image…'**
+  String get serverMarkPickerReplaceImage;
+
+  /// Button that reverts the mark to the image's fallback glyph.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove image'**
+  String get serverMarkPickerRemoveImage;
+
+  /// Readable list of accepted image formats (SVG excluded on iOS, which gets the photo picker).
+  ///
+  /// In en, this message translates to:
+  /// **'PNG, JPEG, WebP or SVG'**
+  String get serverMarkPickerImageFormats;
+
+  /// Readable list of accepted image formats on iOS.
+  ///
+  /// In en, this message translates to:
+  /// **'PNG, JPEG or WebP'**
+  String get serverMarkPickerImageFormatsIos;
+
+  /// Explainer at the bottom of the image tab. {formats} is the accepted-format list; {side} is the stored edge length in pixels.
+  ///
+  /// In en, this message translates to:
+  /// **'{formats}. The image is cropped square, stored at {side} pixels, and travels inside this server’s own settings — so it reaches your other devices with everything else about the server, and never arrives without it. Anything larger than a badge can show would only be paid for on every sync. A transparent image shows the server’s colour through it.'**
+  String serverMarkPickerImageExplanation(String formats, int side);
+
+  /// Title of the custom colour picker dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom colour'**
+  String get serverColorPickerTitle;
+
+  /// Label of the hex-digits field.
+  ///
+  /// In en, this message translates to:
+  /// **'Hex'**
+  String get colorPickerHexLabel;
+
+  /// Error under the hex field when it does not hold six hex digits.
+  ///
+  /// In en, this message translates to:
+  /// **'Six hex digits'**
+  String get colorPickerHexError;
+
+  /// Label of the hue slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Hue'**
+  String get colorPickerHue;
+
+  /// Label of the saturation slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Saturation'**
+  String get colorPickerSaturation;
+
+  /// Label of the brightness slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Brightness'**
+  String get colorPickerBrightness;
+
+  /// Screen-reader value of the hue slider.
+  ///
+  /// In en, this message translates to:
+  /// **'{degrees} degrees'**
+  String colorPickerDegrees(int degrees);
+
+  /// Screen-reader value of the saturation, brightness and opacity sliders.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent} percent'**
+  String colorPickerPercent(int percent);
+
+  /// Small print under the colour sliders.
+  ///
+  /// In en, this message translates to:
+  /// **'Drawn as picked, with the mark kept legible on it in both themes. Devices running an older version show the nearest of the named colours instead.'**
+  String get serverColorPickerHint;
+
+  /// Label of the opacity slider, shown for colours that may be translucent (a theme's lines and selection).
+  ///
+  /// In en, this message translates to:
+  /// **'Opacity'**
+  String get colorPickerOpacity;
+
+  /// Error under the hex field of a picker that takes opacity, when it holds neither six nor eight hex digits.
+  ///
+  /// In en, this message translates to:
+  /// **'Six or eight hex digits'**
+  String get colorPickerHexErrorAlpha;
+
+  /// Dismisses the colour picker without choosing.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get colorPickerCancel;
+
+  /// Confirms the picked colour.
+  ///
+  /// In en, this message translates to:
+  /// **'Use colour'**
+  String get colorPickerUse;
+
+  /// A synced fleet row's menu verb that opens the server editor on it (FL-03). Shown only while a sync account is enrolled; ssh_config imports have no such verb.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit…'**
+  String get fleetRowEdit;
+
+  /// A synced fleet row's menu verb that asks before deleting the server from the sync account (FL-03). Shown only while a sync account is enrolled.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete…'**
+  String get fleetRowDelete;
+
+  /// Title of the confirmation before a server is deleted from the sync account; names the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete {name}?'**
+  String serverDeleteTitle(String name);
+
+  /// Body of the delete confirmation: what deleting a synced server does on other devices.
+  ///
+  /// In en, this message translates to:
+  /// **'The server leaves your sync account, and with it every device that syncs it. Its saved password or key goes too, unless another server uses it.'**
+  String get serverDeleteBody;
+
+  /// The delete confirmation's button that keeps the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get serverDeleteCancel;
+
+  /// The delete confirmation's button that deletes the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get serverDeleteAction;
+
+  /// Toast when the editor is opened on a server a sync removed in the meantime.
+  ///
+  /// In en, this message translates to:
+  /// **'This server is no longer in your account.'**
+  String get serverEditGone;
+
+  /// Toast, and the editor's save error, when the engine stopped before it answered a server edit.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann\'s engine stopped, so nothing was saved. Restart Klabautermann and try again.'**
+  String get serverEditEngineStopped;
+
+  /// Why the engine refused to save or delete a server (03 §4.4): shown as a toast, or in the editor after its Could not save prefix. reason is the engine's CatalogWriteFailure; detail is its own words, used for other only.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, directoryShared{Another Klabautermann may be using this device\'s data folder, so nothing was saved.} notEnrolled{Sign in to your sync account to edit servers.} keystoreUnavailable{Your account key could not be read from the system keystore, so nothing was saved.} unknownTarget{This server is no longer in your account.} invalidDraft{A field is missing or out of range.} tooMany{Your account holds as many servers as it can.} tooLarge{This server is too large to save. Try a smaller image for its mark.} storeUnavailable{Klabautermann\'s sync files could not be written this session, so nothing was saved.} other{Nothing was saved: {detail}}}'**
+  String serverEditRefused(String reason, String detail);
+
+  /// Heading on the Servers settings tab over adding a synced server (FL-03). Shown only while a sync account is enrolled.
+  ///
+  /// In en, this message translates to:
+  /// **'Servers in your account'**
+  String get settingsServersAccountTitle;
+
+  /// Explanation under the heading on the Servers settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a server to your sync account here. To edit or delete one, open its menu in the server list.'**
+  String get settingsServersAccountDetail;
+
+  /// Heading of the device name on the General settings tab (M5 plan Q6).
+  ///
+  /// In en, this message translates to:
+  /// **'This device'**
+  String get settingsDeviceTitle;
+
+  /// Label of the device name field on the General settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Device name'**
+  String get settingsDeviceName;
+
+  /// Helper text under the device name field (SAF-13): the name appears in host logs.
+  ///
+  /// In en, this message translates to:
+  /// **'Servers\' system logs name this device beside each action you take there. Leave it blank for the default.'**
+  String get settingsDeviceNameDetail;
+
+  /// Toast when the device name applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The device name changed, but it could not be saved, so it will not be kept after a restart.'**
+  String get settingsDeviceNameNotSaved;
+
+  /// Toast when the app did not take a change of the device name.
+  ///
+  /// In en, this message translates to:
+  /// **'The device name could not be changed.'**
+  String get settingsDeviceNameNotChanged;
 }
 
 class _AppLocalizationsDelegate

@@ -9,10 +9,18 @@ import 'package:klabautermann_app/controllers/device_name.dart';
 
 void main() {
   test('the default names the platform', () {
-    expect(defaultDeviceName(TargetPlatform.macOS), 'Klabautermann on macOS');
-    expect({
-      for (final platform in TargetPlatform.values) defaultDeviceName(platform),
-    }, hasLength(TargetPlatform.values.length));
+    const labels = {
+      TargetPlatform.android: 'Android',
+      TargetPlatform.fuchsia: 'Fuchsia',
+      TargetPlatform.iOS: 'iOS',
+      TargetPlatform.linux: 'Linux',
+      TargetPlatform.macOS: 'macOS',
+      TargetPlatform.windows: 'Windows',
+    };
+    expect(labels.keys, containsAll(TargetPlatform.values));
+    for (final MapEntry(key: platform, value: label) in labels.entries) {
+      expect(defaultDeviceName(platform), 'Klabautermann on $label');
+    }
   });
 
   test('applies at once, then each change before saving it; blank is the '
