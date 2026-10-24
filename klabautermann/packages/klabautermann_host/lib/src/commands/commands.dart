@@ -16,8 +16,10 @@ const int kCalendarIterationsSystemd = 242;
 /// The longest each part of [HostCommands.auditLine] may be [E].
 const int kAuditLinePartMax = 200;
 
-/// C0 controls and DEL, which a syslog line must not carry.
-final _controlCharacters = RegExp(r'[\x00-\x1f\x7f]');
+/// C0 and C1 controls, DEL and the Unicode line and paragraph
+/// separators, which a syslog line must not carry: NEL and the separators
+/// break lines in some viewers, and C1's CSI starts a terminal sequence.
+final _controlCharacters = RegExp(r'[\x00-\x1f\x7f-\x9f\u2028\u2029]');
 
 /// A command refused before building: an argument failed its validator
 /// (03 §8.8).
@@ -718,7 +720,7 @@ abstract final class HostCommands {
     String clean(String part) {
       final text = part.replaceAll(_controlCharacters, ' ').trim();
       return text.length > kAuditLinePartMax
-          ? text.substring(0, kAuditLinePartMax)
+          ? text.substring(0, kAuditLinePartMax).trimRight()
           : text;
     }
 

@@ -373,6 +373,23 @@ void main() {
       expect(message.length, lessThan(2 * kAuditLinePartMax + 20));
     });
 
+    test('review fix: drops C1 controls and Unicode line breaks too, and '
+        'never ends a capped part in a space', () {
+      final message = HostCommands.auditLine(
+        'stop',
+        'a\u0085b\u009bc\u2028d\u2029e',
+        'Laptop',
+      ).last;
+      expect(message, 'stop a b c d e by Laptop');
+
+      final capped = HostCommands.auditLine(
+        'stop',
+        '${'x' * (kAuditLinePartMax - 1)}\u0085y',
+        'Laptop',
+      ).last;
+      expect(capped, 'stop ${'x' * (kAuditLinePartMax - 1)} by Laptop');
+    });
+
     test('a blank target is refused, and no device leaves out "by"', () {
       expect(
         () => HostCommands.auditLine('start', '  ', 'Laptop'),
