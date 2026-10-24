@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert' show utf8;
 import 'dart:io' show Platform;
 import 'dart:typed_data';
 
@@ -218,6 +219,27 @@ final class _EngineEditorDelegate extends GhostServerEditorDelegate {
   bool get canPickIdentityFile =>
       Platform.isLinux || Platform.isMacOS || Platform.isWindows;
 
+  // Phones cannot reference a key file (03 §4.5), so the key goes into
+  // the vault; desktops may store one the same way.
+  @override
+  bool get canImportKeyFile => true;
+
+  /// The picked file's text. A private key is a few KiB; anything past
+  /// [_keyFileLimit], or not UTF-8, is no key file.
+  @override
+  Future<String?> importKeyFile() async {
+    if (Platform.isMacOS) await FilePicker.skipEntitlementsChecks();
+    final files = await FilePicker.pickFiles();
+    if (files.isEmpty) return null;
+    final file = files.single;
+    final length = await file.length();
+    if (length != null && length > _keyFileLimit) {
+      // The editor words the failure; no message of its own is shown.
+      throw const FormatException();
+    }
+    return utf8.decode(await file.readAsBytes());
+  }
+
   @override
   Future<String?> pickIdentityFile() async {
     // Unsandboxed on macOS (03 §10.2), as for the mark image's picker.
@@ -288,6 +310,9 @@ final class _SaveFailure implements Exception {
   @override
   String toString() => message;
 }
+
+/// The largest file Import from file reads as a private key.
+const int _keyFileLimit = 64 * 1024;
 
 /// The engine's draft as the shared editor's.
 GhostServerDraft ghostDraftOf(ServerDraft draft) => GhostServerDraft(

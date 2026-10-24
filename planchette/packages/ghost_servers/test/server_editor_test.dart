@@ -32,6 +32,8 @@ final class _FakeDelegate extends GhostServerEditorDelegate {
   bool configured = false;
   bool canPick = true;
   bool canTest = true;
+  bool canImport = false;
+  Future<String?> Function()? importReply;
   int testCalls = 0;
   Future<GhostTestReport> Function()? testReply;
   int _ids = 0;
@@ -56,6 +58,12 @@ final class _FakeDelegate extends GhostServerEditorDelegate {
 
   @override
   Future<String?> pickIdentityFile() async => null;
+
+  @override
+  bool get canImportKeyFile => canImport;
+
+  @override
+  Future<String?> importKeyFile() => importReply?.call() ?? Future.value();
 
   @override
   Future<bool> save(GhostServerSave save) async {
@@ -423,6 +431,61 @@ void main() {
 
       expect(field('Identity file path'), findsOneWidget);
       expect(find.text('Browse…'), findsOneWidget);
+    });
+
+    Future<void> pasteKey(WidgetTester tester) async {
+      await tester.tap(find.byType(DropdownButtonFormField<AuthMethod>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Private key').last);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('Import from file fills the pasted key, which saves as a '
+        'pasted one', (tester) async {
+      delegate
+        ..canImport = true
+        ..importReply = () async => 'KEY TEXT';
+      await openEditor(tester);
+      await fillRequired(tester);
+      await pasteKey(tester);
+
+      await scrollTo(tester, find.text('Import from file…'));
+      await tester.tap(find.text('Import from file…'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextFormField>(field('Private key (PEM/OpenSSH)'))
+            .controller!
+            .text,
+        'KEY TEXT',
+      );
+
+      await tapSave(tester);
+      expect(delegate.saves.single.credential.keyPem, 'KEY TEXT');
+      expect(delegate.saves.single.credential.referenceKeyFile, isFalse);
+    });
+
+    testWidgets('a key file that cannot be read says so and keeps the box', (
+      tester,
+    ) async {
+      delegate
+        ..canImport = true
+        ..importReply = () async => throw const FormatException('binary');
+      await openEditor(tester);
+      await pasteKey(tester);
+
+      await scrollTo(tester, find.text('Import from file…'));
+      await tester.tap(find.text('Import from file…'));
+      await tester.pumpAndSettle();
+      expect(find.text('Could not read that file as a key.'), findsOneWidget);
+      await outlastToasts(tester);
+    });
+
+    testWidgets('a host without key import hides it', (tester) async {
+      await openEditor(tester);
+      await pasteKey(tester);
+
+      expect(find.text('Import from file…'), findsNothing);
     });
 
     testWidgets('a host that cannot pick files hides Browse', (tester) async {

@@ -8559,6 +8559,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Copied {name}'**
   String serverDuplicated(String name);
+
+  /// Button under the pasted private key that reads a key file into it, so the key is stored in the app's vault.
+  ///
+  /// In en, this message translates to:
+  /// **'Import from file…'**
+  String get serverEditorImportKeyFile;
+
+  /// Toast when a picked key file is too large or not text.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read that file as a key.'**
+  String get serverEditorKeyFileImportFailed;
 }
 
 class _AppLocalizationsDelegate
