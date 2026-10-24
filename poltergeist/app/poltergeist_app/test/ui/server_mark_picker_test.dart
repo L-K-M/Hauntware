@@ -30,6 +30,7 @@ void main() {
                 strings: PoltergeistServerAppearanceStrings(
                   AppLocalizations.of(context),
                 ),
+                readImage: () async => null,
               ),
               child: const Text('open'),
             ),

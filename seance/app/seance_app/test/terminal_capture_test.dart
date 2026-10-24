@@ -11,8 +11,8 @@ import 'package:seance_app/services/xterm_engine.dart';
 import 'package:seance_app/theme.dart';
 import 'package:seance_app/theme/theme_presets.dart';
 import 'package:seance_app/ui/terminal_appearance.dart';
-import 'package:seance_app/ui/terminal_keyboard_bar.dart';
 import 'package:seance_core/seance_core.dart';
+import 'package:seance_terminal/seance_terminal.dart' show TerminalKeyboardBar;
 import 'package:xterm/xterm.dart' show TerminalView;
 
 /// Real-font captures of the terminal as Séance draws it (03 D3; the

@@ -14,8 +14,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # The mark picker's default image reader.
-  file_picker: ^11.0.2
   # SelectedTabView, the colour picker and the badge image encoder.
   ghost_ui:
     path: ../ghost_ui

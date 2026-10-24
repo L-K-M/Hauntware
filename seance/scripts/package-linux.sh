@@ -299,10 +299,11 @@ Type=Application
 Name=Séance
 GenericName=SSH Client
 Comment=Summon remote machines and talk to them
-Exec=$2
+Exec=$2 %u
 Icon=seance
 Terminal=false
 Categories=Network;System;Utility;
+MimeType=x-scheme-handler/seance;
 # The GApplication id is also the prgname GTK reports to the session (seen
 # in its warnings: "(ch.lkmc.seance:pid): …"), hence StartupWMClass —
 # that's what lets desktops map windows onto this entry.

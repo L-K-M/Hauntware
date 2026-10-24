@@ -31,11 +31,11 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 /// queue here from launch and are reviewed once the app has loaded.
 final SeanceLinkIntake linkIntake = SeanceLinkIntake();
 
-/// The platforms that register the `seance` scheme (section 7). Linux and
-/// Windows need single-instance forwarding first, or a link would start a
-/// second Séance writing the same stores.
-bool get _receivesLinks =>
-    !kIsWeb && (Platform.isAndroid || Platform.isIOS || Platform.isMacOS);
+/// The platforms that register the `seance` scheme (section 7): every
+/// native one. On Linux and Windows the runner forwards a second launch to
+/// the running Séance, so a link never starts a second one writing the
+/// same stores.
+bool get _receivesLinks => !kIsWeb;
 
 /// Opens Settings in its own window, on desktop once the app has started.
 /// Null on mobile, where Settings is a route, and before bootstrap finishes.
