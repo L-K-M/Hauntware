@@ -969,7 +969,8 @@ final class ReadServerDraft extends EngineRequest {
 /// (03 §4.4, FL-03). The saved endpoint counts as confirmed on this
 /// device (M5 plan P16). Answered by [CatalogWritten] or
 /// [CatalogWriteRefused]; a written one sends the fleet and the
-/// preferences just before its answer, and a round's [SyncStatus] after.
+/// preferences just before its answer when they can be read (else the
+/// next round's refresh does), and a round's [SyncStatus] after.
 final class SaveServer extends EngineRequest {
   const SaveServer({
     required this.requestId,
