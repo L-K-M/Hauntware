@@ -83,6 +83,17 @@ void main() {
     expect(session.isClosed, isFalse);
   });
 
+  test('a resize after the far end ended reaches only the terminal', () async {
+    await transport.far.close();
+    await pumpEventQueue();
+
+    engine.terminal.resize(100, 30);
+    await pumpEventQueue();
+
+    expect(transport.sizes, isEmpty);
+    expect(engine.size.cols, 100);
+  });
+
   test('onClosed assigned after the far end ended still fires', () async {
     await transport.far.close();
     await pumpEventQueue();
@@ -106,7 +117,7 @@ void main() {
     expect(transport.closes, 1);
   });
 
-  test('close twice closes the far end and disposes the engine once', () async {
+  test('closing twice closes the far end once', () async {
     await Future.wait([session.close(), session.close()]);
     await session.close();
 

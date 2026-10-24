@@ -22,6 +22,9 @@ dependencies:
     path: ../../../planchette/packages/ghost_fonts
   ghost_marks:
     path: ../../../planchette/packages/ghost_marks
+  # The mark picker's image reader, over file_picker.
+  ghost_marks_picker:
+    path: ../../../planchette/packages/ghost_marks_picker
   # The server list's sectioning, shared with Poltergeist.
   ghost_servers:
     path: ../../../planchette/packages/ghost_servers
@@ -79,6 +82,9 @@ dependencies:
   share_plus: ^12.0.2
   # Opens the releases page in the browser when an update is available.
   url_launcher: ^6.3.0
+  # Delivers seance://connect links to the link intake (lib/services/
+  # link_intake.dart). Pinned to the version Poltergeist runs.
+  app_links: 7.2.1
   # Persists/restores the desktop window's frame, monitor, and maximized/
   # full-screen state across launches (lib/services/window_state.dart).
   window_manager: ^0.5.2

@@ -39,6 +39,25 @@ export 'package:seance_core/seance_core.dart'
         UpdateInfo,
         Argon2Params,
         AuthKind,
+        // The suite's link grammar (docs/design/suite-links.md section 5):
+        // the browse parser, outbound Séance links and display safety.
+        DeepLinkFailure,
+        DeepLinkFailureKind,
+        DeepLinkParse,
+        DeepLinkRequest,
+        HostDeepLink,
+        SafeDeepLinkDisplay,
+        SafeDeepLinkHostDisplay,
+        ServerDeepLink,
+        parsePoltergeistDeepLink,
+        poltergeistBrowseRoute,
+        poltergeistDeepLinkScheme,
+        safeDeepLinkDisplay,
+        safeDeepLinkHostDisplay,
+        seanceConnectRoute,
+        seanceConnectUriForBookmark,
+        seanceConnectUriForServer,
+        seanceDeepLinkScheme,
         AuthMethod,
         // The shared credential decision table (F2c): the server editor and
         // the prompt coordinator's vault-first branch resolve through it
@@ -103,6 +122,12 @@ export 'package:seance_core/seance_core.dart'
         // shared so a new ServerConfig field is carried in one place.
         duplicateServerConfig,
         duplicateServerLabel,
+        // The editor's save rules (docs/design/ghost-servers-part2.md
+        // section 3): the credential a Save writes, whether it reads the
+        // stored entry, and the `updatedAt` stamp.
+        nextUpdatedAt,
+        plannedCredential,
+        plannedCredentialReadsStored,
         kMaxServerIconImageBytes,
         runConnectionTest,
         liveHostAuthenticator,
@@ -152,10 +177,7 @@ export 'package:seance_core/seance_core.dart'
         validateSyncEnrollment;
 
 export 'src/bookmarks/bookmark_groups.dart'
-    show
-        BookmarkGroupSection,
-        groupBookmarks,
-        kUngroupedBookmarkKey;
+    show BookmarkGroupSection, groupBookmarks, kUngroupedBookmarkKey;
 export 'src/bookmarks/bookmark_handler.dart'
     show BookmarkHandler, BookmarkRecordWrites;
 export 'package:seance_core/catalog.dart'
@@ -275,10 +297,7 @@ export 'src/fs/local_file_system.dart'
         LocalCrossDeviceRenameException,
         LocalPathTypeChangedException;
 export 'src/fs/local_copy_pump.dart'
-    show
-        LocalCopyPump,
-        platformLocalCopyPump,
-        streamedLocalCopyPump;
+    show LocalCopyPump, platformLocalCopyPump, streamedLocalCopyPump;
 export 'src/fs/local_fs_safety.dart'
     show
         ensureSafeLocalDirectory,
@@ -528,10 +547,7 @@ export 'src/engine/engine_client.dart'
         ProbeBridge,
         PromptBridge;
 export 'src/engine/engine_connection_manager.dart'
-    show
-        EngineConnectionManager,
-        EngineRemoteFileSystem,
-        ServerConfigSource;
+    show EngineConnectionManager, EngineRemoteFileSystem, ServerConfigSource;
 export 'src/engine/engine_trash_backend.dart' show EngineTrashBackend;
 export 'src/connection/leased_file_system.dart' show LeasedRemoteFileSystem;
 export 'src/fs/content_digest.dart'

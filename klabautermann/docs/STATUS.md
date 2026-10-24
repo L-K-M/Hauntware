@@ -1857,6 +1857,21 @@ is on main:
   ghost_theme's shared editor (presets, mode, colours, font, corners,
   copy, paste and reset), in the app and in the desktop settings window,
   in Klabautermann's words.
+- Pause and Resume (M5 M27c, JOB-07): a cron line in the login user's
+  crontab, or another user's in admin mode, pauses and resumes from its
+  row menu or details as an edit of that crontab, previewed and backed
+  up like any edit; system tables and managed lines offer neither.
+- X-01 theme paste (M5 M32): complete. Themes copied in Séance and
+  Poltergeist paste into the Appearance tab and keep their name,
+  colours, font and corners; Séance's terminal colours, which
+  Klabautermann's palettes do not carry, are dropped.
+  `theme_paste_fixtures_test.dart` replays each app's exact Copy theme
+  text from `test/fixtures/theme_paste/`.
+- v1 stack suite (M5 M29): on the Docker fixture, a service stops,
+  restarts and is recreated alone, a stack deployed from two files names
+  both in every step, a stack's profiles are read, a folder scan finds a
+  stack that never ran, and `down` needs the typed name and keeps the
+  volumes.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container
@@ -1973,6 +1988,10 @@ is not a device smoke test:
   preview, confirmation tiers and protected targets on a phone (PLT-03);
   admin mode ending when iOS backgrounds the app (PLT-04); and the
   activity log afterwards.
+- Privileged file writes under SELinux (M5 M01, D67), on RHEL 9 with
+  SELinux enforcing: a root-owned file the engine edits keeps its label
+  (`ls -Z` before and after the write, which runs `restorecon`). The
+  spike's containers cannot observe labels.
 - The 24 h soak (03 §11.4) against ten hosts, which CI runs only for
   minutes.
 

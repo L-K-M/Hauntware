@@ -18,7 +18,7 @@ const double _compactWidth = 600;
 
 /// The search field's width beside the Live chip at 100 % text; it grows
 /// with the text.
-const double _searchWidth = 350;
+const double _searchWidth = 450;
 
 /// The share of the screen a phone's log sheet opens at, and the least it
 /// drags down to before it closes, as SVC-04's sheet does (03 §10.5).

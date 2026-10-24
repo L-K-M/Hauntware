@@ -81,6 +81,16 @@ void main() {
     expect(await output(), 'cd /srv\nrm -rf data');
   });
 
+  test('a trailing line break is not counted as a line', () async {
+    final reviews = <TerminalPasteReview>[];
+    await policy(
+      findings: [finding],
+      reviews: reviews,
+    ).paste(engine, 'cd /srv\nrm -rf data\n');
+
+    expect(reviews.single.lineCount, 2);
+  });
+
   test('first line only pastes the cleaned first line', () async {
     await policy(
       findings: [finding],

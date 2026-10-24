@@ -13,7 +13,9 @@ List<DangerFinding> lintSteps(Iterable<PlanStep> steps) => [
       // The exact command line quotes every word behind its locale
       // wrapper, which the linter's patterns cannot see through, so it
       // reads the argv joined by spaces: the same words.
-      ShellStep(:final argv) ||
+      // A shell step's shown words: what 8.9 masks is a secret value,
+      // never a word the rules match.
+      ShellStep(shownArgv: final argv) ||
       ExecStep(:final argv) => DangerLinter.scan(argv.join(' ')),
       final ApiStep api => switch (cliEquivalent(api)) {
         final cli? => DangerLinter.scan(cli),
