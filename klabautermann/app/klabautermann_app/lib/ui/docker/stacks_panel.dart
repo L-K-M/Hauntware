@@ -9,6 +9,7 @@ import '../../l10n/app_localizations.dart';
 import '../actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
 import '../actions/docker_actions.dart'
     show StackActionButtons, StackDownButton, StackServiceMenu;
+import '../hand_off_actions.dart' show FolderHandOffs, folderHandOffsShown;
 import 'container_details.dart' show openContainerDetails;
 import 'containers_panel.dart'
     show ContainerHealthBadge, DockerNotice, containerStateText;
@@ -726,6 +727,14 @@ class StackOverview extends StatelessWidget {
             label: l10n.dockerStackWorkingDir,
             values: [project.workingDir ?? none],
           ),
+          // X-04: the folder in Séance and in Poltergeist.
+          if (project.workingDir case final folder?
+              when folderHandOffsShown(
+                context,
+                serverId: serverId,
+                folder: folder,
+              ))
+            FolderHandOffs(serverId: serverId, folder: folder),
           _Fact(
             label: l10n.dockerStackConfigFiles,
             values: project.configFiles.isEmpty ? [none] : project.configFiles,
