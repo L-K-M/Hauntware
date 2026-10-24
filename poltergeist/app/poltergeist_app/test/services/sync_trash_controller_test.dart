@@ -531,41 +531,44 @@ void main() {
   }
 
   for (final leftFails in [true, false]) {
-    test('a trash failure on one side ${leftFails ? 'still runs the other '
-        'but holds Restore' : 'is absent: Restore opens'}', () async {
-      File('${leftRoot.path}/a.txt').writeAsStringSync('alpha');
-      File('${rightRoot.path}/a.txt').writeAsStringSync('older');
-      final plan = testPlan(pair, [
-        testItem(
-          'a.txt',
-          left: testFile(size: 5),
-          right: testFile(size: 5),
-          suggested: SyncActionType.updateLeftToRight,
-          reason: SyncReason.newerOnLeft,
-        ),
-      ]);
-      final controller = _controller(
-        pair: pair,
-        states: states,
-        activity: activity,
-        localFileSystem: () => _TrashResolutionFailureFileSystem(
-          const SyncTrashActivityLockException('claim trash'),
-          // The control arm aims the failure at a path holding neither
-          // trash root, so nothing fails.
-          leftFails ? leftRoot.path : '${scratch.path}/elsewhere',
-        ),
-        plan: plan,
-      );
-      addTearDown(controller.dispose);
+    test(
+      'a trash failure on one side ${leftFails ? 'still runs the other '
+                'but holds Restore' : 'is absent: Restore opens'}',
+      () async {
+        File('${leftRoot.path}/a.txt').writeAsStringSync('alpha');
+        File('${rightRoot.path}/a.txt').writeAsStringSync('older');
+        final plan = testPlan(pair, [
+          testItem(
+            'a.txt',
+            left: testFile(size: 5),
+            right: testFile(size: 5),
+            suggested: SyncActionType.updateLeftToRight,
+            reason: SyncReason.newerOnLeft,
+          ),
+        ]);
+        final controller = _controller(
+          pair: pair,
+          states: states,
+          activity: activity,
+          localFileSystem: () => _TrashResolutionFailureFileSystem(
+            const SyncTrashActivityLockException('claim trash'),
+            // The control arm aims the failure at a path holding neither
+            // trash root, so nothing fails.
+            leftFails ? leftRoot.path : '${scratch.path}/elsewhere',
+          ),
+          plan: plan,
+        );
+        addTearDown(controller.dispose);
 
-      controller.start();
-      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
-      await controller.run();
+        controller.start();
+        await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+        await controller.run();
 
-      expect(controller.phase, SyncPlanPhase.completed);
-      expect(File('${rightRoot.path}/a.txt').readAsStringSync(), 'alpha');
-      expect(controller.canRestore, !leftFails);
-    });
+        expect(controller.phase, SyncPlanPhase.completed);
+        expect(File('${rightRoot.path}/a.txt').readAsStringSync(), 'alpha');
+        expect(controller.canRestore, !leftFails);
+      },
+    );
   }
 
   test('full purge includes foreign runs but refuses an active root', () async {

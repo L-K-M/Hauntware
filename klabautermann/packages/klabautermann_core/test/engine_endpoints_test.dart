@@ -113,10 +113,7 @@ final class _Engine {
       endpointPinStore: pins,
       prober: prober ?? const TcpBannerProber(),
     );
-    expect(
-      await messages.moveNext().timeout(_engineEventWait),
-      isTrue,
-    );
+    expect(await messages.moveNext().timeout(_engineEventWait), isTrue);
     final engine = _Engine._(messages.current as SendPort, messages)
       ..send(const Hello());
     expect(await engine.next(), isA<EngineReady>());
