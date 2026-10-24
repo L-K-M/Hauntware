@@ -2,7 +2,7 @@
 /// Séance account, sync rounds and catalog writes through the catalog
 /// library's `SyncEnrollment`, `RecordCoordinator` and `CatalogWriter`,
 /// over the engine's own files in the support directory (03 §4.10).
-/// Pull-only until v1 (D14).
+/// The MVP ran pull-only (D14); v1 writes and pushes (M5 plan M05).
 library;
 
 import 'dart:async';
@@ -587,7 +587,7 @@ final class EngineSync {
   Future<EngineEvent> putRule(PutRule request) =>
       _write(request.requestId, (writes) async {
         final ruleId = request.ruleId.trim();
-        final target = request.target;
+        final target = request.target?.trim();
         if (ruleId.isEmpty || (target != null && target.isEmpty)) {
           return _refused(request.requestId, CatalogWriteFailure.invalidDraft);
         }

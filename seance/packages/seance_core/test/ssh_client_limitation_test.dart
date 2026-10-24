@@ -696,6 +696,38 @@ void main() {
       });
     });
 
+    test('a server that hangs up before any key-exchange packet is '
+        'closedBeforeKeyExchange', () async {
+      // Nothing yet, or an identification line alone, then a close or a
+      // reset: the service is not taking connections, as while a container
+      // starts.
+      for (final (script, then) in [
+        (const <int>[], _Then.hangUp),
+        (latin1.encode(_identification), _Then.hangUp),
+        (latin1.encode(_identification), _Then.reset),
+      ]) {
+        final failure = await _connectFailure(
+          _ScriptedServer(script, then: then),
+        );
+        expect(
+          failure,
+          _ofKind(SshConnectFailureKind.closedBeforeKeyExchange),
+          reason: '${script.length} bytes, then ${then.name}',
+        );
+      }
+    });
+
+    test('a server that disconnects before its KEXINIT stays other', () async {
+      // A DISCONNECT carries the server's own reason.
+      final failure = await _connectFailure(
+        _ScriptedServer(
+          latin1.encode(_identification),
+          then: _Then.disconnect,
+        ),
+      );
+      expect(failure, _ofKind(SshConnectFailureKind.other));
+    });
+
     test('a curve key exchange that ends early stays other', () async {
       final failure = await _connectFailure(
         _ScriptedServer(_greeting(_kexInit()), then: _Then.hangUp),

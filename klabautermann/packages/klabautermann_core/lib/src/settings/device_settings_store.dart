@@ -34,6 +34,7 @@ const String _safetyKey = 'klabautermann.safety';
 const String _syncSecretsKey = 'klabautermann.sync.secrets';
 
 const String _endpointOverridesKey = 'klabautermann.docker.endpointOverrides';
+const String _stackFoldersKey = 'klabautermann.docker.stackFolders';
 
 // The fields of one server's entry under [_endpointOverridesKey].
 const String _overrideChoiceField = 'choice';
@@ -462,6 +463,44 @@ final class DeviceSettingsStore {
     }
     return null;
   }
+
+  /// The folders STK-08's scan searches on each server, by server id:
+  /// `klabautermann.docker.stackFolders`. Device-local until the `pref`
+  /// record carries them (M5 plan M05). Read leniently: a value that is
+  /// not an object, an entry that is not a list and items that are not
+  /// absolute paths are skipped, rather than failing the file.
+  Map<String, List<String>> get stackFolders => {
+    for (final MapEntry(:key, :value) in _rawStackFolders.entries)
+      if (value case final List<Object?> folders)
+        if ([
+              for (final folder in folders)
+                if (folder case final String path when path.startsWith('/'))
+                  path,
+            ]
+            case final paths when paths.isNotEmpty)
+          key: List.unmodifiable(paths),
+  };
+
+  /// Stores [folders] as [serverId]'s, or removes its entry when empty,
+  /// and writes the document. The other servers' entries stay as they
+  /// were read. Throws when the write fails or this session is
+  /// read-only; the value stays in memory either way.
+  Future<void> setStackFolders(String serverId, List<String> folders) async {
+    final entries = _rawStackFolders;
+    if (folders.isEmpty) {
+      entries.remove(serverId);
+    } else {
+      entries[serverId] = [...folders];
+    }
+    _values[_stackFoldersKey] = entries;
+    await _save();
+  }
+
+  Map<String, Object?> get _rawStackFolders =>
+      switch (_values[_stackFoldersKey]) {
+        final Map<String, Object?> entries => {...entries},
+        _ => {},
+      };
 
   /// The safety preferences as the app stored them (M4 plan M4): an
   /// opaque JSON object the app encodes and decodes, or null when there

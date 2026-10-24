@@ -431,6 +431,11 @@ final class LinkConnector {
       switch (kind) {
         SshConnectFailureKind.unreachable => LinkFailureKind.unreachable,
         SshConnectFailureKind.timedOut => LinkFailureKind.timedOut,
+        // The SSH service turned the connection away before the handshake
+        // began, as a host or container still starting does: a redial may
+        // reach it, as one after a refused connection may.
+        SshConnectFailureKind.closedBeforeKeyExchange =>
+          LinkFailureKind.unreachable,
         // A route the fleet's own configs cannot follow, or one given up
         // before it was resolved; nothing was dialed and nothing the user
         // can fix on the server.

@@ -682,6 +682,7 @@ class _ServerEditorState extends State<_ServerEditor> {
       context,
       current: _mark,
       accent: _tint,
+      readImage: pickServerMarkImage,
     );
     if (chosen == null || !mounted) return;
     setState(() => _mark = chosen);

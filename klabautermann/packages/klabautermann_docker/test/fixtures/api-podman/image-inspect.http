@@ -3,8 +3,8 @@ Api-Version: 1.44
 Content-Type: application/json
 Libpod-Api-Version: 5.8.7
 Server: Libpod/5.8.7 (linux)
-X-Reference-Id: 0x16fa70d30db0
-Date: Sat, 17 Oct 2026 16:14:49 GMT
+X-Reference-Id: 0x2611cc028358
+Date: Tue, 20 Oct 2026 17:14:44 GMT
 Content-Length: 1330
 
 {"Id":"sha256:30ecbe1509090b38ef3260f3609d64d8261230464eaa4d235901db496e9647fb","RepoTags":["mirror.gcr.io/library/busybox:1.37.0"],"RepoDigests":["mirror.gcr.io/library/busybox@sha256:66a6306db78bf2dbf3487f293aa8d6990d8e506fdffab9cc43fe422becf886e4","mirror.gcr.io/library/busybox@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e"],"Parent":"","Comment":"","Created":"2024-09-26T21:31:42Z","ContainerConfig":{"Hostname":"30ecbe15090","Domainname":"","User":"","AttachStdin":false,"AttachStdout":false,"AttachStderr":false,"Tty":false,"OpenStdin":false,"StdinOnce":false,"Env":null,"Cmd":null,"Image":"","Volumes":null,"WorkingDir":"","Entrypoint":null,"OnBuild":null,"Labels":null},"DockerVersion":"","Author":"","Config":{"Env":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],"Cmd":["sh"]},"Architecture":"amd64","Os":"linux","Size":4670414,"GraphDriver":{"Data":{"UpperDir":"/var/lib/containers/storage/overlay/5a9bfd996c6d49c6c3cb4ddfb76e8d09cf16b6b7cf6601d1f2dffbdbc3edb5d4/diff","WorkDir":"/var/lib/containers/storage/overlay/5a9bfd996c6d49c6c3cb4ddfb76e8d09cf16b6b7cf6601d1f2dffbdbc3edb5d4/work"},"Name":"overlay"},"RootFS":{"Type":"layers","Layers":["sha256:5a9bfd996c6d49c6c3cb4ddfb76e8d09cf16b6b7cf6601d1f2dffbdbc3edb5d4"]},"Metadata":{"LastTagTime":"0001-01-01T00:00:00Z"}}

@@ -2,6 +2,7 @@
 
 #include <optional>
 
+#include "deep_link_scheme.h"
 #include "flutter/generated_plugin_registrant.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
@@ -30,6 +31,10 @@ bool FlutterWindow::OnCreate() {
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
+    if (!MarkPrimaryDeepLinkWindow(GetHandle())) {
+      OutputDebugStringW(
+          L"Seance could not mark its primary deep-link window.\n");
+    }
     this->Show();
   });
 

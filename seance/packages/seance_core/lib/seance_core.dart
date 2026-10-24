@@ -56,6 +56,18 @@ export 'src/ssh/remote_file_system.dart'
 
 export 'src/probe/probe_service.dart';
 
+// The suite's link grammar and the path component rule it shares with
+// Poltergeist's local file safety (docs/design/suite-links.md section 4).
+export 'src/links/suite_links.dart';
+export 'src/links/link_display.dart'
+    show
+        SafeDeepLinkDisplay,
+        SafeDeepLinkHostDisplay,
+        safeDeepLinkDisplay,
+        safeDeepLinkHostDisplay;
+export 'src/fs/path_component.dart'
+    show validatePathComponent, maxFileNameBytes, utf8ByteLength;
+
 // The fail-closed chmod is the catalog writer's primitive; catalog.dart
 // exports it.
 export 'src/store/file_permissions.dart' hide restrictLocalPathPermissions;
