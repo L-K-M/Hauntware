@@ -2,11 +2,27 @@
 #include <flutter/flutter_view_controller.h>
 #include <windows.h>
 
+#include "deep_link_scheme.h"
 #include "flutter_window.h"
 #include "utils.h"
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
+  // One instance (docs/design/suite-links.md section 7): a second launch
+  // raises the running window, and a seance:// link is handed to it, so
+  // two engines never write the same stores (STORE-02).
+  if (!RegisterDeepLinkScheme()) {
+    OutputDebugStringW(L"Seance could not register its URL scheme.\n");
+  }
+  switch (ClaimOrForwardDeepLinkInstance(CurrentLaunchIntent())) {
+    case DeepLinkInstanceDisposition::kForwarded:
+      return EXIT_SUCCESS;
+    case DeepLinkInstanceDisposition::kFailed:
+      return EXIT_FAILURE;
+    case DeepLinkInstanceDisposition::kRunPrimary:
+      break;
+  }
+
   // Attach to console when present (e.g., 'flutter run') or create a
   // new console when running with a debugger.
   if (!::AttachConsole(ATTACH_PARENT_PROCESS) && ::IsDebuggerPresent()) {

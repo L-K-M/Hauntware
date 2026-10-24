@@ -2,12 +2,12 @@ HTTP/1.1 200 OK
 Api-Version: 1.44
 Libpod-Api-Version: 5.8.7
 Server: Libpod/5.8.7 (linux)
-X-Reference-Id: 0x16fa71182018
-Date: Sat, 17 Oct 2026 16:14:44 GMT
+X-Reference-Id: 0x2611cc1846b8
+Date: Tue, 20 Oct 2026 17:14:39 GMT
 Transfer-Encoding: chunked
 
-459
-{"read":"2026-10-17T16:14:44.496682553Z","preread":"0001-01-01T00:00:00Z","pids_stats":{"current":1},"blkio_stats":{"io_service_bytes_recursive":[],"io_serviced_recursive":null,"io_queue_recursive":null,"io_service_time_recursive":null,"io_wait_time_recursive":null,"io_merged_recursive":null,"io_time_recursive":null,"sectors_recursive":null},"num_procs":0,"storage_stats":{},"cpu_stats":{"cpu_usage":{"total_usage":19126607,"percpu_usage":[9976408,5563187,3361718,225294],"usage_in_kernelmode":11991748,"usage_in_usermode":7134859},"system_cpu_usage":2674770012,"online_cpus":4,"cpu":0,"throttling_data":{"periods":0,"throttled_periods":0,"throttled_time":0}},"precpu_stats":{"cpu_usage":{"total_usage":0,"usage_in_kernelmode":0,"usage_in_usermode":0},"cpu":0,"throttling_data":{"periods":0,"throttled_periods":0,"throttled_time":0}},"memory_stats":{"usage":3506176,"limit":16874930176},"name":"web","id":"4de087acda04fb31cdc4b7dfa3415919b6aa9995e6efae3c0b0c0849402d1fd5","networks":{"eth0":{"rx_bytes":42,"rx_packets":1,"rx_errors":0,"rx_dropped":0,"tx_bytes":42,"tx_packets":1,"tx_errors":0,"tx_dropped":0}}}
+458
+{"read":"2026-10-20T17:14:39.410073422Z","preread":"0001-01-01T00:00:00Z","pids_stats":{"current":1},"blkio_stats":{"io_service_bytes_recursive":[],"io_serviced_recursive":null,"io_queue_recursive":null,"io_service_time_recursive":null,"io_wait_time_recursive":null,"io_merged_recursive":null,"io_time_recursive":null,"sectors_recursive":null},"num_procs":0,"storage_stats":{},"cpu_stats":{"cpu_usage":{"total_usage":16228726,"percpu_usage":[7609359,5888116,1739745,991506],"usage_in_kernelmode":7691223,"usage_in_usermode":8537503},"system_cpu_usage":2181512125,"online_cpus":4,"cpu":0,"throttling_data":{"periods":0,"throttled_periods":0,"throttled_time":0}},"precpu_stats":{"cpu_usage":{"total_usage":0,"usage_in_kernelmode":0,"usage_in_usermode":0},"cpu":0,"throttling_data":{"periods":0,"throttled_periods":0,"throttled_time":0}},"memory_stats":{"usage":3391488,"limit":16874930176},"name":"web","id":"7a516345102608ac553a7d99af520023d4c3872db3f1fd8b5d96059b8f5d926b","networks":{"eth0":{"rx_bytes":42,"rx_packets":1,"rx_errors":0,"rx_dropped":0,"tx_bytes":42,"tx_packets":1,"tx_errors":0,"tx_dropped":0}}}
 
 0
 
