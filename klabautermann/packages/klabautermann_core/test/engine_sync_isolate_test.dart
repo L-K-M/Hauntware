@@ -226,6 +226,53 @@ void main() {
     expect(read?.draft?.host, 'web-3.example.com');
   });
 
+  test('a duplicate is confirmed only when its source is (M5 M09b)', () async {
+    final server = await FakeSyncServer.create();
+    await server.seedServer(fakeServer('srv-a', 'alpha'));
+    final (client, events) = await spawn(
+      entryPoint: (start) => engineMain(start, syncTransport: server.transport),
+    );
+    final keystore = MemoryKeystore();
+    client.send(
+      const EnrollSync(
+        baseUrl: 'https://sync.example.com',
+        username: fakeSyncUser,
+        password: fakeSyncPassword,
+        encryptionPassphrase: fakeSyncPassword,
+      ),
+    );
+    await untilSyncEnds(client, events, keystore);
+    client.send(
+      const SaveServer(
+        requestId: 'save-1',
+        draft: ServerDraft(
+          id: 'srv-new',
+          label: 'web-3',
+          host: 'web-3.example.com',
+          port: 22,
+          username: 'deploy',
+          auth: ServerDraftAuth.agent,
+        ),
+      ),
+    );
+    await untilSyncEnds(client, events, keystore);
+
+    Future<EndpointConfirmation?> duplicate(String serverId) async {
+      client.send(
+        DuplicateServer(requestId: 'dup-$serverId', serverId: serverId),
+      );
+      final seen = await untilSyncEnds(client, events, keystore);
+      final written = seen.whereType<CatalogWritten>().single;
+      final fleet = seen.whereType<CatalogReplaced>().first;
+      return fleet.entries
+          .singleWhere((e) => e.serverId == written.serverId)
+          .endpoint;
+    }
+
+    expect(await duplicate('srv-new'), EndpointConfirmation.confirmed);
+    expect(await duplicate('srv-a'), EndpointConfirmation.unconfirmed);
+  });
+
   test('a connection test of a synced server this device never confirmed '
       'keeps its stored fields (M5 M09b)', () async {
     final server = await FakeSyncServer.create();
