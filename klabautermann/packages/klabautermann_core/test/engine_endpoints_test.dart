@@ -42,6 +42,11 @@ final class _FlakyPins implements EndpointPinStore {
   Future<void> drop(String serverId) => _inner.drop(serverId);
 }
 
+/// The bound on one engine event arriving. On a loaded CI runner the
+/// isolate's event loop has been observed slipping past 10 seconds; the
+/// bound only exists to fail a real deadlock.
+const _engineEventWait = Duration(seconds: 30);
+
 /// Records each probe's `host:port` and answers online, as a reachable
 /// host would.
 final class _RecordingProber implements Prober {
@@ -108,10 +113,7 @@ final class _Engine {
       endpointPinStore: pins,
       prober: prober ?? const TcpBannerProber(),
     );
-    expect(
-      await messages.moveNext().timeout(const Duration(seconds: 10)),
-      isTrue,
-    );
+    expect(await messages.moveNext().timeout(_engineEventWait), isTrue);
     final engine = _Engine._(messages.current as SendPort, messages)
       ..send(const Hello());
     expect(await engine.next(), isA<EngineReady>());
@@ -123,9 +125,7 @@ final class _Engine {
 
   Future<EngineEvent> next() async {
     while (true) {
-      final arrived = await _messages.moveNext().timeout(
-        const Duration(seconds: 10),
-      );
+      final arrived = await _messages.moveNext().timeout(_engineEventWait);
       expect(arrived, isTrue);
       final event = _messages.current as EngineEvent;
       if (event is! KeystoreRequest) return event;

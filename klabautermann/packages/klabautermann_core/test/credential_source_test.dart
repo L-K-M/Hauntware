@@ -241,30 +241,37 @@ void main() {
     expect(pem, _pem);
   });
 
-  test('the audit log stays owner-only through its rotation', () async {
-    final log = File('${temp.path}/support/$identityAuditLogFileName');
-    final event = IdentityReadEvent(
-      at: '2026-10-14T00:00:00.000Z',
-      serverId: 'ssh-config:web',
-      serverLabel: 'web',
-      path: '/k',
-      viaBookmark: false,
-      ok: true,
-    );
-    // Past twice the 500 kept entries, so the last record rotates.
-    for (var i = 0; i < 1001; i++) {
-      await audit.record(event);
-    }
+  test(
+    'the audit log stays owner-only through its rotation',
+    () async {
+      final log = File('${temp.path}/support/$identityAuditLogFileName');
+      final event = IdentityReadEvent(
+        at: '2026-10-14T00:00:00.000Z',
+        serverId: 'ssh-config:web',
+        serverLabel: 'web',
+        path: '/k',
+        viaBookmark: false,
+        ok: true,
+      );
+      // Past twice the 500 kept entries, so the last record rotates.
+      for (var i = 0; i < 1001; i++) {
+        await audit.record(event);
+      }
 
-    expect(await audit.readAll(), hasLength(500));
-    expect((await log.stat()).mode & 0x3f, 0);
-    expect(
-      temp
-          .listSync(recursive: true)
-          .where((entity) => entity.path.contains('.tmp-')),
-      isEmpty,
-    );
-  }, testOn: 'linux || mac-os');
+      expect(await audit.readAll(), hasLength(500));
+      expect((await log.stat()).mode & 0x3f, 0);
+      expect(
+        temp
+            .listSync(recursive: true)
+            .where((entity) => entity.path.contains('.tmp-')),
+        isEmpty,
+      );
+    },
+    // A thousand appends and a rotation rewrite: a loaded CI disk has
+    // taken longer than the default 30 seconds.
+    timeout: const Timeout(Duration(minutes: 2)),
+    testOn: 'linux || mac-os',
+  );
 }
 
 String _summary(IdentityReadEvent event) =>

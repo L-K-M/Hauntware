@@ -55,7 +55,9 @@ const _listChangeBudget = Duration(seconds: 2);
 
 /// Covers a redial after the Docker host returns, as in
 /// engine_fixture_test.dart.
-const _redialWait = Duration(seconds: 90);
+// A Docker host restart plus a redial has passed 90 s on a loaded CI
+// runner (run 120054453500); the bound fails real deadlocks only.
+const _redialWait = Duration(seconds: 180);
 
 /// Covers stack verification: a `test -f` exec, the compose CLI's
 /// detection and `compose config --hash`, each up to 30 s [E].

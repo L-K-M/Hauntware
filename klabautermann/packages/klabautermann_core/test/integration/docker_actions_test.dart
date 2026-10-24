@@ -43,10 +43,14 @@ const _opsDir = '/home/klab/.local/state/klabautermann/ops';
 
 /// Covers a pull from the fixture registry and the recreate, and the
 /// redial after the session's sshd processes are killed.
-const _redeployWait = Duration(seconds: 120);
+// A redeploy's operation lists have passed two minutes on a loaded CI
+// runner (run 119864619389); the bound fails real deadlocks only.
+const _redeployWait = Duration(seconds: 240);
 
 /// Covers the supervisor seeing the link drop and dialling again.
-const _redialWait = Duration(seconds: 90);
+// A Docker host restart plus a redial has passed 90 s on a loaded CI
+// runner (run 120054453500); the bound fails real deadlocks only.
+const _redialWait = Duration(seconds: 180);
 
 /// Covers a container event reaching the watched list (DKE-02's 2 s) on
 /// a busy runner.

@@ -1,3 +1,6 @@
+// Each file lock holder is a fresh Dart VM; the starts and their waits
+// must fit a loaded CI runner (the bound in test/support/file_lock_holder.dart).
+@Timeout(Duration(minutes: 4))
 @TestOn('vm')
 library;
 

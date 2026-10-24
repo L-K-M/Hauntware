@@ -1,3 +1,9 @@
+// Each test writes through the atomic document API: exclusive creates,
+// flushes, renames and backup rolls. A loaded CI disk has pushed one
+// past the default 30 s; the tests assert order, not speed.
+@Timeout(Duration(minutes: 4))
+library;
+
 import 'dart:convert';
 import 'dart:io';
 

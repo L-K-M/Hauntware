@@ -40,7 +40,9 @@ const _dindSocket = 'unix:///run/docker-fixture/docker.sock';
 
 /// Covers the redeploy's pull and up, and the redial after the session's
 /// sshd processes are killed.
-const _redeployWait = Duration(seconds: 120);
+// A redeploy's operation lists have passed two minutes on a loaded CI
+// runner (run 119864619389); the bound fails real deadlocks only.
+const _redeployWait = Duration(seconds: 240);
 const _redialWait = Duration(seconds: 90);
 
 void main() {
