@@ -7,10 +7,12 @@ normative plan (`03-ARCHITECTURE.md` §2 is the decision log).
 
 ## Where things stand
 
-M2's host reads, M3's Docker reads and M4's actions and admin mode (the
-MVP preview) are on main. M3 met all of its automated exits and M4 all
-but one ([M3 exit](#m3-exit) and [M4 exit](#m4-exit), below); the
-remaining case, a sudo rule scoped to `docker`, waits on a decision.
+M2's host reads, M3's Docker reads, M4's actions and admin mode (the
+MVP preview) and M5's editing, shells and sync writes (v1 part 1) are
+on main. M3 and M5 met all of their automated exits and M4 all but one
+([M3 exit](#m3-exit), [M4 exit](#m4-exit) and [M5 exit](#m5-exit),
+below); M4's remaining case, a sudo rule scoped to `docker`, waits on a
+decision.
 The real-host and device checks stay open under the manual gates. What
 is on main:
 
@@ -1922,14 +1924,6 @@ is on main:
   E10 takes the PIDs into the protected targets, E17 runs `ops` on
   connect, and `ops` has no platform fixture.
 
-Pull-only from the start (D14): no surface sends a request that could
-push or write catalog records, and a widget test guards it.
-
-Not in yet (later PRs): pull-only enrollment and the catalog (F3), the
-engine's reachability probes behind the rows' dots (K20), theme editing
-and presets (F4b's editor), the monitor set and per-server device
-preferences in `settings.json`, and the release job (M4).
-
 The macOS runner now keeps its window hidden until Dart has placed it,
 so the CI launch check's wait for a visible window also proves that
 startup reached the window restore. It also passes `--menu File`, as
@@ -1992,6 +1986,36 @@ snapshot, beyond 03 §11.5's fixture host; the radial `Gauge`, the
 bars and the CPU and memory sparklines serve OV-03 and CPU-02 meanwhile;
 and the device and real-host checks below.
 
+## M5 exit
+
+M5, v1 part 1 (04 §13, M5 plan M01 to M35 and the F5a, F5c and F5d
+extractions), met each automated exit on the evidence below. Every M5
+scope row of 04 is built: in-app server editing with catalog writes
+(FL-03), the `klabautermann:` records with sealed removal (SYN-05),
+container shells and one-off commands (CTX-07, CTX-08), the edit
+pipeline for user-owned and privileged files (SAF-12, X-05), the v1 job,
+stack, unit and log rows, the host syslog line (SAF-13), the footprint
+manifest and view (SAF-14), pin publication behind the enrollment
+assertion (D15, FL-22), the X-03, X-04 and X-10 hand-offs and theme
+paste (X-01, shipped with M4).
+
+| Exit | Evidence | Status |
+|---|---|---|
+| X1: two-device convergence (Séance plus Klabautermann) for server edits and `klabautermann:` records against the real sync server image | M08a's `sync_convergence_test.dart` on the fixture's `sync` service: edits, deletes and exclusions both ways, `pref` and `rule` records reaching Séance, which neither applies nor re-pushes them | met |
+| X2: unknown-kind skip | M02's Séance record-kind tests; M08b's previous-release harness, whose Séance and Poltergeist rounds leave every `klabautermann:` record as written | met |
+| X3: an unsealed tombstone for a `pref` or `rule` record is ignored and a sealed `removed` deletes it | M04's `klabautermann_records_test.dart`; M08a's forged tombstone and sealed removal on the sync server | met |
+| X4: a published first-seen pin reaches Séance through its conflict check; a conflicting pin waits | M07's publication behind the assertion; M08a: a first-seen pin installs on Séance, a conflicting one is reported and left out | met in tests; no release offers the assertion yet (`kPinPublicationRelease` is null until a suite release carries the #56 fix, M5 plan Q1) |
+| X5: edit pipeline integration tests including hash conflicts | M20a's `edit_pipeline_test.dart` on the Docker fixture (compose and `.env` files, crontabs, a file changed between read and run); M20b's `runner_vm_edit_test.dart` (a root file's owner, mode, ACL and label kept, a unit file `systemd-analyze verify` rejects, a root file changed between plan and run) | met |
+| X6: backups listed and removable in the footprint view | M16's backups and manifest, M18's footprint page; M20a: the next connect lists the backups, keeps the newest of each and removes a file's | met |
+| X7: manifest checksums verified on connect | M16's connect-time check; M20a reports a backup changed on the host | met |
+| X8: hand-off links carry no command parameter (parser tests) | F5d-2's link corpus in seance_core, which refuses every command-like parameter; M31's builders, which carry a server id, a folder or a path only | met |
+
+Left open: the pin publication switch, which waits on the release above;
+admin mode for an account whose only sudo rule is NOPASSWD `docker`
+(M4's X5, still an owner decision); and the device and real-host checks
+below, which M5 extends by privileged writes under SELinux, link intake
+on real devices and the container terminal on phones.
+
 ## Open manual gates
 
 The milestone sign-off gates are tracked in
@@ -2024,6 +2048,15 @@ is not a device smoke test:
   spike's containers cannot observe labels.
 - The 24 h soak (03 §11.4) against ten hosts, which CI runs only for
   minutes.
+- Link intake on real devices (M5, X-03, X-04, X-10): on each phone and
+  desktop OS, Klabautermann's "Open terminal in Séance", "Open terminal
+  here" and "Open in Poltergeist" open the sibling on the named server
+  and folder, which asks before connecting, types the `cd` without
+  running it, and runs nothing else; with the sibling not installed the
+  buttons do not show.
+- The container terminal on phones (M5, CTX-07): a shell into a
+  container on an Android phone and an iPhone, with the keyboard bar,
+  paste confirmation and the app backgrounded and resumed.
 
 None of those applies to M1a yet; they gate the milestones that ship the
 matching behavior; this list keeps them visible so they are not lost

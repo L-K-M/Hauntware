@@ -158,7 +158,7 @@
   a process, start, stop, restart or reload a service, and run a timer's
   service now and follow its journal as it runs. Another user's process
   is signalled only in admin mode, and a process that was replaced
-  meanwhile is left alone. Run now starts system timers only.
+  meanwhile is left alone.
 - Admin mode: turn it on from the server header with your sudo password,
   which is kept in memory only while admin mode lasts. It ends after the
   time you choose in Settings > Safety, when the connection drops, when
@@ -179,3 +179,43 @@
   copies them.
 - Settings > Appearance edits the theme as Séance does: presets, light
   or dark, colours, font and corners, with copy, paste and reset.
+- Servers in your sync account can be added, edited, duplicated and
+  deleted from the fleet, and the change reaches Séance and Poltergeist
+  on your other devices. Test connection tries the form before you save,
+  without trusting a host key for good; Browse picks a key file on a
+  desktop, and Import from file stores a key in the app's vault, which
+  is how a phone gets one. Passwords and keys sync only when you turn
+  on "Sync passwords" and the server opts in.
+- Each server's read-only switch and protected targets sync with your
+  account. A host key you confirm can be shared with your
+  other devices once you assert they all run a Séance release that
+  checks shared keys; until such a release is out, nothing is shared.
+- Containers: open a shell in a running container, or run one command
+  and see its output, where actions are allowed.
+- Edit files on the server: your own files, stack compose and `.env`
+  files and crontabs, and in admin mode files only root may write. You
+  review a diff before saving; the file is checked first (a compose
+  file, a unit file, a crontab), backed up, and replaced keeping its
+  owner, mode and label, and a file changed meanwhile is never
+  overwritten. Footprint, in the server header's Safety menu, lists the
+  backups and the files the app keeps on the server, checks them when
+  you connect, and removes what you no longer want.
+- Every action writes one line to the server's system log, naming the
+  device you set in Settings > General.
+- Jobs: anacron jobs, timers' last runs and cron's run log; run a cron
+  line now, pause and resume it, and see lines another tool manages.
+- Services: enable, disable, mask, unmask and reset failed units, your
+  own user units and timers, a unit's file and resources, and the
+  listening sockets.
+- Logs: search with a regular expression or on the server, pick a boot,
+  browse `/var/log` with rotated archives, highlighted addresses, URLs
+  and HTTP codes, and copy, save or share an export, redacted unless you
+  say otherwise.
+- Stacks: act on one service, choose profiles, find stacks in folders
+  you name that never ran, edit their files, and take a stack down
+  keeping its volumes.
+- Open a server, a stack's folder or a log folder in Séance or
+  Poltergeist where they take links; a link opens the server and folder
+  only and never runs a command.
+- Paste a theme copied in Séance or Poltergeist into Settings >
+  Appearance.

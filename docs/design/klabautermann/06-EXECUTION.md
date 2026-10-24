@@ -71,6 +71,9 @@ until a person with the hardware signs them off (04, section 13).
 | Docker on real hosts: rootful and rootless Docker, rootless Podman, Snap Docker, the socat relay | M3 to M4 | open |
 | Manual checklist on one phone per OS and three real hosts | M4 | open |
 | 24 h soak against ten hosts (03 §11.4) | M4 | open |
+| Privileged file writes under SELinux on RHEL 9 (labels kept, `restorecon`) | M5 | open |
+| Link intake on real devices: Séance and Poltergeist hand-offs on each phone and desktop OS | M5 | open |
+| The container terminal on an Android phone and an iPhone | M5 | open |
 | Manual checklist on every platform; owner sign-off | M7 | open |
 
 M4's checklist suggests Debian 12, Ubuntu 26.04 (sudo-rs) and RHEL 9 or
