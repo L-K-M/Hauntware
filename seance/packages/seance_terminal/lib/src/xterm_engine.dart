@@ -286,9 +286,13 @@ class XtermTerminalEngine implements TerminalEngine {
         final atPrompt = phase == TerminalPromptPhase.acceptingInput;
         // Once the shell has shown an integrated prompt, `executing` is
         // known rather than assumed: the line goes to a running program (a
-        // password prompt, a REPL) and is no command to suggest. Without
-        // integration every Enter leaves the phase `executing`, so that
-        // case keeps reporting.
+        // password prompt, a REPL) and is no command to suggest. That also
+        // covers a nested `ssh` or `su` without integration, whose own
+        // password prompt cannot be told from its commands, and a PS2
+        // continuation line, which was only ever a fragment. A line typed
+        // after `133;D` is not dropped: that marker leaves the phase `done`.
+        // Without integration every Enter leaves the phase `executing`, so
+        // that case keeps reporting.
         final toProgram =
             _hasAcceptedPrompt && phase == TerminalPromptPhase.executing;
         _submittedSincePrompt = true;

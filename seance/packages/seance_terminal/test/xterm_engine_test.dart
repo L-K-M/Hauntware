@@ -84,6 +84,34 @@ void main() {
     e.injectInput('ls');
     e.injectInput('\r');
     expect(commands, ['sudo ls', 'ls']);
+
+    // The integrated state outlives a finished command: a later password
+    // prompt is dropped too.
+    e.feed(Uint8List.fromList(utf8.encode('\x1b]133;C\x07Password: ')));
+    e.injectInput('letmein');
+    e.injectInput('\r');
+    expect(commands, ['sudo ls', 'ls']);
+  });
+
+  test('a line typed before the next prompt arrives is reported', () {
+    final commands = <String>[];
+    final e = XtermTerminalEngine(onCommand: commands.add);
+    e.feed(
+      Uint8List.fromList(
+        utf8.encode(
+          '\x1b]1337;ShellIntegrationVersion=1;bash\x07'
+          '\x1b]133;A\x07\x1b]133;B\x07',
+        ),
+      ),
+    );
+    e.injectInput('make');
+    e.injectInput('\r');
+    e.feed(Uint8List.fromList(utf8.encode('\x1b]133;C\x07\x1b]133;D;0\x07')));
+
+    // `133;A` and `133;B` are still in flight.
+    e.injectInput('ls');
+    e.injectInput('\r');
+    expect(commands, ['make', 'ls']);
   });
 
   test('without shell integration every line is reported', () {
