@@ -801,6 +801,10 @@ jobs:
       - name: Resolve app dependencies
         working-directory: seance/app/seance_app
         run: flutter pub get
+      # The same invocation the client leg's linux cell runs
+      # (matrix.build): this workflow sets no defines or flavors, so the
+      # repack carries the shipped payload's sources and flags, as
+      # flatpak_planchette's leg has since it shipped.
       - name: Build
         working-directory: seance/app/seance_app
         run: flutter build linux --release
@@ -814,7 +818,9 @@ jobs:
           scripts/package-linux.sh \
             --bundle "${bundles[0]}" \
             --output-dir . --skip-appimage
-          scripts/build-flatpak.sh "$(find . -maxdepth 1 -type f -name 'seance_*.deb' -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
+          deb="$(find . -maxdepth 1 -type f -name 'seance_*.deb' -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
+          [ -n "$deb" ] || { echo "::error::no seance_*.deb found" >&2; exit 1; }
+          scripts/build-flatpak.sh "$deb"
           mv dist/seance-linux-x64.flatpak "$GITHUB_WORKSPACE/"
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned)
         with:
@@ -876,6 +882,10 @@ jobs:
       - name: Resolve app dependencies
         working-directory: poltergeist/app/poltergeist_app
         run: flutter pub get
+      # The same invocation the client leg's linux cell runs
+      # (matrix.build): this workflow sets no defines or flavors, so the
+      # repack carries the shipped payload's sources and flags, as
+      # flatpak_planchette's leg has since it shipped.
       - name: Build
         working-directory: poltergeist/app/poltergeist_app
         run: flutter build linux --release
@@ -889,7 +899,9 @@ jobs:
           scripts/package-linux.sh \
             --bundle "${bundles[0]}" \
             --output-dir . --skip-appimage
-          scripts/build-flatpak.sh "$(find . -maxdepth 1 -type f -name 'poltergeist_*.deb' -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
+          deb="$(find . -maxdepth 1 -type f -name 'poltergeist_*.deb' -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
+          [ -n "$deb" ] || { echo "::error::no poltergeist_*.deb found" >&2; exit 1; }
+          scripts/build-flatpak.sh "$deb"
           mv dist/poltergeist-linux-x64.flatpak "$GITHUB_WORKSPACE/"
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned)
         with:
