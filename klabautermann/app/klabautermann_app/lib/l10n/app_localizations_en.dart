@@ -5839,4 +5839,329 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get servicesUserUnavailable =>
       'Your own units could not be read. Your user manager runs only while you are logged in, or with lingering enabled.';
+
+  @override
+  String get serverEditorAddTitle => 'Add server';
+
+  @override
+  String get serverEditorEditTitle => 'Edit server';
+
+  @override
+  String get serverEditorLabel => 'Label';
+
+  @override
+  String get serverEditorHost => 'Host';
+
+  @override
+  String get serverEditorPort => 'Port';
+
+  @override
+  String get serverEditorUsername => 'Username';
+
+  @override
+  String get serverEditorAuthentication => 'Authentication';
+
+  @override
+  String get serverEditorAuthAgent => 'ssh-agent';
+
+  @override
+  String get serverEditorAuthPassword => 'Password';
+
+  @override
+  String get serverEditorAuthPrivateKey => 'Private key';
+
+  @override
+  String get serverEditorAgentInfo =>
+      'Keys are provided by your ssh-agent; nothing is stored.';
+
+  @override
+  String get serverEditorPasswordLabel => 'Password';
+
+  @override
+  String get serverEditorReferenceKeyTitle => 'Reference a key file on disk';
+
+  @override
+  String get serverEditorReferenceKeySubtitle =>
+      'Don\'t store the key — read it at connect';
+
+  @override
+  String get serverEditorIdentityFileHint => '~/.ssh/id_ed25519';
+
+  @override
+  String get serverEditorIdentityFilePath => 'Identity file path';
+
+  @override
+  String get serverEditorBrowse => 'Browse…';
+
+  @override
+  String get serverEditorPrivateKeyPem => 'Private key (PEM/OpenSSH)';
+
+  @override
+  String get serverEditorKeyPassphrase => 'Key passphrase (optional)';
+
+  @override
+  String get serverEditorStartDirectory => 'Start folder (optional)';
+
+  @override
+  String get serverEditorStartDirectoryHint => 'e.g. ~/sites or /var/www';
+
+  @override
+  String get serverEditorStartDirectoryNote =>
+      'Opens when you connect to this server. A relative path starts in your home folder. Blank opens your home folder.';
+
+  @override
+  String get serverEditorStartDirectoryInvalid =>
+      'Use an absolute path such as /var/www, or one in your own home such as ~/sites.';
+
+  @override
+  String get serverEditorLoginScript => 'Login script (optional)';
+
+  @override
+  String get serverEditorLoginScriptHint =>
+      'e.g. cd ~/work && tmux attach -t work || tmux new -s work';
+
+  @override
+  String get serverEditorLoginScriptNote =>
+      'Séance runs this as if typed at the prompt right after connecting. Klabautermann keeps it with the server and never runs it. Keep secrets out of it. Blank for none.';
+
+  @override
+  String get serverEditorAppearance => 'Appearance';
+
+  @override
+  String get serverEditorGroup => 'Group';
+
+  @override
+  String get serverEditorGroupHint =>
+      'Production, Home lab, … — blank for none';
+
+  @override
+  String get serverEditorColour => 'Colour';
+
+  @override
+  String get serverEditorMark => 'Mark';
+
+  @override
+  String get serverEditorChooseMark => 'Choose…';
+
+  @override
+  String get serverEditorDefaultMarkTooltip => 'Use the default mark';
+
+  @override
+  String get serverEditorSyncSecretTitle => 'Allow this credential to sync';
+
+  @override
+  String get serverEditorSyncSecretExcluded =>
+      'Not used while this server is excluded from sync.';
+
+  @override
+  String get serverEditorSyncSecretSubtitle =>
+      'End-to-end encrypted. Also needs sync set up with \"Sync saved passwords & keys\" enabled.';
+
+  @override
+  String get serverEditorExcludeTitle => 'Exclude from sync';
+
+  @override
+  String get serverEditorExcludeOnSubtitle =>
+      'Kept on this device only. A copy that synced earlier is removed from the sync server and from your other devices.';
+
+  @override
+  String get serverEditorExcludeOffSubtitle =>
+      'Keep this server on this device only — never upload it.';
+
+  @override
+  String get serverEditorTest => 'Test connection';
+
+  @override
+  String get serverEditorTesting => 'Testing…';
+
+  @override
+  String get serverEditorTestingSemantic => 'Testing connection';
+
+  @override
+  String get serverEditorCancel => 'Cancel';
+
+  @override
+  String get serverEditorSave => 'Save';
+
+  @override
+  String get serverEditorTestDisclaimer =>
+      'Testing authenticates without opening a shell or running the login script. A host key you approve here is trusted for the test only — the first real connection asks again.';
+
+  @override
+  String get serverEditorRequired => 'Required';
+
+  @override
+  String get serverEditorPortRange => '1–65535';
+
+  @override
+  String get serverEditorTestFailedSummary => 'Could not test the connection.';
+
+  @override
+  String serverEditorSaveFailed(String error) {
+    return 'Could not save: $error';
+  }
+
+  @override
+  String get serverEditorExcludeConfirmTitle => 'Exclude from sync?';
+
+  @override
+  String get serverEditorExcludeConfirmBody =>
+      'If this server synced earlier, it is removed from the sync server and from your other devices, along with any credential that synced with it. This device keeps its copy.';
+
+  @override
+  String get serverEditorExcludeConfirmCancel => 'Cancel';
+
+  @override
+  String get serverEditorExcludeConfirmAction => 'Exclude';
+
+  @override
+  String get serverEditorCustomColour => 'Custom colour…';
+
+  @override
+  String serverEditorCustomColourValue(String hex) {
+    return 'Custom colour ($hex)';
+  }
+
+  @override
+  String get serverMarkPickerTitle => 'Server mark';
+
+  @override
+  String get serverMarkPickerIconsTab => 'Icons';
+
+  @override
+  String get serverMarkPickerEmojiTab => 'Emoji';
+
+  @override
+  String get serverMarkPickerImageTab => 'Image';
+
+  @override
+  String get serverMarkPickerCancel => 'Cancel';
+
+  @override
+  String get serverMarkPickerSearchHint =>
+      'Search icons — try k8s, psql, prod…';
+
+  @override
+  String get serverMarkPickerNoMatch => 'No icon matches.';
+
+  @override
+  String get serverMarkPickerDefault => 'Default';
+
+  @override
+  String get serverMarkPickerEmojiHintMacOS =>
+      'Press Control-Command-Space for the system emoji picker.';
+
+  @override
+  String get serverMarkPickerEmojiHintWindows =>
+      'Press Windows-. for the system emoji picker.';
+
+  @override
+  String get serverMarkPickerEmojiHintLinux =>
+      'Your desktop may offer an emoji picker with Control-Shift-E or Control-.';
+
+  @override
+  String get serverMarkPickerEmojiHintOther => 'Switch your keyboard to emoji.';
+
+  @override
+  String get serverMarkPickerAnyEmoji => 'Any emoji';
+
+  @override
+  String get serverMarkPickerOneEmoji => 'One emoji, please.';
+
+  @override
+  String get serverMarkPickerUse => 'Use';
+
+  @override
+  String get serverMarkPickerEmojiFontNote =>
+      'An emoji is drawn with the system’s own emoji font, so a device without one shows a box — the icon chosen under Icons is what it falls back to there.';
+
+  @override
+  String get serverMarkPickerOpenFailed =>
+      'That file could not be opened. Try another.';
+
+  @override
+  String get serverMarkPickerTooLarge =>
+      'That file is too big to read. Crop or export it smaller first.';
+
+  @override
+  String get serverMarkPickerUndecodable =>
+      'That file could not be read as an image.';
+
+  @override
+  String get serverMarkPickerEncodeFailed =>
+      'That image could not be prepared. Try again, or pick another.';
+
+  @override
+  String get serverMarkPickerIncompressible =>
+      'That image would not fit in a server record even at badge size. Try a simpler picture — a logo rather than a photograph.';
+
+  @override
+  String get serverMarkPickerNoImage => 'No image on this server yet.';
+
+  @override
+  String get serverMarkPickerHasImage => 'This server carries an image.';
+
+  @override
+  String get serverMarkPickerChooseImage => 'Choose image…';
+
+  @override
+  String get serverMarkPickerReplaceImage => 'Replace image…';
+
+  @override
+  String get serverMarkPickerRemoveImage => 'Remove image';
+
+  @override
+  String get serverMarkPickerImageFormats => 'PNG, JPEG, WebP or SVG';
+
+  @override
+  String get serverMarkPickerImageFormatsIos => 'PNG, JPEG or WebP';
+
+  @override
+  String serverMarkPickerImageExplanation(String formats, int side) {
+    return '$formats. The image is cropped square, stored at $side pixels, and travels inside this server’s own settings — so it reaches your other devices with everything else about the server, and never arrives without it. Anything larger than a badge can show would only be paid for on every sync. A transparent image shows the server’s colour through it.';
+  }
+
+  @override
+  String get serverColorPickerTitle => 'Custom colour';
+
+  @override
+  String get colorPickerHexLabel => 'Hex';
+
+  @override
+  String get colorPickerHexError => 'Six hex digits';
+
+  @override
+  String get colorPickerHue => 'Hue';
+
+  @override
+  String get colorPickerSaturation => 'Saturation';
+
+  @override
+  String get colorPickerBrightness => 'Brightness';
+
+  @override
+  String colorPickerDegrees(int degrees) {
+    return '$degrees degrees';
+  }
+
+  @override
+  String colorPickerPercent(int percent) {
+    return '$percent percent';
+  }
+
+  @override
+  String get serverColorPickerHint =>
+      'Drawn as picked, with the mark kept legible on it in both themes. Devices running an older version show the nearest of the named colours instead.';
+
+  @override
+  String get colorPickerOpacity => 'Opacity';
+
+  @override
+  String get colorPickerHexErrorAlpha => 'Six or eight hex digits';
+
+  @override
+  String get colorPickerCancel => 'Cancel';
+
+  @override
+  String get colorPickerUse => 'Use colour';
 }

@@ -39,6 +39,11 @@ dependencies:
   # (test/architecture_contract_test.dart).
   ghost_servers:
     path: ../../../planchette/packages/ghost_servers
+  # The server editor's mark and colour pickers take their words from
+  # the app (lib/ui/server_editor_strings.dart); ghost_servers brings the
+  # package already.
+  ghost_marks:
+    path: ../../../planchette/packages/ghost_marks
   # The theme model and builder: the brand style, presets and appearance
   # value the light and dark themes are built from (03 D9, §10.9).
   ghost_theme:

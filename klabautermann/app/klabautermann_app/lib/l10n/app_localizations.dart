@@ -7593,6 +7593,588 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your own units could not be read. Your user manager runs only while you are logged in, or with lingering enabled.'**
   String get servicesUserUnavailable;
+
+  /// Title of the server editor for a new server.
+  ///
+  /// In en, this message translates to:
+  /// **'Add server'**
+  String get serverEditorAddTitle;
+
+  /// Title of the server editor for an existing server.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit server'**
+  String get serverEditorEditTitle;
+
+  /// Label of the server-name field.
+  ///
+  /// In en, this message translates to:
+  /// **'Label'**
+  String get serverEditorLabel;
+
+  /// Label of the hostname field.
+  ///
+  /// In en, this message translates to:
+  /// **'Host'**
+  String get serverEditorHost;
+
+  /// Label of the port field.
+  ///
+  /// In en, this message translates to:
+  /// **'Port'**
+  String get serverEditorPort;
+
+  /// Label of the username field.
+  ///
+  /// In en, this message translates to:
+  /// **'Username'**
+  String get serverEditorUsername;
+
+  /// Label of the auth-method dropdown.
+  ///
+  /// In en, this message translates to:
+  /// **'Authentication'**
+  String get serverEditorAuthentication;
+
+  /// Auth-method choice: the system ssh-agent.
+  ///
+  /// In en, this message translates to:
+  /// **'ssh-agent'**
+  String get serverEditorAuthAgent;
+
+  /// Auth-method choice: a stored password.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get serverEditorAuthPassword;
+
+  /// Auth-method choice: a private key, pasted or referenced.
+  ///
+  /// In en, this message translates to:
+  /// **'Private key'**
+  String get serverEditorAuthPrivateKey;
+
+  /// Explainer under the ssh-agent auth choice.
+  ///
+  /// In en, this message translates to:
+  /// **'Keys are provided by your ssh-agent; nothing is stored.'**
+  String get serverEditorAgentInfo;
+
+  /// Label of the password field.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get serverEditorPasswordLabel;
+
+  /// Title of the switch that keeps the private key on disk rather than storing it.
+  ///
+  /// In en, this message translates to:
+  /// **'Reference a key file on disk'**
+  String get serverEditorReferenceKeyTitle;
+
+  /// Subtitle of the reference-key switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t store the key — read it at connect'**
+  String get serverEditorReferenceKeySubtitle;
+
+  /// Placeholder in the identity-file path field — a conventional key path, not a default.
+  ///
+  /// In en, this message translates to:
+  /// **'~/.ssh/id_ed25519'**
+  String get serverEditorIdentityFileHint;
+
+  /// Label of the referenced-key path field.
+  ///
+  /// In en, this message translates to:
+  /// **'Identity file path'**
+  String get serverEditorIdentityFilePath;
+
+  /// Button beside the identity-file path field that opens the file picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse…'**
+  String get serverEditorBrowse;
+
+  /// Label of the paste-a-key field.
+  ///
+  /// In en, this message translates to:
+  /// **'Private key (PEM/OpenSSH)'**
+  String get serverEditorPrivateKeyPem;
+
+  /// Label of the key-passphrase field.
+  ///
+  /// In en, this message translates to:
+  /// **'Key passphrase (optional)'**
+  String get serverEditorKeyPassphrase;
+
+  /// Label of the start-folder field: the remote folder a Poltergeist pane opens when it connects to this server. Klabautermann keeps the value but does not show the field.
+  ///
+  /// In en, this message translates to:
+  /// **'Start folder (optional)'**
+  String get serverEditorStartDirectory;
+
+  /// Hint inside the start-folder field, which Klabautermann does not show.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. ~/sites or /var/www'**
+  String get serverEditorStartDirectoryHint;
+
+  /// Explainer under the start-folder field, which Klabautermann does not show.
+  ///
+  /// In en, this message translates to:
+  /// **'Opens when you connect to this server. A relative path starts in your home folder. Blank opens your home folder.'**
+  String get serverEditorStartDirectoryNote;
+
+  /// Validation error when the start folder contains control characters or names another user's home (~name). The field is hidden in Klabautermann.
+  ///
+  /// In en, this message translates to:
+  /// **'Use an absolute path such as /var/www, or one in your own home such as ~/sites.'**
+  String get serverEditorStartDirectoryInvalid;
+
+  /// Label of the login-script field: a command Séance types into the server's shell after connecting. Klabautermann stores and syncs it but never runs it.
+  ///
+  /// In en, this message translates to:
+  /// **'Login script (optional)'**
+  String get serverEditorLoginScript;
+
+  /// Hint inside the login-script field.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. cd ~/work && tmux attach -t work || tmux new -s work'**
+  String get serverEditorLoginScriptHint;
+
+  /// Explainer under the login-script field: Séance runs the script, Klabautermann only keeps it.
+  ///
+  /// In en, this message translates to:
+  /// **'Séance runs this as if typed at the prompt right after connecting. Klabautermann keeps it with the server and never runs it. Keep secrets out of it. Blank for none.'**
+  String get serverEditorLoginScriptNote;
+
+  /// Heading of the group/colour/mark section.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get serverEditorAppearance;
+
+  /// Label of the group-name field.
+  ///
+  /// In en, this message translates to:
+  /// **'Group'**
+  String get serverEditorGroup;
+
+  /// Hint inside the group-name field.
+  ///
+  /// In en, this message translates to:
+  /// **'Production, Home lab, … — blank for none'**
+  String get serverEditorGroupHint;
+
+  /// Heading of the accent-colour row.
+  ///
+  /// In en, this message translates to:
+  /// **'Colour'**
+  String get serverEditorColour;
+
+  /// Heading of the mark row (glyph, emoji or imported image).
+  ///
+  /// In en, this message translates to:
+  /// **'Mark'**
+  String get serverEditorMark;
+
+  /// Button that opens the mark picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose…'**
+  String get serverEditorChooseMark;
+
+  /// Tooltip of the button that resets the mark to the default glyph.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the default mark'**
+  String get serverEditorDefaultMarkTooltip;
+
+  /// Title of the per-server credential-sync switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow this credential to sync'**
+  String get serverEditorSyncSecretTitle;
+
+  /// Subtitle of the credential-sync switch while the server is excluded.
+  ///
+  /// In en, this message translates to:
+  /// **'Not used while this server is excluded from sync.'**
+  String get serverEditorSyncSecretExcluded;
+
+  /// Subtitle of the credential-sync switch.
+  ///
+  /// In en, this message translates to:
+  /// **'End-to-end encrypted. Also needs sync set up with \"Sync saved passwords & keys\" enabled.'**
+  String get serverEditorSyncSecretSubtitle;
+
+  /// Title of the whole-server sync-exclusion switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Exclude from sync'**
+  String get serverEditorExcludeTitle;
+
+  /// Subtitle of the exclusion switch while it is on.
+  ///
+  /// In en, this message translates to:
+  /// **'Kept on this device only. A copy that synced earlier is removed from the sync server and from your other devices.'**
+  String get serverEditorExcludeOnSubtitle;
+
+  /// Subtitle of the exclusion switch while it is off.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep this server on this device only — never upload it.'**
+  String get serverEditorExcludeOffSubtitle;
+
+  /// Button that authenticates against the form's draft values without saving.
+  ///
+  /// In en, this message translates to:
+  /// **'Test connection'**
+  String get serverEditorTest;
+
+  /// Label of the test button while a test runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Testing…'**
+  String get serverEditorTesting;
+
+  /// Screen-reader label of the spinner while a connection test runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Testing connection'**
+  String get serverEditorTestingSemantic;
+
+  /// Closes the server editor without saving.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get serverEditorCancel;
+
+  /// Saves the server and closes the editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get serverEditorSave;
+
+  /// Small print under the test button.
+  ///
+  /// In en, this message translates to:
+  /// **'Testing authenticates without opening a shell or running the login script. A host key you approve here is trusted for the test only — the first real connection asks again.'**
+  String get serverEditorTestDisclaimer;
+
+  /// Validator message under a blank required field.
+  ///
+  /// In en, this message translates to:
+  /// **'Required'**
+  String get serverEditorRequired;
+
+  /// Validator message under an out-of-range port.
+  ///
+  /// In en, this message translates to:
+  /// **'1–65535'**
+  String get serverEditorPortRange;
+
+  /// Headline of the inline report when the test itself failed (not the host's answer).
+  ///
+  /// In en, this message translates to:
+  /// **'Could not test the connection.'**
+  String get serverEditorTestFailedSummary;
+
+  /// Toast when saving the server failed. {error} is the failure detail.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save: {error}'**
+  String serverEditorSaveFailed(String error);
+
+  /// Title of the confirmation shown before excluding a synced server.
+  ///
+  /// In en, this message translates to:
+  /// **'Exclude from sync?'**
+  String get serverEditorExcludeConfirmTitle;
+
+  /// Body of the exclusion confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'If this server synced earlier, it is removed from the sync server and from your other devices, along with any credential that synced with it. This device keeps its copy.'**
+  String get serverEditorExcludeConfirmBody;
+
+  /// Declines the exclusion confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get serverEditorExcludeConfirmCancel;
+
+  /// Confirms the exclusion.
+  ///
+  /// In en, this message translates to:
+  /// **'Exclude'**
+  String get serverEditorExcludeConfirmAction;
+
+  /// Tooltip of the spectrum swatch that opens the custom colour picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom colour…'**
+  String get serverEditorCustomColour;
+
+  /// Tooltip of the custom-colour swatch once a colour is chosen. {hex} is the stored #RRGGBB string.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom colour ({hex})'**
+  String serverEditorCustomColourValue(String hex);
+
+  /// Title of the mark picker dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Server mark'**
+  String get serverMarkPickerTitle;
+
+  /// Tab of the mark picker listing the built-in glyphs.
+  ///
+  /// In en, this message translates to:
+  /// **'Icons'**
+  String get serverMarkPickerIconsTab;
+
+  /// Tab of the mark picker for an emoji mark.
+  ///
+  /// In en, this message translates to:
+  /// **'Emoji'**
+  String get serverMarkPickerEmojiTab;
+
+  /// Tab of the mark picker for an imported image.
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get serverMarkPickerImageTab;
+
+  /// Dismisses the mark picker without choosing.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get serverMarkPickerCancel;
+
+  /// Hint inside the icon-tab search field.
+  ///
+  /// In en, this message translates to:
+  /// **'Search icons — try k8s, psql, prod…'**
+  String get serverMarkPickerSearchHint;
+
+  /// Empty state of the icon search.
+  ///
+  /// In en, this message translates to:
+  /// **'No icon matches.'**
+  String get serverMarkPickerNoMatch;
+
+  /// Heading of the no-mark icon section.
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get serverMarkPickerDefault;
+
+  /// How to reach the OS emoji picker on macOS.
+  ///
+  /// In en, this message translates to:
+  /// **'Press Control-Command-Space for the system emoji picker.'**
+  String get serverMarkPickerEmojiHintMacOS;
+
+  /// How to reach the OS emoji picker on Windows.
+  ///
+  /// In en, this message translates to:
+  /// **'Press Windows-. for the system emoji picker.'**
+  String get serverMarkPickerEmojiHintWindows;
+
+  /// How to reach the OS emoji picker on Linux.
+  ///
+  /// In en, this message translates to:
+  /// **'Your desktop may offer an emoji picker with Control-Shift-E or Control-.'**
+  String get serverMarkPickerEmojiHintLinux;
+
+  /// How to reach the emoji input on platforms without a picker chord (mobile).
+  ///
+  /// In en, this message translates to:
+  /// **'Switch your keyboard to emoji.'**
+  String get serverMarkPickerEmojiHintOther;
+
+  /// Label of the free-text emoji field.
+  ///
+  /// In en, this message translates to:
+  /// **'Any emoji'**
+  String get serverMarkPickerAnyEmoji;
+
+  /// Error under the emoji field when it holds text that is not a single emoji.
+  ///
+  /// In en, this message translates to:
+  /// **'One emoji, please.'**
+  String get serverMarkPickerOneEmoji;
+
+  /// Button that confirms the typed emoji.
+  ///
+  /// In en, this message translates to:
+  /// **'Use'**
+  String get serverMarkPickerUse;
+
+  /// Caveat under the emoji grid explaining cross-device rendering and the glyph fallback.
+  ///
+  /// In en, this message translates to:
+  /// **'An emoji is drawn with the system’s own emoji font, so a device without one shows a box — the icon chosen under Icons is what it falls back to there.'**
+  String get serverMarkPickerEmojiFontNote;
+
+  /// Error shown when the picked image file could not be read.
+  ///
+  /// In en, this message translates to:
+  /// **'That file could not be opened. Try another.'**
+  String get serverMarkPickerOpenFailed;
+
+  /// Error shown when the picked image exceeds the decode bound.
+  ///
+  /// In en, this message translates to:
+  /// **'That file is too big to read. Crop or export it smaller first.'**
+  String get serverMarkPickerTooLarge;
+
+  /// Error shown when the picked file is not a decodable image.
+  ///
+  /// In en, this message translates to:
+  /// **'That file could not be read as an image.'**
+  String get serverMarkPickerUndecodable;
+
+  /// Error shown when the picked image could not be re-encoded.
+  ///
+  /// In en, this message translates to:
+  /// **'That image could not be prepared. Try again, or pick another.'**
+  String get serverMarkPickerEncodeFailed;
+
+  /// Error shown when the re-encoded image still exceeds the record-size bound.
+  ///
+  /// In en, this message translates to:
+  /// **'That image would not fit in a server record even at badge size. Try a simpler picture — a logo rather than a photograph.'**
+  String get serverMarkPickerIncompressible;
+
+  /// Caption beside the badge on the image tab when no image is set.
+  ///
+  /// In en, this message translates to:
+  /// **'No image on this server yet.'**
+  String get serverMarkPickerNoImage;
+
+  /// Caption beside the badge on the image tab when an image is set.
+  ///
+  /// In en, this message translates to:
+  /// **'This server carries an image.'**
+  String get serverMarkPickerHasImage;
+
+  /// Button that imports an image when none is set.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose image…'**
+  String get serverMarkPickerChooseImage;
+
+  /// Button that imports an image when one is already set.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace image…'**
+  String get serverMarkPickerReplaceImage;
+
+  /// Button that reverts the mark to the image's fallback glyph.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove image'**
+  String get serverMarkPickerRemoveImage;
+
+  /// Readable list of accepted image formats (SVG excluded on iOS, which gets the photo picker).
+  ///
+  /// In en, this message translates to:
+  /// **'PNG, JPEG, WebP or SVG'**
+  String get serverMarkPickerImageFormats;
+
+  /// Readable list of accepted image formats on iOS.
+  ///
+  /// In en, this message translates to:
+  /// **'PNG, JPEG or WebP'**
+  String get serverMarkPickerImageFormatsIos;
+
+  /// Explainer at the bottom of the image tab. {formats} is the accepted-format list; {side} is the stored edge length in pixels.
+  ///
+  /// In en, this message translates to:
+  /// **'{formats}. The image is cropped square, stored at {side} pixels, and travels inside this server’s own settings — so it reaches your other devices with everything else about the server, and never arrives without it. Anything larger than a badge can show would only be paid for on every sync. A transparent image shows the server’s colour through it.'**
+  String serverMarkPickerImageExplanation(String formats, int side);
+
+  /// Title of the custom colour picker dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom colour'**
+  String get serverColorPickerTitle;
+
+  /// Label of the hex-digits field.
+  ///
+  /// In en, this message translates to:
+  /// **'Hex'**
+  String get colorPickerHexLabel;
+
+  /// Error under the hex field when it does not hold six hex digits.
+  ///
+  /// In en, this message translates to:
+  /// **'Six hex digits'**
+  String get colorPickerHexError;
+
+  /// Label of the hue slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Hue'**
+  String get colorPickerHue;
+
+  /// Label of the saturation slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Saturation'**
+  String get colorPickerSaturation;
+
+  /// Label of the brightness slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Brightness'**
+  String get colorPickerBrightness;
+
+  /// Screen-reader value of the hue slider.
+  ///
+  /// In en, this message translates to:
+  /// **'{degrees} degrees'**
+  String colorPickerDegrees(int degrees);
+
+  /// Screen-reader value of the saturation, brightness and opacity sliders.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent} percent'**
+  String colorPickerPercent(int percent);
+
+  /// Small print under the colour sliders.
+  ///
+  /// In en, this message translates to:
+  /// **'Drawn as picked, with the mark kept legible on it in both themes. Devices running an older version show the nearest of the named colours instead.'**
+  String get serverColorPickerHint;
+
+  /// Label of the opacity slider, shown for colours that may be translucent (a theme's lines and selection).
+  ///
+  /// In en, this message translates to:
+  /// **'Opacity'**
+  String get colorPickerOpacity;
+
+  /// Error under the hex field of a picker that takes opacity, when it holds neither six nor eight hex digits.
+  ///
+  /// In en, this message translates to:
+  /// **'Six or eight hex digits'**
+  String get colorPickerHexErrorAlpha;
+
+  /// Dismisses the colour picker without choosing.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get colorPickerCancel;
+
+  /// Confirms the picked colour.
+  ///
+  /// In en, this message translates to:
+  /// **'Use colour'**
+  String get colorPickerUse;
 }
 
 class _AppLocalizationsDelegate

@@ -365,7 +365,7 @@ packages:
     source: path
     version: "1.9.2"
   ghost_marks:
-    dependency: transitive
+    dependency: "direct main"
     description:
       path: "../../../planchette/packages/ghost_marks"
       relative: true
