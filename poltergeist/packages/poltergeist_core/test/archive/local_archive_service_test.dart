@@ -1,4 +1,4 @@
-@Timeout(Duration(minutes: 2))
+@Timeout(Duration(minutes: 4))
 library;
 
 import 'dart:async';
@@ -20,7 +20,11 @@ const String _stageMarkerPrefix = 'poltergeist-archive-stage-v2:';
 const String _archiveStateDirectoryName = 'local-archive-state-v1';
 const String _ownershipKeyName = 'archive-owner.key';
 const int _ownershipKeyBytes = 32;
-const Duration _archiveHelperReadyTimeout = Duration(seconds: 30);
+// Each helper is a fresh Dart VM compiling the helper and poltergeist_core
+// from source. On a loaded CI runner two of them have taken longer than
+// 30 seconds to print `ready`; the suite's timeout above leaves room for
+// this budget and the work after it.
+const Duration _archiveHelperReadyTimeout = Duration(seconds: 90);
 const List<int> _zip64HighBitSizeBytes = <int>[0, 0, 0, 0, 0, 0, 0, 0x80];
 
 final bool _linuxPermissionChecksApply =
@@ -2474,20 +2478,14 @@ void _replaceAscii(List<int> bytes, String before, String after) {
 Future<(Process, Stream<String>)> _startArchiveHelper(
   List<String> arguments,
 ) async {
-  final packageRelative = p.join(
-    'test',
-    'archive',
-    'archive_process_helper.dart',
-  );
-  final workspaceRelative = p.join(
-    'packages',
-    'poltergeist_core',
-    packageRelative,
-  );
-  final helperPath = <String>[
-    p.join(Directory.current.path, workspaceRelative),
-    p.join(Directory.current.path, packageRelative),
-  ].firstWhere((path) => File(path).existsSync());
+  // Found from the package, not the working directory, which depends on
+  // where the suite was started.
+  final library = Isolate.resolvePackageUriSync(
+    Uri.parse('package:poltergeist_core/poltergeist_core.dart'),
+  )!;
+  final helperPath = File.fromUri(
+    library.resolve('../test/archive/archive_process_helper.dart'),
+  ).path;
   final packageConfig = Isolate.packageConfigSync;
   final process = await Process.start(Platform.resolvedExecutable, [
     if (packageConfig != null) '--packages=${packageConfig.toFilePath()}',
