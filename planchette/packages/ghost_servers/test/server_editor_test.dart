@@ -298,6 +298,14 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
       expect(find.text('Exclude from sync?'), findsNothing);
+      expect(
+        tester
+            .widget<SwitchListTile>(
+              find.widgetWithText(SwitchListTile, 'Exclude from sync'),
+            )
+            .value,
+        isFalse,
+      );
 
       await tapSave(tester);
       expect(delegate.saves.single.draft.excludeFromSync, isFalse);
@@ -389,9 +397,10 @@ void main() {
       }
       expect(delegate.saves, isEmpty);
 
-      await tester.enterText(field('Port'), '2222');
+      // The range's top is in it.
+      await tester.enterText(field('Port'), '65535');
       await tapSave(tester);
-      expect(delegate.saves.single.draft.port, 2222);
+      expect(delegate.saves.single.draft.port, 65535);
     });
   });
 

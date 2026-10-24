@@ -976,6 +976,10 @@ Host gw
           LinkFailureKind.unreachable,
         ),
         SshConnectFailureKind.timedOut: (refused, LinkFailureKind.timedOut),
+        SshConnectFailureKind.closedBeforeKeyExchange: (
+          Exception('transport closed'),
+          LinkFailureKind.unreachable,
+        ),
         SshConnectFailureKind.routeInvalid: (refused, null),
         SshConnectFailureKind.keyPassphraseRequired: (
           refused,
