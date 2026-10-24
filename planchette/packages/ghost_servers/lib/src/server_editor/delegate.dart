@@ -23,6 +23,11 @@ abstract class GhostServerEditorDelegate {
   /// Whether Browse is offered beside the identity file path.
   bool get canPickIdentityFile => true;
 
+  /// Whether Test connection is offered. A host without a connection
+  /// test yet answers false, and the button and its disclaimer are not
+  /// shown.
+  bool get canTestConnection => true;
+
   /// Picks a "reference, don't store" identity file; null when cancelled.
   Future<String?> pickIdentityFile();
 

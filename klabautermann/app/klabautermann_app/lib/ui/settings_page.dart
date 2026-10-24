@@ -21,6 +21,7 @@ import 'about_dialog.dart';
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 import 'appearance_tab.dart';
 import 'monitor_set_feedback.dart';
+import 'server_editing.dart';
 
 /// Settings (03 §10.2): the seven planned tabs as placeholders, except
 /// General, which holds A11Y-15's switch (D60) and the about row (M16),
@@ -344,9 +345,46 @@ class ServersTab extends StatelessWidget {
       builder: (context, _) {
         final candidates = monitorSet.value;
         final monitored = candidates.where((c) => c.monitored).length;
+        final editing = ServerEditingScope.maybeOf(context);
         return ListView(
           padding: const EdgeInsets.all(24),
           children: [
+            // FL-03's entry point here, while an account is enrolled (P16).
+            // The desktop settings window has no engine of its own, so it
+            // offers none; the rail's add menu does.
+            if (editing != null)
+              ListenableBuilder(
+                listenable: editing.sync,
+                builder: (context, _) {
+                  if (!editing.enabled) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Semantics(
+                          header: true,
+                          child: Text(
+                            l10n.settingsServersAccountTitle,
+                            style: textTheme.titleSmall,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          l10n.settingsServersAccountDetail,
+                          style: textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton.tonal(
+                          onPressed: () =>
+                              unawaited(openServerEditor(context, editing)),
+                          child: Text(l10n.addServer),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
             Semantics(
               header: true,
               child: Text(

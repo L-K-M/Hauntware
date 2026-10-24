@@ -364,12 +364,5 @@ GhostCredentialStrings _credentialStrings(
 String _endpointHost(String host) =>
     host.contains(':') && !host.startsWith('[') ? '[$host]' : host;
 
-/// The key type and fingerprint's face (P10): the app's monospace stack,
-/// `ghost_fonts`' bundled family first, which every platform draws; the
-/// generic family alone resolves on Linux and Android only.
-final TextStyle _monoStyle = TextStyle(
-  fontFamily: klabautermannThemeStyle.monoFontFamilies.first,
-  fontFamilyFallback: klabautermannThemeStyle.monoFontFamilies
-      .skip(1)
-      .toList(growable: false),
-);
+/// The key type and fingerprint's face (P10).
+final TextStyle _monoStyle = klabautermannMonoStyle;

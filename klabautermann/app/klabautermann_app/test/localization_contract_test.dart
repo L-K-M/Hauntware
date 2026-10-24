@@ -87,6 +87,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'prefs-${_count++}'",
     r"'ServerPrefsNotSavedException: $failure, $detail'",
   },
+  // A server edit's request id, matched in the engine's answer.
+  'lib/controllers/server_editor_controller.dart': {
+    r"'server-edit-${_count++}'",
+  },
   // The not-saved diagnostic; the Sync tab prints it and shows its own
   // ARB text (settingsSyncSecretsNotSaved).
   'lib/controllers/sync_secrets_controller.dart': {
@@ -702,6 +706,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'['",
     r"'[$host]'",
   },
+  // A refusal's detail, which only the ARB's `other` branch shows: none,
+  // or the error itself for one that is not a refusal.
+  'lib/ui/server_editing.dart': {"''", r"'$error'"},
   // An assert message; programmer diagnostic, never rendered.
   'lib/ui/server_surfaces.dart': {
     "'new controllers come with a new tree (KlabautermannApp, D44)'",

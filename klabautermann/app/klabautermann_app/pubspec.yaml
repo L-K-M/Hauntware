@@ -39,6 +39,11 @@ dependencies:
   # (test/architecture_contract_test.dart).
   ghost_servers:
     path: ../../../planchette/packages/ghost_servers
+  # The server editor's mark and colour pickers take their words from
+  # the app (lib/ui/server_editor_strings.dart); ghost_servers brings the
+  # package already.
+  ghost_marks:
+    path: ../../../planchette/packages/ghost_marks
   # The container shell (03 §7.13, CTX-07): Séance's xterm engine,
   # keyboard bar, appearance mapping and paste policy, reached only
   # through its barrel (test/architecture_contract_test.dart).

@@ -20,6 +20,7 @@ import 'controllers/monitor_set.dart';
 import 'controllers/monitoring_controller.dart';
 import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
+import 'controllers/server_editor_controller.dart';
 import 'controllers/server_prefs_controller.dart';
 import 'controllers/stack_folders.dart';
 import 'controllers/sync_controller.dart';
@@ -217,6 +218,8 @@ Future<void> main(List<String> args) async {
     account: engine.ready.syncAccount,
     pinPublication: pinPublication,
   );
+  // In-app server editing (FL-03): offered while enrolled (P16).
+  final serverEditor = ServerEditorController(engine);
   EngineKeystoreResponder(engine, klabautermannMasterKeyManager());
   for (final issue in engine.ready.syncStoreIssues) {
     debugPrint('${issue.fileName}: ${issue.kind.name} ${issue.detail ?? ''}');
@@ -308,6 +311,7 @@ Future<void> main(List<String> args) async {
       operations: operations,
       dockerNotice: dockerNotice,
       sync: sync,
+      serverEditor: serverEditor,
       settingsIssue: settings.issue,
       importStoreIssue: importStoreIssue,
       syncStoreIssues: engine.ready.syncStoreIssues,

@@ -44,7 +44,11 @@ void main() {
 
     expect(find.text('Before you sign in'), findsOneWidget);
     expect(
-      find.textContaining('It publishes no servers, host keys or passwords.'),
+      find.textContaining('publishes only the servers you add, edit or delete'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining("each server's read-only switch and marks"),
       findsOneWidget,
     );
     expect(
