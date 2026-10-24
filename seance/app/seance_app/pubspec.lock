@@ -868,6 +868,13 @@ packages:
       relative: true
     source: path
     version: "1.9.2"
+  seance_terminal:
+    dependency: "direct main"
+    description:
+      path: "../../packages/seance_terminal"
+      relative: true
+    source: path
+    version: "1.9.2"
   share_plus:
     dependency: "direct main"
     description:
