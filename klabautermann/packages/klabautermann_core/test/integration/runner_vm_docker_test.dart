@@ -30,7 +30,9 @@ const _revisionLabel = 'klabautermann.runner-vm.revision';
 const _endpointWait = Duration(seconds: 60);
 
 /// Covers the pull from the runner's registry and the recreate.
-const _redeployWait = Duration(seconds: 120);
+// A redeploy's operation lists have passed two minutes on a loaded CI
+// runner (run 119864619389); the bound fails real deadlocks only.
+const _redeployWait = Duration(seconds: 240);
 
 /// Covers the supervisor seeing the link drop and dialling again.
 const _redialWait = Duration(seconds: 90);
@@ -228,7 +230,15 @@ void main() {
     final audit = await engine.until<AuditRecords>(
       (e) => e.serverId == serverId,
     );
-    return audit.records.singleWhere((r) => r.action == 'RedeployStack');
+    // The action names the launch (03 §7.17): report what the log does
+    // hold when it is missing, which a lost launch note once produced.
+    return audit.records.singleWhere(
+      (r) => r.action == 'RedeployStack',
+      orElse: () => fail(
+        'no RedeployStack record among '
+        '${audit.records.map((r) => r.action).toList()}',
+      ),
+    );
   }
 
   test('rank 3 through the password prelude: the sudo relay reaches the '

@@ -7,7 +7,13 @@ import 'package:path/path.dart' as p;
 // a JIT compile; under a loaded full suite that has passed 10 s. Stay
 // inside package:test's default 30 s per-test timeout so a slow start
 // still fails here, with the holder's stderr, and its process is stopped.
-const _readyTimeout = Duration(seconds: 25);
+// The holder runs a fresh `dart` on a source script, so start-up includes
+// a JIT compile; under a loaded full suite that has passed 25 s. The
+// bound must stay inside the calling test's timeout so a slow start
+// still fails here, with the holder's stderr, and its process is
+// stopped: the callers carry a @Timeout of four minutes, which leaves
+// this start budget and the test's own work room on a loaded runner.
+const _readyTimeout = Duration(seconds: 90);
 const _exitTimeout = Duration(seconds: 10);
 const _pollInterval = Duration(milliseconds: 10);
 const _lockAcquiredExitCode = 0;

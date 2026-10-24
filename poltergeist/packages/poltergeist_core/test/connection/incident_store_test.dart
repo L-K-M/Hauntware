@@ -1,3 +1,9 @@
+// The sweep helper is a fresh Dart VM compiling poltergeist_core from
+// source; on a loaded CI runner its start can pass the default 30 s
+// (the archive helpers' budget for the same cost is minutes).
+@Timeout(Duration(minutes: 4))
+library;
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';

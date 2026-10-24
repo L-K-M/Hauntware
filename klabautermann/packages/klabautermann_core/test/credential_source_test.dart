@@ -264,7 +264,11 @@ void main() {
           .where((entity) => entity.path.contains('.tmp-')),
       isEmpty,
     );
-  }, testOn: 'linux || mac-os');
+  },
+      // A thousand appends and a rotation rewrite: a loaded CI disk has
+      // taken longer than the default 30 seconds.
+      timeout: const Timeout(Duration(minutes: 2)),
+      testOn: 'linux || mac-os');
 }
 
 String _summary(IdentityReadEvent event) =>

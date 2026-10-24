@@ -28,7 +28,9 @@ const _deadPeerWait = Duration(seconds: 90);
 
 /// Covers a redial after the host returns: backoff and a connect whose
 /// handshake waited on the paused host.
-const _redialWait = Duration(seconds: 90);
+// A Docker host restart plus a redial has passed 90 s on a loaded CI
+// runner (run 120054453500); the bound fails real deadlocks only.
+const _redialWait = Duration(seconds: 180);
 
 const _flag = '/run/klabautermann-fixture/slow-df';
 
