@@ -2483,9 +2483,12 @@ Future<(Process, Stream<String>)> _startArchiveHelper(
   final library = Isolate.resolvePackageUriSync(
     Uri.parse('package:poltergeist_core/poltergeist_core.dart'),
   )!;
-  final helperPath = File.fromUri(
+  final helper = File.fromUri(
     library.resolve('../test/archive/archive_process_helper.dart'),
-  ).path;
+  );
+  // A missing helper would otherwise surface only as the ready timeout.
+  if (!helper.existsSync()) fail('Archive helper not found at ${helper.path}');
+  final helperPath = helper.path;
   final packageConfig = Isolate.packageConfigSync;
   final process = await Process.start(Platform.resolvedExecutable, [
     if (packageConfig != null) '--packages=${packageConfig.toFilePath()}',
