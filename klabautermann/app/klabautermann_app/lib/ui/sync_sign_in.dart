@@ -283,7 +283,7 @@ class _SyncSignInDialogState extends State<SyncSignInDialog> {
     const SizedBox(height: 8),
     Text(l10n.syncDisclosureAccountKey),
     const SizedBox(height: 8),
-    Text(l10n.syncDisclosurePullOnly),
+    Text(l10n.syncDisclosure),
     if (_busy) ...[const SizedBox(height: 16), const LinearProgressIndicator()],
   ];
 }

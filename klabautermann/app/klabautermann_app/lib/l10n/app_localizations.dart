@@ -4138,11 +4138,11 @@ abstract class AppLocalizations {
   /// **'Your encryption passphrase opens the records of every app on this account, Séance and Poltergeist included.'**
   String get syncDisclosureAccountKey;
 
-  /// Disclosure on the sign-in's second step: the app is pull-only and writes nothing to the account.
+  /// Disclosure on the sign-in's second step: what the app writes to the account, and what it does not.
   ///
   /// In en, this message translates to:
-  /// **'Klabautermann only reads this account. It publishes nothing: no servers, host keys or passwords.'**
-  String get syncDisclosurePullOnly;
+  /// **'Klabautermann publishes only the servers you add, edit or delete here, with their passwords or keys when you let them sync. It publishes no host keys.'**
+  String get syncDisclosure;
 
   /// The button that sends the sign-in, enabled once the fleet assertion is ticked.
   ///
@@ -8175,6 +8175,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Use colour'**
   String get colorPickerUse;
+
+  /// A synced fleet row's menu verb that opens the server editor on it (FL-03). Shown only while a sync account is enrolled; ssh_config imports have no such verb.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit…'**
+  String get fleetRowEdit;
+
+  /// A synced fleet row's menu verb that asks before deleting the server from the sync account (FL-03). Shown only while a sync account is enrolled.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete…'**
+  String get fleetRowDelete;
+
+  /// Title of the confirmation before a server is deleted from the sync account; names the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete {name}?'**
+  String serverDeleteTitle(String name);
+
+  /// Body of the delete confirmation: what deleting a synced server does on other devices.
+  ///
+  /// In en, this message translates to:
+  /// **'The server leaves your sync account, and with it every device that syncs it. Its saved password or key goes too, unless another server uses it.'**
+  String get serverDeleteBody;
+
+  /// The delete confirmation's button that keeps the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get serverDeleteCancel;
+
+  /// The delete confirmation's button that deletes the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get serverDeleteAction;
+
+  /// Toast when the editor is opened on a server a sync removed in the meantime.
+  ///
+  /// In en, this message translates to:
+  /// **'This server is no longer in your account.'**
+  String get serverEditGone;
+
+  /// Toast, and the editor's save error, when the engine stopped before it answered a server edit.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann\'s engine stopped, so nothing was saved. Restart Klabautermann and try again.'**
+  String get serverEditEngineStopped;
+
+  /// Why the engine refused to save or delete a server (03 §4.4): shown as a toast, or in the editor after its Could not save prefix. reason is the engine's CatalogWriteFailure; detail is its own words, used for other only.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, directoryShared{Another Klabautermann may be using this device\'s data folder, so nothing was saved.} notEnrolled{Sign in to your sync account to edit servers.} keystoreUnavailable{Your account key could not be read from the system keystore, so nothing was saved.} unknownTarget{This server is no longer in your account.} invalidDraft{A field is missing or out of range.} tooMany{Your account holds as many servers as it can.} tooLarge{This server is too large to save. Try a smaller image for its mark.} storeUnavailable{Klabautermann\'s sync files could not be written this session, so nothing was saved.} other{Nothing was saved: {detail}}}'**
+  String serverEditRefused(String reason, String detail);
+
+  /// Heading on the Servers settings tab over adding a synced server (FL-03). Shown only while a sync account is enrolled.
+  ///
+  /// In en, this message translates to:
+  /// **'Servers in your account'**
+  String get settingsServersAccountTitle;
+
+  /// Explanation under the heading on the Servers settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a server to your sync account here. To edit or delete one, open its menu in the server list.'**
+  String get settingsServersAccountDetail;
 }
 
 class _AppLocalizationsDelegate

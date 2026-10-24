@@ -19,6 +19,7 @@ import 'controllers/monitor_set.dart';
 import 'controllers/monitoring_controller.dart';
 import 'controllers/operations_controller.dart';
 import 'controllers/prompt_controller.dart';
+import 'controllers/server_editor_controller.dart';
 import 'controllers/stack_folders.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
@@ -205,6 +206,8 @@ Future<void> main(List<String> args) async {
   // for, and the OS keystore the engine's sync reaches through this
   // isolate, which alone can call the keystore plugin (D62).
   final sync = SyncController(engine, account: engine.ready.syncAccount);
+  // In-app server editing (FL-03): offered while enrolled (P16).
+  final serverEditor = ServerEditorController(engine);
   EngineKeystoreResponder(engine, klabautermannMasterKeyManager());
   for (final issue in engine.ready.syncStoreIssues) {
     debugPrint('${issue.fileName}: ${issue.kind.name} ${issue.detail ?? ''}');
@@ -288,6 +291,7 @@ Future<void> main(List<String> args) async {
       operations: operations,
       dockerNotice: dockerNotice,
       sync: sync,
+      serverEditor: serverEditor,
       settingsIssue: settings.issue,
       importStoreIssue: importStoreIssue,
       syncStoreIssues: engine.ready.syncStoreIssues,

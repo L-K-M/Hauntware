@@ -1,5 +1,7 @@
+import 'package:flutter/gestures.dart' show PointerDeviceKind, kSecondaryButton;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:klabautermann_app/ui/fleet_rows.dart' show FleetServerList;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/fake_ssh_config.dart';
@@ -51,8 +53,9 @@ void main() {
     // the section, import ~/.ssh/config (FL-02), open the settings route
     // and switch the theme, sign in to the sync account and run a round
     // (03 §4.3), run a sampler subscription the way the monitor set will
-    // drive it (03 §10.1), then answer the engine's prompts. The traffic
-    // this produces is the traffic to judge.
+    // drive it (03 §10.1), answer the engine's prompts, then edit and
+    // delete a server (FL-03). The traffic this produces is the traffic
+    // to judge.
     await tester.tap(find.text('web-1'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Hide section'));
@@ -117,6 +120,69 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(harness.engine.sentOfType<AnswerPrompt>(), hasLength(2));
+
+    // Edit a server and delete it from its row menu (FL-03), now that an
+    // account is enrolled (P16).
+    await tester.tap(find.byTooltip('Show section'));
+    await tester.pumpAndSettle();
+    Future<void> openRowMenu() async {
+      await tester.tap(
+        find.descendant(
+          of: find.byType(FleetServerList),
+          matching: find.text('web-1'),
+        ),
+        buttons: kSecondaryButton,
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await openRowMenu();
+    await tester.tap(find.text('Edit…'));
+    await tester.pumpAndSettle();
+    final read =
+        harness.engine.sentOfType<ReadServerDraft>().single as ReadServerDraft;
+    harness.engine.emit(
+      ServerDraftRead(
+        requestId: read.requestId,
+        draft: const ServerDraft(
+          id: 'srv-1',
+          label: 'web-1',
+          host: 'web-1.example',
+          port: kSshDefaultPort,
+          username: 'deploy',
+          auth: ServerDraftAuth.agent,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final save = find.widgetWithText(FilledButton, 'Save');
+    await tester.scrollUntilVisible(
+      save,
+      100,
+      scrollable: find
+          .descendant(
+            of: find.descendant(
+              of: find.byType(Dialog),
+              matching: find.byType(SingleChildScrollView),
+            ),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    final saved = harness.engine.sentOfType<SaveServer>().single as SaveServer;
+    harness.engine.emit(
+      CatalogWritten(requestId: saved.requestId, serverId: 'srv-1'),
+    );
+    await tester.pumpAndSettle();
+    await openRowMenu();
+    await tester.tap(find.text('Delete…'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await tester.pumpAndSettle();
+    expect(harness.engine.sentOfType<DeleteServer>(), hasLength(1));
 
     // Prove the drive reached the engine, then judge every request.
     expect(harness.engine.sent, isNotEmpty);

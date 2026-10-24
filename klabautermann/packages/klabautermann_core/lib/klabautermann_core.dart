@@ -169,6 +169,9 @@ export 'package:seance_core/seance_core.dart'
 // The login password prompt (03 §4.5) hands ghost_servers' credential
 // dialog the auth method it asks for.
 export 'package:seance_core/seance_core.dart' show AuthMethod;
+// The id a server added in the editor is saved under (FL-03), minted as
+// the catalog mints every record id.
+export 'package:seance_core/seance_core.dart' show uuidV4;
 // A process row's masked arguments (03 §8.9): the Processes panel shows
 // their display and reveals one on request.
 export 'package:klabautermann_docker/klabautermann_docker.dart'

@@ -3158,8 +3158,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'Your encryption passphrase opens the records of every app on this account, Séance and Poltergeist included.';
 
   @override
-  String get syncDisclosurePullOnly =>
-      'Klabautermann only reads this account. It publishes nothing: no servers, host keys or passwords.';
+  String get syncDisclosure =>
+      'Klabautermann publishes only the servers you add, edit or delete here, with their passwords or keys when you let them sync. It publishes no host keys.';
 
   @override
   String get syncSignInAction => 'Sign in';
@@ -6164,4 +6164,59 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get colorPickerUse => 'Use colour';
+
+  @override
+  String get fleetRowEdit => 'Edit…';
+
+  @override
+  String get fleetRowDelete => 'Delete…';
+
+  @override
+  String serverDeleteTitle(String name) {
+    return 'Delete $name?';
+  }
+
+  @override
+  String get serverDeleteBody =>
+      'The server leaves your sync account, and with it every device that syncs it. Its saved password or key goes too, unless another server uses it.';
+
+  @override
+  String get serverDeleteCancel => 'Cancel';
+
+  @override
+  String get serverDeleteAction => 'Delete';
+
+  @override
+  String get serverEditGone => 'This server is no longer in your account.';
+
+  @override
+  String get serverEditEngineStopped =>
+      'Klabautermann\'s engine stopped, so nothing was saved. Restart Klabautermann and try again.';
+
+  @override
+  String serverEditRefused(String reason, String detail) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'directoryShared':
+          'Another Klabautermann may be using this device\'s data folder, so nothing was saved.',
+      'notEnrolled': 'Sign in to your sync account to edit servers.',
+      'keystoreUnavailable':
+          'Your account key could not be read from the system keystore, so nothing was saved.',
+      'unknownTarget': 'This server is no longer in your account.',
+      'invalidDraft': 'A field is missing or out of range.',
+      'tooMany': 'Your account holds as many servers as it can.',
+      'tooLarge':
+          'This server is too large to save. Try a smaller image for its mark.',
+      'storeUnavailable':
+          'Klabautermann\'s sync files could not be written this session, so nothing was saved.',
+      'other': 'Nothing was saved: $detail',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get settingsServersAccountTitle => 'Servers in your account';
+
+  @override
+  String get settingsServersAccountDetail =>
+      'Add a server to your sync account here. To edit or delete one, open its menu in the server list.';
 }
