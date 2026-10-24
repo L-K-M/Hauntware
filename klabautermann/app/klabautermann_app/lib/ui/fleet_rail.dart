@@ -95,7 +95,7 @@ class FleetRail extends StatelessWidget {
 }
 
 /// The bottom bar's sync chip: muted until signed in, busy while a sign-in
-/// or round runs (pull-only, D14).
+/// or round runs.
 SidebarSyncChipData _syncChip(
   BuildContext context,
   AppLocalizations l10n,

@@ -6730,6 +6730,150 @@ abstract class AppLocalizations {
   /// **'Show logs'**
   String get dockerLogsShow;
 
+  /// Tooltip of the button on a container's details that opens a shell in the container (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Open a shell'**
+  String get dockerShellOpen;
+
+  /// Tooltip of the inspector button that swaps a container shell back for the container's details, closing the shell (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Show details'**
+  String get dockerShellHide;
+
+  /// Title of the page that shows a shell in a container (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Shell in {container}'**
+  String dockerShellTitle(String container);
+
+  /// Label of the field that picks the shell program to run in a container (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Shell'**
+  String get dockerShellShellLabel;
+
+  /// Hint and menu item of the shell field when no shell is chosen: the engine runs /bin/bash where the container has it, otherwise /bin/sh (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic: /bin/bash, then /bin/sh'**
+  String get dockerShellShellAuto;
+
+  /// Label of the field naming the user a container shell runs as (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'User'**
+  String get dockerShellUserLabel;
+
+  /// Hint of the empty user field: the shell runs as the container's configured user (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'The container\'s user'**
+  String get dockerShellUserHint;
+
+  /// Button that opens the shell in the container with the chosen shell and user (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Open shell'**
+  String get dockerShellStart;
+
+  /// Status above a container shell while the engine starts it (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Opening the shell…'**
+  String get dockerShellOpening;
+
+  /// Status above a running container shell, naming the command the exec runs (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Running {command}'**
+  String dockerShellRunning(String command);
+
+  /// Status above a container shell that ended or never started, by the engine's reason (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, exited{The shell exited.} closed{The shell was closed.} observeOnly{Management is off for this server, so no shell opens.} readOnly{Read-only mode is on, so no shell opens.} notInFleet{This server is no longer in the fleet.} endpointUnavailable{The server\'s Docker endpoint could not be reached.} noChannel{No session channel was free on the server. Close another view or shell and try again.} tooMany{This server already has the most shells open. Close one first.} refused{The container is gone, or Docker refused the shell.} linkLost{The connection to the server was lost.} adminEnded{Admin mode ended, and the shell with it.} failed{The shell failed.} other{The engine stopped, and the shell with it.}}'**
+  String dockerShellEnded(String reason);
+
+  /// Follows the ended status when the shell reported its exit code (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Exit code {code}.'**
+  String dockerShellExitCode(int code);
+
+  /// Button that opens the container shell again with the same shell and user after it ended (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Open again'**
+  String get dockerShellReopen;
+
+  /// Button that goes back to the shell and user fields after a container shell ended (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Change shell'**
+  String get dockerShellChange;
+
+  /// Tooltip of the button that ends a running container shell (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Close the shell'**
+  String get dockerShellClose;
+
+  /// Context menu item that copies the selected terminal text (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get dockerShellCopy;
+
+  /// Button tooltip and context menu item that pastes the clipboard into a container shell, checked first when it has several lines (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Paste'**
+  String get dockerShellPaste;
+
+  /// Title of the dialog that asks before pasting several lines into a container shell (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Paste 1 line?} other{Paste {count} lines?}}'**
+  String dockerShellPasteTitle(int count);
+
+  /// Body of the paste dialog when the danger linter flagged lines (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Some of these lines look dangerous. Each line runs as you paste it.'**
+  String get dockerShellPasteFindings;
+
+  /// Body of the paste dialog when the danger check failed: unknown, not clean (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'These lines could not be checked. Each line runs as you paste it.'**
+  String get dockerShellPasteUnchecked;
+
+  /// One danger finding in the paste dialog: the pasted line it is on and the linter's explanation (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Line {line}: {explanation}'**
+  String dockerShellPasteFinding(int line, String explanation);
+
+  /// Paste dialog button that pastes every line (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Paste all'**
+  String get dockerShellPasteAll;
+
+  /// Paste dialog button that pastes the first line without its line break (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'First line only'**
+  String get dockerShellPasteFirstLine;
+
+  /// Paste dialog button that pastes nothing (CTX-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get dockerShellPasteCancel;
+
   /// Under a container's name above its logs, in the Docker tab's log pane on desktops and in the bottom sheet on phones.
   ///
   /// In en, this message translates to:
