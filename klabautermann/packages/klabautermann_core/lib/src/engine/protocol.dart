@@ -4839,7 +4839,8 @@ enum LinkClosedReason {
 /// connect failures protocol version 3 classifies (03 §10.1); the last
 /// three are 03 §5.3's client limitations.
 enum LinkFailureKind {
-  /// The connection was refused, or the host had no route or no address.
+  /// The connection was refused, or the host had no route or no address,
+  /// or its SSH service closed the connection before the handshake began.
   unreachable,
 
   /// Connecting or the handshake ran past its deadline.

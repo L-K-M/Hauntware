@@ -456,6 +456,14 @@ enum SshConnectFailureKind {
   /// on every one.
   keyExchangeTimedOut,
 
+  /// The server closed the connection, or it was reset, before it sent any
+  /// key-exchange packet and without a DISCONNECT: the SSH service is not
+  /// taking connections yet, as while a host or container starts, or turns
+  /// unauthenticated ones away, as OpenSSH's MaxStartups does under load.
+  /// Nothing about the client or its credentials was tried, so a later
+  /// attempt may succeed.
+  closedBeforeKeyExchange,
+
   /// Anything else, among them a jump-host resolver that threw (its error
   /// is the [SshConnectException.cause]), an ssh-agent that could not be
   /// reached or would not sign, a handshake that failed or dropped, and a
@@ -521,12 +529,15 @@ SshConnectFailureKind _dialFailureKind(Object error) => _isTimeout(error)
     ? SshConnectFailureKind.timedOut
     : SshConnectFailureKind.unreachable;
 
-SshConnectFailureKind _handshakeFailureKind(Object error) {
+SshConnectFailureKind _handshakeFailureKind(Object error, ServerKexTap tap) {
   if (error is SSHAuthFailError) {
     return SshConnectFailureKind.authenticationRejected;
   }
   if (_isHostKeyRefusal(error)) return SshConnectFailureKind.hostKeyRefused;
   if (_isTimeout(error)) return SshConnectFailureKind.timedOut;
+  if (!tap.packetStarted && _endedWithoutReason(error)) {
+    return SshConnectFailureKind.closedBeforeKeyExchange;
+  }
   return SshConnectFailureKind.other;
 }
 
@@ -1278,7 +1289,7 @@ Future<(SSHClient, AuthKind)> _authenticateSshHost({
       summary,
       error,
       log ?? SshConnectionLog(),
-      kind: limitation?.kind ?? _handshakeFailureKind(error),
+      kind: limitation?.kind ?? _handshakeFailureKind(error, kexTap),
     );
   }
 }
