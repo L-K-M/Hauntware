@@ -12,6 +12,7 @@ import 'app.dart';
 import 'controllers/admin_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/coverage_controller.dart';
+import 'controllers/device_name.dart';
 import 'controllers/pin_publication_controller.dart';
 import 'controllers/docker_endpoint_choices.dart';
 import 'controllers/docker_notice_controller.dart';
@@ -257,6 +258,10 @@ Future<void> main(List<String> args) async {
         serverId,
     prefs: serverPrefs,
   );
+
+  // The device name the host syslog line gives (SAF-13, M5 plan Q6),
+  // until the user can name the device.
+  engine.send(SetDeviceName(defaultDeviceName(defaultTargetPlatform)));
 
   // The "sync passwords" switch (SYN-02), device-local in settings.json
   // and applied to the engine now, since it starts with the switch off.

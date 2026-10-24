@@ -3329,6 +3329,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get serverReadOnly => 'Read-only';
 
   @override
+  String get serverHostAuditLine => 'Log actions on the server';
+
+  @override
   String get serverObserveOnly =>
       'Observe only: Klabautermann reads this server and changes nothing. To act on it, turn on Allow actions in the Safety menu.';
 
@@ -3490,6 +3493,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'userBackups': 'A backup in your Klabautermann backups folder',
       'rootBackups': 'A backup under /var/lib/klabautermann/backups',
       'footprintManifest': 'The list of what Klabautermann keeps on the server',
+      'auditSyslog':
+          'One line in the system log naming this action and this device',
       'other': 'A change on the server',
     });
     return '$_temp0';

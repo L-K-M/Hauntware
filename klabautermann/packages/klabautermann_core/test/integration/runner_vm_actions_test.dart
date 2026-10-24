@@ -163,6 +163,39 @@ void main() {
       await _untilJournal(vm, vm.testService, vm.reloadMessage);
     });
 
+    test('a run ends with the host syslog line naming its action, target '
+        'and device (SAF-13)', () async {
+      final engine = await vm.engine('units-syslog');
+      manage(engine, [sudoServer], hostAuditLine: true);
+      engine.send(const SetDeviceName('Klabautermann on the runner'));
+      await engine.connect(sudoServer, vm.hostKeys);
+      await engine.subscribe(sudoServer, {SampleStream.identity});
+      await hostProfile(engine, sudoServer);
+      await turnOnAdmin(engine, sudoServer, [await vm.sudoPassword()]);
+
+      final planned = await plan(
+        engine,
+        UnitAction(
+          sudoServer,
+          unit: vm.testService,
+          verb: SystemctlVerb.restart,
+        ),
+      );
+      final line = planned.preview.steps.last as ShellStep;
+      expect(line.bestEffort, isTrue);
+      expect(line.elevated, isFalse);
+      expect(planned.preview.hostWrites, contains(HostWriteRow.auditSyslog));
+      final finished = await run(engine, planned) as ActionFinished;
+      expectSucceeded(finished);
+      expect(finished.skippedSteps, isEmpty);
+      await _untilJournal(
+        vm,
+        'klabautermann',
+        'restart ${vm.testService} by Klabautermann on the runner',
+        selector: '-t',
+      );
+    });
+
     test('without admin mode polkit refuses, and the failure says admin '
         'mode would run it', () async {
       final engine = await managed('units-polkit', [limitedServer]);
@@ -343,8 +376,13 @@ Future<String> _show(String unit, String property) async {
 }
 
 /// Waits until [unit]'s journal holds [message], read through the
-/// runner's sudo.
-Future<void> _untilJournal(RunnerVm vm, String unit, String message) async {
+/// runner's sudo; with [selector] `-t`, [unit] is a syslog identifier.
+Future<void> _untilJournal(
+  RunnerVm vm,
+  String unit,
+  String message, {
+  String selector = '-u',
+}) async {
   final deadline = DateTime.now().add(_journalWait);
   while (true) {
     final text = await vm.sudo([
@@ -352,7 +390,7 @@ Future<void> _untilJournal(RunnerVm vm, String unit, String message) async {
       '--no-pager',
       '-o',
       'cat',
-      '-u',
+      selector,
       unit,
     ]);
     if (text.split('\n').contains(message)) return;

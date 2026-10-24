@@ -73,10 +73,21 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/announcement_controller.dart': {
     r"'The announcement setting was not saved: $error'",
   },
-  // The not-saved diagnostic; the Safety tab and the header's Safety menu
-  // print it and show their own ARB text (settingsSafetyNotSaved).
+  // The host syslog line's device name, written into host journals in
+  // one form (M5 plan Q6).
+  'lib/controllers/device_name.dart': {
+    r"'Klabautermann on $name'",
+    "'Android'",
+    "'Fuchsia'",
+    "'iOS'",
+    "'Linux'",
+    "'macOS'",
+    "'Windows'",
+  },
   // A job history read's request id, matched in the engine's answer.
   'lib/controllers/job_history_reads.dart': {r"'history-${_count++}'"},
+  // The not-saved diagnostic; the Safety tab and the header's Safety menu
+  // print it and show their own ARB text (settingsSafetyNotSaved).
   'lib/controllers/safety_controller.dart': {
     r"'The safety settings were not saved: $error'",
     // A migration the engine refused, printed; it is tried again.
