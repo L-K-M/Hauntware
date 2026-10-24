@@ -4,8 +4,9 @@
 // against inventory_allowlist.txt. The session samples every stream,
 // watches the Docker lists and reads a container's log, runs every MVP
 // container, image and stack action and a process signal as the fixture
-// user, and a detached redeploy that outlives a dropped link, re-attaches
-// and is acknowledged. Its own checks stay light: the action suites
+// user, a detached redeploy that outlives a dropped link, re-attaches
+// and is acknowledged, and v1's edit of a file and removal of its
+// backups (M5 M20a). Its own checks stay light: the action suites
 // (E28, E29) test the outcomes, and this one exercises the writes. It
 // runs only from run.sh's inventory leg; without the fixture it skips.
 @Tags(['inventory'])
@@ -31,6 +32,9 @@ const _scratchImage = 'klabautermann-fixture/inventory:1';
 /// The container the session creates and acts on.
 const _scratchContainer = 'inventory-scratch';
 
+/// The plain file seed_docker.sh writes, which the session edits.
+const _editedFile = '/home/klab/edits/app.conf';
+
 /// dind's own socket, for the session's side channel into the engine.
 const _dindSocket = 'unix:///run/docker-fixture/docker.sock';
 
@@ -54,7 +58,7 @@ void main() {
   );
 
   test('a session of every MVP read and action, a detached redeploy '
-      'among them, writes only what 03 §8.11 allows', () async {
+      'among them, and an edit writes only what 03 §8.11 allows', () async {
     final hostKeys = await fixture.dockerHostKeys();
     final scratch = (await dind([
       'run',
@@ -216,6 +220,37 @@ void main() {
     engine.send(AcknowledgeOperation(dockerServer, id));
     await engine.until<OperationsChanged>(
       (e) => e.serverId == dockerServer && !e.operations.any((o) => o.id == id),
+    );
+
+    // An edit of the user's own file (v1, SAF-12), which backs it up,
+    // and the removal of that file's backups (SAF-14).
+    engine.send(
+      const ReadEditable(
+        serverId: dockerServer,
+        requestId: 'inventory-edit',
+        target: FileTarget(_editedFile),
+      ),
+    );
+    final read = await engine.until<EditRead>(
+      (e) => e.requestId == 'inventory-edit',
+    );
+    final content = read.result as EditContent;
+    await planAndRun(
+      engine,
+      EditFile(
+        dockerServer,
+        target: const FileTarget(_editedFile),
+        text: content.text.replaceFirst('seeded', 'edited'),
+        baseSha256: content.sha256,
+      ),
+    );
+    await planAndRun(
+      engine,
+      const RemoveBackups(
+        dockerServer,
+        scope: FootprintScope.user,
+        source: _editedFile,
+      ),
     );
 
     engine.send(const Disconnect(dockerServer));
