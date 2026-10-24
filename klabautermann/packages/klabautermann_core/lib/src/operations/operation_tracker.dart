@@ -341,8 +341,13 @@ final class OperationTracker {
 
   /// Drops the notes of operations whose files are gone: a directory read
   /// to its end that no longer lists them, which another device cleaned
-  /// up or the prune removed.
+  /// up or the prune removed. A launch no listing has shown yet is
+  /// spared: an ops read in flight when the launch landed also reads to
+  /// its end without the record, and losing the note there would audit
+  /// the result without its launch facts. The launch grace
+  /// ([_Server.unlisted]) bounds this exactly as it bounds the re-reads.
   Future<void> _forgetCleaned(String serverId, OpsListing listing) async {
+    final server = _servers[serverId];
     final listed = {
       for (final r in listing.records) r.id,
       for (final r in listing.rejected) r.id,
@@ -357,7 +362,10 @@ final class OperationTracker {
     final gone = [
       for (final MapEntry(key: id, value: note)
           in _store.notesOf(serverId).entries)
-        if (!listed.contains(id) && readToEnd(note.directory)) id,
+        if (!listed.contains(id) &&
+            !(server?.unlisted.containsKey(id) ?? false) &&
+            readToEnd(note.directory))
+          id,
     ];
     await _quietly(() => _store.remove(serverId, gone));
   }

@@ -407,6 +407,58 @@ void main() {
     expect(reads, hasLength(4));
   });
 
+  test("a launch a listing in flight misses keeps the note its result's "
+      'audit needs', () async {
+    await tracker.launched(
+      _s1,
+      _done,
+      directory: OpDirectoryKind.user,
+      launch: OperationLaunch(
+        action: 'RedeployStack',
+        targetName: 'web',
+        steps: ['docker compose pull'],
+        tier: ConfirmationTier.acknowledge,
+        startedAt: DateTime.utc(2026, 10, 18, 9),
+      ),
+    );
+
+    // An ops read that started before the launch landed: the directory
+    // reads to its end without the record, which the launch grace covers
+    // for lists but must also cover the note.
+    await tracker.listed(_s1, _section());
+
+    await tracker.listed(_s1, _section(user: {_done: _record(_done)}));
+    await tracker.acknowledge(_s1, _done);
+    final record = (await audit.query(_s1)).records.single;
+    expect(record.action, 'RedeployStack');
+    expect(record.targetName, 'web');
+    expect(record.steps, ['docker compose pull']);
+  });
+
+  test('a launch the grace passes without showing forgets its note', () async {
+    await tracker.launched(
+      _s1,
+      _done,
+      directory: OpDirectoryKind.user,
+      launch: OperationLaunch(
+        action: 'RedeployStack',
+        targetName: 'web',
+        steps: const [],
+        tier: ConfirmationTier.acknowledge,
+        startedAt: DateTime.utc(2026, 10, 18, 9),
+      ),
+    );
+    // The note is there until the grace passes: a listing inside the
+    // window spares it, and the first listing after it drops it. Assert
+    // all three points.
+    expect(store.notesOf(_s1), isNotEmpty);
+    await tracker.listed(_s1, _section());
+    expect(store.notesOf(_s1), isNotEmpty);
+    await clock.elapse(kLaunchListingGrace + const Duration(seconds: 1));
+    await tracker.listed(_s1, _section());
+    expect(store.notesOf(_s1), isEmpty);
+  });
+
   test('a lost result audits as interrupted', () async {
     link.answer = (c) => c.contains('klabautermann-ticks')
         ? const RemoteCommandResult(exitCode: 3)
