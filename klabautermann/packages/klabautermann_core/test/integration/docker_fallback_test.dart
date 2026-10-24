@@ -349,11 +349,12 @@ void main() {
     expect(ready.phase, DockerEndpointPhase.ready);
     expect(ready.route?.rank, DockerRank.streamlocal);
     expect(ready.label, DockerRouteLabel.socketForward);
-    // The two samplers fit; nothing has asked for a third session yet.
-    expect(ready.lowSession, isFalse);
-
-    // The stack checks run commands: the third session, which sshd
-    // refuses, so the link learns its limit.
+    // The two samplers fit. The footprint check each connect runs
+    // (SAF-14) needs a third session, which sshd may refuse: then the
+    // link has learned its limit already. Otherwise the stack checks run
+    // commands: the third session, which sshd refuses, so the link
+    // learns its limit.
+    final learnedAtConnect = ready.lowSession;
     final clock = Stopwatch()..start();
     engine.send(
       const DockerWatch(
@@ -362,27 +363,42 @@ void main() {
         lists: {DockerWatchList.containers, DockerWatchList.stacks},
       ),
     );
-    final low = await engine.until<DockerEndpointState>(
-      (e) => e.serverId == variantServer && e.lowSession,
-    );
+    final low = learnedAtConnect
+        ? ready
+        : await engine.until<DockerEndpointState>(
+            (e) => e.serverId == variantServer && e.lowSession,
+          );
     final learnedMs = clock.elapsedMilliseconds;
     expect(low.phase, DockerEndpointPhase.ready);
     expect(low.route?.rank, DockerRank.streamlocal);
     expect(low.label, DockerRouteLabel.socketForward);
     expect(engine.seen.whereType<LinkState>().last.status, isA<LinkDegraded>());
 
-    // The refused checks run again at the learned limit, where they
-    // queue for a session (docker_router.dart). The two samplers hold
-    // both for as long as the host is sampled, so no check gets one
-    // before the link's open timeout: recorded behaviour, not a wish.
-    // Each stack reads "check failed" instead of verified.
+    // A check that taught the limit runs again at it, where it queues
+    // for a session (docker_router.dart). The two samplers hold both for
+    // as long as the host is sampled, so no check gets one before the
+    // link's open timeout: recorded behaviour, not a wish. That stack
+    // reads "check failed" instead of verified. A check that starts at
+    // an already learned limit waits for a channel instead (M4 plan M6).
+    final settled = anyOf(
+      isA<StackUnverified>().having(
+        (v) => v.reason,
+        'reason',
+        StackUnverifiedReason.checkFailed,
+      ),
+      isA<StackVerifying>().having(
+        (v) => v.waiting,
+        'waiting',
+        StackWait.channel,
+      ),
+    );
     clock.reset();
     await waitFor(engine, () {
       final stacks = lists(engine, DockerWatchList.stacks);
       if (stacks.isEmpty) return false;
       final verdicts = (stacks.last.payload as DockerStacksPayload).verdicts;
       return verdicts.isNotEmpty &&
-          verdicts.values.every((v) => v is! StackVerifying);
+          verdicts.values.every((v) => settled.matches(v, {}));
     }, timeout: _verifyWait);
     final checkedMs = clock.elapsedMilliseconds;
     final verdicts =
@@ -390,16 +406,10 @@ void main() {
                 as DockerStacksPayload)
             .verdicts;
     expect(verdicts.keys, containsAll(['demo', 'gone']));
-    expect(
-      verdicts.values,
-      everyElement(
-        isA<StackUnverified>().having(
-          (v) => v.reason,
-          'reason',
-          StackUnverifiedReason.checkFailed,
-        ),
-      ),
-    );
+    expect(verdicts.values, everyElement(settled));
+    if (!learnedAtConnect) {
+      expect(verdicts.values, everyElement(isA<StackUnverified>()));
+    }
     expect(
       (await fixture.logs(service)).skip(logged),
       contains('no more sessions'),

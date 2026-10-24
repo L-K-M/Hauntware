@@ -13,15 +13,24 @@ import 'local_sampler.dart';
 import 'redaction.dart';
 
 /// The collectors with a `<collector>.txt` fixture: every tick
-/// collector but the probe, which is stored apart, in `probe.sections`,
-/// and `ops`, whose detached-operation records describe one host's
+/// collector but the probe, which is stored apart, in `probe.sections`;
+/// `ops`, whose detached-operation records describe one host's
 /// operations rather than its platform and have hand-written fixtures in
-/// `klabautermann_host/test/parse/ops_records/`.
+/// `klabautermann_host/test/parse/ops_records/`; and the user manager's
+/// `user_units` and `user_timers`, which read the system collectors'
+/// block shapes, and which a capture container, with no login session,
+/// could only answer with its missing bus.
 final kFixtureCollectors = [
   for (final c in Collector.values)
-    if (c != Collector.probe && c != Collector.ops && c.argValidators.isEmpty)
-      c,
+    if (!_unfixtured.contains(c) && c.argValidators.isEmpty) c,
 ];
+
+const _unfixtured = {
+  Collector.probe,
+  Collector.ops,
+  Collector.userUnits,
+  Collector.userTimers,
+};
 
 /// A capture could not produce or write its fixture.
 final class CaptureFailure implements Exception {

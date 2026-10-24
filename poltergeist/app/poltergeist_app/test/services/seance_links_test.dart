@@ -91,12 +91,33 @@ void main() {
     expect(attempts.single.queryParameters, {'serverId': _serverId});
     expect(errors, hasLength(1));
   });
+
+  test('reports a server the link grammar cannot name', () async {
+    final attempts = <Uri>[];
+    final errors = <Object>[];
+    final launcher = await SeanceLinkLauncher.probe(
+      probe: (_) async => true,
+      launch: (uri) async {
+        attempts.add(uri);
+        return true;
+      },
+      onError: (error, _) => errors.add(error),
+    );
+
+    await launcher.openServer(_server(id: 'not-a-uuid'));
+    await launcher.openBookmark(
+      _bookmark(const BookmarkServerRef(serverConfigId: 'not-a-uuid')),
+    );
+
+    expect(attempts, isEmpty);
+    expect(errors, [isArgumentError, isArgumentError]);
+  });
 }
 
 const _serverId = '123e4567-e89b-42d3-a456-426614174000';
 
-ServerConfig _server() => const ServerConfig(
-  id: _serverId,
+ServerConfig _server({String id = _serverId}) => ServerConfig(
+  id: id,
   label: 'Example',
   host: 'files.example',
   port: 22,

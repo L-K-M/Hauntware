@@ -531,6 +531,53 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     Dragging dismisses the host toolbar and reports completion so it reopens
     at the adjusted range. Mouse selection retains its existing behavior.
 
+### CSI function identity (regressions: `test/src/core/escape/parser_test.dart`, `test/src/terminal_test.dart`)
+
+41. **Private markers and intermediates select the function**
+    (`core/escape/parser.dart#_csiHandlerFor`): upstream dispatched a CSI
+    on its final byte alone, discarded intermediates, and left the private
+    marker to the few handlers that checked it. `CSI > 4 ; 2 m` and
+    `CSI > 4 m`, which set and reset xterm's modifyOtherKeys, ran as
+    SGR 4;2 and SGR 4. Claude Code sends both, so everything printed after
+    it exited was underlined. Likewise XTQMODKEYS (`CSI ? 4 m`) set
+    underline, XTSMGRAPHICS (`CSI ? 1 ; 1 S`) and XTRMTITLE (`CSI > 1 T`)
+    scrolled, XTRESTORE (`CSI ? Pm r`) moved the margins, `CSI > 6 n` sent
+    a cursor report, SR/SL (`CSI Ps SP A`/`@`) moved the cursor or inserted
+    blanks, and XTPUSHCOLORS (`CSI # P`) deleted characters. A sequence now
+    reaches a handler only if that handler implements its marker, and no
+    handler takes intermediates. The `?` forms of SM/RM, DSR, ED and EL and
+    the `>`/`=` forms of DA still work; other forms are ignored. Embedded
+    C0 controls are still skipped, not executed. Colon sub-parameters are
+    still not parsed: `CSI 4:3 m` reads as SGR 43.
+
+### Cmd-click over mouse reporting (regressions: `test/src/ui/link_gesture_test.dart`)
+
+42. **On Apple platforms a Cmd-click opens a link even while the remote
+    reports clicks** (`terminal_view.dart#_linkModifierOutranksRemote`,
+    `#_claimPressForLink`, `ui/gesture/gesture_handler.dart#onTapDown`):
+    amends patch 26, which gave every click on the screen to a remote with
+    mouse reporting on (tmux with `mouse on`, TUIs, or a TUI that exited
+    without turning it off). Links there showed no hand and Cmd-click did
+    nothing. Cmd has no bit in the
+    mouse protocol, so the remote only ever saw a plain click. Now the press
+    is not reported when Cmd is held over a link, the link opens, and
+    holding Cmd shows the hand there, also when the pointer rests while Cmd
+    goes down or up. Cmd-clicks elsewhere, plain clicks and the Ctrl link
+    modifier on other platforms (a reportable modifier) still go to the
+    remote. The press decides: one already reported stays the remote's even
+    if Cmd goes down before its release, and one claimed opens its link even
+    when Cmd rises or Shift falls before that release — the remote never saw
+    the press, so a release that opened nothing would lose the click
+    entirely. The claimed link is captured at mouse-down, so a release
+    shifted within tap slop cannot pick another cell. Only single clicks
+    are claimed, so the later presses of a Cmd-multi-click still reach the
+    remote. The decision is taken at the raw pointer-down, not at the tap
+    recognizer's down (which resolves at its 100ms deadline or at
+    acceptance — mouse-up time for a quick click), and it covers every link
+    press the remote does not own on every platform: the Ctrl link modifier
+    elsewhere claims too when nobody reports taps, while a mouse-reporting
+    remote still keeps those clicks.
+
 ### App-layer notes (outside this package)
 
 - The app passes `shortcuts: {}` and instead routes ⌘C/⌘V/⌘A on
