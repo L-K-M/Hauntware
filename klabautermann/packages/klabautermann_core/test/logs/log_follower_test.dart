@@ -8,7 +8,8 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/logs/log_follower.dart';
 import 'package:klabautermann_core/src/logs/log_service.dart'
     show kLogWindowMax;
-import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
+import 'package:klabautermann_host/klabautermann_host.dart'
+    show HostCommands, JournalBoot;
 import 'package:seance_core/seance_core.dart'
     show RemoteExit, SshLinkClosed, SshLinkClosedReason, quoteShellWord;
 import 'package:test/test.dart';
@@ -143,6 +144,24 @@ void main() {
           ...['tail', '-n', '500', '-F', '--', '/var/log/syslog'],
         ]),
       );
+    });
+
+    test('a journal follow passes its pattern as -g', () {
+      follower(_spec(const JournalLogSource(grep: 'oom'))).run(link);
+      expect(
+        link.commands.single,
+        _cmd([..._journal, '-n', '500', '-f', '-g', 'oom']),
+      );
+    });
+
+    test('refuses a past boot and a compressed file, which never grow', () {
+      for (final source in [
+        const JournalLogSource(boot: JournalBoot.offset(-1)),
+        const KernelLogSource(boot: JournalBoot.offset(-1)),
+        const FileLogSource('/var/log/syslog.2.gz', compressed: true),
+      ]) {
+        expect(LogFollower.accepts(_spec(source)), isFalse, reason: '$source');
+      }
     });
 
     test('refuses a window above 500 and what 8.8 refuses', () {

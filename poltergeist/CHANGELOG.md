@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Large bookmark backups sync in pieces.** A backup round now sends
+  its changes in batches within the limits the sync server advertises.
+  Before, one push past a limit was refused whole and failed the same
+  way every round. A single record too large for the server stays on
+  this device, and the rest still sync.
 - **Preview 23 bundled fonts.** The editor's font button opens a
   searchable picker with code, ambiguous glyphs, bold and italics.
   Previewing changes nothing until you choose Use font. Ligatures are on
