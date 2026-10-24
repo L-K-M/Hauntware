@@ -3862,9 +3862,9 @@
   "@syncDisclosureAccountKey": {
     "description": "Disclosure on the sign-in's second step: the account key decrypts every app's records. Séance and Poltergeist are the sibling apps."
   },
-  "syncDisclosurePullOnly": "Klabautermann only reads this account. It publishes nothing: no servers, host keys or passwords.",
-  "@syncDisclosurePullOnly": {
-    "description": "Disclosure on the sign-in's second step: the app is pull-only and writes nothing to the account."
+  "syncDisclosure": "Klabautermann keeps its own settings in this account: each server's read-only switch and marks. It publishes no servers, host keys or passwords.",
+  "@syncDisclosure": {
+    "description": "Disclosure on the sign-in's second step: what the app writes to the account, and what it does not."
   },
   "syncSignInAction": "Sign in",
   "@syncSignInAction": {

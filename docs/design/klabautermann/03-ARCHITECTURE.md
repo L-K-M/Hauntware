@@ -4851,7 +4851,16 @@ As built in M4 (E10, `KC/lib/src/operations/`):
 - A container is protected when it publishes that port, port 22, or a
   VPN port (51820/udp, 1194, 41641/udp [guess list]).
 - User marks are `ServerSafety.marks` in `SetSafetyPolicy`, which stay on
-  the device until v1's `pref` records (M4 plan Q1).
+  the device until v1's `pref` records (M4 plan Q1). As built in M5
+  (M06): a synced server's marks and read-only switch live in its `pref`
+  record, written with `SetServerPrefs` and read from
+  `ServerPrefsChanged`, so a mark removed on one device is a sealed
+  removal on every other; management, global read-only and the admin
+  expiry stay on the device. The app moves a stored switch and marks
+  into the record once, merged with what it holds, counting both until
+  the write lands, and a server that stops syncing keeps its record's
+  switch and marks on the device. Imported servers keep theirs on the
+  device.
 - Any protection reason raises the tier to typed. A target another
   manager owns does the same: `ownership.dart` reads 8.7's markers
   through `detectOwnership`.
