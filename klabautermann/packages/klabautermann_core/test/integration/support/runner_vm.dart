@@ -156,6 +156,13 @@ final class RunnerVm {
     null => null,
   };
 
+  /// Where spike S6's runner-VM cases write their evidence, or null
+  /// (klabautermann/docs/evidence/s6/).
+  String? get s6EvidenceDirectory => switch (_evidenceDirectory) {
+    final directory? => '$directory/s6',
+    null => null,
+  };
+
   /// Where the leg collects evidence, or null.
   String? get _evidenceDirectory =>
       switch (_environment['KLABAUTERMANN_EVIDENCE_DIR']) {

@@ -17,7 +17,7 @@ void main() {
   group('terminal appearance', () {
     test('font-specific ligature features reach terminal text shaping', () {
       for (final mode in TerminalLigatures.values) {
-        final style = TerminalAppearance.resolve(
+        final style = resolveTerminalAppearance(
           AppSettings(terminalFontFamily: 'Geist Mono', terminalLigatures: mode),
           Brightness.dark,
         ).style;
@@ -29,7 +29,7 @@ void main() {
     });
 
     test('defaults keep xterm\'s size and draw bundled Iosevka Term', () {
-      final appearance = TerminalAppearance.resolve(
+      final appearance = resolveTerminalAppearance(
         AppSettings(),
         Brightness.dark,
       );
@@ -44,13 +44,13 @@ void main() {
 
     test('ligatures follow the setting, on by default', () {
       expect(
-        TerminalAppearance.resolve(AppSettings(), Brightness.dark)
+        resolveTerminalAppearance(AppSettings(), Brightness.dark)
             .style
             .ligatures,
         TerminalLigatures.on,
       );
       expect(
-        TerminalAppearance.resolve(
+        resolveTerminalAppearance(
           AppSettings(terminalLigatures: TerminalLigatures.off),
           Brightness.dark,
         ).style.ligatures,
@@ -59,7 +59,7 @@ void main() {
     });
 
     test("a bundled font's name draws the bundled copy", () {
-      final appearance = TerminalAppearance.resolve(
+      final appearance = resolveTerminalAppearance(
         AppSettings(terminalFontFamily: ' fira code'),
         Brightness.dark,
       );
@@ -71,7 +71,7 @@ void main() {
     });
 
     test('a chosen family leads, with the app stack behind it', () {
-      final appearance = TerminalAppearance.resolve(
+      final appearance = resolveTerminalAppearance(
         AppSettings(terminalFontFamily: '  Iosevka  '),
         Brightness.dark,
       );
@@ -92,11 +92,11 @@ void main() {
         themePalette: ThemePresets.seance,
       );
       expect(
-        TerminalAppearance.resolve(settings, Brightness.dark).theme.background,
+        resolveTerminalAppearance(settings, Brightness.dark).theme.background,
         SeanceTerminalThemes.dark.background,
       );
       expect(
-        TerminalAppearance.resolve(settings, Brightness.light).theme.background,
+        resolveTerminalAppearance(settings, Brightness.light).theme.background,
         SeanceTerminalThemes.light.background,
       );
     });
@@ -104,7 +104,7 @@ void main() {
     test('a new device\'s terminal is the Terminal preset\'s', () {
       final terminal = ThemePresets.terminal.terminal!;
       for (final brightness in Brightness.values) {
-        final theme = TerminalAppearance.resolve(
+        final theme = resolveTerminalAppearance(
           AppSettings(),
           brightness,
         ).theme;
@@ -117,21 +117,21 @@ void main() {
       final dark = AppSettings(terminalPalette: TerminalPalette.alwaysDark);
       final light = AppSettings(terminalPalette: TerminalPalette.alwaysLight);
       expect(
-        TerminalAppearance.resolve(dark, Brightness.light).theme.background,
+        resolveTerminalAppearance(dark, Brightness.light).theme.background,
         SeanceTerminalThemes.dark.background,
       );
       expect(
-        TerminalAppearance.resolve(light, Brightness.dark).theme.background,
+        resolveTerminalAppearance(light, Brightness.dark).theme.background,
         SeanceTerminalThemes.light.background,
       );
     });
 
     test('brightness is derived from the resolved background', () {
-      final dark = TerminalAppearance.resolve(
+      final dark = resolveTerminalAppearance(
         AppSettings(terminalPalette: TerminalPalette.alwaysDark),
         Brightness.light,
       );
-      final light = TerminalAppearance.resolve(
+      final light = resolveTerminalAppearance(
         AppSettings(terminalPalette: TerminalPalette.alwaysLight),
         Brightness.dark,
       );
@@ -143,7 +143,7 @@ void main() {
       final colors = ThemePresets.solarized.terminal!;
       final settings = AppSettings(themePalette: ThemePresets.solarized);
       for (final brightness in Brightness.values) {
-        final theme = TerminalAppearance.resolve(settings, brightness).theme;
+        final theme = resolveTerminalAppearance(settings, brightness).theme;
         expect(theme.background, colors.background);
         expect(theme.foreground, colors.foreground);
         expect(theme.cursor, colors.cursor);
@@ -206,7 +206,7 @@ void main() {
         terminalPalette: TerminalPalette.alwaysDark,
       );
       expect(
-        TerminalAppearance.resolve(dark, Brightness.light).theme.background,
+        resolveTerminalAppearance(dark, Brightness.light).theme.background,
         SeanceTerminalThemes.dark.background,
       );
     });
@@ -214,7 +214,7 @@ void main() {
     test('a theme without terminal colours keeps the built-in ones', () {
       final settings = AppSettings(themePalette: ThemePresets.graphite);
       expect(
-        TerminalAppearance.resolve(settings, Brightness.dark).theme,
+        resolveTerminalAppearance(settings, Brightness.dark).theme,
         same(SeanceTerminalThemes.dark),
       );
     });
@@ -255,14 +255,14 @@ void main() {
 
     test('font size is clamped when resolving', () {
       expect(
-        TerminalAppearance.resolve(
+        resolveTerminalAppearance(
           AppSettings(terminalFontSize: 900),
           Brightness.dark,
         ).style.fontSize,
         kMaxTerminalFontSize,
       );
       expect(
-        TerminalAppearance.resolve(
+        resolveTerminalAppearance(
           AppSettings(terminalFontSize: 1),
           Brightness.dark,
         ).style.fontSize,

@@ -107,6 +107,13 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  ghost_marks:
+    dependency: "direct main"
+    description:
+      path: "../ghost_marks"
+      relative: true
+    source: path
+    version: "1.9.2"
   ghost_ui:
     dependency: "direct main"
     description:

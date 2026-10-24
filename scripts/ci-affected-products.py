@@ -45,6 +45,13 @@ _FILE_READERS = {
     # klabautermann/test/integration mounts Poltergeist's sshd fixture
     # config and runs its check_config.dart.
     "poltergeist/test/integration/": ("klabautermann",),
+    # The app's architecture contract reads seance_terminal's barrel to
+    # check what it passes on, before the app depends on the package. It
+    # names the directory, so the prefix has no trailing slash.
+    "seance/packages/seance_terminal": ("klabautermann",),
+    # seance_app's platform link test pins app_links to the version
+    # Poltergeist runs.
+    "poltergeist/app/poltergeist_app/pubspec.yaml": ("seance",),
 }
 
 # `../../seance/packages/seance_core` or `'poltergeist/test/x'` in a
