@@ -1804,6 +1804,138 @@ abstract class AppLocalizations {
   /// **'{reason, select, noLink{The server is not connected, so drive health could not be read.} adminRequired{Admin mode ended before drive health was read.} elevationRefused{Elevation was refused, so drive health was not read.} missing{smartmontools is not installed on this server.} unreadable{smartctl did not answer as smartmontools 7.0 or later does.} transport{The connection failed while drive health was read.} other{Drive health could not be read.}}'**
   String systemDriveHealthFailed(String reason);
 
+  /// System tab: title of the section listing the server's pending package updates.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates'**
+  String get systemUpdatesTitle;
+
+  /// System tab, Updates: the package manager lists no pending update.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to date'**
+  String get systemUpdatesNone;
+
+  /// System tab, Updates: how many package updates the package manager lists.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 update available} other{{count} updates available}}'**
+  String systemUpdatesCount(int count);
+
+  /// System tab, Updates: how many of the pending updates fix security issues.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 is a security update} other{{count} are security updates}}'**
+  String systemUpdatesSecurityCount(int count);
+
+  /// System tab, Updates: on SUSE, how many security patches zypper says are needed; zypper lists patches rather than packages.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 security patch is needed} other{{count} security patches are needed}}'**
+  String systemUpdatesSecurityPatches(int count);
+
+  /// System tab, Updates: the server reports that a reboot is required, without naming the packages that asked.
+  ///
+  /// In en, this message translates to:
+  /// **'The server asks for a restart.'**
+  String get systemUpdatesRestart;
+
+  /// System tab, Updates: the server reports that a reboot is required, with the packages that asked for it.
+  ///
+  /// In en, this message translates to:
+  /// **'The server asks for a restart, for {packages}.'**
+  String systemUpdatesRestartFor(String packages);
+
+  /// System tab, Updates: the server reports that no reboot is required.
+  ///
+  /// In en, this message translates to:
+  /// **'No restart required'**
+  String get systemUpdatesNoRestart;
+
+  /// System tab, Updates: why the check did not run, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{The server is not connected, so updates could not be checked.} transport{The connection failed while updates were checked.} other{Updates could not be checked.}}'**
+  String systemUpdatesFailed(String reason);
+
+  /// System tab, Updates: the server has none of the package managers the check knows.
+  ///
+  /// In en, this message translates to:
+  /// **'No package manager Klabautermann reads was found (apt, dnf, zypper, pacman or apk).'**
+  String get systemUpdatesNoManager;
+
+  /// System tab, Updates: dnf has no cached metadata; the check only reads cached metadata and never refreshes it.
+  ///
+  /// In en, this message translates to:
+  /// **'The package lists have not been downloaded on this server yet, and the check never downloads them.'**
+  String get systemUpdatesNoCache;
+
+  /// System tab, Updates: the package manager reported an error; detail is its own error text.
+  ///
+  /// In en, this message translates to:
+  /// **'The package manager failed: {detail}'**
+  String systemUpdatesManagerFailed(String detail);
+
+  /// System tab, Updates: column header of the package name.
+  ///
+  /// In en, this message translates to:
+  /// **'Package'**
+  String get systemUpdatesPackage;
+
+  /// System tab, Updates: column header of the installed version.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed'**
+  String get systemUpdatesInstalled;
+
+  /// System tab, Updates: column header of the version the update installs.
+  ///
+  /// In en, this message translates to:
+  /// **'Available'**
+  String get systemUpdatesAvailable;
+
+  /// System tab, Updates: column header marking security updates.
+  ///
+  /// In en, this message translates to:
+  /// **'Security'**
+  String get systemUpdatesSecurity;
+
+  /// System tab, Updates: the cell of an update that fixes a security issue.
+  ///
+  /// In en, this message translates to:
+  /// **'Security'**
+  String get systemUpdatesSecurityYes;
+
+  /// System tab, Updates: the list stops at its limit.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, other{Only the first {count} updates are listed.}}'**
+  String systemUpdatesCut(int count);
+
+  /// System tab, Updates: when the server last refreshed its package lists, in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Package lists last downloaded {time}'**
+  String systemUpdatesListsFrom(DateTime time);
+
+  /// System tab, Updates: a check is running.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking for updates…'**
+  String get systemUpdatesChecking;
+
+  /// System tab, Updates: button that runs a new check instead of using the one from the last hour.
+  ///
+  /// In en, this message translates to:
+  /// **'Check again'**
+  String get systemUpdatesCheckAgain;
+
+  /// System tab, Updates: when the shown check ran, in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked {time}'**
+  String systemUpdatesCheckedAt(DateTime time);
+
   /// System tab, Drive health: the read found no drive, as in a VM without passed-through disks.
   ///
   /// In en, this message translates to:

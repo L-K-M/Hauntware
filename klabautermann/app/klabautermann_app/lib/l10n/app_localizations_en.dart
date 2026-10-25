@@ -1232,6 +1232,130 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get systemUpdatesTitle => 'Updates';
+
+  @override
+  String get systemUpdatesNone => 'Up to date';
+
+  @override
+  String systemUpdatesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count updates available',
+      one: '1 update available',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String systemUpdatesSecurityCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count are security updates',
+      one: '1 is a security update',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String systemUpdatesSecurityPatches(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count security patches are needed',
+      one: '1 security patch is needed',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get systemUpdatesRestart => 'The server asks for a restart.';
+
+  @override
+  String systemUpdatesRestartFor(String packages) {
+    return 'The server asks for a restart, for $packages.';
+  }
+
+  @override
+  String get systemUpdatesNoRestart => 'No restart required';
+
+  @override
+  String systemUpdatesFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noLink': 'The server is not connected, so updates could not be checked.',
+      'transport': 'The connection failed while updates were checked.',
+      'other': 'Updates could not be checked.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemUpdatesNoManager =>
+      'No package manager Klabautermann reads was found (apt, dnf, zypper, pacman or apk).';
+
+  @override
+  String get systemUpdatesNoCache =>
+      'The package lists have not been downloaded on this server yet, and the check never downloads them.';
+
+  @override
+  String systemUpdatesManagerFailed(String detail) {
+    return 'The package manager failed: $detail';
+  }
+
+  @override
+  String get systemUpdatesPackage => 'Package';
+
+  @override
+  String get systemUpdatesInstalled => 'Installed';
+
+  @override
+  String get systemUpdatesAvailable => 'Available';
+
+  @override
+  String get systemUpdatesSecurity => 'Security';
+
+  @override
+  String get systemUpdatesSecurityYes => 'Security';
+
+  @override
+  String systemUpdatesCut(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Only the first $count updates are listed.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String systemUpdatesListsFrom(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return 'Package lists last downloaded $timeString';
+  }
+
+  @override
+  String get systemUpdatesChecking => 'Checking for updates…';
+
+  @override
+  String get systemUpdatesCheckAgain => 'Check again';
+
+  @override
+  String systemUpdatesCheckedAt(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return 'Checked $timeString';
+  }
+
+  @override
   String get systemDriveHealthNone => 'No drive answered smartctl\'s scan.';
 
   @override

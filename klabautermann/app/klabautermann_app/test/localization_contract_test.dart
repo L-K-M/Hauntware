@@ -88,6 +88,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // A job history read's request id, matched in the engine's answer.
   'lib/controllers/job_history_reads.dart': {r"'history-${_count++}'"},
+  // A package check's request id, matched in the engine's answer.
+  'lib/controllers/package_reads.dart': {r"'packages-${_count++}'"},
+  // An empty security cell, a missing detail, and the separator between
+  // package names the server reported.
+  'lib/ui/updates.dart': {"''", "', '"},
   // The not-saved diagnostic; the Safety tab and the header's Safety menu
   // print it and show their own ARB text (settingsSafetyNotSaved).
   'lib/controllers/safety_controller.dart': {

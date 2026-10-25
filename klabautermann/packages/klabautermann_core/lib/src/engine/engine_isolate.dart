@@ -64,6 +64,7 @@ import '../operations/plans/backup_plans.dart';
 import '../operations/plans/docker_plans.dart';
 import '../operations/plans/edit_plan.dart';
 import '../jobs/job_history_query.dart';
+import '../services/packages.dart';
 import '../services/unit_queries.dart';
 import '../operations/stack_edits.dart';
 import '../operations/plans/host_plans.dart';
@@ -261,6 +262,7 @@ void engineMain(
   // Each server's latest probe answer, which the planners read for the
   // login uid, the session's path and its SSH port.
   final profiles = <String, HostProfile>{};
+  final packageReports = PackageReports(now: () => DateTime.now().toUtc());
   OperationRunner? runner;
 
   // Each server's channel slots, one quota for both routers, so the host
@@ -781,6 +783,7 @@ void engineMain(
       ..retain(fleetIds);
     admin?.forget(forgotten);
     plans.forget(forgotten);
+    packageReports.forget(forgotten);
     profiles.removeWhere((id, _) => forgotten.contains(id));
     // Before the caller sends the fleet or an EndpointChanged, so no
     // probe of a server starts, and no answer for it goes out, once the
@@ -1614,6 +1617,38 @@ void engineMain(
               profile: profiles[serverId],
             ),
           ).then(uiPort.send),
+        );
+      case ReadPackages(:final serverId, :final requestId, :final fresh):
+        final link = links?.link(serverId);
+        if (!fleetIds.contains(serverId) || link == null) {
+          uiPort.send(
+            PackagesReport(
+              serverId: serverId,
+              requestId: requestId,
+              failure: PackagesReportFailure.noLink,
+            ),
+          );
+          return;
+        }
+        // Not awaited, as the other reads: the check answers rather than
+        // throws, and a kept answer goes out without one.
+        unawaited(
+          packageReports
+              .read(
+                serverId,
+                requestId: requestId,
+                fresh: fresh,
+                check: () => lendSession(
+                  serverId,
+                  () => readPackages(
+                    serverId,
+                    requestId: requestId,
+                    link: link,
+                    now: () => DateTime.now().toUtc(),
+                  ),
+                ),
+              )
+              .then(uiPort.send),
         );
       case UnitQuery(:final serverId, :final requestId, :final query):
         final link = links?.link(serverId);

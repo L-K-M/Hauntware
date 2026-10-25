@@ -1397,6 +1397,143 @@
       }
     }
   },
+  "systemUpdatesTitle": "Updates",
+  "@systemUpdatesTitle": {
+    "description": "System tab: title of the section listing the server's pending package updates."
+  },
+  "systemUpdatesNone": "Up to date",
+  "@systemUpdatesNone": {
+    "description": "System tab, Updates: the package manager lists no pending update."
+  },
+  "systemUpdatesCount": "{count, plural, =1{1 update available} other{{count} updates available}}",
+  "@systemUpdatesCount": {
+    "description": "System tab, Updates: how many package updates the package manager lists.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemUpdatesSecurityCount": "{count, plural, =1{1 is a security update} other{{count} are security updates}}",
+  "@systemUpdatesSecurityCount": {
+    "description": "System tab, Updates: how many of the pending updates fix security issues.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemUpdatesSecurityPatches": "{count, plural, =1{1 security patch is needed} other{{count} security patches are needed}}",
+  "@systemUpdatesSecurityPatches": {
+    "description": "System tab, Updates: on SUSE, how many security patches zypper says are needed; zypper lists patches rather than packages.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemUpdatesRestart": "The server asks for a restart.",
+  "@systemUpdatesRestart": {
+    "description": "System tab, Updates: the server reports that a reboot is required, without naming the packages that asked."
+  },
+  "systemUpdatesRestartFor": "The server asks for a restart, for {packages}.",
+  "@systemUpdatesRestartFor": {
+    "description": "System tab, Updates: the server reports that a reboot is required, with the packages that asked for it.",
+    "placeholders": {
+      "packages": {
+        "type": "String",
+        "example": "libc6, linux-image-6.1.0-26-amd64"
+      }
+    }
+  },
+  "systemUpdatesNoRestart": "No restart required",
+  "@systemUpdatesNoRestart": {
+    "description": "System tab, Updates: the server reports that no reboot is required."
+  },
+  "systemUpdatesFailed": "{reason, select, noLink{The server is not connected, so updates could not be checked.} transport{The connection failed while updates were checked.} other{Updates could not be checked.}}",
+  "@systemUpdatesFailed": {
+    "description": "System tab, Updates: why the check did not run, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "systemUpdatesNoManager": "No package manager Klabautermann reads was found (apt, dnf, zypper, pacman or apk).",
+  "@systemUpdatesNoManager": {
+    "description": "System tab, Updates: the server has none of the package managers the check knows."
+  },
+  "systemUpdatesNoCache": "The package lists have not been downloaded on this server yet, and the check never downloads them.",
+  "@systemUpdatesNoCache": {
+    "description": "System tab, Updates: dnf has no cached metadata; the check only reads cached metadata and never refreshes it."
+  },
+  "systemUpdatesManagerFailed": "The package manager failed: {detail}",
+  "@systemUpdatesManagerFailed": {
+    "description": "System tab, Updates: the package manager reported an error; detail is its own error text.",
+    "placeholders": {
+      "detail": {
+        "type": "String",
+        "example": "E: Could not open lock file"
+      }
+    }
+  },
+  "systemUpdatesPackage": "Package",
+  "@systemUpdatesPackage": {
+    "description": "System tab, Updates: column header of the package name."
+  },
+  "systemUpdatesInstalled": "Installed",
+  "@systemUpdatesInstalled": {
+    "description": "System tab, Updates: column header of the installed version."
+  },
+  "systemUpdatesAvailable": "Available",
+  "@systemUpdatesAvailable": {
+    "description": "System tab, Updates: column header of the version the update installs."
+  },
+  "systemUpdatesSecurity": "Security",
+  "@systemUpdatesSecurity": {
+    "description": "System tab, Updates: column header marking security updates."
+  },
+  "systemUpdatesSecurityYes": "Security",
+  "@systemUpdatesSecurityYes": {
+    "description": "System tab, Updates: the cell of an update that fixes a security issue."
+  },
+  "systemUpdatesCut": "{count, plural, other{Only the first {count} updates are listed.}}",
+  "@systemUpdatesCut": {
+    "description": "System tab, Updates: the list stops at its limit.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemUpdatesListsFrom": "Package lists last downloaded {time}",
+  "@systemUpdatesListsFrom": {
+    "description": "System tab, Updates: when the server last refreshed its package lists, in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "systemUpdatesChecking": "Checking for updates…",
+  "@systemUpdatesChecking": {
+    "description": "System tab, Updates: a check is running."
+  },
+  "systemUpdatesCheckAgain": "Check again",
+  "@systemUpdatesCheckAgain": {
+    "description": "System tab, Updates: button that runs a new check instead of using the one from the last hour."
+  },
+  "systemUpdatesCheckedAt": "Checked {time}",
+  "@systemUpdatesCheckedAt": {
+    "description": "System tab, Updates: when the shown check ran, in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
   "systemDriveHealthNone": "No drive answered smartctl's scan.",
   "@systemDriveHealthNone": {
     "description": "System tab, Drive health: the read found no drive, as in a VM without passed-through disks."

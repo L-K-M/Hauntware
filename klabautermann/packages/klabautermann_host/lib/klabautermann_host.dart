@@ -41,6 +41,7 @@ export 'src/parse/metrics.dart';
 export 'src/parse/models.dart';
 export 'src/parse/oncalendar.dart';
 export 'src/parse/ops.dart';
+export 'src/parse/packages.dart';
 export 'src/parse/parse_result.dart';
 export 'src/parse/procs.dart';
 export 'src/parse/smart.dart';

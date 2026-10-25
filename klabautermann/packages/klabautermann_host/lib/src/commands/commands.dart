@@ -860,6 +860,62 @@ abstract final class HostCommands {
     };
   }
 
+  /// The package check (03 §7.8, PKG-01 to PKG-03), as the login user
+  /// and from cached metadata only: it never refreshes package lists
+  /// (PKG-05 does, in admin mode). It reads the first manager it finds
+  /// and prints `parsePackageCheck`'s sections: `== manager`, `== cache`
+  /// (the metadata's age as epoch seconds), `== updates` and, where the
+  /// manager has one, `== security`, each body ended by `== rc <status>`,
+  /// then `== reboot required|no|unknown` with the packages that asked.
+  static List<String> packageCheck() => const ['sh', '-c', _packageCheck];
+
+  static const _packageCheck = r'''
+have() { command -v "$1" >/dev/null 2>&1; }
+mtime() { stat -c %Y "$1" 2>/dev/null; }
+if have apt-get; then
+  echo '== manager apt'
+  echo "== cache $(mtime /var/cache/apt/pkgcache.bin)"
+  echo '== updates'
+  apt-get -s -o Debug::NoLocking=1 upgrade 2>&1; echo "== rc $?"
+elif have dnf; then
+  echo '== manager dnf'
+  echo "== cache $(for f in /var/cache/dnf/*.solv /var/cache/libdnf5/*/solv/*.solv; do mtime "$f"; done | sort -n | tail -n 1)"
+  echo '== updates'
+  dnf -q --cacheonly check-update 2>&1; echo "== rc $?"
+  echo '== security'
+  dnf -q --cacheonly updateinfo list --security 2>&1; echo "== rc $?"
+elif have zypper; then
+  echo '== manager zypper'
+  echo '== updates'
+  zypper --non-interactive --no-refresh -q lu 2>&1; echo "== rc $?"
+  echo '== security'
+  zypper --non-interactive --no-refresh -q lp -g security 2>&1; echo "== rc $?"
+elif have pacman; then
+  echo '== manager pacman'
+  echo "== cache $(mtime /var/lib/pacman/sync)"
+  echo '== updates'
+  pacman -Qu 2>&1; echo "== rc $?"
+elif have apk; then
+  echo '== manager apk'
+  echo "== cache $(for f in /var/cache/apk/APKINDEX.*; do mtime "$f"; done | sort -n | tail -n 1)"
+  echo '== updates'
+  apk version -l '<' 2>&1; echo "== rc $?"
+else
+  echo '== manager none'
+fi
+if [ -e /var/run/reboot-required ]; then
+  echo '== reboot required'
+  cat /var/run/reboot-required.pkgs 2>/dev/null
+elif have needs-restarting; then
+  needs-restarting -r >/dev/null 2>&1
+  case $? in 0) echo '== reboot no' ;; 1) echo '== reboot required' ;; *) echo '== reboot unknown' ;; esac
+elif [ -d /var/lib/dpkg ]; then
+  echo '== reboot no'
+else
+  echo '== reboot unknown'
+fi
+''';
+
   /// `smartctl --scan-open -j`: the drives smartctl can open, with the
   /// device type it would read each as (03 §7.11, HW-04).
   static List<String> smartScan() => const ['smartctl', '--scan-open', '-j'];

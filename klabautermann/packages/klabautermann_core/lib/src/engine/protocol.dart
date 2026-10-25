@@ -23,6 +23,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         NetRate,
         OpDirectoryKind,
         OpDirectoryListing,
+        PackageCheck,
         ProcsSelection,
         SmartDisk,
         SystemdUnit,
@@ -1165,6 +1166,23 @@ final class ReadSmart extends EngineRequest {
 
   final String serverId;
   final String requestId;
+}
+
+/// Reads [serverId]'s pending updates and reboot flag (PKG-01 to PKG-03,
+/// 03 §7.8) as the login user, from the package manager's cached
+/// metadata. The engine keeps each server's answer for an hour and
+/// answers from it unless [fresh] asks for a new check. One
+/// [PackagesReport] with [requestId] answers it.
+final class ReadPackages extends EngineRequest {
+  const ReadPackages(
+    this.serverId, {
+    required this.requestId,
+    this.fresh = false,
+  });
+
+  final String serverId;
+  final String requestId;
+  final bool fresh;
 }
 
 /// Answers an outstanding [Prompt] event (03 §10.1).
@@ -2506,6 +2524,37 @@ final class SmartReport extends EngineEvent {
 
   /// Why nothing was read, or null.
   final SmartReportFailure? failure;
+}
+
+/// Why a [ReadPackages] checked nothing.
+enum PackagesReportFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// The link failed while checking.
+  transport,
+}
+
+/// The answer to [ReadPackages]: what the check found at [checkedAt], by
+/// the engine's clock, or why there was no check.
+final class PackagesReport extends EngineEvent {
+  const PackagesReport({
+    required this.serverId,
+    required this.requestId,
+    this.check,
+    this.checkedAt,
+    this.failure,
+  });
+
+  final String serverId;
+  final String requestId;
+
+  /// What the check found; its own failure says when the host's package
+  /// manager could not answer.
+  final PackageCheck? check;
+
+  final DateTime? checkedAt;
+  final PackagesReportFailure? failure;
 }
 
 /// The answer to [ReadUserCrontabs]: the listed users' crontab lines as

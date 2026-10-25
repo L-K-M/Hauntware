@@ -16,6 +16,7 @@ import 'gpus.dart';
 import 'sortable_table.dart';
 import 'system_view.dart';
 import 'temperatures.dart';
+import 'updates.dart';
 
 /// The System tab's sections, which key them; the Disks section's id also
 /// prefixes its table's keys.
@@ -29,6 +30,7 @@ enum SystemSection {
   temperatures,
   gpus,
   driveHealth,
+  updates,
 }
 
 /// The panel width from which the fact sections sit side by side and the
@@ -206,6 +208,12 @@ class _SystemPanelState extends State<SystemPanel> {
                 key: const ValueKey(SystemSection.driveHealth),
                 serverId: widget.serverId,
                 tableId: SystemSection.driveHealth.name,
+              ),
+              UpdatesSection(
+                key: const ValueKey(SystemSection.updates),
+                reads: widget.monitoring.packages,
+                serverId: widget.serverId,
+                tableId: SystemSection.updates.name,
               ),
             ],
           ),

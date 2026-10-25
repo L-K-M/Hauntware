@@ -249,6 +249,12 @@ void main() {
       expect(smart.requestId, 'r-2');
       expect(smart.failure, SmartReportFailure.noLink);
 
+      // PKG-01's check needs the link.
+      client.send(const ReadPackages('ssh-config:web', requestId: 'r-3'));
+      final packages = (await next(events)) as PackagesReport;
+      expect(packages.requestId, 'r-3');
+      expect(packages.failure, PackagesReportFailure.noLink);
+
       // A detached operation's result is acknowledged over a link.
       client.send(
         const AcknowledgeOperation('ssh-config:web', '0123456789abcdef'),

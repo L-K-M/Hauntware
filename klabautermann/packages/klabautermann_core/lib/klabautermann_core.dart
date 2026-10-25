@@ -90,6 +90,16 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         TimersSnapshot,
         UnitListFormat,
         UnitsSnapshot;
+// The System tab's Updates section (PKG-01 to PKG-03): what a
+// PackagesReport's check found.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show
+        PackageCheck,
+        PackageCheckFailure,
+        PackageManager,
+        PackageUpdate,
+        RebootState,
+        kPackageUpdatesKept;
 // The Logs panel's boot picker and /var/log browser (LOG-08, LOG-09): a
 // HostResult's rows and the boot a source reads.
 export 'package:klabautermann_host/klabautermann_host.dart'

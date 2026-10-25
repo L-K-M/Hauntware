@@ -11,6 +11,7 @@ import 'docker_endpoint_choices.dart';
 import 'job_history_reads.dart';
 import 'log_reads.dart';
 import 'log_streams.dart';
+import 'package_reads.dart';
 import 'stack_folders.dart';
 
 /// How long a server's link outlives the last view that opened it, as long
@@ -158,6 +159,7 @@ final class MonitoringController extends ChangeNotifier {
     logs = LogStreams(_engine);
     terminals = ContainerTerminals(_engine);
     jobHistory = JobHistoryReads(_engine);
+    packages = PackageReads(_engine);
     docker = DockerController(
       _engine,
       endpointChoices: dockerEndpointChoices,
@@ -183,6 +185,10 @@ final class MonitoringController extends ChangeNotifier {
   /// The Jobs tab's last runs (JOB-05), a concern of its own beside
   /// [logs].
   late final JobHistoryReads jobHistory;
+
+  /// The System tab's package checks (PKG-01 to PKG-03), a concern of its
+  /// own beside [logs].
+  late final PackageReads packages;
 
   /// Each server's Docker endpoint, which the server header names, and
   /// the engine details the Docker tab shows (03 §5.9, §10.2): a concern
@@ -759,6 +765,7 @@ final class MonitoringController extends ChangeNotifier {
     logs.dispose();
     terminals.dispose();
     jobHistory.dispose();
+    packages.dispose();
     docker.dispose();
     _onEngineDone();
     for (final refresh in _refreshes.toList()) {

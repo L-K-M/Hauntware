@@ -3845,6 +3845,24 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   (`/var/run/reboot-required`, `needs-restarting -r`), services needing
   restart (`needrestart -b`, `needs-restarting -s`), refresh as an admin
   action, fleet update center from cached results.
+- **As built (M6 N36a).** One `sh -c` script (`HostCommands.packageCheck`)
+  runs as the login user and reads the first manager it finds:
+  `apt-get -s -o Debug::NoLocking=1 upgrade` (security from an origin
+  naming `-security`), `dnf -q --cacheonly check-update` with
+  `updateinfo list --security` (an advisory naming a package followed by
+  its version marks it), `zypper --no-refresh -q lu` with `lp -g security`
+  (needed security patches counted, since zypper lists patches rather
+  than packages), `pacman -Qu` (the local sync database, never a
+  download) and `apk version -l '<'`. It prints the metadata's age where
+  the manager keeps one file for it, and the reboot flag from
+  `/var/run/reboot-required` and its `.pkgs`, else `needs-restarting -r`,
+  else "no" on a dpkg host. dnf without cached metadata is said so, not
+  downloaded [U: dnf 5's `updateinfo` alias]. `ReadPackages` answers with
+  a `PackagesReport`; the engine keeps each server's check for an hour
+  (`fresh` runs a new one), shares a running check between reads, keeps
+  no failed one, and forgets a server's with its capabilities. At most
+  1,000 updates are kept [E]. The check runs for at most 120 s. Services
+  needing restart, refresh and the fleet update center follow (N36b).
 - **v1.x.** Apply updates (PKG-07) only as a detached operation with a typed
   confirmation and `DEBIAN_FRONTEND=noninteractive`, never in a client-held
   channel; holds; automatic-update status; old kernels; scheduled checks

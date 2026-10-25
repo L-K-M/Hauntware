@@ -1946,6 +1946,16 @@ is on main:
   clock against this device's. The System tab's Time section shows the
   time zone, whether the clock is synchronized, and how far it is ahead
   or behind (in step within two seconds).
+- Pending updates (M6 N36a, PKG-01 to PKG-03): the System tab's Updates
+  section asks the server's package manager (apt, dnf, zypper, pacman or
+  apk) for its pending updates as the login user and from cached
+  metadata only, never refreshing it. It lists each update with its
+  installed and new versions, security ones first (apt's security
+  origins, dnf's security advisories; zypper counts needed security
+  patches), when the package lists were last downloaded, and whether the
+  server asks for a restart (`/var/run/reboot-required` with the packages
+  that asked, or `needs-restarting -r`). The engine keeps each server's
+  check for an hour; "Check again" runs a new one.
 - Drive health (M6 N37c, HW-04): in admin mode, the System tab's Drive
   health section reads every drive's SMART health on request through an
   elevated `smartctl --scan-open`, then `smartctl -n standby -a` per
