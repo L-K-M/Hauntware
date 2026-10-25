@@ -1985,6 +1985,14 @@ is on main:
   edits and deletes rules, checking that percentages stay within 0 to
   100 and that the clear threshold sits on the recovered side of the
   raise one.
+- Alert notifications (M6 N51, ALR-01): a switch on the alert rules
+  page and in the alert center posts a system notification for each
+  raised alert and withdraws it on the clear. Turning it on first shows
+  the app's prompt, which says rules are evaluated on this device while
+  Klabautermann is open, then the system's request; the choice is kept
+  in settings.json. Each notification states the same limit (Y3). The
+  app icon's badge is not built, and whether the notifications show on
+  real Android, iOS, macOS, Windows and Linux desktops is a manual check.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container

@@ -7,6 +7,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../controllers/alert_rules_controller.dart';
 import '../controllers/fleet_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'alert_notifications.dart';
 import 'alerts.dart';
 import 'server_editing.dart';
 
@@ -148,6 +149,7 @@ class AlertRulesPage extends StatelessWidget {
                   ),
                 ),
               ),
+              const AlertNotificationsSwitch(),
               if (!canEdit)
                 Padding(
                   padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 8),

@@ -8435,5 +8435,77 @@
   "alertRuleEngineStopped": "Klabautermann's engine stopped before the rule was saved.",
   "@alertRuleEngineStopped": {
     "description": "Toast when the engine stopped before it answered a rule write."
+  },
+  "alertNotificationsSwitch": "Notify me when an alert is raised",
+  "@alertNotificationsSwitch": {
+    "description": "The switch for raised alerts' system notifications (ALR-01), on the alert rules page and in the alert center."
+  },
+  "alertNotificationsSwitchDetail": "A system notification, posted only while Klabautermann is open.",
+  "@alertNotificationsSwitchDetail": {
+    "description": "Under the notification switch: the coverage limit (Y3)."
+  },
+  "alertNotificationsPromptTitle": "Get notified of raised alerts?",
+  "@alertNotificationsPromptTitle": {
+    "description": "Title of the app's prompt before the system asks to allow notifications."
+  },
+  "alertNotificationsPromptBody": "Klabautermann evaluates your rules on this device while it is open, and posts a notification when one raises. It cannot notify you while it is closed.",
+  "@alertNotificationsPromptBody": {
+    "description": "The notification prompt: the coverage limit (Y3), stated before the system asks."
+  },
+  "alertNotificationsPromptAllow": "Allow notifications",
+  "@alertNotificationsPromptAllow": {
+    "description": "The notification prompt's button that goes on to the system's request."
+  },
+  "alertNotificationsPromptLater": "Not now",
+  "@alertNotificationsPromptLater": {
+    "description": "The notification prompt's button that leaves notifications off."
+  },
+  "alertNotificationsDenied": "Notifications are turned off for Klabautermann in your system settings.",
+  "@alertNotificationsDenied": {
+    "description": "Toast when the system refused the app notifications; they stay off."
+  },
+  "alertNotificationsUnavailable": "This device has no system notifications Klabautermann can post.",
+  "@alertNotificationsUnavailable": {
+    "description": "Toast when the device offers no notifications to the app."
+  },
+  "alertNotificationsNotSaved": "The notification setting applies until Klabautermann restarts; it could not be saved.",
+  "@alertNotificationsNotSaved": {
+    "description": "Toast when the notification switch changed but settings.json could not be written."
+  },
+  "alertNotificationTitle": "{server}: {metric} at {value}",
+  "@alertNotificationTitle": {
+    "description": "A raised alert's system notification title; server is the server's name (server data), metric the metric's name, such as CPU busy, and value the reading, such as 93%.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      },
+      "metric": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "alertNotificationBody": "{severity}. Evaluated on this device while Klabautermann is open.",
+  "@alertNotificationBody": {
+    "description": "A raised alert's system notification text: its severity word, then the coverage limit (Y3).",
+    "placeholders": {
+      "severity": {
+        "type": "String"
+      }
+    }
+  },
+  "alertNotificationChannel": "Raised alerts",
+  "@alertNotificationChannel": {
+    "description": "The Android notification channel's name, shown in the system's notification settings."
+  },
+  "alertNotificationChannelDetail": "Alerts your rules raise while Klabautermann is open.",
+  "@alertNotificationChannelDetail": {
+    "description": "The Android notification channel's description, shown in the system's notification settings."
+  },
+  "alertNotificationOpen": "Open",
+  "@alertNotificationOpen": {
+    "description": "The default action of a desktop notification on Linux: brings the app forward."
   }
 }

@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Raised alerts as system notifications (ALR-01), asked for at
+         runtime on Android 13 and later. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="Klabautermann"
         android:name="${applicationName}"

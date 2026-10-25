@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/alert_center.dart';
+import '../controllers/alert_notifications.dart' show AlertNotificationText;
 import '../controllers/fleet_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'alert_notifications.dart';
 import 'alert_rules.dart';
 import 'charts/charts.dart';
 
@@ -42,6 +44,27 @@ String? alertValueText(AppLocalizations l10n, String metric, double value) =>
       null => null,
       _ => l10n.chartPercent(value / 100),
     };
+
+/// [raise]'s system notification (ALR-01): the server, metric and
+/// reading, then the severity and the coverage limit (Y3). [server] is the
+/// server's name.
+AlertNotificationText alertNotificationText(
+  AppLocalizations l10n,
+  LocalAlertChanged raise, {
+  required String server,
+}) {
+  final metric = alertMetricName(l10n, raise.metric);
+  final value = switch (raise.value) {
+    final value? => alertValueText(l10n, raise.metric, value),
+    null => null,
+  };
+  return (
+    title: value == null
+        ? l10n.alertRowTitle(server, metric)
+        : l10n.alertNotificationTitle(server, metric, value),
+    body: l10n.alertNotificationBody(l10n.alertSeverity(raise.severity.name)),
+  );
+}
 
 /// The icon of [severity]: a shape apiece, so the badge and the rows never
 /// rely on colour alone (A11Y-01).
@@ -278,6 +301,7 @@ class AlertCenterView extends StatelessWidget {
               child: ListView(
                 shrinkWrap: true,
                 children: [
+                  const AlertNotificationsSwitch(),
                   _Heading(l10n.alertsActiveHeading),
                   if (active.isEmpty)
                     ListTile(title: Text(l10n.alertsNoneActive))

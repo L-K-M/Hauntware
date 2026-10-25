@@ -26,6 +26,7 @@ const String _appearanceKey = 'klabautermann.appearance';
 const String _firstRunCardKey = 'klabautermann.coverage.firstRunCardDismissed';
 const String _announceBandsKey =
     'klabautermann.accessibility.announceThresholdBands';
+const String _alertNotificationsKey = 'klabautermann.alerts.notifications';
 const String _rootEquivalenceNoticeKey =
     'klabautermann.docker.rootEquivalenceNoticeDismissed';
 const String _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
@@ -307,6 +308,19 @@ final class DeviceSettingsStore {
   /// way.
   Future<void> setAnnounceThresholdBands(bool announce) async {
     _values[_announceBandsKey] = announce;
+    await _save();
+  }
+
+  /// Whether raised alerts post a system notification (ALR-01): off until
+  /// the user turns it on and the system allows it, so anything but
+  /// `true` reads as off and a damaged file posts nothing unasked.
+  bool get alertNotifications => _values[_alertNotificationsKey] == true;
+
+  /// Stores [enabled] and writes the document. Throws when the write
+  /// fails or this session is read-only; the value stays in memory either
+  /// way.
+  Future<void> setAlertNotifications(bool enabled) async {
+    _values[_alertNotificationsKey] = enabled;
     await _save();
   }
 

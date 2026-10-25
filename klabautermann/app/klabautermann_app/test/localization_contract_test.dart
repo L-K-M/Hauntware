@@ -95,6 +95,21 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // A migration the engine refused, printed; it is tried again.
     r"'Safety preferences of $serverId stay on this device: $error'",
   },
+  // A refused post's diagnostic, printed.
+  'lib/controllers/alert_notifications.dart': {
+    "'while posting an alert notification'",
+  },
+  // The plugin's start-up diagnostic, the Android icon resource, the
+  // Windows toast identity (the product name, the application id of
+  // 04 §12.3 and a fixed GUID) and the Android channel's id.
+  'lib/services/system_notifications.dart': {
+    "'while starting system notifications'",
+    "'@mipmap/ic_launcher'",
+    "'Klabautermann'",
+    "'ch.lkmc.klabautermann'",
+    "'5b0e8d0c-7f43-4c55-9a1e-2f6b7a3d9c41'",
+    "'alerts'",
+  },
   // A rule write's request id, never shown, and its refusal's diagnostic.
   'lib/controllers/alert_rules_controller.dart': {
     r"'rule-${_count++}'",
