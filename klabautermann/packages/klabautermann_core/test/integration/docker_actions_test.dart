@@ -536,9 +536,14 @@ void main() {
       engine,
       const PullImage(dockerServer, reference: tag, via: PullRoute.host),
     );
-    final hostRun = await run(engine, host);
-    expectSucceeded(hostRun);
-    expect((hostRun as ActionFinished).output?.stdout, contains(tag));
+    // A shell step that succeeds reports its exit code, unlike an API one.
+    expect(
+      await run(engine, host),
+      isA<ActionFinished>()
+          .having((f) => f.outcome, 'outcome', ActionOutcome.succeeded)
+          .having((f) => f.exitCode, 'exitCode', 0)
+          .having((f) => f.output?.stdout, 'stdout', contains(tag)),
+    );
     expect(await dind(['image', 'ls', '--quiet', tag]), isNotEmpty);
 
     final missing = await plan(
