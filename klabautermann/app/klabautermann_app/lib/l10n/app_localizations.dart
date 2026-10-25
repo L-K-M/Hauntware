@@ -9051,6 +9051,132 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not read that file as a key.'**
   String get serverEditorKeyFileImportFailed;
+
+  /// Title of the in-app alert center (ALR-01), which lists the alerts the user's rules raised.
+  ///
+  /// In en, this message translates to:
+  /// **'Alerts'**
+  String get alertsTitle;
+
+  /// The coverage limit (Y3) the alert notice and the alert center state: rules are evaluated only on this device and only while the app runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Evaluated on this device while Klabautermann is open.'**
+  String get alertsCoverage;
+
+  /// The fleet list's alert notice while rules have raised alerts; count is how many are raised.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 alert is active} other{{count} alerts are active}}'**
+  String alertsNoticeActive(int count);
+
+  /// The fleet list's alert notice when alerts were raised and cleared since the user last opened the alert center, and none is raised now.
+  ///
+  /// In en, this message translates to:
+  /// **'Every alert has cleared since you last looked.'**
+  String get alertsNoticeCleared;
+
+  /// Button on the fleet list's alert notice that opens the alert center.
+  ///
+  /// In en, this message translates to:
+  /// **'Show alerts'**
+  String get alertsShow;
+
+  /// Alert center heading over the alerts raised now.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get alertsActiveHeading;
+
+  /// Alert center line under the Active heading when no alert is raised.
+  ///
+  /// In en, this message translates to:
+  /// **'No alert is active.'**
+  String get alertsNoneActive;
+
+  /// Alert center heading over the latest raises and clears since the app started.
+  ///
+  /// In en, this message translates to:
+  /// **'Earlier'**
+  String get alertsHistoryHeading;
+
+  /// A fleet row's alert count (ALR-02), in its tooltip and screen-reader label; count is how many alerts are raised for that server.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 alert} other{{count} alerts}}'**
+  String alertsRowCount(int count);
+
+  /// The number on a fleet row's alert badge (ALR-02), in the UI locale's number format.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}'**
+  String alertsBadgeCount(int count);
+
+  /// An alert center row's title; server is the server's name (server data) and metric the alert's metric, such as CPU busy.
+  ///
+  /// In en, this message translates to:
+  /// **'{server}: {metric}'**
+  String alertRowTitle(String server, String metric);
+
+  /// An alert's severity word in the alert center.
+  ///
+  /// In en, this message translates to:
+  /// **'{severity, select, critical{Critical} warning{Warning} other{Info}}'**
+  String alertSeverity(String severity);
+
+  /// An alert center time from before today: a date and time in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'{time}'**
+  String alertDateTime(DateTime time);
+
+  /// When a raised alert's breach began, in the alert center; time is a time of day in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'since {time}'**
+  String alertSince(String time);
+
+  /// An alert center history row for a raise; time is a time of day in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Raised at {time}'**
+  String alertRaisedAt(String time);
+
+  /// An alert center history row for a clear; time is a time of day in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Cleared at {time}'**
+  String alertClearedAt(String time);
+
+  /// The alert metric cpu.busy: the share of CPU time spent busy.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU busy'**
+  String get alertMetricCpuBusy;
+
+  /// The alert metric memory.used: used memory as a share of the total.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory used'**
+  String get alertMetricMemoryUsed;
+
+  /// The alert metric load.perCore: the 1-minute load average divided by the number of cores.
+  ///
+  /// In en, this message translates to:
+  /// **'Load per core'**
+  String get alertMetricLoadPerCore;
+
+  /// The alert metric disk.used: the fullest filesystem's used space.
+  ///
+  /// In en, this message translates to:
+  /// **'Disk space used'**
+  String get alertMetricDiskUsed;
+
+  /// The alert metric disk.inodes: the fullest filesystem's used inodes.
+  ///
+  /// In en, this message translates to:
+  /// **'Inodes used'**
+  String get alertMetricDiskInodes;
 }
 
 class _AppLocalizationsDelegate

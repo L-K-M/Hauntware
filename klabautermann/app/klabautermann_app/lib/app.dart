@@ -11,6 +11,7 @@ import 'package:klabautermann_core/klabautermann_core.dart'
         SyncStoreIssue;
 
 import 'controllers/admin_controller.dart';
+import 'controllers/alert_center.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/app_lock_controller.dart';
 import 'controllers/pin_publication_controller.dart';
@@ -34,6 +35,7 @@ import 'ui/actions/action_entry.dart' show OperationsScope;
 import 'ui/actions/action_preview.dart' show ActionResultToasts;
 import 'ui/adaptive_shell.dart';
 import 'ui/admin_mode_chip.dart' show AdminScope;
+import 'ui/alerts.dart' show AlertScope;
 import 'ui/app_lock_gate.dart';
 import 'ui/docker/docker_panel.dart' show DockerNoticeScope;
 import 'ui/hand_off_actions.dart' show HandOffScope;
@@ -70,6 +72,7 @@ class KlabautermannApp extends StatelessWidget {
     this.syncSecrets,
     this.pinPublication,
     this.admin,
+    this.alerts,
     this.operations,
     required this.dockerNotice,
     this.sync,
@@ -126,6 +129,11 @@ class KlabautermannApp extends StatelessWidget {
   /// Admin mode per server (03 §8.2), one engine run's like [fleet]. Null
   /// in tests that leave it out, where the header shows no admin chip.
   final AdminController? admin;
+
+  /// The in-app alerts the engine's rules raise (ALR-01), one engine run's
+  /// like [fleet]. Null in tests that leave it out, where the fleet shows
+  /// no alert notice or badges.
+  final AlertCenter? alerts;
 
   /// Previews and runs of actions (03 §8.5), one engine run's like
   /// [fleet]. Null in tests that leave it out, where no action can run.
@@ -287,12 +295,16 @@ class KlabautermannApp extends StatelessWidget {
               ),
               null => withSafety,
             };
+            final withAlerts = switch (alerts) {
+              final alerts? => AlertScope(alerts: alerts, child: withEditing),
+              null => withEditing,
+            };
             final withHandOff = switch (handOff) {
               final handOff? => HandOffScope(
                 launcher: handOff,
-                child: withEditing,
+                child: withAlerts,
               ),
-              null => withEditing,
+              null => withAlerts,
             };
             return switch (appLock) {
               final appLock? => AppLockGate(lock: appLock, child: withHandOff),

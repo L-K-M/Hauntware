@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'app.dart';
 import 'controllers/admin_controller.dart';
+import 'controllers/alert_center.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/app_lock_controller.dart';
 import 'controllers/coverage_controller.dart';
@@ -203,6 +204,9 @@ Future<void> main(List<String> args) async {
   // Admin mode per server (03 §8.2): the engine runs it and holds the
   // password; the header's chip asks and shows its state.
   final admin = AdminController(engine);
+  // In-app alerts (ALR-01): the engine evaluates the synced rules on live
+  // samples; the fleet list and rows show what they raise.
+  final alerts = AlertCenter(engine);
   // Action previews and runs (03 §8.5): the engine plans and runs them;
   // the app shows the preview and the results.
   final operations = OperationsController(
@@ -361,6 +365,7 @@ Future<void> main(List<String> args) async {
       syncSecrets: syncSecrets,
       pinPublication: pinPublication,
       admin: admin,
+      alerts: alerts,
       operations: operations,
       dockerNotice: dockerNotice,
       sync: sync,

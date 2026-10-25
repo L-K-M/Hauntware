@@ -8261,5 +8261,139 @@
   "serverEditorKeyFileImportFailed": "Could not read that file as a key.",
   "@serverEditorKeyFileImportFailed": {
     "description": "Toast when a picked key file is too large or not text."
+  },
+  "alertsTitle": "Alerts",
+  "@alertsTitle": {
+    "description": "Title of the in-app alert center (ALR-01), which lists the alerts the user's rules raised."
+  },
+  "alertsCoverage": "Evaluated on this device while Klabautermann is open.",
+  "@alertsCoverage": {
+    "description": "The coverage limit (Y3) the alert notice and the alert center state: rules are evaluated only on this device and only while the app runs."
+  },
+  "alertsNoticeActive": "{count, plural, =1{1 alert is active} other{{count} alerts are active}}",
+  "@alertsNoticeActive": {
+    "description": "The fleet list's alert notice while rules have raised alerts; count is how many are raised.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "alertsNoticeCleared": "Every alert has cleared since you last looked.",
+  "@alertsNoticeCleared": {
+    "description": "The fleet list's alert notice when alerts were raised and cleared since the user last opened the alert center, and none is raised now."
+  },
+  "alertsShow": "Show alerts",
+  "@alertsShow": {
+    "description": "Button on the fleet list's alert notice that opens the alert center."
+  },
+  "alertsActiveHeading": "Active",
+  "@alertsActiveHeading": {
+    "description": "Alert center heading over the alerts raised now."
+  },
+  "alertsNoneActive": "No alert is active.",
+  "@alertsNoneActive": {
+    "description": "Alert center line under the Active heading when no alert is raised."
+  },
+  "alertsHistoryHeading": "Earlier",
+  "@alertsHistoryHeading": {
+    "description": "Alert center heading over the latest raises and clears since the app started."
+  },
+  "alertsRowCount": "{count, plural, =1{1 alert} other{{count} alerts}}",
+  "@alertsRowCount": {
+    "description": "A fleet row's alert count (ALR-02), in its tooltip and screen-reader label; count is how many alerts are raised for that server.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "alertsBadgeCount": "{count}",
+  "@alertsBadgeCount": {
+    "description": "The number on a fleet row's alert badge (ALR-02), in the UI locale's number format.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "alertRowTitle": "{server}: {metric}",
+  "@alertRowTitle": {
+    "description": "An alert center row's title; server is the server's name (server data) and metric the alert's metric, such as CPU busy.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      },
+      "metric": {
+        "type": "String"
+      }
+    }
+  },
+  "alertSeverity": "{severity, select, critical{Critical} warning{Warning} other{Info}}",
+  "@alertSeverity": {
+    "description": "An alert's severity word in the alert center.",
+    "placeholders": {
+      "severity": {
+        "type": "String"
+      }
+    }
+  },
+  "alertDateTime": "{time}",
+  "@alertDateTime": {
+    "description": "An alert center time from before today: a date and time in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "alertSince": "since {time}",
+  "@alertSince": {
+    "description": "When a raised alert's breach began, in the alert center; time is a time of day in the UI locale.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRaisedAt": "Raised at {time}",
+  "@alertRaisedAt": {
+    "description": "An alert center history row for a raise; time is a time of day in the UI locale.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "alertClearedAt": "Cleared at {time}",
+  "@alertClearedAt": {
+    "description": "An alert center history row for a clear; time is a time of day in the UI locale.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "alertMetricCpuBusy": "CPU busy",
+  "@alertMetricCpuBusy": {
+    "description": "The alert metric cpu.busy: the share of CPU time spent busy."
+  },
+  "alertMetricMemoryUsed": "Memory used",
+  "@alertMetricMemoryUsed": {
+    "description": "The alert metric memory.used: used memory as a share of the total."
+  },
+  "alertMetricLoadPerCore": "Load per core",
+  "@alertMetricLoadPerCore": {
+    "description": "The alert metric load.perCore: the 1-minute load average divided by the number of cores."
+  },
+  "alertMetricDiskUsed": "Disk space used",
+  "@alertMetricDiskUsed": {
+    "description": "The alert metric disk.used: the fullest filesystem's used space."
+  },
+  "alertMetricDiskInodes": "Inodes used",
+  "@alertMetricDiskInodes": {
+    "description": "The alert metric disk.inodes: the fullest filesystem's used inodes."
   }
 }

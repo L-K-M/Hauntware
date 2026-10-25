@@ -1990,8 +1990,17 @@ is on main:
   `client` rule on the live samples of the servers its scope names, with
   the rule's raise and clear thresholds and durations, over `cpu.busy`,
   `memory.used`, `load.perCore`, `disk.used` and `disk.inodes`, and
-  sends `LocalAlertChanged` on each raise and clear. Nothing in the app
-  shows them yet (N50b).
+  sends `LocalAlertChanged` on each raise and clear.
+- Alert center and badges (M6 N50b, ALR-01, ALR-02): the app's alert
+  center keeps the raised alerts and the latest 100 raises and clears of
+  the engine run. A notice heads the fleet list while an alert is raised,
+  or when alerts came and went since the user last looked, and states
+  that rules are evaluated on this device while Klabautermann is open
+  (Y3); it opens the alert center, whose rows open their server. Each
+  fleet row badges its raised alerts with the icon of the highest
+  severity and their count, which its label and tooltip say too. The
+  app icon's badge waits on notifications (N51), and there is no rule
+  editor yet (N50c).
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container

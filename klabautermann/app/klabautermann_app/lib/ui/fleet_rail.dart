@@ -5,6 +5,7 @@ import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
 import '../controllers/sync_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'alerts.dart';
 import 'coverage.dart';
 import 'endpoint_confirmation.dart';
 import 'fleet_rows.dart';
@@ -62,9 +63,18 @@ class FleetRail extends StatelessWidget {
                     monitoring: monitoring,
                     showSelection: true,
                     onOpen: (server) => fleet.select(server.id),
-                    // 03 §4.3 step 3: synced servers waiting to be
-                    // confirmed.
-                    header: EndpointsPendingNotice(fleet: fleet),
+                    // The raised alerts (ALR-01), then 03 §4.3 step 3's
+                    // synced servers waiting to be confirmed.
+                    header: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        AlertsNotice(
+                          fleet: fleet,
+                          onOpenServer: (server) => fleet.select(server.id),
+                        ),
+                        EndpointsPendingNotice(fleet: fleet),
+                      ],
+                    ),
                   ),
                 ),
                 SidebarBottomBar(
