@@ -273,6 +273,52 @@ void main() {
     await tester.pump(const Duration(seconds: 10));
   });
 
+  testWidgets('a rule\'s own scope stays on offer after the editor '
+      'changes it', (tester) async {
+    final harness = await pumpApp(
+      tester,
+      servers: _servers,
+      alerts: true,
+      syncAccount: testSyncAccount,
+    );
+    harness.engine
+      ..emit(_rules)
+      ..emit(
+        LocalAlertChanged(
+          serverId: 'srv-2',
+          ruleId: 'r-db1',
+          metric: 'memory.used',
+          severity: AlertSeverity.warning,
+          raised: true,
+          at: DateTime.utc(2026, 10, 25, 12),
+          value: 93,
+        ),
+      );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Show alerts'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Alert rules'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Memory used above 90%'));
+    await tester.pumpAndSettle();
+
+    // Opened from every rule, so no server of its own: the rule's server
+    // is the only way back once every server was chosen.
+    await tester.tap(find.text('On db-1'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('On every server').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('On every server'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('On db-1').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    final put = harness.engine.sentOfType<PutRule>().single as PutRule;
+    expect((put.rule.scope, put.target), (RuleScope.server, 'srv-2'));
+  });
+
   testWidgets('the alert center opens every rule', (tester) async {
     final harness = await pumpApp(tester, servers: _servers, alerts: true);
     harness.engine

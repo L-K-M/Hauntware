@@ -730,7 +730,7 @@ void engineMain(
     prefsSent = sent;
     // By id, so a reload that lists the same rules in another order
     // sends nothing.
-    final rules = (await sync.rules())..sort((a, b) => a.id.compareTo(b.id));
+    final rules = [...await sync.rules()]..sort((a, b) => a.id.compareTo(b.id));
     final encoded = jsonEncode([
       for (final rule in rules) encodeSyncedRule(rule),
     ]);

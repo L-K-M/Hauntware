@@ -334,6 +334,11 @@ class _AlertRuleEditorState extends State<AlertRuleEditor> {
   late ThresholdOp _op;
   late AlertSeverity _severity;
   late (RuleScope, String?) _scope;
+
+  /// The metric and scope the editor opened with, which its menus keep
+  /// offering after a change, so a rule's own can be chosen again.
+  late final String _ownMetric;
+  late final (RuleScope, String?) _ownScope;
   late final TextEditingController _raise, _raiseFor, _clear, _clearFor;
 
   @override
@@ -349,6 +354,8 @@ class _AlertRuleEditorState extends State<AlertRuleEditor> {
       (null, final server?) => (RuleScope.server, server.id),
       (null, null) => (RuleScope.all, null),
     };
+    _ownMetric = _metric;
+    _ownScope = _scope;
     _raise = TextEditingController(
       text: _numberText(rule?.raise.value ?? _defaultRaise),
     );
@@ -452,7 +459,7 @@ class _AlertRuleEditorState extends State<AlertRuleEditor> {
   List<(RuleScope, String?)> get _scopes {
     final server = widget.server;
     return {
-      _scope,
+      _ownScope,
       if (server != null) (RuleScope.server, server.id),
       if (server?.group case final group?) (RuleScope.group, group),
       (RuleScope.all, null),
@@ -475,7 +482,7 @@ class _AlertRuleEditorState extends State<AlertRuleEditor> {
     final theme = Theme.of(context);
     final metrics = {
       for (final metric in AlertMetric.values) metric.id,
-      _metric,
+      _ownMetric,
     };
     final suffix = _percent ? l10n.alertRulePercentSuffix : null;
     const gap = SizedBox(height: 12);
