@@ -256,8 +256,11 @@ class PaneTabsView extends StatelessWidget {
   }
 }
 
-/// The strip's height (D32 §6), including the 2 px active-pane line.
-const _tabStripHeight = 30.0;
+/// The strip's height (D32 §6), including the 2 px active-pane line and
+/// the 1 px rule along its bottom. Public because the columns beside the
+/// panes line up with it: the inspector's tabs put their rule on the same
+/// row, and the sidebar's filter field spans the same band.
+const paneTabStripHeight = 30.0;
 
 /// The active-pane marker: a 2 px accent line along the TOP of the
 /// ACTIVE pane's strip, above its chips. Both strips keep a 1 px
@@ -398,7 +401,7 @@ class _TabStripState extends State<_TabStrip> {
         },
         builder: (context, candidateData, rejectedData) => Container(
           key: _stripKey,
-          height: _tabStripHeight,
+          height: paneTabStripHeight,
           color: chrome.headerBackground,
           child: Stack(
             children: [
@@ -757,7 +760,7 @@ class _TabChipState extends State<_TabChip> {
     final showClose = active || _hovered;
 
     Widget chip = Container(
-      height: _tabStripHeight,
+      height: paneTabStripHeight,
       constraints: const BoxConstraints(minWidth: 72, maxWidth: 220),
       padding: const EdgeInsetsDirectional.only(start: 10, end: 4),
       decoration: BoxDecoration(
@@ -1143,15 +1146,12 @@ class _TabEntryDropState extends State<_TabEntryDrop> {
         _accept(details.data);
       },
       builder: (context, candidateData, rejectedData) => Container(
-        // A border that appears on acceptance would add 4px each axis
-        // and reflow the strip mid-drag — keep it mounted and swap the
-        // color so toggling repaints only.
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: _accepting ? colors.primary : Colors.transparent,
-            width: 2,
-          ),
-        ),
+        // Painted over the chip rather than around it: a border around
+        // it would inset the chip below the strip's height, and one that
+        // came and went with acceptance would reflow the strip mid-drag.
+        foregroundDecoration: _accepting
+            ? BoxDecoration(border: Border.all(color: colors.primary, width: 2))
+            : null,
         child: widget.child,
       ),
     );

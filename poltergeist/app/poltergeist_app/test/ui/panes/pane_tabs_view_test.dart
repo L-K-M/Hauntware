@@ -672,6 +672,30 @@ void main() {
       expectMarkerOn(rightStrip, leftStrip);
     });
 
+    // The drop ring paints over the chip, so it no longer insets it: the
+    // chip fills the strip, and the active one runs from the strip's top
+    // down to the rule, the front of the pane it heads.
+    testWidgets('a chip fills the strip from its top to its bottom', (
+      tester,
+    ) async {
+      await openLocalTab(leftStrip, '/home/a');
+      await pumpBoth(tester);
+
+      final scroll = find.ancestor(
+        of: find.descendant(
+          of: find.byType(SingleChildScrollView),
+          matching: find.byKey(ValueKey(leftStrip.tabs.single.id)),
+        ),
+        matching: find.byType(SingleChildScrollView),
+      );
+      final chip = find.descendant(
+        of: scroll,
+        matching: find.byKey(ValueKey(leftStrip.tabs.single.id)),
+      );
+      expect(tester.getRect(chip).top, tester.getRect(scroll).top);
+      expect(tester.getSize(chip).height, paneTabStripHeight);
+    });
+
     testWidgets('the ✕ shows on the active tab and on hover only', (
       tester,
     ) async {

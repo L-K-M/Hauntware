@@ -2310,7 +2310,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         // draws the header under the unified toolbar band, whose empty
         // space the system already drags and zooms.
         header,
-        Divider(height: 1, color: chrome.separator),
+        Divider(height: _headerRuleHeight, color: chrome.separator),
         // D19's update banner lives in Alerts now (D32 §3); the pane
         // row owns the rest of the column.
         Expanded(child: paneRow),
@@ -2335,9 +2335,20 @@ class _WorkspaceShellState extends State<WorkspaceShell>
                 children: [
                   // macOS: the traffic lights sit over the sidebar's top
                   // band (the full-size content view under the unified
-                  // toolbar, which drags natively) — Finder's layout.
-                  if (unifiedToolbar) SizedBox(height: chrome.headerHeight),
-                  Expanded(child: _buildSidebarView(sshImportCommand)),
+                  // toolbar, which drags natively) — Finder's layout. The
+                  // band clears the header's rule too, so the sidebar
+                  // starts level with the tab strips and its filter field
+                  // spans their band.
+                  if (unifiedToolbar)
+                    SizedBox(height: chrome.headerHeight + _headerRuleHeight),
+                  Expanded(
+                    child: _buildSidebarView(
+                      sshImportCommand,
+                      filterBarExtent: unifiedToolbar
+                          ? paneTabStripHeight
+                          : null,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -3589,6 +3600,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   Widget _buildSidebarView(
     RegisteredCommand? sshImportCommand, {
     SidebarPresentation presentation = SidebarPresentation.rail,
+    double? filterBarExtent,
   }) {
     final session = widget.engineSession;
     final backup = widget.bookmarkBackup;
@@ -3607,6 +3619,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     return SidebarView(
       controller: _sidebar!,
       presentation: presentation,
+      filterBarExtent: filterBarExtent,
       // D22's adoption offer in the empty-servers state routes through
       // the registered command: the same enablement and one-shot
       // session rule apply as the menu row.
@@ -4804,6 +4817,9 @@ class _WorkspaceShellState extends State<WorkspaceShell>
 /// Leading room for the macOS traffic lights when the header reaches the
 /// window's leading edge (sidebar hidden or in the drawer).
 const _macTrafficLightsInset = 76.0;
+
+/// The line under the header, across the panes and the inspector.
+const _headerRuleHeight = 1.0;
 
 /// How far past a region's minimum a drag must go before it hides the
 /// region (10 §3.1): a deliberate fling, never an accidental nudge.
