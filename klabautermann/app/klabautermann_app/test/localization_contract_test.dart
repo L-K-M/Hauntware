@@ -88,6 +88,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // A job history read's request id, matched in the engine's answer.
   'lib/controllers/job_history_reads.dart': {r"'history-${_count++}'"},
+  // A history rollup read's request id, matched in the engine's answer.
+  'lib/controllers/history_reads.dart': {r"'rollup-${_count++}'"},
   // The not-saved diagnostic; the Safety tab and the header's Safety menu
   // print it and show their own ARB text (settingsSafetyNotSaved).
   'lib/controllers/safety_controller.dart': {
@@ -95,6 +97,29 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // A migration the engine refused, printed; it is tried again.
     r"'Safety preferences of $serverId stay on this device: $error'",
   },
+  // A refused post's diagnostic, printed.
+  'lib/controllers/alert_notifications.dart': {
+    "'while posting an alert notification'",
+  },
+  // The plugin's start-up diagnostic, the Android icon resource, the
+  // Windows toast identity (the product name, the application id of
+  // 04 §12.3 and a fixed GUID) and the Android channel's id.
+  'lib/services/system_notifications.dart': {
+    "'while starting system notifications'",
+    "'@mipmap/ic_launcher'",
+    "'Klabautermann'",
+    "'ch.lkmc.klabautermann'",
+    "'5b0e8d0c-7f43-4c55-9a1e-2f6b7a3d9c41'",
+    "'alerts'",
+  },
+  // A rule write's request id, never shown, and its refusal's diagnostic.
+  'lib/controllers/alert_rules_controller.dart': {
+    r"'rule-${_count++}'",
+    r"'AlertRuleNotSavedException: $failure, $detail'",
+  },
+  // An unexpected write error, printed in the refusal's other case; a
+  // missing target's empty name; and a typed number's comma and point.
+  'lib/ui/alert_rules.dart': {r"'$error'", "''", "','", "'.'"},
   // A pref write's request id, never shown, and its refusal's diagnostic.
   'lib/controllers/server_prefs_controller.dart': {
     r"'prefs-${_count++}'",
@@ -164,6 +189,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The Activity table's key prefix, never shown, and the copied log's
   // line break between JSON records.
   'lib/ui/actions/activity_page.dart': {"'activity'", r"'\n'"},
+  // The ARB select key of every unused image's prune (DKE-05).
+  'lib/ui/actions/docker_actions.dart': {"'imagesAll'"},
   'lib/controllers/fleet_controller.dart': {
     // The row subtitle's address: host or user@host, with :port when the
     // port is not 22 and an IPv6 host then bracketed before it. Machine
@@ -225,6 +252,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'images-${_count++}'",
     r"'stacks-${_count++}'",
     r"'volumes-${_count++}'",
+    r"'networks-${_count++}'",
     r"'stack-file-${_count++}'",
   },
   'lib/controllers/docker_endpoint_choices.dart': {
@@ -298,15 +326,28 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'klabautermann/settings_link'",
     "'--klabautermann-settings-window'",
     r"'$error'",
+    "'The app is locked'",
   },
   'lib/services/settings_window/settings_window_host.dart': {
     r"'No settings window method $name'",
     "'No pin publication settings'",
+    "'No app lock settings'",
   },
   'lib/services/settings_window/remote_settings.dart': {
     "'Settings link closed'",
     // The device name until the first snapshot, which comes with hello.
     "''",
+  },
+  // The app lock (SAF-20): a failed change's text for the debug log, the
+  // empty reason that picks the toast's generic branch, and the line break
+  // between the switch's detail and its note.
+  'lib/ui/app_lock_settings.dart': {r"'$error'", "''", r"'\n'"},
+  // Diagnostics in AppLockException, never shown: the lock's screens word
+  // failures from its availability alone.
+  'lib/services/device_authenticator.dart': {
+    r"'device authentication failed: ${error.code}'",
+    "'device authentication was rejected'",
+    "'device authentication is unavailable'",
   },
   // A keystore failure's text, which the answer carries to the engine as
   // a diagnostic; surfaces show ARB text (syncFailedKeystore).
@@ -532,6 +573,17 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // line break between its cells in its screen-reader label, each ARB
     // text.
     r"'${DockerWatchList.volumes.name}.row.${_rowKey(entry)}'",
+    r"'\n'",
+  },
+  'lib/ui/docker/networks_panel.dart': {
+    // The key tests find a phone row by, in the table rows' form, and the
+    // line break between its cells in its screen-reader label, each ARB
+    // text.
+    r"'${DockerWatchList.networks.name}.row.${_rowKey(entry)}'",
+    r"'\n'",
+  },
+  'lib/ui/docker/networks_view.dart': {
+    // The line break between the fields the search reads.
     r"'\n'",
   },
   'lib/ui/docker/volumes_view.dart': {

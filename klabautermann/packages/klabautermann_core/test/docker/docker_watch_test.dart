@@ -53,10 +53,11 @@ Map<String, Object?> _event(
   String type = 'container',
   String action = 'start',
   int time = 1760702400,
+  Map<String, String> attributes = const {},
 }) => {
   'Type': type,
   'Action': action,
-  'Actor': {'ID': id, 'Attributes': <String, String>{}},
+  'Actor': {'ID': id, 'Attributes': attributes},
   'time': time,
   'timeNano': time * 1000000000,
 };
@@ -114,7 +115,15 @@ final class _Harness {
           },
         ],
         'Warnings': null,
-      });
+      })
+      ..routes['/v1.52/networks'] = jsonEncode([
+        {
+          'Id': 'n1',
+          'Name': 'shop_default',
+          'Driver': 'bridge',
+          'Labels': {'com.example.token': 's3cret'},
+        },
+      ]);
   }
 
   final bool relay;
@@ -289,6 +298,22 @@ void main() {
       expect(h.requests('/images/json'), hasLength(images + 1));
     });
 
+    test('a container prune re-reads the whole container list', () async {
+      final h = _Harness();
+      await h.start({DockerWatchList.containers});
+      h.daemon.routes[_containersPath] = jsonEncode([_container('abc')]);
+
+      h.router.actionRan(_srv, everyContainer: true);
+      await h.clock.elapse(kDockerEventBatch);
+      expect(_ids(h.lists().single), ['abc']);
+      expect(
+        Uri.parse(
+          h.requests(_containersPath).last.split(' ')[1],
+        ).queryParameters['filters'],
+        isNull,
+      );
+    });
+
     test('an action on a server without a watch reads nothing', () async {
       final h = _Harness();
       h.router.actionRan(_srv, containers: {'abc'}, images: true);
@@ -365,6 +390,57 @@ void main() {
       await h.clock.elapse(kDockerEventBatch);
       expect(h.lists(), [_list(DockerWatchList.volumes)]);
       expect(h.requests('/volumes'), hasLength(2));
+    });
+
+    test('network events re-read the networks, labels masked; volume '
+        'events read no networks (DNW-01)', () async {
+      final h = _Harness();
+      final first = await h.start({DockerWatchList.networks});
+
+      expect(first, [_list(DockerWatchList.networks, fullRelist: true)]);
+      final networks = (first.single.payload as DockerNetworksPayload).networks;
+      expect(networks.single.name, 'shop_default');
+      expect(networks.single.labels['com.example.token']?.isMasked, isTrue);
+
+      h.daemon.emit(_event('cache', type: 'volume', action: 'create'));
+      await h.clock.elapse(const Duration(seconds: 1));
+      expect(h.lists(), isEmpty);
+
+      h.daemon.emit(_event('n2', type: 'network', action: 'create'));
+      await h.clock.elapse(kDockerEventBatch);
+      expect(h.lists(), [_list(DockerWatchList.networks)]);
+      expect(h.requests('/networks'), hasLength(2));
+    });
+
+    test('a network connect re-reads the container it joined, whose '
+        'networks the use counts read (DNW-01)', () async {
+      final h = _Harness();
+      await h.start({DockerWatchList.containers, DockerWatchList.networks});
+
+      h.daemon.emit(
+        _event(
+          'n1',
+          type: 'network',
+          action: 'connect',
+          attributes: const {'container': 'abc', 'name': 'shop_default'},
+        ),
+      );
+      await h.clock.elapse(kDockerEventBatch);
+
+      expect(
+        h.lists(),
+        unorderedEquals([
+          _list(DockerWatchList.containers),
+          _list(DockerWatchList.networks),
+        ]),
+      );
+      final targeted = h.requests(_containersPath).last;
+      expect(
+        Uri.parse(targeted.split(' ')[1]).queryParameters['filters'],
+        jsonEncode({
+          'id': ['abc'],
+        }),
+      );
     });
 
     test('a failed volume read reaches the watch, and the next event reads '

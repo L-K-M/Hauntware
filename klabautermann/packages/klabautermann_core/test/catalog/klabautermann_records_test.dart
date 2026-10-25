@@ -6,8 +6,6 @@ import 'dart:typed_data';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/catalog/klabautermann_records.dart';
-import 'package:klabautermann_host/klabautermann_host.dart'
-    show RuleEvalScope, RuleScope;
 import 'package:seance_core/catalog.dart';
 import 'package:seance_core/seance_core.dart';
 import 'package:test/test.dart';

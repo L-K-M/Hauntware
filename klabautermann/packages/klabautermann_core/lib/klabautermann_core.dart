@@ -7,6 +7,17 @@ library;
 // Pull-only sync (D14, D63): the policy the engine's coordinator runs
 // under, which the app's pull-only test checks, and the keystore entry
 // names the app binds ghost_keystore with (03 §4.5, D62).
+export 'src/alerts/alert_evaluator.dart' show AlertMetric;
+export 'src/alerts/alert_rules.dart';
+export 'src/catalog/klabautermann_records.dart' show SyncedRule;
+export 'src/history/history_store.dart'
+    show
+        HistoryBucket,
+        HistoryGap,
+        HistoryProvenance,
+        HistoryRange,
+        HistoryStat,
+        HistoryTier;
 export 'src/catalog/engine_sync.dart' show engineSyncPushPolicy;
 export 'src/catalog/sync_credentials.dart'
     show klabautermannApiKeyPrefix, klabautermannMasterKeyEntry;
@@ -179,9 +190,11 @@ export 'package:seance_core/seance_core.dart'
         poltergeistDeepLinkScheme,
         seanceConnectRoute,
         seanceDeepLinkScheme;
+
 // A one-off command's words, split as a shell would without expanding
 // them (CTX-08).
 export 'src/operations/command_words.dart' show splitCommandWords;
+
 // The sync sign-in form (03 §4.3 step 1) checks its fields with the
 // suite's enrollment rule before the engine is asked, and the pull-only
 // test names the push policy.
@@ -242,6 +255,8 @@ export 'package:klabautermann_docker/klabautermann_docker.dart'
         HealthStatus,
         ImageSummary,
         LogConfig,
+        NetworkIpamConfig,
+        NetworkSummary,
         Ownership,
         OwnershipMarker,
         SystemDf,
@@ -263,7 +278,9 @@ export 'src/sampling/sample_results.dart' show externalMonitorsIn;
 // model's hysteresis evaluator, whose `for` durations debounce a band.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show
+        RuleEvalScope,
         RulePhase,
+        RuleScope,
         ThresholdBound,
         ThresholdOp,
         ThresholdRule,

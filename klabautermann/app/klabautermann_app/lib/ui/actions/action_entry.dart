@@ -44,6 +44,16 @@ enum ActionEntryPoint {
   /// Removing a volume (VOL-02).
   volumeRemove,
 
+  /// Removing a network (DNW-02).
+  networkRemove,
+
+  /// Pruning unused containers, images, volumes, networks or build cache
+  /// (DKE-05, IMG-06).
+  prune,
+
+  /// Pulling an image (IMG-03).
+  imagePull,
+
   /// A stack's start, stop and restart (STK-03).
   stackVerb,
 

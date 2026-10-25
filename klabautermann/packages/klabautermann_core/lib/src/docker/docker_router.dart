@@ -331,18 +331,23 @@ final class DockerRouter {
   }
 
   /// Tells [serverId]'s watches that an action changed the [containers]
-  /// it addressed, the images or the volumes, so the lists read them again rather
-  /// than trust the event the engine logged for it (see
+  /// it addressed, with [everyContainer] any of them, the images, the
+  /// volumes or the networks, so the lists read them again rather than
+  /// trust the event the engine logged for it (see
   /// [DockerWatcher.changed]). Nothing is read without a watch.
   void actionRan(
     String serverId, {
     Set<String> containers = const {},
+    bool everyContainer = false,
     bool images = false,
     bool volumes = false,
+    bool networks = false,
   }) => _sessions[serverId]?.watcher?.changed(
     containers: containers,
+    everyContainer: everyContainer,
     images: images,
     volumes: volumes,
+    networks: networks,
   );
 
   /// Ends the watch [request] names; the last one stops the server's

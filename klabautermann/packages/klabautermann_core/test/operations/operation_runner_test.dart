@@ -9,7 +9,7 @@ import 'package:klabautermann_core/src/operations/confirmation.dart';
 import 'package:klabautermann_core/src/operations/operation_plan.dart';
 import 'package:klabautermann_core/src/operations/operation_runner.dart';
 import 'package:klabautermann_docker/klabautermann_docker.dart'
-    show DockerConflictException;
+    show DockerCancelledException, DockerConflictException;
 import 'package:seance_core/seance_core.dart'
     show
         ChannelOpenException,
@@ -456,12 +456,42 @@ void main() {
     final answers = <ActionFinished>[];
     for (final status in statuses) {
       answers.add(
-        await runner(link, api: (_, _) async => status).run('plan-1', plan),
+        await runner(link, api: (_, _, _) async => status).run('plan-1', plan),
       );
     }
     expect(answers.first.outcome, ActionOutcome.succeeded);
     expect(answers.last.failure, ActionFailure.stepFailed);
     expect(answers.last.httpStatus, 404);
+  });
+
+  test('an API step hears its plan id; an error the daemon explained fails '
+      'it with its words, and a cancel cancels the run (IMG-03)', () async {
+    final link = _Link((_, _) => _ok);
+    final plan = _plan([ApiStep(method: 'POST', path: '/v1.44/images/create')]);
+    final heard = <String>[];
+
+    final explained = await runner(
+      link,
+      api: (_, planId, _) async {
+        heard.add(planId);
+        throw const ApiStepError('manifest unknown', status: 404);
+      },
+    ).run('plan-7', plan);
+    expect(heard, ['plan-7']);
+    expect(
+      (explained.outcome, explained.failure, explained.httpStatus),
+      (ActionOutcome.failed, ActionFailure.stepFailed, 404),
+    );
+    expect(explained.output?.stderr, 'manifest unknown');
+
+    final cancelled = await runner(
+      link,
+      api: (_, _, _) async => throw const DockerCancelledException('closed'),
+    ).run('plan-8', plan);
+    expect(
+      (cancelled.outcome, cancelled.failedStep),
+      (ActionOutcome.cancelled, 0),
+    );
   });
 
   test('an exec step needs the exec runner; its output comes back with '
@@ -559,7 +589,7 @@ void main() {
     final lending = OperationRunner(
       linkFor: (_) => link,
       emit: events.add,
-      api: (_, _) async {
+      api: (_, _, _) async {
         expect(inside, isFalse, reason: 'an API step borrows nothing');
         return 204;
       },

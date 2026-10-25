@@ -366,7 +366,7 @@ packages:
       path: "../../../seance/packages/seance_protocol"
       relative: true
     source: path
-    version: "1.9.2"
+    version: "1.9.3"
   sky_engine:
     dependency: transitive
     description: flutter

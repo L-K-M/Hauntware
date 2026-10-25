@@ -1960,6 +1960,18 @@ is on main:
   memory, temperature and power, says when an installed `nvidia-smi`
   fails, and does not show where the host has no GPU it reads. Intel
   GPUs are not read.
+- App lock (M6 N66, SAF-20): Settings > Safety's "Require device
+  authentication" (Android, iOS, macOS, Windows; off and disabled on
+  Linux) opens the app behind a lock screen that asks for the device's
+  biometrics or passcode, and locks it again after 5 minutes in the
+  background or hidden. It is Séance's `AppLock`, moved into
+  ghost_keystore (N01). While locked the keystore answers the engine's
+  reads with a refusal, writes still go through, open links keep running,
+  and admin mode ends on every server. Turning it on or off asks first and
+  applies only once saved, the desktop settings window included. Tested
+  with a fake authenticator; the system prompts themselves (Face ID,
+  Android BiometricPrompt, Touch ID, Windows Hello) are a manual check per
+  OS.
 - Temperatures (M6 N37a, HW-01): collector-set version 11 adds the
   slow `temps` collector, which reads the hwmon temperature inputs and
   their limits and labels with builtins, falling back to the thermal
@@ -1974,6 +1986,90 @@ is on main:
   and waits where every column fits; a figure the reading cannot give
   reads as unknown, and inside a container the section is withheld as
   the host's (D50).
+- Networks (M6 N11, DNW-01, DNW-02): the Docker tab gains a Networks
+  sub-tab after Volumes, listing every network by name with its driver,
+  scope, first subnet and its gateway, and how many containers are on
+  it, counted from the containers' endpoints, with the built-in
+  `bridge`, `host` and `none` marked, an Unused filter that never lists
+  a built-in one, and a search by name, driver or subnet. A watch naming
+  `networks` reads `/networks` and reads it again on a `network` event.
+  Where actions are allowed, a user-defined network's Remove plans one
+  `DELETE /networks/{id}` behind a plain confirmation, refused for a
+  built-in network and while any container is on it. As on the Volumes
+  sub-tab, the Unused filter stays off until a container list says
+  which are unused. The Docker actions suite refuses and removes a network on
+  the fixture.
+- Prune (M6 N12, DKE-05, IMG-06): the Containers, Images, Volumes and
+  Networks sub-tabs offer a prune where actions are allowed: stopped
+  containers; dangling images, every unused image (`-a`) or the build
+  cache from the Images menu; unused volumes; unused user-defined
+  networks. The preview lists what the prune removes, with sizes where
+  the engine reports them per object and the bytes freed, and what it
+  keeps and why (in use, or one of the engine's own networks). Every
+  prune asks for the typed confirmation (03 §8.6 tier 2; DKE-05's typed
+  rule for volumes and `-a` is the stricter subset). Volume prune sends
+  `all=true` from API 1.42, so named volumes go as the preview says,
+  and warns that the data has no way back. The runner reads the matches
+  again before the step and refuses when they changed, so what runs is
+  what the preview showed; the build cache, whose records have no ids,
+  is not re-validated. The Docker actions suite previews a volume prune
+  and runs a dangling-image prune on the fixture.
+- Image pull (M6 N13, IMG-03): the Images sub-tab's "Pull image…" opens
+  a sheet for a reference (a name without a tag pulls `latest`, never
+  every tag), planned behind a plain confirmation as one
+  `POST /images/create`. While it runs the sheet lists each layer in the
+  order the daemon named it, with its status and a bar of the bytes done
+  of the total, and the image's own last message; the engine sends that
+  progress at most four times a second. It is a foreground pull, as 03
+  §7.14 says: "Stop pull" and closing the sheet both send
+  `CancelAction`, the engine closes the request and the daemon stops the
+  pull, and the plan finishes as cancelled. An `errorDetail` in the
+  stream, or an error answer such as a refused registry, fails the step
+  with the daemon's words shown. The daemon pulls anonymously; private
+  registries through the host's own credentials (`docker pull` over exec,
+  REG-01) and the detached pull come with N13b. The Docker actions suite
+  pulls a tag pushed to the fixture registry and fails on a tag it lacks.
+- Alert evaluation (M6 N50a, ALR-01): the engine evaluates every synced
+  `client` rule on the live samples of the servers its scope names, with
+  the rule's raise and clear thresholds and durations, over `cpu.busy`,
+  `memory.used`, `load.perCore`, `disk.used` and `disk.inodes`, and
+  sends `LocalAlertChanged` on each raise and clear.
+- On-device history (M6 N52a, HIS-01): the engine rolls each server's
+  CPU, memory, load per core and fullest-disk readings into 1-minute
+  buckets for 48 hours and 10-minute buckets for 30 days (min, max,
+  mean, count), keeps the gaps it saw with their causes, and stores
+  them in fixed-size rings under `history/` that survive restarts and
+  go when the server leaves the fleet. `ReadHistory` answers them.
+  The Overview's History card (N52b) charts CPU, memory, disk or inode
+  use over 48 hours or 30 days as each bucket's mean and peak, with a
+  labelled band for each gap: disconnected, in background, reading
+  failed, or app closed where nothing was recorded.
+- Alert center and badges (M6 N50b, ALR-01, ALR-02): the app's alert
+  center keeps the raised alerts and the latest 100 raises and clears of
+  the engine run. A notice heads the fleet list while an alert is raised,
+  or when alerts came and went since the user last looked, and states
+  that rules are evaluated on this device while Klabautermann is open
+  (Y3); it opens the alert center, whose rows open their server. Each
+  fleet row badges its raised alerts with the icon of the highest
+  severity and their count, which its label and tooltip say too. The
+  app icon's badge waits on notifications (N51).
+- Alert rule editor (M6 N50c, ALR-01, ALR-16): the engine reports the
+  account's alert rules whenever they change. The server header's bell
+  opens the rules that apply to that server, and the alert center every
+  rule; each row states the condition, scope, severity, clear threshold
+  and durations, and that it is evaluated on this device while
+  Klabautermann is open. While a sync account is enrolled the page adds,
+  edits and deletes rules, checking that percentages stay within 0 to
+  100 and that the clear threshold sits on the recovered side of the
+  raise one.
+- Alert notifications (M6 N51, ALR-01): a switch on the alert rules
+  page and in the alert center posts a system notification for each
+  raised alert and withdraws it on the clear. Turning it on first shows
+  the app's prompt, which says rules are evaluated on this device while
+  Klabautermann is open, then the system's request; the choice is kept
+  in settings.json. Each notification states the same limit (Y3). The
+  app icon's badge is not built, and whether the notifications show on
+  real Android, iOS, macOS, Windows and Linux desktops is a manual check.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container
@@ -2097,6 +2193,9 @@ is not a device smoke test:
 - iOS background disclosure and the return banner (PLT-04).
 - Android battery and data use.
 - macOS keychain prompts.
+- The app lock's system prompt (SAF-20) on each OS: Face ID or the
+  passcode on iOS, BiometricPrompt on Android, Touch ID or the password on
+  macOS, Windows Hello; and the lock returning after 5 minutes away.
 - VM passes on Debian 12, Ubuntu 24.04 and 26.04 (sudo-rs), RHEL 8 and 9,
   Alpine and a BusyBox NAS, plus a Synology host (11.3).
 - Docker on real hosts (M3, Q1): rootful Docker, which CI runs only in

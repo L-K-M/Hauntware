@@ -26,6 +26,7 @@ const String _appearanceKey = 'klabautermann.appearance';
 const String _firstRunCardKey = 'klabautermann.coverage.firstRunCardDismissed';
 const String _announceBandsKey =
     'klabautermann.accessibility.announceThresholdBands';
+const String _alertNotificationsKey = 'klabautermann.alerts.notifications';
 const String _rootEquivalenceNoticeKey =
     'klabautermann.docker.rootEquivalenceNoticeDismissed';
 const String _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
@@ -33,6 +34,7 @@ const String _monitorSetKey = 'klabautermann.monitorSet';
 const String _safetyKey = 'klabautermann.safety';
 const String _syncSecretsKey = 'klabautermann.sync.secrets';
 const String _deviceNameKey = 'klabautermann.audit.deviceName';
+const String _appLockKey = 'klabautermann.appLock';
 
 const String _endpointOverridesKey = 'klabautermann.docker.endpointOverrides';
 const String _stackFoldersKey = 'klabautermann.docker.stackFolders';
@@ -310,6 +312,19 @@ final class DeviceSettingsStore {
     await _save();
   }
 
+  /// Whether raised alerts post a system notification (ALR-01): off until
+  /// the user turns it on and the system allows it, so anything but
+  /// `true` reads as off and a damaged file posts nothing unasked.
+  bool get alertNotifications => _values[_alertNotificationsKey] == true;
+
+  /// Stores [enabled] and writes the document. Throws when the write
+  /// fails or this session is read-only; the value stays in memory either
+  /// way.
+  Future<void> setAlertNotifications(bool enabled) async {
+    _values[_alertNotificationsKey] = enabled;
+    await _save();
+  }
+
   /// The device's "sync passwords" switch (03 §4.5, SYN-02),
   /// `klabautermann.sync.secrets`: off unless the user turned it on, so
   /// anything but `true` reads as off and a damaged file syncs no
@@ -321,6 +336,23 @@ final class DeviceSettingsStore {
   /// way.
   Future<void> setSyncSecrets(bool enabled) async {
     _values[_syncSecretsKey] = enabled;
+    await _save();
+  }
+
+  /// The device's app lock (SAF-20), `klabautermann.appLock`: off until
+  /// the user turns it on. Any other value than `false` that is there
+  /// reads as on, so a damaged value can never drop the lock; an absent
+  /// one, as on a fresh install, reads as off.
+  bool get appLock => switch (_values[_appLockKey]) {
+    null || false => false,
+    _ => true,
+  };
+
+  /// Stores [enabled] and writes the document. Throws when the write
+  /// fails or this session is read-only; the value stays in memory either
+  /// way.
+  Future<void> setAppLock(bool enabled) async {
+    _values[_appLockKey] = enabled;
     await _save();
   }
 

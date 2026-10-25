@@ -55,12 +55,15 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
         HealthStatus,
         ImageSummary,
         MaskedValue,
+        NetworkSummary,
         SystemDf,
         VolumeSummary;
 import 'package:meta/meta.dart';
 // DangerLinter's findings are plain data: a severity and three values.
 import 'package:seance_core/seance_core.dart' show DangerFinding;
 
+import '../catalog/klabautermann_records.dart' show SyncedRule;
+import '../history/history_store.dart' show HistoryRange, HistoryTier;
 import '../docker/docker_ladder.dart'
     show
         DockerNoRouteReason,
@@ -266,6 +269,19 @@ import '../operations/plan_types.dart';
 /// N10a): [DockerWatchList.volumes], delivered as [DockerVolumesPayload].
 /// The [CreateVolume] and [RemoveVolume] intents then joined it (VOL-02,
 /// N10b), with the refusals `volumeInUse` and `volumeExists`.
+///
+/// The network list then joined v3 the same way (03 §7.15 DNW-01, DNW-02,
+/// M6 plan N11): [DockerWatchList.networks], delivered as
+/// [DockerNetworksPayload], and the [RemoveNetwork] intent with the
+/// refusals `networkInUse` and `builtinNetwork`.
+///
+/// Prune then joined v3 the same way (03 §7.12 DKE-05, IMG-06, M6 plan
+/// N12): the [PruneDocker] intent, whose preview carries a
+/// [PrunePreview], and the refusal `nothingToPrune`.
+///
+/// The image pull then joined v3 the same way (03 §7.14 IMG-03, M6 plan
+/// N13): the [PullImage] intent, [ImagePullProgress] while it runs, and
+/// [CancelAction], which stops it.
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -782,6 +798,16 @@ final class RunAction extends EngineRequest {
   final ActionConfirmation confirmation;
 }
 
+/// Stops the running plan [planId] where its step can stop: an image pull
+/// (IMG-03), whose request the engine closes, which cancels the pull on
+/// the daemon. The plan finishes as [ActionOutcome.cancelled]; a step
+/// that cannot stop runs to its end.
+final class CancelAction extends EngineRequest {
+  const CancelAction(this.planId);
+
+  final String planId;
+}
+
 /// The safety preferences the app keeps in `settings.json` (03 §4.10, M4
 /// plan M4), sent at spawn and on every change. The engine enforces them:
 /// until the first one arrives, every server is observe-only.
@@ -1083,8 +1109,8 @@ final class SetServerPrefs extends EngineRequest {
   final ServerPrefs? prefs;
 }
 
-/// Seals the alert rule [ruleId] as its `rule` record (03 §4.8); no
-/// surface sends it yet. Answered as [SaveServer].
+/// Seals the alert rule [ruleId] as its `rule` record (03 §4.8); the
+/// app's rule editor sends it. Answered as [SaveServer].
 final class PutRule extends EngineRequest {
   const PutRule({
     required this.requestId,
@@ -1164,6 +1190,17 @@ final class ReadSmart extends EngineRequest {
   const ReadSmart(this.serverId, {required this.requestId});
 
   final String serverId;
+  final String requestId;
+}
+
+/// Reads [serverId]'s on-device history in [tier] (HIS-01, 03 §7.20):
+/// the buckets and gaps within the tier's span. One [HistoryRead] with
+/// [requestId] answers it.
+final class ReadHistory extends EngineRequest {
+  const ReadHistory(this.serverId, this.tier, {required this.requestId});
+
+  final String serverId;
+  final HistoryTier tier;
   final String requestId;
 }
 
@@ -2095,6 +2132,37 @@ final class ActionProgress extends EngineEvent {
   final String? message;
 }
 
+/// Where a running image pull stands (03 §7.14 IMG-03): each layer the
+/// daemon reported, in the order it first did, and the latest message
+/// about the image as a whole. Sent at most a few times a second.
+final class ImagePullProgress extends EngineEvent {
+  ImagePullProgress({
+    required this.planId,
+    required Iterable<PullLayer> layers,
+    this.status,
+  }) : layers = List.unmodifiable(layers);
+
+  final String planId;
+  final List<PullLayer> layers;
+
+  /// The daemon's last message without a layer id, such as
+  /// `Pulling from library/nginx` or `Digest: sha256:...`.
+  final String? status;
+}
+
+/// One layer of an [ImagePullProgress]: the daemon's status for it
+/// (`Downloading`, `Extracting`, `Pull complete`, ...) and the bytes done
+/// of the total, when it reports them.
+@immutable
+final class PullLayer {
+  const PullLayer(this.id, {this.status, this.current, this.total});
+
+  final String id;
+  final String? status;
+  final int? current;
+  final int? total;
+}
+
 /// The answer to the [ReadEditable] with [requestId].
 final class EditRead extends EngineEvent {
   const EditRead({
@@ -2417,6 +2485,15 @@ enum ActionRefusalReason {
 
   /// A volume of that name already exists (VOL-02).
   volumeExists,
+
+  /// A container holds an endpoint on the network (DNW-02).
+  networkInUse,
+
+  /// `bridge`, `host` and `none` are the engine's own and stay (DNW-01).
+  builtinNetwork,
+
+  /// A prune's filters match nothing now (DKE-05).
+  nothingToPrune,
 
   /// The stack's services depend on each other in a cycle, so there is no
   /// order to act in (STK-03).
@@ -2927,6 +3004,73 @@ final class KeystoreRequest extends EngineEvent {
   /// Unique for the engine's lifetime.
   final int requestId;
   final KeystoreOperation operation;
+}
+
+/// One in-app threshold alert raised or cleared (ALR-01, 03 §7.19, D29):
+/// the engine evaluates every synced rule on the live samples of the
+/// servers it applies to, on this device while Klabautermann is open. A
+/// rule that is removed or changed, or a server that leaves its scope,
+/// clears a raised alert at once.
+final class LocalAlertChanged extends EngineEvent {
+  const LocalAlertChanged({
+    required this.serverId,
+    required this.ruleId,
+    required this.metric,
+    required this.severity,
+    required this.raised,
+    required this.at,
+    this.value,
+    this.since,
+  });
+
+  final String serverId;
+
+  /// The `rule` record's id.
+  final String ruleId;
+
+  /// The rule's metric id, such as `cpu.busy`.
+  final String metric;
+
+  final AlertSeverity severity;
+
+  /// True when the alert went up, false when it cleared.
+  final bool raised;
+
+  /// The reading that raised or cleared it, by the engine's clock in UTC.
+  final DateTime at;
+
+  /// The value that reading had; null for a clear without a reading.
+  final double? value;
+
+  /// When the breach behind a raise began, as the rule's `for` counts it.
+  final DateTime? since;
+}
+
+/// The account's alert rules (03 §4.8, §7.19) changed: a pulled or
+/// written `rule` record applied or was removed. [rules] is every live
+/// rule. The engine sends it only on a change, starting from none, so an
+/// account without rules never hears it.
+final class AlertRulesChanged extends EngineEvent {
+  const AlertRulesChanged(this.rules);
+
+  final List<SyncedRule> rules;
+}
+
+/// The answer to [ReadHistory]: [serverId]'s buckets in [tier], oldest
+/// first, the one still filling included, and the gaps the engine saw
+/// within their span; empty before the engine opens its store.
+final class HistoryRead extends EngineEvent {
+  const HistoryRead({
+    required this.requestId,
+    required this.serverId,
+    required this.tier,
+    required this.range,
+  });
+
+  final String requestId;
+  final String serverId;
+  final HistoryTier tier;
+  final HistoryRange range;
 }
 
 /// Alerts fetched for one server inside a sync round (v1.x, 03 §10.1, D42).
@@ -3688,6 +3832,9 @@ enum DockerWatchList {
 
   /// The volume list (03 §7.15 VOL-01), as [DockerVolumesPayload].
   volumes,
+
+  /// The network list (03 §7.15 DNW-01), as [DockerNetworksPayload].
+  networks,
 }
 
 /// The most watches one server holds [E]: a Docker view holds one or two.
@@ -3739,6 +3886,13 @@ final class DockerVolumesPayload extends DockerPayload {
   const DockerVolumesPayload(this.volumes);
 
   final List<VolumeSummary> volumes;
+}
+
+/// The network list (03 §7.15 DNW-01), labels masked by key.
+final class DockerNetworksPayload extends DockerPayload {
+  const DockerNetworksPayload(this.networks);
+
+  final List<NetworkSummary> networks;
 }
 
 /// `/system/df`'s totals per type (02 OV-05), read in the shape the
@@ -4456,6 +4610,42 @@ final class RemoveVolume extends ActionIntent {
   final String name;
 }
 
+/// Removes the network [networkId] (03 §7.15 DNW-02): never a built-in
+/// one, and not while a container holds an endpoint on it.
+final class RemoveNetwork extends ActionIntent {
+  const RemoveNetwork(super.serverId, {required this.networkId});
+
+  final String networkId;
+}
+
+/// Pulls the image [reference] (03 §7.14 IMG-03): `name`, `name:tag` or
+/// `name@digest`, with a registry host when it has one. A name without a
+/// tag pulls `latest`, never every tag. The daemon pulls anonymously; a
+/// private registry's credentials are the host's own (REG-01).
+final class PullImage extends ActionIntent {
+  const PullImage(super.serverId, {required this.reference});
+
+  final String reference;
+}
+
+/// The kinds of unused Docker objects a prune removes (03 §7.12 DKE-05).
+enum DockerPruneKind { containers, images, volumes, networks, buildCache }
+
+/// Removes the unused objects of [kind] (DKE-05, IMG-06): stopped
+/// containers, dangling images or with [all] every image no container
+/// uses, volumes no container mounts, user-defined networks no container
+/// is on, or the build cache no build uses. The preview lists them first.
+final class PruneDocker extends ActionIntent {
+  const PruneDocker(super.serverId, {required this.kind, this.all = false})
+    : assert(!all || kind == DockerPruneKind.images, 'only images prune all');
+
+  final DockerPruneKind kind;
+
+  /// For images, every unused one rather than the dangling ones only
+  /// (`docker image prune -a`).
+  final bool all;
+}
+
 /// What [StackAction] does to a Compose project (STK-03).
 enum StackVerb { start, stop, restart }
 
@@ -4742,6 +4932,7 @@ final class ActionPreview {
     this.protected,
     this.followUnit,
     this.orphans = const [],
+    this.prune,
     this.warnings = const {},
   });
 
@@ -4775,6 +4966,9 @@ final class ActionPreview {
   /// The stack's containers whose service its files no longer name,
   /// which `--remove-orphans` would remove (STK-06).
   final List<String> orphans;
+
+  /// What a prune removes and what it leaves, and why (DKE-05).
+  final PrunePreview? prune;
 
   final Set<PlanWarning> warnings;
 }
@@ -5427,8 +5621,9 @@ enum CadenceProfile {
   phone,
 
   /// The Cellular saver column, which reads `timers`, `cron`, `temps`
-  /// and `gpu` on demand: once per [Subscribe] that names them, as soon as the link is
-  /// ready and the app is in the foreground (see [Subscribe]).
+  /// and `gpu` on demand: once per [Subscribe] that names them, as soon
+  /// as the link is ready and the app is in the foreground (see
+  /// [Subscribe]).
   cellularSaver,
 }
 

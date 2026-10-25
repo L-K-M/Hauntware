@@ -5,7 +5,7 @@
 // plan's steps run on the host instead, as one operation the runner
 // launches (03 §7.17, M4 E18).
 import 'package:klabautermann_docker/klabautermann_docker.dart'
-    show DockerApiException, DockerException;
+    show DockerApiException, DockerCancelledException, DockerException;
 import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
 import 'package:seance_core/seance_core.dart'
     show
@@ -24,10 +24,13 @@ import 'detached_runner.dart' show LaunchFailure, LaunchResult;
 import 'operation_plan.dart';
 import 'plan_types.dart';
 
-/// Runs one Docker API step on [serverId]'s engine and returns its HTTP
-/// status (M4 E15). A [DockerException] or [DockerEndpointUnavailable]
-/// it throws ends the run as a transport failure.
-typedef ApiStepRunner = Future<int> Function(String serverId, ApiStep step);
+/// Runs one Docker API step of plan [planId] on [serverId]'s engine and
+/// returns its HTTP status (M4 E15). An [ApiStepError] it throws fails
+/// the step with the daemon's words; a [DockerCancelledException], a
+/// [CancelAction] honoured, cancels the run; any other [DockerException]
+/// or a [DockerEndpointUnavailable] ends it as a transport failure.
+typedef ApiStepRunner =
+    Future<int> Function(String serverId, String planId, ApiStep step);
 
 /// Runs one [ExecStep] on [serverId]'s engine (CTX-08) and returns the
 /// command's exit code, null when the daemon reported none, and its
@@ -235,7 +238,25 @@ final class OperationRunner {
             if (api == null) {
               return failed(ActionFailure.unsupportedStep, step: i);
             }
-            final status = await api(serverId, step);
+            final int status;
+            try {
+              status = await api(serverId, planId, step);
+            } on ApiStepError catch (e) {
+              await _cleanUp(link, plan, session);
+              return failed(
+                ActionFailure.stepFailed,
+                step: i,
+                httpStatus: e.status,
+                output: ExecOutput(stdout: '', stderr: e.detail),
+              );
+            } on DockerCancelledException {
+              await _cleanUp(link, plan, session);
+              return ActionFinished(
+                planId: planId,
+                outcome: ActionOutcome.cancelled,
+                failedStep: i,
+              );
+            }
             if (status < _httpOk || status >= _httpMultipleChoices) {
               await _cleanUp(link, plan, session);
               return failed(

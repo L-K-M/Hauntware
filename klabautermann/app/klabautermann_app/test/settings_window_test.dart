@@ -10,6 +10,7 @@ import 'package:ghost_theme/ghost_theme.dart';
 import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/app_identity.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
+import 'package:klabautermann_app/controllers/app_lock_controller.dart';
 import 'package:klabautermann_app/controllers/sync_secrets_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
@@ -29,6 +30,7 @@ import 'package:klabautermann_app/ui/settings_page.dart';
 import 'package:klabautermann_core/klabautermann_core.dart'
     show MonitorEligibility, SafetyPolicy, ServerSafety;
 
+import 'support/device_authenticator.dart';
 import 'support/fake_engine.dart';
 import 'support/harness.dart';
 
@@ -57,6 +59,26 @@ final class _RefusingAppearance extends ChangeNotifier
     ThemePalette palette,
     ThemeModePreference mode,
   ) async => throw StateError('read-only appearance');
+}
+
+/// An app lock the test locks and unlocks by hand.
+final class _ManualAppLock extends ChangeNotifier implements AppLockSettings {
+  @override
+  bool get enabled => true;
+
+  @override
+  AppLockSupport get support => AppLockSupport.available;
+
+  @override
+  bool get locked => _locked;
+  bool _locked = false;
+  set locked(bool locked) {
+    _locked = locked;
+    notifyListeners();
+  }
+
+  @override
+  Future<AppLockChange> setEnabled(bool enabled) async => AppLockChange.changed;
 }
 
 /// The desktop settings window (03 §10.2, D32) over fake channels: the main
@@ -146,6 +168,7 @@ void main() {
     SafetySettings? safety,
     SyncSecretsSettings? syncSecrets,
     DeviceNameSettings? deviceName,
+    AppLockSettings? appLock,
   ]) {
     final host = SettingsWindowHost(
       appearance: appearance,
@@ -155,6 +178,7 @@ void main() {
       monitorSet: monitorSet ?? newFleet().monitorSettings,
       safety: safety ?? newSafety(),
       syncSecrets: syncSecrets ?? newSyncSecrets(),
+      appLock: appLock,
       control: _control,
       link: _appLink,
       requestAppExit: () async => AppExitResponse.exit,
@@ -307,9 +331,12 @@ void main() {
     late List<bool> syncApplied;
     late DeviceNameController deviceName;
     late List<String> namesApplied;
+    late FakeDeviceAuthenticator device;
+    late AppLockController appLock;
+    late List<bool> appLockSaved;
     late SettingsWindowHost host;
 
-    setUp(() {
+    setUp(() async {
       runnerWithWindow();
       appearance = AppearanceController();
       announcements = AnnouncementController();
@@ -341,6 +368,15 @@ void main() {
         apply: namesApplied.add,
       );
       addTearDown(deviceName.dispose);
+      device = FakeDeviceAuthenticator();
+      appLockSaved = [];
+      appLock = AppLockController(
+        authenticator: device,
+        supported: true,
+        save: (enabled) async => appLockSaved.add(enabled),
+      );
+      await appLock.refreshAvailability();
+      addTearDown(appLock.dispose);
       host = newHost(
         appearance,
         announcements,
@@ -348,6 +384,7 @@ void main() {
         safety,
         syncSecrets,
         deviceName,
+        appLock,
       );
     });
 
@@ -742,6 +779,116 @@ void main() {
         find.text('You have not marked anything protected.'),
         findsOneWidget,
       );
+    });
+
+    testWidgets('the Safety tab\'s app lock switch asks for device '
+        'authentication in the app and says when it did not change '
+        '(SAF-20)', (tester) async {
+      // Tall enough for the whole Safety tab, the app lock at its end.
+      tester.view.physicalSize = const Size(1000, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final remote = await pumpWindow(tester, SettingsTab.safety);
+      SwitchListTile lockSwitch() => tester.widget<SwitchListTile>(
+        find.ancestor(
+          of: find.text('Require device authentication'),
+          matching: find.byType(SwitchListTile),
+        ),
+      );
+      expect(lockSwitch().value, isFalse);
+      expect(remote.appLock.support, AppLockSupport.available);
+
+      await tester.tap(find.text('Require device authentication'));
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+      expect(device.prompts, 1, reason: 'asked in the app, not the window');
+      expect(appLock.enabled, isTrue);
+      expect(appLockSaved, [true]);
+      expect(remote.appLock.enabled, isTrue);
+      expect(lockSwitch().value, isTrue);
+
+      device.accept = false;
+      await tester.tap(find.text('Require device authentication'));
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+      expect(appLock.enabled, isTrue);
+      expect(lockSwitch().value, isTrue);
+      expect(
+        find.text(
+          'The app lock did not change: authentication failed or was '
+          'cancelled.',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('while the app is locked the window covers its settings '
+        'and the app refuses its calls (SAF-20)', (tester) async {
+      host.dispose();
+      final lock = _ManualAppLock();
+      addTearDown(lock.dispose);
+      await tester.runAsync(() async {
+        host = newHost(
+          appearance,
+          announcements,
+          fleet.monitorSettings,
+          safety,
+          syncSecrets,
+          deviceName,
+          lock,
+        );
+      });
+      final remote = await pumpWindow(tester, SettingsTab.appearance);
+      expect(find.text('Dark'), findsOneWidget);
+
+      await tester.runAsync(() async {
+        lock.locked = true;
+        await pumpEventQueue();
+      });
+      await tester.pumpAndSettle();
+      expect(find.text('Klabautermann is locked'), findsOneWidget);
+      expect(find.text('Dark'), findsNothing);
+
+      // A call already on its way when the lock engaged changes nothing.
+      await tester.runAsync(() async {
+        await expectLater(
+          remote.appearance.setMode(ThemeModePreference.dark),
+          throwsA(isA<SettingsLinkException>()),
+        );
+      });
+      // The app's error reporter hears of the refusal, as of any other.
+      expect(tester.takeException(), isA<AppLockedException>());
+      expect(appearance.value.mode, ThemeModePreference.system);
+
+      await tester.runAsync(() async {
+        lock.locked = false;
+        await pumpEventQueue();
+      });
+      await tester.pumpAndSettle();
+      expect(find.text('Klabautermann is locked'), findsNothing);
+      expect(find.text('Dark'), findsOneWidget);
+    });
+
+    testWidgets('a window opened while the app is locked shows the notice '
+        'from its first frame (SAF-20)', (tester) async {
+      host.dispose();
+      final lock = _ManualAppLock()..locked = true;
+      addTearDown(lock.dispose);
+      await tester.runAsync(() async {
+        host = newHost(
+          appearance,
+          announcements,
+          fleet.monitorSettings,
+          safety,
+          syncSecrets,
+          deviceName,
+          lock,
+        );
+      });
+      await pumpWindow(tester, SettingsTab.appearance);
+
+      expect(find.text('Klabautermann is locked'), findsOneWidget);
+      expect(find.text('Dark'), findsNothing);
     });
 
     testWidgets('a theme change in the app re-themes the showing window', (
