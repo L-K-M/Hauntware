@@ -22,6 +22,7 @@ import 'temperatures.dart';
 enum SystemSection {
   identity,
   uptime,
+  time,
   network,
   disks,
   diskActivity,
@@ -70,6 +71,7 @@ class _SystemPanelState extends State<SystemPanel> {
   late ValueListenable<Sample?> _temps;
   late ValueListenable<Sample?> _gpu;
   late ValueListenable<HostProfile?> _profile;
+  late ValueListenable<ServerClock?> _clock;
 
   /// The latest `fs` sample that listed mounts. While a later one times
   /// out, as on a stale network mount, its mounts stay listed with their
@@ -94,6 +96,7 @@ class _SystemPanelState extends State<SystemPanel> {
     _temps,
     _gpu,
     _profile,
+    _clock,
   ];
 
   @override
@@ -130,6 +133,7 @@ class _SystemPanelState extends State<SystemPanel> {
     _gpu = monitoring.sampleFor(serverId, SampleStream.gpu);
     _listed = monitoring.lastReadingFor(serverId, SampleStream.fs);
     _profile = monitoring.profileFor(serverId);
+    _clock = monitoring.clockFor(serverId);
     for (final listenable in _slow) {
       listenable.addListener(_onSlowChange);
     }
@@ -157,6 +161,7 @@ class _SystemPanelState extends State<SystemPanel> {
           listenable: _core,
           builder: (context, _) => _uptimeSection(l10n, profile),
         );
+        final time = _timeSection(l10n, profile);
         final network = ListenableBuilder(
           listenable: _core,
           builder: (context, _) => _networkSection(l10n),
@@ -179,7 +184,7 @@ class _SystemPanelState extends State<SystemPanel> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         spacing: _gap,
-                        children: [uptime, network],
+                        children: [uptime, time, network],
                       ),
                     ),
                   ],
@@ -187,6 +192,7 @@ class _SystemPanelState extends State<SystemPanel> {
               else ...[
                 identity,
                 uptime,
+                time,
                 network,
               ],
               _disksSection(context, l10n, wide: wide),
@@ -264,6 +270,27 @@ class _SystemPanelState extends State<SystemPanel> {
           ),
         ];
       }),
+    );
+  }
+
+  /// SYS-02 and CN-17, from the probe: the time zone, whether the clock
+  /// is in sync, and how far it was from this device's when the probe
+  /// answered.
+  Widget _timeSection(AppLocalizations l10n, HostProfile? profile) {
+    return PanelSection(
+      key: const ValueKey(SystemSection.time),
+      title: l10n.systemTimeTitle,
+      children: [
+        _Fact(
+          label: l10n.systemTimeZone,
+          value: profile?.timezone ?? profile?.zoneOffset,
+        ),
+        _Fact(label: l10n.systemTimeSync, value: timeSyncText(l10n, profile)),
+        _Fact(
+          label: l10n.systemClock,
+          value: clockSkewText(l10n, _clock.value?.skew),
+        ),
+      ],
     );
   }
 

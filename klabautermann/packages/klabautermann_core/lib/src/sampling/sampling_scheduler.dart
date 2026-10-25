@@ -488,7 +488,20 @@ final class SamplingScheduler {
         }
         _emitAll(server.pipeline.addProbe(outcome));
         if (outcome is SamplerReplied) {
-          _probed(server.pipeline.serverId, server.pipeline.profile!);
+          final profile = server.pipeline.profile!;
+          _probed(server.pipeline.serverId, profile);
+          if (profile.epochSeconds case final epoch?) {
+            final at = _now().toUtc();
+            _emit(
+              ServerClock(
+                server.pipeline.serverId,
+                skew: Duration(
+                  milliseconds: epoch * 1000 - at.millisecondsSinceEpoch,
+                ),
+                at: at,
+              ),
+            );
+          }
         }
         _schedule(server, run, run.slow);
         _schedule(server, run, run.fast);

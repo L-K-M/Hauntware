@@ -110,4 +110,47 @@ void main() {
     );
     expect(shownMounts(fs, showPseudo: true), hasLength(4));
   });
+
+  test('CN-17 words the clock skew; within two seconds is in step', () {
+    expect(clockSkewText(_l10n, null), isNull);
+    expect(
+      clockSkewText(_l10n, const Duration(milliseconds: -1900)),
+      'In step with this device',
+    );
+    expect(
+      clockSkewText(_l10n, const Duration(seconds: 3)),
+      '3 seconds ahead of this device',
+    );
+    expect(
+      clockSkewText(_l10n, const Duration(minutes: -5, seconds: -10)),
+      '5 minutes behind this device',
+    );
+    expect(
+      clockSkewText(_l10n, const Duration(hours: 3)),
+      '3 hours ahead of this device',
+    );
+  });
+
+  test('SYS-02 words the time sync, unknown where timedatectl did not say', () {
+    expect(timeSyncText(_l10n, null), isNull);
+    expect(timeSyncText(_l10n, HostProfile()), isNull);
+    expect(
+      timeSyncText(_l10n, HostProfile(ntpEnabled: true, ntpSynchronized: true)),
+      'Synchronized',
+    );
+    expect(
+      timeSyncText(
+        _l10n,
+        HostProfile(ntpEnabled: true, ntpSynchronized: false),
+      ),
+      'Not synchronized',
+    );
+    expect(
+      timeSyncText(
+        _l10n,
+        HostProfile(ntpEnabled: false, ntpSynchronized: false),
+      ),
+      'Off',
+    );
+  });
 }

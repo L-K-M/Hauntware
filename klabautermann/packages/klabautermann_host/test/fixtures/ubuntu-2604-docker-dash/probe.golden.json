@@ -90,6 +90,8 @@
     "timezone": null,
     "etcTimezone": null,
     "localtimeTarget": null,
+    "ntpEnabled": null,
+    "ntpSynchronized": null,
     "lingerEnabled": null,
     "killUserProcesses": null,
     "xdgRuntimeDir": null,

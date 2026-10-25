@@ -1722,6 +1722,24 @@ final class HostProfileChanged extends EngineEvent {
   final DateTime? cachedAt;
 }
 
+/// How far [serverId]'s clock is from this device's (CN-17), measured at
+/// each probe answer: the probe's `date +%s` against the engine's clock
+/// when the answer arrived. It is good to a second or two: `date` reads
+/// whole seconds, and the answer's last areas and its transit come after
+/// it, which reads as the server being behind by that much.
+final class ServerClock extends EngineEvent {
+  const ServerClock(this.serverId, {required this.skew, required this.at});
+
+  final String serverId;
+
+  /// The server's time less this device's: positive when the server is
+  /// ahead.
+  final Duration skew;
+
+  /// When the probe answered, by the engine's clock in UTC.
+  final DateTime at;
+}
+
 /// The next records of the [OpenLogStream] stream [streamId], in the
 /// stream's order ([LogStreamSpec]). The engine sends at most 20 batches
 /// a second per stream (03 §10.1), so a busy follow arrives in batches

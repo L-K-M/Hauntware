@@ -96,6 +96,8 @@
     "timezone": "Europe/Berlin",
     "etcTimezone": null,
     "localtimeTarget": "/usr/share/zoneinfo/Europe/Berlin",
+    "ntpEnabled": null,
+    "ntpSynchronized": null,
     "lingerEnabled": true,
     "killUserProcesses": "no",
     "xdgRuntimeDir": "/run/user/1000",

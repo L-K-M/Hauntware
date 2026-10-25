@@ -90,6 +90,8 @@
     "timezone": "Etc/UTC",
     "etcTimezone": "Etc/UTC",
     "localtimeTarget": "/usr/share/zoneinfo/Etc/UTC",
+    "ntpEnabled": null,
+    "ntpSynchronized": null,
     "lingerEnabled": false,
     "killUserProcesses": null,
     "xdgRuntimeDir": null,

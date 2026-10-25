@@ -3930,6 +3930,19 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   common to warn on. A probe that found no smartctl answers without
   running anything. The read is not repeated on its own; the
   minutes-scale cadence and HW-05's scoring wait for history (v1.x).
+
+  Time (M6 N38a, SYS-02, CN-17, collector-set version 13) comes from the
+  probe: its clock area asks `timedatectl show` for `NTP` and
+  `NTPSynchronized` beside `Timezone`, which `HostProfile.ntpEnabled` and
+  `ntpSynchronized` carry, null without timedatectl. Each probe answer
+  also sends `ServerClock`, the probe's `date +%s` against the engine's
+  clock when the answer arrived; the answer's last areas and transit
+  make the server read up to a second or two behind, so the System tab's
+  Time section reads anything within two seconds as in step and words
+  the rest in seconds, minutes or hours ahead or behind. The skew is
+  measured once per probe, so per link, which is enough for a clock that
+  drifts by seconds a day; durations on the server's clock (CN-17's
+  second half) already use the server's times.
 - **v1.x.** Fans, battery, inventory, crash markers, boot performance,
   incident snapshot (redacted by default), deploy pre-flight checks.
 

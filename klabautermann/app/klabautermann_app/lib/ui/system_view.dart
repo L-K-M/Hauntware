@@ -87,6 +87,36 @@ String uptimeText(AppLocalizations l10n, Duration uptime) {
   return l10n.systemUptimeMinutes(minutes);
 }
 
+/// The skew below which a server's clock reads as in step: the probe
+/// reads whole seconds, and its answer's transit adds a little more.
+const kClockInStep = Duration(seconds: 2);
+
+/// CN-17's words for [skew], the server's time less this device's; null
+/// before a probe measured it.
+String? clockSkewText(AppLocalizations l10n, Duration? skew) {
+  if (skew == null) return null;
+  final size = skew.abs();
+  if (size < kClockInStep) return l10n.systemClockInStep;
+  final amount = size < const Duration(minutes: 2)
+      ? l10n.systemClockSeconds(size.inSeconds)
+      : size < const Duration(hours: 2)
+      ? l10n.systemClockMinutes(size.inMinutes)
+      : l10n.systemClockHours(size.inHours);
+  return skew.isNegative
+      ? l10n.systemClockBehind(amount)
+      : l10n.systemClockAhead(amount);
+}
+
+/// SYS-02's words for [profile]'s time sync; null where timedatectl did
+/// not say.
+String? timeSyncText(AppLocalizations l10n, HostProfile? profile) =>
+    switch ((profile?.ntpEnabled, profile?.ntpSynchronized)) {
+      (_, true) => l10n.systemTimeSynced,
+      (false, _) => l10n.systemTimeSyncOff,
+      (_, false) => l10n.systemTimeNotSynced,
+      _ => null,
+    };
+
 /// DSK-01's mounts in `df` order: without the pseudo filesystems the host
 /// marks by type (tmpfs, devtmpfs, overlay, squashfs, erofs; 03 §7.3)
 /// unless [showPseudo].
