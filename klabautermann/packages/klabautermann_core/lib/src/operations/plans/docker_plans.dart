@@ -1,10 +1,12 @@
 // The Docker action planners (M4 E15): CTR-02's state changes, CTR-06's
 // removal, IMG-02's image removal, STK-03's stack verbs, VOL-02's
-// volume create and remove (M6 N10b) and DNW-02's network removal
-// (N11). Each reads its target over the server's Docker endpoint at
+// volume create and remove (M6 N10b), DNW-02's network removal (N11)
+// and DKE-05's prune (N12). Each reads its target over the server's Docker endpoint at
 // planning time and builds one plan of exact API steps addressed by full
 // id, which the runner re-validates by inspect before the first one runs
 // (03 §8.5).
+import 'dart:convert';
+
 import 'package:klabautermann_docker/klabautermann_docker.dart';
 import 'package:meta/meta.dart';
 
@@ -60,6 +62,7 @@ Future<PlanAttempt> planDockerAction(
       CreateVolume() => await _planCreateVolume(intent, context),
       RemoveVolume() => await _planRemoveVolume(intent, context),
       RemoveNetwork() => await _planRemoveNetwork(intent, context),
+      PruneDocker() => await _planPrune(intent, context),
       StackAction() => await _planStack(intent, context),
       ContainerExec() => await _planExec(intent, context),
       _ => _refused(ActionRefusalReason.notImplemented),
@@ -377,6 +380,227 @@ Future<PlanAttempt> _planRemoveNetwork(
   );
 }
 
+/// DKE-05, IMG-06: the objects a prune's filters match now are listed with
+/// what they leave and why, and the prune runs after the typed
+/// confirmation. The runner reads the same list again before the step
+/// and refuses when it changed, so what runs is what the preview showed.
+Future<PlanAttempt> _planPrune(PruneDocker intent, DockerPlanContext c) async {
+  final preview = await prunePreview(c.client, intent.kind, all: intent.all);
+  if (preview.count == 0) return _refused(ActionRefusalReason.nothingToPrune);
+
+  final target = pruneTarget(intent.kind, all: intent.all);
+  return _planned(
+    OperationPlan(
+      intent: intent,
+      kind: OperationKind.prune,
+      targetName: target,
+      steps: [_pruneStep(c, intent.kind, all: intent.all)],
+      requiredLevel: _level(c),
+      runner: _runner(c),
+      hostWrites: const [HostWriteRow.engineState],
+      impact: intent.kind == DockerPruneKind.volumes
+          ? PlanImpact(ImpactKind.deletesVolumeData, count: preview.count)
+          : null,
+      prune: preview,
+      revalidate: [
+        // The build cache's records have no ids to compare.
+        if (intent.kind != DockerPruneKind.buildCache)
+          DockerTargetUnchanged(
+            DockerTargetKind.prune,
+            target,
+            pruneFingerprint(preview),
+          ),
+      ],
+    ),
+  );
+}
+
+/// The prune [kind] names, as a typed confirmation repeats it and the
+/// runner reads it back: `images-all` for every unused image.
+String pruneTarget(DockerPruneKind kind, {required bool all}) => switch (kind) {
+  DockerPruneKind.images when all => 'images-all',
+  DockerPruneKind.buildCache => 'build-cache',
+  _ => kind.name,
+};
+
+/// A prune's identity for re-validation: the names it removes, sorted.
+String pruneFingerprint(PrunePreview preview) =>
+    ([for (final item in preview.removes) item.name]..sort()).join('\n');
+
+ApiStep _pruneStep(
+  DockerPlanContext c,
+  DockerPruneKind kind, {
+  required bool all,
+}) {
+  String filters(Map<String, List<String>> map) => jsonEncode(map);
+  return switch (kind) {
+    DockerPruneKind.containers => ApiStep(
+      method: 'POST',
+      path: _path(c, '/containers/prune'),
+    ),
+    // Without `dangling=false` the engine removes dangling images only.
+    DockerPruneKind.images => ApiStep(
+      method: 'POST',
+      path: _path(c, '/images/prune'),
+      query: {
+        'filters': filters({
+          'dangling': [all ? 'false' : 'true'],
+        }),
+      },
+    ),
+    // From 1.42 the engine spares named volumes unless asked for all, so
+    // the prune matches the preview's list of every unused one.
+    DockerPruneKind.volumes => ApiStep(
+      method: 'POST',
+      path: _path(c, '/volumes/prune'),
+      query: {
+        if (c.client.gates.hasVolumePruneAll)
+          'filters': filters({
+            'all': ['true'],
+          }),
+      },
+    ),
+    DockerPruneKind.networks => ApiStep(
+      method: 'POST',
+      path: _path(c, '/networks/prune'),
+    ),
+    // `all` removes every record no build uses, which is what the
+    // engine's reclaimable figure counts.
+    DockerPruneKind.buildCache => ApiStep(
+      method: 'POST',
+      path: _path(c, '/build/prune'),
+      query: const {'all': '1'},
+    ),
+  };
+}
+
+/// The container states a container prune spares: one that runs, is
+/// paused or restarting, or is being removed already.
+const _livingStates = {'running', 'paused', 'restarting', 'removing'};
+
+/// The `status` filter values of the containers a container prune
+/// removes.
+const _stoppedStates = ['created', 'exited', 'dead'];
+
+/// What the prune [kind] removes on [client]'s engine now, and what it
+/// leaves and why (DKE-05), read with the filters the prune sends.
+Future<PrunePreview> prunePreview(
+  DockerClient client,
+  DockerPruneKind kind, {
+  required bool all,
+}) async {
+  switch (kind) {
+    case DockerPruneKind.containers:
+      // Sizes are read for the stopped ones only: the engine computes
+      // each container's on request.
+      final containers = (await client.listContainers(
+        sizes: true,
+        filters: {'status': _stoppedStates},
+      )).value;
+      final removes = [
+        for (final container in containers)
+          if (!_livingStates.contains(container.state))
+            PruneItem(_nameOf(container), size: container.sizeRw),
+      ];
+      return PrunePreview(removes: removes, freed: _sum(removes));
+
+    case DockerPruneKind.images:
+      final used = {
+        for (final container in (await client.listContainers()).value)
+          ?container.imageId,
+      };
+      final removes = <PruneItem>[];
+      final kept = <PruneKept>[];
+      for (final image in (await client.listImages()).value) {
+        if (!all && !_dangling(image)) continue;
+        final name = _imageName(image);
+        if (used.contains(image.id)) {
+          kept.add(PruneKept(name, PruneExemption.inUse));
+        } else {
+          removes.add(PruneItem(name, size: image.size));
+        }
+      }
+      return PrunePreview(removes: removes, kept: kept, freed: _sum(removes));
+
+    // The volume list carries no sizes: `/system/df` sums the unused
+    // ones' bytes.
+    case DockerPruneKind.volumes:
+      final unused = {
+        for (final volume in (await client.listVolumes(
+          filters: {
+            'dangling': ['true'],
+          },
+        )).value)
+          volume.name,
+      };
+      final every = (await client.listVolumes()).value;
+      return PrunePreview(
+        removes: [for (final name in unused) PruneItem(name)],
+        kept: [
+          for (final volume in every)
+            if (!unused.contains(volume.name))
+              PruneKept(volume.name, PruneExemption.inUse),
+        ],
+        freed: (await client.systemDf(
+          type: SystemDfType.volume,
+        )).value.volumes?.reclaimable,
+      );
+
+    case DockerPruneKind.networks:
+      final removes = <PruneItem>[];
+      final kept = <PruneKept>[];
+      for (final listed in (await client.listNetworks()).value) {
+        if (listed.isBuiltin) {
+          kept.add(PruneKept(listed.name, PruneExemption.builtin));
+          continue;
+        }
+        // The list leaves the endpoints out.
+        final network = await client.inspectNetwork(listed.id);
+        if (network.containers.isEmpty) {
+          removes.add(PruneItem(network.name));
+        } else {
+          kept.add(PruneKept(network.name, PruneExemption.inUse));
+        }
+      }
+      return PrunePreview(removes: removes, kept: kept);
+
+    case DockerPruneKind.buildCache:
+      final usage = (await client.systemDf(
+        type: SystemDfType.buildCache,
+      )).value.buildCache;
+      final total = usage?.totalCount ?? 0;
+      return PrunePreview(
+        removes: const [],
+        count: total - (usage?.activeCount ?? 0),
+        freed: usage?.reclaimable,
+      );
+  }
+}
+
+/// An image no tag names, which a prune without `-a` removes.
+bool _dangling(ImageSummary image) =>
+    image.repoTags.every((tag) => tag == '<none>:<none>');
+
+/// An image as a prune preview names it: its first tag, or its short id.
+String _imageName(ImageSummary image) {
+  for (final tag in image.repoTags) {
+    if (tag != '<none>:<none>') return tag;
+  }
+  final id = image.id.startsWith('sha256:') ? image.id.substring(7) : image.id;
+  return id.length > 12 ? id.substring(0, 12) : id;
+}
+
+/// The total of [items]' sizes, or null when one is unknown.
+int? _sum(List<PruneItem> items) {
+  var total = 0;
+  for (final item in items) {
+    final size = item.size;
+    if (size == null) return null;
+    total += size;
+  }
+  return total;
+}
+
 /// The identity [DockerTargetUnchanged] expects of a target that must
 /// not exist yet, as a volume about to be created. No id, fingerprint or
 /// timestamp reads as it, so an existing target never passes for absent.
@@ -513,17 +737,19 @@ Future<int> runApiStep(DockerClient client, ApiStep step) async {
 }
 
 /// What [step] changes once it succeeds, for the watched lists to read
-/// again: the container its path addresses (`/containers/<id>/...`), the
-/// images for an image removal, the volumes for a volume's create or
-/// removal, or the networks for a network's removal.
-({String? container, bool images, bool volumes, bool networks}) apiStepChanges(
-  ApiStep step,
-) {
+/// again: the container its path addresses (`/containers/<id>/...`),
+/// every container after a container prune, the images after an image
+/// removal or prune, and the volumes or networks after one's create,
+/// removal or prune.
+({String? container, bool containers, bool images, bool volumes, bool networks})
+apiStepChanges(ApiStep step) {
   final segments = Uri(path: step.path).pathSegments;
+  final prune = segments.isNotEmpty && segments.last == 'prune';
   final at = segments.indexOf('containers');
-  if (at >= 0 && at + 1 < segments.length) {
+  if (!prune && at >= 0 && at + 1 < segments.length) {
     return (
       container: segments[at + 1],
+      containers: false,
       images: false,
       volumes: false,
       networks: false,
@@ -531,6 +757,7 @@ Future<int> runApiStep(DockerClient client, ApiStep step) async {
   }
   return (
     container: null,
+    containers: at >= 0,
     images: segments.contains('images'),
     volumes: segments.contains('volumes'),
     networks: segments.contains('networks'),
@@ -560,6 +787,16 @@ Future<RevalidationFailure?> revalidateDockerTarget(
       DockerTargetKind.network => (await client.inspectNetwork(
         check.target,
       )).id,
+      DockerTargetKind.prune => switch (_pruneKindOf(check.target)) {
+        null => null,
+        final kind => pruneFingerprint(
+          await prunePreview(
+            client,
+            kind,
+            all: check.target == pruneTarget(DockerPruneKind.images, all: true),
+          ),
+        ),
+      },
     };
     return id == check.id ? null : RevalidationFailure.targetChanged;
   } on DockerNotFoundException {
@@ -567,6 +804,16 @@ Future<RevalidationFailure?> revalidateDockerTarget(
   } on DockerApiException {
     return RevalidationFailure.unreadable;
   }
+}
+
+/// The prune kind [target] ([pruneTarget]) names, or null for none.
+DockerPruneKind? _pruneKindOf(String target) {
+  for (final kind in DockerPruneKind.values) {
+    for (final all in const [false, true]) {
+      if (pruneTarget(kind, all: all) == target) return kind;
+    }
+  }
+  return null;
 }
 
 /// The container [idOrName] names now, by its full id: the list filtered

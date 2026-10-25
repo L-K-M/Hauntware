@@ -219,6 +219,11 @@ void main() {
       expect(gates(55).hasLogsContentType, isTrue);
     });
 
+    test('volume prune all filter from 1.42', () {
+      expect(gates(41).hasVolumePruneAll, isFalse);
+      expect(gates(42).hasVolumePruneAll, isTrue);
+    });
+
     test('image Containers count from 1.51', () {
       expect(gates(50).hasImageContainersCount, isFalse);
       expect(gates(51).hasImageContainersCount, isTrue);

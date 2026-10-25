@@ -162,6 +162,28 @@ void main() {
       expect(answer.more, isFalse);
     });
 
+    test('a history read answers empty before any reading (HIS-01)', () async {
+      final client = await spawnEngine(
+        access: SupportDirectoryAccess.exclusive,
+      );
+      final (:events, fleet: _) = await started(client);
+
+      client.send(
+        const ReadHistory(
+          'ssh-config:web',
+          HistoryTier.tenMinutes,
+          requestId: 'h-1',
+        ),
+      );
+      final answer = (await next(events)) as HistoryRead;
+      expect(
+        (answer.requestId, answer.serverId, answer.tier),
+        ('h-1', 'ssh-config:web', HistoryTier.tenMinutes),
+      );
+      expect(answer.range.buckets, isEmpty);
+      expect(answer.range.gaps, isEmpty);
+    });
+
     test('an export redacts its lines in the engine (LOG-10)', () async {
       final client = await spawnEngine();
       final (:events, fleet: _) = await started(client);

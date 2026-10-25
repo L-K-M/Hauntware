@@ -298,6 +298,22 @@ void main() {
       expect(h.requests('/images/json'), hasLength(images + 1));
     });
 
+    test('a container prune re-reads the whole container list', () async {
+      final h = _Harness();
+      await h.start({DockerWatchList.containers});
+      h.daemon.routes[_containersPath] = jsonEncode([_container('abc')]);
+
+      h.router.actionRan(_srv, everyContainer: true);
+      await h.clock.elapse(kDockerEventBatch);
+      expect(_ids(h.lists().single), ['abc']);
+      expect(
+        Uri.parse(
+          h.requests(_containersPath).last.split(' ')[1],
+        ).queryParameters['filters'],
+        isNull,
+      );
+    });
+
     test('an action on a server without a watch reads nothing', () async {
       final h = _Harness();
       h.router.actionRan(_srv, containers: {'abc'}, images: true);

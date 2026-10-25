@@ -61,6 +61,26 @@ final class _RefusingAppearance extends ChangeNotifier
   ) async => throw StateError('read-only appearance');
 }
 
+/// An app lock the test locks and unlocks by hand.
+final class _ManualAppLock extends ChangeNotifier implements AppLockSettings {
+  @override
+  bool get enabled => true;
+
+  @override
+  AppLockSupport get support => AppLockSupport.available;
+
+  @override
+  bool get locked => _locked;
+  bool _locked = false;
+  set locked(bool locked) {
+    _locked = locked;
+    notifyListeners();
+  }
+
+  @override
+  Future<AppLockChange> setEnabled(bool enabled) async => AppLockChange.changed;
+}
+
 /// The desktop settings window (03 §10.2, D32) over fake channels: the main
 /// window asks the runner for it (phones push the route), and the window,
 /// on a second engine that shares nothing with the app's, changes the app's
@@ -800,6 +820,75 @@ void main() {
         ),
         findsOneWidget,
       );
+    });
+
+    testWidgets('while the app is locked the window covers its settings '
+        'and the app refuses its calls (SAF-20)', (tester) async {
+      host.dispose();
+      final lock = _ManualAppLock();
+      addTearDown(lock.dispose);
+      await tester.runAsync(() async {
+        host = newHost(
+          appearance,
+          announcements,
+          fleet.monitorSettings,
+          safety,
+          syncSecrets,
+          deviceName,
+          lock,
+        );
+      });
+      final remote = await pumpWindow(tester, SettingsTab.appearance);
+      expect(find.text('Dark'), findsOneWidget);
+
+      await tester.runAsync(() async {
+        lock.locked = true;
+        await pumpEventQueue();
+      });
+      await tester.pumpAndSettle();
+      expect(find.text('Klabautermann is locked'), findsOneWidget);
+      expect(find.text('Dark'), findsNothing);
+
+      // A call already on its way when the lock engaged changes nothing.
+      await tester.runAsync(() async {
+        await expectLater(
+          remote.appearance.setMode(ThemeModePreference.dark),
+          throwsA(isA<SettingsLinkException>()),
+        );
+      });
+      // The app's error reporter hears of the refusal, as of any other.
+      expect(tester.takeException(), isA<AppLockedException>());
+      expect(appearance.value.mode, ThemeModePreference.system);
+
+      await tester.runAsync(() async {
+        lock.locked = false;
+        await pumpEventQueue();
+      });
+      await tester.pumpAndSettle();
+      expect(find.text('Klabautermann is locked'), findsNothing);
+      expect(find.text('Dark'), findsOneWidget);
+    });
+
+    testWidgets('a window opened while the app is locked shows the notice '
+        'from its first frame (SAF-20)', (tester) async {
+      host.dispose();
+      final lock = _ManualAppLock()..locked = true;
+      addTearDown(lock.dispose);
+      await tester.runAsync(() async {
+        host = newHost(
+          appearance,
+          announcements,
+          fleet.monitorSettings,
+          safety,
+          syncSecrets,
+          deviceName,
+          lock,
+        );
+      });
+      await pumpWindow(tester, SettingsTab.appearance);
+
+      expect(find.text('Klabautermann is locked'), findsOneWidget);
+      expect(find.text('Dark'), findsNothing);
     });
 
     testWidgets('a theme change in the app re-themes the showing window', (

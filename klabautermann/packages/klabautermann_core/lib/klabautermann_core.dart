@@ -8,6 +8,14 @@ library;
 // under, which the app's pull-only test checks, and the keystore entry
 // names the app binds ghost_keystore with (03 §4.5, D62).
 export 'src/alerts/alert_evaluator.dart' show AlertMetric;
+export 'src/history/history_store.dart'
+    show
+        HistoryBucket,
+        HistoryGap,
+        HistoryProvenance,
+        HistoryRange,
+        HistoryStat,
+        HistoryTier;
 export 'src/catalog/engine_sync.dart' show engineSyncPushPolicy;
 export 'src/catalog/sync_credentials.dart'
     show klabautermannApiKeyPrefix, klabautermannMasterKeyEntry;

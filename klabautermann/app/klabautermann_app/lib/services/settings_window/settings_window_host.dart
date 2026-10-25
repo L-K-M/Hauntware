@@ -154,6 +154,10 @@ final class SettingsWindowHost {
   };
 
   Future<Object?> _handleCall(String name, Object? argument) async {
+    // A locked app changes nothing from the settings window, which covers
+    // itself then; a call already on its way when the lock engaged is
+    // refused here.
+    if (_appLock?.locked ?? false) throw const AppLockedException();
     switch (SettingsLinkMethod.values.asNameMap()[name]) {
       case null:
         throw MissingPluginException('No settings window method $name');

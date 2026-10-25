@@ -3705,6 +3705,10 @@
   "@appLockDetail": {
     "description": "App lock screen: what unlocking asks for, and that open links are not closed by the lock."
   },
+  "settingsWindowLocked": "Unlock it in its main window to change settings.",
+  "@settingsWindowLocked": {
+    "description": "The desktop settings window while the app is locked, under the title that it is locked."
+  },
   "appLockUnlock": "Unlock",
   "@appLockUnlock": {
     "description": "App lock screen: the button that asks for device authentication again."
@@ -4584,6 +4588,56 @@
   "@actionPreviewDetachedIos": {
     "description": "Preview note for a detached operation on iOS, where the app does not run in the background (03 §7.17)."
   },
+  "actionPreviewPruneRemoves": "{count, plural, =1{Removes 1 object} other{Removes {count} objects}}",
+  "@actionPreviewPruneRemoves": {
+    "description": "Heading above what a prune removes (DKE-05).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "actionPreviewPruneFrees": "Frees {size}",
+  "@actionPreviewPruneFrees": {
+    "description": "Under a prune's heading: the disk space it frees, as the engine reports it (DKE-05).",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "1.2 GiB"
+      }
+    }
+  },
+  "actionPreviewPruneItem": "{name} ({size})",
+  "@actionPreviewPruneItem": {
+    "description": "One object a prune removes, with its size (DKE-05).",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "app:old"
+      },
+      "size": {
+        "type": "String",
+        "example": "12 MiB"
+      }
+    }
+  },
+  "actionPreviewPruneKeeps": "Kept",
+  "@actionPreviewPruneKeeps": {
+    "description": "Heading above what a prune leaves, each with why (DKE-05's exemption labels)."
+  },
+  "actionPreviewPruneKept": "{name}: {reason, select, inUse{in use} builtin{the engine's own} other{kept}}",
+  "@actionPreviewPruneKept": {
+    "description": "One object a prune leaves and why (DKE-05).",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "pgdata"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
   "actionPreviewOrphans": "Containers the stack's files no longer name",
   "@actionPreviewOrphans": {
     "description": "Heading above a redeploy's orphan containers (STK-06)."
@@ -4700,7 +4754,7 @@
       }
     }
   },
-  "actionRefused": "{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server's container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} networkInUse{A container is on this network. Stop or disconnect it first.} builtinNetwork{This is one of the engine's own networks, which stay.} dependencyCycle{The stack's services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack's files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}",
+  "actionRefused": "{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server's container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} networkInUse{A container is on this network. Stop or disconnect it first.} builtinNetwork{This is one of the engine's own networks, which stay.} nothingToPrune{There is nothing to prune.} dependencyCycle{The stack's services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack's files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}",
   "@actionRefused": {
     "description": "Toast when the engine refused to plan or run an action; reason is the engine's ActionRefusalReason name.",
     "placeholders": {
@@ -5058,7 +5112,7 @@
   "@activityColumnResult": {
     "description": "Column of the activity log: how the run ended."
   },
-  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
+  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
   "@activityAction": {
     "description": "An activity log row's action; action is the engine's intent type name.",
     "placeholders": {
@@ -6305,6 +6359,19 @@
   "dockerVolumesUseUnknown": "Which volumes are in use is unknown: the containers, whose mounts tell, could not be listed.",
   "@dockerVolumesUseUnknown": {
     "description": "Volumes list: the volume list carries no use count, and the container list it is computed from failed."
+  },
+  "dockerPrune": "Prune…",
+  "@dockerPrune": {
+    "description": "Images list: the button over the list that opens the menu of prunes (DKE-05, IMG-06)."
+  },
+  "dockerPruneChoice": "{kind, select, containers{Prune stopped containers…} images{Prune dangling images…} imagesAll{Prune all unused images…} volumes{Prune unused volumes…} networks{Prune unused networks…} buildCache{Prune the build cache…} other{Prune…}}",
+  "@dockerPruneChoice": {
+    "description": "A prune's button or menu row, which opens its preview (DKE-05, IMG-06).",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
   },
   "dockerVolumeCreate": "Create volume…",
   "@dockerVolumeCreate": {
@@ -8490,5 +8557,67 @@
   "alertMetricDiskInodes": "Inodes used",
   "@alertMetricDiskInodes": {
     "description": "The alert metric disk.inodes: the fullest filesystem's used inodes."
+  },
+  "historyTitle": "History",
+  "@historyTitle": {
+    "description": "The Overview card that charts a server's on-device history (HIS-01)."
+  },
+  "historyLastHours": "{count, plural, =1{Last hour} other{Last {count} hours}}",
+  "@historyLastHours": {
+    "description": "The History card's range choice of the 1-minute tier; count is 48.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "historyLastDays": "{count, plural, =1{Last day} other{Last {count} days}}",
+  "@historyLastDays": {
+    "description": "The History card's range choice of the 10-minute tier; count is 30.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "historyRefresh": "Refresh",
+  "@historyRefresh": {
+    "description": "Tooltip of the History card's button that reads the history again."
+  },
+  "historyEmpty": "No history yet. Klabautermann keeps 48 hours and 30 days of this server's readings while it is open.",
+  "@historyEmpty": {
+    "description": "The History card when this device recorded nothing for the server in the chosen range."
+  },
+  "historyLaneMean": "Average",
+  "@historyLaneMean": {
+    "description": "The History chart's series of each bucket's mean."
+  },
+  "historyLanePeak": "Peak",
+  "@historyLanePeak": {
+    "description": "The History chart's series of each bucket's highest reading."
+  },
+  "historySource": "Recorded on this device while Klabautermann was open",
+  "@historySource": {
+    "description": "Where the History chart's data comes from, as its legend says."
+  },
+  "historyMetricCpu": "CPU busy",
+  "@historyMetricCpu": {
+    "description": "A History metric: the share of CPU time spent busy."
+  },
+  "historyMetricMemory": "Memory used",
+  "@historyMetricMemory": {
+    "description": "A History metric: used memory as a share of the total."
+  },
+  "historyMetricDisk": "Disk space used",
+  "@historyMetricDisk": {
+    "description": "A History metric: the fullest filesystem's used space."
+  },
+  "historyMetricInodes": "Inodes used",
+  "@historyMetricInodes": {
+    "description": "A History metric: the fullest filesystem's used inodes."
+  },
+  "historyMetricLoad": "Load per core",
+  "@historyMetricLoad": {
+    "description": "A History metric: the 1-minute load average per core."
   }
 }
