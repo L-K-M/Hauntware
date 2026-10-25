@@ -4398,8 +4398,16 @@ arrives with E22's Docker actions.
   another metric stays idle. An unknown value holds the rule's phase. A
   raise and a clear each send `LocalAlertChanged`; a rule removed or
   changed, or a server leaving its scope, clears a raised alert at once.
-  The alert center, badges, notifications and the rule editor follow
-  (N50b, N51).
+- **As built (M6 N50b).** The app's `AlertCenter` follows those events
+  for one engine run: the raised alerts, critical first, and the latest
+  100 raises and clears. The fleet list's notice shows while an alert is
+  raised, or while raises and clears the user has not looked at remain,
+  states the coverage limit and opens the alert center, a dialog whose
+  rows open their server. Each fleet row badges its raised alerts
+  (ALR-02) with the highest severity's icon, a shape per severity, and
+  the count, which its label and tooltip say too. An engine that stops
+  ends its raised alerts. Notifications and the app icon's badge (N51)
+  and the rule editor (N50c) follow.
 - **v1.x.** Flap damping (the rest of ALR-16), desktop tray monitoring
   (ALR-03, PLT-10), Android watch mode for a session (PLT-11, D34), Android
   credential-free reachability checks every 15 minutes or more (PLT-15), and T1

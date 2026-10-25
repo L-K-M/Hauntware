@@ -6674,4 +6674,103 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get serverEditorKeyFileImportFailed =>
       'Could not read that file as a key.';
+
+  @override
+  String get alertsTitle => 'Alerts';
+
+  @override
+  String get alertsCoverage =>
+      'Evaluated on this device while Klabautermann is open.';
+
+  @override
+  String alertsNoticeActive(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count alerts are active',
+      one: '1 alert is active',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get alertsNoticeCleared =>
+      'Every alert has cleared since you last looked.';
+
+  @override
+  String get alertsShow => 'Show alerts';
+
+  @override
+  String get alertsActiveHeading => 'Active';
+
+  @override
+  String get alertsNoneActive => 'No alert is active.';
+
+  @override
+  String get alertsHistoryHeading => 'Earlier';
+
+  @override
+  String alertsRowCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count alerts',
+      one: '1 alert',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String alertsBadgeCount(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '$countString';
+  }
+
+  @override
+  String alertRowTitle(String server, String metric) {
+    return '$server: $metric';
+  }
+
+  @override
+  String alertSeverity(String severity) {
+    String _temp0 = intl.Intl.selectLogic(severity, {
+      'critical': 'Critical',
+      'warning': 'Warning',
+      'other': 'Info',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String alertSince(String time) {
+    return 'since $time';
+  }
+
+  @override
+  String alertRaisedAt(String time) {
+    return 'Raised at $time';
+  }
+
+  @override
+  String alertClearedAt(String time) {
+    return 'Cleared at $time';
+  }
+
+  @override
+  String get alertMetricCpuBusy => 'CPU busy';
+
+  @override
+  String get alertMetricMemoryUsed => 'Memory used';
+
+  @override
+  String get alertMetricLoadPerCore => 'Load per core';
+
+  @override
+  String get alertMetricDiskUsed => 'Disk space used';
+
+  @override
+  String get alertMetricDiskInodes => 'Inodes used';
 }
