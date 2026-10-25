@@ -93,6 +93,7 @@ String _artifact({
   List<double> p1Values = const [10, 11, 12],
   List<double> p3Values = const [5],
   String p1Config = _p1Config,
+  String p3Config = _p3Config,
   String tierADart = _tierADart,
 }) {
   final rows = [
@@ -126,7 +127,7 @@ String _artifact({
           'flutterVersion': null,
           'mode': 'aot',
           'cpuModel': cpu,
-          'scenarioConfig': _p3Config,
+          'scenarioConfig': p3Config,
         },
       },
   ];
@@ -140,7 +141,7 @@ void main() {
     FingerprintAxis.runnerImage: _newImage,
   });
 
-  RefreshPool pool(Map<int, String> artifacts, {TierBBaseline? baseline}) =>
+  RefreshPool pool(Map<int, String?> artifacts, {TierBBaseline? baseline}) =>
       poolRefresh(
         catalog: catalog,
         current: baseline ?? current,
@@ -183,7 +184,7 @@ void main() {
       expect(result.entries['P1']!.median, 1.001);
     });
 
-    test('excludes unreadable, checker-rejected and tier-A-only runs', () {
+    test('excludes unreadable, checker-rejected and unmeasured runs', () {
       final duplicate = jsonDecode(_artifact()) as Map<String, Object?>;
       final rows = duplicate['rows'] as List<Object?>;
       rows.add(rows.first);
@@ -196,12 +197,17 @@ void main() {
         1: '{not json',
         2: jsonEncode(duplicate),
         3: jsonEncode(tierAOnly),
+        4: null,
+        5: _artifact(p1Values: []),
       });
 
       expect(result.usedRuns, isEmpty);
       expect(result.excludedRuns[1], startsWith('unreadable JSON'));
       expect(result.excludedRuns[2], contains('duplicate observation'));
       expect(result.excludedRuns[3], 'no tier-B rows');
+      expect(result.excludedRuns[4], 'no readable $benchResultsFileName');
+      // Only errored tier-B rows: the run measured nothing to pool.
+      expect(result.excludedRuns[5], 'no ok tier-B rows');
     });
 
     test('gives a scenario without ok rows no entry', () {
@@ -213,7 +219,19 @@ void main() {
     });
 
     test('warns when a landed scenario has no ok rows', () {
-      final result = pool({1: _artifact(p1Values: [])});
+      final p1Missing = jsonDecode(_artifact()) as Map<String, Object?>;
+      final rows = p1Missing['rows'] as List<Object?>;
+      rows.removeWhere((row) => (row as Map)['scenario'] == 'P1');
+      rows.add({
+        'scenario': 'P6',
+        'repetition': 1,
+        'status': 'ok',
+        'value': 0.1,
+        'unit': '%',
+        'fingerprint': _tierBFingerprint(_newImage, _recordedCpu, 'scroll'),
+      });
+
+      final result = pool({1: jsonEncode(p1Missing)});
 
       expect(
         result.warnings,
@@ -240,6 +258,20 @@ void main() {
         result.warnings,
         contains(startsWith('tier-A rows ran with dartVersion dart-sdk-next')),
       );
+    });
+
+    test('warns when a tier-A scenario ran under another config', () {
+      final result = pool({
+        1: _artifact(p3Config: 'p3/v2'),
+        2: _artifact(),
+        3: _artifact(),
+      });
+
+      expect(result.usedRuns, [1, 2, 3]);
+      expect(result.warnings, [
+        'P3 ran under p3/v2, but budgets.json calibrates $_p3Config: '
+            'recalibrate tier A separately',
+      ]);
     });
 
     test('refuses to pool runs that disagree on a config', () {
@@ -306,6 +338,8 @@ void main() {
   group('refresh CLI', () {
     late Directory temp;
     late String artifacts;
+    late String budgetsPath;
+    late String baselinePath;
     late List<String> files;
     final out = MemorySink();
     final err = MemorySink();
@@ -314,11 +348,11 @@ void main() {
       exitCode = 0;
       temp = Directory.systemTemp.createTempSync('d12-refresh-test');
       artifacts = '${temp.path}/artifacts';
-      final budgets = File('${temp.path}/budgets.json')
-        ..writeAsStringSync(jsonEncode(_catalogJson));
-      final baseline = File('${temp.path}/baseline.json')
-        ..writeAsStringSync(jsonEncode(_baselineJson()));
-      files = ['--budgets', budgets.path, '--baseline', baseline.path];
+      budgetsPath = '${temp.path}/budgets.json';
+      baselinePath = '${temp.path}/baseline.json';
+      File(budgetsPath).writeAsStringSync(jsonEncode(_catalogJson));
+      File(baselinePath).writeAsStringSync(jsonEncode(_baselineJson()));
+      files = ['--budgets', budgetsPath, '--baseline', baselinePath];
       out.clear();
       err.clear();
     });
@@ -337,6 +371,25 @@ void main() {
           pollInterval: Duration.zero,
         );
 
+    void storeArtifact(int runId, String text) {
+      Directory('$artifacts/$runId').createSync(recursive: true);
+      File('$artifacts/$runId/$benchResultsFileName').writeAsStringSync(text);
+    }
+
+    List<String> sample(
+      List<String> branches, [
+      List<String> extra = const [],
+    ]) => [
+      'sample',
+      for (final branch in branches) ...['--branch', branch],
+      '--artifacts',
+      artifacts,
+      '--set',
+      'runnerImage=$_newImage',
+      ...extra,
+      ...files,
+    ];
+
     test('sample dispatches until enough runs qualify', () async {
       final actions = _FakeActions(
         artifactsByRun: {
@@ -346,18 +399,7 @@ void main() {
         },
       );
 
-      await run([
-        'sample',
-        '--branch',
-        'bench/side',
-        '--artifacts',
-        artifacts,
-        '--set',
-        'runnerImage=$_newImage',
-        '--runs',
-        '2',
-        ...files,
-      ], actions);
+      await run(sample(['bench/side'], ['--runs', '2']), actions);
 
       expect(exitCode, 0);
       expect(actions.dispatched, [
@@ -370,6 +412,41 @@ void main() {
       expect(out.text, contains('run 3 qualifies; 2 of 2 qualify'));
     });
 
+    test('sample waits for the D12 job and for each cancellation', () async {
+      // The fake fails the test if a run is cancelled before its D12 job
+      // finished, or a branch is redispatched while its run still goes.
+      final actions = _FakeActions(
+        artifactsByRun: {1: _artifact(), 2: _artifact()},
+        benchPolls: 3,
+        settlePolls: 2,
+      );
+
+      await run(sample(['bench/side'], ['--runs', '2']), actions);
+
+      expect(exitCode, 0);
+      expect(actions.cancelled, [1, 2]);
+      expect(actions.dispatched, hasLength(2));
+    });
+
+    test('sample keeps one run per branch going in parallel', () async {
+      final actions = _FakeActions(
+        artifactsByRun: {
+          for (final id in [1, 2, 3, 4]) id: _artifact(),
+        },
+      );
+
+      await run(sample(['bench/a', 'bench/b']), actions);
+
+      expect(actions.dispatched, [
+        ('bench/a', 1),
+        ('bench/b', 2),
+        ('bench/a', 3),
+        ('bench/b', 4),
+      ]);
+      expect(actions.cancelled, [1, 2, 3, 4]);
+      expect(exitCode, 0);
+    });
+
     test('sample stops when its dispatch budget is spent', () async {
       final actions = _FakeActions(
         artifactsByRun: {
@@ -378,18 +455,7 @@ void main() {
         },
       );
 
-      await run([
-        'sample',
-        '--branch',
-        'bench/side',
-        '--artifacts',
-        artifacts,
-        '--set',
-        'runnerImage=$_newImage',
-        '--max-dispatches',
-        '2',
-        ...files,
-      ], actions);
+      await run(sample(['bench/side'], ['--max-dispatches', '2']), actions);
 
       expect(exitCode, 1);
       expect(actions.dispatched, hasLength(2));
@@ -402,18 +468,7 @@ void main() {
         failingStateCalls: 2,
       );
 
-      await run([
-        'sample',
-        '--branch',
-        'bench/side',
-        '--artifacts',
-        artifacts,
-        '--set',
-        'runnerImage=$_newImage',
-        '--runs',
-        '1',
-        ...files,
-      ], actions);
+      await run(sample(['bench/side'], ['--runs', '1']), actions);
 
       expect(exitCode, 0);
       expect(actions.cancelled, [1]);
@@ -421,57 +476,34 @@ void main() {
       expect(out.text, contains('run 1 qualifies; 1 of 1 qualify'));
     });
 
-    test('sample rejects a repeated branch', () async {
-      final actions = _FakeActions();
-
-      await run([
-        'sample',
-        '--branch',
-        'bench/side',
-        '--branch',
-        'bench/side',
-        '--artifacts',
-        artifacts,
-      ], actions);
-
-      expect(exitCode, 64);
-      expect(actions.dispatched, isEmpty);
-    });
-
     test('sample dispatches nothing once enough runs qualify', () async {
       for (final runId in [7, 8, 9]) {
-        Directory('$artifacts/$runId').createSync(recursive: true);
-        File(
-          '$artifacts/$runId/$benchResultsFileName',
-        ).writeAsStringSync(_artifact());
+        storeArtifact(runId, _artifact());
       }
       final actions = _FakeActions();
 
-      await run([
-        'sample',
-        '--branch',
-        'bench/side',
-        '--artifacts',
-        artifacts,
-        '--set',
-        'runnerImage=$_newImage',
-        ...files,
-      ], actions);
+      await run(sample(['bench/side']), actions);
 
       expect(actions.dispatched, isEmpty);
       expect(out.text, contains('3 of 3 runs qualify'));
     });
 
-    test('sample refuses main', () async {
+    for (final branch in [mainBranch, 'refs/heads/main', 'heads/main', 'x']) {
+      test('sample refuses $branch', () async {
+        final actions = _FakeActions();
+
+        await run(sample([branch]), actions);
+
+        expect(exitCode, 64);
+        expect(err.text, contains('only on bench/* side branches'));
+        expect(actions.dispatched, isEmpty);
+      });
+    }
+
+    test('sample rejects a repeated branch', () async {
       final actions = _FakeActions();
 
-      await run([
-        'sample',
-        '--branch',
-        mainBranch,
-        '--artifacts',
-        artifacts,
-      ], actions);
+      await run(sample(['bench/side', 'bench/side']), actions);
 
       expect(exitCode, 64);
       expect(actions.dispatched, isEmpty);
@@ -488,18 +520,9 @@ void main() {
         ),
       );
 
-      await expectLater(
-        run([
-          'sample',
-          '--branch',
-          'bench/side',
-          '--artifacts',
-          artifacts,
-          ...files,
-        ], actions),
-        throwsStateError,
-      );
+      await expectLater(run(sample(['bench/side']), actions), throwsStateError);
       expect(actions.cancelled, isEmpty);
+      expect(out.text, contains('stopped with runs still going: 1'));
     });
 
     test('collect downloads new push and dispatch runs once', () async {
@@ -516,8 +539,11 @@ void main() {
               event: RunEvent.push,
               createdAt: since.subtract(const Duration(seconds: 1)),
             ),
+            CiRun(id: 5, event: RunEvent.push, createdAt: since),
+            CiRun(id: 6, event: RunEvent.push, createdAt: since),
           ],
         },
+        resultlessArtifacts: {5},
       );
       final arguments = [
         'collect',
@@ -530,14 +556,50 @@ void main() {
       await run(arguments, actions);
       await run(arguments, actions);
 
-      expect(actions.downloads, [1, 2]);
+      // Runs 5 and 6 never yield a results file, so each attempt retries.
+      expect(actions.downloads, [1, 2, 5, 6, 5, 6]);
+      expect(out.text, contains('run 5 (main): artifact holds no'));
+      expect(out.text, contains('run 6 (main): no bench-results artifact'));
       expect(File('$artifacts/2/$benchResultsFileName').existsSync(), isTrue);
     });
 
+    test('pool --write updates both committed files', () async {
+      for (final runId in [1, 2, 3]) {
+        storeArtifact(runId, _artifact(p1Values: [runId + 20]));
+      }
+      Directory('$artifacts/4').createSync(recursive: true);
+
+      await run([
+        'pool',
+        '--artifacts',
+        artifacts,
+        '--set',
+        'runnerImage=$_newImage',
+        '--write',
+        ...files,
+      ], _FakeActions());
+
+      expect(exitCode, 0);
+      expect(out.text, contains('4: no readable $benchResultsFileName'));
+      final baseline = TierBBaseline.fromJson(
+        jsonDecode(File(baselinePath).readAsStringSync()),
+        catalog,
+      );
+      expect(baseline.fingerprint.runnerImage, _newImage);
+      expect(baseline.scenarios['P1']!.median, 22);
+      final budgets = BudgetCatalog.fromJson(
+        jsonDecode(File(budgetsPath).readAsStringSync()),
+      );
+      expect(budgets.calibratedFingerprint!.runnerImage, _newImage);
+      expect(
+        temp.listSync().map((entry) => entry.path),
+        isNot(contains(endsWith('-tmp'))),
+      );
+    });
+
     test('pool --write refuses a pool below the minimum', () async {
-      Directory('$artifacts/1').createSync(recursive: true);
-      File('$artifacts/1/$benchResultsFileName').writeAsStringSync(_artifact());
-      final before = File(files[3]).readAsStringSync();
+      storeArtifact(1, _artifact());
+      final before = File(baselinePath).readAsStringSync();
 
       await run([
         'pool',
@@ -551,7 +613,7 @@ void main() {
 
       expect(exitCode, 1);
       expect(err.text, contains('not written'));
-      expect(File(files[3]).readAsStringSync(), before);
+      expect(File(baselinePath).readAsStringSync(), before);
     });
 
     test('rejects an unknown --set axis', () async {
@@ -566,15 +628,166 @@ void main() {
       expect(exitCode, 64);
       expect(err.text, contains('--set expects <axis>=<value>'));
     });
+
+    test('rejects options the command does not read', () async {
+      await run([
+        'pool',
+        '--artifacts',
+        artifacts,
+        '--branch',
+        'bench/side',
+      ], _FakeActions());
+
+      expect(exitCode, 64);
+      expect(err.text, contains('--branch does not apply to pool'));
+    });
+  });
+
+  group('GhActionsClient', () {
+    test('dispatches through the API and reads the created run id', () async {
+      final gh = _FakeGh(['{"workflow_run_id": 42, "run_url": "u"}']);
+
+      final runId = await gh.client.dispatchSample('bench/side');
+
+      expect(runId, 42);
+      expect(gh.calls.single, [
+        'api',
+        '--method',
+        'POST',
+        'repos/o/r/actions/workflows/ci.yml/dispatches',
+        '-f',
+        'ref=bench/side',
+        '-f',
+        'inputs[skip_m0]=true',
+        '-F',
+        'return_run_details=true',
+      ]);
+    });
+
+    test('names the orphaned dispatch when GitHub returns no id', () async {
+      final gh = _FakeGh(['']);
+
+      expect(
+        () => gh.client.dispatchSample('bench/side'),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('gh run list --branch bench/side'),
+          ),
+        ),
+      );
+    });
+
+    test('reads the run and its D12 job state', () async {
+      final gh = _FakeGh([
+        jsonEncode({
+          'headBranch': 'bench/side',
+          'event': 'workflow_dispatch',
+          'status': 'in_progress',
+          'jobs': [
+            {'name': 'Planchette client (linux)', 'status': 'in_progress'},
+            {'name': benchJobName, 'status': 'completed'},
+          ],
+        }),
+      ]);
+
+      final state = await gh.client.runState(7);
+
+      expect(state.branch, 'bench/side');
+      expect(state.event, RunEvent.workflowDispatch);
+      expect(state.runCompleted, isFalse);
+      expect(state.benchCompleted, isTrue);
+      expect(gh.calls.single, [
+        'run',
+        'view',
+        '7',
+        '--json',
+        'headBranch,event,status,jobs',
+        '--repo',
+        'o/r',
+      ]);
+    });
+
+    test('reports a missing or expired artifact without downloading', () async {
+      for (final listing in [
+        {'artifacts': <Object?>[]},
+        {
+          'artifacts': [
+            {'name': benchArtifactName, 'expired': true},
+          ],
+        },
+      ]) {
+        final gh = _FakeGh([jsonEncode(listing)]);
+
+        expect(await gh.client.downloadBenchResults(7, 'dir'), isFalse);
+        expect(gh.calls, hasLength(1));
+      }
+    });
+
+    test('downloads an available artifact and surfaces failures', () async {
+      final listing = jsonEncode({
+        'artifacts': [
+          {'name': benchArtifactName, 'expired': false},
+        ],
+      });
+
+      final gh = _FakeGh([listing, '']);
+      expect(await gh.client.downloadBenchResults(7, 'dir'), isTrue);
+      expect(gh.calls.last, [
+        'run',
+        'download',
+        '7',
+        '--name',
+        benchArtifactName,
+        '--dir',
+        'dir',
+        '--repo',
+        'o/r',
+      ]);
+
+      final failing = _FakeGh([listing], failAt: 1);
+      await expectLater(
+        failing.client.downloadBenchResults(7, 'dir'),
+        throwsA(isA<ProcessException>()),
+      );
+    });
   });
 }
 
-/// In-memory GitHub: each dispatched run's D12 job is done at its first
-/// poll, and a cancelled run then reads as completed.
+/// Scripted `gh`: answers each call with the next stdout, failing the
+/// call at index [failAt] the way an expired token would.
+class _FakeGh {
+  final List<String> _stdout;
+  final int? failAt;
+  final calls = <List<String>>[];
+
+  _FakeGh(this._stdout, {this.failAt});
+
+  GhActionsClient get client =>
+      GhActionsClient(repository: 'o/r', runner: _run);
+
+  Future<ProcessResult> _run(String executable, List<String> arguments) async {
+    final index = calls.length;
+    calls.add(arguments);
+    if (index == failAt) {
+      return ProcessResult(0, 1, '', 'HTTP 401: Bad credentials');
+    }
+    return ProcessResult(0, 0, _stdout[index], '');
+  }
+}
+
+/// In-memory GitHub. A dispatched run's D12 job finishes after
+/// [benchPolls] polls, and a cancelled run completes [settlePolls] polls
+/// after the cancel. It fails the test when the tool cancels a run before
+/// its D12 job finished or redispatches a branch whose run still goes.
 class _FakeActions implements ActionsClient {
   final Map<int, String> artifactsByRun;
   final Map<String, List<CiRun>> runsByBranch;
+  final Set<int> resultlessArtifacts;
   final CiRunState Function(int runId)? stateOf;
+  final int benchPolls;
+  final int settlePolls;
 
   /// runState calls that fail like an unreachable GitHub before the
   /// fake starts answering.
@@ -584,16 +797,32 @@ class _FakeActions implements ActionsClient {
   final cancelled = <int>[];
   final downloads = <int>[];
   final _branchOf = <int, String>{};
+  final _polls = <int, int>{};
+  final _cancelledAtPoll = <int, int>{};
 
   _FakeActions({
     this.artifactsByRun = const {},
     this.runsByBranch = const {},
+    this.resultlessArtifacts = const {},
     this.stateOf,
+    this.benchPolls = 0,
+    this.settlePolls = 0,
     this.failingStateCalls = 0,
   });
 
+  bool _benchDone(int runId) => (_polls[runId] ?? 0) > benchPolls;
+
+  bool _runDone(int runId) =>
+      _cancelledAtPoll.containsKey(runId) &&
+      _polls[runId]! > _cancelledAtPoll[runId]! + settlePolls;
+
   @override
   Future<int> dispatchSample(String branch) async {
+    final previous = dispatched.where((entry) => entry.$1 == branch).lastOrNull;
+    if (previous != null && !_runDone(previous.$2)) {
+      fail('redispatched $branch while run ${previous.$2} still goes');
+    }
+
     final runId = dispatched.length + 1;
     dispatched.add((branch, runId));
     _branchOf[runId] = branch;
@@ -606,18 +835,25 @@ class _FakeActions implements ActionsClient {
       failingStateCalls--;
       throw const ProcessException('gh', ['run', 'view'], 'timeout', 1);
     }
+
+    _polls.update(runId, (count) => count + 1, ifAbsent: () => 1);
     return stateOf?.call(runId) ??
         CiRunState(
           branch: _branchOf[runId]!,
           event: RunEvent.workflowDispatch,
-          runCompleted: cancelled.contains(runId),
-          benchCompleted: true,
+          runCompleted: _runDone(runId),
+          benchCompleted: _benchDone(runId),
         );
   }
 
   @override
   Future<bool> downloadBenchResults(int runId, String directory) async {
     downloads.add(runId);
+    if (resultlessArtifacts.contains(runId)) {
+      Directory(directory).createSync(recursive: true);
+      return true;
+    }
+
     final text = artifactsByRun[runId];
     if (text == null) {
       return false;
@@ -629,7 +865,13 @@ class _FakeActions implements ActionsClient {
   }
 
   @override
-  Future<void> cancel(int runId) async => cancelled.add(runId);
+  Future<void> cancel(int runId) async {
+    if (stateOf == null && !_benchDone(runId)) {
+      fail('cancelled run $runId before its D12 job finished');
+    }
+    cancelled.add(runId);
+    _cancelledAtPoll[runId] = _polls[runId] ?? 0;
+  }
 
   @override
   Future<List<CiRun>> listRuns(String branch) async =>

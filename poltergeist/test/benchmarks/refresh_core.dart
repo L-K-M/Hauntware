@@ -19,6 +19,9 @@ import 'check_core.dart';
 /// The procedure's minimum number of pooled runs (README step 1).
 const minimumRefreshRuns = 3;
 
+/// The merged results file inside every `bench-results` artifact.
+const benchResultsFileName = 'bench-results.json';
+
 /// Decimal places of a committed baseline median.
 const _medianDecimals = 3;
 
@@ -104,8 +107,9 @@ class RefreshPool {
   });
 }
 
-/// Pools [artifacts] (run id → `bench-results.json` text) against
-/// [target], the tier-B fingerprint the refreshed baseline records.
+/// Pools [artifacts] (run id → `bench-results.json` text, null when the
+/// run's artifact holds no readable results file) against [target], the
+/// tier-B fingerprint the refreshed baseline records.
 ///
 /// Throws [CheckDataException] when pooled runs disagree on a scenario's
 /// config: a run measured under another config belongs to a different
@@ -114,7 +118,7 @@ RefreshPool poolRefresh({
   required BudgetCatalog catalog,
   required TierBBaseline current,
   required BenchFingerprint target,
-  required Map<int, String> artifacts,
+  required Map<int, String?> artifacts,
 }) {
   final usedRuns = <int>[];
   final excludedRuns = <int, String>{};
@@ -124,9 +128,15 @@ RefreshPool poolRefresh({
   final warnings = <String>{};
 
   for (final runId in artifacts.keys.toList()..sort()) {
+    final text = artifacts[runId];
+    if (text == null) {
+      excludedRuns[runId] = 'no readable $benchResultsFileName';
+      continue;
+    }
+
     final ResultsFile results;
     try {
-      results = ResultsFile.fromJson(jsonDecode(artifacts[runId]!), catalog);
+      results = ResultsFile.fromJson(jsonDecode(text), catalog);
     } on FormatException catch (error) {
       excludedRuns[runId] = 'unreadable JSON: ${error.message}';
       continue;
@@ -152,11 +162,18 @@ RefreshPool poolRefresh({
       continue;
     }
 
-    usedRuns.add(runId);
-    final tierA = results.fingerprints[BenchTier.a];
-    if (tierA != null) {
-      warnings.addAll(_tierACalibrationWarnings(catalog, target, tierA));
+    // A run whose whole tier-B leg errored measured nothing, so it must
+    // not count toward the procedure's minimum.
+    final measuredTierB = results.rows.any(
+      (row) => row.isOk && catalog.scenarios[row.scenario]!.tier == BenchTier.b,
+    );
+    if (!measuredTierB) {
+      excludedRuns[runId] = 'no ok tier-B rows';
+      continue;
     }
+
+    usedRuns.add(runId);
+    warnings.addAll(_tierACalibrationWarnings(catalog, results));
 
     for (final row in results.rows) {
       final scenario = row.scenario;
@@ -250,16 +267,18 @@ RefreshPool poolRefresh({
   );
 }
 
-/// Tier A runs its own SDK, so a refresh moves only the shared machine
-/// axes of its calibration. Any runtime-axis mismatch left over needs a
-/// separate tier-A recalibration, which this tool never invents.
+/// Tier A runs its own SDK and per-scenario configs, so a refresh moves
+/// only the shared machine axes of its calibration. A runtime-axis or
+/// config mismatch left over needs a separate tier-A recalibration (e.g.
+/// the 2026-09-22 rotation shifted P5's readdir order), which this tool
+/// never invents.
 Iterable<String> _tierACalibrationWarnings(
   BudgetCatalog catalog,
-  BenchFingerprint target,
-  BenchFingerprint tierA,
+  ResultsFile results,
 ) sync* {
   final calibration = catalog.calibratedFingerprint;
-  if (calibration == null) {
+  final tierA = results.fingerprints[BenchTier.a];
+  if (calibration == null || tierA == null) {
     return;
   }
 
@@ -271,6 +290,15 @@ Iterable<String> _tierACalibrationWarnings(
       yield 'tier-A rows ran with ${axis.name} ${axis.of(tierA)}, but '
           'budgets.json calibrates ${axis.of(calibration)}: recalibrate '
           'tier A separately';
+    }
+  }
+
+  for (final row in results.rows) {
+    final calibrated =
+        catalog.scenarios[row.scenario]!.calibratedScenarioConfig;
+    if (calibrated != null && row.fingerprint.scenarioConfig != calibrated) {
+      yield '${row.scenario} ran under ${row.fingerprint.scenarioConfig}, but '
+          'budgets.json calibrates $calibrated: recalibrate tier A separately';
     }
   }
 }

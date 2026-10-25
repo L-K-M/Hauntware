@@ -1,7 +1,8 @@
 // GitHub Actions access for the D12 baseline refresh tool.
 //
 // refresh.dart talks only to [ActionsClient]; [GhActionsClient] owns the
-// `gh` invocations, so tests substitute a fake and never reach GitHub.
+// `gh` invocations behind an injectable process runner, so tests
+// substitute fakes and never reach GitHub.
 library;
 
 import 'dart:convert';
@@ -12,7 +13,6 @@ const ciWorkflow = 'ci.yml';
 const mainBranch = 'main';
 const benchJobName = 'D12 benchmarks';
 const benchArtifactName = 'bench-results';
-const benchResultsFileName = 'bench-results.json';
 
 /// Most recent runs listed per branch; covers weeks of main history.
 const _runListLimit = 300;
@@ -71,7 +71,7 @@ abstract interface class ActionsClient {
   Future<CiRunState> runState(int runId);
 
   /// Downloads [runId]'s `bench-results` artifact into [directory].
-  /// False when the run has no such artifact (yet).
+  /// False when the run has no such artifact; a failed download throws.
   Future<bool> downloadBenchResults(int runId, String directory);
 
   /// Dispatches ci.yml on [branch] with the M0 measurements skipped and
@@ -81,11 +81,19 @@ abstract interface class ActionsClient {
   Future<void> cancel(int runId);
 }
 
+/// Runs one `gh` invocation, e.g. [Process.run].
+typedef GhRunner =
+    Future<ProcessResult> Function(String executable, List<String> arguments);
+
 /// [ActionsClient] over the authenticated `gh` CLI.
 class GhActionsClient implements ActionsClient {
   final String repository;
+  final GhRunner _runner;
 
-  const GhActionsClient({this.repository = defaultRepository});
+  const GhActionsClient({
+    this.repository = defaultRepository,
+    this._runner = Process.run,
+  });
 
   @override
   Future<List<CiRun>> listRuns(String branch) async {
@@ -138,7 +146,24 @@ class GhActionsClient implements ActionsClient {
 
   @override
   Future<bool> downloadBenchResults(int runId, String directory) async {
-    final result = await _run([
+    // Ask for the artifact first, so "the run has none" never hides a
+    // failed download (expired token, network, rate limit).
+    final listing = await _api([
+      'repos/$repository/actions/runs/$runId/artifacts?name=$benchArtifactName',
+    ]);
+    final artifacts =
+        (jsonDecode(listing) as Map<String, Object?>)['artifacts'];
+    final available = (artifacts as List<Object?>).any(
+      (artifact) =>
+          artifact is Map &&
+          artifact['name'] == benchArtifactName &&
+          artifact['expired'] != true,
+    );
+    if (!available) {
+      return false;
+    }
+
+    await _gh([
       'run',
       'download',
       '$runId',
@@ -147,58 +172,58 @@ class GhActionsClient implements ActionsClient {
       '--dir',
       directory,
     ]);
-    return result.exitCode == 0;
+    return true;
   }
 
   @override
   Future<int> dispatchSample(String branch) async {
-    final arguments = [
-      'workflow',
-      'run',
-      ciWorkflow,
-      '--ref',
-      branch,
+    // The dispatch API names the run it created (gh's own `workflow run`
+    // reads the same field), so the id never comes from parsing prose.
+    final json = await _api([
+      '--method',
+      'POST',
+      'repos/$repository/actions/workflows/$ciWorkflow/dispatches',
       '-f',
-      'skip_m0=true',
-    ];
-    final result = await _run(arguments);
-    _requireSuccess(arguments, result);
-
-    // gh reports the created run's URL, e.g. .../actions/runs/40193700726,
-    // on stdout or stderr depending on its version.
-    final output = '${result.stdout}${result.stderr}';
-    final match = RegExp(r'/actions/runs/(\d+)').firstMatch(output);
-    if (match == null) {
-      throw StateError(
-        'gh did not report the dispatched run on $branch; update gh '
-        '(output: ${output.trim()})',
-      );
+      'ref=$branch',
+      '-f',
+      'inputs[skip_m0]=true',
+      '-F',
+      'return_run_details=true',
+    ]);
+    // GitHub answers 204 with no body where run details are unsupported.
+    final response = json.trim().isEmpty ? null : jsonDecode(json);
+    if (response case {'workflow_run_id': final int runId}) {
+      return runId;
     }
-    return int.parse(match.group(1)!);
+
+    throw StateError(
+      'dispatched $ciWorkflow on $branch, but GitHub returned no run id; '
+      'find the run with `gh run list --branch $branch --event '
+      'workflow_dispatch` and cancel it by hand',
+    );
   }
 
   @override
   Future<void> cancel(int runId) => _gh(['run', 'cancel', '$runId']);
 
-  /// stdout of a successful gh call; stderr may carry notices.
-  Future<String> _gh(List<String> arguments) async {
-    final result = await _run(arguments);
-    _requireSuccess(arguments, result);
+  /// stdout of a successful `gh <command> ... --repo`; stderr may carry
+  /// notices.
+  Future<String> _gh(List<String> arguments) =>
+      _call([...arguments, '--repo', repository]);
+
+  /// `gh api` addresses the repository in its path instead of `--repo`.
+  Future<String> _api(List<String> arguments) => _call(['api', ...arguments]);
+
+  Future<String> _call(List<String> arguments) async {
+    final result = await _runner('gh', arguments);
+    if (result.exitCode != 0) {
+      throw ProcessException(
+        'gh',
+        arguments,
+        '${result.stderr}'.trim(),
+        result.exitCode,
+      );
+    }
     return '${result.stdout}';
   }
-
-  void _requireSuccess(List<String> arguments, ProcessResult result) {
-    if (result.exitCode == 0) {
-      return;
-    }
-    throw ProcessException(
-      'gh',
-      arguments,
-      '${result.stderr}'.trim(),
-      result.exitCode,
-    );
-  }
-
-  Future<ProcessResult> _run(List<String> arguments) =>
-      Process.run('gh', [...arguments, '--repo', repository]);
 }

@@ -47,6 +47,34 @@ const defaultPollInterval = Duration(minutes: 1);
 /// transient failure must not abandon the runs it dispatched.
 const _maxConsecutiveGhFailures = 10;
 
+/// `sample` dispatches only on branches under this prefix. A plain name
+/// check would let `refs/heads/main` or another spelling of main through,
+/// and a dispatch on main supersedes its queued push run.
+const sideBranchPrefix = 'bench/';
+
+/// Options each command reads; any other option is a usage error, so a
+/// misplaced flag never silently changes nothing.
+const _commandOptions = {
+  RefreshCommand.collect: {'--artifacts', '--branch', '--since', '--repo'},
+  RefreshCommand.sample: {
+    '--artifacts',
+    '--branch',
+    '--set',
+    '--runs',
+    '--max-dispatches',
+    '--budgets',
+    '--baseline',
+    '--repo',
+  },
+  RefreshCommand.pool: {
+    '--artifacts',
+    '--set',
+    '--write',
+    '--budgets',
+    '--baseline',
+  },
+};
+
 const _usageText =
     '''
 Usage: dart run test/benchmarks/refresh.dart <command> [options]
@@ -56,9 +84,9 @@ tier-B baseline (README "Baseline refresh procedure").
 Commands:
   collect   download the artifacts of ci.yml push and dispatch runs
             created since --since on each --branch (default main)
-  sample    dispatch ci.yml on each --branch (side branches at main's
-            tip, never main), keep each run's artifact, cancel the rest
-            of the run, and redispatch until --runs runs qualify
+  sample    dispatch ci.yml on each --branch (side branches under
+            $sideBranchPrefix at main's tip), keep each run's artifact, cancel
+            the rest of the run, and redispatch until --runs runs qualify
   pool      pool the qualifying artifacts and print the new baseline;
             --write updates the baseline and tier-A calibration files
 
@@ -161,6 +189,13 @@ class RefreshArguments {
 
     for (var i = 1; i < arguments.length; i++) {
       final argument = arguments[i];
+      if (argument.startsWith('--') &&
+          !_commandOptions[command]!.contains(argument)) {
+        throw RefreshUsageException(
+          '$argument does not apply to ${command.name}',
+        );
+      }
+
       switch (argument) {
         case '--artifacts':
           artifacts = takeValue(i++);
@@ -196,14 +231,8 @@ class RefreshArguments {
     if (artifacts == null) {
       throw const RefreshUsageException('--artifacts is required');
     }
-    if (write && command != RefreshCommand.pool) {
-      throw const RefreshUsageException('--write applies to pool only');
-    }
     if (command == RefreshCommand.collect && since == null) {
       throw const RefreshUsageException('collect requires --since');
-    }
-    if (command != RefreshCommand.collect && since != null) {
-      throw const RefreshUsageException('--since applies to collect only');
     }
     if (branches.toSet().length != branches.length) {
       throw const RefreshUsageException('each --branch may appear once');
@@ -216,12 +245,14 @@ class RefreshArguments {
         throw const RefreshUsageException('sample requires --branch');
       }
 
-      // A dispatch on main joins main's concurrency group and supersedes
-      // its queued push run, which AGENTS.md forbids cancelling.
-      if (branches.contains(mainBranch)) {
-        throw const RefreshUsageException(
-          'sample never dispatches on main; push a side branch at '
-          "main's tip instead",
+      final unsafe = branches.where(
+        (branch) => !branch.startsWith(sideBranchPrefix),
+      );
+      if (unsafe.isNotEmpty) {
+        throw RefreshUsageException(
+          'sample dispatches only on $sideBranchPrefix* side branches, '
+          'never main (got ${unsafe.join(', ')}); push one at main\'s tip '
+          'first',
         );
       }
     }
@@ -339,11 +370,19 @@ Future<void> _collect(
         run.id,
         _runDirectory(cli.artifacts, run.id),
       );
+      if (!downloaded) {
+        out.writeln(
+          'run ${run.id} ($branch): no $benchArtifactName artifact '
+          '(cancelled before the D12 job, or still running)',
+        );
+        continue;
+      }
+
       out.writeln(
-        downloaded
+        _hasArtifact(cli.artifacts, run.id)
             ? 'run ${run.id} ($branch): downloaded'
-            : 'run ${run.id} ($branch): no $benchArtifactName artifact '
-                  '(cancelled before the D12 job, or still running)',
+            : 'run ${run.id} ($branch): artifact holds no '
+                  '$benchResultsFileName (the D12 job stopped early)',
       );
     }
   }
@@ -363,123 +402,159 @@ Future<void> _sample(
     artifacts: _readArtifacts(cli.artifacts),
   );
 
-  var qualifying = repool().usedRuns.length;
-  var dispatchesLeft = cli.maxDispatches;
-  final active = <String, int>{};
+  await _Sampler(cli, actions, out, pollInterval, repool).run();
+}
 
-  Future<void> dispatch(String branch) async {
-    final runId = await actions.dispatchSample(branch);
-    dispatchesLeft--;
-    active[branch] = runId;
-    out.writeln(
+/// One `sample` invocation: the side-branch runs it dispatched and still
+/// tracks, one per branch at a time.
+class _Sampler {
+  final RefreshArguments _cli;
+  final ActionsClient _actions;
+  final IOSink _out;
+  final Duration _pollInterval;
+  final RefreshPool Function() _repool;
+
+  final _active = <String, int>{};
+  final _cancelling = <int>{};
+  late int _qualifying = _repool().usedRuns.length;
+  late int _dispatchesLeft = _cli.maxDispatches;
+  var _ghFailures = 0;
+
+  _Sampler(
+    this._cli,
+    this._actions,
+    this._out,
+    this._pollInterval,
+    this._repool,
+  );
+
+  Future<void> run() async {
+    try {
+      await _sampleUntilTarget();
+    } catch (_) {
+      // Whatever stopped the loop, the runs it dispatched keep going and
+      // hold runners until someone cancels them.
+      if (_active.isNotEmpty) {
+        _out.writeln(
+          'stopped with runs still going: ${_active.values.join(' ')}; '
+          'cancel them by hand',
+        );
+      }
+      rethrow;
+    }
+
+    if (_qualifying < _cli.runs) {
+      _out.writeln('dispatch budget spent with $_qualifying of ${_cli.runs}');
+      exitCode = gradedFailureExitCode;
+    }
+  }
+
+  Future<void> _sampleUntilTarget() async {
+    _out.writeln('$_qualifying of ${_cli.runs} runs qualify');
+    for (final branch in _cli.branches) {
+      if (_targetReached || _dispatchesLeft == 0) {
+        break;
+      }
+      await _dispatch(branch);
+    }
+
+    while (_active.isNotEmpty) {
+      await Future<void>.delayed(_pollInterval);
+
+      for (final MapEntry(key: branch, value: runId)
+          in _active.entries.toList()) {
+        if (!await _poll(branch, runId)) {
+          continue;
+        }
+
+        _active.remove(branch);
+        final pool = _repool();
+        _qualifying = pool.usedRuns.length;
+        final verdict = pool.usedRuns.contains(runId)
+            ? 'qualifies'
+            : 'excluded (${pool.excludedRuns[runId] ?? 'no artifact'})';
+        _out.writeln(
+          'run $runId $verdict; $_qualifying of ${_cli.runs} qualify',
+        );
+        if (_targetReached || _dispatchesLeft == 0) {
+          continue;
+        }
+        await _dispatch(branch);
+      }
+    }
+  }
+
+  bool get _targetReached => _qualifying >= _cli.runs;
+
+  Future<void> _dispatch(String branch) async {
+    final runId = await _actions.dispatchSample(branch);
+    _dispatchesLeft--;
+    _active[branch] = runId;
+    _out.writeln(
       'dispatched run $runId on $branch (cancel it by hand if this '
-      'tool stops early)',
+      'tool is interrupted)',
     );
   }
 
-  out.writeln('$qualifying of ${cli.runs} runs qualify');
-  for (final branch in cli.branches) {
-    if (qualifying >= cli.runs || dispatchesLeft == 0) {
-      break;
-    }
-    await dispatch(branch);
-  }
-
-  final cancelling = <int>{};
-  var ghFailures = 0;
-  while (active.isNotEmpty) {
-    await Future<void>.delayed(pollInterval);
-
-    for (final MapEntry(key: branch, value: runId) in active.entries.toList()) {
-      final bool finished;
-      try {
-        finished = await _advanceRun(
-          actions,
-          cli.artifacts,
-          branch,
-          runId,
-          cancelling,
-        );
-        ghFailures = 0;
-      } on ProcessException catch (error) {
-        ghFailures++;
-        if (ghFailures > _maxConsecutiveGhFailures) {
-          rethrow;
-        }
-        out.writeln('run $runId: gh failed, retrying ($error)');
-        continue;
+  /// One poll of [runId]; true once the run has completed. gh failures
+  /// are retried at the next poll, up to a bound.
+  Future<bool> _poll(String branch, int runId) async {
+    try {
+      final finished = await _advanceRun(branch, runId);
+      _ghFailures = 0;
+      return finished;
+    } on ProcessException catch (error) {
+      _ghFailures++;
+      if (_ghFailures > _maxConsecutiveGhFailures) {
+        rethrow;
       }
-      if (!finished) {
-        continue;
-      }
-
-      active.remove(branch);
-      final pool = repool();
-      qualifying = pool.usedRuns.length;
-      final verdict = pool.usedRuns.contains(runId)
-          ? 'qualifies'
-          : 'excluded (${pool.excludedRuns[runId] ?? 'no artifact'})';
-      out.writeln('run $runId $verdict; $qualifying of ${cli.runs} qualify');
-      if (qualifying >= cli.runs || dispatchesLeft == 0) {
-        continue;
-      }
-      await dispatch(branch);
+      _out.writeln('run $runId: gh failed, retrying ($error)');
+      return false;
     }
   }
 
-  if (qualifying < cli.runs) {
-    out.writeln('dispatch budget spent with $qualifying of ${cli.runs}');
-    exitCode = gradedFailureExitCode;
-  }
-}
+  /// Keeps [runId]'s artifact once its D12 job finishes, then cancels the
+  /// rest of the run to free the runners. True once the run has
+  /// completed; until then a redispatch on its branch would only queue
+  /// behind it in the branch's concurrency group.
+  Future<bool> _advanceRun(String branch, int runId) async {
+    final state = await _actions.runState(runId);
+    if (!state.benchCompleted && !state.runCompleted) {
+      return false;
+    }
 
-/// Moves one dispatched run along: keeps its artifact once the D12 job
-/// finishes, then cancels the rest of the run to free the runners. True
-/// once the run has completed; until then a redispatch on its branch
-/// would only queue behind it in the branch's concurrency group.
-Future<bool> _advanceRun(
-  ActionsClient actions,
-  String artifacts,
-  String branch,
-  int runId,
-  Set<int> cancelling,
-) async {
-  final state = await actions.runState(runId);
-  if (!state.benchCompleted && !state.runCompleted) {
+    if (!_hasArtifact(_cli.artifacts, runId)) {
+      await _actions.downloadBenchResults(
+        runId,
+        _runDirectory(_cli.artifacts, runId),
+      );
+    }
+    if (state.runCompleted) {
+      return true;
+    }
+
+    if (!_cancelling.contains(runId)) {
+      _requireOwnDispatch(runId, branch, state);
+      await _actions.cancel(runId);
+      _cancelling.add(runId);
+    }
     return false;
   }
 
-  if (!_hasArtifact(artifacts, runId)) {
-    await actions.downloadBenchResults(runId, _runDirectory(artifacts, runId));
-  }
-  if (state.runCompleted) {
-    return true;
-  }
+  /// Proves [runId] is this tool's side-branch dispatch before it is
+  /// cancelled. Anything else is a bug that must never cancel a run.
+  static void _requireOwnDispatch(int runId, String branch, CiRunState state) {
+    if (state.branch == branch &&
+        state.branch != mainBranch &&
+        state.event == RunEvent.workflowDispatch) {
+      return;
+    }
 
-  if (!cancelling.contains(runId)) {
-    await _cancelOwnRun(actions, runId, branch, state);
-    cancelling.add(runId);
-  }
-  return false;
-}
-
-/// Cancels a run this tool dispatched, after proving it is one: a side
-/// branch dispatch. Anything else is a bug that must not cancel a run.
-Future<void> _cancelOwnRun(
-  ActionsClient actions,
-  int runId,
-  String branch,
-  CiRunState state,
-) async {
-  if (state.branch != branch ||
-      state.event != RunEvent.workflowDispatch ||
-      state.branch == mainBranch) {
     throw StateError(
       'refusing to cancel run $runId: it is a ${state.event.ghName} run '
       'on ${state.branch}, not a dispatch on $branch',
     );
   }
-  await actions.cancel(runId);
 }
 
 void _pool(RefreshArguments cli, IOSink out, IOSink err) {
@@ -533,14 +608,20 @@ void _pool(RefreshArguments cli, IOSink out, IOSink err) {
     return;
   }
 
-  final baselineFile = File(cli.baseline);
-  final budgetsFile = File(cli.budgets);
-  baselineFile.writeAsStringSync(
-    updateBaselineJson(baselineFile.readAsStringSync(), target, pool),
+  // Both documents are computed before either is written, and each lands
+  // by rename, so a read or encode failure leaves both files untouched
+  // and no file is ever half-written.
+  final baselineText = updateBaselineJson(
+    File(cli.baseline).readAsStringSync(),
+    target,
+    pool,
   );
-  budgetsFile.writeAsStringSync(
-    updateBudgetsJson(budgetsFile.readAsStringSync(), target),
+  final budgetsText = updateBudgetsJson(
+    File(cli.budgets).readAsStringSync(),
+    target,
   );
+  _replaceFile(cli.baseline, baselineText);
+  _replaceFile(cli.budgets, budgetsText);
   out.writeln(
     'Wrote ${cli.baseline} and ${cli.budgets}. Update the pins in '
     'check_test.dart, then run the checker against the used artifacts '
@@ -565,8 +646,15 @@ Object? _decode(String path) {
   }
 }
 
-/// Run id → `bench-results.json` text for every run directory present.
-Map<int, String> _readArtifacts(String directory) {
+void _replaceFile(String path, String text) {
+  final temp = File('$path.refresh-tmp')..writeAsStringSync(text, flush: true);
+  temp.renameSync(path);
+}
+
+/// Run id → `bench-results.json` text for every run directory present;
+/// null when the run's artifact holds no readable results file, so the
+/// pool lists that run as excluded instead of dropping it unseen.
+Map<int, String?> _readArtifacts(String directory) {
   final root = Directory(directory);
   if (!root.existsSync()) {
     return {};
@@ -575,10 +663,16 @@ Map<int, String> _readArtifacts(String directory) {
   return {
     for (final entry in root.listSync().whereType<Directory>())
       if (int.tryParse(p.basename(entry.path)) case final runId?)
-        if (File(p.join(entry.path, benchResultsFileName)) case final file
-            when file.existsSync())
-          runId: file.readAsStringSync(),
+        runId: _readResults(entry.path),
   };
+}
+
+String? _readResults(String runDirectory) {
+  try {
+    return File(p.join(runDirectory, benchResultsFileName)).readAsStringSync();
+  } on FileSystemException {
+    return null;
+  }
 }
 
 bool _hasArtifact(String directory, int runId) => File(
