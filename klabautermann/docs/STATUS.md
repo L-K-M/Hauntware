@@ -1931,6 +1931,18 @@ is on main:
   driver. A watch naming `volumes` reads `/volumes` and reads it again
   on a `volume` event; labels are masked by key. Create and remove come
   next (N10b).
+- App lock (M6 N66, SAF-20): Settings > Safety's "Require device
+  authentication" (Android, iOS, macOS, Windows; off and disabled on
+  Linux) opens the app behind a lock screen that asks for the device's
+  biometrics or passcode, and locks it again after 5 minutes in the
+  background or hidden. It is Séance's `AppLock`, moved into
+  ghost_keystore (N01). While locked the keystore answers the engine's
+  reads with a refusal, writes still go through, open links keep running,
+  and admin mode ends on every server. Turning it on or off asks first and
+  applies only once saved, the desktop settings window included. Tested
+  with a fake authenticator; the system prompts themselves (Face ID,
+  Android BiometricPrompt, Touch ID, Windows Hello) are a manual check per
+  OS.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container
@@ -2054,6 +2066,9 @@ is not a device smoke test:
 - iOS background disclosure and the return banner (PLT-04).
 - Android battery and data use.
 - macOS keychain prompts.
+- The app lock's system prompt (SAF-20) on each OS: Face ID or the
+  passcode on iOS, BiometricPrompt on Android, Touch ID or the password on
+  macOS, Windows Hello; and the lock returning after 5 minutes away.
 - VM passes on Debian 12, Ubuntu 24.04 and 26.04 (sudo-rs), RHEL 8 and 9,
   Alpine and a BusyBox NAS, plus a Synology host (11.3).
 - Docker on real hosts (M3, Q1): rootful Docker, which CI runs only in
