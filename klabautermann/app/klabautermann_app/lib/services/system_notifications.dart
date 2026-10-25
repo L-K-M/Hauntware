@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
@@ -33,8 +34,36 @@ final class LocalSystemNotifications implements SystemNotifications {
 
   /// The plugin, set up once for this run; null where it has no
   /// implementation or failed to start, and then nothing posts.
+  ///
+  /// On Linux the plugin talks to the session bus, and its signal
+  /// subscription connects in the background with no error handler, so a
+  /// desktop without a bus would see an unhandled error, and every later
+  /// call on that client would wait for a connection that never comes.
+  /// The setup runs in its own error zone, which takes that error, and
+  /// asks the notification server for its capabilities: notifications
+  /// are unavailable when the bus fails first, the server refuses, or no
+  /// answer comes within [_busAnswerTimeout].
   static Future<LocalSystemNotifications?> start(
     NotificationChannelWords words,
+  ) async {
+    final busFailed = Completer<void>();
+    final starting = runZonedGuarded(() => _start(words, busFailed.future), (
+      error,
+      stackTrace,
+    ) {
+      _report(error, stackTrace);
+      if (!busFailed.isCompleted) busFailed.complete();
+    });
+    return starting == null ? null : await starting;
+  }
+
+  /// How long startup waits for the notification server, which a working
+  /// session bus answers in milliseconds; the app's window waits on it.
+  static const _busAnswerTimeout = Duration(seconds: 3);
+
+  static Future<LocalSystemNotifications?> _start(
+    NotificationChannelWords words,
+    Future<void> busFailed,
   ) async {
     final plugin = FlutterLocalNotificationsPlugin();
     try {
@@ -63,7 +92,25 @@ final class LocalSystemNotifications implements SystemNotifications {
         ),
       );
       if (started == false) return null;
+      final linux = plugin
+          .resolvePlatformSpecificImplementation<
+            LinuxFlutterLocalNotificationsPlugin
+          >();
+      if (linux != null) {
+        final answered = await Future.any([
+          linux.getCapabilities().then((_) => true),
+          busFailed.then((_) => false),
+        ]).timeout(_busAnswerTimeout, onTimeout: () => false);
+        if (!answered) return null;
+      }
     } on Object catch (error, stackTrace) {
+      _report(error, stackTrace);
+      return null;
+    }
+    return LocalSystemNotifications._(plugin, words);
+  }
+
+  static void _report(Object error, StackTrace stackTrace) =>
       FlutterError.reportError(
         FlutterErrorDetails(
           exception: error,
@@ -71,10 +118,6 @@ final class LocalSystemNotifications implements SystemNotifications {
           context: ErrorDescription('while starting system notifications'),
         ),
       );
-      return null;
-    }
-    return LocalSystemNotifications._(plugin, words);
-  }
 
   /// The launcher icon, which every Android build carries.
   static const _androidIcon = '@mipmap/ic_launcher';
