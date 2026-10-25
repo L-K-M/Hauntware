@@ -21,8 +21,7 @@
 # every later job on that runner instead of one per job. A local build
 # has no tool cache and keeps flatpak's own default. The directory needs
 # no lock: it is one per runner, and a runner executes one job at a time,
-# so no two jobs ever write the same installation. CI serializes runtime
-# staging to bound scratch memory across the runner pool.
+# so no two jobs ever write the same installation.
 if [[ -z "${FLATPAK_USER_DIR:-}" && -n "${RUNNER_TOOL_CACHE:-}" ]]; then
   export FLATPAK_USER_DIR="$RUNNER_TOOL_CACHE/flatpak-user"
 fi
