@@ -7050,4 +7050,176 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get historyMetricLoad => 'Load per core';
+
+  @override
+  String get alertRulesTitle => 'Alert rules';
+
+  @override
+  String get alertRulesEmpty => 'No alert rules yet.';
+
+  @override
+  String get alertRulesEmptyServer => 'No rule applies to this server yet.';
+
+  @override
+  String get alertRulesNeedSync =>
+      'Alert rules sync through your sync account, so adding or changing one needs you signed in.';
+
+  @override
+  String get alertRuleAdd => 'Add rule';
+
+  @override
+  String get alertRuleNew => 'New rule';
+
+  @override
+  String get alertRuleEdit => 'Edit rule';
+
+  @override
+  String get alertRuleSave => 'Save';
+
+  @override
+  String get alertRuleDelete => 'Delete rule';
+
+  @override
+  String get alertRuleDeleteConfirm =>
+      'Delete this rule? It is removed on every device that syncs your account.';
+
+  @override
+  String get alertRuleDeleteAction => 'Delete';
+
+  @override
+  String alertRuleCondition(String op, String metric, String value) {
+    String _temp0 = intl.Intl.selectLogic(op, {
+      'greaterThan': '$metric above $value',
+      'greaterOrEqual': '$metric at or above $value',
+      'lessThan': '$metric below $value',
+      'other': '$metric at or below $value',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String alertRuleClears(String op, String value) {
+    String _temp0 = intl.Intl.selectLogic(op, {
+      'greaterThan': 'Clears at or below $value',
+      'greaterOrEqual': 'Clears below $value',
+      'lessThan': 'Clears at or above $value',
+      'other': 'Clears above $value',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String alertRuleFor(String duration) {
+    return 'after $duration';
+  }
+
+  @override
+  String alertRuleMinutes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count minutes',
+      one: '1 minute',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String alertRuleSeconds(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count seconds',
+      one: '1 second',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String alertRuleScopeServer(String server) {
+    return 'On $server';
+  }
+
+  @override
+  String alertRuleScopeGroup(String group) {
+    return 'On the $group group';
+  }
+
+  @override
+  String get alertRuleScopeAll => 'On every server';
+
+  @override
+  String get alertRuleMetricLabel => 'Metric';
+
+  @override
+  String get alertRuleOpLabel => 'Raise when the value is';
+
+  @override
+  String alertRuleOp(String op) {
+    String _temp0 = intl.Intl.selectLogic(op, {
+      'greaterThan': 'Above',
+      'greaterOrEqual': 'At or above',
+      'lessThan': 'Below',
+      'other': 'At or below',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get alertRuleRaiseValueLabel => 'Raise at';
+
+  @override
+  String get alertRuleClearValueLabel => 'Clear at';
+
+  @override
+  String get alertRuleForLabel => 'Held for (minutes)';
+
+  @override
+  String get alertRuleSeverityLabel => 'Severity';
+
+  @override
+  String get alertRuleScopeLabel => 'Applies to';
+
+  @override
+  String get alertRulePercentSuffix => '%';
+
+  @override
+  String get alertRuleNumberInvalid => 'Enter a number.';
+
+  @override
+  String get alertRulePercentInvalid => 'Enter a value from 0 to 100.';
+
+  @override
+  String get alertRuleMinutesInvalid => 'Enter 0 or more minutes.';
+
+  @override
+  String get alertRuleClearAboveRaise =>
+      'The clear value must not be above the raise value.';
+
+  @override
+  String get alertRuleClearBelowRaise =>
+      'The clear value must not be below the raise value.';
+
+  @override
+  String alertRuleRefused(String reason, String detail) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'directoryShared':
+          'Another Klabautermann may be using this device\'s data folder, so nothing was saved.',
+      'notEnrolled': 'Sign in to your sync account to change alert rules.',
+      'keystoreUnavailable':
+          'Your account key could not be read from the system keystore, so nothing was saved.',
+      'unknownTarget': 'This rule is no longer in your account.',
+      'invalidDraft': 'A field is missing or out of range.',
+      'tooMany': 'Your account holds as many rules as it can.',
+      'tooLarge': 'This rule is too large to save.',
+      'storeUnavailable':
+          'Klabautermann\'s sync files could not be written this session, so nothing was saved.',
+      'other': 'Nothing was saved: $detail',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get alertRuleEngineStopped =>
+      'Klabautermann\'s engine stopped before the rule was saved.';
 }

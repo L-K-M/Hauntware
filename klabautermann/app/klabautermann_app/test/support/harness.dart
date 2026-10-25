@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/controllers/admin_controller.dart';
 import 'package:klabautermann_app/controllers/alert_center.dart';
+import 'package:klabautermann_app/controllers/alert_rules_controller.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
@@ -47,6 +48,7 @@ final class AppHarness {
     required this.serverEditor,
     this.admin,
     this.alerts,
+    this.alertRules,
     this.operations,
   });
 
@@ -62,6 +64,7 @@ final class AppHarness {
   final ServerEditorController serverEditor;
   final AdminController? admin;
   final AlertCenter? alerts;
+  final AlertRulesController? alertRules;
   final OperationsController? operations;
 
   void dispose() {
@@ -81,6 +84,7 @@ final class AppHarness {
     serverEditor.dispose();
     admin?.dispose();
     alerts?.dispose();
+    alertRules?.dispose();
     operations?.dispose();
   }
 }
@@ -108,8 +112,8 @@ final class AppHarness {
 /// [appVersion] stands in for what `readAppVersion` read. [safety], which
 /// the caller disposes, adds the safety preferences; none leaves the
 /// Safety menu and notices out. [admin] adds the admin mode controller
-/// over the fake engine, [alerts] the alert center, and [operations] the
-/// operations one.
+/// over the fake engine, [alerts] the alert center and the alert rules,
+/// and [operations] the operations one.
 /// [linkGrace] defaults to zero, which disconnects a server as its last
 /// view closes: the tree unmounts at the end of every test, and the test
 /// binding fails a test that leaves a grace timer pending.
@@ -167,6 +171,7 @@ Future<AppHarness> pumpApp(
     serverEditor: ServerEditorController(engine),
     admin: admin ? AdminController(engine) : null,
     alerts: alerts ? AlertCenter(engine) : null,
+    alertRules: alerts ? AlertRulesController(engine) : null,
     operations: operations ? OperationsController(engine) : null,
   );
   addTearDown(() async {
@@ -185,6 +190,7 @@ Future<AppHarness> pumpApp(
       safety: safety,
       admin: harness.admin,
       alerts: harness.alerts,
+      alertRules: harness.alertRules,
       operations: harness.operations,
       dockerNotice: harness.dockerNotice,
       sync: harness.sync,

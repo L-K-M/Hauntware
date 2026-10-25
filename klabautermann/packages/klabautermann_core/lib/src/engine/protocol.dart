@@ -61,6 +61,7 @@ import 'package:meta/meta.dart';
 // DangerLinter's findings are plain data: a severity and three values.
 import 'package:seance_core/seance_core.dart' show DangerFinding;
 
+import '../catalog/klabautermann_records.dart' show SyncedRule;
 import '../history/history_store.dart' show HistoryRange, HistoryTier;
 import '../docker/docker_ladder.dart'
     show
@@ -1107,8 +1108,8 @@ final class SetServerPrefs extends EngineRequest {
   final ServerPrefs? prefs;
 }
 
-/// Seals the alert rule [ruleId] as its `rule` record (03 §4.8); no
-/// surface sends it yet. Answered as [SaveServer].
+/// Seals the alert rule [ruleId] as its `rule` record (03 §4.8); the
+/// app's rule editor sends it. Answered as [SaveServer].
 final class PutRule extends EngineRequest {
   const PutRule({
     required this.requestId,
@@ -2969,6 +2970,16 @@ final class LocalAlertChanged extends EngineEvent {
 
   /// When the breach behind a raise began, as the rule's `for` counts it.
   final DateTime? since;
+}
+
+/// The account's alert rules (03 §4.8, §7.19) changed: a pulled or
+/// written `rule` record applied or was removed. [rules] is every live
+/// rule. The engine sends it only on a change, starting from none, so an
+/// account without rules never hears it.
+final class AlertRulesChanged extends EngineEvent {
+  const AlertRulesChanged(this.rules);
+
+  final List<SyncedRule> rules;
 }
 
 /// The answer to [ReadHistory]: [serverId]'s buckets in [tier], oldest
