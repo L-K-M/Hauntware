@@ -1573,6 +1573,8 @@ class AppState extends ChangeNotifier {
         terminalTitle: engine.terminalTitle,
         activeCommand: engine.activeCommand,
         initialLocalCopies: tab.retainedLocalCopies,
+        shellReader: RemoteShellDirectory(session.runCommand),
+        shellMayHaveMoved: engine.shellMayHaveMoved,
       );
       tab.git = RemoteGitController(
         session.runCommand,

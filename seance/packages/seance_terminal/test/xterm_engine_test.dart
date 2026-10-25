@@ -125,6 +125,68 @@ void main() {
     expect(commands, ['ls', 'pwd']);
   });
 
+  test('shellMayHaveMoved ticks on every Enter, empty or recalled', () async {
+    final e = XtermTerminalEngine();
+    var ticks = 0;
+    e.shellMayHaveMoved.addListener(() => ticks++);
+
+    e.injectInput('cd /srv');
+    e.injectInput('\r');
+    e.sendKey([0x0d]); // an empty line
+    e.sendKey([0x1b, 0x5b, 0x41]); // Up recalls history the engine never sees
+    e.sendKey([0x0d]);
+    expect(ticks, 3);
+
+    e.injectInput('half typed');
+    e.sendKey([0x03]); // Ctrl-C submits nothing
+    expect(ticks, 3);
+    await e.dispose();
+  });
+
+  test(
+    'shellMayHaveMoved ticks as a full-screen program hands back, not inside it',
+    () async {
+      final e = XtermTerminalEngine();
+      var ticks = 0;
+      e.shellMayHaveMoved.addListener(() => ticks++);
+
+      // fzf opens; its Enter picks a directory the shell then cd's to.
+      e.feed(Uint8List.fromList(utf8.encode('\x1b[?1049h')));
+      e.sendKey([0x0d]);
+      expect(ticks, 0);
+
+      e.feed(Uint8List.fromList(utf8.encode('\x1b[?1049l')));
+      expect(ticks, 1);
+      e.sendKey([0x0d]);
+      expect(ticks, 2);
+      await e.dispose();
+    },
+  );
+
+  test(
+    'shellMayHaveMoved stays still for a line typed into a running program',
+    () async {
+      final e = XtermTerminalEngine();
+      var ticks = 0;
+      e.shellMayHaveMoved.addListener(() => ticks++);
+
+      e.feed(
+        Uint8List.fromList(
+          utf8.encode(
+            '\x1b]1337;ShellIntegrationVersion=1;bash\x07'
+            '\x1b]133;A\x07\x1b]133;B\x07',
+          ),
+        ),
+      );
+      e.injectInput('python3');
+      e.sendKey([0x0d]); // a command at the prompt
+      e.injectInput('print(1)');
+      e.sendKey([0x0d]); // a line for the REPL
+      expect(ticks, 1);
+      await e.dispose();
+    },
+  );
+
   test('sendKey forwards raw bytes to the session input', () async {
     final e = XtermTerminalEngine();
     final got = <int>[];

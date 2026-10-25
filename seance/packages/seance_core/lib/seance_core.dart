@@ -35,6 +35,7 @@ export 'src/ssh/remote_command.dart';
 export 'src/ssh/remote_git.dart';
 export 'src/ssh/remote_process.dart'
     show PtyRequest, RemoteExit, RemoteSignal, RemoteProcess;
+export 'src/ssh/remote_shell_directory.dart';
 export 'src/ssh/ssh_link.dart';
 export 'src/ssh/ssh_session.dart';
 // Named `test_connection` rather than `connection_test`: `dart test <package>`
