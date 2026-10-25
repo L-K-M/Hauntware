@@ -16,6 +16,12 @@ final _shells = {
       if (File('$dir/$name').existsSync()) name: '$dir/$name',
 };
 
+/// Whether a real nvidia-smi sits where the test PATH reaches it.
+final _hostNvidiaSmi = [
+  '/usr/bin/nvidia-smi',
+  '/bin/nvidia-smi',
+].any((path) => File(path).existsSync());
+
 Future<void> _write(Directory root, String path, String text) async {
   final file = File('${root.path}/$path');
   await file.parent.create(recursive: true);
@@ -42,7 +48,7 @@ Future<String> _gpu(String shell, Directory root, {String? nvidiaSmi}) async {
       "NL='\n'\n_HW_T=\nhw_qrun() { \"\$@\"; }\n$fragment\nc_gpu\n"
           "printf '%s:%s' \"\$st\" \"\$o\"",
     ],
-    // A PATH without the host's own nvidia-smi.
+    // The stubs first, so they shadow a host's own nvidia-smi.
     environment: {'PATH': '${bin.path}:/usr/bin:/bin'},
     includeParentEnvironment: false,
   );
@@ -96,12 +102,17 @@ esac''',
       expect(parsed.value.devices, hasLength(2));
     });
 
-    test('$name: without nvidia-smi or cards both blocks are empty', () async {
-      final root = await Directory.systemTemp.createTemp('klab-gpu-');
-      addTearDown(() => root.delete(recursive: true));
+    test(
+      '$name: without nvidia-smi or cards both blocks are empty',
+      () async {
+        final root = await Directory.systemTemp.createTemp('klab-gpu-');
+        addTearDown(() => root.delete(recursive: true));
 
-      expect(await _gpu(shell, root), 'ok:== nvidia ==\n== amdgpu ==');
-    });
+        expect(await _gpu(shell, root), 'ok:== nvidia ==\n== amdgpu ==');
+      },
+      // Nothing shadows a real nvidia-smi on the test PATH.
+      skip: _hostNvidiaSmi ? 'this host has nvidia-smi' : null,
+    );
 
     test('$name: a failing nvidia-smi sends its status and message', () async {
       final root = await Directory.systemTemp.createTemp('klab-gpu-');
