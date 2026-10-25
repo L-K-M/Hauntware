@@ -2957,6 +2957,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Unlock with this device\'s passcode, PIN or biometrics. Connections already open keep running.';
 
   @override
+  String get settingsWindowLocked =>
+      'Unlock it in its main window to change settings.';
+
+  @override
   String get appLockUnlock => 'Unlock';
 
   @override

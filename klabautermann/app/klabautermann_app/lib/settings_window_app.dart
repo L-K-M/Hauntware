@@ -73,9 +73,11 @@ class _SettingsWindowAppState extends State<SettingsWindowApp> {
     // themes: the screen showing is the one a change came from, and it
     // keeps its state through the re-theme.
     final home = ListenableBuilder(
-      listenable: Listenable.merge([remote, remote.page]),
+      listenable: Listenable.merge([remote, remote.page, remote.appLock]),
       builder: (context, _) {
         if (remote.lost) return const _Unreachable();
+        // A locked app's settings stay behind its lock screen (SAF-20).
+        if (remote.appLock.locked) return const _Locked();
         final page = remote.page.value;
         return page == null
             // Hidden: no screen, so nothing on it outlives the window
@@ -118,6 +120,37 @@ class _SettingsWindowAppState extends State<SettingsWindowApp> {
       darkTheme: themes.darkTheme,
       themeMode: themes.themeMode,
       home: home,
+    );
+  }
+}
+
+/// What the window shows while the app is locked: its settings wait for
+/// the unlock in the app's own window.
+class _Locked extends StatelessWidget {
+  const _Locked();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            spacing: 12,
+            children: [
+              const Icon(Icons.lock_outline, size: 48),
+              Text(
+                l10n.appLockTitle,
+                style: Theme.of(context).textTheme.titleLarge,
+                textAlign: TextAlign.center,
+              ),
+              Text(l10n.settingsWindowLocked, textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

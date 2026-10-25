@@ -3934,6 +3934,12 @@ abstract class AppLocalizations {
   /// **'Unlock with this device\'s passcode, PIN or biometrics. Connections already open keep running.'**
   String get appLockDetail;
 
+  /// The desktop settings window while the app is locked, under the title that it is locked.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock it in its main window to change settings.'**
+  String get settingsWindowLocked;
+
   /// App lock screen: the button that asks for device authentication again.
   ///
   /// In en, this message translates to:
