@@ -2982,7 +2982,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String settingsAppLockDetail(int minutes) {
-    return 'Ask for this device\'s passcode, PIN or biometrics when Klabautermann opens and after $minutes minutes in the background. Locking turns admin mode off on every server.';
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: '$minutes minutes',
+      one: '1 minute',
+    );
+    return 'Ask for this device\'s passcode, PIN or biometrics when Klabautermann opens and after $_temp0 in the background. Locking turns admin mode off on every server.';
   }
 
   @override

@@ -3638,7 +3638,7 @@
   "@settingsAppLock": {
     "description": "Settings > Safety: the app lock switch."
   },
-  "settingsAppLockDetail": "Ask for this device's passcode, PIN or biometrics when Klabautermann opens and after {minutes} minutes in the background. Locking turns admin mode off on every server.",
+  "settingsAppLockDetail": "Ask for this device's passcode, PIN or biometrics when Klabautermann opens and after {minutes, plural, =1{1 minute} other{{minutes} minutes}} in the background. Locking turns admin mode off on every server.",
   "@settingsAppLockDetail": {
     "description": "Settings > Safety: what the app lock switch does.",
     "placeholders": {

@@ -111,6 +111,27 @@ void main() {
     expect(find.text(_title), findsNothing);
   });
 
+  testWidgets('a prompt that fails some other way leaves Unlock working', (
+    tester,
+  ) async {
+    device.failWith = StateError('channel lost');
+    await pump(tester);
+    await tester.pumpAndSettle();
+
+    // ghost_keystore's AppLock turns any failure into a refusal, so the
+    // screen says the prompt failed rather than waiting on it.
+    expect(
+      find.text('Authentication failed or was cancelled. Try again.'),
+      findsOneWidget,
+    );
+
+    device.failWith = null;
+    await tester.tap(find.text('Unlock'));
+    await tester.pumpAndSettle();
+    expect(device.prompts, 2);
+    expect(find.text(_title), findsNothing);
+  });
+
   testWidgets('a device with no authentication says what to set up', (
     tester,
   ) async {
