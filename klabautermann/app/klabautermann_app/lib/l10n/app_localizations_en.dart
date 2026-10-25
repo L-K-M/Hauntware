@@ -6777,6 +6777,16 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String alertDateTime(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return '$timeString';
+  }
+
+  @override
   String alertSince(String time) {
     return 'since $time';
   }

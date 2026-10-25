@@ -8238,6 +8238,16 @@
       }
     }
   },
+  "alertDateTime": "{time}",
+  "@alertDateTime": {
+    "description": "An alert center time from before today: a date and time in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
   "alertSince": "since {time}",
   "@alertSince": {
     "description": "When a raised alert's breach began, in the alert center; time is a time of day in the UI locale.",

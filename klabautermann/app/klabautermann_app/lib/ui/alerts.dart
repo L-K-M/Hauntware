@@ -372,10 +372,20 @@ class AlertCenterView extends StatelessWidget {
     return () => open(server);
   }
 
-  static String _time(BuildContext context, DateTime at) =>
-      MaterialLocalizations.of(
+  /// [at] as a time of day when it is today, else with its date, as an
+  /// alert can stay raised, and the history can reach back, for days.
+  static String _time(BuildContext context, DateTime at) {
+    final local = at.toLocal();
+    final now = DateTime.now();
+    if (local.year == now.year &&
+        local.month == now.month &&
+        local.day == now.day) {
+      return MaterialLocalizations.of(
         context,
-      ).formatTimeOfDay(TimeOfDay.fromDateTime(at.toLocal()));
+      ).formatTimeOfDay(TimeOfDay.fromDateTime(local));
+    }
+    return AppLocalizations.of(context).alertDateTime(local);
+  }
 }
 
 class _Heading extends StatelessWidget {

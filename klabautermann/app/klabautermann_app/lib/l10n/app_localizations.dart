@@ -9010,6 +9010,12 @@ abstract class AppLocalizations {
   /// **'{severity, select, critical{Critical} warning{Warning} other{Info}}'**
   String alertSeverity(String severity);
 
+  /// An alert center time from before today: a date and time in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'{time}'**
+  String alertDateTime(DateTime time);
+
   /// When a raised alert's breach began, in the alert center; time is a time of day in the UI locale.
   ///
   /// In en, this message translates to:
