@@ -159,7 +159,7 @@ final class ProcessStarted extends Revalidation {
 }
 
 /// What a [DockerTargetUnchanged] names.
-enum DockerTargetKind { container, image, stack, volume }
+enum DockerTargetKind { container, image, stack, volume, network }
 
 /// A Docker target is unchanged: the container or image still has [id],
 /// or the stack still has the containers [id] fingerprints. The runner
@@ -169,11 +169,11 @@ final class DockerTargetUnchanged extends Revalidation {
 
   final DockerTargetKind kind;
 
-  /// The container name, the image reference, the stack's project or
-  /// the volume's name.
+  /// The container name, the image reference, the stack's project, the
+  /// volume's name or the network's id.
   final String target;
 
-  /// The container or image id, the stack's fingerprint
+  /// The container, image or network id, the stack's fingerprint
   /// ([stackFingerprint]) or the volume's creation time, which a volume
   /// removed and created again under its name changes, as the preview
   /// saw it.

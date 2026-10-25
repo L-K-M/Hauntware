@@ -15,6 +15,7 @@ import 'containers_panel.dart';
 import 'docker_endpoint.dart';
 import 'docker_endpoint_picker.dart';
 import 'images_panel.dart';
+import 'networks_panel.dart';
 import 'stacks_panel.dart';
 import 'volumes_panel.dart';
 
@@ -32,25 +33,28 @@ class DockerNoticeScope extends InheritedNotifier<DockerNoticeController> {
       context.dependOnInheritedWidgetOfExactType<DockerNoticeScope>()?.notifier;
 }
 
-/// The Docker tab's sub-tabs in 03 §10.2's order; Networks joins in v1.
+/// The Docker tab's sub-tabs in 03 §10.2's order.
 enum DockerSubTab {
   containers,
   images,
   stacks,
-  volumes;
+  volumes,
+  networks;
 
   String label(AppLocalizations l10n) => switch (this) {
     containers => l10n.dockerTabContainers,
     images => l10n.dockerTabImages,
     stacks => l10n.dockerTabStacks,
     volumes => l10n.dockerTabVolumes,
+    networks => l10n.dockerTabNetworks,
   };
 }
 
 /// The Docker tab once [serverId]'s endpoint is ready (03 §10.2): SAF-08's
 /// notice until it is dismissed on this device, the engine strip
 /// (DKE-01), and the sub-tabs: Containers ([ContainersPanel]), Images
-/// ([ImagesPanel]), Stacks ([StacksPanel]) and Volumes ([VolumesPanel]). While [visible], the tab
+/// ([ImagesPanel]), Stacks ([StacksPanel]), Volumes ([VolumesPanel]) and
+/// Networks ([NetworksPanel]). While [visible], the tab
 /// counts as a view of the server's Docker engine
 /// ([DockerController.openView]), so a ready endpoint's details are read,
 /// and each sub-tab watches its list while it shows: the stacks only
@@ -181,6 +185,12 @@ class _DockerPanelState extends State<DockerPanel> {
                                   widget.visible && tabs.index == tab.index,
                             ),
                             DockerSubTab.volumes => VolumesPanel(
+                              monitoring: widget.monitoring,
+                              serverId: widget.serverId,
+                              visible:
+                                  widget.visible && tabs.index == tab.index,
+                            ),
+                            DockerSubTab.networks => NetworksPanel(
                               monitoring: widget.monitoring,
                               serverId: widget.serverId,
                               visible:

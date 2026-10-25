@@ -1,8 +1,8 @@
 // The engine's Docker and process actions end to end on the Docker
 // fixture (M4 E28, X2 and X3): the real engine in its own isolate, links
 // on, as the fixture user in the Docker host's `docker` group. Every
-// container, image and stack action of the MVP, and v1's volume create
-// and remove, with the watched list following it; the refusals a managed stack, a protected container and
+// container, image and stack action of the MVP, v1's volume create and
+// remove and network remove, with the watched list following it; the refusals a managed stack, a protected container and
 // an unverified or managed redeploy get; a kill and a stop and continue
 // of the user's own process, with the start-time guard; and STK-06's
 // detached redeploy under BusyBox `setsid` (spike S4), which pulls a new
@@ -348,6 +348,81 @@ void main() {
     );
     expect(
       await dind(['volume', 'ls', '--quiet', '--filter', 'name=^$volume\$']),
+      isEmpty,
+    );
+  });
+
+  test('a network is refused while built in or a container is on it, and '
+      'removed once it is free (DNW-02)', () async {
+    const network = 'actions-network';
+    const user = 'actions-network-user';
+    addTearDown(() async {
+      for (final arguments in [
+        ['rm', '--force', user],
+        ['network', 'rm', network],
+      ]) {
+        try {
+          await dind(arguments);
+        } on Object {
+          // Removed by the test.
+        }
+      }
+    });
+    final engine = await start('network-actions');
+    watch(engine, {DockerWatchList.networks});
+    final id = (await dind(['network', 'create', network])).trim();
+
+    bool listed(DockerPayload payload) =>
+        payload is DockerNetworksPayload &&
+        payload.networks.any((n) => n.name == network);
+
+    await untilList(engine, DockerWatchList.networks, listed);
+    expect(
+      await planAnswer(
+        engine,
+        RemoveNetwork(dockerServer, networkId: 'bridge'),
+      ),
+      isA<ActionRefused>().having(
+        (r) => r.reason,
+        'reason',
+        ActionRefusalReason.builtinNetwork,
+      ),
+    );
+
+    await dind([
+      'run',
+      '--detach',
+      '--name',
+      user,
+      '--network',
+      network,
+      _image,
+      'sleep',
+      '600',
+    ]);
+    expect(
+      await planAnswer(engine, RemoveNetwork(dockerServer, networkId: id)),
+      isA<ActionRefused>().having(
+        (r) => r.reason,
+        'reason',
+        ActionRefusalReason.networkInUse,
+      ),
+    );
+    await dind(['rm', '--force', user]);
+
+    final removal = await plan(
+      engine,
+      RemoveNetwork(dockerServer, networkId: id),
+    );
+    expect(removal.preview.requiredTier, ConfirmationTier.acknowledge);
+    expectSucceeded(await run(engine, removal));
+    await untilList(
+      engine,
+      DockerWatchList.networks,
+      (payload) => payload is DockerNetworksPayload && !listed(payload),
+    );
+    expect(
+      await dind(['network', 'ls', '--quiet', '--filter', 'id=$id']),
       isEmpty,
     );
   });

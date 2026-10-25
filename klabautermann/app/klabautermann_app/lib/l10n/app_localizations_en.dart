@@ -3705,6 +3705,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'volumeInUse':
           'A container mounts this volume. Remove the container first.',
       'volumeExists': 'A volume with this name already exists.',
+      'networkInUse':
+          'A container is on this network. Stop or disconnect it first.',
+      'builtinNetwork':
+          'This is one of the engine\'s own networks, which stay.',
       'dependencyCycle':
           'The stack\'s services depend on each other in a loop, so there is no order to act in.',
       'stackManaged': 'A manager deploys this stack. Redeploy it there.',
@@ -4010,6 +4014,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'RemoveImage': 'Remove image',
       'CreateVolume': 'Create volume',
       'RemoveVolume': 'Remove volume',
+      'RemoveNetwork': 'Remove network',
       'StackAction': 'Stack action',
       'RedeployStack': 'Redeploy stack',
       'ContainerExec': 'Run command',
@@ -4347,6 +4352,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dockerTabVolumes => 'Volumes';
+
+  @override
+  String get dockerTabNetworks => 'Networks';
 
   @override
   String get dockerTabStacks => 'Stacks';
@@ -5030,6 +5038,73 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dockerVolumeRemove => 'Remove';
+
+  @override
+  String get dockerNetworksColumnScope => 'Scope';
+
+  @override
+  String get dockerNetworksColumnSubnet => 'Subnet';
+
+  @override
+  String get dockerNetworksColumnGateway => 'Gateway';
+
+  @override
+  String get dockerNetworksNoSubnet => 'None';
+
+  @override
+  String get dockerNetworksBuiltin => 'Built-in';
+
+  @override
+  String dockerNetworksBuiltinName(String name) {
+    return '$name, built-in';
+  }
+
+  @override
+  String dockerNetworksInUse(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count containers on it',
+      one: '1 container on it',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerNetworksSearchHint => 'Search by name, driver or subnet';
+
+  @override
+  String get dockerNetworksReading => 'Reading the networks…';
+
+  @override
+  String get dockerNetworksEmpty => 'This engine has no networks.';
+
+  @override
+  String get dockerNetworksNoMatch => 'No network matches the search.';
+
+  @override
+  String get dockerNetworksNoneUnused =>
+      'Every network you made has a container on it.';
+
+  @override
+  String dockerNetworksFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'tooManyQueries':
+          'This server already has as many Docker watches open as Klabautermann allows.',
+      'daemonError': 'The engine refused or failed to list the networks.',
+      'connectionFailed':
+          'The connection to the engine failed while listing the networks.',
+      'other': 'The networks could not be listed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerNetworksUseUnknown =>
+      'Which networks are in use is unknown: the containers, which name their networks, could not be listed.';
+
+  @override
+  String get dockerNetworkRemove => 'Remove';
 
   @override
   String get dockerDetailsClose => 'Close the container details';

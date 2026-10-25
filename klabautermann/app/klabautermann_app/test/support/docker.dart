@@ -78,6 +78,7 @@ ContainerSummary dockerContainer(
   List<ContainerPort> ports = const [],
   HealthStatus? health,
   List<String> volumes = const [],
+  Map<String, String> networks = const {},
 }) => ContainerSummary(
   id: id,
   names: ['/${name ?? id}'],
@@ -88,6 +89,7 @@ ContainerSummary dockerContainer(
       status ?? (state == 'running' ? 'Up 2 hours' : 'Exited (0) 1 day ago'),
   ports: ports,
   health: health,
+  networks: networks,
   mounts: [
     for (final volume in volumes)
       ContainerMount(type: 'volume', name: volume, destination: '/$volume'),
@@ -177,6 +179,19 @@ DockerListChanged dockerVolumeList(
   serverId: serverId,
   list: DockerWatchList.volumes,
   payload: DockerVolumesPayload(volumes),
+  at: at,
+  fullRelist: true,
+);
+
+/// [networks] on [serverId], as a watch of the networks delivers them.
+DockerListChanged dockerNetworkList(
+  String serverId,
+  List<NetworkSummary> networks, {
+  required DateTime at,
+}) => DockerListChanged(
+  serverId: serverId,
+  list: DockerWatchList.networks,
+  payload: DockerNetworksPayload(networks),
   at: at,
   fullRelist: true,
 );
