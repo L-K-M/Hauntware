@@ -1303,7 +1303,7 @@ void main() {
       );
       // Pin values too so an edited median, repetition count, or config
       // fails alongside a dropped or fabricated entry. The configs are
-      // the ones the cited main-branch artifacts actually recorded.
+      // the ones the cited pooled artifacts actually recorded.
       expect(baseline.scenarios['P1']!.median, 1100.812);
       expect(baseline.scenarios['P1']!.repetitions, 12);
       expect(
