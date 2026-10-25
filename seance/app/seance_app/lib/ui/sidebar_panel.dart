@@ -178,20 +178,24 @@ class _PanelTabStrip extends StatelessWidget {
     final corner = BorderRadius.circular(_cornerRadius);
     return ListenableBuilder(
       listenable: controller,
-      builder: (context, _) => Container(
+      builder: (context, _) => SizedBox(
         key: SidebarPanel.tabStripKey,
         height: TerminalTabStrip.height,
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: separator)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            for (final (index, tab) in tabs.indexed) ...[
-              if (index > 0) const SizedBox(width: _gap),
-              _tab(tab, index, palette.glyph(tab.hue), corner),
+        // A DecoratedBox, not a Container's border, so the rule does not
+        // inset the row: the tabs centre on whole pixels.
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: separator)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (final (index, tab) in tabs.indexed) ...[
+                if (index > 0) const SizedBox(width: _gap),
+                _tab(tab, index, palette.glyph(tab.hue), corner),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

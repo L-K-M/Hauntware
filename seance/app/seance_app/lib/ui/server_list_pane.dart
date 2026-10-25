@@ -23,7 +23,6 @@ import 'server_status_dot.dart';
 import 'server_tile.dart';
 import 'settings_screen.dart';
 import 'sidebar/sidebar_kit.dart';
-import 'terminal_pane.dart';
 import 'top_toast.dart';
 
 /// Where the server list is mounted, which decides its chrome.
@@ -64,11 +63,17 @@ class ServerListPane extends StatefulWidget {
   /// Open the local shell.
   final VoidCallback? onOpenLocal;
 
+  /// The height of the tab strip beside the rail, when the rail starts
+  /// level with it: the filter field then spans the strip's band
+  /// ([SidebarFilterField.barExtent]). Null keeps the compact field.
+  final double? filterBarExtent;
+
   const ServerListPane({
     super.key,
     required this.onOpen,
     required this.posture,
     this.onOpenLocal,
+    this.filterBarExtent,
   });
 
   /// Below this many servers the list is short enough to read at a glance
@@ -347,11 +352,10 @@ class _ServerListPaneState extends State<ServerListPane> {
     }
     final update = state.updateInfo;
     final localShell = state.localShellAvailable && widget.onOpenLocal != null;
-    // The field spans the terminal's tab strip band only at the rail's top,
-    // level with the strip; under a banner or the local shell it stays
-    // compact.
+    // The field spans the tab strip's band only at the rail's top, level
+    // with the strip; under a banner or the local shell it stays compact.
     final levelWithTabs =
-        !_home && update == null && state.inboxPending.isEmpty && !localShell;
+        update == null && state.inboxPending.isEmpty && !localShell;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -413,7 +417,7 @@ class _ServerListPaneState extends State<ServerListPane> {
                 : matches.isEmpty
                 ? '0 of ${servers.length}'
                 : '${matches.length} of ${servers.length} · ↵ opens the first',
-            barExtent: levelWithTabs ? TerminalTabStrip.height : null,
+            barExtent: levelWithTabs ? widget.filterBarExtent : null,
           ),
         Expanded(child: list),
         if (!_home)

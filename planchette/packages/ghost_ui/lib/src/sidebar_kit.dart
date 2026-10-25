@@ -17,6 +17,7 @@
 library;
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart' show PointerDeviceKind, kPrimaryButton;
 import 'package:flutter/material.dart';
@@ -2010,12 +2011,12 @@ class SidebarFilterField extends StatefulWidget {
   final FocusNode? focusNode;
   final Key? fieldKey;
 
-  /// The height of the tab strip beside the rail, for a field at the top
-  /// of a rail that starts where the strip does. On a pointer platform the
-  /// field then takes that height with no inset above it, so its edges
-  /// meet the tabs': a 38 px strip, a field from its top to its rule's
-  /// bottom. Null keeps the compact field; touch keeps its 44 dp target
-  /// either way.
+  /// The height of a tab strip beside the rail, for a field at the top of
+  /// a rail that starts where the strip does. On a pointer platform the
+  /// field then spans the strip's band from the top of its slot, so its
+  /// edges meet the tabs'. It grows past the band only when the text scale
+  /// needs more room than that. Null keeps the compact field; touch keeps
+  /// its 44 dp target either way.
   final double? barExtent;
 
   @override
@@ -2076,6 +2077,15 @@ class _SidebarFilterFieldState extends State<SidebarFilterField> {
     );
   }
 
+  /// The touch target, or on a pointer platform the compact extent as the
+  /// text scales it, raised to [SidebarFilterField.barExtent] when set.
+  double _extent(BuildContext context, bool touch) {
+    if (touch) return _scaledExtent(context, _touchFilterExtent);
+    final compact = _scaledExtent(context, _filterExtent);
+    final bar = widget.barExtent;
+    return bar == null ? compact : math.max(bar, compact);
+  }
+
   Widget _field(BuildContext context, TextStyle? small) {
     final chrome = _chrome(context);
     final strings = SidebarKitScope.of(context);
@@ -2094,10 +2104,7 @@ class _SidebarFilterFieldState extends State<SidebarFilterField> {
           ),
         },
         child: SizedBox(
-          height: _scaledExtent(
-            context,
-            touch ? _touchFilterExtent : widget.barExtent ?? _filterExtent,
-          ),
+          height: _extent(context, touch),
           child: TextField(
             key: widget.fieldKey,
             controller: _text,

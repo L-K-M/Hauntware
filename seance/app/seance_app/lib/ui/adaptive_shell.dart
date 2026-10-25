@@ -75,6 +75,9 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
             posture: ServerListPosture.rail,
             onOpen: (s) => _open(state, s),
             onOpenLocal: () => _openLocal(state),
+            // The rail starts level with the terminal's tab strip, under
+            // the header and its rule or at the window's top.
+            filterBarExtent: TerminalTabStrip.height,
           ),
           header: unifiedToolbar ? const HeaderToolbar() : null,
           terminalPane: TerminalPane(
@@ -251,8 +254,9 @@ class AdaptivePaneLayout extends StatefulWidget {
   /// or null for no header. When set, it spans the terminal and utility
   /// panes the way Poltergeist's spans its panes and inspector; the list
   /// pane stays full height and starts below a spacer of the header's
-  /// height, where the traffic lights sit, and the layout takes the band
-  /// back from the app's reservation ([ClaimMacosToolbarBand]).
+  /// height and its rule, where the traffic lights sit, and the layout
+  /// takes the band back from the app's reservation
+  /// ([ClaimMacosToolbarBand]).
   final Widget? header;
 
   /// Requested pane widths to start from (the persisted values, on real

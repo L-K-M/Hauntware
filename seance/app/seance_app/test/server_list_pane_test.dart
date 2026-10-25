@@ -114,6 +114,7 @@ void main() {
             child: ServerListPane(
               posture: ServerListPosture.rail,
               onOpen: onOpen ?? (_) {},
+              filterBarExtent: TerminalTabStrip.height,
             ),
           ),
         ),

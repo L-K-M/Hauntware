@@ -1146,12 +1146,15 @@ class _TabEntryDropState extends State<_TabEntryDrop> {
         _accept(details.data);
       },
       builder: (context, candidateData, rejectedData) => Container(
-        // Painted over the chip rather than around it: a border around
-        // it would inset the chip below the strip's height, and one that
-        // came and went with acceptance would reflow the strip mid-drag.
-        foregroundDecoration: _accepting
-            ? BoxDecoration(border: Border.all(color: colors.primary, width: 2))
-            : null,
+        // Painted over the chip rather than around it, which would inset
+        // the chip below the strip's height. Kept mounted with its colour
+        // swapped: a ring that came and went would remount the chip.
+        foregroundDecoration: BoxDecoration(
+          border: Border.all(
+            color: _accepting ? colors.primary : Colors.transparent,
+            width: 2,
+          ),
+        ),
         child: widget.child,
       ),
     );
