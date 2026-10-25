@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The side panel's tabs now read Files, Git, Snippets and Assistant,
+  and Files opens first. The line under them continues the one under
+  the terminal's tabs, and the server list's filter field is as tall as
+  the tabs and level with them.
 - Séance can open a terminal from a `seance://connect` link sent by
   Poltergeist or Klabautermann. A link names one of your saved servers
   and, optionally, a folder to start in; Séance never creates a server

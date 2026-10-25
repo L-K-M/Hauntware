@@ -1306,6 +1306,8 @@ void main() {
         // The user manager's streams share the system streams' variants.
         SampleStream.userUnits: UnitsResult(UnitsSnapshot()),
         SampleStream.userTimers: TimersResult(TimersSnapshot()),
+        SampleStream.temps: const TempsResult(TempsSnapshot([])),
+        SampleStream.gpu: const GpuResult(GpuSnapshot([])),
       };
       expect(variants.keys, SampleStream.values);
       const unavailable = CollectorUnavailable(

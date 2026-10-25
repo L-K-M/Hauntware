@@ -1,7 +1,7 @@
 name: poltergeist_app
 description: Poltergeist cross-platform file transfer client.
 publish_to: none
-version: 1.9.2+1090299
+version: 1.9.3+1090399
 
 environment:
   sdk: ^3.12.0

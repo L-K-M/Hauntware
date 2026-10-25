@@ -300,6 +300,11 @@ class TerminalTabStrip extends StatelessWidget {
   /// Null draws none — a server with no colour looks exactly as before.
   final Color? accent;
 
+  /// The strip's height, its bottom rule included. Public because the
+  /// columns beside it line up with it: the side panel's tabs put their
+  /// rule on the same row, and the rail's filter field spans the same band.
+  static const double height = 38;
+
   const TerminalTabStrip({
     super.key,
     required this.tabs,
@@ -318,7 +323,7 @@ class TerminalTabStrip extends StatelessWidget {
     final chrome = SeanceChrome.of(context, seanceThemeStyle);
     final accent = this.accent;
     return Container(
-      height: 38,
+      height: height,
       // Over the tabs' top edge, where Poltergeist paints its active-pane
       // line. In front rather than a border, so it takes no height: the tabs
       // sit the same with or without a colour. Below the tabs it sat against
@@ -426,7 +431,10 @@ class TerminalTabStrip extends StatelessWidget {
               iconSize: 18,
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 40, minHeight: 38),
+              constraints: const BoxConstraints(
+                minWidth: 40,
+                minHeight: height,
+              ),
               icon: const Icon(Icons.add),
               onPressed: onNewTab,
             ),
@@ -442,7 +450,10 @@ class TerminalTabStrip extends StatelessWidget {
                 iconSize: 18,
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 40, minHeight: 38),
+                constraints: const BoxConstraints(
+                  minWidth: 40,
+                  minHeight: height,
+                ),
                 // The assistant's purple (Poltergeist's D34).
                 icon: Icon(
                   Icons.auto_fix_high,
@@ -665,7 +676,7 @@ class _ChipShellState extends State<_ChipShell> {
                         widget.onClose,
                   },
             child: Container(
-              height: 38,
+              height: TerminalTabStrip.height,
               padding: const EdgeInsetsDirectional.only(start: 12, end: 4),
               decoration: BoxDecoration(
                 color: widget.selected

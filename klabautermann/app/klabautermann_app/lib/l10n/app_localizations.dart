@@ -1612,6 +1612,162 @@ abstract class AppLocalizations {
   /// **'Device'**
   String get systemDevice;
 
+  /// System tab: the section of each whole disk's I/O rates since the previous reading (DSK-03, DSK-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Disk activity'**
+  String get systemDiskActivityTitle;
+
+  /// System tab, Disk activity: a rate needs two readings, and only one has arrived.
+  ///
+  /// In en, this message translates to:
+  /// **'Rates show from the second reading.'**
+  String get systemDiskActivityWaiting;
+
+  /// System tab, Disk activity: the server reports no whole disk that ever did I/O (loop, RAM and partition devices are left out).
+  ///
+  /// In en, this message translates to:
+  /// **'No disk has done any I/O yet.'**
+  String get systemDiskActivityEmpty;
+
+  /// Disk activity column: bytes read per second.
+  ///
+  /// In en, this message translates to:
+  /// **'Read'**
+  String get systemDiskRead;
+
+  /// Disk activity column: bytes written per second.
+  ///
+  /// In en, this message translates to:
+  /// **'Write'**
+  String get systemDiskWrite;
+
+  /// Disk activity column: completed read requests per second (read IOPS).
+  ///
+  /// In en, this message translates to:
+  /// **'Reads/s'**
+  String get systemDiskReadsPerSecond;
+
+  /// Disk activity column: completed write requests per second (write IOPS).
+  ///
+  /// In en, this message translates to:
+  /// **'Writes/s'**
+  String get systemDiskWritesPerSecond;
+
+  /// Disk activity column: the mean time a read took, queueing included (iostat's r_await).
+  ///
+  /// In en, this message translates to:
+  /// **'Read wait'**
+  String get systemDiskReadAwait;
+
+  /// Disk activity column: the mean time a write took, queueing included (iostat's w_await).
+  ///
+  /// In en, this message translates to:
+  /// **'Write wait'**
+  String get systemDiskWriteAwait;
+
+  /// Disk activity column: the share of the interval the disk had any request in flight (iostat's %util).
+  ///
+  /// In en, this message translates to:
+  /// **'Busy'**
+  String get systemDiskBusy;
+
+  /// Disk activity: a whole number of requests per second, in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}'**
+  String systemDiskOperations(int count);
+
+  /// Disk activity: a mean request time in milliseconds with one decimal, in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{ms} ms'**
+  String systemDiskMilliseconds(double ms);
+
+  /// System tab: the section of the host's temperature sensors (HW-01). It is hidden where the host has none, as VMs and containers usually do.
+  ///
+  /// In en, this message translates to:
+  /// **'Temperatures'**
+  String get systemTemperaturesTitle;
+
+  /// Temperatures table: column of the sensor's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Sensor'**
+  String get systemTemperatureSensor;
+
+  /// Temperatures table: a sensor named by its chip (coretemp, nvme, k10temp) and the chip's label for it (Package id 0, Composite). Both are the kernel's technical names.
+  ///
+  /// In en, this message translates to:
+  /// **'{chip}: {label}'**
+  String systemTemperatureSensorName(String chip, String label);
+
+  /// Temperatures table: column of the sensor's current reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Temperature'**
+  String get systemTemperatureReading;
+
+  /// Temperatures table: column of the temperature the chip calls high for the sensor (its max limit).
+  ///
+  /// In en, this message translates to:
+  /// **'High'**
+  String get systemTemperatureHigh;
+
+  /// Temperatures table: column of the temperature the chip calls critical for the sensor.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical'**
+  String get systemTemperatureCritical;
+
+  /// A temperature in degrees Celsius, as a whole number in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{celsius} °C'**
+  String systemTemperatureCelsius(double celsius);
+
+  /// System tab: the section of the host's GPUs (HW-03). It is hidden where the host has none the app can read.
+  ///
+  /// In en, this message translates to:
+  /// **'GPUs'**
+  String get systemGpusTitle;
+
+  /// GPUs table: column of the GPU's name, or its device name (card1, nvidia0) where the driver reports no product name.
+  ///
+  /// In en, this message translates to:
+  /// **'GPU'**
+  String get systemGpuColumn;
+
+  /// GPUs table: column of the share of time the GPU was busy.
+  ///
+  /// In en, this message translates to:
+  /// **'Busy'**
+  String get systemGpuBusy;
+
+  /// GPUs table: column of the GPU's own memory (VRAM) in use, of its total.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get systemGpuMemory;
+
+  /// GPUs table: column of the GPU's current power draw.
+  ///
+  /// In en, this message translates to:
+  /// **'Power'**
+  String get systemGpuPower;
+
+  /// A power draw in watts, as a whole number in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{watts} W'**
+  String systemGpuWatts(double watts);
+
+  /// System tab, GPUs: nvidia-smi ran and failed, as when its driver is not loaded; message is the tool's own first line, untranslated.
+  ///
+  /// In en, this message translates to:
+  /// **'nvidia-smi is installed but failed: {message}'**
+  String systemGpuNvidiaFailed(String message);
+
   /// Disks table column: where the filesystem is mounted.
   ///
   /// In en, this message translates to:
@@ -3765,6 +3921,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The setting could not be changed.'**
   String get settingsAnnounceNotChanged;
+
+  /// App lock screen (SAF-20): its heading, shown over the whole app while the app lock is engaged.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann is locked'**
+  String get appLockTitle;
+
+  /// App lock screen: what unlocking asks for, and that open links are not closed by the lock.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock with this device\'s passcode, PIN or biometrics. Connections already open keep running.'**
+  String get appLockDetail;
+
+  /// App lock screen: the button that asks for device authentication again.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock'**
+  String get appLockUnlock;
+
+  /// App lock screen: the last device authentication was rejected or dismissed.
+  ///
+  /// In en, this message translates to:
+  /// **'Authentication failed or was cancelled. Try again.'**
+  String get appLockFailed;
+
+  /// App lock screen: device authentication is not set up or not available, so the lock cannot be opened yet.
+  ///
+  /// In en, this message translates to:
+  /// **'This device has no passcode, PIN or biometrics to ask for. Set one up, then try again.'**
+  String get appLockUnavailable;
+
+  /// The reason line the operating system's authentication prompt shows when the app lock asks for it.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock Klabautermann'**
+  String get appLockReason;
+
+  /// Settings > Safety: the heading over the app lock switch (SAF-20).
+  ///
+  /// In en, this message translates to:
+  /// **'App lock'**
+  String get settingsAppLockTitle;
+
+  /// Settings > Safety: the app lock switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Require device authentication'**
+  String get settingsAppLock;
+
+  /// Settings > Safety: what the app lock switch does.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask for this device\'s passcode, PIN or biometrics when Klabautermann opens and after {minutes} minutes in the background. Locking turns admin mode off on every server.'**
+  String settingsAppLockDetail(int minutes);
+
+  /// Settings > Safety: why the app lock switch is off and disabled on Linux.
+  ///
+  /// In en, this message translates to:
+  /// **'This platform has no device authentication Klabautermann can ask for.'**
+  String get settingsAppLockUnsupported;
+
+  /// Settings > Safety: why the app lock switch cannot be turned on right now.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up a passcode, PIN or biometrics on this device to use the app lock.'**
+  String get settingsAppLockUnavailable;
+
+  /// Settings > Safety: a toast after turning the app lock on or off did not take effect, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, notAuthenticated{The app lock did not change: authentication failed or was cancelled.} unavailable{The app lock did not change: this device has no authentication to ask for.} notSaved{The app lock did not change: the setting could not be saved.} other{The app lock did not change.}}'**
+  String settingsAppLockNotChanged(String reason);
 
   /// Section heading on the Sync settings tab over the sync passwords switch (SYN-02).
   ///
@@ -6628,7 +6856,7 @@ abstract class AppLocalizations {
   /// **'Enter a name.'**
   String get dockerVolumeNameRequired;
 
-  /// Create volume dialog: a name or driver Docker would refuse.
+  /// Create volume dialog: a name Docker would refuse.
   ///
   /// In en, this message translates to:
   /// **'Use letters, digits, \'_\', \'.\' and \'-\', starting with a letter or digit, at least two characters.'**
@@ -8913,6 +9141,132 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not read that file as a key.'**
   String get serverEditorKeyFileImportFailed;
+
+  /// Title of the in-app alert center (ALR-01), which lists the alerts the user's rules raised.
+  ///
+  /// In en, this message translates to:
+  /// **'Alerts'**
+  String get alertsTitle;
+
+  /// The coverage limit (Y3) the alert notice and the alert center state: rules are evaluated only on this device and only while the app runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Evaluated on this device while Klabautermann is open.'**
+  String get alertsCoverage;
+
+  /// The fleet list's alert notice while rules have raised alerts; count is how many are raised.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 alert is active} other{{count} alerts are active}}'**
+  String alertsNoticeActive(int count);
+
+  /// The fleet list's alert notice when alerts were raised and cleared since the user last opened the alert center, and none is raised now.
+  ///
+  /// In en, this message translates to:
+  /// **'Every alert has cleared since you last looked.'**
+  String get alertsNoticeCleared;
+
+  /// Button on the fleet list's alert notice that opens the alert center.
+  ///
+  /// In en, this message translates to:
+  /// **'Show alerts'**
+  String get alertsShow;
+
+  /// Alert center heading over the alerts raised now.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get alertsActiveHeading;
+
+  /// Alert center line under the Active heading when no alert is raised.
+  ///
+  /// In en, this message translates to:
+  /// **'No alert is active.'**
+  String get alertsNoneActive;
+
+  /// Alert center heading over the latest raises and clears since the app started.
+  ///
+  /// In en, this message translates to:
+  /// **'Earlier'**
+  String get alertsHistoryHeading;
+
+  /// A fleet row's alert count (ALR-02), in its tooltip and screen-reader label; count is how many alerts are raised for that server.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 alert} other{{count} alerts}}'**
+  String alertsRowCount(int count);
+
+  /// The number on a fleet row's alert badge (ALR-02), in the UI locale's number format.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}'**
+  String alertsBadgeCount(int count);
+
+  /// An alert center row's title; server is the server's name (server data) and metric the alert's metric, such as CPU busy.
+  ///
+  /// In en, this message translates to:
+  /// **'{server}: {metric}'**
+  String alertRowTitle(String server, String metric);
+
+  /// An alert's severity word in the alert center.
+  ///
+  /// In en, this message translates to:
+  /// **'{severity, select, critical{Critical} warning{Warning} other{Info}}'**
+  String alertSeverity(String severity);
+
+  /// An alert center time from before today: a date and time in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'{time}'**
+  String alertDateTime(DateTime time);
+
+  /// When a raised alert's breach began, in the alert center; time is a time of day in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'since {time}'**
+  String alertSince(String time);
+
+  /// An alert center history row for a raise; time is a time of day in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Raised at {time}'**
+  String alertRaisedAt(String time);
+
+  /// An alert center history row for a clear; time is a time of day in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Cleared at {time}'**
+  String alertClearedAt(String time);
+
+  /// The alert metric cpu.busy: the share of CPU time spent busy.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU busy'**
+  String get alertMetricCpuBusy;
+
+  /// The alert metric memory.used: used memory as a share of the total.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory used'**
+  String get alertMetricMemoryUsed;
+
+  /// The alert metric load.perCore: the 1-minute load average divided by the number of cores.
+  ///
+  /// In en, this message translates to:
+  /// **'Load per core'**
+  String get alertMetricLoadPerCore;
+
+  /// The alert metric disk.used: the fullest filesystem's used space.
+  ///
+  /// In en, this message translates to:
+  /// **'Disk space used'**
+  String get alertMetricDiskUsed;
+
+  /// The alert metric disk.inodes: the fullest filesystem's used inodes.
+  ///
+  /// In en, this message translates to:
+  /// **'Inodes used'**
+  String get alertMetricDiskInodes;
 }
 
 class _AppLocalizationsDelegate

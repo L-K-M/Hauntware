@@ -53,10 +53,11 @@ Map<String, Object?> _event(
   String type = 'container',
   String action = 'start',
   int time = 1760702400,
+  Map<String, String> attributes = const {},
 }) => {
   'Type': type,
   'Action': action,
-  'Actor': {'ID': id, 'Attributes': <String, String>{}},
+  'Actor': {'ID': id, 'Attributes': attributes},
   'time': time,
   'timeNano': time * 1000000000,
 };
@@ -409,6 +410,37 @@ void main() {
       await h.clock.elapse(kDockerEventBatch);
       expect(h.lists(), [_list(DockerWatchList.networks)]);
       expect(h.requests('/networks'), hasLength(2));
+    });
+
+    test('a network connect re-reads the container it joined, whose '
+        'networks the use counts read (DNW-01)', () async {
+      final h = _Harness();
+      await h.start({DockerWatchList.containers, DockerWatchList.networks});
+
+      h.daemon.emit(
+        _event(
+          'n1',
+          type: 'network',
+          action: 'connect',
+          attributes: const {'container': 'abc', 'name': 'shop_default'},
+        ),
+      );
+      await h.clock.elapse(kDockerEventBatch);
+
+      expect(
+        h.lists(),
+        unorderedEquals([
+          _list(DockerWatchList.containers),
+          _list(DockerWatchList.networks),
+        ]),
+      );
+      final targeted = h.requests(_containersPath).last;
+      expect(
+        Uri.parse(targeted.split(' ')[1]).queryParameters['filters'],
+        jsonEncode({
+          'id': ['abc'],
+        }),
+      );
     });
 
     test('a failed volume read reaches the watch, and the next event reads '

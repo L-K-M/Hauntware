@@ -1,5 +1,6 @@
 package ch.lkmc.klabautermann
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+// A FragmentActivity: local_auth's biometric prompt needs one (SAF-20).
+class MainActivity : FlutterFragmentActivity()

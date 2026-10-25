@@ -251,20 +251,23 @@ Future<PlanAttempt> _planRemoveImage(
   );
 }
 
-/// The names Docker accepts for a volume or a driver
-/// (`[a-zA-Z0-9][a-zA-Z0-9_.-]+`, the daemon's `RestrictedNamePattern`).
+/// The names Docker accepts for a volume (`[a-zA-Z0-9][a-zA-Z0-9_.-]+`,
+/// the daemon's `RestrictedNamePattern`). A driver is not held to it: a
+/// plugin driver is a reference such as `vieux/sshfs:latest`, which the
+/// daemon looks up and refuses itself when it has none.
 final _volumeName = RegExp(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]+$');
 
 /// VOL-02: a new empty volume, after a plain confirmation. A name taken
 /// is refused rather than sent: the engine would answer the existing
-/// volume as created.
+/// volume as created. For the same reason the runner checks again that
+/// the name is still free right before the create.
 Future<PlanAttempt> _planCreateVolume(
   CreateVolume intent,
   DockerPlanContext c,
 ) async {
   final driver = intent.driver;
   if (!_volumeName.hasMatch(intent.name) ||
-      (driver != null && !_volumeName.hasMatch(driver))) {
+      (driver != null && driver.trim().isEmpty)) {
     return _refused(ActionRefusalReason.invalidTarget);
   }
   try {
@@ -288,6 +291,13 @@ Future<PlanAttempt> _planCreateVolume(
       requiredLevel: _level(c),
       runner: _runner(c),
       hostWrites: const [HostWriteRow.engineState],
+      revalidate: [
+        DockerTargetUnchanged(
+          DockerTargetKind.volume,
+          intent.name,
+          kAbsentTarget,
+        ),
+      ],
     ),
   );
 }
@@ -717,6 +727,11 @@ int? _sum(List<PruneItem> items) {
   return total;
 }
 
+/// The identity [DockerTargetUnchanged] expects of a target that must
+/// not exist yet, as a volume about to be created. No id, fingerprint or
+/// timestamp reads as it, so an existing target never passes for absent.
+const kAbsentTarget = '<absent>';
+
 /// A volume's identity for re-validation: its creation time, which a
 /// volume removed and created again under the same name changes.
 String volumeFingerprint(VolumeSummary volume) =>
@@ -911,7 +926,7 @@ Future<RevalidationFailure?> revalidateDockerTarget(
     };
     return id == check.id ? null : RevalidationFailure.targetChanged;
   } on DockerNotFoundException {
-    return RevalidationFailure.targetChanged;
+    return check.id == kAbsentTarget ? null : RevalidationFailure.targetChanged;
   } on DockerApiException {
     return RevalidationFailure.unreadable;
   }

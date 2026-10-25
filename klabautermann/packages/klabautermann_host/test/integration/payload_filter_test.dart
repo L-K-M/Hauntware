@@ -405,6 +405,10 @@ void main() {
             'sda',
           ]);
           expect(core.diskstats.first.sectorsWritten, 87654321 * 61);
+          // DSK-04's timings: ms reading, ms writing, ms doing I/O.
+          expect(core.diskstats.first.readMs, 456789);
+          expect(core.diskstats.first.writeMs, 567890);
+          expect(core.diskstats.first.ioMs, 678901);
 
           expect(core.cpuPressure!.some!.avg10, 12.34);
           // Under lxcfs, cpu's full line is the container's real figure.

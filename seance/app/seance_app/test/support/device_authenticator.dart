@@ -1,4 +1,4 @@
-import 'package:seance_app/services/app_lock.dart';
+import 'package:ghost_keystore/app_lock.dart';
 
 class TestDeviceAuthenticator implements DeviceAuthenticator {
   AppLockAvailability supported = AppLockAvailability.available;

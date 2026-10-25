@@ -113,14 +113,14 @@ packages:
       path: "../ghost_fonts"
       relative: true
     source: path
-    version: "1.9.2"
+    version: "1.9.3"
   ghost_ui:
     dependency: "direct main"
     description:
       path: "../ghost_ui"
       relative: true
     source: path
-    version: "1.9.2"
+    version: "1.9.3"
   http:
     dependency: transitive
     description:
@@ -231,7 +231,7 @@ packages:
       path: "../planchette_core"
       relative: true
     source: path
-    version: "1.9.2"
+    version: "1.9.3"
   sky_engine:
     dependency: transitive
     description: flutter

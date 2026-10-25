@@ -105,6 +105,12 @@ changes how it is presented.
   than ForkLift's under them, owner-directed 2026-09-26) and an
   accent-tinted selection. Both tab bars keep a 1 px separator along their
   bottom edge. The inactive pane's selection is neutral grey.
+- **One band under the header** (owner-directed 2026-10-25): the
+  inspector's tab row is as tall as the pane tab bars, with its separator
+  on the same row, and tabs fill their bar. On macOS the sidebar starts
+  below the header's divider, so its filter field spans the same band;
+  on Linux and Windows the sidebar runs from the window's top beside the
+  header, and its field stays compact.
 
 ### 3.1 Sizes, splitters, persistence
 

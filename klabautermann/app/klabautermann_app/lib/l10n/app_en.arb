@@ -1215,6 +1215,159 @@
   "@systemDevice": {
     "description": "Label of the device or source a filesystem is mounted from, such as /dev/sda1 or nas:/export, in a mount's details."
   },
+  "systemDiskActivityTitle": "Disk activity",
+  "@systemDiskActivityTitle": {
+    "description": "System tab: the section of each whole disk's I/O rates since the previous reading (DSK-03, DSK-04)."
+  },
+  "systemDiskActivityWaiting": "Rates show from the second reading.",
+  "@systemDiskActivityWaiting": {
+    "description": "System tab, Disk activity: a rate needs two readings, and only one has arrived."
+  },
+  "systemDiskActivityEmpty": "No disk has done any I/O yet.",
+  "@systemDiskActivityEmpty": {
+    "description": "System tab, Disk activity: the server reports no whole disk that ever did I/O (loop, RAM and partition devices are left out)."
+  },
+  "systemDiskRead": "Read",
+  "@systemDiskRead": {
+    "description": "Disk activity column: bytes read per second."
+  },
+  "systemDiskWrite": "Write",
+  "@systemDiskWrite": {
+    "description": "Disk activity column: bytes written per second."
+  },
+  "systemDiskReadsPerSecond": "Reads/s",
+  "@systemDiskReadsPerSecond": {
+    "description": "Disk activity column: completed read requests per second (read IOPS)."
+  },
+  "systemDiskWritesPerSecond": "Writes/s",
+  "@systemDiskWritesPerSecond": {
+    "description": "Disk activity column: completed write requests per second (write IOPS)."
+  },
+  "systemDiskReadAwait": "Read wait",
+  "@systemDiskReadAwait": {
+    "description": "Disk activity column: the mean time a read took, queueing included (iostat's r_await)."
+  },
+  "systemDiskWriteAwait": "Write wait",
+  "@systemDiskWriteAwait": {
+    "description": "Disk activity column: the mean time a write took, queueing included (iostat's w_await)."
+  },
+  "systemDiskBusy": "Busy",
+  "@systemDiskBusy": {
+    "description": "Disk activity column: the share of the interval the disk had any request in flight (iostat's %util)."
+  },
+  "systemDiskOperations": "{count}",
+  "@systemDiskOperations": {
+    "description": "Disk activity: a whole number of requests per second, in the UI locale.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "systemDiskMilliseconds": "{ms} ms",
+  "@systemDiskMilliseconds": {
+    "description": "Disk activity: a mean request time in milliseconds with one decimal, in the UI locale.",
+    "placeholders": {
+      "ms": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 1
+        }
+      }
+    }
+  },
+  "systemTemperaturesTitle": "Temperatures",
+  "@systemTemperaturesTitle": {
+    "description": "System tab: the section of the host's temperature sensors (HW-01). It is hidden where the host has none, as VMs and containers usually do."
+  },
+  "systemTemperatureSensor": "Sensor",
+  "@systemTemperatureSensor": {
+    "description": "Temperatures table: column of the sensor's name."
+  },
+  "systemTemperatureSensorName": "{chip}: {label}",
+  "@systemTemperatureSensorName": {
+    "description": "Temperatures table: a sensor named by its chip (coretemp, nvme, k10temp) and the chip's label for it (Package id 0, Composite). Both are the kernel's technical names.",
+    "placeholders": {
+      "chip": {
+        "type": "String",
+        "example": "coretemp"
+      },
+      "label": {
+        "type": "String",
+        "example": "Package id 0"
+      }
+    }
+  },
+  "systemTemperatureReading": "Temperature",
+  "@systemTemperatureReading": {
+    "description": "Temperatures table: column of the sensor's current reading."
+  },
+  "systemTemperatureHigh": "High",
+  "@systemTemperatureHigh": {
+    "description": "Temperatures table: column of the temperature the chip calls high for the sensor (its max limit)."
+  },
+  "systemTemperatureCritical": "Critical",
+  "@systemTemperatureCritical": {
+    "description": "Temperatures table: column of the temperature the chip calls critical for the sensor."
+  },
+  "systemTemperatureCelsius": "{celsius} °C",
+  "@systemTemperatureCelsius": {
+    "description": "A temperature in degrees Celsius, as a whole number in the UI locale.",
+    "placeholders": {
+      "celsius": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 0
+        }
+      }
+    }
+  },
+  "systemGpusTitle": "GPUs",
+  "@systemGpusTitle": {
+    "description": "System tab: the section of the host's GPUs (HW-03). It is hidden where the host has none the app can read."
+  },
+  "systemGpuColumn": "GPU",
+  "@systemGpuColumn": {
+    "description": "GPUs table: column of the GPU's name, or its device name (card1, nvidia0) where the driver reports no product name."
+  },
+  "systemGpuBusy": "Busy",
+  "@systemGpuBusy": {
+    "description": "GPUs table: column of the share of time the GPU was busy."
+  },
+  "systemGpuMemory": "Memory",
+  "@systemGpuMemory": {
+    "description": "GPUs table: column of the GPU's own memory (VRAM) in use, of its total."
+  },
+  "systemGpuPower": "Power",
+  "@systemGpuPower": {
+    "description": "GPUs table: column of the GPU's current power draw."
+  },
+  "systemGpuWatts": "{watts} W",
+  "@systemGpuWatts": {
+    "description": "A power draw in watts, as a whole number in the UI locale.",
+    "placeholders": {
+      "watts": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 0
+        }
+      }
+    }
+  },
+  "systemGpuNvidiaFailed": "nvidia-smi is installed but failed: {message}",
+  "@systemGpuNvidiaFailed": {
+    "description": "System tab, GPUs: nvidia-smi ran and failed, as when its driver is not loaded; message is the tool's own first line, untranslated.",
+    "placeholders": {
+      "message": {
+        "type": "String",
+        "example": "NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver."
+      }
+    }
+  },
   "systemColumnMount": "Mount",
   "@systemColumnMount": {
     "description": "Disks table column: where the filesystem is mounted."
@@ -3448,6 +3601,64 @@
   "settingsAnnounceNotChanged": "The setting could not be changed.",
   "@settingsAnnounceNotChanged": {
     "description": "Toast when the app did not take a change of the threshold announcement switch."
+  },
+  "appLockTitle": "Klabautermann is locked",
+  "@appLockTitle": {
+    "description": "App lock screen (SAF-20): its heading, shown over the whole app while the app lock is engaged."
+  },
+  "appLockDetail": "Unlock with this device's passcode, PIN or biometrics. Connections already open keep running.",
+  "@appLockDetail": {
+    "description": "App lock screen: what unlocking asks for, and that open links are not closed by the lock."
+  },
+  "appLockUnlock": "Unlock",
+  "@appLockUnlock": {
+    "description": "App lock screen: the button that asks for device authentication again."
+  },
+  "appLockFailed": "Authentication failed or was cancelled. Try again.",
+  "@appLockFailed": {
+    "description": "App lock screen: the last device authentication was rejected or dismissed."
+  },
+  "appLockUnavailable": "This device has no passcode, PIN or biometrics to ask for. Set one up, then try again.",
+  "@appLockUnavailable": {
+    "description": "App lock screen: device authentication is not set up or not available, so the lock cannot be opened yet."
+  },
+  "appLockReason": "Unlock Klabautermann",
+  "@appLockReason": {
+    "description": "The reason line the operating system's authentication prompt shows when the app lock asks for it."
+  },
+  "settingsAppLockTitle": "App lock",
+  "@settingsAppLockTitle": {
+    "description": "Settings > Safety: the heading over the app lock switch (SAF-20)."
+  },
+  "settingsAppLock": "Require device authentication",
+  "@settingsAppLock": {
+    "description": "Settings > Safety: the app lock switch."
+  },
+  "settingsAppLockDetail": "Ask for this device's passcode, PIN or biometrics when Klabautermann opens and after {minutes} minutes in the background. Locking turns admin mode off on every server.",
+  "@settingsAppLockDetail": {
+    "description": "Settings > Safety: what the app lock switch does.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsAppLockUnsupported": "This platform has no device authentication Klabautermann can ask for.",
+  "@settingsAppLockUnsupported": {
+    "description": "Settings > Safety: why the app lock switch is off and disabled on Linux."
+  },
+  "settingsAppLockUnavailable": "Set up a passcode, PIN or biometrics on this device to use the app lock.",
+  "@settingsAppLockUnavailable": {
+    "description": "Settings > Safety: why the app lock switch cannot be turned on right now."
+  },
+  "settingsAppLockNotChanged": "{reason, select, notAuthenticated{The app lock did not change: authentication failed or was cancelled.} unavailable{The app lock did not change: this device has no authentication to ask for.} notSaved{The app lock did not change: the setting could not be saved.} other{The app lock did not change.}}",
+  "@settingsAppLockNotChanged": {
+    "description": "Settings > Safety: a toast after turning the app lock on or off did not take effect, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
   },
   "settingsSyncSecretsTitle": "Passwords and keys",
   "@settingsSyncSecretsTitle": {
@@ -6131,7 +6342,7 @@
   },
   "dockerVolumeNameInvalid": "Use letters, digits, '_', '.' and '-', starting with a letter or digit, at least two characters.",
   "@dockerVolumeNameInvalid": {
-    "description": "Create volume dialog: a name or driver Docker would refuse."
+    "description": "Create volume dialog: a name Docker would refuse."
   },
   "dockerVolumeRemove": "Remove",
   "@dockerVolumeRemove": {
@@ -8159,5 +8370,139 @@
   "serverEditorKeyFileImportFailed": "Could not read that file as a key.",
   "@serverEditorKeyFileImportFailed": {
     "description": "Toast when a picked key file is too large or not text."
+  },
+  "alertsTitle": "Alerts",
+  "@alertsTitle": {
+    "description": "Title of the in-app alert center (ALR-01), which lists the alerts the user's rules raised."
+  },
+  "alertsCoverage": "Evaluated on this device while Klabautermann is open.",
+  "@alertsCoverage": {
+    "description": "The coverage limit (Y3) the alert notice and the alert center state: rules are evaluated only on this device and only while the app runs."
+  },
+  "alertsNoticeActive": "{count, plural, =1{1 alert is active} other{{count} alerts are active}}",
+  "@alertsNoticeActive": {
+    "description": "The fleet list's alert notice while rules have raised alerts; count is how many are raised.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "alertsNoticeCleared": "Every alert has cleared since you last looked.",
+  "@alertsNoticeCleared": {
+    "description": "The fleet list's alert notice when alerts were raised and cleared since the user last opened the alert center, and none is raised now."
+  },
+  "alertsShow": "Show alerts",
+  "@alertsShow": {
+    "description": "Button on the fleet list's alert notice that opens the alert center."
+  },
+  "alertsActiveHeading": "Active",
+  "@alertsActiveHeading": {
+    "description": "Alert center heading over the alerts raised now."
+  },
+  "alertsNoneActive": "No alert is active.",
+  "@alertsNoneActive": {
+    "description": "Alert center line under the Active heading when no alert is raised."
+  },
+  "alertsHistoryHeading": "Earlier",
+  "@alertsHistoryHeading": {
+    "description": "Alert center heading over the latest raises and clears since the app started."
+  },
+  "alertsRowCount": "{count, plural, =1{1 alert} other{{count} alerts}}",
+  "@alertsRowCount": {
+    "description": "A fleet row's alert count (ALR-02), in its tooltip and screen-reader label; count is how many alerts are raised for that server.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "alertsBadgeCount": "{count}",
+  "@alertsBadgeCount": {
+    "description": "The number on a fleet row's alert badge (ALR-02), in the UI locale's number format.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "alertRowTitle": "{server}: {metric}",
+  "@alertRowTitle": {
+    "description": "An alert center row's title; server is the server's name (server data) and metric the alert's metric, such as CPU busy.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      },
+      "metric": {
+        "type": "String"
+      }
+    }
+  },
+  "alertSeverity": "{severity, select, critical{Critical} warning{Warning} other{Info}}",
+  "@alertSeverity": {
+    "description": "An alert's severity word in the alert center.",
+    "placeholders": {
+      "severity": {
+        "type": "String"
+      }
+    }
+  },
+  "alertDateTime": "{time}",
+  "@alertDateTime": {
+    "description": "An alert center time from before today: a date and time in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "alertSince": "since {time}",
+  "@alertSince": {
+    "description": "When a raised alert's breach began, in the alert center; time is a time of day in the UI locale.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRaisedAt": "Raised at {time}",
+  "@alertRaisedAt": {
+    "description": "An alert center history row for a raise; time is a time of day in the UI locale.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "alertClearedAt": "Cleared at {time}",
+  "@alertClearedAt": {
+    "description": "An alert center history row for a clear; time is a time of day in the UI locale.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "alertMetricCpuBusy": "CPU busy",
+  "@alertMetricCpuBusy": {
+    "description": "The alert metric cpu.busy: the share of CPU time spent busy."
+  },
+  "alertMetricMemoryUsed": "Memory used",
+  "@alertMetricMemoryUsed": {
+    "description": "The alert metric memory.used: used memory as a share of the total."
+  },
+  "alertMetricLoadPerCore": "Load per core",
+  "@alertMetricLoadPerCore": {
+    "description": "The alert metric load.perCore: the 1-minute load average divided by the number of cores."
+  },
+  "alertMetricDiskUsed": "Disk space used",
+  "@alertMetricDiskUsed": {
+    "description": "The alert metric disk.used: the fullest filesystem's used space."
+  },
+  "alertMetricDiskInodes": "Inodes used",
+  "@alertMetricDiskInodes": {
+    "description": "The alert metric disk.inodes: the fullest filesystem's used inodes."
   }
 }
