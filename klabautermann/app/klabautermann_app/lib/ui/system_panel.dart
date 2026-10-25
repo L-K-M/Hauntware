@@ -13,10 +13,18 @@ import 'charts/charts.dart' show BarSegment, ChartUnit, StackedBar;
 import 'disk_activity.dart';
 import 'sortable_table.dart';
 import 'system_view.dart';
+import 'temperatures.dart';
 
 /// The System tab's sections, which key them; the Disks section's id also
 /// prefixes its table's keys.
-enum SystemSection { identity, uptime, network, disks, diskActivity }
+enum SystemSection {
+  identity,
+  uptime,
+  network,
+  disks,
+  diskActivity,
+  temperatures,
+}
 
 /// The panel width from which the fact sections sit side by side and the
 /// mounts table adds its type and bytes columns and usage bars. The desktop
@@ -55,6 +63,7 @@ class _SystemPanelState extends State<SystemPanel> {
   late ValueListenable<Sample?> _identity;
   late ValueListenable<Sample?> _core;
   late ValueListenable<Sample?> _fs;
+  late ValueListenable<Sample?> _temps;
   late ValueListenable<HostProfile?> _profile;
 
   /// The latest `fs` sample that listed mounts. While a later one times
@@ -67,10 +76,12 @@ class _SystemPanelState extends State<SystemPanel> {
   TableSort? _sort;
   bool _showPseudo = false;
 
-  /// The Disk activity table's order, which outlives tab switches too.
+  /// The Disk activity and Temperatures tables' orders, which outlive
+  /// tab switches too.
   TableSort? _activitySort;
+  TableSort? _tempsSort;
 
-  List<Listenable> get _slow => [_identity, _fs, _listed, _profile];
+  List<Listenable> get _slow => [_identity, _fs, _listed, _temps, _profile];
 
   @override
   void initState() {
@@ -102,6 +113,7 @@ class _SystemPanelState extends State<SystemPanel> {
     _identity = monitoring.sampleFor(serverId, SampleStream.identity);
     _core = monitoring.sampleFor(serverId, SampleStream.core);
     _fs = monitoring.sampleFor(serverId, SampleStream.fs);
+    _temps = monitoring.sampleFor(serverId, SampleStream.temps);
     _listed = monitoring.lastReadingFor(serverId, SampleStream.fs);
     _profile = monitoring.profileFor(serverId);
     for (final listenable in _slow) {
@@ -135,6 +147,7 @@ class _SystemPanelState extends State<SystemPanel> {
           listenable: _core,
           builder: (context, _) => _networkSection(l10n),
         );
+        final temperatures = _temperaturesSection(l10n, profile);
         return SingleChildScrollView(
           padding: EdgeInsets.all(wide ? 20 : 16),
           child: Column(
@@ -166,6 +179,7 @@ class _SystemPanelState extends State<SystemPanel> {
                 listenable: _core,
                 builder: (context, _) => _diskActivitySection(l10n, profile),
               ),
+              ?temperatures,
             ],
           ),
         );
@@ -277,6 +291,31 @@ class _SystemPanelState extends State<SystemPanel> {
           ),
         ];
       }),
+    );
+  }
+
+  /// HW-01: each temperature sensor and the chip's limits for it, or no
+  /// section where the host reports none, as VMs usually do. Inside a
+  /// container, sysfs shows the host's sensors, so there is none either.
+  Widget? _temperaturesSection(AppLocalizations l10n, HostProfile? profile) {
+    if (inContainer(profile)) return null;
+    final sensors = switch (_temps.value?.result) {
+      TempsResult(:final temps) when temps.sensors.isNotEmpty => temps.sensors,
+      _ => null,
+    };
+    if (sensors == null) return null;
+
+    return PanelSection(
+      key: const ValueKey(SystemSection.temperatures),
+      title: l10n.systemTemperaturesTitle,
+      children: [
+        TemperaturesTable(
+          tableId: SystemSection.temperatures.name,
+          sensors: sensors,
+          sort: _tempsSort,
+          onSort: (sort) => setState(() => _tempsSort = sort),
+        ),
+      ],
     );
   }
 

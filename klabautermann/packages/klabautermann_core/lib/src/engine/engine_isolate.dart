@@ -782,11 +782,12 @@ void engineMain(
       detail: imports.detail,
     );
     final before = fleetIds;
-    fleetIds = {for (final entry in fleetEntries()) entry.serverId};
+    final entries = fleetEntries();
+    fleetIds = {for (final entry in entries) entry.serverId};
     sampling.fleet = fleetIds;
     alerts
         .setFleet({
-          for (final entry in fleetEntries()) entry.serverId: entry.group,
+          for (final entry in entries) entry.serverId: entry.group,
         }, DateTime.now().toUtc())
         .forEach(uiPort.send);
     scheduler?.retain(fleetIds);

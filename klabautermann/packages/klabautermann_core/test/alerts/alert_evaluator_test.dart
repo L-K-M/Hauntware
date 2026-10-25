@@ -71,6 +71,14 @@ void main() {
     expect(cleared.since, isNull);
   });
 
+  test('the rule model and the protocol name the same severities, which '
+      'the evaluator maps by name', () {
+    expect(
+      [for (final s in host.AlertSeverity.values) s.name],
+      [for (final s in AlertSeverity.values) s.name],
+    );
+  });
+
   test('a short breach never raises, and an unknown value holds the '
       'phase rather than reading as zero', () {
     alerts.setRules([_cpu()], _t0);
@@ -105,7 +113,8 @@ void main() {
     expect(raised('elsewhere'), isEmpty);
   });
 
-  test('the fullest real filesystem feeds disk.used and disk.inodes', () {
+  test('disk.used and disk.inodes each come from the fullest real '
+      'filesystem, past pseudo ones', () {
     final values = alertValues(
       FsResult(
         FsSnapshot([

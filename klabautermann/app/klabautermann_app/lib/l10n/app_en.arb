@@ -1278,6 +1278,53 @@
       }
     }
   },
+  "systemTemperaturesTitle": "Temperatures",
+  "@systemTemperaturesTitle": {
+    "description": "System tab: the section of the host's temperature sensors (HW-01). It is hidden where the host has none, as VMs and containers usually do."
+  },
+  "systemTemperatureSensor": "Sensor",
+  "@systemTemperatureSensor": {
+    "description": "Temperatures table: column of the sensor's name."
+  },
+  "systemTemperatureSensorName": "{chip}: {label}",
+  "@systemTemperatureSensorName": {
+    "description": "Temperatures table: a sensor named by its chip (coretemp, nvme, k10temp) and the chip's label for it (Package id 0, Composite). Both are the kernel's technical names.",
+    "placeholders": {
+      "chip": {
+        "type": "String",
+        "example": "coretemp"
+      },
+      "label": {
+        "type": "String",
+        "example": "Package id 0"
+      }
+    }
+  },
+  "systemTemperatureReading": "Temperature",
+  "@systemTemperatureReading": {
+    "description": "Temperatures table: column of the sensor's current reading."
+  },
+  "systemTemperatureHigh": "High",
+  "@systemTemperatureHigh": {
+    "description": "Temperatures table: column of the temperature the chip calls high for the sensor (its max limit)."
+  },
+  "systemTemperatureCritical": "Critical",
+  "@systemTemperatureCritical": {
+    "description": "Temperatures table: column of the temperature the chip calls critical for the sensor."
+  },
+  "systemTemperatureCelsius": "{celsius} °C",
+  "@systemTemperatureCelsius": {
+    "description": "A temperature in degrees Celsius, as a whole number in the UI locale.",
+    "placeholders": {
+      "celsius": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 0
+        }
+      }
+    }
+  },
   "systemColumnMount": "Mount",
   "@systemColumnMount": {
     "description": "Disks table column: where the filesystem is mounted."
@@ -3511,6 +3558,64 @@
   "settingsAnnounceNotChanged": "The setting could not be changed.",
   "@settingsAnnounceNotChanged": {
     "description": "Toast when the app did not take a change of the threshold announcement switch."
+  },
+  "appLockTitle": "Klabautermann is locked",
+  "@appLockTitle": {
+    "description": "App lock screen (SAF-20): its heading, shown over the whole app while the app lock is engaged."
+  },
+  "appLockDetail": "Unlock with this device's passcode, PIN or biometrics. Connections already open keep running.",
+  "@appLockDetail": {
+    "description": "App lock screen: what unlocking asks for, and that open links are not closed by the lock."
+  },
+  "appLockUnlock": "Unlock",
+  "@appLockUnlock": {
+    "description": "App lock screen: the button that asks for device authentication again."
+  },
+  "appLockFailed": "Authentication failed or was cancelled. Try again.",
+  "@appLockFailed": {
+    "description": "App lock screen: the last device authentication was rejected or dismissed."
+  },
+  "appLockUnavailable": "This device has no passcode, PIN or biometrics to ask for. Set one up, then try again.",
+  "@appLockUnavailable": {
+    "description": "App lock screen: device authentication is not set up or not available, so the lock cannot be opened yet."
+  },
+  "appLockReason": "Unlock Klabautermann",
+  "@appLockReason": {
+    "description": "The reason line the operating system's authentication prompt shows when the app lock asks for it."
+  },
+  "settingsAppLockTitle": "App lock",
+  "@settingsAppLockTitle": {
+    "description": "Settings > Safety: the heading over the app lock switch (SAF-20)."
+  },
+  "settingsAppLock": "Require device authentication",
+  "@settingsAppLock": {
+    "description": "Settings > Safety: the app lock switch."
+  },
+  "settingsAppLockDetail": "Ask for this device's passcode, PIN or biometrics when Klabautermann opens and after {minutes} minutes in the background. Locking turns admin mode off on every server.",
+  "@settingsAppLockDetail": {
+    "description": "Settings > Safety: what the app lock switch does.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsAppLockUnsupported": "This platform has no device authentication Klabautermann can ask for.",
+  "@settingsAppLockUnsupported": {
+    "description": "Settings > Safety: why the app lock switch is off and disabled on Linux."
+  },
+  "settingsAppLockUnavailable": "Set up a passcode, PIN or biometrics on this device to use the app lock.",
+  "@settingsAppLockUnavailable": {
+    "description": "Settings > Safety: why the app lock switch cannot be turned on right now."
+  },
+  "settingsAppLockNotChanged": "{reason, select, notAuthenticated{The app lock did not change: authentication failed or was cancelled.} unavailable{The app lock did not change: this device has no authentication to ask for.} notSaved{The app lock did not change: the setting could not be saved.} other{The app lock did not change.}}",
+  "@settingsAppLockNotChanged": {
+    "description": "Settings > Safety: a toast after turning the app lock on or off did not take effect, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
   },
   "settingsSyncSecretsTitle": "Passwords and keys",
   "@settingsSyncSecretsTitle": {
@@ -8191,9 +8296,19 @@
       }
     }
   },
+  "alertDateTime": "{time}",
+  "@alertDateTime": {
+    "description": "An alert center time from before today: a date and time in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
   "alertSince": "since {time}",
   "@alertSince": {
-    "description": "When a raised alert's breach began, in the alert center; time is a time of day in the UI locale.",
+    "description": "When a raised alert's breach began, in the alert center; time is a time of day when the breach began today, else a date and time, in the UI locale.",
     "placeholders": {
       "time": {
         "type": "String"

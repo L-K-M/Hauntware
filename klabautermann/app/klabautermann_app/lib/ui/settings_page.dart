@@ -6,6 +6,7 @@ import 'package:klabautermann_core/klabautermann_core.dart'
     show MonitorEligibility, kAdminExpiryChoices, kMonitorSetLimit;
 
 import '../controllers/announcement_controller.dart';
+import '../controllers/app_lock_controller.dart';
 import '../controllers/appearance_controller.dart';
 import '../controllers/device_name.dart';
 import '../controllers/monitor_set.dart';
@@ -15,6 +16,7 @@ import '../controllers/sync_secrets_controller.dart';
 import '../l10n/app_localizations.dart';
 import '../services/settings_window/settings_window_link.dart';
 import 'about_dialog.dart';
+import 'app_lock_settings.dart';
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 import 'appearance_tab.dart';
 import 'monitor_set_feedback.dart';
@@ -38,6 +40,7 @@ class SettingsPage extends StatefulWidget {
     required this.monitorSet,
     this.deviceName,
     this.safety,
+    this.appLock,
     this.syncSecrets,
     this.pinPublication,
     this.initialTab = SettingsTab.general,
@@ -53,6 +56,10 @@ class SettingsPage extends StatefulWidget {
 
   /// Null in tests that leave safety out, where the tab is a placeholder.
   final SafetySettings? safety;
+
+  /// The app lock (SAF-20) in the Safety tab; null in tests that leave it
+  /// out, where the tab shows no app lock.
+  final AppLockSettings? appLock;
 
   /// Null in tests that leave it out, where the Sync tab is a placeholder.
   final SyncSecretsSettings? syncSecrets;
@@ -146,6 +153,7 @@ class _SettingsPageState extends State<SettingsPage>
               ),
               SettingsTab.safety when widget.safety != null => SafetyTab(
                 safety: widget.safety!,
+                appLock: widget.appLock,
               ),
               _ => const PlaceholderPaneBody(),
             },
@@ -558,9 +566,12 @@ class ServersTab extends StatelessWidget {
 /// (SAF-22), each mark with a button that removes it. Per-server
 /// management and read-only live in the server header's Safety menu.
 class SafetyTab extends StatelessWidget {
-  const SafetyTab({super.key, required this.safety});
+  const SafetyTab({super.key, required this.safety, this.appLock});
 
   final SafetySettings safety;
+
+  /// Null where the app lock is left out.
+  final AppLockSettings? appLock;
 
   /// As [AppearanceTab._setMode]: the control moves once the app took the
   /// change, and a change it took but could not save says so.
@@ -655,6 +666,10 @@ class SafetyTab extends StatelessWidget {
                   ),
                 ),
               ),
+            if (appLock case final appLock?) ...[
+              const SizedBox(height: 24),
+              AppLockSection(lock: appLock),
+            ],
           ],
         );
       },

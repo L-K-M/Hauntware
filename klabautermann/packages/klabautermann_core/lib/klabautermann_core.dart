@@ -83,6 +83,8 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         ProcsSelection,
         SystemWideProcFile,
         SystemdUnit,
+        TempSensor,
+        TempsSnapshot,
         TimersSnapshot,
         UnitListFormat,
         UnitsSnapshot;

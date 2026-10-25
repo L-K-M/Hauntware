@@ -43,9 +43,14 @@ const _fast = {SampleStream.overview, SampleStream.core};
 /// tool's `kFixtureCollectors`): their payloads are the system streams'
 /// shapes, which these fixtures read.
 const _userManager = {SampleStream.userUnits, SampleStream.userTimers};
+
+/// `temps` has no captured fixture either: capture containers and VMs
+/// have no sensors; its parser and fragment have their own tests.
+const _temps = {SampleStream.temps};
 final _slow = SampleStream.values.toSet().difference({
   ..._fast,
   ..._userManager,
+  ..._temps,
 });
 
 /// Every field comes from a system-wide `/proc` file, so a container
