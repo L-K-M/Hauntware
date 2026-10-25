@@ -25,9 +25,14 @@ enum ServerPanel {
   jobs({SampleStream.timers, SampleStream.cron}),
   docker({}),
 
-  /// Identity (SYS-01), uptime and boot (BOOT-01), disks (DSK-01/02) and
-  /// network (NET-01).
-  system({SampleStream.identity, SampleStream.fs, SampleStream.core}),
+  /// Identity (SYS-01), uptime and boot (BOOT-01), disks (DSK-01 to
+  /// DSK-04), network (NET-01) and temperatures (HW-01).
+  system({
+    SampleStream.identity,
+    SampleStream.fs,
+    SampleStream.core,
+    SampleStream.temps,
+  }),
   access({});
 
   const ServerPanel(this.streams);

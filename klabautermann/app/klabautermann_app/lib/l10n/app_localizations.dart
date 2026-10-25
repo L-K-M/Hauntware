@@ -1684,6 +1684,48 @@ abstract class AppLocalizations {
   /// **'{ms} ms'**
   String systemDiskMilliseconds(double ms);
 
+  /// System tab: the section of the host's temperature sensors (HW-01). It is hidden where the host has none, as VMs and containers usually do.
+  ///
+  /// In en, this message translates to:
+  /// **'Temperatures'**
+  String get systemTemperaturesTitle;
+
+  /// Temperatures table: column of the sensor's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Sensor'**
+  String get systemTemperatureSensor;
+
+  /// Temperatures table: a sensor named by its chip (coretemp, nvme, k10temp) and the chip's label for it (Package id 0, Composite). Both are the kernel's technical names.
+  ///
+  /// In en, this message translates to:
+  /// **'{chip}: {label}'**
+  String systemTemperatureSensorName(String chip, String label);
+
+  /// Temperatures table: column of the sensor's current reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Temperature'**
+  String get systemTemperatureReading;
+
+  /// Temperatures table: column of the temperature the chip calls high for the sensor (its max limit).
+  ///
+  /// In en, this message translates to:
+  /// **'High'**
+  String get systemTemperatureHigh;
+
+  /// Temperatures table: column of the temperature the chip calls critical for the sensor.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical'**
+  String get systemTemperatureCritical;
+
+  /// A temperature in degrees Celsius, as a whole number in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{celsius} °C'**
+  String systemTemperatureCelsius(double celsius);
+
   /// Disks table column: where the filesystem is mounted.
   ///
   /// In en, this message translates to:
