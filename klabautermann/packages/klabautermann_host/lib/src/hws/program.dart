@@ -43,7 +43,8 @@ const kSamplerStartCommand =
 /// the login user's own manager (03 §7.5, SVC-09).
 /// Version 10 adds DSK-04's ms reading, ms writing and ms doing I/O to
 /// `core`'s diskstats rows (D48).
-const kCollectorSetVersion = '10';
+/// Version 11 adds the slow `temps` collector (HW-01).
+const kCollectorSetVersion = '11';
 
 /// The most `procs` rows one reply carries (D48). With more processes the
 /// fragment keeps the union of the [kProcsRowCap] / 2 with the highest CPU
@@ -124,6 +125,7 @@ const collectorFragments = <Collector, String>{
   Collector.cron: _kCronFragment,
   Collector.timerDetail: _kTimerDetailFragment,
   Collector.ops: _kOpsFragment,
+  Collector.temps: _kTempsFragment,
 };
 
 /// Assembles the program text for [kind]: the nonce line first, then the
@@ -493,6 +495,37 @@ c_fs() {
     *)
       st=error ;;
   esac
+}
+""";
+
+/// `temps` (03 §6.4, HW-01): each hwmon chip's temperature inputs as
+/// `<dir>|<chip>|<input>|<millidegrees>|<max>|<crit>|<label>`, then each
+/// thermal zone as `<zone>|<millidegrees>|<type>`, read with builtins. An
+/// input that cannot be read (an unwired sensor answers EIO) is skipped,
+/// and a host without either class sends empty blocks.
+const _kTempsFragment = r"""
+c_temps() {
+  st=ok; o='== hwmon =='
+  for _d in /sys/class/hwmon/hwmon*; do
+    [ -r "$_d/name" ] || continue
+    read -r _c <"$_d/name" || continue
+    for _f in "$_d"/temp*_input; do
+      _v=; read -r _v 2>/dev/null <"$_f"
+      case $_v in '' | *[!0-9-]*) continue ;; esac
+      _b=${_f%_input}; _m=; _k=; _l=
+      [ -r "${_b}_max" ] && read -r _m 2>/dev/null <"${_b}_max"
+      [ -r "${_b}_crit" ] && read -r _k 2>/dev/null <"${_b}_crit"
+      [ -r "${_b}_label" ] && read -r _l 2>/dev/null <"${_b}_label"
+      o="$o$NL${_d##*/}|$_c|${_b##*/}|$_v|$_m|$_k|$_l"
+    done
+  done
+  o="$o$NL== thermal =="
+  for _z in /sys/class/thermal/thermal_zone*; do
+    _v=; read -r _v 2>/dev/null <"$_z/temp"
+    case $_v in '' | *[!0-9-]*) continue ;; esac
+    _t=; [ -r "$_z/type" ] && read -r _t 2>/dev/null <"$_z/type"
+    o="$o$NL${_z##*/}|$_v|$_t"
+  done
 }
 """;
 

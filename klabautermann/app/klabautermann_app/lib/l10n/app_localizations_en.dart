@@ -1135,6 +1135,38 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get systemTemperaturesTitle => 'Temperatures';
+
+  @override
+  String get systemTemperatureSensor => 'Sensor';
+
+  @override
+  String systemTemperatureSensorName(String chip, String label) {
+    return '$chip: $label';
+  }
+
+  @override
+  String get systemTemperatureReading => 'Temperature';
+
+  @override
+  String get systemTemperatureHigh => 'High';
+
+  @override
+  String get systemTemperatureCritical => 'Critical';
+
+  @override
+  String systemTemperatureCelsius(double celsius) {
+    final intl.NumberFormat celsiusNumberFormat =
+        intl.NumberFormat.decimalPatternDigits(
+          locale: localeName,
+          decimalDigits: 0,
+        );
+    final String celsiusString = celsiusNumberFormat.format(celsius);
+
+    return '$celsiusString °C';
+  }
+
+  @override
   String get systemColumnMount => 'Mount';
 
   @override
