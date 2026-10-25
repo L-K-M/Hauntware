@@ -38,11 +38,34 @@ const _identity = IdentityResult(
   arch: 'x86_64',
 );
 
-CoreResult _core({Map<String, NetRate>? network = _network}) => CoreResult(
+CoreResult _core({
+  Map<String, NetRate>? network = _network,
+  Map<String, DiskRate>? disks = _disks,
+}) => CoreResult(
   uptime: const Duration(days: 12, hours: 3, minutes: 7),
   bootedAt: _booted,
   network: network,
+  disks: disks,
 );
+
+/// Two whole disks: one with collector set 10's timings, one as an older
+/// reading without them.
+const _disks = {
+  'nvme0n1': DiskRate(
+    readBytesPerSecond: 2.5 * _mib,
+    writeBytesPerSecond: 3.0 * _mib,
+    readsPerSecond: 812,
+    writesPerSecond: 140.4,
+    readAwaitMs: 0.42,
+    writeAwaitMs: 1.85,
+    busyPercent: 37.6,
+  ),
+  'sda': DiskRate(
+    readBytesPerSecond: 0,
+    writeBytesPerSecond: 512.0 * _kib,
+    writesPerSecond: 9,
+  ),
+};
 
 const _network = {
   'eth0': NetRate(
@@ -254,7 +277,7 @@ void main() {
         .cast<Subscribe>()
         .last;
     expect(system.streams, ServerPanel.system.streams);
-    expect(find.text('Waiting for the first reading.'), findsNWidgets(4));
+    expect(find.text('Waiting for the first reading.'), findsNWidgets(5));
 
     await _Panel(harness.engine).all(tester, _vm);
     expect(find.text('Waiting for the first reading.'), findsNothing);
@@ -310,7 +333,55 @@ void main() {
       _inSection(SystemSection.network, find.text('Unknown')),
       findsNWidgets(2),
     );
-    expect(find.textContaining('0 B/s'), findsNothing);
+    expect(
+      _inSection(SystemSection.network, find.textContaining('0 B/s')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('DSK-03 and DSK-04 show each disk\'s throughput, requests, '
+      'wait and busy share; what a reading lacks reads unknown', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.sample(tester, SampleStream.core, _core());
+    Finder activity(String text) =>
+        _inSection(SystemSection.diskActivity, find.text(text));
+
+    expect(activity('nvme0n1'), findsOneWidget);
+    expect(activity('2.5 MiB/s'), findsOneWidget);
+    expect(activity('3 MiB/s'), findsOneWidget);
+    expect(activity('812'), findsOneWidget);
+    expect(activity('140'), findsOneWidget);
+    expect(activity('0.4 ms'), findsOneWidget);
+    expect(activity('1.9 ms'), findsOneWidget);
+    expect(activity('38%'), findsOneWidget);
+    // sda's reading has no timings: its waits and busy share are unknown,
+    // never zero.
+    expect(activity('512 KiB/s'), findsOneWidget);
+    expect(activity('Unknown'), findsNWidgets(3));
+
+    // The first reading after a reset has no rates yet.
+    await panel.sample(tester, SampleStream.core, _core(disks: null));
+    expect(activity('Rates show from the second reading.'), findsOneWidget);
+    await panel.sample(tester, SampleStream.core, _core(disks: const {}));
+    expect(activity('No disk has done any I/O yet.'), findsOneWidget);
+  });
+
+  testWidgets('where every column does not fit, the disk activity table '
+      'keeps throughput and busy share and drops the counts and waits', (
+    tester,
+  ) async {
+    final panel = await _pump(tester, size: _phone);
+    await panel.sample(tester, SampleStream.core, _core());
+    Finder activity(String text) =>
+        _inSection(SystemSection.diskActivity, find.text(text));
+
+    expect(activity('2.5 MiB/s'), findsOneWidget);
+    expect(activity('38%'), findsOneWidget);
+    expect(activity('812'), findsNothing);
+    expect(activity('0.4 ms'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('SYS-04: inside a container without lxcfs the host\'s uptime '
@@ -632,7 +703,7 @@ void main() {
     panel.serverId!.value = 'srv-2';
     await tester.pumpAndSettle();
     expect(find.text('Debian GNU/Linux 12 (bookworm)'), findsNothing);
-    expect(find.text('Waiting for the first reading.'), findsNWidgets(4));
+    expect(find.text('Waiting for the first reading.'), findsNWidgets(5));
 
     // A timeout there lists none of the first server's mounts.
     await panel.sample(

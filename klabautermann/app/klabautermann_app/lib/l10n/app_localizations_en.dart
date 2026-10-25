@@ -1084,6 +1084,57 @@ class AppLocalizationsEn extends AppLocalizations {
   String get systemDevice => 'Device';
 
   @override
+  String get systemDiskActivityTitle => 'Disk activity';
+
+  @override
+  String get systemDiskActivityWaiting => 'Rates show from the second reading.';
+
+  @override
+  String get systemDiskActivityEmpty => 'No disk has done any I/O yet.';
+
+  @override
+  String get systemDiskRead => 'Read';
+
+  @override
+  String get systemDiskWrite => 'Write';
+
+  @override
+  String get systemDiskReadsPerSecond => 'Reads/s';
+
+  @override
+  String get systemDiskWritesPerSecond => 'Writes/s';
+
+  @override
+  String get systemDiskReadAwait => 'Read wait';
+
+  @override
+  String get systemDiskWriteAwait => 'Write wait';
+
+  @override
+  String get systemDiskBusy => 'Busy';
+
+  @override
+  String systemDiskOperations(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '$countString';
+  }
+
+  @override
+  String systemDiskMilliseconds(double ms) {
+    final intl.NumberFormat msNumberFormat =
+        intl.NumberFormat.decimalPatternDigits(
+          locale: localeName,
+          decimalDigits: 1,
+        );
+    final String msString = msNumberFormat.format(ms);
+
+    return '$msString ms';
+  }
+
+  @override
   String get systemColumnMount => 'Mount';
 
   @override

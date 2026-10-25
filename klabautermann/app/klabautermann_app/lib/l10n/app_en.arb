@@ -1215,6 +1215,69 @@
   "@systemDevice": {
     "description": "Label of the device or source a filesystem is mounted from, such as /dev/sda1 or nas:/export, in a mount's details."
   },
+  "systemDiskActivityTitle": "Disk activity",
+  "@systemDiskActivityTitle": {
+    "description": "System tab: the section of each whole disk's I/O rates since the previous reading (DSK-03, DSK-04)."
+  },
+  "systemDiskActivityWaiting": "Rates show from the second reading.",
+  "@systemDiskActivityWaiting": {
+    "description": "System tab, Disk activity: a rate needs two readings, and only one has arrived."
+  },
+  "systemDiskActivityEmpty": "No disk has done any I/O yet.",
+  "@systemDiskActivityEmpty": {
+    "description": "System tab, Disk activity: the server reports no whole disk that ever did I/O (loop, RAM and partition devices are left out)."
+  },
+  "systemDiskRead": "Read",
+  "@systemDiskRead": {
+    "description": "Disk activity column: bytes read per second."
+  },
+  "systemDiskWrite": "Write",
+  "@systemDiskWrite": {
+    "description": "Disk activity column: bytes written per second."
+  },
+  "systemDiskReadsPerSecond": "Reads/s",
+  "@systemDiskReadsPerSecond": {
+    "description": "Disk activity column: completed read requests per second (read IOPS)."
+  },
+  "systemDiskWritesPerSecond": "Writes/s",
+  "@systemDiskWritesPerSecond": {
+    "description": "Disk activity column: completed write requests per second (write IOPS)."
+  },
+  "systemDiskReadAwait": "Read wait",
+  "@systemDiskReadAwait": {
+    "description": "Disk activity column: the mean time a read took, queueing included (iostat's r_await)."
+  },
+  "systemDiskWriteAwait": "Write wait",
+  "@systemDiskWriteAwait": {
+    "description": "Disk activity column: the mean time a write took, queueing included (iostat's w_await)."
+  },
+  "systemDiskBusy": "Busy",
+  "@systemDiskBusy": {
+    "description": "Disk activity column: the share of the interval the disk had any request in flight (iostat's %util)."
+  },
+  "systemDiskOperations": "{count}",
+  "@systemDiskOperations": {
+    "description": "Disk activity: a whole number of requests per second, in the UI locale.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "systemDiskMilliseconds": "{ms} ms",
+  "@systemDiskMilliseconds": {
+    "description": "Disk activity: a mean request time in milliseconds with one decimal, in the UI locale.",
+    "placeholders": {
+      "ms": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 1
+        }
+      }
+    }
+  },
   "systemColumnMount": "Mount",
   "@systemColumnMount": {
     "description": "Disks table column: where the filesystem is mounted."

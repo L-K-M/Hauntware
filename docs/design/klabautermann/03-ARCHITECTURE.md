@@ -662,10 +662,12 @@ Proposals awaiting the owner close the section; they are not decisions.
   `drivers/nvme/host/core.c` (`nvme_alloc_ns`),
   `drivers/nvme/host/multipath.c` (`nvme_mpath_start_request`)], so a path
   row stays only when its head row shows no I/O, as on kernels before the
-  head accounted it. The four counters serve DSK-03's rates; DSK-04's
-  latency and utilization fields (ms reading, ms writing, `io_ticks`,
-  weighted ms) stay out until v1 brings DSK-04 and bumps the collector-set
-  version. A `netdev` or `diskstats` row whose counters are all zero (an
+  head accounted it. Since collector-set version 10 each row carries
+  seven counters: reads, sectors read, writes and sectors written serve
+  DSK-03's throughput and IOPS; ms reading, ms writing and `io_ticks`
+  serve DSK-04's await per request and busy share. Weighted ms (queue
+  depth) stays out. The parser still takes a four-counter row, whose
+  waits and busy share read as unknown. A `netdev` or `diskstats` row whose counters are all zero (an
   unused NIC, idle `nbd` devices) is left out; its first non-zero reading
   starts its series. PSI keeps `avg10`, `avg60` and `avg300` (7.1),
   without the cumulative `total`. The cpu file's `full` line stays: the
@@ -3350,8 +3352,9 @@ the guarded kill needs it.
   inodes from `df -Pi`; both under `timeout 10` because stale NFS mounts hang
   `df`.
 - **v1.** I/O rates and latency from `/proc/diskstats` deltas (devices
-  filtered on the host by D48; the `core` rows gain DSK-04's latency fields
-  with a collector-set version bump); mount details from `findmnt -J -b`
+  filtered on the host by D48; the `core` rows carry DSK-04's latency
+  fields from collector-set version 10, shown in the System tab's Disk
+  activity table); mount details from `findmnt -J -b`
   (util-linux 2.27+); swap devices; the disk space explorer (DSK-07), which
   streams `ncdu -x -o -` or `gdu -o-` when installed, else incremental `du -x
   -B1 -d1` per opened directory, read-only, sudo for a complete tree.
