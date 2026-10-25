@@ -260,6 +260,9 @@ PlatformException encodeLinkError(Object error) => PlatformException(
 /// unlocked in its own window.
 final class AppLockedException implements Exception {
   const AppLockedException();
+
+  @override
+  String toString() => 'The app is locked';
 }
 
 /// The inverse of [encodeLinkError], in the window.

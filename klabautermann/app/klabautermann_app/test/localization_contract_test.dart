@@ -299,6 +299,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'klabautermann/settings_link'",
     "'--klabautermann-settings-window'",
     r"'$error'",
+    "'The app is locked'",
   },
   'lib/services/settings_window/settings_window_host.dart': {
     r"'No settings window method $name'",

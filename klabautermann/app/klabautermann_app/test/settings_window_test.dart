@@ -869,6 +869,28 @@ void main() {
       expect(find.text('Dark'), findsOneWidget);
     });
 
+    testWidgets('a window opened while the app is locked shows the notice '
+        'from its first frame (SAF-20)', (tester) async {
+      host.dispose();
+      final lock = _ManualAppLock()..locked = true;
+      addTearDown(lock.dispose);
+      await tester.runAsync(() async {
+        host = newHost(
+          appearance,
+          announcements,
+          fleet.monitorSettings,
+          safety,
+          syncSecrets,
+          deviceName,
+          lock,
+        );
+      });
+      await pumpWindow(tester, SettingsTab.appearance);
+
+      expect(find.text('Klabautermann is locked'), findsOneWidget);
+      expect(find.text('Dark'), findsNothing);
+    });
+
     testWidgets('a theme change in the app re-themes the showing window', (
       tester,
     ) async {

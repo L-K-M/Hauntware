@@ -5172,7 +5172,9 @@ ghost_keystore's `AppLock` (F5f), Séance's own, behind a lock screen:
   window to run it.
 - While the app is locked, the desktop settings window covers its tabs
   with a notice to unlock the app's window, and the app refuses every
-  call from it, so a change cannot slip past the lock screen.
+  call from it, so a change cannot slip past the lock screen. Like the
+  app's own covered window, it keeps the settings it last received
+  behind the notice.
 - The lock fails closed: a device whose passcode, PIN and biometrics are
   removed while it is on keeps the app behind the screen, which says to
   set one up again, since unlocking and turning the lock off both need
