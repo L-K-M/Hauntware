@@ -29,6 +29,15 @@ Map<String, int> containersByVolume(List<ContainerSummary> containers) {
   return counts;
 }
 
+/// The names Docker accepts for a volume or a driver, as the engine's
+/// planner checks them (VOL-02).
+final _volumeName = RegExp(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]+$');
+
+/// Whether [name] is one Docker accepts for a volume or a driver: a
+/// letter or digit, then at least one more letter, digit, `_`, `.` or
+/// `-`.
+bool validVolumeName(String name) => _volumeName.hasMatch(name);
+
 /// One volume the tab lists, with how many containers mount it.
 final class VolumeEntry {
   const VolumeEntry(this.volume, this.containers);

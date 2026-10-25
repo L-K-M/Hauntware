@@ -536,9 +536,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   'lib/ui/docker/volumes_view.dart': {
     // The mount type of a named volume, matched, never shown; the line
-    // break between the fields the search reads.
+    // break between the fields the search reads; the name pattern Docker
+    // accepts (VOL-02).
     "'volume'",
     r"'\n'",
+    "r'^[a-zA-Z0-9][a-zA-Z0-9_.-]+\$'",
   },
   'lib/ui/docker/unlisted_stacks.dart': {
     // The path separator a found file's folder and name split at, the

@@ -8,6 +8,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../l10n/app_localizations.dart';
 import '../docker/containers_view.dart' show EngineContainerState;
 import '../docker/images_view.dart' show ImageEntry;
+import '../docker/volumes_view.dart' show VolumeEntry, validVolumeName;
 import 'action_entry.dart';
 import 'action_preview.dart';
 
@@ -562,6 +563,186 @@ class StackDownButton extends StatelessWidget {
           label: Text(l10n.dockerStackDown),
         ),
       ),
+    );
+  }
+}
+
+/// [entry]'s actions for the Volumes table's row menu, where actions on
+/// [serverId] are allowed (VOL-02): Remove, which the engine refuses for
+/// a volume a container mounts.
+List<SidebarMenuEntry> volumeActionEntries(
+  BuildContext context, {
+  required String serverId,
+  required VolumeEntry entry,
+}) {
+  if (!actionsAllowedAt(context, serverId, ActionEntryPoint.volumeRemove)) {
+    return const [];
+  }
+  return [
+    SidebarMenuAction(
+      label: AppLocalizations.of(context).dockerVolumeRemove,
+      onSelected: () =>
+          startAction(context, RemoveVolume(serverId, name: entry.volume.name)),
+    ),
+  ];
+}
+
+/// The same action behind a button on the Volumes phone row, which has
+/// no row menu.
+class VolumeActionsButton extends StatelessWidget {
+  const VolumeActionsButton({
+    super.key,
+    required this.serverId,
+    required this.entry,
+  });
+
+  final String serverId;
+  final VolumeEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return ActionEntry(
+      serverId: serverId,
+      point: ActionEntryPoint.volumeRemove,
+      child: MenuAnchor(
+        menuChildren: [
+          MenuItemButton(
+            onPressed: () => startAction(
+              context,
+              RemoveVolume(serverId, name: entry.volume.name),
+            ),
+            child: Text(l10n.dockerVolumeRemove),
+          ),
+        ],
+        builder: (context, controller, _) => IconButton(
+          tooltip: l10n.dockerActions,
+          icon: const Icon(Icons.more_vert),
+          onPressed: () =>
+              controller.isOpen ? controller.close() : controller.open(),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Create volume…" over the Volumes list (VOL-02): asks for a name and
+/// an optional driver, then plans the create.
+class CreateVolumeButton extends StatelessWidget {
+  const CreateVolumeButton({super.key, required this.serverId});
+
+  final String serverId;
+
+  Future<void> _create(BuildContext context) async {
+    final request = await showDialog<({String name, String? driver})>(
+      context: context,
+      builder: (context) => const _CreateVolumeDialog(),
+    );
+    if (request == null || !context.mounted) return;
+    startAction(
+      context,
+      CreateVolume(serverId, name: request.name, driver: request.driver),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => ActionEntry(
+    serverId: serverId,
+    point: ActionEntryPoint.volumeCreate,
+    child: OutlinedButton.icon(
+      onPressed: () => unawaited(_create(context)),
+      icon: const Icon(Icons.add),
+      label: Text(AppLocalizations.of(context).dockerVolumeCreate),
+    ),
+  );
+}
+
+class _CreateVolumeDialog extends StatefulWidget {
+  const _CreateVolumeDialog();
+
+  @override
+  State<_CreateVolumeDialog> createState() => _CreateVolumeDialogState();
+}
+
+class _CreateVolumeDialogState extends State<_CreateVolumeDialog> {
+  final _name = TextEditingController();
+  final _driver = TextEditingController();
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _driver.dispose();
+    super.dispose();
+  }
+
+  /// Why the typed name or driver cannot be sent, or null; an empty
+  /// driver asks for the engine's default.
+  String? _problem(
+    AppLocalizations l10n,
+    String text, {
+    bool optional = false,
+  }) {
+    final value = text.trim();
+    if (value.isEmpty) return optional ? null : l10n.dockerVolumeNameRequired;
+    return validVolumeName(value) ? null : l10n.dockerVolumeNameInvalid;
+  }
+
+  void _submit() {
+    final l10n = AppLocalizations.of(context);
+    if (_problem(l10n, _name.text) != null ||
+        _problem(l10n, _driver.text, optional: true) != null) {
+      setState(() {});
+      return;
+    }
+    final driver = _driver.text.trim();
+    Navigator.of(
+      context,
+    ).pop((name: _name.text.trim(), driver: driver.isEmpty ? null : driver));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final nameProblem = _name.text.isEmpty ? null : _problem(l10n, _name.text);
+    final driverProblem = _problem(l10n, _driver.text, optional: true);
+    return AlertDialog(
+      title: Text(l10n.dockerVolumeCreateTitle),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        spacing: 12,
+        children: [
+          TextField(
+            controller: _name,
+            autofocus: true,
+            onChanged: (_) => setState(() {}),
+            onSubmitted: (_) => _submit(),
+            decoration: InputDecoration(
+              labelText: l10n.dockerVolumesColumnName,
+              errorText: nameProblem,
+            ),
+          ),
+          TextField(
+            controller: _driver,
+            onChanged: (_) => setState(() {}),
+            onSubmitted: (_) => _submit(),
+            decoration: InputDecoration(
+              labelText: l10n.dockerVolumesColumnDriver,
+              hintText: l10n.dockerVolumeDriverHint,
+              errorText: driverProblem,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.actionConfirmCancel),
+        ),
+        FilledButton(
+          onPressed: _name.text.trim().isEmpty ? null : _submit,
+          child: Text(l10n.dockerVolumeCreateSubmit),
+        ),
+      ],
     );
   }
 }

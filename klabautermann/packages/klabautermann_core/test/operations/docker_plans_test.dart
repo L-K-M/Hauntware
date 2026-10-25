@@ -7,6 +7,7 @@ import 'dart:convert';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/operations/confirmation.dart';
+import 'package:klabautermann_core/src/operations/danger.dart';
 import 'package:klabautermann_core/src/operations/operation_plan.dart';
 import 'package:klabautermann_core/src/operations/plans/docker_plans.dart';
 import 'package:klabautermann_core/src/operations/protected_targets.dart';
@@ -33,6 +34,7 @@ Map<String, Object?> _container(
   String? imageId,
   Map<String, String> labels = const {},
   List<Map<String, Object?>> ports = const [],
+  List<String> volumes = const [],
 }) => {
   'Id': id ?? _id(name.codeUnits.map((c) => c.toRadixString(16)).join()),
   'Names': ['/$name'],
@@ -41,6 +43,9 @@ Map<String, Object?> _container(
   'State': state,
   'Labels': labels,
   'Ports': ports,
+  'Mounts': [
+    for (final volume in volumes) {'Type': 'volume', 'Name': volume},
+  ],
 };
 
 Map<String, String> _compose(
@@ -64,6 +69,7 @@ final class _Engine extends FakeDaemon {
   final String api;
   final containers = <Map<String, Object?>>[];
   final images = <Map<String, Object?>>[];
+  final volumes = <Map<String, Object?>>[];
 
   /// Statuses by `METHOD path`; actions answer 204 otherwise.
   final statuses = <String, int>{};
@@ -89,12 +95,21 @@ final class _Engine extends FakeDaemon {
           : (jsonDecode(filters) as Map).cast<String, Object?>();
       final ids = (decoded['id'] as List?)?.cast<String>();
       final labels = (decoded['label'] as List?)?.cast<String>();
+      final mounted = (decoded['volume'] as List?)?.cast<String>();
       return _reply(200, [
         for (final c in containers)
           if ((ids == null || ids.any((id) => '${c['Id']}'.startsWith(id))) &&
-              (labels == null || labels.every((l) => _hasLabel(c, l))))
+              (labels == null || labels.every((l) => _hasLabel(c, l))) &&
+              (mounted == null || mounted.every((v) => _mounts(c, v))))
             c,
       ]);
+    }
+    if (method == 'GET' && rest.startsWith('/volumes/')) {
+      final key = Uri.decodeComponent(rest.substring('/volumes/'.length));
+      for (final v in volumes) {
+        if (v['Name'] == key) return _reply(200, v);
+      }
+      return _reply(404, {'message': 'get $key: no such volume'});
     }
     if (method == 'GET' && rest.startsWith('/containers/')) {
       final key = Uri.decodeComponent(rest.split('/')[2]);
@@ -120,6 +135,11 @@ final class _Engine extends FakeDaemon {
     }
     return 'HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n';
   }
+
+  static bool _mounts(Map<String, Object?> container, String volume) =>
+      (container['Mounts'] as List? ?? const []).any(
+        (m) => (m as Map)['Name'] == volume,
+      );
 
   static bool _hasLabel(Map<String, Object?> container, String filter) {
     final [key, value] = filter.split('=');
@@ -487,6 +507,135 @@ void main() {
     });
   });
 
+  group('volumes (VOL-02)', () {
+    const created = '2026-10-20T08:00:00Z';
+
+    _Engine withVolume({List<String> mountedBy = const []}) {
+      final engine = _Engine()
+        ..volumes.add({
+          'Name': 'pgdata',
+          'Driver': 'local',
+          'CreatedAt': created,
+        });
+      for (final name in mountedBy) {
+        engine.containers.add(
+          _container(name, state: 'exited', volumes: ['pgdata']),
+        );
+      }
+      return engine;
+    }
+
+    test('a new volume is one create request after a plain confirmation, '
+        'its body shown as sent', () async {
+      final plan = _planned(
+        await _plan(
+          const CreateVolume(_server, name: 'cache', driver: 'local'),
+          withVolume(),
+        ),
+      );
+      expect(plan.kind, OperationKind.createVolume);
+      expect(plan.tier, ConfirmationTier.acknowledge);
+      expect(
+        _step(plan).display,
+        'POST /v1.52/volumes/create {"Name":"cache","Driver":"local"}',
+      );
+      expect(plan.revalidate, isEmpty);
+
+      final engineDefault = _planned(
+        await _plan(const CreateVolume(_server, name: 'cache'), withVolume()),
+      );
+      expect(_step(engineDefault).json, {'Name': 'cache'});
+    });
+
+    test('a taken name or one Docker refuses is not planned', () async {
+      final engine = withVolume();
+      expect(
+        (await _plan(
+          const CreateVolume(_server, name: 'pgdata'),
+          engine,
+        )).refusal,
+        ActionRefusalReason.volumeExists,
+      );
+      for (final (name, driver) in [
+        ('a', null),
+        ('-data', null),
+        ('da ta', null),
+        ('data', 'lo/cal'),
+      ]) {
+        expect(
+          (await _plan(
+            CreateVolume(_server, name: name, driver: driver),
+            engine,
+          )).refusal,
+          ActionRefusalReason.invalidTarget,
+          reason: '$name $driver',
+        );
+      }
+    });
+
+    test('removing a volume deletes its data behind the typed confirmation '
+        'and re-validates its creation time', () async {
+      final plan = _planned(
+        await _plan(const RemoveVolume(_server, name: 'pgdata'), withVolume()),
+      );
+      expect(plan.kind, OperationKind.removeVolume);
+      expect(plan.tier, ConfirmationTier.typedPhrase);
+      expect(plan.impact?.kind, ImpactKind.deletesVolumeData);
+      expect(_step(plan).display, 'DELETE /v1.52/volumes/pgdata');
+      final check = plan.revalidate.single as DockerTargetUnchanged;
+      expect(check.kind, DockerTargetKind.volume);
+      expect(check.id, DateTime.parse(created).toIso8601String());
+    });
+
+    test('a volume a container mounts is refused, and a gone one is a '
+        'changed target', () async {
+      expect(
+        (await _plan(
+          const RemoveVolume(_server, name: 'pgdata'),
+          withVolume(mountedBy: ['db']),
+        )).refusal,
+        ActionRefusalReason.volumeInUse,
+      );
+      expect(
+        (await _plan(
+          const RemoveVolume(_server, name: 'pgdata'),
+          _Engine(),
+        )).refusal,
+        ActionRefusalReason.targetChanged,
+      );
+    });
+
+    test('re-validation sees a volume created again under its name', () async {
+      final engine = withVolume();
+      final client = _client(engine);
+      final check = DockerTargetUnchanged(
+        DockerTargetKind.volume,
+        'pgdata',
+        DateTime.parse(created).toIso8601String(),
+      );
+      expect(await revalidateDockerTarget(client, check), isNull);
+
+      engine.volumes.single['CreatedAt'] = '2026-10-21T09:00:00Z';
+      expect(
+        await revalidateDockerTarget(client, check),
+        RevalidationFailure.targetChanged,
+      );
+    });
+
+    test('the linter reads a create as docker volume create', () {
+      expect(
+        cliEquivalent(
+          ApiStep(
+            method: 'POST',
+            path: '/v1.52/volumes/create',
+            json: {'Name': 'cache', 'Driver': 'nfs'},
+          ),
+        ),
+        'docker volume create --driver nfs cache',
+      );
+    });
+  });
+
   group('stacks (STK-03)', () {
     _Engine shop({String dbDependsOn = ''}) => _Engine()
       ..containers.addAll([
@@ -618,7 +767,7 @@ void main() {
         apiStepChanges(
           ApiStep(method: 'POST', path: '/v1.44/containers/c1/pause'),
         ),
-        (container: 'c1', images: false),
+        (container: 'c1', images: false, volumes: false),
       );
       expect(
         apiStepChanges(
@@ -628,13 +777,21 @@ void main() {
             query: {'v': '1'},
           ),
         ),
-        (container: 'c1', images: false),
+        (container: 'c1', images: false, volumes: false),
       );
       expect(
         apiStepChanges(
           ApiStep(method: 'DELETE', path: '/v1.44/images/nginx%3Alatest'),
         ),
-        (container: null, images: true),
+        (container: null, images: true, volumes: false),
+      );
+      expect(
+        apiStepChanges(ApiStep(method: 'POST', path: '/v1.44/volumes/create')),
+        (container: null, images: false, volumes: true),
+      );
+      expect(
+        apiStepChanges(ApiStep(method: 'DELETE', path: '/v1.44/volumes/data')),
+        (container: null, images: false, volumes: true),
       );
     });
 

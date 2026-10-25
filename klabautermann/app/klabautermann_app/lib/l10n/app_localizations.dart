@@ -4597,7 +4597,7 @@ abstract class AppLocalizations {
   /// The action's impact in the preview; kind is the engine's ImpactKind name and count a number of containers.
   ///
   /// In en, this message translates to:
-  /// **'{kind, select, dropsSession{This can drop your connection to the server.} stopsContainers{This stops {count} running containers.} removesVolumes{This deletes the container\'s volumes and the data in them.} forcesImageInUse{{count} containers still use this image.} interruptsTarget{This interrupts what the target is doing.} other{}}'**
+  /// **'{kind, select, dropsSession{This can drop your connection to the server.} stopsContainers{This stops {count} running containers.} removesVolumes{This deletes the container\'s volumes and the data in them.} forcesImageInUse{{count} containers still use this image.} deletesVolumeData{This deletes the volume and the data in it.} interruptsTarget{This interrupts what the target is doing.} other{}}'**
   String actionPreviewImpact(String kind, int count);
 
   /// Why the target is protected (SAF-22); reason is the engine's ProtectedReason name.
@@ -4717,7 +4717,7 @@ abstract class AppLocalizations {
   /// Toast when the engine refused to plan or run an action; reason is the engine's ActionRefusalReason name.
   ///
   /// In en, this message translates to:
-  /// **'{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server\'s container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} dependencyCycle{The stack\'s services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack\'s files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}'**
+  /// **'{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server\'s container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} dependencyCycle{The stack\'s services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack\'s files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}'**
   String actionRefused(String reason);
 
   /// Process action (PRC-02): sends SIGTERM, asking the process to end.
@@ -5125,7 +5125,7 @@ abstract class AppLocalizations {
   /// An activity log row's action; action is the engine's intent type name.
   ///
   /// In en, this message translates to:
-  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
+  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
   String activityAction(String action);
 
   /// An activity log row's confirmation; tier is the engine's ConfirmationTier name.
@@ -6501,6 +6501,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Which volumes are in use is unknown: the containers, whose mounts tell, could not be listed.'**
   String get dockerVolumesUseUnknown;
+
+  /// Volumes list: the button over the list that opens the create dialog (VOL-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Create volume…'**
+  String get dockerVolumeCreate;
+
+  /// Create volume dialog: its title.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a volume'**
+  String get dockerVolumeCreateTitle;
+
+  /// Create volume dialog: the button that goes on to the action preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get dockerVolumeCreateSubmit;
+
+  /// Create volume dialog: the driver field's hint, Docker's default driver name, used when the field is left empty.
+  ///
+  /// In en, this message translates to:
+  /// **'local'**
+  String get dockerVolumeDriverHint;
+
+  /// Create volume dialog: the name field is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a name.'**
+  String get dockerVolumeNameRequired;
+
+  /// Create volume dialog: a name or driver Docker would refuse.
+  ///
+  /// In en, this message translates to:
+  /// **'Use letters, digits, \'_\', \'.\' and \'-\', starting with a letter or digit, at least two characters.'**
+  String get dockerVolumeNameInvalid;
+
+  /// Volumes list: the row action that removes a volume and its data, behind a typed confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get dockerVolumeRemove;
 
   /// Tooltip of the button that closes a container's details in the desktop inspector (03 §10.2).
   ///

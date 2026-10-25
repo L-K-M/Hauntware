@@ -5,6 +5,9 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../controllers/docker_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
+import '../actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
+import '../actions/docker_actions.dart'
+    show CreateVolumeButton, VolumeActionsButton, volumeActionEntries;
 import '../sortable_table.dart';
 import 'containers_panel.dart' show DockerNotice;
 import 'containers_view.dart' show searchTerms;
@@ -23,6 +26,8 @@ const double _headerShare = 0.4;
 /// The Volumes sub-tab (03 §7.15 VOL-01): every volume by name, its
 /// driver, age and date of creation, and how many containers mount it,
 /// with a filter for the unused ones and a search by name or driver.
+/// Where actions are allowed, a volume is created over the list and
+/// removed from its row (VOL-02).
 ///
 /// While [visible], it holds the server's volume watch
 /// ([DockerController.watchVolumes]), which reads the containers too:
@@ -178,6 +183,11 @@ class _VolumesPanelState extends State<VolumesPanel> {
                 text: l10n.dockerVolumesUseUnknown,
                 detail: containers.failure?.detail,
               ),
+            if (volumes != null)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: CreateVolumeButton(serverId: widget.serverId),
+              ),
             if (volumes != null) _filters(l10n),
             if (volumes != null && !wide) _sortControls(l10n),
           ],
@@ -260,6 +270,18 @@ class _VolumesPanelState extends State<VolumesPanel> {
       rowKey: _rowKey,
       sort: _sort,
       onSort: (sort) => setState(() => _sort = sort),
+      rowActions:
+          actionsAllowedAt(
+            context,
+            widget.serverId,
+            ActionEntryPoint.volumeRemove,
+          )
+          ? (entry) => volumeActionEntries(
+              context,
+              serverId: widget.serverId,
+              entry: entry,
+            )
+          : null,
       empty: empty,
     );
   }
@@ -382,7 +404,7 @@ class _VolumesPanelState extends State<VolumesPanel> {
           for (final column in columns)
             (label: column.label, text: column.text(entry)),
         ];
-        return Semantics(
+        final row = Semantics(
           key: ValueKey(_phoneRowKey(entry)),
           container: true,
           label: [
@@ -417,6 +439,14 @@ class _VolumesPanelState extends State<VolumesPanel> {
               ],
             ),
           ),
+        );
+        // The actions sit beside the row's one node, so a screen reader
+        // reaches them as a button of their own.
+        return Row(
+          children: [
+            Expanded(child: row),
+            VolumeActionsButton(serverId: widget.serverId, entry: entry),
+          ],
         );
       },
     );
