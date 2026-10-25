@@ -346,6 +346,12 @@ class _ServerListPaneState extends State<ServerListPane> {
       list = _serverList(context, state, matches);
     }
     final update = state.updateInfo;
+    final localShell = state.localShellAvailable && widget.onOpenLocal != null;
+    // The field spans the terminal's tab strip band only at the rail's top,
+    // level with the strip; under a banner or the local shell it stays
+    // compact.
+    final levelWithTabs =
+        !_home && update == null && state.inboxPending.isEmpty && !localShell;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -365,7 +371,7 @@ class _ServerListPaneState extends State<ServerListPane> {
         // not vanish behind a query the way a filtered-out host does.
         // Also above the onboarding empty state — with no servers yet it
         // is the one thing here that can actually be opened.
-        if (state.localShellAvailable && widget.onOpenLocal != null) ...[
+        if (localShell) ...[
           Builder(
             builder: (context) {
               final tabs = state
@@ -407,9 +413,7 @@ class _ServerListPaneState extends State<ServerListPane> {
                 : matches.isEmpty
                 ? '0 of ${servers.length}'
                 : '${matches.length} of ${servers.length} · ↵ opens the first',
-            // The rail starts level with the terminal's tab strip, so the
-            // field spans the same band as the tabs.
-            barExtent: _home ? null : TerminalTabStrip.height,
+            barExtent: levelWithTabs ? TerminalTabStrip.height : null,
           ),
         Expanded(child: list),
         if (!_home)

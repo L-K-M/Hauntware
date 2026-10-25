@@ -18,6 +18,7 @@ import 'package:seance_app/ui/server_list_pane.dart';
 import 'package:seance_app/ui/server_status_dot.dart';
 import 'package:seance_app/ui/server_tile.dart';
 import 'package:seance_app/ui/sidebar/sidebar_kit.dart';
+import 'package:seance_app/ui/terminal_pane.dart';
 import 'package:seance_core/seance_core.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
@@ -353,6 +354,28 @@ void main() {
       await tester.runAsync(() => state!.saveServer(server('e')));
       await tester.pumpAndSettle();
       expect(field, findsOneWidget);
+    });
+
+    // Level with the terminal's tab strip only from the rail's top: under
+    // a banner the strip's band is out of reach, so the field stays
+    // compact rather than a tall field pressed against the banner.
+    testWidgets('the filter spans the tab band at the top, and is compact '
+        'under a banner', (tester) async {
+      final field = find.byKey(const ValueKey('servers.filter.field'));
+      await boot(tester, [
+        for (final name in ['a', 'b', 'c', 'd', 'e']) server(name),
+      ]);
+      await pumpRail(tester);
+      expect(tester.getRect(field).top, 0);
+      expect(tester.getSize(field).height, TerminalTabStrip.height);
+
+      state!.updateInfo = UpdateInfo(
+        latestVersion: '99.0.0',
+        releasesUrl: Uri.parse('https://example.com/releases'),
+      );
+      await pumpRail(tester);
+      expect(tester.getRect(field).top, greaterThan(0));
+      expect(tester.getSize(field).height, lessThan(TerminalTabStrip.height));
     });
 
     testWidgets('the count says what Enter does, and only when there is '

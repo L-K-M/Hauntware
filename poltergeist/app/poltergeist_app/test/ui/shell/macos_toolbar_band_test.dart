@@ -11,7 +11,6 @@ import 'package:poltergeist_app/ui/panes/pane_commands.dart';
 import 'package:poltergeist_app/ui/panes/pane_tabs_view.dart';
 import 'package:poltergeist_app/ui/shell/header_toolbar.dart';
 import 'package:poltergeist_app/ui/shell/macos_toolbar_band.dart';
-import 'package:poltergeist_app/ui/sidebar/sidebar_commands.dart';
 import 'package:poltergeist_app/ui/sidebar/sidebar_view.dart';
 import 'package:poltergeist_app/ui/top_toast.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
