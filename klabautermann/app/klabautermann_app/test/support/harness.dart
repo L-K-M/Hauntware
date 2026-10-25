@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/controllers/admin_controller.dart';
 import 'package:klabautermann_app/controllers/alert_center.dart';
+import 'package:klabautermann_app/controllers/alert_notifications.dart';
 import 'package:klabautermann_app/controllers/alert_rules_controller.dart';
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
@@ -18,9 +19,12 @@ import 'package:klabautermann_app/controllers/prompt_controller.dart';
 import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/controllers/server_editor_controller.dart';
 import 'package:klabautermann_app/controllers/sync_controller.dart';
+import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/services/hand_off.dart';
 import 'package:klabautermann_app/services/settings_window/settings_window_link.dart';
 import 'package:klabautermann_app/services/ssh_config_source.dart';
+import 'package:klabautermann_app/services/system_notifications.dart';
+import 'package:klabautermann_app/ui/alerts.dart' show alertNotificationText;
 import 'package:klabautermann_core/klabautermann_core.dart'
     show
         DeviceSettingsIssue,
@@ -49,6 +53,7 @@ final class AppHarness {
     this.admin,
     this.alerts,
     this.alertRules,
+    this.alertNotifications,
     this.operations,
   });
 
@@ -65,6 +70,7 @@ final class AppHarness {
   final AdminController? admin;
   final AlertCenter? alerts;
   final AlertRulesController? alertRules;
+  final AlertNotificationsController? alertNotifications;
   final OperationsController? operations;
 
   void dispose() {
@@ -85,6 +91,7 @@ final class AppHarness {
     admin?.dispose();
     alerts?.dispose();
     alertRules?.dispose();
+    alertNotifications?.dispose();
     operations?.dispose();
   }
 }
@@ -112,8 +119,9 @@ final class AppHarness {
 /// [appVersion] stands in for what `readAppVersion` read. [safety], which
 /// the caller disposes, adds the safety preferences; none leaves the
 /// Safety menu and notices out. [admin] adds the admin mode controller
-/// over the fake engine, [alerts] the alert center and the alert rules,
-/// and [operations] the operations one.
+/// over the fake engine, [alerts] the alert center, the alert rules and
+/// the alert notifications, posting to [notifications] (none: the device
+/// has none), and [operations] the operations one.
 /// [linkGrace] defaults to zero, which disconnects a server as its last
 /// view closes: the tree unmounts at the end of every test, and the test
 /// binding fails a test that leaves a grace timer pending.
@@ -128,6 +136,7 @@ Future<AppHarness> pumpApp(
   SafetyController? safety,
   bool admin = false,
   bool alerts = false,
+  SystemNotifications? notifications,
   bool operations = false,
   DockerNoticeController? dockerNotice,
   DockerEndpointChoices? dockerEndpointChoices,
@@ -172,6 +181,22 @@ Future<AppHarness> pumpApp(
     admin: admin ? AdminController(engine) : null,
     alerts: alerts ? AlertCenter(engine) : null,
     alertRules: alerts ? AlertRulesController(engine) : null,
+    alertNotifications: alerts
+        ? AlertNotificationsController(
+            engine,
+            notifications: notifications,
+            textOf: (raise) => alertNotificationText(
+              lookupAppLocalizations(const Locale('en')),
+              raise,
+              server:
+                  servers
+                      .where((server) => server.id == raise.serverId)
+                      .firstOrNull
+                      ?.displayName ??
+                  raise.serverId,
+            ),
+          )
+        : null,
     operations: operations ? OperationsController(engine) : null,
   );
   addTearDown(() async {
@@ -191,6 +216,7 @@ Future<AppHarness> pumpApp(
       admin: harness.admin,
       alerts: harness.alerts,
       alertRules: harness.alertRules,
+      alertNotifications: harness.alertNotifications,
       operations: harness.operations,
       dockerNotice: harness.dockerNotice,
       sync: harness.sync,

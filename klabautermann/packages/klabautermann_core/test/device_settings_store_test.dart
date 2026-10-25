@@ -10,6 +10,7 @@ const _appearanceKey = 'klabautermann.appearance';
 const _firstRunCardKey = 'klabautermann.coverage.firstRunCardDismissed';
 const _rootNoticeKey = 'klabautermann.docker.rootEquivalenceNoticeDismissed';
 const _announceBandsKey = 'klabautermann.accessibility.announceThresholdBands';
+const _alertNotificationsKey = 'klabautermann.alerts.notifications';
 const _appLockKey = 'klabautermann.appLock';
 const _syncSecretsKey = 'klabautermann.sync.secrets';
 const _deviceNameKey = 'klabautermann.audit.deviceName';
@@ -466,6 +467,34 @@ void main() {
           _deviceNameKey: damaged,
         });
         expect((await DeviceSettingsStore.open(file)).deviceName, isNull);
+      }
+    });
+
+    test('posts no alert notification until turned on, keeps it off once '
+        'turned off, and reads a damaged value as off', () async {
+      writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.alertNotifications, isFalse);
+      await store.setAlertNotifications(true);
+      expect((await DeviceSettingsStore.open(file)).alertNotifications, isTrue);
+      expect(document()[_alertNotificationsKey], isTrue);
+      await store.setAlertNotifications(false);
+      expect(
+        (await DeviceSettingsStore.open(file)).alertNotifications,
+        isFalse,
+      );
+
+      for (final damaged in <Object>['true', 1, <String>[]]) {
+        writeDocument({
+          _versionKey: 1,
+          _deviceIdKey: 'device-a',
+          _alertNotificationsKey: damaged,
+        });
+        expect(
+          (await DeviceSettingsStore.open(file)).alertNotifications,
+          isFalse,
+        );
       }
     });
 

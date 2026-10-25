@@ -9561,6 +9561,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Klabautermann\'s engine stopped before the rule was saved.'**
   String get alertRuleEngineStopped;
+
+  /// The switch for raised alerts' system notifications (ALR-01), on the alert rules page and in the alert center.
+  ///
+  /// In en, this message translates to:
+  /// **'Notify me when an alert is raised'**
+  String get alertNotificationsSwitch;
+
+  /// Under the notification switch: the coverage limit (Y3).
+  ///
+  /// In en, this message translates to:
+  /// **'A system notification, posted only while Klabautermann is open.'**
+  String get alertNotificationsSwitchDetail;
+
+  /// Title of the app's prompt before the system asks to allow notifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Get notified of raised alerts?'**
+  String get alertNotificationsPromptTitle;
+
+  /// The notification prompt: the coverage limit (Y3), stated before the system asks.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann evaluates your rules on this device while it is open, and posts a notification when one raises. It cannot notify you while it is closed.'**
+  String get alertNotificationsPromptBody;
+
+  /// The notification prompt's button that goes on to the system's request.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow notifications'**
+  String get alertNotificationsPromptAllow;
+
+  /// The notification prompt's button that leaves notifications off.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get alertNotificationsPromptLater;
+
+  /// Toast when the system refused the app notifications; they stay off.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications are turned off for Klabautermann in your system settings.'**
+  String get alertNotificationsDenied;
+
+  /// Toast when the device offers no notifications to the app.
+  ///
+  /// In en, this message translates to:
+  /// **'This device has no system notifications Klabautermann can post.'**
+  String get alertNotificationsUnavailable;
+
+  /// Toast when the notification switch changed but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The notification setting applies until Klabautermann restarts; it could not be saved.'**
+  String get alertNotificationsNotSaved;
+
+  /// A raised alert's system notification title; server is the server's name (server data), metric the metric's name, such as CPU busy, and value the reading, such as 93%.
+  ///
+  /// In en, this message translates to:
+  /// **'{server}: {metric} at {value}'**
+  String alertNotificationTitle(String server, String metric, String value);
+
+  /// A raised alert's system notification text: its severity word, then the coverage limit (Y3).
+  ///
+  /// In en, this message translates to:
+  /// **'{severity}. Evaluated on this device while Klabautermann is open.'**
+  String alertNotificationBody(String severity);
+
+  /// The Android notification channel's name, shown in the system's notification settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Raised alerts'**
+  String get alertNotificationChannel;
+
+  /// The Android notification channel's description, shown in the system's notification settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Alerts your rules raise while Klabautermann is open.'**
+  String get alertNotificationChannelDetail;
+
+  /// The default action of a desktop notification on Linux: brings the app forward.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get alertNotificationOpen;
 }
 
 class _AppLocalizationsDelegate

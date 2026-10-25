@@ -4447,6 +4447,24 @@ arrives with E22's Docker actions.
   raise one) with their durations in minutes, a severity, and the
   server, its group or every server. A new rule from a server starts on
   that server.
+- **As built (M6 N51).** Raised alerts post system notifications
+  through `flutter_local_notifications` 22.3.3 once the user turns the
+  switch on, on the alert rules page or in the alert center. The app's
+  prompt says first that rules are evaluated on this device while
+  Klabautermann is open and that nothing notifies while it is closed;
+  the system's request follows (Android 13 and later, iOS, macOS), and a
+  refusal leaves the switch off. The switch is device-local, in
+  settings.json (`klabautermann.alerts.notifications`, off unless
+  `true`). Each raise posts one notification per rule and server, its
+  title the server, metric and reading and its text the severity and
+  the coverage limit (Y3); the clear withdraws it. Android posts on a
+  "Raised alerts" channel with library desugaring enabled, iOS presents
+  in the foreground with the app as the notification center's delegate,
+  Windows names the app with its application id and a fixed GUID, and
+  the Flatpak talks to `org.freedesktop.Notifications`. Notifications
+  are not scheduled and a tap only brings the app forward. The app
+  icon's badge (ALR-02) stays open; delivery on real devices is a manual
+  check per OS.
 - **v1.x.** Flap damping (the rest of ALR-16), desktop tray monitoring
   (ALR-03, PLT-10), Android watch mode for a session (PLT-11, D34), Android
   credential-free reachability checks every 15 minutes or more (PLT-15), and T1

@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'app.dart';
 import 'controllers/admin_controller.dart';
 import 'controllers/alert_center.dart';
+import 'controllers/alert_notifications.dart';
 import 'controllers/alert_rules_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/app_lock_controller.dart';
@@ -41,8 +42,10 @@ import 'services/settings_window/settings_window_link.dart';
 import 'services/ssh_config_source.dart';
 import 'services/stored_appearance.dart';
 import 'services/stored_safety.dart';
+import 'services/system_notifications.dart';
 import 'services/window_state.dart';
 import 'settings_window_app.dart';
+import 'ui/alerts.dart' show alertNotificationText;
 import 'ui/already_running_app.dart';
 
 /// The composition root (03 §10.1): the settings-window branch, the
@@ -210,6 +213,36 @@ Future<void> main(List<String> args) async {
   final alerts = AlertCenter(engine);
   // The synced rules behind them, and the editor's writes (03 §4.8).
   final alertRules = AlertRulesController(engine);
+  // Their system notifications (ALR-01), worded in the device's locale
+  // as it is when each posts, and switched on per device in
+  // settings.json.
+  AppLocalizations deviceStrings() => lookupAppLocalizations(
+    basicLocaleListResolution(
+      PlatformDispatcher.instance.locales,
+      AppLocalizations.supportedLocales,
+    ),
+  );
+  final startStrings = deviceStrings();
+  final alertNotifications = AlertNotificationsController(
+    engine,
+    notifications: await LocalSystemNotifications.start((
+      channelName: startStrings.alertNotificationChannel,
+      channelDescription: startStrings.alertNotificationChannelDetail,
+      openAction: startStrings.alertNotificationOpen,
+    )),
+    textOf: (raise) => alertNotificationText(
+      deviceStrings(),
+      raise,
+      server:
+          fleet.servers
+              .where((server) => server.id == raise.serverId)
+              .firstOrNull
+              ?.displayName ??
+          raise.serverId,
+    ),
+    enabled: settings.alertNotifications,
+    save: settings.setAlertNotifications,
+  );
   // Action previews and runs (03 §8.5): the engine plans and runs them;
   // the app shows the preview and the results.
   final operations = OperationsController(
@@ -370,6 +403,7 @@ Future<void> main(List<String> args) async {
       admin: admin,
       alerts: alerts,
       alertRules: alertRules,
+      alertNotifications: alertNotifications,
       operations: operations,
       dockerNotice: dockerNotice,
       sync: sync,

@@ -7222,4 +7222,56 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get alertRuleEngineStopped =>
       'Klabautermann\'s engine stopped before the rule was saved.';
+
+  @override
+  String get alertNotificationsSwitch => 'Notify me when an alert is raised';
+
+  @override
+  String get alertNotificationsSwitchDetail =>
+      'A system notification, posted only while Klabautermann is open.';
+
+  @override
+  String get alertNotificationsPromptTitle => 'Get notified of raised alerts?';
+
+  @override
+  String get alertNotificationsPromptBody =>
+      'Klabautermann evaluates your rules on this device while it is open, and posts a notification when one raises. It cannot notify you while it is closed.';
+
+  @override
+  String get alertNotificationsPromptAllow => 'Allow notifications';
+
+  @override
+  String get alertNotificationsPromptLater => 'Not now';
+
+  @override
+  String get alertNotificationsDenied =>
+      'Notifications are turned off for Klabautermann in your system settings.';
+
+  @override
+  String get alertNotificationsUnavailable =>
+      'This device has no system notifications Klabautermann can post.';
+
+  @override
+  String get alertNotificationsNotSaved =>
+      'The notification setting applies until Klabautermann restarts; it could not be saved.';
+
+  @override
+  String alertNotificationTitle(String server, String metric, String value) {
+    return '$server: $metric at $value';
+  }
+
+  @override
+  String alertNotificationBody(String severity) {
+    return '$severity. Evaluated on this device while Klabautermann is open.';
+  }
+
+  @override
+  String get alertNotificationChannel => 'Raised alerts';
+
+  @override
+  String get alertNotificationChannelDetail =>
+      'Alerts your rules raise while Klabautermann is open.';
+
+  @override
+  String get alertNotificationOpen => 'Open';
 }
