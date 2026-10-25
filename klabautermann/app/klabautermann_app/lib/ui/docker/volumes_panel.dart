@@ -7,7 +7,11 @@ import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
 import '../actions/docker_actions.dart'
-    show CreateVolumeButton, VolumeActionsButton, volumeActionEntries;
+    show
+        CreateVolumeButton,
+        PruneButton,
+        VolumeActionsButton,
+        volumeActionEntries;
 import '../sortable_table.dart';
 import 'containers_panel.dart' show DockerNotice;
 import 'containers_view.dart' show searchTerms;
@@ -183,6 +187,7 @@ class _VolumesPanelState extends State<VolumesPanel> {
                 text: l10n.dockerVolumesUseUnknown,
                 detail: containers.failure?.detail,
               ),
+            // Create and prune share the server's action policy.
             if (volumes != null &&
                 actionsAllowedAt(
                   context,
@@ -191,7 +196,21 @@ class _VolumesPanelState extends State<VolumesPanel> {
                 ))
               Align(
                 alignment: AlignmentDirectional.centerStart,
-                child: CreateVolumeButton(serverId: widget.serverId),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    CreateVolumeButton(serverId: widget.serverId),
+                    PruneButton(
+                      choices: [
+                        PruneDocker(
+                          widget.serverId,
+                          kind: DockerPruneKind.volumes,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             if (volumes != null)
               _filters(l10n, useKnown: containers.containers != null),

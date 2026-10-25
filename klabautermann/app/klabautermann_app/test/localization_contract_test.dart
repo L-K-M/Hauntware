@@ -88,6 +88,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // A job history read's request id, matched in the engine's answer.
   'lib/controllers/job_history_reads.dart': {r"'history-${_count++}'"},
+  // A history rollup read's request id, matched in the engine's answer.
+  'lib/controllers/history_reads.dart': {r"'rollup-${_count++}'"},
   // The not-saved diagnostic; the Safety tab and the header's Safety menu
   // print it and show their own ARB text (settingsSafetyNotSaved).
   'lib/controllers/safety_controller.dart': {
@@ -172,6 +174,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The Activity table's key prefix, never shown, and the copied log's
   // line break between JSON records.
   'lib/ui/actions/activity_page.dart': {"'activity'", r"'\n'"},
+  // The ARB select key of every unused image's prune (DKE-05).
+  'lib/ui/actions/docker_actions.dart': {"'imagesAll'"},
   'lib/controllers/fleet_controller.dart': {
     // The row subtitle's address: host or user@host, with :port when the
     // port is not 22 and an IPv6 host then bracketed before it. Machine
@@ -307,6 +311,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'klabautermann/settings_link'",
     "'--klabautermann-settings-window'",
     r"'$error'",
+    "'The app is locked'",
   },
   'lib/services/settings_window/settings_window_host.dart': {
     r"'No settings window method $name'",

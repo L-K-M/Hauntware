@@ -62,6 +62,7 @@ import 'package:meta/meta.dart';
 import 'package:seance_core/seance_core.dart' show DangerFinding;
 
 import '../catalog/klabautermann_records.dart' show SyncedRule;
+import '../history/history_store.dart' show HistoryRange, HistoryTier;
 import '../docker/docker_ladder.dart'
     show
         DockerNoRouteReason,
@@ -272,6 +273,10 @@ import '../operations/plan_types.dart';
 /// M6 plan N11): [DockerWatchList.networks], delivered as
 /// [DockerNetworksPayload], and the [RemoveNetwork] intent with the
 /// refusals `networkInUse` and `builtinNetwork`.
+///
+/// Prune then joined v3 the same way (03 §7.12 DKE-05, IMG-06, M6 plan
+/// N12): the [PruneDocker] intent, whose preview carries a
+/// [PrunePreview], and the refusal `nothingToPrune`.
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -1159,6 +1164,17 @@ final class ReadUserCrontabs extends EngineRequest {
   const ReadUserCrontabs(this.serverId, {required this.requestId});
 
   final String serverId;
+  final String requestId;
+}
+
+/// Reads [serverId]'s on-device history in [tier] (HIS-01, 03 §7.20):
+/// the buckets and gaps within the tier's span. One [HistoryRead] with
+/// [requestId] answers it.
+final class ReadHistory extends EngineRequest {
+  const ReadHistory(this.serverId, this.tier, {required this.requestId});
+
+  final String serverId;
+  final HistoryTier tier;
   final String requestId;
 }
 
@@ -2401,6 +2417,9 @@ enum ActionRefusalReason {
   /// `bridge`, `host` and `none` are the engine's own and stay (DNW-01).
   builtinNetwork,
 
+  /// A prune's filters match nothing now (DKE-05).
+  nothingToPrune,
+
   /// The stack's services depend on each other in a cycle, so there is no
   /// order to act in (STK-03).
   dependencyCycle,
@@ -2916,6 +2935,23 @@ final class AlertRulesChanged extends EngineEvent {
   const AlertRulesChanged(this.rules);
 
   final List<SyncedRule> rules;
+}
+
+/// The answer to [ReadHistory]: [serverId]'s buckets in [tier], oldest
+/// first, the one still filling included, and the gaps the engine saw
+/// within their span; empty before the engine opens its store.
+final class HistoryRead extends EngineEvent {
+  const HistoryRead({
+    required this.requestId,
+    required this.serverId,
+    required this.tier,
+    required this.range,
+  });
+
+  final String requestId;
+  final String serverId;
+  final HistoryTier tier;
+  final HistoryRange range;
 }
 
 /// Alerts fetched for one server inside a sync round (v1.x, 03 §10.1, D42).
@@ -4463,6 +4499,24 @@ final class RemoveNetwork extends ActionIntent {
   final String networkId;
 }
 
+/// The kinds of unused Docker objects a prune removes (03 §7.12 DKE-05).
+enum DockerPruneKind { containers, images, volumes, networks, buildCache }
+
+/// Removes the unused objects of [kind] (DKE-05, IMG-06): stopped
+/// containers, dangling images or with [all] every image no container
+/// uses, volumes no container mounts, user-defined networks no container
+/// is on, or the build cache no build uses. The preview lists them first.
+final class PruneDocker extends ActionIntent {
+  const PruneDocker(super.serverId, {required this.kind, this.all = false})
+    : assert(!all || kind == DockerPruneKind.images, 'only images prune all');
+
+  final DockerPruneKind kind;
+
+  /// For images, every unused one rather than the dangling ones only
+  /// (`docker image prune -a`).
+  final bool all;
+}
+
 /// What [StackAction] does to a Compose project (STK-03).
 enum StackVerb { start, stop, restart }
 
@@ -4749,6 +4803,7 @@ final class ActionPreview {
     this.protected,
     this.followUnit,
     this.orphans = const [],
+    this.prune,
     this.warnings = const {},
   });
 
@@ -4782,6 +4837,9 @@ final class ActionPreview {
   /// The stack's containers whose service its files no longer name,
   /// which `--remove-orphans` would remove (STK-06).
   final List<String> orphans;
+
+  /// What a prune removes and what it leaves, and why (DKE-05).
+  final PrunePreview? prune;
 
   final Set<PlanWarning> warnings;
 }

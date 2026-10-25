@@ -13,6 +13,7 @@ import 'docker/containers_view.dart' show containerNameOf;
 import 'failed_units_summary.dart';
 import 'fleet_row_state.dart' show kFleetRowStaleAfter, kFleetRowThresholds;
 import 'freshness.dart';
+import 'history_card.dart';
 import 'system_panel.dart' show PanelNotice, PanelSection;
 import 'system_view.dart';
 import 'threshold_announcer.dart';
@@ -279,6 +280,7 @@ class OverviewPanel extends StatelessWidget {
               host,
               ?dockerCard,
             ],
+            HistoryCard(reads: monitoring.rollups, serverId: serverId),
             ?coverage,
           ]),
         );

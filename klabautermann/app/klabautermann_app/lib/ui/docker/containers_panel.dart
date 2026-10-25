@@ -8,7 +8,9 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../controllers/docker_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
-import '../actions/docker_actions.dart' show containerActionEntries;
+import '../actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
+import '../actions/docker_actions.dart'
+    show PruneButton, containerActionEntries;
 import '../sortable_table.dart';
 import 'container_details.dart';
 import 'container_logs.dart';
@@ -229,6 +231,23 @@ class _ContainersPanelState extends State<ContainersPanel> {
                 icon: Icons.error_outline,
                 text: l10n.dockerContainersStatsFailed,
                 detail: list.statsFailure?.detail,
+              ),
+            if (containers != null &&
+                actionsAllowedAt(
+                  context,
+                  widget.serverId,
+                  ActionEntryPoint.prune,
+                ))
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: PruneButton(
+                  choices: [
+                    PruneDocker(
+                      widget.serverId,
+                      kind: DockerPruneKind.containers,
+                    ),
+                  ],
+                ),
               ),
             if (containers != null) _filters(l10n),
             if (containers != null && !wide) _sortControls(l10n),

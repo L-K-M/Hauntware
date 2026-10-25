@@ -64,6 +64,10 @@ const ApiVersion clientApiFloor = ApiVersion(1, 41);
 /// raw-stream `Content-Type` (03 §5.6).
 const ApiVersion apiVersionLogsContentType = ApiVersion(1, 42);
 
+/// `POST /volumes/prune` takes the `all` filter, and without it removes
+/// anonymous volumes only, from 1.42 (03 §7.12 DKE-05).
+const ApiVersion apiVersionVolumePruneAll = ApiVersion(1, 42);
+
 /// `/images/json` `Containers` count, gated at 1.51 (03 §5.8).
 const ApiVersion apiVersionImageContainers = ApiVersion(1, 51);
 
@@ -91,6 +95,10 @@ final class ApiFeatureGates {
 
   /// The daemon labels log responses with the stream Content-Type.
   bool get hasLogsContentType => negotiated >= apiVersionLogsContentType;
+
+  /// `POST /volumes/prune` takes `all`; without it the daemon spares
+  /// named volumes.
+  bool get hasVolumePruneAll => negotiated >= apiVersionVolumePruneAll;
 
   /// `/images/json` reports the `Containers` count.
   bool get hasImageContainersCount => negotiated >= apiVersionImageContainers;

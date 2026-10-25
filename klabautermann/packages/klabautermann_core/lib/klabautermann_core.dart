@@ -10,6 +10,14 @@ library;
 export 'src/alerts/alert_evaluator.dart' show AlertMetric;
 export 'src/alerts/alert_rules.dart';
 export 'src/catalog/klabautermann_records.dart' show SyncedRule;
+export 'src/history/history_store.dart'
+    show
+        HistoryBucket,
+        HistoryGap,
+        HistoryProvenance,
+        HistoryRange,
+        HistoryStat,
+        HistoryTier;
 export 'src/catalog/engine_sync.dart' show engineSyncPushPolicy;
 export 'src/catalog/sync_credentials.dart'
     show klabautermannApiKeyPrefix, klabautermannMasterKeyEntry;

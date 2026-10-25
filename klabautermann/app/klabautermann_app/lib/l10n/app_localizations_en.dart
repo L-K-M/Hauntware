@@ -2957,6 +2957,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Unlock with this device\'s passcode, PIN or biometrics. Connections already open keep running.';
 
   @override
+  String get settingsWindowLocked =>
+      'Unlock it in its main window to change settings.';
+
+  @override
   String get appLockUnlock => 'Unlock';
 
   @override
@@ -3712,6 +3716,40 @@ class AppLocalizationsEn extends AppLocalizations {
       'Runs on the server and continues if you leave the app or the connection drops. Its result shows under Operations when you come back.';
 
   @override
+  String actionPreviewPruneRemoves(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Removes $count objects',
+      one: 'Removes 1 object',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String actionPreviewPruneFrees(String size) {
+    return 'Frees $size';
+  }
+
+  @override
+  String actionPreviewPruneItem(String name, String size) {
+    return '$name ($size)';
+  }
+
+  @override
+  String get actionPreviewPruneKeeps => 'Kept';
+
+  @override
+  String actionPreviewPruneKept(String name, String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'inUse': 'in use',
+      'builtin': 'the engine\'s own',
+      'other': 'kept',
+    });
+    return '$name: $_temp0';
+  }
+
+  @override
   String get actionPreviewOrphans =>
       'Containers the stack\'s files no longer name';
 
@@ -3827,6 +3865,7 @@ class AppLocalizationsEn extends AppLocalizations {
           'A container is on this network. Stop or disconnect it first.',
       'builtinNetwork':
           'This is one of the engine\'s own networks, which stay.',
+      'nothingToPrune': 'There is nothing to prune.',
       'dependencyCycle':
           'The stack\'s services depend on each other in a loop, so there is no order to act in.',
       'stackManaged': 'A manager deploys this stack. Redeploy it there.',
@@ -4133,6 +4172,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'CreateVolume': 'Create volume',
       'RemoveVolume': 'Remove volume',
       'RemoveNetwork': 'Remove network',
+      'PruneDocker': 'Prune',
       'StackAction': 'Stack action',
       'RedeployStack': 'Redeploy stack',
       'ContainerExec': 'Run command',
@@ -5134,6 +5174,23 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dockerVolumesUseUnknown =>
       'Which volumes are in use is unknown: the containers, whose mounts tell, could not be listed.';
+
+  @override
+  String get dockerPrune => 'Prune…';
+
+  @override
+  String dockerPruneChoice(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'containers': 'Prune stopped containers…',
+      'images': 'Prune dangling images…',
+      'imagesAll': 'Prune all unused images…',
+      'volumes': 'Prune unused volumes…',
+      'networks': 'Prune unused networks…',
+      'buildCache': 'Prune the build cache…',
+      'other': 'Prune…',
+    });
+    return '$_temp0';
+  }
 
   @override
   String get dockerVolumeCreate => 'Create volume…';
@@ -6901,6 +6958,63 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get alertMetricDiskInodes => 'Inodes used';
+
+  @override
+  String get historyTitle => 'History';
+
+  @override
+  String historyLastHours(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Last $count hours',
+      one: 'Last hour',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String historyLastDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Last $count days',
+      one: 'Last day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get historyRefresh => 'Refresh';
+
+  @override
+  String get historyEmpty =>
+      'No history yet. Klabautermann keeps 48 hours and 30 days of this server\'s readings while it is open.';
+
+  @override
+  String get historyLaneMean => 'Average';
+
+  @override
+  String get historyLanePeak => 'Peak';
+
+  @override
+  String get historySource =>
+      'Recorded on this device while Klabautermann was open';
+
+  @override
+  String get historyMetricCpu => 'CPU busy';
+
+  @override
+  String get historyMetricMemory => 'Memory used';
+
+  @override
+  String get historyMetricDisk => 'Disk space used';
+
+  @override
+  String get historyMetricInodes => 'Inodes used';
+
+  @override
+  String get historyMetricLoad => 'Load per core';
 
   @override
   String get alertRulesTitle => 'Alert rules';

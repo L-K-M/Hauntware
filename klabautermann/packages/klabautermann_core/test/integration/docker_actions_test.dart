@@ -2,7 +2,7 @@
 // fixture (M4 E28, X2 and X3): the real engine in its own isolate, links
 // on, as the fixture user in the Docker host's `docker` group. Every
 // container, image and stack action of the MVP, v1's volume create and
-// remove and network remove, with the watched list following it; the refusals a managed stack, a protected container and
+// remove, network remove and prune, with the watched list following it; the refusals a managed stack, a protected container and
 // an unverified or managed redeploy get; a kill and a stop and continue
 // of the user's own process, with the start-time guard; and STK-06's
 // detached redeploy under BusyBox `setsid` (spike S4), which pulls a new
@@ -425,6 +425,75 @@ void main() {
       await dind(['network', 'ls', '--quiet', '--filter', 'id=$id']),
       isEmpty,
     );
+  });
+
+  test('a prune previews what it removes and what it keeps, and removes '
+      'what it previewed (DKE-05, IMG-06)', () async {
+    const volume = 'prune-volume';
+    const user = 'prune-user';
+    const tag = 'klab-prune/scratch:1';
+    addTearDown(() async {
+      for (final arguments in [
+        ['rm', '--force', user],
+        ['volume', 'rm', volume],
+        ['rmi', tag],
+      ]) {
+        try {
+          await dind(arguments);
+        } on Object {
+          // Removed by the test.
+        }
+      }
+    });
+    final engine = await start('prune-actions');
+
+    // A volume prune lists the unused volume, keeps a mounted one and is
+    // only previewed: other suites' volumes share the engine.
+    await dind(['volume', 'create', volume]);
+    final volumes = await plan(
+      engine,
+      const PruneDocker(dockerServer, kind: DockerPruneKind.volumes),
+    );
+    expect(volumes.preview.requiredTier, ConfirmationTier.typedPhrase);
+    expect(volumes.preview.targetName, 'volumes');
+    expect([
+      for (final item in volumes.preview.prune!.removes) item.name,
+    ], contains(volume));
+
+    // Committing the same tag twice leaves the first image dangling.
+    await dind(['create', '--name', user, _image, 'true']);
+    await dind(['commit', user, tag]);
+    final dangling = (await dind([
+      'image',
+      'inspect',
+      '--format',
+      '{{.Id}}',
+      tag,
+    ])).trim();
+    await dind(['commit', '--change', 'LABEL second=1', user, tag]);
+    final short = dangling.substring('sha256:'.length, 'sha256:'.length + 12);
+
+    final images = await plan(
+      engine,
+      const PruneDocker(dockerServer, kind: DockerPruneKind.images),
+    );
+    expect([
+      for (final item in images.preview.prune!.removes) item.name,
+    ], contains(short));
+    expectSucceeded(await run(engine, images));
+    expect(
+      await dind([
+        'image',
+        'ls',
+        '--quiet',
+        '--no-trunc',
+        '--filter',
+        'dangling=true',
+      ]),
+      isNot(contains(dangling)),
+    );
+    // A tagged image stays: only `-a` removes it.
+    expect(await dind(['image', 'ls', '--quiet', tag]), isNotEmpty);
   });
 
   test('a stack stops, starts and restarts its containers (STK-03)', () async {

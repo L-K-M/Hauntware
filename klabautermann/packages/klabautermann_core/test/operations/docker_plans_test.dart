@@ -35,8 +35,10 @@ Map<String, Object?> _container(
   Map<String, String> labels = const {},
   List<Map<String, Object?>> ports = const [],
   List<String> volumes = const [],
+  int? sizeRw,
 }) => {
   'Id': id ?? _id(name.codeUnits.map((c) => c.toRadixString(16)).join()),
+  'SizeRw': ?sizeRw,
   'Names': ['/$name'],
   'Image': 'app:1',
   'ImageID': ?imageId,
@@ -72,6 +74,9 @@ final class _Engine extends FakeDaemon {
   final volumes = <Map<String, Object?>>[];
   final networks = <Map<String, Object?>>[];
 
+  /// `GET /system/df`'s body.
+  Map<String, Object?> df = const {};
+
   /// Statuses by `METHOD path`; actions answer 204 otherwise.
   final statuses = <String, int>{};
 
@@ -97,14 +102,29 @@ final class _Engine extends FakeDaemon {
       final ids = (decoded['id'] as List?)?.cast<String>();
       final labels = (decoded['label'] as List?)?.cast<String>();
       final mounted = (decoded['volume'] as List?)?.cast<String>();
+      final states = (decoded['status'] as List?)?.cast<String>();
       return _reply(200, [
         for (final c in containers)
           if ((ids == null || ids.any((id) => '${c['Id']}'.startsWith(id))) &&
               (labels == null || labels.every((l) => _hasLabel(c, l))) &&
-              (mounted == null || mounted.every((v) => _mounts(c, v))))
+              (mounted == null || mounted.every((v) => _mounts(c, v))) &&
+              (states == null || states.contains(c['State'])))
             c,
       ]);
     }
+    if (method == 'GET' && rest == '/volumes') {
+      final filters = uri.queryParameters['filters'];
+      final dangling = filters != null && filters.contains('dangling');
+      return _reply(200, {
+        'Volumes': [
+          for (final v in volumes)
+            if (!dangling || !containers.any((c) => _mounts(c, '${v['Name']}')))
+              v,
+        ],
+      });
+    }
+    if (method == 'GET' && rest == '/networks') return _reply(200, networks);
+    if (method == 'GET' && rest == '/system/df') return _reply(200, df);
     if (method == 'GET' && rest.startsWith('/networks/')) {
       final key = Uri.decodeComponent(rest.substring('/networks/'.length));
       for (final n in networks) {
@@ -739,6 +759,267 @@ void main() {
     });
   });
 
+  group('prune (DKE-05, IMG-06)', () {
+    Map<String, Object?> image(String seed, {List<String> tags = const []}) => {
+      'Id': 'sha256:${_id(seed)}',
+      'RepoTags': tags,
+      'Size': 1000,
+    };
+    Map<String, Object?> network(
+      String name, {
+      Map<String, Object?> containers = const {},
+    }) => {
+      'Id': _id(name.codeUnits.first.toRadixString(16)),
+      'Name': name,
+      'Driver': 'bridge',
+      'Containers': containers,
+    };
+
+    Future<PrunePreview> preview(PruneDocker intent, _Engine engine) async =>
+        _planned(await _plan(intent, engine)).prune!;
+
+    test('containers: the stopped ones, with their sizes, behind the typed '
+        'confirmation', () async {
+      final engine = _Engine()
+        ..containers.addAll([
+          _container('web-1'),
+          _container('old-1', state: 'exited', sizeRw: 300),
+          _container('new-1', state: 'created', sizeRw: 0),
+          _container('dead-1', state: 'dead', sizeRw: 20),
+        ]);
+      final plan = _planned(
+        await _plan(
+          const PruneDocker(_server, kind: DockerPruneKind.containers),
+          engine,
+        ),
+      );
+      expect(plan.kind, OperationKind.prune);
+      expect(plan.tier, ConfirmationTier.typedPhrase);
+      expect(plan.targetName, 'containers');
+      expect(_step(plan).display, 'POST /v1.52/containers/prune');
+      expect(
+        [for (final item in plan.prune!.removes) (item.name, item.size)],
+        [('old-1', 300), ('new-1', 0), ('dead-1', 20)],
+      );
+      expect(plan.prune!.freed, 320);
+      expect(cliEquivalent(_step(plan)), 'docker container prune -f');
+    });
+
+    test('images: dangling ones, or with all every unused one, keeping '
+        'those in use', () async {
+      final engine = _Engine()
+        ..images.addAll([
+          image('d1'),
+          image('d2', tags: ['<none>:<none>']),
+          image('t1', tags: ['app:old']),
+          image('t2', tags: ['app:1']),
+        ])
+        ..containers.addAll([
+          _container('web-1', imageId: 'sha256:${_id('d2')}'),
+          _container('api-1', state: 'exited', imageId: 'sha256:${_id('t2')}'),
+        ]);
+
+      final dangling = _planned(
+        await _plan(
+          const PruneDocker(_server, kind: DockerPruneKind.images),
+          engine,
+        ),
+      );
+      expect(dangling.targetName, 'images');
+      expect(
+        [for (final i in dangling.prune!.removes) i.name],
+        [_id('d1').substring(0, 12)],
+      );
+      expect(
+        [for (final k in dangling.prune!.kept) (k.name, k.reason)],
+        [(_id('d2').substring(0, 12), PruneExemption.inUse)],
+      );
+      expect(
+        _step(dangling).query['filters'],
+        jsonEncode({
+          'dangling': ['true'],
+        }),
+      );
+      expect(cliEquivalent(_step(dangling)), 'docker image prune -f');
+
+      final every = _planned(
+        await _plan(
+          const PruneDocker(_server, kind: DockerPruneKind.images, all: true),
+          engine,
+        ),
+      );
+      expect(every.targetName, 'images-all');
+      expect(
+        [for (final i in every.prune!.removes) i.name],
+        [_id('d1').substring(0, 12), 'app:old'],
+      );
+      expect(every.prune!.freed, 2000);
+      expect(
+        [for (final k in every.prune!.kept) k.name],
+        [_id('d2').substring(0, 12), 'app:1'],
+      );
+      expect(cliEquivalent(_step(every)), 'docker image prune -a -f');
+    });
+
+    test('volumes: every unused one, named ones too, with the reclaimable '
+        'bytes and the data warning', () async {
+      _Engine engine(String api) => _Engine(api: api)
+        ..volumes.addAll([
+          {'Name': 'pgdata', 'Driver': 'local'},
+          {'Name': 'orphan', 'Driver': 'local'},
+        ])
+        ..containers.add(_container('db-1', volumes: ['pgdata']))
+        ..df = {
+          'VolumeUsage': {
+            'TotalCount': 2,
+            'ActiveCount': 1,
+            'Reclaimable': 4096,
+          },
+        };
+
+      final plan = _planned(
+        await _plan(
+          const PruneDocker(_server, kind: DockerPruneKind.volumes),
+          engine('1.52'),
+        ),
+      );
+      expect([for (final i in plan.prune!.removes) i.name], ['orphan']);
+      expect(
+        [for (final k in plan.prune!.kept) (k.name, k.reason)],
+        [('pgdata', PruneExemption.inUse)],
+      );
+      expect(plan.prune!.freed, 4096);
+      expect(
+        (plan.impact!.kind, plan.impact!.count),
+        (ImpactKind.deletesVolumeData, 1),
+      );
+      expect(
+        _step(plan).query['filters'],
+        jsonEncode({
+          'all': ['true'],
+        }),
+      );
+      expect(cliEquivalent(_step(plan)), 'docker volume prune -a -f');
+
+      // Before 1.42 a prune already removes named volumes, and the filter
+      // does not exist.
+      final old = _planned(
+        await _plan(
+          const PruneDocker(_server, kind: DockerPruneKind.volumes),
+          engine('1.41'),
+        ),
+      );
+      expect(_step(old).query, isEmpty);
+    });
+
+    test('networks: user-defined ones no container is on, keeping the '
+        'built-in and the used ones', () async {
+      final engine = _Engine()
+        ..networks.addAll([
+          network('bridge'),
+          network(
+            'shop_default',
+            containers: {
+              _id('c1'): {'Name': 'shop-web-1'},
+            },
+          ),
+          network('old_net'),
+        ]);
+      final result = await preview(
+        const PruneDocker(_server, kind: DockerPruneKind.networks),
+        engine,
+      );
+      expect([for (final i in result.removes) i.name], ['old_net']);
+      expect(
+        [for (final k in result.kept) (k.name, k.reason)],
+        [
+          ('bridge', PruneExemption.builtin),
+          ('shop_default', PruneExemption.inUse),
+        ],
+      );
+    });
+
+    test('the build cache: the unused records counted and sized by the '
+        'engine, with nothing to re-validate', () async {
+      final engine = _Engine()
+        ..df = {
+          'BuildCacheUsage': {
+            'TotalCount': 5,
+            'ActiveCount': 2,
+            'Reclaimable': 8192,
+          },
+        };
+      final plan = _planned(
+        await _plan(
+          const PruneDocker(_server, kind: DockerPruneKind.buildCache),
+          engine,
+        ),
+      );
+      expect(plan.targetName, 'build-cache');
+      expect((plan.prune!.count, plan.prune!.freed), (3, 8192));
+      expect(plan.revalidate, isEmpty);
+      expect(_step(plan).display, 'POST /v1.52/build/prune?all=1');
+      expect(cliEquivalent(_step(plan)), 'docker builder prune -a -f');
+    });
+
+    test('nothing to remove is refused', () async {
+      final engine = _Engine()..containers.add(_container('web-1'));
+      for (final kind in DockerPruneKind.values) {
+        expect(
+          (await _plan(PruneDocker(_server, kind: kind), engine)).refusal,
+          ActionRefusalReason.nothingToPrune,
+          reason: kind.name,
+        );
+      }
+    });
+
+    test('the runner refuses when what the prune matches changed after the '
+        'preview', () async {
+      final engine = _Engine()
+        ..containers.add(_container('old-1', state: 'exited'));
+      final plan = _planned(
+        await _plan(
+          const PruneDocker(_server, kind: DockerPruneKind.containers),
+          engine,
+        ),
+      );
+      final check = plan.revalidate.single as DockerTargetUnchanged;
+      expect(check.kind, DockerTargetKind.prune);
+      expect(await revalidateDockerTarget(_client(engine), check), isNull);
+
+      engine.containers.add(_container('web-1', state: 'exited'));
+      expect(
+        await revalidateDockerTarget(_client(engine), check),
+        RevalidationFailure.targetChanged,
+      );
+    });
+
+    test('a prune reads the lists it changed again', () {
+      expect(
+        apiStepChanges(
+          ApiStep(method: 'POST', path: '/v1.52/containers/prune'),
+        ),
+        (
+          container: null,
+          containers: true,
+          images: false,
+          volumes: false,
+          networks: false,
+        ),
+      );
+      expect(
+        apiStepChanges(ApiStep(method: 'POST', path: '/v1.52/images/prune')),
+        (
+          container: null,
+          containers: false,
+          images: true,
+          volumes: false,
+          networks: false,
+        ),
+      );
+    });
+  });
+
   group('stacks (STK-03)', () {
     _Engine shop({String dbDependsOn = ''}) => _Engine()
       ..containers.addAll([
@@ -870,7 +1151,13 @@ void main() {
         apiStepChanges(
           ApiStep(method: 'POST', path: '/v1.44/containers/c1/pause'),
         ),
-        (container: 'c1', images: false, volumes: false, networks: false),
+        (
+          container: 'c1',
+          containers: false,
+          images: false,
+          volumes: false,
+          networks: false,
+        ),
       );
       expect(
         apiStepChanges(
@@ -880,25 +1167,55 @@ void main() {
             query: {'v': '1'},
           ),
         ),
-        (container: 'c1', images: false, volumes: false, networks: false),
+        (
+          container: 'c1',
+          containers: false,
+          images: false,
+          volumes: false,
+          networks: false,
+        ),
       );
       expect(
         apiStepChanges(
           ApiStep(method: 'DELETE', path: '/v1.44/images/nginx%3Alatest'),
         ),
-        (container: null, images: true, volumes: false, networks: false),
+        (
+          container: null,
+          containers: false,
+          images: true,
+          volumes: false,
+          networks: false,
+        ),
       );
       expect(
         apiStepChanges(ApiStep(method: 'POST', path: '/v1.44/volumes/create')),
-        (container: null, images: false, volumes: true, networks: false),
+        (
+          container: null,
+          containers: false,
+          images: false,
+          volumes: true,
+          networks: false,
+        ),
       );
       expect(
         apiStepChanges(ApiStep(method: 'DELETE', path: '/v1.44/networks/n1')),
-        (container: null, images: false, volumes: false, networks: true),
+        (
+          container: null,
+          containers: false,
+          images: false,
+          volumes: false,
+          networks: true,
+        ),
       );
       expect(
         apiStepChanges(ApiStep(method: 'DELETE', path: '/v1.44/volumes/data')),
-        (container: null, images: false, volumes: true, networks: false),
+        (
+          container: null,
+          containers: false,
+          images: false,
+          volumes: true,
+          networks: false,
+        ),
       );
     });
 
