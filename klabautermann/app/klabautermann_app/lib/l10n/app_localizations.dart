@@ -6538,7 +6538,7 @@ abstract class AppLocalizations {
   /// **'Enter a name.'**
   String get dockerVolumeNameRequired;
 
-  /// Create volume dialog: a name or driver Docker would refuse.
+  /// Create volume dialog: a name Docker would refuse.
   ///
   /// In en, this message translates to:
   /// **'Use letters, digits, \'_\', \'.\' and \'-\', starting with a letter or digit, at least two characters.'**
