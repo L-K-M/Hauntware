@@ -237,6 +237,8 @@ export 'package:klabautermann_docker/klabautermann_docker.dart'
         HealthStatus,
         ImageSummary,
         LogConfig,
+        NetworkIpamConfig,
+        NetworkSummary,
         Ownership,
         OwnershipMarker,
         SystemDf,

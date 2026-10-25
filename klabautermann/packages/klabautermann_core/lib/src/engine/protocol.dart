@@ -53,6 +53,7 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
         HealthStatus,
         ImageSummary,
         MaskedValue,
+        NetworkSummary,
         SystemDf,
         VolumeSummary;
 import 'package:meta/meta.dart';
@@ -264,6 +265,11 @@ import '../operations/plan_types.dart';
 /// N10a): [DockerWatchList.volumes], delivered as [DockerVolumesPayload].
 /// The [CreateVolume] and [RemoveVolume] intents then joined it (VOL-02,
 /// N10b), with the refusals `volumeInUse` and `volumeExists`.
+///
+/// The network list then joined v3 the same way (03 §7.15 DNW-01, DNW-02,
+/// M6 plan N11): [DockerWatchList.networks], delivered as
+/// [DockerNetworksPayload], and the [RemoveNetwork] intent with the
+/// refusals `networkInUse` and `builtinNetwork`.
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -2386,6 +2392,12 @@ enum ActionRefusalReason {
   /// A volume of that name already exists (VOL-02).
   volumeExists,
 
+  /// A container holds an endpoint on the network (DNW-02).
+  networkInUse,
+
+  /// `bridge`, `host` and `none` are the engine's own and stay (DNW-01).
+  builtinNetwork,
+
   /// The stack's services depend on each other in a cycle, so there is no
   /// order to act in (STK-03).
   dependencyCycle,
@@ -3612,6 +3624,9 @@ enum DockerWatchList {
 
   /// The volume list (03 §7.15 VOL-01), as [DockerVolumesPayload].
   volumes,
+
+  /// The network list (03 §7.15 DNW-01), as [DockerNetworksPayload].
+  networks,
 }
 
 /// The most watches one server holds [E]: a Docker view holds one or two.
@@ -3663,6 +3678,13 @@ final class DockerVolumesPayload extends DockerPayload {
   const DockerVolumesPayload(this.volumes);
 
   final List<VolumeSummary> volumes;
+}
+
+/// The network list (03 §7.15 DNW-01), labels masked by key.
+final class DockerNetworksPayload extends DockerPayload {
+  const DockerNetworksPayload(this.networks);
+
+  final List<NetworkSummary> networks;
 }
 
 /// `/system/df`'s totals per type (02 OV-05), read in the shape the
@@ -4378,6 +4400,14 @@ final class RemoveVolume extends ActionIntent {
   const RemoveVolume(super.serverId, {required this.name});
 
   final String name;
+}
+
+/// Removes the network [networkId] (03 §7.15 DNW-02): never a built-in
+/// one, and not while a container holds an endpoint on it.
+final class RemoveNetwork extends ActionIntent {
+  const RemoveNetwork(super.serverId, {required this.networkId});
+
+  final String networkId;
 }
 
 /// What [StackAction] does to a Compose project (STK-03).

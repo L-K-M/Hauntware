@@ -44,6 +44,9 @@ enum ActionEntryPoint {
   /// Removing a volume (VOL-02).
   volumeRemove,
 
+  /// Removing a network (DNW-02).
+  networkRemove,
+
   /// A stack's start, stop and restart (STK-03).
   stackVerb,
 
