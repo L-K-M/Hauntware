@@ -6574,11 +6574,29 @@ abstract class AppLocalizations {
   /// **'Stop pull'**
   String get dockerPullCancel;
 
-  /// Pull sheet: while a pull runs. The pull runs over this connection and the daemon stops it when the sheet closes (03 §7.14).
+  /// Pull sheet: while a pull runs, by route. An engine pull stops when the sheet closes; the host's docker pull ends with its connection (03 §7.14).
   ///
   /// In en, this message translates to:
-  /// **'Pulling. Closing this sheet stops the pull.'**
-  String get dockerPullForeground;
+  /// **'{route, select, engine{Pulling. Closing this sheet stops the pull.} host{Pulling on the server. Losing the connection stops the pull.} other{Starting the pull on the server.}}'**
+  String dockerPullRunning(String route);
+
+  /// Pull sheet: the choice of how to pull (IMG-03, REG-01).
+  ///
+  /// In en, this message translates to:
+  /// **'{route, select, engine{Engine} host{Server\'s login} other{Detached}}'**
+  String dockerPullRoute(String route);
+
+  /// Pull sheet: under the route choice, what the chosen route does (03 §7.14, REG-01).
+  ///
+  /// In en, this message translates to:
+  /// **'{route, select, engine{The engine pulls anonymously and shows each layer. Closing the sheet stops it.} host{The server\'s docker pull uses its own docker login, for private registries. The output shows at the end.} other{The server\'s docker pull runs on its own and keeps running when you leave. Follow it under Operations.}}'**
+  String dockerPullRouteNote(String route);
+
+  /// Pull sheet: a detached pull launched; its log follows it (03 §7.17).
+  ///
+  /// In en, this message translates to:
+  /// **'The pull of {target} started on the server.'**
+  String dockerPullDetached(String target);
 
   /// Pull sheet: one layer's status with the bytes done of its total.
   ///

@@ -36,10 +36,12 @@ void openImagePull(BuildContext context, {required String serverId}) {
   );
 }
 
-/// An image pull with its per-layer progress (03 §7.14 IMG-03): the
-/// reference, planned and confirmed as any action is, then each layer the
-/// daemon reports and how the pull ended. The pull is a foreground one:
-/// closing the sheet stops it, which the sheet says while it runs.
+/// An image pull (03 §7.14 IMG-03, REG-01): the reference and the route,
+/// planned and confirmed as any action is. Through the engine the sheet
+/// shows each layer the daemon reports, and closing it stops the pull;
+/// the host's own `docker pull` uses the host's registry logins, in the
+/// foreground with its output at the end, or detached to outlive the
+/// sheet.
 class ImagePullSheet extends StatefulWidget {
   const ImagePullSheet({
     super.key,
@@ -59,9 +61,12 @@ class ImagePullSheet extends StatefulWidget {
 class _ImagePullSheetState extends State<ImagePullSheet> {
   final _reference = TextEditingController();
   late final StreamSubscription<(String, RunState)> _ends;
+  PullRoute _route = PullRoute.engine;
 
-  /// The pull this sheet started and its end, once it came.
+  /// The pull this sheet started, the route it took, and its end, once
+  /// it came.
   String? _planId;
+  PullRoute? _ranVia;
   String? _target;
   RunState? _end;
 
@@ -83,8 +88,9 @@ class _ImagePullSheetState extends State<ImagePullSheet> {
 
   @override
   void dispose() {
-    // A foreground pull ends with its view (03 §7.14).
-    if (_planId case final planId? when _end == null) {
+    // An engine pull ends with its view (03 §7.14).
+    if (_planId case final planId?
+        when _end == null && _ranVia == PullRoute.engine) {
       widget.operations.cancel(planId);
     }
     widget.operations.removeListener(_changed);
@@ -97,14 +103,16 @@ class _ImagePullSheetState extends State<ImagePullSheet> {
     final reference = _reference.text.trim();
     if (reference.isEmpty || widget.operations.planning) return;
 
+    final via = _route;
     await previewAndRun(
       context,
       widget.operations,
-      PullImage(widget.serverId, reference: reference),
+      PullImage(widget.serverId, reference: reference, via: via),
       onRun: (planId, preview) {
         if (!mounted) return;
         setState(() {
           _planId = planId;
+          _ranVia = via;
           _target = preview.targetName;
           _end = null;
         });
@@ -143,6 +151,25 @@ class _ImagePullSheetState extends State<ImagePullSheet> {
           ),
           onSubmitted: running ? null : (_) => unawaited(_pull()),
         ),
+        const SizedBox(height: 12),
+        SegmentedButton<PullRoute>(
+          segments: [
+            for (final route in PullRoute.values)
+              ButtonSegment(
+                value: route,
+                label: Text(l10n.dockerPullRoute(route.name)),
+              ),
+          ],
+          selected: {_route},
+          onSelectionChanged: running
+              ? null
+              : (chosen) => setState(() => _route = chosen.single),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          l10n.dockerPullRouteNote(_route.name),
+          style: theme.textTheme.bodySmall,
+        ),
         const SizedBox(height: 16),
         Wrap(
           spacing: 8,
@@ -153,7 +180,7 @@ class _ImagePullSheetState extends State<ImagePullSheet> {
               icon: const Icon(Icons.download),
               label: Text(l10n.dockerPullStart),
             ),
-            if (running)
+            if (running && _ranVia == PullRoute.engine)
               OutlinedButton(
                 onPressed: () => widget.operations.cancel(_planId!),
                 child: Text(l10n.dockerPullCancel),
@@ -162,7 +189,10 @@ class _ImagePullSheetState extends State<ImagePullSheet> {
         ),
         if (running) ...[
           const SizedBox(height: 16),
-          Text(l10n.dockerPullForeground, style: theme.textTheme.bodySmall),
+          Text(
+            l10n.dockerPullRunning(_ranVia!.name),
+            style: theme.textTheme.bodySmall,
+          ),
         ],
         if (progress?.status case final status?) ...[
           const SizedBox(height: 12),
@@ -176,7 +206,7 @@ class _ImagePullSheetState extends State<ImagePullSheet> {
         ],
         if ((_end, _target) case (final end?, final target?)) ...[
           const SizedBox(height: 16),
-          _PullResult(end: end, target: target),
+          _PullResult(end: end, target: target, via: _ranVia!),
         ],
       ],
     );
@@ -243,10 +273,15 @@ class PullLayerRow extends StatelessWidget {
 /// How a pull ended: done, cancelled, refused, or failed with what the
 /// daemon said.
 class _PullResult extends StatelessWidget {
-  const _PullResult({required this.end, required this.target});
+  const _PullResult({
+    required this.end,
+    required this.target,
+    required this.via,
+  });
 
   final RunState end;
   final String target;
+  final PullRoute via;
 
   @override
   Widget build(BuildContext context) {
@@ -258,8 +293,11 @@ class _PullResult extends StatelessWidget {
     };
     final headline = switch (end) {
       RunRefused(:final reason) => l10n.actionRefused(reason.name),
-      RunInProgress() => l10n.dockerPullForeground,
+      RunInProgress() => l10n.dockerPullRunning(via.name),
       RunFinished(:final finished) => switch (finished.outcome) {
+        // A detached pull only started: its log follows it (03 §7.17).
+        ActionOutcome.succeeded when finished.operationId != null =>
+          l10n.dockerPullDetached(target),
         ActionOutcome.succeeded => l10n.actionSucceeded(target),
         ActionOutcome.cancelled => l10n.actionCancelled(target),
         ActionOutcome.failed => switch (finished.failure) {
@@ -268,7 +306,9 @@ class _PullResult extends StatelessWidget {
         },
       },
     };
-    final detail = finished?.output?.stderr;
+    // The host's docker pull prints its progress on stdout and its
+    // error on stderr; the engine's error comes as stderr.
+    final output = finished?.output;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -285,8 +325,8 @@ class _PullResult extends StatelessWidget {
             ),
           ),
         ),
-        if (detail != null && detail.isNotEmpty)
-          SelectableText(detail, style: _mono(theme)),
+        for (final text in [?output?.stdout, ?output?.stderr])
+          if (text.isNotEmpty) SelectableText(text, style: _mono(theme)),
       ],
     );
   }

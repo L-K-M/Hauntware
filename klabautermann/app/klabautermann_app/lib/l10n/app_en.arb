@@ -6074,9 +6074,42 @@
   "@dockerPullCancel": {
     "description": "Pull sheet: the button that stops a running pull."
   },
-  "dockerPullForeground": "Pulling. Closing this sheet stops the pull.",
-  "@dockerPullForeground": {
-    "description": "Pull sheet: while a pull runs. The pull runs over this connection and the daemon stops it when the sheet closes (03 §7.14)."
+  "dockerPullRunning": "{route, select, engine{Pulling. Closing this sheet stops the pull.} host{Pulling on the server. Losing the connection stops the pull.} other{Starting the pull on the server.}}",
+  "@dockerPullRunning": {
+    "description": "Pull sheet: while a pull runs, by route. An engine pull stops when the sheet closes; the host's docker pull ends with its connection (03 §7.14).",
+    "placeholders": {
+      "route": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerPullRoute": "{route, select, engine{Engine} host{Server's login} other{Detached}}",
+  "@dockerPullRoute": {
+    "description": "Pull sheet: the choice of how to pull (IMG-03, REG-01).",
+    "placeholders": {
+      "route": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerPullRouteNote": "{route, select, engine{The engine pulls anonymously and shows each layer. Closing the sheet stops it.} host{The server's docker pull uses its own docker login, for private registries. The output shows at the end.} other{The server's docker pull runs on its own and keeps running when you leave. Follow it under Operations.}}",
+  "@dockerPullRouteNote": {
+    "description": "Pull sheet: under the route choice, what the chosen route does (03 §7.14, REG-01).",
+    "placeholders": {
+      "route": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerPullDetached": "The pull of {target} started on the server.",
+  "@dockerPullDetached": {
+    "description": "Pull sheet: a detached pull launched; its log follows it (03 §7.17).",
+    "placeholders": {
+      "target": {
+        "type": "String",
+        "example": "registry.example.com/app:2"
+      }
+    }
   },
   "dockerPullLayerBytes": "{status}: {current} of {total}",
   "@dockerPullLayerBytes": {

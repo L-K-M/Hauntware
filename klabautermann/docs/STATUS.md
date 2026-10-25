@@ -1978,10 +1978,16 @@ is on main:
   `CancelAction`, the engine closes the request and the daemon stops the
   pull, and the plan finishes as cancelled. An `errorDetail` in the
   stream, or an error answer such as a refused registry, fails the step
-  with the daemon's words shown. The daemon pulls anonymously; private
-  registries through the host's own credentials (`docker pull` over exec,
-  REG-01) and the detached pull come with N13b. The Docker actions suite
-  pulls a tag pushed to the fixture registry and fails on a tag it lacks.
+  with the daemon's words shown. The daemon pulls anonymously; for a
+  private registry (M6 N13b, REG-01) the sheet's route choice runs the
+  host's own `docker --host unix://<socket> pull`, which uses the host's
+  `docker login` and credential helpers: "Server's login" over the link,
+  its output shown at the end, or "Detached" as an operation on the
+  runner row the host and admin mode allow, which keeps running when the
+  sheet closes and is followed under Operations. Over the sudo relay both
+  run as root, so only in admin mode. The Docker actions suite pulls a
+  tag pushed to the fixture registry through the engine and the host's
+  CLI, and fails on a tag it lacks.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container

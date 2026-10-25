@@ -329,6 +329,21 @@ void main() {
         throwsArgumentError,
       );
     });
+
+    test('docker pull names the endpoint and never takes an option as the '
+        'image (REG-01)', () {
+      expect(
+        dockerPull(socketPath: '/run/docker.sock', reference: 'app:1').argv,
+        ['docker', '--host', 'unix:///run/docker.sock', 'pull', 'app:1'],
+      );
+      for (final reference in ['', '--help']) {
+        expect(
+          () =>
+              dockerPull(socketPath: '/run/docker.sock', reference: reference),
+          throwsArgumentError,
+        );
+      }
+    });
   });
 
   group('compose output parsers (03 §7.16)', () {
