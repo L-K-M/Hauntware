@@ -1963,7 +1963,7 @@ is on main:
   which are unused. The Docker actions suite refuses and removes a network on
   the fixture. Prune (DNW-02, DKE-05) comes with N12.
 - Alert evaluation (M6 N50a, ALR-01): the engine evaluates every synced
-  `rule` record on the live samples of the servers its scope names, with
+  `client` rule on the live samples of the servers its scope names, with
   the rule's raise and clear thresholds and durations, over `cpu.busy`,
   `memory.used`, `load.perCore`, `disk.used` and `disk.inodes`, and
   sends `LocalAlertChanged` on each raise and clear. Nothing in the app
