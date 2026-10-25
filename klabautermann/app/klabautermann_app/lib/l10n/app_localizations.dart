@@ -3880,6 +3880,78 @@ abstract class AppLocalizations {
   /// **'The setting could not be changed.'**
   String get settingsAnnounceNotChanged;
 
+  /// App lock screen (SAF-20): its heading, shown over the whole app while the app lock is engaged.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann is locked'**
+  String get appLockTitle;
+
+  /// App lock screen: what unlocking asks for, and that open links are not closed by the lock.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock with this device\'s passcode, PIN or biometrics. Connections already open keep running.'**
+  String get appLockDetail;
+
+  /// App lock screen: the button that asks for device authentication again.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock'**
+  String get appLockUnlock;
+
+  /// App lock screen: the last device authentication was rejected or dismissed.
+  ///
+  /// In en, this message translates to:
+  /// **'Authentication failed or was cancelled. Try again.'**
+  String get appLockFailed;
+
+  /// App lock screen: device authentication is not set up or not available, so the lock cannot be opened yet.
+  ///
+  /// In en, this message translates to:
+  /// **'This device has no passcode, PIN or biometrics to ask for. Set one up, then try again.'**
+  String get appLockUnavailable;
+
+  /// The reason line the operating system's authentication prompt shows when the app lock asks for it.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock Klabautermann'**
+  String get appLockReason;
+
+  /// Settings > Safety: the heading over the app lock switch (SAF-20).
+  ///
+  /// In en, this message translates to:
+  /// **'App lock'**
+  String get settingsAppLockTitle;
+
+  /// Settings > Safety: the app lock switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Require device authentication'**
+  String get settingsAppLock;
+
+  /// Settings > Safety: what the app lock switch does.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask for this device\'s passcode, PIN or biometrics when Klabautermann opens and after {minutes} minutes in the background. Locking turns admin mode off on every server.'**
+  String settingsAppLockDetail(int minutes);
+
+  /// Settings > Safety: why the app lock switch is off and disabled on Linux.
+  ///
+  /// In en, this message translates to:
+  /// **'This platform has no device authentication Klabautermann can ask for.'**
+  String get settingsAppLockUnsupported;
+
+  /// Settings > Safety: why the app lock switch cannot be turned on right now.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up a passcode, PIN or biometrics on this device to use the app lock.'**
+  String get settingsAppLockUnavailable;
+
+  /// Settings > Safety: a toast after turning the app lock on or off did not take effect, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, notAuthenticated{The app lock did not change: authentication failed or was cancelled.} unavailable{The app lock did not change: this device has no authentication to ask for.} notSaved{The app lock did not change: the setting could not be saved.} other{The app lock did not change.}}'**
+  String settingsAppLockNotChanged(String reason);
+
   /// Section heading on the Sync settings tab over the sync passwords switch (SYN-02).
   ///
   /// In en, this message translates to:
