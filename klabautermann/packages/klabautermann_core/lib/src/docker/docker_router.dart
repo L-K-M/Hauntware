@@ -926,6 +926,12 @@ final class DockerRouter {
         case DockerImagesQuery():
           final images = await client.listImages();
           return read(DockerImagesPayload(images.value), images.warnings);
+        case DockerImageHistoryQuery(:final image):
+          final history = await client.imageHistory(image);
+          return read(
+            DockerImageHistoryPayload(maskImageHistory(history.value)),
+            history.warnings,
+          );
         case DockerComposeQuery():
           return read(switch (await endpoint.stacks.detectCli()) {
             final cli? => DockerComposePayload(cli),
@@ -965,6 +971,7 @@ final class DockerRouter {
   /// Whether [spec] names what it reads in a form the engine takes.
   static bool _valid(DockerQuerySpec spec) => switch (spec) {
     DockerContainerQuery(:final containerId) => containerId.isNotEmpty,
+    DockerImageHistoryQuery(:final image) => image.isNotEmpty,
     DockerStackFileQuery(:final project, :final path) =>
       composeNamePattern.hasMatch(project) && _absolute(path),
     DockerStackProfilesQuery(:final project) => composeNamePattern.hasMatch(

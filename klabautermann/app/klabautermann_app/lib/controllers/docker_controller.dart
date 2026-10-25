@@ -383,6 +383,12 @@ final class DockerController {
   Future<DockerPayload> scanStacks(String serverId, List<String> folders) =>
       _ask(serverId, DockerStackScanQuery(folders));
 
+  /// The history of [image], a reference or id, on [serverId] (IMG-04):
+  /// a [DockerImageHistoryPayload] whose instructions the engine masked,
+  /// or a [DockerQueryFailed]. Nothing of the answer stays here.
+  Future<DockerPayload> readImageHistory(String serverId, String image) =>
+      _ask(serverId, DockerImageHistoryQuery(image));
+
   /// Sends [spec] once and completes with the engine's answer, as
   /// [readStackFile] describes.
   Future<DockerPayload> _ask(String serverId, DockerQuerySpec spec) {

@@ -4950,6 +4950,57 @@ class AppLocalizationsEn extends AppLocalizations {
       'Which images are in use is unknown: this engine\'s API reports no count, and the containers could not be listed.';
 
   @override
+  String dockerImageHistoryTitle(String image) {
+    return '$image: history';
+  }
+
+  @override
+  String get dockerImageHistoryReading => 'Reading the image\'s history…';
+
+  @override
+  String get dockerImageHistoryEmpty =>
+      'The engine reports no layers for this image.';
+
+  @override
+  String dockerImageHistoryMasked(int count, int seconds) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count instructions hold masked values. Reveal values shows them for $seconds seconds.',
+      one:
+          '1 instruction holds masked values. Reveal values shows them for $seconds seconds.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerImageHistoryNoInstruction => 'No instruction recorded';
+
+  @override
+  String get dockerImageHistoryComment => 'Comment';
+
+  @override
+  String dockerImageHistoryFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'notInFleet': 'This server is no longer in the fleet.',
+      'linkUnavailable': 'There is no connection to this server.',
+      'profileUnknown': 'The server\'s capability check has not answered yet.',
+      'endpointUnavailable': 'The Docker engine cannot be reached.',
+      'tooManyQueries':
+          'This server already has as many Docker reads waiting as Klabautermann allows.',
+      'notFound': 'The engine no longer has this image.',
+      'daemonError':
+          'The engine refused or failed to read the image\'s history.',
+      'connectionFailed':
+          'The connection to the engine failed while reading the history.',
+      'cancelled': 'The read stopped before it ran.',
+      'other': 'The image\'s history could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
   String get dockerImagesLowSessionRelay =>
       'Low-session mode: the list is read again every 15 seconds instead of following engine events.';
 
