@@ -7,6 +7,7 @@ import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 
 import '../../controllers/announcement_controller.dart';
+import '../../controllers/app_lock_controller.dart';
 import '../../controllers/appearance_controller.dart';
 import '../../controllers/device_name.dart';
 import '../../controllers/monitor_set.dart';
@@ -82,6 +83,11 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     }),
   );
 
+  /// The Safety tab's app lock switch, from the latest snapshot.
+  late final RemoteAppLock appLock = RemoteAppLock._(
+    (enabled) => invoke(SettingsLinkMethod.setAppLock.name, enabled),
+  );
+
   /// The Safety tab's model, from the latest snapshot.
   late final RemoteSafety safety = RemoteSafety._(
     (method, argument) => invoke(method.name, argument),
@@ -117,6 +123,9 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
       ),
       (snapshot[SettingsLinkKey.labels.name]! as Map).cast<String, String>(),
     );
+    appLock._apply(
+      snapshot[SettingsLinkKey.appLock.name] as Map<Object?, Object?>?,
+    );
   }
 
   @override
@@ -128,6 +137,7 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     pinPublication.dispose();
     monitorSet.dispose();
     safety.dispose();
+    appLock.dispose();
     super.dispose();
   }
 }
@@ -220,6 +230,40 @@ final class RemoteSyncSecrets extends ChangeNotifier
   Future<void> setSyncSecrets(bool enabled) async {
     await _call(enabled);
   }
+}
+
+/// [AppLockSettings] over the link: the app's lock as the latest snapshot
+/// carries it, and a change whose device authentication runs in the
+/// app's window. An app that offers no lock reads as unsupported.
+final class RemoteAppLock extends ChangeNotifier implements AppLockSettings {
+  RemoteAppLock._(this._call);
+
+  final Future<Object?> Function(bool enabled) _call;
+
+  bool _enabled = false;
+  AppLockSupport _support = AppLockSupport.unsupported;
+
+  void _apply(Map<Object?, Object?>? json) {
+    final enabled = json?[SettingsLinkKey.enabled.name] as bool? ?? false;
+    final support = switch (json?[SettingsLinkKey.support.name]) {
+      final String name => AppLockSupport.values.byName(name),
+      _ => AppLockSupport.unsupported,
+    };
+    if (enabled == _enabled && support == _support) return;
+    _enabled = enabled;
+    _support = support;
+    notifyListeners();
+  }
+
+  @override
+  bool get enabled => _enabled;
+
+  @override
+  AppLockSupport get support => _support;
+
+  @override
+  Future<AppLockChange> setEnabled(bool enabled) async =>
+      AppLockChange.values.byName((await _call(enabled))! as String);
 }
 
 /// [PinPublicationSettings] over the link: the app's state as the latest

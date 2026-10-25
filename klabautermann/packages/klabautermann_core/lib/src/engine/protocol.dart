@@ -25,6 +25,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         ProcsSelection,
         SystemdUnit,
         SystemctlVerb,
+        TempsSnapshot,
         ThresholdRule,
         TimerLastRun,
         TimersSnapshot,
@@ -1620,7 +1621,8 @@ final class Sample extends EngineEvent {
              (stream == SampleStream.timers && result is TimersResult) ||
              (stream == SampleStream.cron && result is CronResult) ||
              (stream == SampleStream.userUnits && result is UnitsResult) ||
-             (stream == SampleStream.userTimers && result is TimersResult),
+             (stream == SampleStream.userTimers && result is TimersResult) ||
+             (stream == SampleStream.temps && result is TempsResult),
          'result must be the variant for stream, or CollectorUnavailable',
        );
 
@@ -2868,6 +2870,46 @@ final class KeystoreRequest extends EngineEvent {
   /// Unique for the engine's lifetime.
   final int requestId;
   final KeystoreOperation operation;
+}
+
+/// One in-app threshold alert raised or cleared (ALR-01, 03 §7.19, D29):
+/// the engine evaluates every synced rule on the live samples of the
+/// servers it applies to, on this device while Klabautermann is open. A
+/// rule that is removed or changed, or a server that leaves its scope,
+/// clears a raised alert at once.
+final class LocalAlertChanged extends EngineEvent {
+  const LocalAlertChanged({
+    required this.serverId,
+    required this.ruleId,
+    required this.metric,
+    required this.severity,
+    required this.raised,
+    required this.at,
+    this.value,
+    this.since,
+  });
+
+  final String serverId;
+
+  /// The `rule` record's id.
+  final String ruleId;
+
+  /// The rule's metric id, such as `cpu.busy`.
+  final String metric;
+
+  final AlertSeverity severity;
+
+  /// True when the alert went up, false when it cleared.
+  final bool raised;
+
+  /// The reading that raised or cleared it, by the engine's clock in UTC.
+  final DateTime at;
+
+  /// The value that reading had; null for a clear without a reading.
+  final double? value;
+
+  /// When the breach behind a raise began, as the rule's `for` counts it.
+  final DateTime? since;
 }
 
 /// Alerts fetched for one server inside a sync round (v1.x, 03 §10.1, D42).
@@ -5391,6 +5433,9 @@ enum SampleStream {
 
   /// The login user's own systemd timers ([TimersResult], 7.7, JOB-08).
   userTimers,
+
+  /// Temperature sensors ([TempsResult], HW-01).
+  temps,
 }
 
 /// The 03 §6.4 cadence columns [SetCadenceProfile] picks among.
@@ -5401,8 +5446,8 @@ enum CadenceProfile {
   /// The Phone column.
   phone,
 
-  /// The Cellular saver column, which reads `timers` and `cron` on
-  /// demand: once per [Subscribe] that names them, as soon as the link is
+  /// The Cellular saver column, which reads `timers`, `cron` and
+  /// `temps` on demand: once per [Subscribe] that names them, as soon as the link is
   /// ready and the app is in the foreground (see [Subscribe]).
   cellularSaver,
 }
@@ -5553,8 +5598,8 @@ final class CoreResult extends SampleResult {
   /// As [OverviewResult.network].
   final Map<String, NetRate>? network;
 
-  /// Byte rates per block device since the previous reading; null without
-  /// one, as [OverviewResult.network].
+  /// Throughput, requests, waits and busy share per block device since
+  /// the previous reading; null without one, as [OverviewResult.network].
   final Map<String, DiskRate>? disks;
 
   /// Pressure stall information; null where the kernel has none, which is
@@ -5673,6 +5718,14 @@ final class FsResult extends SampleResult {
   const FsResult(this.fs);
 
   final FsSnapshot fs;
+}
+
+/// Temperature sensors ([SampleStream.temps], HW-01): empty where the
+/// host has none, as VMs and containers usually do.
+final class TempsResult extends SampleResult {
+  const TempsResult(this.temps);
+
+  final TempsSnapshot temps;
 }
 
 /// SYS-01's identity ([SampleStream.identity]); virtualization comes with

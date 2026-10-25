@@ -662,10 +662,12 @@ Proposals awaiting the owner close the section; they are not decisions.
   `drivers/nvme/host/core.c` (`nvme_alloc_ns`),
   `drivers/nvme/host/multipath.c` (`nvme_mpath_start_request`)], so a path
   row stays only when its head row shows no I/O, as on kernels before the
-  head accounted it. The four counters serve DSK-03's rates; DSK-04's
-  latency and utilization fields (ms reading, ms writing, `io_ticks`,
-  weighted ms) stay out until v1 brings DSK-04 and bumps the collector-set
-  version. A `netdev` or `diskstats` row whose counters are all zero (an
+  head accounted it. Since collector-set version 10 each row carries
+  seven counters: reads, sectors read, writes and sectors written serve
+  DSK-03's throughput and IOPS; ms reading, ms writing and `io_ticks`
+  serve DSK-04's await per request and busy share. Weighted ms (queue
+  depth) stays out. The parser still takes a four-counter row, whose
+  waits and busy share read as unknown. A `netdev` or `diskstats` row whose counters are all zero (an
   unused NIC, idle `nbd` devices) is left out; its first non-zero reading
   starts its series. PSI keeps `avg10`, `avg60` and `avg300` (7.1),
   without the cumulative `total`. The cpu file's `full` line stays: the
@@ -3350,8 +3352,9 @@ the guarded kill needs it.
   inodes from `df -Pi`; both under `timeout 10` because stale NFS mounts hang
   `df`.
 - **v1.** I/O rates and latency from `/proc/diskstats` deltas (devices
-  filtered on the host by D48; the `core` rows gain DSK-04's latency fields
-  with a collector-set version bump); mount details from `findmnt -J -b`
+  filtered on the host by D48; the `core` rows carry DSK-04's latency
+  fields from collector-set version 10, shown in the System tab's Disk
+  activity table); mount details from `findmnt -J -b`
   (util-linux 2.27+); swap devices; the disk space explorer (DSK-07), which
   streams `ncdu -x -o -` or `gdu -o-` when installed, else incremental `du -x
   -B1 -d1` per opened directory, read-only, sudo for a complete tree.
@@ -3886,6 +3889,19 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   and reboot-and-wait; boot timeline with unclean shutdowns; running against
   installed kernel; doctor checklist; "why is it slow"; attention queue
   (acknowledgements device-local); container diagnose without an LLM.
+
+  As built (M6 N37a, collector-set version 11), the slow `temps`
+  collector reads each hwmon chip's `temp<N>_input` with its `_max`,
+  `_crit` and `_label` through builtins, without `sensors`, and lists the
+  thermal zones, which the parser takes only where no hwmon input read:
+  a zone mostly repeats a chip's reading (`acpitz`, `x86_pkg_temp`
+  beside `coretemp`). A reading outside -60 to 250 °C is an unwired
+  input or an error code and is dropped; a limit of 0 is unset. The
+  `temps` stream runs every 10 s on desktop and phone and once per
+  subscription under the cellular saver. The System tab's Temperatures
+  section lists each sensor, sortable hottest first, with the chip's high
+  and critical limits where they fit, and does not show while the host
+  reports no sensor or inside a container, whose sysfs shows the host's.
 - **v1.x.** Fans, battery, inventory, crash markers, boot performance,
   incident snapshot (redacted by default), deploy pre-flight checks.
 
@@ -4384,6 +4400,19 @@ arrives with E22's Docker actions.
   owner on 2026-10-10, D10; no notification plugin resolves in any lockfile
   today [R: c3 §5.4]). Every rule row and the notification permission prompt say
   "evaluated on this device while Klabautermann is open".
+- **As built (M6 N50a).** The engine's `AlertEvaluator` takes the live
+  `rule` records after every sync round and the fleet with its groups
+  whenever it changes, and evaluates each `client` rule on every sample
+  of the servers its scope names (a `server` rule its target, a `group`
+  rule the servers of that group, `all` every fleet server). The metric
+  vocabulary is what the samples carry: `cpu.busy`, `memory.used` and
+  `load.perCore` from `overview` and `core`, and `disk.used` and
+  `disk.inodes`, the fullest real filesystem, from `fs`; a rule naming
+  another metric stays idle. An unknown value holds the rule's phase. A
+  raise and a clear each send `LocalAlertChanged`; a rule removed or
+  changed, or a server leaving its scope, clears a raised alert at once.
+  The alert center, badges, notifications and the rule editor follow
+  (N50b, N51).
 - **v1.x.** Flap damping (the rest of ALR-16), desktop tray monitoring
   (ALR-03, PLT-10), Android watch mode for a session (PLT-11, D34), Android
   credential-free reachability checks every 15 minutes or more (PLT-15), and T1
@@ -5119,6 +5148,32 @@ unchanged backup restores.
 
 Out of scope: enforced RBAC and tamper-proof audit; a client cannot restrict
 the holder of a root-equivalent socket (NG-08).
+
+### 8.13 App lock (SAF-20)
+
+Off by default, per device in `settings.json` (`klabautermann.appLock`),
+on Android, iOS, macOS and Windows; Linux has no system prompt
+`local_auth` can call, so the switch stays off there. The lock is
+ghost_keystore's `AppLock` (F5f), Séance's own, behind a lock screen:
+
+- With the lock on, the app opens behind the screen, which asks for
+  device authentication (biometrics, the passcode or PIN as fallback) at
+  once and on "Unlock". After `appLockBackgroundTimeout` (5 minutes) in
+  the background or hidden, by wall and monotonic time, it locks again.
+  The covered app stays mounted but takes no pointer, focus or semantics.
+- The engine's keystore reads (the master key, API keys such as the sync
+  token) wait for it: the app answers a read while locked with a refusal,
+  so a locked app hands the engine no new credential. Writes and deletes
+  are not held back, so a sign-out finishes. Links already open keep
+  running, as in Séance.
+- Admin mode ends on every server when the lock engages (8.2).
+- Turning the lock on or off asks for authentication first and takes
+  effect only once saved; the desktop settings window asks the app's
+  window to run it.
+- The lock fails closed: a device whose passcode, PIN and biometrics are
+  removed while it is on keeps the app behind the screen, which says to
+  set one up again, since unlocking and turning the lock off both need
+  that authentication.
 
 ---
 

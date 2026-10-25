@@ -520,6 +520,26 @@ void main() {
     expect(externalMonitorsIn(list(const [])).status, AccessStatus.unknown);
   });
 
+  test('a temps section reads as its sensors in °C (HW-01)', () {
+    final streams = {SampleStream.temps};
+    final p = _sampling(streams: streams);
+    final temps = _result<TempsResult>(
+      p.addTick(
+        streams,
+        reply(1, 1000, [
+          ok(
+            'temps',
+            '== hwmon ==\nhwmon2|coretemp|temp1|48000|84000|100000|Package id 0'
+                '\n== thermal ==\nthermal_zone0|27800|acpitz',
+          ),
+        ]),
+        _at(0),
+      ),
+    ).temps;
+    expect(temps.sensors.single.label, 'Package id 0');
+    expect(temps.sensors.single.celsius, 48);
+  });
+
   test('a reply\'s uptime times procs only when procs leads it', () {
     // The host reads the `B` uptime before the first collector, so a slow
     // `fs` ahead of `procs` would count toward the interval.

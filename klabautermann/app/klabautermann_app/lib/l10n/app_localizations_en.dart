@@ -1084,6 +1084,89 @@ class AppLocalizationsEn extends AppLocalizations {
   String get systemDevice => 'Device';
 
   @override
+  String get systemDiskActivityTitle => 'Disk activity';
+
+  @override
+  String get systemDiskActivityWaiting => 'Rates show from the second reading.';
+
+  @override
+  String get systemDiskActivityEmpty => 'No disk has done any I/O yet.';
+
+  @override
+  String get systemDiskRead => 'Read';
+
+  @override
+  String get systemDiskWrite => 'Write';
+
+  @override
+  String get systemDiskReadsPerSecond => 'Reads/s';
+
+  @override
+  String get systemDiskWritesPerSecond => 'Writes/s';
+
+  @override
+  String get systemDiskReadAwait => 'Read wait';
+
+  @override
+  String get systemDiskWriteAwait => 'Write wait';
+
+  @override
+  String get systemDiskBusy => 'Busy';
+
+  @override
+  String systemDiskOperations(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '$countString';
+  }
+
+  @override
+  String systemDiskMilliseconds(double ms) {
+    final intl.NumberFormat msNumberFormat =
+        intl.NumberFormat.decimalPatternDigits(
+          locale: localeName,
+          decimalDigits: 1,
+        );
+    final String msString = msNumberFormat.format(ms);
+
+    return '$msString ms';
+  }
+
+  @override
+  String get systemTemperaturesTitle => 'Temperatures';
+
+  @override
+  String get systemTemperatureSensor => 'Sensor';
+
+  @override
+  String systemTemperatureSensorName(String chip, String label) {
+    return '$chip: $label';
+  }
+
+  @override
+  String get systemTemperatureReading => 'Temperature';
+
+  @override
+  String get systemTemperatureHigh => 'High';
+
+  @override
+  String get systemTemperatureCritical => 'Critical';
+
+  @override
+  String systemTemperatureCelsius(double celsius) {
+    final intl.NumberFormat celsiusNumberFormat =
+        intl.NumberFormat.decimalPatternDigits(
+          locale: localeName,
+          decimalDigits: 0,
+        );
+    final String celsiusString = celsiusNumberFormat.format(celsius);
+
+    return '$celsiusString °C';
+  }
+
+  @override
   String get systemColumnMount => 'Mount';
 
   @override
@@ -2833,6 +2916,60 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsAnnounceNotChanged => 'The setting could not be changed.';
+
+  @override
+  String get appLockTitle => 'Klabautermann is locked';
+
+  @override
+  String get appLockDetail =>
+      'Unlock with this device\'s passcode, PIN or biometrics. Connections already open keep running.';
+
+  @override
+  String get appLockUnlock => 'Unlock';
+
+  @override
+  String get appLockFailed =>
+      'Authentication failed or was cancelled. Try again.';
+
+  @override
+  String get appLockUnavailable =>
+      'This device has no passcode, PIN or biometrics to ask for. Set one up, then try again.';
+
+  @override
+  String get appLockReason => 'Unlock Klabautermann';
+
+  @override
+  String get settingsAppLockTitle => 'App lock';
+
+  @override
+  String get settingsAppLock => 'Require device authentication';
+
+  @override
+  String settingsAppLockDetail(int minutes) {
+    return 'Ask for this device\'s passcode, PIN or biometrics when Klabautermann opens and after $minutes minutes in the background. Locking turns admin mode off on every server.';
+  }
+
+  @override
+  String get settingsAppLockUnsupported =>
+      'This platform has no device authentication Klabautermann can ask for.';
+
+  @override
+  String get settingsAppLockUnavailable =>
+      'Set up a passcode, PIN or biometrics on this device to use the app lock.';
+
+  @override
+  String settingsAppLockNotChanged(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'notAuthenticated':
+          'The app lock did not change: authentication failed or was cancelled.',
+      'unavailable':
+          'The app lock did not change: this device has no authentication to ask for.',
+      'notSaved':
+          'The app lock did not change: the setting could not be saved.',
+      'other': 'The app lock did not change.',
+    });
+    return '$_temp0';
+  }
 
   @override
   String get settingsSyncSecretsTitle => 'Passwords and keys';

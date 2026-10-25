@@ -202,6 +202,73 @@ void main() {
     test('a zero interval yields nothing', () {
       expect(diskRates([_disk('sda', 1, 1)], [_disk('sda', 2, 2)], 0), isEmpty);
     });
+
+    DiskStatEntry timed(
+      int reads,
+      int writes, {
+      required int readMs,
+      required int writeMs,
+      required int ioMs,
+    }) => DiskStatEntry(
+      'nvme0n1',
+      readsCompleted: reads,
+      sectorsRead: reads * 8,
+      writesCompleted: writes,
+      sectorsWritten: writes * 8,
+      readMs: readMs,
+      writeMs: writeMs,
+      ioMs: ioMs,
+    );
+
+    test('IOPS, await and busy share from the timings (DSK-04)', () {
+      final r = diskRates(
+        [timed(1000, 2000, readMs: 500, writeMs: 4000, ioMs: 10000)],
+        [timed(1400, 2100, readMs: 900, writeMs: 4600, ioMs: 11500)],
+        2,
+      )['nvme0n1']!;
+
+      expect(r.readsPerSecond, 200);
+      expect(r.writesPerSecond, 50);
+      // 400 ms over 400 reads, 600 ms over 100 writes.
+      expect(r.readAwaitMs, 1);
+      expect(r.writeAwaitMs, 6);
+      // 1.5 s of the 2 s interval with I/O in flight.
+      expect(r.busyPercent, 75);
+    });
+
+    test('no completed reads leaves the read await unknown; busy never '
+        'exceeds 100 %', () {
+      final r = diskRates(
+        [timed(10, 10, readMs: 5, writeMs: 5, ioMs: 0)],
+        [timed(10, 20, readMs: 5, writeMs: 25, ioMs: 1020)],
+        1,
+      )['nvme0n1']!;
+
+      expect(r.readAwaitMs, isNull);
+      expect(r.writeAwaitMs, 2);
+      expect(r.busyPercent, 100);
+    });
+
+    test('a four-counter row keeps throughput without latency or '
+        'utilization', () {
+      final r = diskRates(
+        [_disk('sda', 100, 200)],
+        [timed(0, 0, readMs: 1, writeMs: 1, ioMs: 1)],
+        1,
+      );
+      // Different names: the four-counter row is another device.
+      expect(r, isEmpty);
+
+      final old = diskRates(
+        [_disk('sda', 100, 200)],
+        [_disk('sda', 300, 500)],
+        1,
+      )['sda']!;
+      expect(old.readAwaitMs, isNull);
+      expect(old.writeAwaitMs, isNull);
+      expect(old.busyPercent, isNull);
+      expect(old.toJson().containsKey('busyPercent'), isFalse);
+    });
   });
 
   group('diffCoreSnapshots', () {
