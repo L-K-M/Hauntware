@@ -204,6 +204,27 @@ void main() {
     expect(_label(tester, 'pgdata'), contains('Use: unknown'));
   });
 
+  testWidgets('the Unused filter lists every volume until a container list '
+      'says which are unused', (tester) async {
+    final panel = await _pump(tester);
+    await panel.list(tester);
+
+    final unused = find.widgetWithText(ChoiceChip, 'Unused');
+    expect(tester.widget<ChoiceChip>(unused).onSelected, isNull);
+    await tester.tap(unused);
+    await tester.pumpAndSettle();
+    expect(_order(tester), ['cache', 'orphan', 'pgdata']);
+    expect(find.text('Every volume is mounted by a container.'), findsNothing);
+
+    await panel.emit(
+      tester,
+      dockerContainerList(_serverId, _containers, at: _now),
+    );
+    await tester.tap(unused);
+    await tester.pumpAndSettle();
+    expect(_order(tester), ['orphan']);
+  });
+
   testWidgets('says why the list failed, keeps the last one and watches '
       'again on Try again', (tester) async {
     final panel = await _pump(tester);
