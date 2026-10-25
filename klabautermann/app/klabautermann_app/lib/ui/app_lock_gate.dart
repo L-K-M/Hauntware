@@ -50,6 +50,10 @@ class _AppLockGateState extends State<AppLockGate> {
     if (old.lock == widget.lock) return;
     old.lock.removeListener(_onLock);
     widget.lock.addListener(_onLock);
+    // The asking is per controller: a new one starts its own spell.
+    _asked = false;
+    _outcome = null;
+    _askOnce();
   }
 
   @override

@@ -327,7 +327,8 @@ final class DeviceSettingsStore {
 
   /// The device's app lock (SAF-20), `klabautermann.appLock`: off until
   /// the user turns it on. Any other value than `false` that is there
-  /// reads as on, so a damaged file can never drop the lock.
+  /// reads as on, so a damaged value can never drop the lock; an absent
+  /// one, as on a fresh install, reads as off.
   bool get appLock => switch (_values[_appLockKey]) {
     null || false => false,
     _ => true,

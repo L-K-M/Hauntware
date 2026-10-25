@@ -128,6 +128,19 @@ void main() {
     expect(device.prompts, 0);
   });
 
+  testWidgets('a new controller asks by itself again', (tester) async {
+    device.accept = false;
+    await pump(tester);
+    await tester.pumpAndSettle();
+    expect(device.prompts, 1);
+
+    device.accept = true;
+    await pump(tester);
+    await tester.pumpAndSettle();
+    expect(device.prompts, 2);
+    expect(find.text(_title), findsNothing);
+  });
+
   testWidgets('back from the background past the timeout, the lock screen '
       'returns and asks again; sooner, it does not', (tester) async {
     await pump(tester);

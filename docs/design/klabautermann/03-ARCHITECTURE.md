@@ -5141,6 +5141,10 @@ ghost_keystore's `AppLock` (F5f), Séance's own, behind a lock screen:
 - Turning the lock on or off asks for authentication first and takes
   effect only once saved; the desktop settings window asks the app's
   window to run it.
+- The lock fails closed: a device whose passcode, PIN and biometrics are
+  removed while it is on keeps the app behind the screen, which says to
+  set one up again, since unlocking and turning the lock off both need
+  that authentication.
 
 ---
 

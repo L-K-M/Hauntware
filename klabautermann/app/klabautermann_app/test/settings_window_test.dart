@@ -779,9 +779,7 @@ void main() {
       expect(remote.appLock.support, AppLockSupport.available);
 
       await tester.tap(find.text('Require device authentication'));
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 50)),
-      );
+      await tester.runAsync(pumpEventQueue);
       await tester.pumpAndSettle();
       expect(device.prompts, 1, reason: 'asked in the app, not the window');
       expect(appLock.enabled, isTrue);
@@ -791,9 +789,7 @@ void main() {
 
       device.accept = false;
       await tester.tap(find.text('Require device authentication'));
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 50)),
-      );
+      await tester.runAsync(pumpEventQueue);
       await tester.pumpAndSettle();
       expect(appLock.enabled, isTrue);
       expect(lockSwitch().value, isTrue);

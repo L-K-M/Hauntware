@@ -44,6 +44,9 @@ final class LocalDeviceAuthenticator implements DeviceAuthenticator {
 
   @override
   Future<void> authenticate() async {
+    if (kIsWeb || !appLockSupportedOn(_platform)) {
+      throw const AppLockException('device authentication is unavailable');
+    }
     final bool accepted;
     try {
       accepted = await _authentication.authenticate(
