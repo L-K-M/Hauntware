@@ -4825,8 +4825,8 @@ entry point. The text lives only in the editor's state.
 | Tier | Examples | Confirmation |
 |---|---|---|
 | 0 | Refresh, open logs, inspect, follow, view files | None |
-| 1 | Start, stop, restart, reload, pause, kill or signal a non-protected target; run a timer now; stack start, stop, restart; pull and redeploy without orphan removal; remove a container without volumes; remove an unused image | Dialog naming the target and the impact; on touch a confirmation sheet; single-key bindings open the dialog and never act directly |
-| 2 | Remove with volumes; force-remove an image in use; prune; `compose down`; orphan removal; crontab overwrite; reboot; package upgrade; "act anyway" on an owned target; any protected target; any fleet-wide action | Typed name of the target, plus the dry-run list where one exists |
+| 1 | Start, stop, restart, reload, pause, kill or signal a non-protected target; run a timer now; stack start, stop, restart; pull and redeploy without orphan removal; remove a container without volumes; remove an unused image; create a volume | Dialog naming the target and the impact; on touch a confirmation sheet; single-key bindings open the dialog and never act directly |
+| 2 | Remove with volumes; remove a volume; force-remove an image in use; prune; `compose down`; orphan removal; crontab overwrite; reboot; package upgrade; "act anyway" on an owned target; any protected target; any fleet-wide action | Typed name of the target, plus the dry-run list where one exists |
 
 Protected targets: a built-in list (`ssh.service`, `sshd.service`,
 `ssh.socket`, network managers, firewall units, `tailscaled`, `wg-quick@*`,
@@ -5632,6 +5632,7 @@ shows there.
 | `DuplicateServer(requestId, serverId)` (M09b): a new server from a synced one, its own id, timestamps and "copy" label, and its own copy of the credential, never a shared vault entry; a copy of a confirmed endpoint is confirmed | As `SaveServer`, with the copy's id in `CatalogWritten.serverId` |
 | `TestServerConnection(requestId, draft, credential)` (M09b): the editor's Test connection over the links' credentials, pins and prompts; a host key trusted during it holds for that attempt only; rejected while links are off | `Prompt`s as a connect sends them, then `ServerConnectionTested(requestId, ok, summary, notes, log)`, the summary, notes and redacted transcript as seance_core's `runConnectionTest` words them |
 | `DockerWatch` naming `volumes` (M6 N10a, VOL-01): the volume list, re-read on a `volume` event; a Volumes view watches it with the containers, whose mounts tell which volumes are in use | `DockerListChanged` with `DockerVolumesPayload(volumes)`, labels masked by key |
+| `PlanAction` with `CreateVolume(serverId, name, driver)` or `RemoveVolume(serverId, name)` (M6 N10b, VOL-02): a create is one `POST /volumes/create` behind a plain confirmation, refused for a taken name; a removal deletes the data behind the typed confirmation and is refused while a container mounts the volume | As every action: `ActionPlanned`, then `ActionFinished`; refusals `volumeExists` and `volumeInUse`; the volume watch reads its list again |
 | `AnswerKeystore(requestId, result)` (D62) | `KeystoreRequest(requestId, operation)`: the engine asks the app for the OS keystore |
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)` (K41, 4.7) | `CatalogReplaced(entries)` with each synced entry's `endpoint`, after `RequestRejected` when a pin could not be saved; `EndpointChanged(serverId)` when a sync changes a confirmed endpoint |

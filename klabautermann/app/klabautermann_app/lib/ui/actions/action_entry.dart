@@ -38,6 +38,12 @@ enum ActionEntryPoint {
   /// Removing an image (IMG-02).
   imageRemove,
 
+  /// Creating a volume (VOL-02).
+  volumeCreate,
+
+  /// Removing a volume (VOL-02).
+  volumeRemove,
+
   /// A stack's start, stop and restart (STK-03).
   stackVerb,
 

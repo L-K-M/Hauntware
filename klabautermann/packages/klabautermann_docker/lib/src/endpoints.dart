@@ -8,6 +8,7 @@ import 'docker_parse_result.dart';
 import 'duplex.dart';
 import 'errors.dart';
 import 'http_types.dart';
+import 'json_reader.dart';
 import 'log_resume.dart';
 import 'log_time.dart';
 import 'models/container.dart';
@@ -517,6 +518,25 @@ extension DockerEndpoints on DockerClient {
       cancelToken: cancelToken,
     );
     return parseVolumeSummaries(_decodeBuffered(res.body, '/volumes').value);
+  }
+
+  /// `GET /volumes/{name}` (03 §7.15 VOL-02): one volume, as the list
+  /// reports it.
+  Future<VolumeSummary> inspectVolume(
+    String name, {
+    Duration? timeout,
+    DockerCancelToken? cancelToken,
+  }) async {
+    final res = await request(
+      'GET',
+      '/volumes/${_seg(name)}',
+      timeout: timeout,
+      cancelToken: cancelToken,
+    );
+    final decoded = _decodeBuffered(res.body, 'volume inspect').value;
+    return VolumeSummary.parse(
+      JsonReader(asStringMap(decoded is Map ? decoded : const {}), []),
+    );
   }
 
   // --- engine ----------------------------------------------------------

@@ -1,6 +1,7 @@
 // Docker actions in the app (M4 E22): which verbs each container state
 // offers and what they plan (CTR-02, CTR-05, CTR-06), image removal and
-// its forced form (IMG-02), a stack's verbs (STK-03), and the "Turn on
+// its forced form (IMG-02), a volume's create and remove (VOL-02), a
+// stack's verbs (STK-03), and the "Turn on
 // admin mode" button where something needs root (SAF-02).
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +13,7 @@ import 'package:klabautermann_app/ui/actions/action_entry.dart';
 import 'package:klabautermann_app/ui/actions/docker_actions.dart';
 import 'package:klabautermann_app/ui/admin_mode_chip.dart';
 import 'package:klabautermann_app/ui/docker/images_view.dart';
+import 'package:klabautermann_app/ui/docker/volumes_view.dart';
 import 'package:klabautermann_app/ui/server_safety.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -238,6 +240,72 @@ void main() {
       expect((h.planned.single as RemoveImage).force, isTrue);
     });
 
+    testWidgets('Create volume asks for a name and an optional driver, and '
+        'plans only a name Docker takes', (tester) async {
+      final h = await _pump(tester, const CreateVolumeButton(serverId: _srv));
+      await tester.tap(find.text('Create volume…'));
+      await tester.pumpAndSettle();
+
+      final submit = find.widgetWithText(FilledButton, 'Continue');
+      expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+      await tester.enterText(find.widgetWithText(TextField, 'Name'), '-bad');
+      await tester.pumpAndSettle();
+      expect(find.textContaining('starting with a letter or digit'), findsOne);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(h.planned, isEmpty);
+
+      await tester.enterText(find.widgetWithText(TextField, 'Name'), 'cache');
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(
+        h.planned.single,
+        isA<CreateVolume>()
+            .having((c) => c.name, 'name', 'cache')
+            .having((c) => c.driver, 'driver', isNull),
+      );
+      await h.refuse(tester);
+
+      await tester.tap(find.text('Create volume…'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Name'),
+        'nfs-data',
+      );
+      // A plugin driver is a reference the daemon resolves.
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Driver'),
+        'vieux/sshfs:latest',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
+      await tester.pumpAndSettle();
+      expect((h.planned.last as CreateVolume).driver, 'vieux/sshfs:latest');
+      await h.refuse(tester);
+
+      // Enter on an untouched name says the name is required.
+      await tester.tap(find.text('Create volume…'));
+      await tester.pumpAndSettle();
+      await tester.showKeyboard(find.widgetWithText(TextField, 'Name'));
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(find.text('Enter a name.'), findsOneWidget);
+    });
+
+    testWidgets('the volume button plans its removal', (tester) async {
+      final h = await _pump(
+        tester,
+        const VolumeActionsButton(
+          serverId: _srv,
+          entry: VolumeEntry(VolumeSummary(name: 'pgdata'), 0),
+        ),
+      );
+      await tester.tap(find.byTooltip('Actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove'));
+      await tester.pumpAndSettle();
+      expect((h.planned.single as RemoveVolume).name, 'pgdata');
+    });
+
     testWidgets('observe-only and read-only offer none', (tester) async {
       for (final safety in [
         const SafetyPolicy(),
@@ -262,6 +330,11 @@ void main() {
                 serverId: _srv,
                 entry: ImageEntry(ImageSummary(id: 'sha256:1'), 0),
               ),
+              const VolumeActionsButton(
+                serverId: _srv,
+                entry: VolumeEntry(VolumeSummary(name: 'pgdata'), 0),
+              ),
+              const CreateVolumeButton(serverId: _srv),
               const TurnOnAdminModeButton(serverId: _srv),
             ],
           ),

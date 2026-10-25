@@ -1,5 +1,6 @@
 // The Docker action planners (M4 E15): CTR-02's state changes, CTR-06's
-// removal, IMG-02's image removal and STK-03's stack verbs. Each reads its
+// removal, IMG-02's image removal, STK-03's stack verbs and VOL-02's
+// volume create and remove (M6 N10b). Each reads its
 // target over the server's Docker endpoint at planning time and builds
 // one plan of exact API steps addressed by full id, which the runner
 // re-validates by inspect before the first one runs (03 §8.5).
@@ -55,6 +56,8 @@ Future<PlanAttempt> planDockerAction(
       ContainerAction() => await _planContainer(intent, context),
       RemoveContainer() => await _planRemoveContainer(intent, context),
       RemoveImage() => await _planRemoveImage(intent, context),
+      CreateVolume() => await _planCreateVolume(intent, context),
+      RemoveVolume() => await _planRemoveVolume(intent, context),
       StackAction() => await _planStack(intent, context),
       ContainerExec() => await _planExec(intent, context),
       _ => _refused(ActionRefusalReason.notImplemented),
@@ -242,6 +245,109 @@ Future<PlanAttempt> _planRemoveImage(
   );
 }
 
+/// The names Docker accepts for a volume (`[a-zA-Z0-9][a-zA-Z0-9_.-]+`,
+/// the daemon's `RestrictedNamePattern`). A driver is not held to it: a
+/// plugin driver is a reference such as `vieux/sshfs:latest`, which the
+/// daemon looks up and refuses itself when it has none.
+final _volumeName = RegExp(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]+$');
+
+/// VOL-02: a new empty volume, after a plain confirmation. A name taken
+/// is refused rather than sent: the engine would answer the existing
+/// volume as created. For the same reason the runner checks again that
+/// the name is still free right before the create.
+Future<PlanAttempt> _planCreateVolume(
+  CreateVolume intent,
+  DockerPlanContext c,
+) async {
+  final driver = intent.driver;
+  if (!_volumeName.hasMatch(intent.name) || driver == '') {
+    return _refused(ActionRefusalReason.invalidTarget);
+  }
+  try {
+    await c.client.inspectVolume(intent.name);
+    return _refused(ActionRefusalReason.volumeExists);
+  } on DockerNotFoundException {
+    // The name is free.
+  }
+  return _planned(
+    OperationPlan(
+      intent: intent,
+      kind: OperationKind.createVolume,
+      targetName: intent.name,
+      steps: [
+        ApiStep(
+          method: 'POST',
+          path: _path(c, '/volumes/create'),
+          json: {'Name': intent.name, 'Driver': ?driver},
+        ),
+      ],
+      requiredLevel: _level(c),
+      runner: _runner(c),
+      hostWrites: const [HostWriteRow.engineState],
+      revalidate: [
+        DockerTargetUnchanged(
+          DockerTargetKind.volume,
+          intent.name,
+          kAbsentTarget,
+        ),
+      ],
+    ),
+  );
+}
+
+/// VOL-02: removing a volume deletes its data, so it needs the typed
+/// confirmation (03 §7.15); one a container mounts, running or not, is
+/// refused, as the engine would refuse it.
+Future<PlanAttempt> _planRemoveVolume(
+  RemoveVolume intent,
+  DockerPlanContext c,
+) async {
+  if (!_volumeName.hasMatch(intent.name)) {
+    return _refused(ActionRefusalReason.invalidTarget);
+  }
+  final volume = await c.client.inspectVolume(intent.name);
+  final users = (await c.client.listContainers(
+    filters: {
+      'volume': [intent.name],
+    },
+  )).value;
+  if (users.isNotEmpty) return _refused(ActionRefusalReason.volumeInUse);
+  return _planned(
+    OperationPlan(
+      intent: intent,
+      kind: OperationKind.removeVolume,
+      targetName: intent.name,
+      steps: [
+        ApiStep(
+          method: 'DELETE',
+          path: _path(c, '/volumes/${Uri.encodeComponent(intent.name)}'),
+        ),
+      ],
+      requiredLevel: _level(c),
+      runner: _runner(c),
+      hostWrites: const [HostWriteRow.engineState],
+      impact: const PlanImpact(ImpactKind.deletesVolumeData),
+      revalidate: [
+        DockerTargetUnchanged(
+          DockerTargetKind.volume,
+          intent.name,
+          volumeFingerprint(volume),
+        ),
+      ],
+    ),
+  );
+}
+
+/// The identity [DockerTargetUnchanged] expects of a target that must
+/// not exist yet, as a volume about to be created. No id, fingerprint or
+/// timestamp reads as it, so an existing target never passes for absent.
+const kAbsentTarget = '<absent>';
+
+/// A volume's identity for re-validation: its creation time, which a
+/// volume removed and created again under the same name changes.
+String volumeFingerprint(VolumeSummary volume) =>
+    volume.createdAt?.toUtc().toIso8601String() ?? '';
+
 /// STK-03: every container of the project, services in dependency order
 /// (`com.docker.compose.depends_on`), reversed for stop; one-off
 /// containers are left alone and a dependency cycle refuses.
@@ -358,6 +464,7 @@ Future<int> runApiStep(DockerClient client, ApiStep step) async {
       step.method,
       step.path,
       query: step.query,
+      json: step.json,
       versioned: false,
     );
     return response.statusCode;
@@ -367,15 +474,20 @@ Future<int> runApiStep(DockerClient client, ApiStep step) async {
 }
 
 /// What [step] changes once it succeeds, for the watched lists to read
-/// again: the container its path addresses (`/containers/<id>/...`), or
-/// the images for an image removal.
-({String? container, bool images}) apiStepChanges(ApiStep step) {
+/// again: the container its path addresses (`/containers/<id>/...`), the
+/// images for an image removal, or the volumes for a volume's create or
+/// removal.
+({String? container, bool images, bool volumes}) apiStepChanges(ApiStep step) {
   final segments = Uri(path: step.path).pathSegments;
   final at = segments.indexOf('containers');
   if (at >= 0 && at + 1 < segments.length) {
-    return (container: segments[at + 1], images: false);
+    return (container: segments[at + 1], images: false, volumes: false);
   }
-  return (container: null, images: segments.contains('images'));
+  return (
+    container: null,
+    images: segments.contains('images'),
+    volumes: segments.contains('volumes'),
+  );
 }
 
 /// Checks [check] against the engine: null while the target still has
@@ -395,10 +507,13 @@ Future<RevalidationFailure?> revalidateDockerTarget(
       DockerTargetKind.stack => stackFingerprint(
         await _projectContainers(client, check.target),
       ),
+      DockerTargetKind.volume => volumeFingerprint(
+        await client.inspectVolume(check.target),
+      ),
     };
     return id == check.id ? null : RevalidationFailure.targetChanged;
   } on DockerNotFoundException {
-    return RevalidationFailure.targetChanged;
+    return check.id == kAbsentTarget ? null : RevalidationFailure.targetChanged;
   } on DockerApiException {
     return RevalidationFailure.unreadable;
   }

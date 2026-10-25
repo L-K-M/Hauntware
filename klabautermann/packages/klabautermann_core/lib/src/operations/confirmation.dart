@@ -41,6 +41,12 @@ enum OperationKind {
   removeContainerWithVolumes(ConfirmationTier.typedPhrase),
   removeUnusedImage(ConfirmationTier.acknowledge),
   forceRemoveImageInUse(ConfirmationTier.typedPhrase),
+
+  /// A new, empty named volume (VOL-02).
+  createVolume(ConfirmationTier.acknowledge),
+
+  /// Removing a volume deletes its data (03 §7.15).
+  removeVolume(ConfirmationTier.typedPhrase),
   prune(ConfirmationTier.typedPhrase),
   composeDown(ConfirmationTier.typedPhrase),
 

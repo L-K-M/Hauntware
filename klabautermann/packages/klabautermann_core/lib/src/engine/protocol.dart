@@ -261,6 +261,8 @@ import '../operations/plan_types.dart';
 ///
 /// The volume list then joined v3 the same way (03 §7.15 VOL-01, M6 plan
 /// N10a): [DockerWatchList.volumes], delivered as [DockerVolumesPayload].
+/// The [CreateVolume] and [RemoveVolume] intents then joined it (VOL-02,
+/// N10b), with the refusals `volumeInUse` and `volumeExists`.
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -2375,6 +2377,13 @@ enum ActionRefusalReason {
   /// (IMG-02).
   imageInUse,
 
+  /// A container mounts the volume, so the engine would refuse its
+  /// removal (VOL-02).
+  volumeInUse,
+
+  /// A volume of that name already exists (VOL-02).
+  volumeExists,
+
   /// The stack's services depend on each other in a cycle, so there is no
   /// order to act in (STK-03).
   dependencyCycle,
@@ -4350,6 +4359,23 @@ final class RemoveImage extends ActionIntent {
 
   final String image;
   final bool force;
+}
+
+/// Creates a named volume with [driver] (03 §7.15 VOL-02); null asks
+/// for the engine's default, `local`.
+final class CreateVolume extends ActionIntent {
+  const CreateVolume(super.serverId, {required this.name, this.driver});
+
+  final String name;
+  final String? driver;
+}
+
+/// Removes the volume [name] and the data in it (03 §7.15 VOL-02),
+/// behind the typed confirmation; one a container mounts is refused.
+final class RemoveVolume extends ActionIntent {
+  const RemoveVolume(super.serverId, {required this.name});
+
+  final String name;
 }
 
 /// What [StackAction] does to a Compose project (STK-03).

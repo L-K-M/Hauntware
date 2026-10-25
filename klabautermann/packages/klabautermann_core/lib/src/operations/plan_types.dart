@@ -101,16 +101,26 @@ final class ApiStep extends PlanStep {
     required this.method,
     required this.path,
     Map<String, String> query = const {},
-  }) : query = Map.unmodifiable(query);
+    Map<String, String>? json,
+  }) : query = Map.unmodifiable(query),
+       json = json == null ? null : Map.unmodifiable(json);
 
   final String method;
   final String path;
   final Map<String, String> query;
 
+  /// The request's JSON body, shown as sent: plain names a create
+  /// request carries (VOL-02), never a secret.
+  final Map<String, String>? json;
+
   @override
-  String get display => query.isEmpty
-      ? '$method $path'
-      : '$method $path?${Uri(queryParameters: query).query}';
+  String get display {
+    final request = query.isEmpty
+        ? '$method $path'
+        : '$method $path?${Uri(queryParameters: query).query}';
+    final body = json;
+    return body == null ? request : '$request ${jsonEncode(body)}';
+  }
 }
 
 /// A one-off command in a container (CTX-08): `POST
@@ -251,6 +261,9 @@ enum ImpactKind {
 
   /// An image in use by [PlanImpact.count] containers is removed anyway.
   forcesImageInUse,
+
+  /// A volume is removed with the data in it: it has no way back.
+  deletesVolumeData,
 
   /// The target restarts or stops; nothing beyond it is touched.
   interruptsTarget,
