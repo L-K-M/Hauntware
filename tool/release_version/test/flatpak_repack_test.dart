@@ -219,6 +219,11 @@ flatpak() {
     fi
     return "$UPDATE_QUERY_EXIT_CODE"
   fi
+  if [[ "$1" == build ]]; then
+    [[ "$2" == */work/build && "$3 $4" == "sh -c" ]]
+    printf 'smoke\n'
+    return
+  fi
   mkdir -p "$FLATPAK_USER_DIR"
 }
 stat() {
@@ -243,10 +248,12 @@ cp() {
   command cp "$@"
 }
 flatpak-builder() {
-  # Runner containers have no FUSE: a build or --run that mounts the
-  # build directory through rofiles-fuse fails there.
+  # Runner containers have no FUSE: a build that mounts the build
+  # directory through rofiles-fuse fails there, and --run always does
+  # when rofiles-fuse is installed (run mode lacks the opt-out).
   case " $* " in
     *' --show-manifest '* | *' --install-deps-only '*) ;;
+    *' --run '*) printf 'fuse: device not found\n' >&2; return 1 ;;
     *' --disable-rofiles-fuse '*) ;;
     *) printf 'fuse: device not found\n' >&2; return 1 ;;
   esac
@@ -269,7 +276,6 @@ flatpak-builder() {
       printf '%s' "$DEPENDENCY_REVISION" > "$FLATPAK_USER_DIR/runtime"
       chmod 444 "$FLATPAK_USER_DIR/runtime"
       ln -sfn runtime "$FLATPAK_USER_DIR/active" ;;
-    *' --run '*) printf 'smoke\n' ;;
     *' --install-deps-from=flathub '*) printf 'build:pull\n' ;;
     *) printf 'build:cached\n' ;;
   esac
