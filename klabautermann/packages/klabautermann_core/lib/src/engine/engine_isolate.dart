@@ -24,6 +24,7 @@ import '../audit/host_audit_line.dart';
 import '../admin/safety_policy.dart';
 import '../admin/smart.dart';
 import '../admin/user_crontabs.dart';
+import '../alerts/alert_evaluator.dart';
 import '../capabilities/capability_cache.dart';
 import '../catalog/engine_sync.dart';
 import '../catalog/engine_vault.dart';
@@ -326,6 +327,8 @@ void engineMain(
   // What the engine asks the user while it connects, keyed by prompt id
   // (03 §10.1).
   final prompts = PromptBroker(emit: uiPort.send);
+  // In-app alerts (ALR-01): every synced rule, on every sample.
+  final alerts = AlertEvaluator();
 
   // The host-key pins (03 §4.6, D61): `host_keys.json` while the process
   // holds the support directory alone, otherwise that file's pins read
@@ -531,12 +534,15 @@ void engineMain(
           (client, _) => runApiStep(client, step),
         );
         if (status >= 200 && status < 300) {
-          final (:container, :images, :volumes) = apiStepChanges(step);
+          final (:container, :images, :volumes, :networks) = apiStepChanges(
+            step,
+          );
           router.actionRan(
             serverId,
             containers: {?container},
             images: images,
             volumes: volumes,
+            networks: networks,
           );
         }
         return status;
@@ -631,7 +637,14 @@ void engineMain(
     scheduler = SamplingScheduler(
       subscriptions: sampling,
       linkFor: links.link,
-      emit: uiPort.send,
+      emit: (event) {
+        uiPort.send(event);
+        if (event is Sample) {
+          alerts
+              .observe(event.serverId, event.result, event.at)
+              .forEach(uiPort.send);
+        }
+      },
       deadPeerHint: links.deadPeerHint,
       clearDeadPeerHint: links.clearDeadPeerHint,
       probed: (serverId, profile) {
@@ -697,6 +710,9 @@ void engineMain(
     );
     changes.forEach(uiPort.send);
     prefsSent = sent;
+    alerts
+        .setRules(await sync.rules(), DateTime.now().toUtc())
+        .forEach(uiPort.send);
   }
 
   void probeFleet() {
@@ -755,8 +771,14 @@ void engineMain(
       detail: imports.detail,
     );
     final before = fleetIds;
-    fleetIds = {for (final entry in fleetEntries()) entry.serverId};
+    final entries = fleetEntries();
+    fleetIds = {for (final entry in entries) entry.serverId};
     sampling.fleet = fleetIds;
+    alerts
+        .setFleet({
+          for (final entry in entries) entry.serverId: entry.group,
+        }, DateTime.now().toUtc())
+        .forEach(uiPort.send);
     scheduler?.retain(fleetIds);
     logs?.retain(fleetIds);
     operations?.retain(fleetIds);
@@ -1375,6 +1397,7 @@ void engineMain(
               RemoveImage() ||
               CreateVolume() ||
               RemoveVolume() ||
+              RemoveNetwork() ||
               StackAction() ||
               ContainerExec():
             final router = docker;

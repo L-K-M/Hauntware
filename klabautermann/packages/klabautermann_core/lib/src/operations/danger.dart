@@ -45,6 +45,8 @@ String? cliEquivalent(ApiStep step) {
       ].join(' ');
     case ('DELETE', ['images', ...final name]) when name.isNotEmpty:
       return ['docker rmi', if (flag('force')) '-f', name.join('/')].join(' ');
+    case ('DELETE', ['networks', final id]):
+      return 'docker network rm $id';
     case ('POST', ['volumes', 'create']):
       return [
         'docker volume create',

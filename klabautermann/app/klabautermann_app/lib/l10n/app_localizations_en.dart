@@ -3036,6 +3036,60 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAnnounceNotChanged => 'The setting could not be changed.';
 
   @override
+  String get appLockTitle => 'Klabautermann is locked';
+
+  @override
+  String get appLockDetail =>
+      'Unlock with this device\'s passcode, PIN or biometrics. Connections already open keep running.';
+
+  @override
+  String get appLockUnlock => 'Unlock';
+
+  @override
+  String get appLockFailed =>
+      'Authentication failed or was cancelled. Try again.';
+
+  @override
+  String get appLockUnavailable =>
+      'This device has no passcode, PIN or biometrics to ask for. Set one up, then try again.';
+
+  @override
+  String get appLockReason => 'Unlock Klabautermann';
+
+  @override
+  String get settingsAppLockTitle => 'App lock';
+
+  @override
+  String get settingsAppLock => 'Require device authentication';
+
+  @override
+  String settingsAppLockDetail(int minutes) {
+    return 'Ask for this device\'s passcode, PIN or biometrics when Klabautermann opens and after $minutes minutes in the background. Locking turns admin mode off on every server.';
+  }
+
+  @override
+  String get settingsAppLockUnsupported =>
+      'This platform has no device authentication Klabautermann can ask for.';
+
+  @override
+  String get settingsAppLockUnavailable =>
+      'Set up a passcode, PIN or biometrics on this device to use the app lock.';
+
+  @override
+  String settingsAppLockNotChanged(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'notAuthenticated':
+          'The app lock did not change: authentication failed or was cancelled.',
+      'unavailable':
+          'The app lock did not change: this device has no authentication to ask for.',
+      'notSaved':
+          'The app lock did not change: the setting could not be saved.',
+      'other': 'The app lock did not change.',
+    });
+    return '$_temp0';
+  }
+
+  @override
   String get settingsSyncSecretsTitle => 'Passwords and keys';
 
   @override
@@ -3855,6 +3909,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'volumeInUse':
           'A container mounts this volume. Remove the container first.',
       'volumeExists': 'A volume with this name already exists.',
+      'networkInUse':
+          'A container is on this network. Stop or disconnect it first.',
+      'builtinNetwork':
+          'This is one of the engine\'s own networks, which stay.',
       'dependencyCycle':
           'The stack\'s services depend on each other in a loop, so there is no order to act in.',
       'stackManaged': 'A manager deploys this stack. Redeploy it there.',
@@ -4160,6 +4218,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'RemoveImage': 'Remove image',
       'CreateVolume': 'Create volume',
       'RemoveVolume': 'Remove volume',
+      'RemoveNetwork': 'Remove network',
       'StackAction': 'Stack action',
       'RedeployStack': 'Redeploy stack',
       'ContainerExec': 'Run command',
@@ -4497,6 +4556,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dockerTabVolumes => 'Volumes';
+
+  @override
+  String get dockerTabNetworks => 'Networks';
 
   @override
   String get dockerTabStacks => 'Stacks';
@@ -5180,6 +5242,73 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dockerVolumeRemove => 'Remove';
+
+  @override
+  String get dockerNetworksColumnScope => 'Scope';
+
+  @override
+  String get dockerNetworksColumnSubnet => 'Subnet';
+
+  @override
+  String get dockerNetworksColumnGateway => 'Gateway';
+
+  @override
+  String get dockerNetworksNoSubnet => 'None';
+
+  @override
+  String get dockerNetworksBuiltin => 'Built-in';
+
+  @override
+  String dockerNetworksBuiltinName(String name) {
+    return '$name, built-in';
+  }
+
+  @override
+  String dockerNetworksInUse(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count containers on it',
+      one: '1 container on it',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerNetworksSearchHint => 'Search by name, driver or subnet';
+
+  @override
+  String get dockerNetworksReading => 'Reading the networks…';
+
+  @override
+  String get dockerNetworksEmpty => 'This engine has no networks.';
+
+  @override
+  String get dockerNetworksNoMatch => 'No network matches the search.';
+
+  @override
+  String get dockerNetworksNoneUnused =>
+      'Every network you made has a container on it.';
+
+  @override
+  String dockerNetworksFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'tooManyQueries':
+          'This server already has as many Docker watches open as Klabautermann allows.',
+      'daemonError': 'The engine refused or failed to list the networks.',
+      'connectionFailed':
+          'The connection to the engine failed while listing the networks.',
+      'other': 'The networks could not be listed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerNetworksUseUnknown =>
+      'Which networks are in use is unknown: the containers, which name their networks, could not be listed.';
+
+  @override
+  String get dockerNetworkRemove => 'Remove';
 
   @override
   String get dockerDetailsClose => 'Close the container details';
@@ -6749,4 +6878,113 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get serverEditorKeyFileImportFailed =>
       'Could not read that file as a key.';
+
+  @override
+  String get alertsTitle => 'Alerts';
+
+  @override
+  String get alertsCoverage =>
+      'Evaluated on this device while Klabautermann is open.';
+
+  @override
+  String alertsNoticeActive(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count alerts are active',
+      one: '1 alert is active',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get alertsNoticeCleared =>
+      'Every alert has cleared since you last looked.';
+
+  @override
+  String get alertsShow => 'Show alerts';
+
+  @override
+  String get alertsActiveHeading => 'Active';
+
+  @override
+  String get alertsNoneActive => 'No alert is active.';
+
+  @override
+  String get alertsHistoryHeading => 'Earlier';
+
+  @override
+  String alertsRowCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count alerts',
+      one: '1 alert',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String alertsBadgeCount(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '$countString';
+  }
+
+  @override
+  String alertRowTitle(String server, String metric) {
+    return '$server: $metric';
+  }
+
+  @override
+  String alertSeverity(String severity) {
+    String _temp0 = intl.Intl.selectLogic(severity, {
+      'critical': 'Critical',
+      'warning': 'Warning',
+      'other': 'Info',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String alertDateTime(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return '$timeString';
+  }
+
+  @override
+  String alertSince(String time) {
+    return 'since $time';
+  }
+
+  @override
+  String alertRaisedAt(String time) {
+    return 'Raised at $time';
+  }
+
+  @override
+  String alertClearedAt(String time) {
+    return 'Cleared at $time';
+  }
+
+  @override
+  String get alertMetricCpuBusy => 'CPU busy';
+
+  @override
+  String get alertMetricMemoryUsed => 'Memory used';
+
+  @override
+  String get alertMetricLoadPerCore => 'Load per core';
+
+  @override
+  String get alertMetricDiskUsed => 'Disk space used';
+
+  @override
+  String get alertMetricDiskInodes => 'Inodes used';
 }

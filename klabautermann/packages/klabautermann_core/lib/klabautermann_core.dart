@@ -7,6 +7,7 @@ library;
 // Pull-only sync (D14, D63): the policy the engine's coordinator runs
 // under, which the app's pull-only test checks, and the keystore entry
 // names the app binds ghost_keystore with (03 §4.5, D62).
+export 'src/alerts/alert_evaluator.dart' show AlertMetric;
 export 'src/catalog/engine_sync.dart' show engineSyncPushPolicy;
 export 'src/catalog/sync_credentials.dart'
     show klabautermannApiKeyPrefix, klabautermannMasterKeyEntry;
@@ -242,6 +243,8 @@ export 'package:klabautermann_docker/klabautermann_docker.dart'
         HealthStatus,
         ImageSummary,
         LogConfig,
+        NetworkIpamConfig,
+        NetworkSummary,
         Ownership,
         OwnershipMarker,
         SystemDf,

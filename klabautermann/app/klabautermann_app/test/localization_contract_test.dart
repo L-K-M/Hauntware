@@ -225,6 +225,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'images-${_count++}'",
     r"'stacks-${_count++}'",
     r"'volumes-${_count++}'",
+    r"'networks-${_count++}'",
     r"'stack-file-${_count++}'",
   },
   'lib/controllers/docker_endpoint_choices.dart': {
@@ -302,11 +303,23 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/services/settings_window/settings_window_host.dart': {
     r"'No settings window method $name'",
     "'No pin publication settings'",
+    "'No app lock settings'",
   },
   'lib/services/settings_window/remote_settings.dart': {
     "'Settings link closed'",
     // The device name until the first snapshot, which comes with hello.
     "''",
+  },
+  // The app lock (SAF-20): a failed change's text for the debug log, the
+  // empty reason that picks the toast's generic branch, and the line break
+  // between the switch's detail and its note.
+  'lib/ui/app_lock_settings.dart': {r"'$error'", "''", r"'\n'"},
+  // Diagnostics in AppLockException, never shown: the lock's screens word
+  // failures from its availability alone.
+  'lib/services/device_authenticator.dart': {
+    r"'device authentication failed: ${error.code}'",
+    "'device authentication was rejected'",
+    "'device authentication is unavailable'",
   },
   // A keystore failure's text, which the answer carries to the engine as
   // a diagnostic; surfaces show ARB text (syncFailedKeystore).
@@ -532,6 +545,17 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // line break between its cells in its screen-reader label, each ARB
     // text.
     r"'${DockerWatchList.volumes.name}.row.${_rowKey(entry)}'",
+    r"'\n'",
+  },
+  'lib/ui/docker/networks_panel.dart': {
+    // The key tests find a phone row by, in the table rows' form, and the
+    // line break between its cells in its screen-reader label, each ARB
+    // text.
+    r"'${DockerWatchList.networks.name}.row.${_rowKey(entry)}'",
+    r"'\n'",
+  },
+  'lib/ui/docker/networks_view.dart': {
+    // The line break between the fields the search reads.
     r"'\n'",
   },
   'lib/ui/docker/volumes_view.dart': {

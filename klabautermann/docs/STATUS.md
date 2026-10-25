@@ -1955,6 +1955,18 @@ is on main:
   memory, temperature and power, says when an installed `nvidia-smi`
   fails, and does not show where the host has no GPU it reads. Intel
   GPUs are not read.
+- App lock (M6 N66, SAF-20): Settings > Safety's "Require device
+  authentication" (Android, iOS, macOS, Windows; off and disabled on
+  Linux) opens the app behind a lock screen that asks for the device's
+  biometrics or passcode, and locks it again after 5 minutes in the
+  background or hidden. It is Séance's `AppLock`, moved into
+  ghost_keystore (N01). While locked the keystore answers the engine's
+  reads with a refusal, writes still go through, open links keep running,
+  and admin mode ends on every server. Turning it on or off asks first and
+  applies only once saved, the desktop settings window included. Tested
+  with a fake authenticator; the system prompts themselves (Face ID,
+  Android BiometricPrompt, Touch ID, Windows Hello) are a manual check per
+  OS.
 - Temperatures (M6 N37a, HW-01): collector-set version 11 adds the
   slow `temps` collector, which reads the hwmon temperature inputs and
   their limits and labels with builtins, falling back to the thermal
@@ -1969,6 +1981,34 @@ is on main:
   and waits where every column fits; a figure the reading cannot give
   reads as unknown, and inside a container the section is withheld as
   the host's (D50).
+- Networks (M6 N11, DNW-01, DNW-02): the Docker tab gains a Networks
+  sub-tab after Volumes, listing every network by name with its driver,
+  scope, first subnet and its gateway, and how many containers are on
+  it, counted from the containers' endpoints, with the built-in
+  `bridge`, `host` and `none` marked, an Unused filter that never lists
+  a built-in one, and a search by name, driver or subnet. A watch naming
+  `networks` reads `/networks` and reads it again on a `network` event.
+  Where actions are allowed, a user-defined network's Remove plans one
+  `DELETE /networks/{id}` behind a plain confirmation, refused for a
+  built-in network and while any container is on it. As on the Volumes
+  sub-tab, the Unused filter stays off until a container list says
+  which are unused. The Docker actions suite refuses and removes a network on
+  the fixture. Prune (DNW-02, DKE-05) comes with N12.
+- Alert evaluation (M6 N50a, ALR-01): the engine evaluates every synced
+  `client` rule on the live samples of the servers its scope names, with
+  the rule's raise and clear thresholds and durations, over `cpu.busy`,
+  `memory.used`, `load.perCore`, `disk.used` and `disk.inodes`, and
+  sends `LocalAlertChanged` on each raise and clear.
+- Alert center and badges (M6 N50b, ALR-01, ALR-02): the app's alert
+  center keeps the raised alerts and the latest 100 raises and clears of
+  the engine run. A notice heads the fleet list while an alert is raised,
+  or when alerts came and went since the user last looked, and states
+  that rules are evaluated on this device while Klabautermann is open
+  (Y3); it opens the alert center, whose rows open their server. Each
+  fleet row badges its raised alerts with the icon of the highest
+  severity and their count, which its label and tooltip say too. The
+  app icon's badge waits on notifications (N51), and there is no rule
+  editor yet (N50c).
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container
@@ -2092,6 +2132,9 @@ is not a device smoke test:
 - iOS background disclosure and the return banner (PLT-04).
 - Android battery and data use.
 - macOS keychain prompts.
+- The app lock's system prompt (SAF-20) on each OS: Face ID or the
+  passcode on iOS, BiometricPrompt on Android, Touch ID or the password on
+  macOS, Windows Hello; and the lock returning after 5 minutes away.
 - VM passes on Debian 12, Ubuntu 24.04 and 26.04 (sudo-rs), RHEL 8 and 9,
   Alpine and a BusyBox NAS, plus a Synology host (11.3).
 - Docker on real hosts (M3, Q1): rootful Docker, which CI runs only in

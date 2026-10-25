@@ -89,7 +89,7 @@ packages:
       path: "../ghost_ui"
       relative: true
     source: path
-    version: "1.9.2"
+    version: "1.9.3"
   http:
     dependency: transitive
     description:

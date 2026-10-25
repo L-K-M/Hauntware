@@ -4018,6 +4018,78 @@ abstract class AppLocalizations {
   /// **'The setting could not be changed.'**
   String get settingsAnnounceNotChanged;
 
+  /// App lock screen (SAF-20): its heading, shown over the whole app while the app lock is engaged.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann is locked'**
+  String get appLockTitle;
+
+  /// App lock screen: what unlocking asks for, and that open links are not closed by the lock.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock with this device\'s passcode, PIN or biometrics. Connections already open keep running.'**
+  String get appLockDetail;
+
+  /// App lock screen: the button that asks for device authentication again.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock'**
+  String get appLockUnlock;
+
+  /// App lock screen: the last device authentication was rejected or dismissed.
+  ///
+  /// In en, this message translates to:
+  /// **'Authentication failed or was cancelled. Try again.'**
+  String get appLockFailed;
+
+  /// App lock screen: device authentication is not set up or not available, so the lock cannot be opened yet.
+  ///
+  /// In en, this message translates to:
+  /// **'This device has no passcode, PIN or biometrics to ask for. Set one up, then try again.'**
+  String get appLockUnavailable;
+
+  /// The reason line the operating system's authentication prompt shows when the app lock asks for it.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock Klabautermann'**
+  String get appLockReason;
+
+  /// Settings > Safety: the heading over the app lock switch (SAF-20).
+  ///
+  /// In en, this message translates to:
+  /// **'App lock'**
+  String get settingsAppLockTitle;
+
+  /// Settings > Safety: the app lock switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Require device authentication'**
+  String get settingsAppLock;
+
+  /// Settings > Safety: what the app lock switch does.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask for this device\'s passcode, PIN or biometrics when Klabautermann opens and after {minutes} minutes in the background. Locking turns admin mode off on every server.'**
+  String settingsAppLockDetail(int minutes);
+
+  /// Settings > Safety: why the app lock switch is off and disabled on Linux.
+  ///
+  /// In en, this message translates to:
+  /// **'This platform has no device authentication Klabautermann can ask for.'**
+  String get settingsAppLockUnsupported;
+
+  /// Settings > Safety: why the app lock switch cannot be turned on right now.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up a passcode, PIN or biometrics on this device to use the app lock.'**
+  String get settingsAppLockUnavailable;
+
+  /// Settings > Safety: a toast after turning the app lock on or off did not take effect, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, notAuthenticated{The app lock did not change: authentication failed or was cancelled.} unavailable{The app lock did not change: this device has no authentication to ask for.} notSaved{The app lock did not change: the setting could not be saved.} other{The app lock did not change.}}'**
+  String settingsAppLockNotChanged(String reason);
+
   /// Section heading on the Sync settings tab over the sync passwords switch (SYN-02).
   ///
   /// In en, this message translates to:
@@ -4969,7 +5041,7 @@ abstract class AppLocalizations {
   /// Toast when the engine refused to plan or run an action; reason is the engine's ActionRefusalReason name.
   ///
   /// In en, this message translates to:
-  /// **'{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server\'s container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} dependencyCycle{The stack\'s services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack\'s files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}'**
+  /// **'{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server\'s container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} networkInUse{A container is on this network. Stop or disconnect it first.} builtinNetwork{This is one of the engine\'s own networks, which stay.} dependencyCycle{The stack\'s services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack\'s files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}'**
   String actionRefused(String reason);
 
   /// Process action (PRC-02): sends SIGTERM, asking the process to end.
@@ -5377,7 +5449,7 @@ abstract class AppLocalizations {
   /// An activity log row's action; action is the engine's intent type name.
   ///
   /// In en, this message translates to:
-  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
+  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
   String activityAction(String action);
 
   /// An activity log row's confirmation; tier is the engine's ConfirmationTier name.
@@ -5835,6 +5907,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Volumes'**
   String get dockerTabVolumes;
+
+  /// Docker tab: the sub-tab listing networks.
+  ///
+  /// In en, this message translates to:
+  /// **'Networks'**
+  String get dockerTabNetworks;
 
   /// Docker tab: the sub-tab listing compose stacks.
   ///
@@ -6795,6 +6873,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Remove'**
   String get dockerVolumeRemove;
+
+  /// Networks list: the column of network scopes, such as local or swarm.
+  ///
+  /// In en, this message translates to:
+  /// **'Scope'**
+  String get dockerNetworksColumnScope;
+
+  /// Networks list: the column of each network's first configured subnet.
+  ///
+  /// In en, this message translates to:
+  /// **'Subnet'**
+  String get dockerNetworksColumnSubnet;
+
+  /// Networks list: the column of the gateway of each network's first configured subnet.
+  ///
+  /// In en, this message translates to:
+  /// **'Gateway'**
+  String get dockerNetworksColumnGateway;
+
+  /// Networks list: a network with no subnet or gateway configured, such as host or none.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get dockerNetworksNoSubnet;
+
+  /// Networks list: the badge on the engine's own networks (bridge, host, none), which cannot be removed.
+  ///
+  /// In en, this message translates to:
+  /// **'Built-in'**
+  String get dockerNetworksBuiltin;
+
+  /// Networks list: what a screen reader hears for a built-in network's name.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}, built-in'**
+  String dockerNetworksBuiltinName(String name);
+
+  /// Networks list: what a screen reader hears, and a phone row shows, for a network running containers are on.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 container on it} other{{count} containers on it}}'**
+  String dockerNetworksInUse(int count);
+
+  /// Networks list: the search field's hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search by name, driver or subnet'**
+  String get dockerNetworksSearchHint;
+
+  /// Networks list: shown until the first list arrives.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the networks…'**
+  String get dockerNetworksReading;
+
+  /// Networks list: the engine listed none.
+  ///
+  /// In en, this message translates to:
+  /// **'This engine has no networks.'**
+  String get dockerNetworksEmpty;
+
+  /// Networks list: the search hides every network.
+  ///
+  /// In en, this message translates to:
+  /// **'No network matches the search.'**
+  String get dockerNetworksNoMatch;
+
+  /// Networks list: the Unused filter hides every network; built-in networks never count as unused.
+  ///
+  /// In en, this message translates to:
+  /// **'Every network you made has a container on it.'**
+  String get dockerNetworksNoneUnused;
+
+  /// Networks list: why the list could not be read. reason is the engine's failure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} daemonError{The engine refused or failed to list the networks.} connectionFailed{The connection to the engine failed while listing the networks.} other{The networks could not be listed.}}'**
+  String dockerNetworksFailed(String reason);
+
+  /// Networks list: the network list names no containers, and the container list it is computed from failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Which networks are in use is unknown: the containers, which name their networks, could not be listed.'**
+  String get dockerNetworksUseUnknown;
+
+  /// Networks list: the row action that removes a network no container is on.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get dockerNetworkRemove;
 
   /// Tooltip of the button that closes a container's details in the desktop inspector (03 §10.2).
   ///
@@ -8979,6 +9147,132 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not read that file as a key.'**
   String get serverEditorKeyFileImportFailed;
+
+  /// Title of the in-app alert center (ALR-01), which lists the alerts the user's rules raised.
+  ///
+  /// In en, this message translates to:
+  /// **'Alerts'**
+  String get alertsTitle;
+
+  /// The coverage limit (Y3) the alert notice and the alert center state: rules are evaluated only on this device and only while the app runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Evaluated on this device while Klabautermann is open.'**
+  String get alertsCoverage;
+
+  /// The fleet list's alert notice while rules have raised alerts; count is how many are raised.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 alert is active} other{{count} alerts are active}}'**
+  String alertsNoticeActive(int count);
+
+  /// The fleet list's alert notice when alerts were raised and cleared since the user last opened the alert center, and none is raised now.
+  ///
+  /// In en, this message translates to:
+  /// **'Every alert has cleared since you last looked.'**
+  String get alertsNoticeCleared;
+
+  /// Button on the fleet list's alert notice that opens the alert center.
+  ///
+  /// In en, this message translates to:
+  /// **'Show alerts'**
+  String get alertsShow;
+
+  /// Alert center heading over the alerts raised now.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get alertsActiveHeading;
+
+  /// Alert center line under the Active heading when no alert is raised.
+  ///
+  /// In en, this message translates to:
+  /// **'No alert is active.'**
+  String get alertsNoneActive;
+
+  /// Alert center heading over the latest raises and clears since the app started.
+  ///
+  /// In en, this message translates to:
+  /// **'Earlier'**
+  String get alertsHistoryHeading;
+
+  /// A fleet row's alert count (ALR-02), in its tooltip and screen-reader label; count is how many alerts are raised for that server.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 alert} other{{count} alerts}}'**
+  String alertsRowCount(int count);
+
+  /// The number on a fleet row's alert badge (ALR-02), in the UI locale's number format.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}'**
+  String alertsBadgeCount(int count);
+
+  /// An alert center row's title; server is the server's name (server data) and metric the alert's metric, such as CPU busy.
+  ///
+  /// In en, this message translates to:
+  /// **'{server}: {metric}'**
+  String alertRowTitle(String server, String metric);
+
+  /// An alert's severity word in the alert center.
+  ///
+  /// In en, this message translates to:
+  /// **'{severity, select, critical{Critical} warning{Warning} other{Info}}'**
+  String alertSeverity(String severity);
+
+  /// An alert center time from before today: a date and time in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'{time}'**
+  String alertDateTime(DateTime time);
+
+  /// When a raised alert's breach began, in the alert center; time is a time of day in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'since {time}'**
+  String alertSince(String time);
+
+  /// An alert center history row for a raise; time is a time of day in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Raised at {time}'**
+  String alertRaisedAt(String time);
+
+  /// An alert center history row for a clear; time is a time of day in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Cleared at {time}'**
+  String alertClearedAt(String time);
+
+  /// The alert metric cpu.busy: the share of CPU time spent busy.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU busy'**
+  String get alertMetricCpuBusy;
+
+  /// The alert metric memory.used: used memory as a share of the total.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory used'**
+  String get alertMetricMemoryUsed;
+
+  /// The alert metric load.perCore: the 1-minute load average divided by the number of cores.
+  ///
+  /// In en, this message translates to:
+  /// **'Load per core'**
+  String get alertMetricLoadPerCore;
+
+  /// The alert metric disk.used: the fullest filesystem's used space.
+  ///
+  /// In en, this message translates to:
+  /// **'Disk space used'**
+  String get alertMetricDiskUsed;
+
+  /// The alert metric disk.inodes: the fullest filesystem's used inodes.
+  ///
+  /// In en, this message translates to:
+  /// **'Inodes used'**
+  String get alertMetricDiskInodes;
 }
 
 class _AppLocalizationsDelegate

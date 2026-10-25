@@ -53,6 +53,10 @@ import 'docker_endpoint_choices.dart';
 /// its images: the containers' mounts tell which volumes are in use, and
 /// a container event re-lists the containers but not the volumes.
 ///
+/// A Networks view that shows a server ([watchNetworks]) has its
+/// networks watched with its containers (03 §7.15 DNW-01), as a Volumes
+/// view has its volumes: the containers tell which networks are in use.
+///
 /// A Stacks view that shows a server ([watchStacks]) has its compose
 /// stacks watched (03 §7.16 STK-01, STK-02, STK-05): a [DockerWatch] of
 /// the stacks alone, one per server while any such view shows. Asking
@@ -231,6 +235,11 @@ final class DockerController {
   /// could not be read.
   ValueListenable<DockerVolumeList> volumesFor(String serverId) =>
       _server(serverId).volumes;
+
+  /// What [serverId]'s watches last delivered of its networks, or why they
+  /// could not be read.
+  ValueListenable<DockerNetworkList> networksFor(String serverId) =>
+      _server(serverId).networks;
 
   /// [serverId]'s last disk use measurement ([measureDiskUse]).
   ValueListenable<DockerDiskUse> diskUseFor(String serverId) =>
@@ -498,6 +507,57 @@ final class DockerController {
   void _unwatchVolumes(String serverId, _DockerServer server) {
     final watchId = server.volumesWatchId;
     server.volumesWatchId = null;
+    if (watchId == null || _stopped) return;
+    _send(DockerUnwatch(serverId: serverId, watchId: watchId));
+  }
+
+  /// A Networks view shows [serverId]; [unwatchNetworks] says it no
+  /// longer does. The first view starts the server's network watch.
+  void watchNetworks(String serverId) {
+    if (!_listed(serverId)) return;
+    final server = _server(serverId);
+    server.networkViews++;
+    if (server.networkViews > 1) return;
+
+    _watchNetworks(serverId, server);
+  }
+
+  /// The last view to hide ends the server's network watch.
+  void unwatchNetworks(String serverId) {
+    final server = _servers[serverId];
+    if (server == null || server.networkViews == 0) return;
+    server.networkViews--;
+    if (server.networkViews > 0) return;
+
+    _unwatchNetworks(serverId, server);
+  }
+
+  /// Watches [serverId]'s networks anew after a failure, under a new id,
+  /// as [retryContainers] does.
+  void retryNetworks(String serverId) {
+    final server = _servers[serverId];
+    if (server == null || server.networksWatchId == null) return;
+
+    _unwatchNetworks(serverId, server);
+    _watchNetworks(serverId, server);
+  }
+
+  void _watchNetworks(String serverId, _DockerServer server) {
+    if (_stopped) return;
+
+    final watchId = server.networksWatchId ??= 'networks-${_count++}';
+    _send(
+      DockerWatch(
+        serverId: serverId,
+        watchId: watchId,
+        lists: const {DockerWatchList.networks, DockerWatchList.containers},
+      ),
+    );
+  }
+
+  void _unwatchNetworks(String serverId, _DockerServer server) {
+    final watchId = server.networksWatchId;
+    server.networksWatchId = null;
     if (watchId == null || _stopped) return;
     _send(DockerUnwatch(serverId: serverId, watchId: watchId));
   }
@@ -931,6 +991,9 @@ final class DockerController {
         if (list == DockerWatchList.volumes) {
           server.volumes.value = server.volumes.value.took(payload, at);
         }
+        if (list == DockerWatchList.networks) {
+          server.networks.value = server.networks.value.took(payload, at);
+        }
         if (list == DockerWatchList.stacks) {
           server.stacks.value = server.stacks.value.took(payload, at);
           // The grouping holds every container the list read.
@@ -1183,6 +1246,37 @@ final class DockerVolumeList {
       };
 }
 
+/// What a server's watches delivered of its networks (03 §7.15 DNW-01).
+@immutable
+final class DockerNetworkList {
+  const DockerNetworkList({this.networks, this.at, this.failure});
+
+  /// The latest list read; null until one was.
+  final List<NetworkSummary>? networks;
+
+  /// When the engine read [networks], by this device's clock.
+  final DateTime? at;
+
+  /// Why the latest read failed while [networks] keeps the list before;
+  /// null once one is read.
+  final DockerQueryFailed? failure;
+
+  /// This list with [payload], read at [at], taken in.
+  DockerNetworkList took(DockerPayload payload, DateTime at) =>
+      switch (payload) {
+        DockerNetworksPayload(:final networks) => DockerNetworkList(
+          networks: networks,
+          at: at,
+        ),
+        final DockerQueryFailed failure => DockerNetworkList(
+          networks: networks,
+          at: this.at,
+          failure: failure,
+        ),
+        _ => this,
+      };
+}
+
 /// A server's disk use measurement (02 OV-05): the last `/system/df`
 /// read, and whether one is under way or why the last one failed.
 @immutable
@@ -1363,6 +1457,9 @@ final class _DockerServer {
   final ValueNotifier<DockerVolumeList> volumes = ValueNotifier(
     const DockerVolumeList(),
   );
+  final ValueNotifier<DockerNetworkList> networks = ValueNotifier(
+    const DockerNetworkList(),
+  );
   final ValueNotifier<DockerDiskUse> diskUse = ValueNotifier(
     const DockerDiskUse(),
   );
@@ -1417,6 +1514,12 @@ final class _DockerServer {
   /// The volume watch the engine holds, while any Volumes view shows.
   String? volumesWatchId;
 
+  /// How many Networks views show the server.
+  int networkViews = 0;
+
+  /// The network watch the engine holds, while any Networks view shows.
+  String? networksWatchId;
+
   /// How many Stacks views show the server.
   int stackViews = 0;
 
@@ -1447,6 +1550,7 @@ final class _DockerServer {
     containers.dispose();
     images.dispose();
     volumes.dispose();
+    networks.dispose();
     diskUse.dispose();
     stacks.dispose();
     for (final container in inspected.values) {

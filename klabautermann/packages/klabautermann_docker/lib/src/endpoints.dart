@@ -504,6 +504,25 @@ extension DockerEndpoints on DockerClient {
     return parseNetworkSummaries(_decodeBuffered(res.body, '/networks').value);
   }
 
+  /// `GET /networks/{id}` (03 §7.15 DNW-02): one network with the
+  /// containers that hold an endpoint on it, which the list leaves out.
+  Future<NetworkSummary> inspectNetwork(
+    String id, {
+    Duration? timeout,
+    DockerCancelToken? cancelToken,
+  }) async {
+    final res = await request(
+      'GET',
+      '/networks/${_seg(id)}',
+      timeout: timeout,
+      cancelToken: cancelToken,
+    );
+    final decoded = _decodeBuffered(res.body, 'network inspect').value;
+    return NetworkSummary.parse(
+      JsonReader(asStringMap(decoded is Map ? decoded : const {}), []),
+    );
+  }
+
   /// `GET /volumes` (03 §7.15 VOL-01).
   Future<DockerParseResult<List<VolumeSummary>>> listVolumes({
     Map<String, Object?>? filters,

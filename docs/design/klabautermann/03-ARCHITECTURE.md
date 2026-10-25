@@ -4428,6 +4428,27 @@ arrives with E22's Docker actions.
   owner on 2026-10-10, D10; no notification plugin resolves in any lockfile
   today [R: c3 §5.4]). Every rule row and the notification permission prompt say
   "evaluated on this device while Klabautermann is open".
+- **As built (M6 N50a).** The engine's `AlertEvaluator` takes the live
+  `rule` records after every sync round and the fleet with its groups
+  whenever it changes, and evaluates each `client` rule on every sample
+  of the servers its scope names (a `server` rule its target, a `group`
+  rule the servers of that group, `all` every fleet server). The metric
+  vocabulary is what the samples carry: `cpu.busy`, `memory.used` and
+  `load.perCore` from `overview` and `core`, and `disk.used` and
+  `disk.inodes`, the fullest real filesystem, from `fs`; a rule naming
+  another metric stays idle. An unknown value holds the rule's phase. A
+  raise and a clear each send `LocalAlertChanged`; a rule removed or
+  changed, or a server leaving its scope, clears a raised alert at once.
+- **As built (M6 N50b).** The app's `AlertCenter` follows those events
+  for one engine run: the raised alerts, critical first, and the latest
+  100 raises and clears. The fleet list's notice shows while an alert is
+  raised, or while raises and clears the user has not looked at remain,
+  states the coverage limit and opens the alert center, a dialog whose
+  rows open their server. Each fleet row badges its raised alerts
+  (ALR-02) with the highest severity's icon, a shape per severity, and
+  the count, which its label and tooltip say too. An engine that stops
+  ends its raised alerts. Notifications and the app icon's badge (N51)
+  and the rule editor (N50c) follow.
 - **v1.x.** Flap damping (the rest of ALR-16), desktop tray monitoring
   (ALR-03, PLT-10), Android watch mode for a session (PLT-11, D34), Android
   credential-free reachability checks every 15 minutes or more (PLT-15), and T1
@@ -4869,7 +4890,7 @@ entry point. The text lives only in the editor's state.
 | Tier | Examples | Confirmation |
 |---|---|---|
 | 0 | Refresh, open logs, inspect, follow, view files | None |
-| 1 | Start, stop, restart, reload, pause, kill or signal a non-protected target; run a timer now; stack start, stop, restart; pull and redeploy without orphan removal; remove a container without volumes; remove an unused image; create a volume | Dialog naming the target and the impact; on touch a confirmation sheet; single-key bindings open the dialog and never act directly |
+| 1 | Start, stop, restart, reload, pause, kill or signal a non-protected target; run a timer now; stack start, stop, restart; pull and redeploy without orphan removal; remove a container without volumes; remove an unused image; create a volume; remove a network no container is on | Dialog naming the target and the impact; on touch a confirmation sheet; single-key bindings open the dialog and never act directly |
 | 2 | Remove with volumes; remove a volume; force-remove an image in use; prune; `compose down`; orphan removal; crontab overwrite; reboot; package upgrade; "act anyway" on an owned target; any protected target; any fleet-wide action | Typed name of the target, plus the dry-run list where one exists |
 
 Protected targets: a built-in list (`ssh.service`, `sshd.service`,
@@ -5163,6 +5184,32 @@ unchanged backup restores.
 
 Out of scope: enforced RBAC and tamper-proof audit; a client cannot restrict
 the holder of a root-equivalent socket (NG-08).
+
+### 8.13 App lock (SAF-20)
+
+Off by default, per device in `settings.json` (`klabautermann.appLock`),
+on Android, iOS, macOS and Windows; Linux has no system prompt
+`local_auth` can call, so the switch stays off there. The lock is
+ghost_keystore's `AppLock` (F5f), Séance's own, behind a lock screen:
+
+- With the lock on, the app opens behind the screen, which asks for
+  device authentication (biometrics, the passcode or PIN as fallback) at
+  once and on "Unlock". After `appLockBackgroundTimeout` (5 minutes) in
+  the background or hidden, by wall and monotonic time, it locks again.
+  The covered app stays mounted but takes no pointer, focus or semantics.
+- The engine's keystore reads (the master key, API keys such as the sync
+  token) wait for it: the app answers a read while locked with a refusal,
+  so a locked app hands the engine no new credential. Writes and deletes
+  are not held back, so a sign-out finishes. Links already open keep
+  running, as in Séance.
+- Admin mode ends on every server when the lock engages (8.2).
+- Turning the lock on or off asks for authentication first and takes
+  effect only once saved; the desktop settings window asks the app's
+  window to run it.
+- The lock fails closed: a device whose passcode, PIN and biometrics are
+  removed while it is on keeps the app behind the screen, which says to
+  set one up again, since unlocking and turning the lock off both need
+  that authentication.
 
 ---
 
@@ -5677,6 +5724,8 @@ shows there.
 | `TestServerConnection(requestId, draft, credential)` (M09b): the editor's Test connection over the links' credentials, pins and prompts; a host key trusted during it holds for that attempt only; rejected while links are off | `Prompt`s as a connect sends them, then `ServerConnectionTested(requestId, ok, summary, notes, log)`, the summary, notes and redacted transcript as seance_core's `runConnectionTest` words them |
 | `DockerWatch` naming `volumes` (M6 N10a, VOL-01): the volume list, re-read on a `volume` event; a Volumes view watches it with the containers, whose mounts tell which volumes are in use | `DockerListChanged` with `DockerVolumesPayload(volumes)`, labels masked by key |
 | `PlanAction` with `CreateVolume(serverId, name, driver)` or `RemoveVolume(serverId, name)` (M6 N10b, VOL-02): a create is one `POST /volumes/create` behind a plain confirmation, refused for a taken name; a removal deletes the data behind the typed confirmation and is refused while a container mounts the volume | As every action: `ActionPlanned`, then `ActionFinished`; refusals `volumeExists` and `volumeInUse`; the volume watch reads its list again |
+| `DockerWatch` naming `networks` (M6 N11, DNW-01): the network list, re-read on a `network` event; a Networks view watches it with the containers, whose endpoints tell which networks are in use | `DockerListChanged` with `DockerNetworksPayload(networks)`, labels masked by key |
+| `PlanAction` with `RemoveNetwork(serverId, networkId)` (M6 N11, DNW-02): one `DELETE /networks/{id}` behind a plain confirmation, refused for a built-in network (`bridge`, `host`, `none`) and while a container is on it | As every action: `ActionPlanned`, then `ActionFinished`; refusals `builtinNetwork` and `networkInUse`; the network watch reads its list again |
 | `AnswerKeystore(requestId, result)` (D62) | `KeystoreRequest(requestId, operation)`: the engine asks the app for the OS keystore |
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)` (K41, 4.7) | `CatalogReplaced(entries)` with each synced entry's `endpoint`, after `RequestRejected` when a pin could not be saved; `EndpointChanged(serverId)` when a sync changes a confirmed endpoint |
