@@ -19,6 +19,7 @@ const _recordedCpu = 'AMD EPYC 7763 64-Core Processor';
 const _otherCpu = 'AMD EPYC 9V74 80-Core Processor';
 const _tierBDart = 'dart-flutter-bundled';
 const _tierADart = 'dart-sdk';
+const _arch = 'linux_x64';
 const _p1Config = 'local-entries-10000-first-paint';
 const _p3Config = 'p3/v1';
 
@@ -26,7 +27,7 @@ final _catalogJson = {
   'schema': budgetsSchemaV2Id,
   'calibratedFingerprint': {
     'runnerImage': _oldImage,
-    'arch': 'linux_x64',
+    'arch': _arch,
     'dartVersion': _tierADart,
     'flutterVersion': null,
     'mode': 'aot',
@@ -74,10 +75,11 @@ Map<String, Object?> _baselineJson({String p1Config = _p1Config}) => {
 Map<String, Object?> _tierBFingerprint(
   String image,
   String cpu,
-  String? config,
-) => {
+  String? config, {
+  String arch = _arch,
+}) => {
   'runnerImage': image,
-  'arch': 'linux_x64',
+  'arch': arch,
   'dartVersion': _tierBDart,
   'flutterVersion': '3.47.2',
   'mode': 'profile',
@@ -87,9 +89,12 @@ Map<String, Object?> _tierBFingerprint(
 
 /// A bench-results.json text: P1 rows with [p1Values], errored P6 rows,
 /// and P3 rows with [p3Values] (tier A, on the same machine).
+/// [tierBRuntime] overrides tier B's runtime axes, e.g. `mode`.
 String _artifact({
   String image = _newImage,
   String cpu = _recordedCpu,
+  String arch = _arch,
+  Map<String, String> tierBRuntime = const {},
   List<double> p1Values = const [10, 11, 12],
   List<double> p3Values = const [5],
   String p1Config = _p1Config,
@@ -104,14 +109,20 @@ String _artifact({
         'status': 'ok',
         'value': value,
         'unit': 'ms',
-        'fingerprint': _tierBFingerprint(image, cpu, p1Config),
+        'fingerprint': {
+          ..._tierBFingerprint(image, cpu, p1Config, arch: arch),
+          ...tierBRuntime,
+        },
       },
     {
       'scenario': 'P6',
       'repetition': 0,
       'status': 'error',
       'error': 'insufficient frame capture',
-      'fingerprint': _tierBFingerprint(image, cpu, 'scroll'),
+      'fingerprint': {
+        ..._tierBFingerprint(image, cpu, 'scroll', arch: arch),
+        ...tierBRuntime,
+      },
     },
     for (final (index, value) in p3Values.indexed)
       {
@@ -122,7 +133,7 @@ String _artifact({
         'unit': 'ms',
         'fingerprint': {
           'runnerImage': image,
-          'arch': 'linux_x64',
+          'arch': arch,
           'dartVersion': tierADart,
           'flutterVersion': null,
           'mode': 'aot',
@@ -172,6 +183,35 @@ void main() {
       expect(p1.unit, 'ms');
       expect(p1.scenarioConfig, _p1Config);
       expect(result.tierAMedians['P3'], (median: 5.0, unit: 'ms', count: 2));
+    });
+
+    test('excludes a run that differs on any other axis', () {
+      final result = pool({
+        1: _artifact(arch: 'linux_arm64'),
+        2: _artifact(tierBRuntime: {'dartVersion': '3.14.0'}),
+        3: _artifact(tierBRuntime: {'flutterVersion': '3.48.0'}),
+        4: _artifact(tierBRuntime: {'mode': 'debug'}),
+      });
+
+      expect(result.usedRuns, isEmpty);
+      expect(result.excludedRuns, {
+        1: 'arch linux_arm64',
+        2: 'dartVersion 3.14.0',
+        3: 'flutterVersion 3.48.0',
+        4: 'mode debug',
+      });
+    });
+
+    test('takes the median of all pooled rows, not of run medians', () {
+      // Run medians 2, 10 and 11 would give 10.
+      final result = pool({
+        1: _artifact(p1Values: [1, 2, 3]),
+        2: _artifact(p1Values: [10]),
+        3: _artifact(p1Values: [11]),
+      });
+
+      expect(result.entries['P1']!.median, 3);
+      expect(result.entries['P1']!.repetitions, 5);
     });
 
     test('rounds medians to three decimals', () {
@@ -344,8 +384,11 @@ void main() {
     final out = MemorySink();
     final err = MemorySink();
 
+    // The last run's exit code; refreshMain never sets the process-global
+    // exitCode, which check_cli_test.dart asserts in a parallel isolate.
+    late int exitCode;
+
     setUp(() {
-      exitCode = 0;
       temp = Directory.systemTemp.createTempSync('d12-refresh-test');
       artifacts = '${temp.path}/artifacts';
       budgetsPath = '${temp.path}/budgets.json';
@@ -357,19 +400,17 @@ void main() {
       err.clear();
     });
 
-    tearDown(() {
-      exitCode = 0;
-      temp.deleteSync(recursive: true);
-    });
+    tearDown(() => temp.deleteSync(recursive: true));
 
-    Future<void> run(List<String> arguments, _FakeActions actions) =>
-        refreshMain(
-          arguments,
-          out: out,
-          err: err,
-          client: actions,
-          pollInterval: Duration.zero,
-        );
+    Future<void> run(List<String> arguments, _FakeActions actions) async {
+      exitCode = await refreshMain(
+        arguments,
+        out: out,
+        err: err,
+        client: actions,
+        pollInterval: Duration.zero,
+      );
+    }
 
     void storeArtifact(int runId, String text) {
       Directory('$artifacts/$runId').createSync(recursive: true);
@@ -474,6 +515,59 @@ void main() {
       expect(actions.cancelled, [1]);
       expect(out.text, contains('run 1: gh failed, retrying'));
       expect(out.text, contains('run 1 qualifies; 1 of 1 qualify'));
+    });
+
+    test('sample moves on from runs that leave no results', () async {
+      final actions = _FakeActions(
+        artifactsByRun: {3: _artifact()},
+        resultlessArtifacts: {2},
+      );
+
+      await run(sample(['bench/side'], ['--runs', '1']), actions);
+
+      expect(exitCode, 0);
+      expect(actions.dispatched, hasLength(3));
+      expect(out.text, contains('run 1 excluded (no artifact)'));
+      expect(
+        out.text,
+        contains('run 2 excluded (no readable $benchResultsFileName)'),
+      );
+      expect(out.text, contains('run 3 qualifies; 1 of 1 qualify'));
+    });
+
+    test('sample names the branch of a dispatch gh failed on', () async {
+      // gh can fail after GitHub created the run, so the tool cannot
+      // know whether one exists.
+      final actions = _FakeActions(
+        artifactsByRun: {1: _artifact()},
+        failingDispatch: 2,
+      );
+
+      await run(sample(['bench/a', 'bench/b']), actions);
+
+      expect(exitCode, 74);
+      expect(
+        out.text,
+        contains(
+          'dispatch on bench/b failed; look for a run to cancel with '
+          '`gh run list --branch bench/b --event workflow_dispatch`',
+        ),
+      );
+      expect(out.text, contains('stopped with runs still going: 1;'));
+    });
+
+    test('sample gives up on a run that keeps failing', () async {
+      // Healthy polls of bench/b's runs must not reset bench/a's count.
+      final actions = _FakeActions(unreachableRuns: {1});
+
+      await run(
+        sample(['bench/a', 'bench/b'], ['--max-dispatches', '50']),
+        actions,
+      );
+
+      expect(exitCode, 74);
+      expect(actions.unreachablePolls, 11);
+      expect(out.text, contains('stopped with runs still going: 1 '));
     });
 
     test('sample dispatches nothing once enough runs qualify', () async {
@@ -629,6 +723,22 @@ void main() {
       expect(err.text, contains('--set expects <axis>=<value>'));
     });
 
+    test('rejects a repeated single-value option', () async {
+      for (final (repeated, message) in [
+        (['--artifacts', 'a', '--artifacts', 'b'], '--artifacts'),
+        (
+          ['--artifacts', 'a', '--set', 'arch=x', '--set', 'arch=y'],
+          '--set arch',
+        ),
+      ]) {
+        err.clear();
+        await run(['pool', ...repeated], _FakeActions());
+
+        expect(exitCode, 64);
+        expect(err.text, contains('$message may appear once'));
+      }
+    });
+
     test('rejects options the command does not read', () async {
       await run([
         'pool',
@@ -644,6 +754,12 @@ void main() {
   });
 
   group('GhActionsClient', () {
+    final listing = jsonEncode({
+      'artifacts': [
+        {'name': benchArtifactName, 'expired': false},
+      ],
+    });
+
     test('dispatches through the API and reads the created run id', () async {
       final gh = _FakeGh(['{"workflow_run_id": 42, "run_url": "u"}']);
 
@@ -676,6 +792,44 @@ void main() {
             contains('gh run list --branch bench/side'),
           ),
         ),
+      );
+    });
+
+    test('lists the runs since a time and refuses a cut-off list', () async {
+      final since = DateTime.utc(2026, 10, 23, 15);
+      final run = {
+        'databaseId': 7,
+        'event': 'push',
+        'createdAt': '2026-10-24T00:00:00Z',
+      };
+      final gh = _FakeGh([
+        jsonEncode([run]),
+        jsonEncode(List.filled(1000, run)),
+      ]);
+
+      final runs = await gh.client.listRuns('main', since);
+
+      expect(runs.single.id, 7);
+      expect(runs.single.event, RunEvent.push);
+      expect(gh.calls.single, [
+        'run',
+        'list',
+        '--workflow',
+        'ci.yml',
+        '--branch',
+        'main',
+        '--created',
+        '>=2026-10-23T15:00:00.000Z',
+        '--limit',
+        '1000',
+        '--json',
+        'databaseId,event,createdAt',
+        '--repo',
+        'o/r',
+      ]);
+      await expectLater(
+        gh.client.listRuns('main', since),
+        throwsA(isA<StateError>()),
       );
     });
 
@@ -726,14 +880,12 @@ void main() {
     });
 
     test('downloads an available artifact and surfaces failures', () async {
-      final listing = jsonEncode({
-        'artifacts': [
-          {'name': benchArtifactName, 'expired': false},
-        ],
-      });
+      final root = Directory.systemTemp.createTempSync('d12-gh-test');
+      addTearDown(() => root.deleteSync(recursive: true));
+      final directory = '${root.path}/7';
 
       final gh = _FakeGh([listing, '']);
-      expect(await gh.client.downloadBenchResults(7, 'dir'), isTrue);
+      expect(await gh.client.downloadBenchResults(7, directory), isTrue);
       expect(gh.calls.last, [
         'run',
         'download',
@@ -741,28 +893,49 @@ void main() {
         '--name',
         benchArtifactName,
         '--dir',
-        'dir',
+        '$directory.download',
         '--repo',
         'o/r',
       ]);
+      expect(Directory(directory).existsSync(), isTrue);
 
       final failing = _FakeGh([listing], failAt: 1);
       await expectLater(
-        failing.client.downloadBenchResults(7, 'dir'),
+        failing.client.downloadBenchResults(7, directory),
         throwsA(isA<ProcessException>()),
       );
+    });
+
+    test('replaces an earlier download of the same run', () async {
+      // gh refuses to extract over existing files, and collect and sample
+      // download a results-less artifact again.
+      final root = Directory.systemTemp.createTempSync('d12-gh-test');
+      addTearDown(() => root.deleteSync(recursive: true));
+      final directory = '${root.path}/7';
+      final gh = _FakeGh(
+        [listing, '', listing, ''],
+        extracts: ['evaluate.log'],
+      );
+
+      expect(await gh.client.downloadBenchResults(7, directory), isTrue);
+      expect(await gh.client.downloadBenchResults(7, directory), isTrue);
+      expect(File('$directory/evaluate.log').existsSync(), isTrue);
+      expect(root.listSync(), hasLength(1));
     });
   });
 }
 
 /// Scripted `gh`: answers each call with the next stdout, failing the
-/// call at index [failAt] the way an expired token would.
+/// call at index [failAt] the way an expired token would. `run download`
+/// extracts [extracts] into its `--dir` and, like gh, refuses to
+/// overwrite a file that exists.
 class _FakeGh {
   final List<String> _stdout;
   final int? failAt;
+  final List<String> extracts;
   final calls = <List<String>>[];
 
-  _FakeGh(this._stdout, {this.failAt});
+  _FakeGh(this._stdout, {this.failAt, this.extracts = const []});
 
   GhActionsClient get client =>
       GhActionsClient(repository: 'o/r', runner: _run);
@@ -772,6 +945,19 @@ class _FakeGh {
     calls.add(arguments);
     if (index == failAt) {
       return ProcessResult(0, 1, '', 'HTTP 401: Bad credentials');
+    }
+
+    if (arguments case ['run', 'download', ...]) {
+      final directory = arguments[arguments.indexOf('--dir') + 1];
+      for (final name in extracts) {
+        final file = File('$directory/$name');
+        if (file.existsSync()) {
+          return ProcessResult(0, 1, '', 'openat $name: file exists');
+        }
+        file
+          ..createSync(recursive: true)
+          ..writeAsStringSync(name);
+      }
     }
     return ProcessResult(0, 0, _stdout[index], '');
   }
@@ -793,12 +979,21 @@ class _FakeActions implements ActionsClient {
   /// fake starts answering.
   int failingStateCalls;
 
+  /// The 1-based dispatchSample call that fails like gh losing the
+  /// response.
+  final int? failingDispatch;
+
+  /// Runs whose every runState call fails, e.g. a 404.
+  final Set<int> unreachableRuns;
+  var unreachablePolls = 0;
+
   final dispatched = <(String, int)>[];
   final cancelled = <int>[];
   final downloads = <int>[];
   final _branchOf = <int, String>{};
   final _polls = <int, int>{};
   final _cancelledAtPoll = <int, int>{};
+  var _dispatchCalls = 0;
 
   _FakeActions({
     this.artifactsByRun = const {},
@@ -808,6 +1003,8 @@ class _FakeActions implements ActionsClient {
     this.benchPolls = 0,
     this.settlePolls = 0,
     this.failingStateCalls = 0,
+    this.failingDispatch,
+    this.unreachableRuns = const {},
   });
 
   bool _benchDone(int runId) => (_polls[runId] ?? 0) > benchPolls;
@@ -822,6 +1019,9 @@ class _FakeActions implements ActionsClient {
     if (previous != null && !_runDone(previous.$2)) {
       fail('redispatched $branch while run ${previous.$2} still goes');
     }
+    if (++_dispatchCalls == failingDispatch) {
+      throw const ProcessException('gh', ['api'], 'connection reset', 1);
+    }
 
     final runId = dispatched.length + 1;
     dispatched.add((branch, runId));
@@ -834,6 +1034,10 @@ class _FakeActions implements ActionsClient {
     if (failingStateCalls > 0) {
       failingStateCalls--;
       throw const ProcessException('gh', ['run', 'view'], 'timeout', 1);
+    }
+    if (unreachableRuns.contains(runId)) {
+      unreachablePolls++;
+      throw const ProcessException('gh', ['run', 'view'], 'HTTP 404', 1);
     }
 
     _polls.update(runId, (count) => count + 1, ifAbsent: () => 1);
@@ -874,6 +1078,8 @@ class _FakeActions implements ActionsClient {
   }
 
   @override
-  Future<List<CiRun>> listRuns(String branch) async =>
-      runsByBranch[branch] ?? const [];
+  Future<List<CiRun>> listRuns(String branch, DateTime since) async => [
+    for (final run in runsByBranch[branch] ?? const <CiRun>[])
+      if (!run.createdAt.isBefore(since)) run,
+  ];
 }

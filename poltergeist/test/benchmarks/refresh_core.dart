@@ -297,8 +297,9 @@ Iterable<String> _tierACalibrationWarnings(
     final calibrated =
         catalog.scenarios[row.scenario]!.calibratedScenarioConfig;
     if (calibrated != null && row.fingerprint.scenarioConfig != calibrated) {
-      yield '${row.scenario} ran under ${row.fingerprint.scenarioConfig}, but '
-          'budgets.json calibrates $calibrated: recalibrate tier A separately';
+      yield '${row.scenario} ran under '
+          "${row.fingerprint.scenarioConfig ?? '<none>'}, but budgets.json "
+          'calibrates $calibrated: recalibrate tier A separately';
     }
   }
 }

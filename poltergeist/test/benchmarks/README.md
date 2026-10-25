@@ -317,6 +317,7 @@ dart run test/benchmarks/refresh.dart collect \
 # branches only). Each run is cancelled once its D12 job uploads
 # results, then redispatched until three runs qualify (--runs,
 # --max-dispatches).
+git fetch origin main
 git push origin origin/main:refs/heads/bench/d12-sample
 dart run test/benchmarks/refresh.dart sample --branch bench/d12-sample \
   --artifacts "$dir" --set runnerImage="$image"

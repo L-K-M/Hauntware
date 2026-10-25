@@ -14,8 +14,12 @@ const mainBranch = 'main';
 const benchJobName = 'D12 benchmarks';
 const benchArtifactName = 'bench-results';
 
-/// Most recent runs listed per branch; covers weeks of main history.
-const _runListLimit = 300;
+/// Most runs listed per branch and window; main sees about 30 a day.
+const _runListLimit = 1000;
+
+/// Suffix of the directory an artifact is extracted into before it
+/// replaces the run's directory; never a run id, so pooling skips it.
+const _stagingSuffix = '.download';
 
 /// gh's run status once a run can no longer change.
 const _completedStatus = 'completed';
@@ -65,13 +69,14 @@ class CiRunState {
 }
 
 abstract interface class ActionsClient {
-  /// ci.yml runs on [branch], newest first.
-  Future<List<CiRun>> listRuns(String branch);
+  /// ci.yml runs on [branch] created at or after [since], newest first.
+  Future<List<CiRun>> listRuns(String branch, DateTime since);
 
   Future<CiRunState> runState(int runId);
 
-  /// Downloads [runId]'s `bench-results` artifact into [directory].
-  /// False when the run has no such artifact; a failed download throws.
+  /// Downloads [runId]'s `bench-results` artifact into [directory],
+  /// replacing an earlier download. False when the run has no such
+  /// artifact; a failed download throws.
   Future<bool> downloadBenchResults(int runId, String directory);
 
   /// Dispatches ci.yml on [branch] with the M0 measurements skipped and
@@ -96,7 +101,7 @@ class GhActionsClient implements ActionsClient {
   });
 
   @override
-  Future<List<CiRun>> listRuns(String branch) async {
+  Future<List<CiRun>> listRuns(String branch, DateTime since) async {
     final json = await _gh([
       'run',
       'list',
@@ -104,13 +109,25 @@ class GhActionsClient implements ActionsClient {
       ciWorkflow,
       '--branch',
       branch,
+      '--created',
+      '>=${since.toUtc().toIso8601String()}',
       '--limit',
       '$_runListLimit',
       '--json',
       'databaseId,event,createdAt',
     ]);
+    final runs = jsonDecode(json) as List<Object?>;
+
+    // A full page may have cut off the window's oldest runs.
+    if (runs.length >= _runListLimit) {
+      throw StateError(
+        'over $_runListLimit $ciWorkflow runs on $branch since $since; '
+        'pass a later --since',
+      );
+    }
+
     return [
-      for (final run in jsonDecode(json) as List<Object?>)
+      for (final run in runs)
         if (run case {
           'databaseId': final int id,
           'event': final String event,
@@ -163,6 +180,16 @@ class GhActionsClient implements ActionsClient {
       return false;
     }
 
+    // gh refuses to extract over existing files, and a killed download
+    // leaves a partial results file, so extract beside [directory] and
+    // swap it in: a results-less artifact downloads again, and
+    // [directory] only ever holds a whole artifact.
+    final staging = Directory('$directory$_stagingSuffix');
+    if (staging.existsSync()) {
+      staging.deleteSync(recursive: true);
+    }
+    staging.createSync(recursive: true);
+
     await _gh([
       'run',
       'download',
@@ -170,8 +197,14 @@ class GhActionsClient implements ActionsClient {
       '--name',
       benchArtifactName,
       '--dir',
-      directory,
+      staging.path,
     ]);
+
+    final target = Directory(directory);
+    if (target.existsSync()) {
+      target.deleteSync(recursive: true);
+    }
+    staging.renameSync(directory);
     return true;
   }
 

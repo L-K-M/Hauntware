@@ -43,8 +43,9 @@ const defaultMaxDispatches = 6;
 /// How often `sample` polls its runs.
 const defaultPollInterval = Duration(minutes: 1);
 
-/// Consecutive gh failures `sample` rides out before giving up; a single
-/// transient failure must not abandon the runs it dispatched.
+/// Consecutive gh failures on one run that `sample` rides out before
+/// giving up; a single transient failure must not abandon the runs it
+/// dispatched.
 const _maxConsecutiveGhFailures = 10;
 
 /// `sample` dispatches only on branches under this prefix. A plain name
@@ -74,6 +75,10 @@ const _commandOptions = {
     '--baseline',
   },
 };
+
+/// Options that may repeat; any other given twice is a usage error
+/// rather than last-wins, e.g. two `--artifacts` directories.
+const _repeatableOptions = {'--branch', '--set'};
 
 const _usageText =
     '''
@@ -169,6 +174,7 @@ class RefreshArguments {
     var budgets = defaultBudgetsPath;
     var baseline = defaultBaselinePath;
     var repository = defaultRepository;
+    final given = <String>{};
 
     String takeValue(int index) {
       if (index + 1 >= arguments.length) {
@@ -195,6 +201,9 @@ class RefreshArguments {
           '$argument does not apply to ${command.name}',
         );
       }
+      if (!_repeatableOptions.contains(argument) && !given.add(argument)) {
+        throw RefreshUsageException('$argument may appear once');
+      }
 
       switch (argument) {
         case '--artifacts':
@@ -210,6 +219,9 @@ class RefreshArguments {
           }
         case '--set':
           final (axis, value) = _parseOverride(takeValue(i++));
+          if (overrides.containsKey(axis)) {
+            throw RefreshUsageException('--set ${axis.name} may appear once');
+          }
           overrides[axis] = value;
         case '--runs':
           runs = takeCount(i++);
@@ -303,9 +315,11 @@ class RefreshArguments {
   }
 }
 
-/// CLI body, exposed for in-process tests: sets [exitCode] instead of
-/// exiting, and talks to GitHub only through [client].
-Future<void> refreshMain(
+/// CLI body, exposed for in-process tests: returns the exit code instead
+/// of setting the process-global [exitCode], which test files running in
+/// parallel isolates would race on, and talks to GitHub only through
+/// [client].
+Future<int> refreshMain(
   List<String> arguments, {
   IOSink? out,
   IOSink? err,
@@ -320,14 +334,13 @@ Future<void> refreshMain(
     cli = RefreshArguments.parse(arguments);
   } on RefreshUsageException catch (error) {
     stderrSink.writeln('$error\n$_usageText');
-    exitCode = usageExitCode;
-    return;
+    return usageExitCode;
   }
 
   final command = cli.command;
   if (command == null) {
     stdoutSink.writeln(_usageText);
-    return;
+    return 0;
   }
 
   final actions = client ?? GhActionsClient(repository: cli.repository);
@@ -335,20 +348,21 @@ Future<void> refreshMain(
     switch (command) {
       case RefreshCommand.collect:
         await _collect(cli, actions, stdoutSink);
+        return 0;
       case RefreshCommand.sample:
-        await _sample(cli, actions, stdoutSink, pollInterval);
+        return await _sample(cli, actions, stdoutSink, pollInterval);
       case RefreshCommand.pool:
-        _pool(cli, stdoutSink, stderrSink);
+        return _pool(cli, stdoutSink, stderrSink);
     }
   } on CheckDataException catch (error) {
     stderrSink.writeln('error: $error');
-    exitCode = dataExitCode;
+    return dataExitCode;
   } on FileSystemException catch (error) {
     stderrSink.writeln('error: $error');
-    exitCode = ioExitCode;
+    return ioExitCode;
   } on ProcessException catch (error) {
     stderrSink.writeln('error: $error');
-    exitCode = ioExitCode;
+    return ioExitCode;
   }
 }
 
@@ -358,8 +372,8 @@ Future<void> _collect(
   IOSink out,
 ) async {
   for (final branch in cli.branches) {
-    for (final run in await actions.listRuns(branch)) {
-      if (run.createdAt.isBefore(cli.since!) || !run.event.recordsTierB) {
+    for (final run in await actions.listRuns(branch, cli.since!)) {
+      if (!run.event.recordsTierB) {
         continue;
       }
       if (_hasArtifact(cli.artifacts, run.id)) {
@@ -388,7 +402,8 @@ Future<void> _collect(
   }
 }
 
-Future<void> _sample(
+/// 0 once enough runs qualify, else [gradedFailureExitCode].
+Future<int> _sample(
   RefreshArguments cli,
   ActionsClient actions,
   IOSink out,
@@ -402,7 +417,7 @@ Future<void> _sample(
     artifacts: _readArtifacts(cli.artifacts),
   );
 
-  await _Sampler(cli, actions, out, pollInterval, repool).run();
+  return _Sampler(cli, actions, out, pollInterval, repool).run();
 }
 
 /// One `sample` invocation: the side-branch runs it dispatched and still
@@ -418,7 +433,10 @@ class _Sampler {
   final _cancelling = <int>{};
   late int _qualifying = _repool().usedRuns.length;
   late int _dispatchesLeft = _cli.maxDispatches;
-  var _ghFailures = 0;
+
+  /// Consecutive gh failures per run, so healthy polls of one branch
+  /// never mask a run that keeps failing on another.
+  final _ghFailures = <int, int>{};
 
   _Sampler(
     this._cli,
@@ -428,7 +446,7 @@ class _Sampler {
     this._repool,
   );
 
-  Future<void> run() async {
+  Future<int> run() async {
     try {
       await _sampleUntilTarget();
     } catch (_) {
@@ -445,8 +463,9 @@ class _Sampler {
 
     if (_qualifying < _cli.runs) {
       _out.writeln('dispatch budget spent with $_qualifying of ${_cli.runs}');
-      exitCode = gradedFailureExitCode;
+      return gradedFailureExitCode;
     }
+    return 0;
   }
 
   Future<void> _sampleUntilTarget() async {
@@ -487,7 +506,19 @@ class _Sampler {
   bool get _targetReached => _qualifying >= _cli.runs;
 
   Future<void> _dispatch(String branch) async {
-    final runId = await _actions.dispatchSample(branch);
+    final int runId;
+    try {
+      runId = await _actions.dispatchSample(branch);
+    } on ProcessException {
+      // gh can fail after GitHub created the run (e.g. a dropped
+      // response), so a run nobody tracks may exist. Retrying could leave
+      // a second one.
+      _out.writeln(
+        'dispatch on $branch failed; look for a run to cancel with '
+        '`gh run list --branch $branch --event workflow_dispatch`',
+      );
+      rethrow;
+    }
     _dispatchesLeft--;
     _active[branch] = runId;
     _out.writeln(
@@ -501,11 +532,15 @@ class _Sampler {
   Future<bool> _poll(String branch, int runId) async {
     try {
       final finished = await _advanceRun(branch, runId);
-      _ghFailures = 0;
+      _ghFailures.remove(runId);
       return finished;
     } on ProcessException catch (error) {
-      _ghFailures++;
-      if (_ghFailures > _maxConsecutiveGhFailures) {
+      final failures = _ghFailures.update(
+        runId,
+        (count) => count + 1,
+        ifAbsent: () => 1,
+      );
+      if (failures > _maxConsecutiveGhFailures) {
         rethrow;
       }
       _out.writeln('run $runId: gh failed, retrying ($error)');
@@ -557,7 +592,8 @@ class _Sampler {
   }
 }
 
-void _pool(RefreshArguments cli, IOSink out, IOSink err) {
+/// 0 unless `--write` refused a short pool ([gradedFailureExitCode]).
+int _pool(RefreshArguments cli, IOSink out, IOSink err) {
   final (catalog, current, target) = _loadTarget(cli);
   final pool = poolRefresh(
     catalog: catalog,
@@ -600,12 +636,11 @@ void _pool(RefreshArguments cli, IOSink out, IOSink err) {
   }
 
   if (!cli.write) {
-    return;
+    return 0;
   }
   if (pool.usedRuns.length < minimumRefreshRuns) {
     err.writeln('not written: fewer than $minimumRefreshRuns runs qualify');
-    exitCode = gradedFailureExitCode;
-    return;
+    return gradedFailureExitCode;
   }
 
   // Both documents are computed before either is written, and each lands
@@ -627,6 +662,7 @@ void _pool(RefreshArguments cli, IOSink out, IOSink err) {
     'check_test.dart, then run the checker against the used artifacts '
     '(README step 4).',
   );
+  return 0;
 }
 
 (BudgetCatalog, TierBBaseline, BenchFingerprint) _loadTarget(
@@ -682,4 +718,6 @@ bool _hasArtifact(String directory, int runId) => File(
 String _runDirectory(String directory, int runId) =>
     p.join(directory, '$runId');
 
-Future<void> main(List<String> arguments) => refreshMain(arguments);
+Future<void> main(List<String> arguments) async {
+  exitCode = await refreshMain(arguments);
+}
