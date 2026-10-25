@@ -1139,6 +1139,39 @@ void main() {
         expect(tester.getSize(fill).height, extent);
       });
     }
+
+    // Beside a tab strip the field fills the strip's height from the top
+    // of its slot, so its edges meet the tabs'. Touch keeps its target and
+    // its inset.
+    for (final (platform, top, extent) in [
+      (TargetPlatform.macOS, 0.0, 38.0),
+      (TargetPlatform.android, 4.0, 44.0),
+    ]) {
+      testWidgets('beside a 38 px strip it fills ${extent.toInt()} px from '
+          '${top.toInt()} px down on ${platform.name}', (tester) async {
+        await _pump(
+          tester,
+          SidebarFilterField(
+            fieldKey: const ValueKey('f'),
+            query: '',
+            onChanged: (_) {},
+            onDismiss: () {},
+            barExtent: 38,
+          ),
+          platform: platform,
+        );
+        final field = find.byKey(const ValueKey('f'));
+        final fill = find.descendant(
+          of: field,
+          matching: find.byWidgetPredicate(
+            (widget) => widget.runtimeType.toString() == '_BorderContainer',
+            description: "InputDecorator's fill-painting _BorderContainer",
+          ),
+        );
+        expect(tester.getRect(fill).top, top);
+        expect(tester.getSize(fill).height, extent);
+      });
+    }
   });
 
   group('SidebarBottomBar', () {

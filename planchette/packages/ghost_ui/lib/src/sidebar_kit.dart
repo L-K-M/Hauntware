@@ -1999,6 +1999,7 @@ class SidebarFilterField extends StatefulWidget {
     this.countText,
     this.focusNode,
     this.fieldKey,
+    this.barExtent,
   });
 
   final String query;
@@ -2008,6 +2009,14 @@ class SidebarFilterField extends StatefulWidget {
   final String? countText;
   final FocusNode? focusNode;
   final Key? fieldKey;
+
+  /// The height of the tab strip beside the rail, for a field at the top
+  /// of a rail that starts where the strip does. On a pointer platform the
+  /// field then takes that height with no inset above it, so its edges
+  /// meet the tabs': a 38 px strip, a field from its top to its rule's
+  /// bottom. Null keeps the compact field; touch keeps its 44 dp target
+  /// either way.
+  final double? barExtent;
 
   @override
   State<SidebarFilterField> createState() => _SidebarFilterFieldState();
@@ -2041,8 +2050,9 @@ class _SidebarFilterFieldState extends State<SidebarFilterField> {
     final touch = _touch(context);
     final small = touch ? theme.textTheme.bodyLarge : theme.textTheme.bodySmall;
     final count = widget.query.isEmpty ? null : widget.countText;
+    final level = !touch && widget.barExtent != null;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(_railInset, 4, _railInset, 4),
+      padding: EdgeInsets.fromLTRB(_railInset, level ? 0 : 4, _railInset, 4),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2086,7 +2096,7 @@ class _SidebarFilterFieldState extends State<SidebarFilterField> {
         child: SizedBox(
           height: _scaledExtent(
             context,
-            touch ? _touchFilterExtent : _filterExtent,
+            touch ? _touchFilterExtent : widget.barExtent ?? _filterExtent,
           ),
           child: TextField(
             key: widget.fieldKey,

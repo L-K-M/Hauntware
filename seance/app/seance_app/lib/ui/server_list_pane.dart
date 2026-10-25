@@ -23,6 +23,7 @@ import 'server_status_dot.dart';
 import 'server_tile.dart';
 import 'settings_screen.dart';
 import 'sidebar/sidebar_kit.dart';
+import 'terminal_pane.dart';
 import 'top_toast.dart';
 
 /// Where the server list is mounted, which decides its chrome.
@@ -406,6 +407,9 @@ class _ServerListPaneState extends State<ServerListPane> {
                 : matches.isEmpty
                 ? '0 of ${servers.length}'
                 : '${matches.length} of ${servers.length} · ↵ opens the first',
+            // The rail starts level with the terminal's tab strip, so the
+            // field spans the same band as the tabs.
+            barExtent: _home ? null : TerminalTabStrip.height,
           ),
         Expanded(child: list),
         if (!_home)
