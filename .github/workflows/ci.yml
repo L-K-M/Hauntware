@@ -53,7 +53,8 @@ env:
 # klabautermann_dart (its host-sampling and owner-only file tests need
 # a VM with systemd and a non-root user), poltergeist_dart (its native
 # archive I/O binds fstat, a symbol glibc exports only from 2.33 and
-# the runner images lack) and the timing measurements, whose budgets
+# the runner images lack), the *_flatpak repacks (see
+# planchette_flatpak) and the timing measurements, whose budgets
 # assume GitHub's runner images.
 # Self-hosted runners keep the Flutter SDK and pub cache on disk, so
 # flutter-action's actions/cache, which downloads the 1.6 GB SDK
@@ -1522,20 +1523,7 @@ jobs:
     needs: affected
     if: needs.affected.outputs.planchette == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    # Runtime updates stage off ZFS to avoid O_TMPFILE publication stalls.
-    # Retain cold-build budgets until full packaging is verified.
-    timeout-minutes: ${{ matrix.target == 'linux' && 240 || 120 }}
-    # Serialize self-hosted staging: the GNOME installation needs ~4 GB
-    # of scratch RAM. Use a new group so fixed jobs can run while old
-    # download jobs drain. Membership mirrors runs-on above; fork legs
-    # on hosted runners keep a run-unique group. queue: max
-    # queues every waiter instead of cancelling the pending one (actionlint
-    # v1.7.12 predates the key; .github/actionlint.yaml scopes the
-    # exception).
-    concurrency:
-      group: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && 'flatpak-runtime-staging' || format('planchette-client-{0}-{1}', matrix.target, github.run_id) }}
-      cancel-in-progress: false
-      queue: max
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -1598,16 +1586,6 @@ jobs:
         if: matrix.target == 'linux'
         working-directory: planchette
         run: scripts/package-linux.sh --appimage=required
-      - name: Linux Flatpak bundle
-        if: matrix.target == 'linux'
-        working-directory: planchette
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
-          # Ubuntu 24.04 denies the unprivileged user namespaces bubblewrap
-          # (flatpak's sandbox helper) builds in.
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
-          scripts/build-flatpak.sh "$(find dist -maxdepth 1 -type f -name 'planchette_*.deb' -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
       - name: Native keyboard modifiers
         if: matrix.target == 'macos'
         working-directory: planchette
@@ -1637,19 +1615,49 @@ jobs:
         shell: bash
         run: python "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/windows/x64/runner/Release/planchette.exe --title '^Untitled . Planchette$'
 
+  # Repack the Linux .deb as a Flatpak on a GitHub-hosted runner, as
+  # release.yml's Flatpak legs do. bubblewrap, flatpak's sandbox, needs
+  # user namespaces and its own /proc mount, which the self-hosted runner
+  # containers deny; allowing both there would let a job's root reach
+  # the host. Without a .deb argument build-flatpak.sh builds and
+  # packages the app itself: ordinary CI uploads no Poltergeist or
+  # Klabautermann binaries a client leg could hand over.
+  planchette_flatpak:
+    name: Planchette Linux Flatpak
+    needs: affected
+    if: needs.affected.outputs.planchette == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45   # cold: Flutter toolchain plus ~2 GB of Flathub runtimes
+    steps:
+      - uses: actions/checkout@v7
+      - name: Linux toolchain and Flatpak
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          libsecret-1-dev libjsoncpp-dev dpkg-dev file binutils imagemagick
+          flatpak flatpak-builder elfutils
+      # Ubuntu 24.04 denies the unprivileged user namespaces bubblewrap
+      # builds in.
+      - name: Allow user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Resolve app
+        working-directory: planchette/app/planchette_app
+        run: flutter pub get
+      - name: Flatpak bundle
+        working-directory: planchette
+        run: scripts/build-flatpak.sh
+
   seance_client:
     name: Séance client (${{ matrix.target }})
     needs: affected
     if: needs.affected.outputs.seance == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    # Runtime staging and cold-build budgets follow planchette_client.
-    timeout-minutes: ${{ matrix.target == 'linux' && 240 || 120 }}
-    # Serialize runtime staging with the other client jobs;
-    # see planchette_client.
-    concurrency:
-      group: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && 'flatpak-runtime-staging' || format('seance-client-{0}-{1}', matrix.target, github.run_id) }}
-      cancel-in-progress: false
-      queue: max
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -1762,20 +1770,6 @@ jobs:
         if: startsWith(matrix.target, 'linux')
         working-directory: seance
         run: scripts/package-linux.sh --output-dir dist-packages
-      # Repack the same .deb as a Flatpak bundle; rides the same upload.
-      - name: Flatpak bundle
-        if: startsWith(matrix.target, 'linux')
-        working-directory: seance
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
-          # Ubuntu 24.04 denies the unprivileged user namespaces bubblewrap
-          # (flatpak's sandbox helper) builds in.
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
-          deb="$(find dist-packages -maxdepth 1 -type f -name 'seance_*.deb' -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
-          [ -n "$deb" ] || { echo "::error::no seance_*.deb in dist-packages" >&2; exit 1; }
-          scripts/build-flatpak.sh "$deb"
-          mv dist/seance-linux-x64.flatpak dist-packages/
       - name: Upload Linux packages
         if: startsWith(matrix.target, 'linux')
         uses: actions/upload-artifact@v7
@@ -1784,19 +1778,49 @@ jobs:
           path: seance/dist-packages/*
           if-no-files-found: error
 
+  # The Séance Flatpak repack; see planchette_flatpak.
+  seance_flatpak:
+    name: Séance Linux Flatpak
+    needs: affected
+    if: needs.affected.outputs.seance == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45   # cold: Flutter toolchain plus ~2 GB of Flathub runtimes
+    steps:
+      - uses: actions/checkout@v7
+      - name: Linux toolchain and Flatpak
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          libsecret-1-dev libjsoncpp-dev imagemagick file
+          flatpak flatpak-builder elfutils
+      # Ubuntu 24.04 denies the unprivileged user namespaces bubblewrap
+      # builds in.
+      - name: Allow user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Resolve app
+        working-directory: seance/app/seance_app
+        run: flutter pub get
+      - name: Flatpak bundle
+        working-directory: seance
+        run: scripts/build-flatpak.sh
+      - name: Upload Flatpak
+        uses: actions/upload-artifact@v7
+        with:
+          name: seance-linux-x64-flatpak
+          path: seance/dist/seance-linux-x64.flatpak
+          if-no-files-found: error
+
   poltergeist_client:
     name: Poltergeist client (${{ matrix.target }})
     needs: affected
     if: needs.affected.outputs.poltergeist == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    # Runtime staging and cold-build budgets follow planchette_client.
-    timeout-minutes: ${{ matrix.target == 'linux' && 240 || 120 }}
-    # Serialize runtime staging with the other client jobs;
-    # see planchette_client.
-    concurrency:
-      group: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && 'flatpak-runtime-staging' || format('poltergeist-client-{0}-{1}', matrix.target, github.run_id) }}
-      cancel-in-progress: false
-      queue: max
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -1905,18 +1929,37 @@ jobs:
         if: startsWith(matrix.target, 'linux')
         working-directory: poltergeist
         run: scripts/package-linux.sh --output-dir dist-packages
-      # Repack the same .deb as a Flatpak bundle; no upload — ordinary CI
-      # does not publish binaries (see the comment above).
-      - name: Flatpak bundle (build check only)
-        if: startsWith(matrix.target, 'linux')
+
+  # The Poltergeist Flatpak repack; see planchette_flatpak.
+  poltergeist_flatpak:
+    name: Poltergeist Linux Flatpak
+    needs: affected
+    if: needs.affected.outputs.poltergeist == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45   # cold: Flutter toolchain plus ~2 GB of Flathub runtimes
+    steps:
+      - uses: actions/checkout@v7
+      - name: Linux toolchain and Flatpak
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          libsecret-1-dev libjsoncpp-dev imagemagick file
+          flatpak flatpak-builder elfutils
+      # Ubuntu 24.04 denies the unprivileged user namespaces bubblewrap
+      # builds in.
+      - name: Allow user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Resolve app
+        working-directory: poltergeist/app/poltergeist_app
+        run: flutter pub get
+      - name: Flatpak bundle
         working-directory: poltergeist
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
-          # Ubuntu 24.04 denies the unprivileged user namespaces bubblewrap
-          # (flatpak's sandbox helper) builds in.
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
-          scripts/build-flatpak.sh "$(find dist-packages -maxdepth 1 -type f -name 'poltergeist_*.deb' -print -quit)"
+        run: scripts/build-flatpak.sh
 
   # Klabautermann's legs copy poltergeist_client and add the two native
   # macOS fixtures of seance_client (docs/design/klabautermann, 04
@@ -1929,14 +1972,7 @@ jobs:
     needs: affected
     if: needs.affected.outputs.klabautermann == 'true'
     runs-on: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && vars.CI_LINUX_RUNNER || matrix.os }}
-    # Runtime staging and cold-build budgets follow planchette_client.
-    timeout-minutes: ${{ matrix.target == 'linux' && 240 || 120 }}
-    # Serialize runtime staging with the other client jobs;
-    # see planchette_client.
-    concurrency:
-      group: ${{ matrix.target == 'linux' && github.event.pull_request.head.repo.fork != true && 'flatpak-runtime-staging' || format('klabautermann-client-{0}-{1}', matrix.target, github.run_id) }}
-      cancel-in-progress: false
-      queue: max
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -2050,19 +2086,37 @@ jobs:
         if: startsWith(matrix.target, 'linux')
         working-directory: klabautermann
         run: scripts/package-linux.sh --output-dir dist-packages
-      # Repack the same .deb as a Flatpak bundle; no upload either.
-      - name: Flatpak bundle (build check only)
-        if: startsWith(matrix.target, 'linux')
+
+  # The Klabautermann Flatpak repack; see planchette_flatpak.
+  klabautermann_flatpak:
+    name: Klabautermann Linux Flatpak
+    needs: affected
+    if: needs.affected.outputs.klabautermann == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45   # cold: Flutter toolchain plus ~2 GB of Flathub runtimes
+    steps:
+      - uses: actions/checkout@v7
+      - name: Linux toolchain and Flatpak
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          libsecret-1-dev libjsoncpp-dev imagemagick file
+          flatpak flatpak-builder elfutils
+      # Ubuntu 24.04 denies the unprivileged user namespaces bubblewrap
+      # builds in.
+      - name: Allow user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Resolve app
+        working-directory: klabautermann/app/klabautermann_app
+        run: flutter pub get
+      - name: Flatpak bundle
         working-directory: klabautermann
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
-          # Ubuntu 24.04 denies the unprivileged user namespaces bubblewrap
-          # (flatpak's sandbox helper) builds in.
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
-          deb="$(find dist-packages -maxdepth 1 -type f -name 'klabautermann_*.deb' -print -quit)"
-          [ -n "$deb" ] || { echo "::error::no klabautermann_*.deb in dist-packages" >&2; exit 1; }
-          scripts/build-flatpak.sh "$deb"
+        run: scripts/build-flatpak.sh
 
   # ---- Séance sync server image -----------------------------------------
   docker:
