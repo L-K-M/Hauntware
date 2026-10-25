@@ -4400,6 +4400,19 @@ arrives with E22's Docker actions.
   owner on 2026-10-10, D10; no notification plugin resolves in any lockfile
   today [R: c3 §5.4]). Every rule row and the notification permission prompt say
   "evaluated on this device while Klabautermann is open".
+- **As built (M6 N50a).** The engine's `AlertEvaluator` takes the live
+  `rule` records after every sync round and the fleet with its groups
+  whenever it changes, and evaluates each `client` rule on every sample
+  of the servers its scope names (a `server` rule its target, a `group`
+  rule the servers of that group, `all` every fleet server). The metric
+  vocabulary is what the samples carry: `cpu.busy`, `memory.used` and
+  `load.perCore` from `overview` and `core`, and `disk.used` and
+  `disk.inodes`, the fullest real filesystem, from `fs`; a rule naming
+  another metric stays idle. An unknown value holds the rule's phase. A
+  raise and a clear each send `LocalAlertChanged`; a rule removed or
+  changed, or a server leaving its scope, clears a raised alert at once.
+  The alert center, badges, notifications and the rule editor follow
+  (N50b, N51).
 - **v1.x.** Flap damping (the rest of ALR-16), desktop tray monitoring
   (ALR-03, PLT-10), Android watch mode for a session (PLT-11, D34), Android
   credential-free reachability checks every 15 minutes or more (PLT-15), and T1
