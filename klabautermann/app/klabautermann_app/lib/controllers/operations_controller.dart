@@ -94,6 +94,9 @@ final class OperationsController extends ChangeNotifier {
   final Map<String, RunState> _runs = {};
   final Map<String, OperationsChanged> _detached = {};
   final Map<String, String> _targets = {};
+
+  /// Each image pull's latest progress, by plan id (IMG-03).
+  final Map<String, ImagePullProgress> _pulls = {};
   final _ends = StreamController<(String planId, RunState state)>.broadcast();
   bool _engineStopped = false;
 
@@ -105,6 +108,14 @@ final class OperationsController extends ChangeNotifier {
 
   /// [planId]'s run, or null when it was never run this engine run.
   RunState? runOf(String planId) => _runs[planId];
+
+  /// Where the image pull [planId] stands, or null before its first
+  /// report (IMG-03).
+  ImagePullProgress? pullOf(String planId) => _pulls[planId];
+
+  /// Asks the engine to stop the running plan [planId] where its step can
+  /// stop; it then finishes as cancelled.
+  void cancel(String planId) => _send(CancelAction(planId));
 
   /// Each run's end, finished or refused, as it happens: the result toast
   /// listens here.
@@ -232,6 +243,9 @@ final class OperationsController extends ChangeNotifier {
         notifyListeners();
       case ActionFinished(:final planId):
         _end(planId, RunFinished(event));
+      case ImagePullProgress(:final planId):
+        _pulls[planId] = event;
+        notifyListeners();
       case OperationsChanged(:final serverId):
         _detached[serverId] = event;
         notifyListeners();

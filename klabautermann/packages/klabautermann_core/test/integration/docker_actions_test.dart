@@ -2,7 +2,8 @@
 // fixture (M4 E28, X2 and X3): the real engine in its own isolate, links
 // on, as the fixture user in the Docker host's `docker` group. Every
 // container, image and stack action of the MVP, v1's volume create and
-// remove, network remove and prune, with the watched list following it; the refusals a managed stack, a protected container and
+// remove, network remove, prune and pull, with the watched list
+// following it; the refusals a managed stack, a protected container and
 // an unverified or managed redeploy get; a kill and a stop and continue
 // of the user's own process, with the start-time guard; and STK-06's
 // detached redeploy under BusyBox `setsid` (spike S4), which pulls a new
@@ -494,6 +495,49 @@ void main() {
     );
     // A tagged image stays: only `-a` removes it.
     expect(await dind(['image', 'ls', '--quiet', tag]), isNotEmpty);
+  });
+
+  test('a pull streams its layers from the fixture registry, and a tag it '
+      'lacks fails with what the daemon said (IMG-03)', () async {
+    const tag = 'registry:5000/klab/app:pulled';
+    addTearDown(() async {
+      try {
+        await dind(['rmi', tag]);
+      } on Object {
+        // Never pulled.
+      }
+    });
+    final engine = await start('pull-actions');
+
+    // The tag the registry serves, under a name the engine does not hold,
+    // so the daemon downloads rather than finds it.
+    await dind(['tag', _appImage, tag]);
+    await dind(['push', tag]);
+    await dind(['rmi', tag]);
+    final pulled = await plan(
+      engine,
+      const PullImage(dockerServer, reference: tag),
+    );
+    expect(pulled.preview.requiredTier, ConfirmationTier.acknowledge);
+    expectSucceeded(await run(engine, pulled));
+    final reports = [
+      for (final event in engine.seen)
+        if (event is ImagePullProgress && event.planId == pulled.planId) event,
+    ];
+    expect(reports, isNotEmpty);
+    expect(reports.last.status, contains('Status:'));
+    expect(await dind(['image', 'ls', '--quiet', tag]), isNotEmpty);
+
+    final missing = await plan(
+      engine,
+      const PullImage(dockerServer, reference: 'registry:5000/klab/app:none'),
+    );
+    expect(
+      await run(engine, missing),
+      isA<ActionFinished>()
+          .having((f) => f.failure, 'failure', ActionFailure.stepFailed)
+          .having((f) => f.output?.stderr, 'detail', isNotEmpty),
+    );
   });
 
   test('a stack stops, starts and restarts its containers (STK-03)', () async {

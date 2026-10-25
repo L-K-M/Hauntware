@@ -4802,7 +4802,7 @@
   "@activityColumnResult": {
     "description": "Column of the activity log: how the run ended."
   },
-  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
+  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
   "@activityAction": {
     "description": "An activity log row's action; action is the engine's intent type name.",
     "placeholders": {
@@ -6049,6 +6049,52 @@
   "dockerVolumesUseUnknown": "Which volumes are in use is unknown: the containers, whose mounts tell, could not be listed.",
   "@dockerVolumesUseUnknown": {
     "description": "Volumes list: the volume list carries no use count, and the container list it is computed from failed."
+  },
+  "dockerPullOpen": "Pull image…",
+  "@dockerPullOpen": {
+    "description": "Images list: the button over the list that opens the pull sheet (IMG-03)."
+  },
+  "dockerPullTitle": "Pull an image",
+  "@dockerPullTitle": {
+    "description": "Pull sheet: its title (IMG-03)."
+  },
+  "dockerPullReference": "Image",
+  "@dockerPullReference": {
+    "description": "Pull sheet: the label of the image reference field."
+  },
+  "dockerPullReferenceHint": "nginx:1.27 or registry.example.com/app:2",
+  "@dockerPullReferenceHint": {
+    "description": "Pull sheet: example references in the empty field. A name without a tag pulls latest."
+  },
+  "dockerPullStart": "Pull",
+  "@dockerPullStart": {
+    "description": "Pull sheet: the button that plans the pull and shows its preview."
+  },
+  "dockerPullCancel": "Stop pull",
+  "@dockerPullCancel": {
+    "description": "Pull sheet: the button that stops a running pull."
+  },
+  "dockerPullForeground": "Pulling. Closing this sheet stops the pull.",
+  "@dockerPullForeground": {
+    "description": "Pull sheet: while a pull runs. The pull runs over this connection and the daemon stops it when the sheet closes (03 §7.14)."
+  },
+  "dockerPullLayerBytes": "{status}: {current} of {total}",
+  "@dockerPullLayerBytes": {
+    "description": "Pull sheet: one layer's status with the bytes done of its total.",
+    "placeholders": {
+      "status": {
+        "type": "String",
+        "example": "Downloading"
+      },
+      "current": {
+        "type": "String",
+        "example": "12 MiB"
+      },
+      "total": {
+        "type": "String",
+        "example": "40 MiB"
+      }
+    }
   },
   "dockerPrune": "Prune…",
   "@dockerPrune": {

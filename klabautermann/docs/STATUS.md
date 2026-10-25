@@ -1967,6 +1967,21 @@ is on main:
   what the preview showed; the build cache, whose records have no ids,
   is not re-validated. The Docker actions suite previews a volume prune
   and runs a dangling-image prune on the fixture.
+- Image pull (M6 N13, IMG-03): the Images sub-tab's "Pull image…" opens
+  a sheet for a reference (a name without a tag pulls `latest`, never
+  every tag), planned behind a plain confirmation as one
+  `POST /images/create`. While it runs the sheet lists each layer in the
+  order the daemon named it, with its status and a bar of the bytes done
+  of the total, and the image's own last message; the engine sends that
+  progress at most four times a second. It is a foreground pull, as 03
+  §7.14 says: "Stop pull" and closing the sheet both send
+  `CancelAction`, the engine closes the request and the daemon stops the
+  pull, and the plan finishes as cancelled. An `errorDetail` in the
+  stream, or an error answer such as a refused registry, fails the step
+  with the daemon's words shown. The daemon pulls anonymously; private
+  registries through the host's own credentials (`docker pull` over exec,
+  REG-01) and the detached pull come with N13b. The Docker actions suite
+  pulls a tag pushed to the fixture registry and fails on a tag it lacks.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container

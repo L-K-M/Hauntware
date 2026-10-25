@@ -10,6 +10,7 @@ import '../actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
 import '../actions/docker_actions.dart'
     show ImageActionsButton, PruneButton, imageActionEntries;
 import '../sortable_table.dart';
+import 'image_pull.dart' show ImagePullButton;
 import 'containers_panel.dart' show DockerNotice;
 import 'containers_view.dart' show searchTerms;
 import 'docker_cells.dart';
@@ -191,17 +192,28 @@ class _ImagesPanelState extends State<ImagesPanel> {
                 ))
               Align(
                 alignment: AlignmentDirectional.centerStart,
-                child: PruneButton(
-                  choices: [
-                    PruneDocker(widget.serverId, kind: DockerPruneKind.images),
-                    PruneDocker(
-                      widget.serverId,
-                      kind: DockerPruneKind.images,
-                      all: true,
-                    ),
-                    PruneDocker(
-                      widget.serverId,
-                      kind: DockerPruneKind.buildCache,
+                // Pull and prune share the server's action policy.
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ImagePullButton(serverId: widget.serverId),
+                    PruneButton(
+                      choices: [
+                        PruneDocker(
+                          widget.serverId,
+                          kind: DockerPruneKind.images,
+                        ),
+                        PruneDocker(
+                          widget.serverId,
+                          kind: DockerPruneKind.images,
+                          all: true,
+                        ),
+                        PruneDocker(
+                          widget.serverId,
+                          kind: DockerPruneKind.buildCache,
+                        ),
+                      ],
                     ),
                   ],
                 ),

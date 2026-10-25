@@ -363,3 +363,17 @@ final class PrunePreview {
   /// engine's reclaimable figure where it reports no size per object.
   final int? freed;
 }
+
+/// An API step the daemon answered with an error it explained, as a pull
+/// whose stream ends on an `errorDetail` (IMG-03): the runner fails the
+/// step with [detail] as its output and [status] when the daemon sent
+/// one.
+final class ApiStepError implements Exception {
+  const ApiStepError(this.detail, {this.status});
+
+  final String detail;
+  final int? status;
+
+  @override
+  String toString() => 'ApiStepError($status): $detail';
+}
