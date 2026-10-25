@@ -3902,6 +3902,18 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   section lists each sensor, sortable hottest first, with the chip's high
   and critical limits where they fit, and does not show while the host
   reports no sensor or inside a container, whose sysfs shows the host's.
+
+  The slow `gpu` collector (M6 N37b, collector-set version 12) asks
+  `nvidia-smi --query-gpu` for each NVIDIA GPU's utilization, memory,
+  temperature, draw and power limit as CSV, and reads each amdgpu card's
+  `gpu_busy_percent`, `mem_info_vram_used` and `_total` and its hwmon
+  temperature and power with builtins. Intel GPUs report busyness only
+  through `intel_gpu_top`, which needs root and streams, so they are not
+  read. The `gpu` stream runs every 30 s on desktop and phone and once
+  per subscription under the cellular saver. The System tab's GPUs
+  section lists each GPU's busy share, and its memory, temperature and
+  power where every column fits; an installed `nvidia-smi` that fails,
+  as without its driver, shows its first line instead.
 - **v1.x.** Fans, battery, inventory, crash markers, boot performance,
   incident snapshot (redacted by default), deploy pre-flight checks.
 

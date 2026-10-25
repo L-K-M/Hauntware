@@ -11,6 +11,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         DiskRate,
         FootprintRow,
         FsSnapshot,
+        GpuSnapshot,
         HostProfile,
         JobEntry,
         JournalBoot,
@@ -1612,7 +1613,8 @@ final class Sample extends EngineEvent {
              (stream == SampleStream.cron && result is CronResult) ||
              (stream == SampleStream.userUnits && result is UnitsResult) ||
              (stream == SampleStream.userTimers && result is TimersResult) ||
-             (stream == SampleStream.temps && result is TempsResult),
+             (stream == SampleStream.temps && result is TempsResult) ||
+             (stream == SampleStream.gpu && result is GpuResult),
          'result must be the variant for stream, or CollectorUnavailable',
        );
 
@@ -5337,6 +5339,9 @@ enum SampleStream {
 
   /// Temperature sensors ([TempsResult], HW-01).
   temps,
+
+  /// GPUs ([GpuResult], HW-03).
+  gpu,
 }
 
 /// The 03 §6.4 cadence columns [SetCadenceProfile] picks among.
@@ -5347,8 +5352,8 @@ enum CadenceProfile {
   /// The Phone column.
   phone,
 
-  /// The Cellular saver column, which reads `timers`, `cron` and
-  /// `temps` on demand: once per [Subscribe] that names them, as soon as the link is
+  /// The Cellular saver column, which reads `timers`, `cron`, `temps`
+  /// and `gpu` on demand: once per [Subscribe] that names them, as soon as the link is
   /// ready and the app is in the foreground (see [Subscribe]).
   cellularSaver,
 }
@@ -5627,6 +5632,14 @@ final class TempsResult extends SampleResult {
   const TempsResult(this.temps);
 
   final TempsSnapshot temps;
+}
+
+/// GPUs ([SampleStream.gpu], HW-03): empty where the host has none the
+/// collector reads.
+final class GpuResult extends SampleResult {
+  const GpuResult(this.gpu);
+
+  final GpuSnapshot gpu;
 }
 
 /// SYS-01's identity ([SampleStream.identity]); virtualization comes with

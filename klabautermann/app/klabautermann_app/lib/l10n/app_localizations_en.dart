@@ -1167,6 +1167,38 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get systemGpusTitle => 'GPUs';
+
+  @override
+  String get systemGpuColumn => 'GPU';
+
+  @override
+  String get systemGpuBusy => 'Busy';
+
+  @override
+  String get systemGpuMemory => 'Memory';
+
+  @override
+  String get systemGpuPower => 'Power';
+
+  @override
+  String systemGpuWatts(double watts) {
+    final intl.NumberFormat wattsNumberFormat =
+        intl.NumberFormat.decimalPatternDigits(
+          locale: localeName,
+          decimalDigits: 0,
+        );
+    final String wattsString = wattsNumberFormat.format(watts);
+
+    return '$wattsString W';
+  }
+
+  @override
+  String systemGpuNvidiaFailed(String message) {
+    return 'nvidia-smi is installed but failed: $message';
+  }
+
+  @override
   String get systemColumnMount => 'Mount';
 
   @override

@@ -1726,6 +1726,48 @@ abstract class AppLocalizations {
   /// **'{celsius} °C'**
   String systemTemperatureCelsius(double celsius);
 
+  /// System tab: the section of the host's GPUs (HW-03). It is hidden where the host has none the app can read.
+  ///
+  /// In en, this message translates to:
+  /// **'GPUs'**
+  String get systemGpusTitle;
+
+  /// GPUs table: column of the GPU's name, or its device name (card1, nvidia0) where the driver reports no product name.
+  ///
+  /// In en, this message translates to:
+  /// **'GPU'**
+  String get systemGpuColumn;
+
+  /// GPUs table: column of the share of time the GPU was busy.
+  ///
+  /// In en, this message translates to:
+  /// **'Busy'**
+  String get systemGpuBusy;
+
+  /// GPUs table: column of the GPU's own memory (VRAM) in use, of its total.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get systemGpuMemory;
+
+  /// GPUs table: column of the GPU's current power draw.
+  ///
+  /// In en, this message translates to:
+  /// **'Power'**
+  String get systemGpuPower;
+
+  /// A power draw in watts, as a whole number in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{watts} W'**
+  String systemGpuWatts(double watts);
+
+  /// System tab, GPUs: nvidia-smi ran and failed, as when its driver is not loaded; message is the tool's own first line, untranslated.
+  ///
+  /// In en, this message translates to:
+  /// **'nvidia-smi is installed but failed: {message}'**
+  String systemGpuNvidiaFailed(String message);
+
   /// Disks table column: where the filesystem is mounted.
   ///
   /// In en, this message translates to:

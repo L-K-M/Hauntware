@@ -44,7 +44,8 @@ const kSamplerStartCommand =
 /// Version 10 adds DSK-04's ms reading, ms writing and ms doing I/O to
 /// `core`'s diskstats rows (D48).
 /// Version 11 adds the slow `temps` collector (HW-01).
-const kCollectorSetVersion = '11';
+/// Version 12 adds the slow `gpu` collector (HW-03).
+const kCollectorSetVersion = '12';
 
 /// The most `procs` rows one reply carries (D48). With more processes the
 /// fragment keeps the union of the [kProcsRowCap] / 2 with the highest CPU
@@ -126,6 +127,7 @@ const collectorFragments = <Collector, String>{
   Collector.timerDetail: _kTimerDetailFragment,
   Collector.ops: _kOpsFragment,
   Collector.temps: _kTempsFragment,
+  Collector.gpu: _kGpuFragment,
 };
 
 /// Assembles the program text for [kind]: the nonce line first, then the
@@ -525,6 +527,39 @@ c_temps() {
     case $_v in '' | *[!0-9-]*) continue ;; esac
     _t=; [ -r "$_z/type" ] && read -r _t 2>/dev/null <"$_z/type"
     o="$o$NL${_z##*/}|$_v|$_t"
+  done
+}
+""";
+
+/// `gpu` (03 §6.4, HW-03): `nvidia-smi`'s query of each NVIDIA GPU as
+/// CSV, with its exit status on an `rc=` line, then each amdgpu card as
+/// `<card>|<busy %>|<VRAM used>|<VRAM total>|<millidegrees>|<µW>`, read
+/// with builtins from the card's device directory and its hwmon. A
+/// card whose `gpu_busy_percent` cannot be read is not an amdgpu one and
+/// is skipped. Intel GPUs report busyness only through `intel_gpu_top`,
+/// which needs root and streams, so they are not read.
+const _kGpuFragment = r"""
+c_gpu() {
+  st=ok; o='== nvidia =='
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    n=$(hw_qrun nvidia-smi --query-gpu=index,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,power.limit --format=csv,noheader,nounits </dev/null 2>&1)
+    o="$o${NL}rc=$?$NL$n"
+  fi
+  o="$o$NL== amdgpu =="
+  for _c in /sys/class/drm/card[0-9]*; do
+    case ${_c##*/} in *-*) continue ;; esac
+    _d=$_c/device
+    _b=; read -r _b 2>/dev/null <"$_d/gpu_busy_percent"
+    case $_b in '' | *[!0-9]*) continue ;; esac
+    _u=; _t=; _k=; _p=
+    [ -r "$_d/mem_info_vram_used" ] && read -r _u 2>/dev/null <"$_d/mem_info_vram_used"
+    [ -r "$_d/mem_info_vram_total" ] && read -r _t 2>/dev/null <"$_d/mem_info_vram_total"
+    for _h in "$_d"/hwmon/hwmon*; do
+      [ -r "$_h/temp1_input" ] && read -r _k 2>/dev/null <"$_h/temp1_input"
+      [ -r "$_h/power1_average" ] && read -r _p 2>/dev/null <"$_h/power1_average"
+      [ -r "$_h/power1_input" ] && [ -z "$_p" ] && read -r _p 2>/dev/null <"$_h/power1_input"
+    done
+    o="$o$NL${_c##*/}|$_b|$_u|$_t|$_k|$_p"
   done
 }
 """;

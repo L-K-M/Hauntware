@@ -1325,6 +1325,49 @@
       }
     }
   },
+  "systemGpusTitle": "GPUs",
+  "@systemGpusTitle": {
+    "description": "System tab: the section of the host's GPUs (HW-03). It is hidden where the host has none the app can read."
+  },
+  "systemGpuColumn": "GPU",
+  "@systemGpuColumn": {
+    "description": "GPUs table: column of the GPU's name, or its device name (card1, nvidia0) where the driver reports no product name."
+  },
+  "systemGpuBusy": "Busy",
+  "@systemGpuBusy": {
+    "description": "GPUs table: column of the share of time the GPU was busy."
+  },
+  "systemGpuMemory": "Memory",
+  "@systemGpuMemory": {
+    "description": "GPUs table: column of the GPU's own memory (VRAM) in use, of its total."
+  },
+  "systemGpuPower": "Power",
+  "@systemGpuPower": {
+    "description": "GPUs table: column of the GPU's current power draw."
+  },
+  "systemGpuWatts": "{watts} W",
+  "@systemGpuWatts": {
+    "description": "A power draw in watts, as a whole number in the UI locale.",
+    "placeholders": {
+      "watts": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 0
+        }
+      }
+    }
+  },
+  "systemGpuNvidiaFailed": "nvidia-smi is installed but failed: {message}",
+  "@systemGpuNvidiaFailed": {
+    "description": "System tab, GPUs: nvidia-smi ran and failed, as when its driver is not loaded; message is the tool's own first line, untranslated.",
+    "placeholders": {
+      "message": {
+        "type": "String",
+        "example": "NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver."
+      }
+    }
+  },
   "systemColumnMount": "Mount",
   "@systemColumnMount": {
     "description": "Disks table column: where the filesystem is mounted."
