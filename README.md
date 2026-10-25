@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 > LLM disclosure: This codebase was written with substantial help from large language models: AI coding agents working from the [`AGENTS.md`](AGENTS.md) brief in this repo.
 
-**Current version:** v<!-- version -->1.9.2<!-- /version --> · [Releases](https://github.com/L-K-M/Hauntware/releases)
+**Current version:** v<!-- version -->1.9.3<!-- /version --> · [Releases](https://github.com/L-K-M/Hauntware/releases)
 
 Desktop apps are ad-hoc signed and not notarized. After moving one to
 Applications, clear its quarantine flag, for example:

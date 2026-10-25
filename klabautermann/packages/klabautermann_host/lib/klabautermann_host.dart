@@ -33,6 +33,7 @@ export 'src/parse/cron.dart';
 export 'src/parse/dmesg.dart';
 export 'src/parse/footprint.dart';
 export 'src/parse/fs.dart';
+export 'src/parse/gpu.dart';
 export 'src/parse/identity.dart';
 export 'src/parse/journal.dart';
 export 'src/parse/log_sources.dart';

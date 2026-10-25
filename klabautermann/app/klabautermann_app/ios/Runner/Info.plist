@@ -6,6 +6,8 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Use Face ID to unlock Klabautermann when the app lock is on.</string>
 	<key>CFBundleDisplayName</key>
 	<string>Klabautermann</string>
 	<key>CFBundleExecutable</key>

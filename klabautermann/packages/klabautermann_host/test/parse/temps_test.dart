@@ -56,6 +56,29 @@ void main() {
       expect(sensors.first.celsius, 41.0);
     });
 
+    test('the thermal zones fill in when every hwmon input is dropped, and '
+        'warn on an implausible zone', () {
+      final result = parseTemps(
+        [
+          '== hwmon ==',
+          'hwmon1|acpitz|temp1|-128000|||',
+          '== thermal ==',
+          'thermal_zone0|-5000|acpitz',
+          'thermal_zone1|300000|INT3400',
+        ].join('\n'),
+        ParseContext.standard,
+      );
+
+      expect(result.warnings, hasLength(2));
+      expect(result.warnings.first, contains('hwmon1|acpitz'));
+      expect(result.warnings.last, contains('thermal_zone1'));
+      final zone = result.value.sensors.single;
+      expect(
+        (zone.id, zone.chip, zone.celsius),
+        ('thermal_zone0', 'acpitz', -5.0),
+      );
+    });
+
     test('a host without sensors reads empty, as VMs do', () {
       final result = parseTemps(
         '== hwmon ==\n== thermal ==\n',

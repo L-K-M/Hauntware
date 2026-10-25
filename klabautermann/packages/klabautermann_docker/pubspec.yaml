@@ -5,7 +5,7 @@ description: >-
   handling, API version negotiation with feature gates, and the versioned
   API plumbing every endpoint uses (docs/design/klabautermann/03, sections
   3.3 and 5.4 to 5.9). No SSH, no Flutter, no dart:io.
-version: 1.9.2
+version: 1.9.3
 publish_to: none
 resolution: workspace
 

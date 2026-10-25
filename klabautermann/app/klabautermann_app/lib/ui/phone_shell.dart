@@ -7,6 +7,7 @@ import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
 import '../controllers/sync_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'alerts.dart';
 import 'coverage.dart';
 import 'endpoint_confirmation.dart';
 import 'fleet_rows.dart';
@@ -145,8 +146,18 @@ class _PhoneShellState extends State<PhoneShell> {
                   fleet: fleet,
                   monitoring: widget.monitoring,
                   onOpen: (server) => unawaited(_open(server)),
-                  // 03 §4.3 step 3: synced servers waiting to be confirmed.
-                  header: EndpointsPendingNotice(fleet: fleet),
+                  // The raised alerts (ALR-01), then 03 §4.3 step 3's
+                  // synced servers waiting to be confirmed.
+                  header: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      AlertsNotice(
+                        fleet: fleet,
+                        onOpenServer: (server) => unawaited(_open(server)),
+                      ),
+                      EndpointsPendingNotice(fleet: fleet),
+                    ],
+                  ),
                 ),
               ),
             ),

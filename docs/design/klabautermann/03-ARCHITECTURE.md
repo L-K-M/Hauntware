@@ -3902,6 +3902,18 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   section lists each sensor, sortable hottest first, with the chip's high
   and critical limits where they fit, and does not show while the host
   reports no sensor or inside a container, whose sysfs shows the host's.
+
+  The slow `gpu` collector (M6 N37b, collector-set version 12) asks
+  `nvidia-smi --query-gpu` for each NVIDIA GPU's utilization, memory,
+  temperature, draw and power limit as CSV, and reads each amdgpu card's
+  `gpu_busy_percent`, `mem_info_vram_used` and `_total` and its hwmon
+  temperature and power with builtins. Intel GPUs report busyness only
+  through `intel_gpu_top`, which needs root and streams, so they are not
+  read. The `gpu` stream runs every 30 s on desktop and phone and once
+  per subscription under the cellular saver. The System tab's GPUs
+  section lists each GPU's busy share, and its memory, temperature and
+  power where every column fits; an installed `nvidia-smi` that fails,
+  as without its driver, shows its first line instead.
 - **v1.x.** Fans, battery, inventory, crash markers, boot performance,
   incident snapshot (redacted by default), deploy pre-flight checks.
 
@@ -4411,8 +4423,16 @@ arrives with E22's Docker actions.
   another metric stays idle. An unknown value holds the rule's phase. A
   raise and a clear each send `LocalAlertChanged`; a rule removed or
   changed, or a server leaving its scope, clears a raised alert at once.
-  The alert center, badges, notifications and the rule editor follow
-  (N50b, N51).
+- **As built (M6 N50b).** The app's `AlertCenter` follows those events
+  for one engine run: the raised alerts, critical first, and the latest
+  100 raises and clears. The fleet list's notice shows while an alert is
+  raised, or while raises and clears the user has not looked at remain,
+  states the coverage limit and opens the alert center, a dialog whose
+  rows open their server. Each fleet row badges its raised alerts
+  (ALR-02) with the highest severity's icon, a shape per severity, and
+  the count, which its label and tooltip say too. An engine that stops
+  ends its raised alerts. Notifications and the app icon's badge (N51)
+  and the rule editor (N50c) follow.
 - **v1.x.** Flap damping (the rest of ALR-16), desktop tray monitoring
   (ALR-03, PLT-10), Android watch mode for a session (PLT-11, D34), Android
   credential-free reachability checks every 15 minutes or more (PLT-15), and T1
@@ -5172,6 +5192,32 @@ unchanged backup restores.
 
 Out of scope: enforced RBAC and tamper-proof audit; a client cannot restrict
 the holder of a root-equivalent socket (NG-08).
+
+### 8.13 App lock (SAF-20)
+
+Off by default, per device in `settings.json` (`klabautermann.appLock`),
+on Android, iOS, macOS and Windows; Linux has no system prompt
+`local_auth` can call, so the switch stays off there. The lock is
+ghost_keystore's `AppLock` (F5f), Séance's own, behind a lock screen:
+
+- With the lock on, the app opens behind the screen, which asks for
+  device authentication (biometrics, the passcode or PIN as fallback) at
+  once and on "Unlock". After `appLockBackgroundTimeout` (5 minutes) in
+  the background or hidden, by wall and monotonic time, it locks again.
+  The covered app stays mounted but takes no pointer, focus or semantics.
+- The engine's keystore reads (the master key, API keys such as the sync
+  token) wait for it: the app answers a read while locked with a refusal,
+  so a locked app hands the engine no new credential. Writes and deletes
+  are not held back, so a sign-out finishes. Links already open keep
+  running, as in Séance.
+- Admin mode ends on every server when the lock engages (8.2).
+- Turning the lock on or off asks for authentication first and takes
+  effect only once saved; the desktop settings window asks the app's
+  window to run it.
+- The lock fails closed: a device whose passcode, PIN and biometrics are
+  removed while it is on keeps the app behind the screen, which says to
+  set one up again, since unlocking and turning the lock off both need
+  that authentication.
 
 ---
 
