@@ -512,6 +512,8 @@ void main() {
     panel.engine.emit(const AdminModeState(_serverId, AdminModePhase.on));
     await tester.pumpAndSettle();
     await tester.ensureVisible(drives('Read drive health'));
+    // A second tap before the button gives way starts no second read.
+    await tester.tap(drives('Read drive health'));
     await tester.tap(drives('Read drive health'));
     await tester.pumpAndSettle();
     expect(drives('Reading drive health…'), findsOneWidget);

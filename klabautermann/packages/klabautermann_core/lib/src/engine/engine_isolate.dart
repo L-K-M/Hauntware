@@ -1626,7 +1626,9 @@ void engineMain(
           return;
         }
         admin?.touch(serverId);
-        // Not awaited, as the crontab read above.
+        // Not awaited, as the crontab read above. readSmart answers
+        // rather than throws; a lend that fails still answers, so the
+        // section never waits on nothing.
         unawaited(
           lendSession(
             serverId,
@@ -1636,7 +1638,10 @@ void engineMain(
               session: session,
               profile: profiles[serverId],
             ),
-          ).then(uiPort.send),
+          ).then(
+            uiPort.send,
+            onError: (Object _) => fail(SmartReportFailure.transport),
+          ),
         );
       case UnitQuery(:final serverId, :final requestId, :final query):
         final link = links?.link(serverId);

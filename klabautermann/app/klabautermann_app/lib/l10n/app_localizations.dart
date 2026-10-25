@@ -1852,6 +1852,12 @@ abstract class AppLocalizations {
   /// **'Bad sectors'**
   String get systemDriveBadSectors;
 
+  /// Drive health table: a drive's bad sectors, a whole number in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}'**
+  String systemDriveBadSectorCount(int count);
+
   /// Drive health table: column of how long the drive has been powered on over its life.
   ///
   /// In en, this message translates to:

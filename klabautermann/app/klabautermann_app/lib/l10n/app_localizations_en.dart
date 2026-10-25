@@ -1273,6 +1273,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get systemDriveBadSectors => 'Bad sectors';
 
   @override
+  String systemDriveBadSectorCount(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '$countString';
+  }
+
+  @override
   String get systemDrivePowerOn => 'Powered on';
 
   @override

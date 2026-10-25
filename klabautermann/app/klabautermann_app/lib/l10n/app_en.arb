@@ -1439,6 +1439,16 @@
   "@systemDriveBadSectors": {
     "description": "Drive health table: column of an ATA drive's reallocated, pending and uncorrectable sectors, summed."
   },
+  "systemDriveBadSectorCount": "{count}",
+  "@systemDriveBadSectorCount": {
+    "description": "Drive health table: a drive's bad sectors, a whole number in the UI locale.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
   "systemDrivePowerOn": "Powered on",
   "@systemDrivePowerOn": {
     "description": "Drive health table: column of how long the drive has been powered on over its life."
