@@ -445,6 +445,13 @@ final class DockerWatcher {
           break;
       }
     }
+    // A connect or disconnect changes that container's networks, and
+    // Docker logs it as a network event only (DNW-01's counts read them).
+    if (event.type == 'network' && _wantsContainers) {
+      if (event.attributes['container'] case final id? when id.isNotEmpty) {
+        _changedIds.add(id);
+      }
+    }
     _schedule();
   }
 
