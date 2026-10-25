@@ -5,9 +5,10 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../services/system_notifications.dart';
 
-/// What turning alert notifications on came to.
+/// What setting the alert notifications switch came to.
 enum AlertNotificationsOutcome {
-  /// They are on, and saved.
+  /// The switch is set as asked, and saved; turning it off always ends
+  /// here.
   enabled,
 
   /// The system refused the app; they stay off.

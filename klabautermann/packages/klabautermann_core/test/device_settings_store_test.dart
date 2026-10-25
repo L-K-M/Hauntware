@@ -470,8 +470,8 @@ void main() {
       }
     });
 
-    test('posts no alert notification until turned on, and reads a damaged '
-        'value as off', () async {
+    test('posts no alert notification until turned on, keeps it off once '
+        'turned off, and reads a damaged value as off', () async {
       writeDocument({_versionKey: 1, _deviceIdKey: 'device-a'});
 
       final store = await DeviceSettingsStore.open(file);
@@ -479,6 +479,11 @@ void main() {
       await store.setAlertNotifications(true);
       expect((await DeviceSettingsStore.open(file)).alertNotifications, isTrue);
       expect(document()[_alertNotificationsKey], isTrue);
+      await store.setAlertNotifications(false);
+      expect(
+        (await DeviceSettingsStore.open(file)).alertNotifications,
+        isFalse,
+      );
 
       for (final damaged in <Object>['true', 1, <String>[]]) {
         writeDocument({
