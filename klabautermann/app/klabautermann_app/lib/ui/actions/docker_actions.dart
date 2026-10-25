@@ -647,7 +647,7 @@ class PruneButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     const icon = Icon(Icons.cleaning_services_outlined);
-    assert(choices.isNotEmpty, 'a prune button offers at least one prune');
+    assert(choices.isNotEmpty);
     final serverId = choices.first.serverId;
     if (choices case [final only]) {
       return ActionEntry(
