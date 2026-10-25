@@ -75,6 +75,9 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
             posture: ServerListPosture.rail,
             onOpen: (s) => _open(state, s),
             onOpenLocal: () => _openLocal(state),
+            // The rail starts level with the terminal's tab strip, under
+            // the header and its rule or at the window's top.
+            filterBarExtent: TerminalTabStrip.height,
           ),
           header: unifiedToolbar ? const HeaderToolbar() : null,
           terminalPane: TerminalPane(
@@ -144,6 +147,9 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
     await state.openLocalShell();
   }
 }
+
+/// The line under the macOS header, across the terminal and utility panes.
+const double _headerRuleHeight = 1;
 
 /// The pane sizes that fit within one wide-layout constraint.
 class AdaptivePaneWidths {
@@ -248,8 +254,9 @@ class AdaptivePaneLayout extends StatefulWidget {
   /// or null for no header. When set, it spans the terminal and utility
   /// panes the way Poltergeist's spans its panes and inspector; the list
   /// pane stays full height and starts below a spacer of the header's
-  /// height, where the traffic lights sit, and the layout takes the band
-  /// back from the app's reservation ([ClaimMacosToolbarBand]).
+  /// height and its rule, where the traffic lights sit, and the layout
+  /// takes the band back from the app's reservation
+  /// ([ClaimMacosToolbarBand]).
   final Widget? header;
 
   /// Requested pane widths to start from (the persisted values, on real
@@ -403,7 +410,12 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
                       color: chrome.sidebarBackground,
                       child: Column(
                         children: [
-                          SizedBox(height: chrome.headerHeight),
+                          // The header and its rule, so the list starts
+                          // where the tab strip does and its filter field
+                          // lines up with the tabs.
+                          SizedBox(
+                            height: chrome.headerHeight + _headerRuleHeight,
+                          ),
                           Expanded(child: widget.listPane),
                         ],
                       ),
@@ -415,8 +427,8 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
                       children: [
                         header,
                         Divider(
-                          height: 1,
-                          thickness: 1,
+                          height: _headerRuleHeight,
+                          thickness: _headerRuleHeight,
                           color: chrome.separator,
                         ),
                         Expanded(child: panes),

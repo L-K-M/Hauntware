@@ -1491,8 +1491,8 @@ void main() {
           )
           .any(
             (c) =>
-                c.decoration is BoxDecoration &&
-                (c.decoration! as BoxDecoration).border?.top.color ==
+                c.foregroundDecoration is BoxDecoration &&
+                (c.foregroundDecoration! as BoxDecoration).border?.top.color ==
                     primary,
           );
     }

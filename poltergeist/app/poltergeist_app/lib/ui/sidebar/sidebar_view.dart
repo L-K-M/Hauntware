@@ -130,6 +130,7 @@ class SidebarView extends StatefulWidget {
     this.dropDelegate,
     this.clock = DateTime.now,
     this.presentation = SidebarPresentation.rail,
+    this.filterBarExtent,
     super.key,
   });
 
@@ -227,6 +228,11 @@ class SidebarView extends StatefulWidget {
 
   /// The desktop rail or the compact Home (D32 §9).
   final SidebarPresentation presentation;
+
+  /// The height of the panes' tab strips, when the rail starts level with
+  /// them: the filter field then spans their band
+  /// ([SidebarFilterField.barExtent]). Null keeps the compact field.
+  final double? filterBarExtent;
 
   @override
   State<SidebarView> createState() => _SidebarViewState();
@@ -476,6 +482,7 @@ class _SidebarViewState extends State<SidebarView> {
               onDismiss: controller.dismissFilter,
               onSubmitted: data.firstMatch,
               countText: data.filtering ? _countText(l10n, data) : null,
+              barExtent: widget.filterBarExtent,
             ),
           Expanded(
             child: ListView(
