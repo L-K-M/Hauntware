@@ -115,6 +115,21 @@ void main() {
       expect([for (final b in range.buckets) b.start], [_at(60)]);
     });
 
+    test('flushing closes the filling minute into its 10-minute bucket, '
+        'so that one holds every reading too', () async {
+      history
+        ..observe(_web, _cpu(10), _at(0))
+        ..observe(_web, _cpu(30), _at(60));
+      await history.flush();
+
+      final ten = await history.read(
+        _web,
+        HistoryTier.tenMinutes,
+        now: _at(90),
+      );
+      expect(ten.buckets.single.values[AlertMetric.cpuBusy]!.count, 2);
+    });
+
     test('gaps are recorded and read back in order', () async {
       history
         ..gap(_web, _at(120), _at(300), GapCause.disconnected)
@@ -196,6 +211,27 @@ void main() {
 
       await open({});
       expect(await dbDir.exists(), isFalse);
+    });
+
+    test('a write queued before a server is forgotten opens nothing '
+        'again', () async {
+      final store = await open({_web});
+      store
+        ..observe(_web, _cpu(10), _at(0))
+        ..observe(_web, _cpu(20), _at(60));
+      // The first minute's write is queued; the server leaves before it
+      // runs.
+      final forgotten = store.forget({_web});
+      await forgotten;
+      await store.flush();
+
+      expect(
+        await Directory('${support.path}/history/$_web').exists(),
+        isFalse,
+      );
+      // Rings the queued write opened would still hold its bucket.
+      final range = await store.read(_web, HistoryTier.minute, now: _at(90));
+      expect(range.buckets, isEmpty);
     });
 
     test('without exclusive access nothing touches disk', () async {

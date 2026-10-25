@@ -121,6 +121,9 @@ class _HistoryCardState extends State<HistoryCard> {
   void didUpdateWidget(HistoryCard old) {
     super.didUpdateWidget(old);
     if (old.serverId != widget.serverId || old.reads != widget.reads) {
+      // The last server's chart goes at once, not when this one answers.
+      _range = null;
+      _readAt = null;
       unawaited(_read());
     }
   }
@@ -163,7 +166,12 @@ class _HistoryCardState extends State<HistoryCard> {
                 showCheckmark: false,
                 onSelected: (_) {
                   if (_tier == tier) return;
-                  setState(() => _tier = tier);
+                  // The other tier's buckets never draw at this one's width.
+                  setState(() {
+                    _tier = tier;
+                    _range = null;
+                    _readAt = null;
+                  });
                   unawaited(_read());
                 },
               ),

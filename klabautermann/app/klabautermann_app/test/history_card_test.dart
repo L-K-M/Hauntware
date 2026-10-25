@@ -183,5 +183,37 @@ void main() {
         isA<HistoryRange>().having((r) => r.buckets, 'buckets', isEmpty),
       );
     });
+
+    testWidgets('a tier switch or a server change drops the chart until '
+        'its own read answers', (tester) async {
+      await pumpCard(tester);
+      await answer(tester, historySample());
+      expect(find.byType(TimeSeriesChart), findsOneWidget);
+
+      await tester.tap(find.text('Last 30 days'));
+      await tester.pump();
+      expect(find.byType(TimeSeriesChart), findsNothing);
+      await answer(tester, historySample());
+      expect(find.byType(TimeSeriesChart), findsOneWidget);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: HistoryCard(
+                reads: reads,
+                serverId: 'srv-2',
+                now: () => historyNow,
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(find.byType(TimeSeriesChart), findsNothing);
+      final read = engine.sentOfType<ReadHistory>().last as ReadHistory;
+      expect(read.serverId, 'srv-2');
+    });
   });
 }

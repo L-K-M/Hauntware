@@ -1595,9 +1595,13 @@ void engineMain(
           ),
         );
       case ReadHistory(:final serverId, :final tier, :final requestId):
+        const nothing = HistoryRange(buckets: [], gaps: []);
+        // The app waits on the answer, so a read that fails answers
+        // nothing recorded rather than nothing at all.
         final range =
-            await history?.read(serverId, tier, now: DateTime.now().toUtc()) ??
-            const HistoryRange(buckets: [], gaps: []);
+            await (history?.read(serverId, tier, now: DateTime.now().toUtc()) ??
+                    Future.value(nothing))
+                .catchError((Object _) => nothing);
         uiPort.send(
           HistoryRead(
             requestId: requestId,
@@ -1794,13 +1798,15 @@ void engineMain(
           }),
         );
       case Shutdown():
-        // The buckets still filling are written first, then open shells
-        // end, so their TerminalClosed and audit
+        // The buckets still filling are written and open shells end,
+        // side by side within one grace, so their TerminalClosed and audit
         // records are not cut off by Isolate.exit. Each stream's end goes
         // out before the isolate does, and its process goes with the
         // isolate.
-        await history?.flush().timeout(_shutdownGrace, onTimeout: () {});
-        await terminals?.dispose().timeout(_shutdownGrace, onTimeout: () {});
+        await Future.wait([
+          ?history?.flush().timeout(_shutdownGrace, onTimeout: () {}),
+          ?terminals?.dispose().timeout(_shutdownGrace, onTimeout: () {}),
+        ]);
         unawaited(logs?.close());
         unawaited(docker?.close());
         commands.close();

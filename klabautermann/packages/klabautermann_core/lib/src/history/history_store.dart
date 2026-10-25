@@ -137,9 +137,11 @@ final class _MemoryRing implements _RingBytes {
 
   final Uint8List _bytes;
 
+  /// A copy, as a file ring's read is: a write queued while the caller
+  /// decodes never shows through.
   @override
   Future<Uint8List> read(int offset, int length) async =>
-      Uint8List.sublistView(_bytes, offset, offset + length);
+      _bytes.sublist(offset, offset + length);
 
   @override
   Future<void> write(int offset, Uint8List bytes) async =>
@@ -267,6 +269,10 @@ final class HistoryStore {
   final Map<String, _Accumulator> _tenMinutes = {};
   Future<void> _tail = Future.value();
 
+  /// Bumped per server by [forget], so a write queued before it is
+  /// dropped instead of opening the server's rings again.
+  final Map<String, int> _generations = {};
+
   bool get _writesFiles => _access == SupportDirectoryAccess.exclusive;
 
   /// Rolls [result]'s readings for [serverId], taken [at], into its
@@ -299,7 +305,9 @@ final class HistoryStore {
   /// reports it.
   void gap(String serverId, DateTime from, DateTime until, GapCause cause) =>
       _queue(serverId, (rings) async {
-        final header = ByteData.sublistView(await rings.gaps.read(0, 16));
+        final header = ByteData.sublistView(
+          await rings.gaps.read(0, _headerBytes),
+        );
         final next = header.getUint32(4) % _gapSlots;
         final slot = ByteData(_gapSlotBytes)
           ..setInt64(0, _seconds(from))
@@ -312,10 +320,13 @@ final class HistoryStore {
         await rings.gaps.write(0, _gapHeader(next + 1));
       });
 
-  /// Writes the buckets still filling, as when the engine stops.
+  /// Writes the buckets still filling, as when the engine stops: each
+  /// minute closes into its 10-minute bucket first, so that one holds
+  /// every reading too.
   Future<void> flush() {
-    for (final MapEntry(key: serverId, value: minute) in _minute.entries) {
-      _write(serverId, HistoryTier.minute, minute.bucket);
+    for (final MapEntry(key: serverId, value: minute)
+        in _minute.entries.toList()) {
+      _closeMinute(serverId, minute);
     }
     for (final MapEntry(key: serverId, value: ten) in _tenMinutes.entries) {
       _write(serverId, HistoryTier.tenMinutes, ten.bucket);
@@ -386,6 +397,7 @@ final class HistoryStore {
     for (final serverId in serverIds) {
       _minute.remove(serverId);
       _tenMinutes.remove(serverId);
+      _generations[serverId] = (_generations[serverId] ?? 0) + 1;
       final rings = _rings.remove(serverId);
       _tail = _tail.then((_) async {
         try {
@@ -437,7 +449,10 @@ final class HistoryStore {
       });
 
   void _queue(String serverId, Future<void> Function(_ServerRings) body) {
+    final generation = _generations[serverId] ?? 0;
     _tail = _tail.then((_) async {
+      // A server forgotten since this write was queued keeps no rings.
+      if ((_generations[serverId] ?? 0) != generation) return;
       try {
         final rings = await _ringsOf(serverId);
         if (rings != null) await body(rings);
