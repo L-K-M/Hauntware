@@ -11,6 +11,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/family_hues.dart';
 import '../activity/activity_panel.dart';
 import '../panes/info_panel.dart';
+import '../panes/pane_tabs_view.dart';
 import '../preview_panel.dart';
 import '../shell/corner_count_badge.dart';
 import 'alerts_view.dart';
@@ -95,7 +96,6 @@ class InspectorView extends StatelessWidget {
                     .where((task) => !task.isTerminal)
                     .length,
               ),
-              Divider(height: 1, color: chrome.separator),
               Expanded(
                 child: switch (workspace.inspectorTab) {
                   InspectorTab.info => _InfoTab(
@@ -129,7 +129,9 @@ class InspectorView extends StatelessWidget {
 }
 
 /// ForkLift's inspector header: three icon tabs, centered, the Alerts
-/// tab badged with the attention count and Transfers with live work.
+/// tab badged with the attention count and Transfers with live work. As
+/// tall as the panes' tab strips, with the rule inside it the same way,
+/// so the rules meet in one line across the seam.
 class _TabSwitcher extends StatelessWidget {
   const _TabSwitcher({
     required this.selected,
@@ -148,6 +150,7 @@ class _TabSwitcher extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final colors = Theme.of(context).colorScheme;
     final palette = FamilyPalette.of(context);
+    final separator = PoltergeistChrome.of(context).separator;
     // D34: each tab keeps its family hue (Info the places blue,
     // Transfers the motion cyan, Alerts the attention yellow), and the
     // selected one lights up in it, its glyph filled on a wash of its
@@ -194,7 +197,8 @@ class _TabSwitcher extends StatelessWidget {
             onTap: () => onSelect(value),
             child: Container(
               width: 40,
-              height: 28,
+              // Centred, 2 px inside the strip's top and bottom edges.
+              height: paneTabStripHeight - 4,
               alignment: Alignment.center,
               decoration: isSelected
                   ? BoxDecoration(
@@ -210,39 +214,46 @@ class _TabSwitcher extends StatelessWidget {
     }
 
     return SizedBox(
-      height: 40,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          tab(
-            InspectorTab.info,
-            Icons.info_outline,
-            Icons.info,
-            l10n.inspectorTabInfo,
-            hue: FamilyHue.blue,
-          ),
-          const SizedBox(width: 6),
-          tab(
-            InspectorTab.transfers,
-            Icons.swap_vert,
-            Icons.swap_vert,
-            l10n.inspectorTabTransfers,
-            hue: FamilyHue.cyan,
-            badge: liveTransfers,
-            announce: l10n.transferCountSemantics,
-          ),
-          const SizedBox(width: 6),
-          tab(
-            InspectorTab.alerts,
-            Icons.warning_amber_outlined,
-            Icons.warning_amber,
-            l10n.inspectorTabAlerts,
-            hue: FamilyHue.yellow,
-            badge: alertCount,
-            announce: l10n.alertCountSemantics,
-            errorBadge: true,
-          ),
-        ],
+      height: paneTabStripHeight,
+      // A DecoratedBox, not a Container's border, so the rule does not
+      // inset the row: the tabs centre on the strip's whole height.
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: separator)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            tab(
+              InspectorTab.info,
+              Icons.info_outline,
+              Icons.info,
+              l10n.inspectorTabInfo,
+              hue: FamilyHue.blue,
+            ),
+            const SizedBox(width: 6),
+            tab(
+              InspectorTab.transfers,
+              Icons.swap_vert,
+              Icons.swap_vert,
+              l10n.inspectorTabTransfers,
+              hue: FamilyHue.cyan,
+              badge: liveTransfers,
+              announce: l10n.transferCountSemantics,
+            ),
+            const SizedBox(width: 6),
+            tab(
+              InspectorTab.alerts,
+              Icons.warning_amber_outlined,
+              Icons.warning_amber,
+              l10n.inspectorTabAlerts,
+              hue: FamilyHue.yellow,
+              badge: alertCount,
+              announce: l10n.alertCountSemantics,
+              errorBadge: true,
+            ),
+          ],
+        ),
       ),
     );
   }

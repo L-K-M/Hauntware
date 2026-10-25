@@ -10,10 +10,11 @@ import 'files_pane.dart';
 import 'git_pane.dart';
 import 'selected_tab_view.dart';
 import 'snippets_pane.dart';
+import 'terminal_pane.dart';
 
-/// The right-hand utility panel: an Assistant tab (the LLM chat, when a provider
-/// is configured) and a Snippets tab (always available). Used both as a tiled
-/// pane on wide layouts and inside the end-drawer on narrow ones.
+/// The right-hand utility panel: Files, Git, Snippets and the Assistant (the
+/// LLM chat, when a provider is configured). Used both as a tiled pane on
+/// wide layouts and inside the end-drawer on narrow ones.
 class SidebarPanel extends StatefulWidget {
   final bool includeFiles;
 
@@ -35,11 +36,19 @@ class _SidebarPanelState extends State<SidebarPanel>
     super.didChangeDependencies();
     if (_tabs != null) return;
     final state = AppScope.of(context);
+    // Files opens first. The narrow drawer has no Files and opens on what
+    // its button names: the Assistant once one is set up, else Snippets.
+    final opening = widget.includeFiles
+        ? _PanelPage.files
+        : state.llmConfigured
+        ? _PanelPage.assistant
+        : _PanelPage.snippets;
+    final tabs = _panelTabs;
     // includeFiles is fixed at every call site (const constructions), so the
     // controller's length never needs to track a rebuild-time change.
     _tabs = TabController(
-      length: widget.includeFiles ? 4 : 3,
-      initialIndex: state.llmConfigured ? 0 : 1,
+      length: tabs.length,
+      initialIndex: tabs.indexWhere((tab) => tab.page == opening),
       vsync: this,
     );
   }
@@ -51,34 +60,38 @@ class _SidebarPanelState extends State<SidebarPanel>
   }
 
   /// The tabs in order, each with its family hue (Poltergeist's D34, the
-  /// sibling apps' colour vocabulary): the Assistant the AI purple, the
-  /// Snippets the saved-recipe teal, Files the places blue, Git the code
-  /// orange.
+  /// sibling apps' colour vocabulary): Files the places blue, Git the code
+  /// orange, the Snippets the saved-recipe teal, the Assistant the AI
+  /// purple.
   List<_PanelTab> get _panelTabs => [
-    const _PanelTab(
-      'Assistant',
-      Icons.auto_awesome_outlined,
-      Icons.auto_awesome,
-      FamilyHue.purple,
-    ),
-    const _PanelTab(
-      'Snippets',
-      Icons.bookmarks_outlined,
-      Icons.bookmarks,
-      FamilyHue.teal,
-    ),
     if (widget.includeFiles)
       const _PanelTab(
+        _PanelPage.files,
         'Files',
         Icons.folder_outlined,
         Icons.folder,
         FamilyHue.blue,
       ),
     const _PanelTab(
+      _PanelPage.git,
       'Git',
       Icons.account_tree_outlined,
       Icons.account_tree,
       FamilyHue.orange,
+    ),
+    const _PanelTab(
+      _PanelPage.snippets,
+      'Snippets',
+      Icons.bookmarks_outlined,
+      Icons.bookmarks,
+      FamilyHue.teal,
+    ),
+    const _PanelTab(
+      _PanelPage.assistant,
+      'Assistant',
+      Icons.auto_awesome_outlined,
+      Icons.auto_awesome,
+      FamilyHue.purple,
     ),
   ];
 
@@ -94,22 +107,22 @@ class _SidebarPanelState extends State<SidebarPanel>
           child: Column(
             children: [
               _PanelTabStrip(controller: controller, tabs: tabs),
-              Divider(
-                height: 1,
-                color: SeanceChrome.of(context, seanceThemeStyle).separator,
-              ),
               Expanded(
                 // A tab's page is built when it is first opened, so Files and
                 // Git initialize their session's controller only then.
                 child: SelectedTabView(
                   controller: _tabs,
                   children: [
-                    state.llmConfigured
-                        ? const ChatSidebar()
-                        : const _AssistantSetupPrompt(),
-                    const SnippetsPane(),
-                    if (widget.includeFiles) const FilesPane(),
-                    const GitPane(),
+                    for (final tab in tabs)
+                      switch (tab.page) {
+                        _PanelPage.files => const FilesPane(),
+                        _PanelPage.git => const GitPane(),
+                        _PanelPage.snippets => const SnippetsPane(),
+                        _PanelPage.assistant =>
+                          state.llmConfigured
+                              ? const ChatSidebar()
+                              : const _AssistantSetupPrompt(),
+                      },
                   ],
                 ),
               ),
@@ -126,9 +139,13 @@ class _SidebarPanelState extends State<SidebarPanel>
 /// Poltergeist's inspector tabs use the same value.
 const panelTabWashAlpha = 0.16;
 
-class _PanelTab {
-  const _PanelTab(this.label, this.glyph, this.openGlyph, this.hue);
+/// What a panel tab opens.
+enum _PanelPage { files, git, snippets, assistant }
 
+class _PanelTab {
+  const _PanelTab(this.page, this.label, this.glyph, this.openGlyph, this.hue);
+
+  final _PanelPage page;
   final String label;
 
   /// The glyph at rest, and the filled one the open tab shows.
@@ -139,11 +156,12 @@ class _PanelTab {
 
 /// The panel's tabs as Poltergeist's inspector header sets its own: a
 /// centred row of glyphs in their hues, each named by its tooltip, the
-/// open one filled on a wash of its colour.
+/// open one filled on a wash of its colour. As tall as the terminal's tab
+/// strip, with the rule inside it the same way, so the two rules meet in
+/// one line across the seam.
 class _PanelTabStrip extends StatelessWidget {
   const _PanelTabStrip({required this.controller, required this.tabs});
 
-  static const double _height = 40;
   static const double _tabWidth = 40;
   static const double _tabHeight = 28;
   static const double _gap = 6;
@@ -156,20 +174,28 @@ class _PanelTabStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = FamilyPalette.of(context);
+    final separator = SeanceChrome.of(context, seanceThemeStyle).separator;
     final corner = BorderRadius.circular(_cornerRadius);
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) => SizedBox(
         key: SidebarPanel.tabStripKey,
-        height: _height,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            for (final (index, tab) in tabs.indexed) ...[
-              if (index > 0) const SizedBox(width: _gap),
-              _tab(tab, index, palette.glyph(tab.hue), corner),
+        height: TerminalTabStrip.height,
+        // A DecoratedBox, not a Container's border, so the rule does not
+        // inset the row: the tabs centre on whole pixels.
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: separator)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (final (index, tab) in tabs.indexed) ...[
+                if (index > 0) const SizedBox(width: _gap),
+                _tab(tab, index, palette.glyph(tab.hue), corner),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

@@ -1139,6 +1139,67 @@ void main() {
         expect(tester.getSize(fill).height, extent);
       });
     }
+
+    // Beside a tab strip the field fills the strip's height from the top
+    // of its slot, so its edges meet the tabs'. Touch keeps its target and
+    // its inset.
+    for (final (platform, top, extent) in [
+      (TargetPlatform.macOS, 0.0, 38.0),
+      (TargetPlatform.android, 4.0, 44.0),
+    ]) {
+      testWidgets('beside a 38 px strip it fills ${extent.toInt()} px from '
+          '${top.toInt()} px down on ${platform.name}', (tester) async {
+        await _pump(
+          tester,
+          SidebarFilterField(
+            fieldKey: const ValueKey('f'),
+            query: '',
+            onChanged: (_) {},
+            onDismiss: () {},
+            barExtent: 38,
+          ),
+          platform: platform,
+        );
+        final field = find.byKey(const ValueKey('f'));
+        final fill = find.descendant(
+          of: field,
+          matching: find.byWidgetPredicate(
+            (widget) => widget.runtimeType.toString() == '_BorderContainer',
+            description: "InputDecorator's fill-painting _BorderContainer",
+          ),
+        );
+        expect(tester.getRect(fill).top, top);
+        expect(tester.getSize(fill).height, extent);
+      });
+    }
+
+    // The strip does not grow with the text, so the field keeps the band
+    // until the scaled compact extent needs more: 26 × 1.1 fits in 30,
+    // 26 × 1.5 does not.
+    for (final (scale, extent) in [(1.1, 30.0), (1.5, 39.0)]) {
+      testWidgets('beside a 30 px strip at text scale $scale it is '
+          '${extent.toInt()} px', (tester) async {
+        await _pump(
+          tester,
+          Builder(
+            builder: (context) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.linear(scale)),
+              child: SidebarFilterField(
+                fieldKey: const ValueKey('f'),
+                query: '',
+                onChanged: (_) {},
+                onDismiss: () {},
+                barExtent: 30,
+              ),
+            ),
+          ),
+          platform: TargetPlatform.macOS,
+        );
+        expect(tester.getSize(find.byKey(const ValueKey('f'))).height, extent);
+      });
+    }
   });
 
   group('SidebarBottomBar', () {
