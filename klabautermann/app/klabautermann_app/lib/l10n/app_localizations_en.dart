@@ -4289,6 +4289,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerTabImages => 'Images';
 
   @override
+  String get dockerTabVolumes => 'Volumes';
+
+  @override
   String get dockerTabStacks => 'Stacks';
 
   @override
@@ -4898,6 +4901,56 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dockerImagesLowSessionRelay =>
       'Low-session mode: the list is read again every 15 seconds instead of following engine events.';
+
+  @override
+  String get dockerVolumesColumnName => 'Name';
+
+  @override
+  String get dockerVolumesColumnDriver => 'Driver';
+
+  @override
+  String dockerVolumesInUse(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Mounted by $count containers',
+      one: 'Mounted by 1 container',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerVolumesSearchHint => 'Search by name or driver';
+
+  @override
+  String get dockerVolumesReading => 'Reading the volumes…';
+
+  @override
+  String get dockerVolumesEmpty => 'This engine has no volumes.';
+
+  @override
+  String get dockerVolumesNoMatch => 'No volume matches the search.';
+
+  @override
+  String get dockerVolumesNoneUnused =>
+      'Every volume is mounted by a container.';
+
+  @override
+  String dockerVolumesFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'tooManyQueries':
+          'This server already has as many Docker watches open as Klabautermann allows.',
+      'daemonError': 'The engine refused or failed to list the volumes.',
+      'connectionFailed':
+          'The connection to the engine failed while listing the volumes.',
+      'other': 'The volumes could not be listed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerVolumesUseUnknown =>
+      'Which volumes are in use is unknown: the containers, whose mounts tell, could not be listed.';
 
   @override
   String get dockerDetailsClose => 'Close the container details';

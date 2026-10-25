@@ -5578,6 +5578,12 @@ abstract class AppLocalizations {
   /// **'Images'**
   String get dockerTabImages;
 
+  /// Docker tab: the sub-tab listing volumes.
+  ///
+  /// In en, this message translates to:
+  /// **'Volumes'**
+  String get dockerTabVolumes;
+
   /// Docker tab: the sub-tab listing compose stacks.
   ///
   /// In en, this message translates to:
@@ -6435,6 +6441,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Low-session mode: the list is read again every 15 seconds instead of following engine events.'**
   String get dockerImagesLowSessionRelay;
+
+  /// Volumes list: the column of volume names.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get dockerVolumesColumnName;
+
+  /// Volumes list: the column of volume drivers, such as local.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver'**
+  String get dockerVolumesColumnDriver;
+
+  /// Volumes list: what a screen reader hears, and a phone row shows, for a volume containers mount, running or not.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Mounted by 1 container} other{Mounted by {count} containers}}'**
+  String dockerVolumesInUse(int count);
+
+  /// Volumes list: the search field's hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search by name or driver'**
+  String get dockerVolumesSearchHint;
+
+  /// Volumes list: shown until the first list arrives.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the volumes…'**
+  String get dockerVolumesReading;
+
+  /// Volumes list: the engine listed none.
+  ///
+  /// In en, this message translates to:
+  /// **'This engine has no volumes.'**
+  String get dockerVolumesEmpty;
+
+  /// Volumes list: the search hides every volume.
+  ///
+  /// In en, this message translates to:
+  /// **'No volume matches the search.'**
+  String get dockerVolumesNoMatch;
+
+  /// Volumes list: the Unused filter hides every volume.
+  ///
+  /// In en, this message translates to:
+  /// **'Every volume is mounted by a container.'**
+  String get dockerVolumesNoneUnused;
+
+  /// Volumes list: why the list could not be read. reason is the engine's failure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} daemonError{The engine refused or failed to list the volumes.} connectionFailed{The connection to the engine failed while listing the volumes.} other{The volumes could not be listed.}}'**
+  String dockerVolumesFailed(String reason);
+
+  /// Volumes list: the volume list carries no use count, and the container list it is computed from failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Which volumes are in use is unknown: the containers, whose mounts tell, could not be listed.'**
+  String get dockerVolumesUseUnknown;
 
   /// Tooltip of the button that closes a container's details in the desktop inspector (03 §10.2).
   ///

@@ -52,7 +52,8 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
         HealthStatus,
         ImageSummary,
         MaskedValue,
-        SystemDf;
+        SystemDf,
+        VolumeSummary;
 import 'package:meta/meta.dart';
 // DangerLinter's findings are plain data: a severity and three values.
 import 'package:seance_core/seance_core.dart' show DangerFinding;
@@ -257,6 +258,9 @@ import '../operations/plan_types.dart';
 /// plan M09b): [TestServerConnection], answered by
 /// [ServerConnectionTested]. [DuplicateServer] then joined it, answered
 /// as [SaveServer].
+///
+/// The volume list then joined v3 the same way (03 §7.15 VOL-01, M6 plan
+/// N10a): [DockerWatchList.volumes], delivered as [DockerVolumesPayload].
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -3594,6 +3598,9 @@ enum DockerWatchList {
   /// One-shot stats for the watch's `statsFor` (CST-01), as
   /// [DockerStatsPayload].
   stats,
+
+  /// The volume list (03 §7.15 VOL-01), as [DockerVolumesPayload].
+  volumes,
 }
 
 /// The most watches one server holds [E]: a Docker view holds one or two.
@@ -3638,6 +3645,13 @@ final class DockerImagesPayload extends DockerPayload {
   const DockerImagesPayload(this.images);
 
   final List<ImageSummary> images;
+}
+
+/// The volume list (03 §7.15 VOL-01), labels masked by key.
+final class DockerVolumesPayload extends DockerPayload {
+  const DockerVolumesPayload(this.volumes);
+
+  final List<VolumeSummary> volumes;
 }
 
 /// `/system/df`'s totals per type (02 OV-05), read in the shape the

@@ -5143,6 +5143,10 @@
   "@dockerTabImages": {
     "description": "Docker tab: the sub-tab listing images."
   },
+  "dockerTabVolumes": "Volumes",
+  "@dockerTabVolumes": {
+    "description": "Docker tab: the sub-tab listing volumes."
+  },
   "dockerTabStacks": "Stacks",
   "@dockerTabStacks": {
     "description": "Docker tab: the sub-tab listing compose stacks."
@@ -5941,6 +5945,56 @@
   "dockerImagesLowSessionRelay": "Low-session mode: the list is read again every 15 seconds instead of following engine events.",
   "@dockerImagesLowSessionRelay": {
     "description": "Images list: the server's link has a session limit (03 §5.2) on a relay route."
+  },
+  "dockerVolumesColumnName": "Name",
+  "@dockerVolumesColumnName": {
+    "description": "Volumes list: the column of volume names."
+  },
+  "dockerVolumesColumnDriver": "Driver",
+  "@dockerVolumesColumnDriver": {
+    "description": "Volumes list: the column of volume drivers, such as local."
+  },
+  "dockerVolumesInUse": "{count, plural, =1{Mounted by 1 container} other{Mounted by {count} containers}}",
+  "@dockerVolumesInUse": {
+    "description": "Volumes list: what a screen reader hears, and a phone row shows, for a volume containers mount, running or not.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerVolumesSearchHint": "Search by name or driver",
+  "@dockerVolumesSearchHint": {
+    "description": "Volumes list: the search field's hint."
+  },
+  "dockerVolumesReading": "Reading the volumes…",
+  "@dockerVolumesReading": {
+    "description": "Volumes list: shown until the first list arrives."
+  },
+  "dockerVolumesEmpty": "This engine has no volumes.",
+  "@dockerVolumesEmpty": {
+    "description": "Volumes list: the engine listed none."
+  },
+  "dockerVolumesNoMatch": "No volume matches the search.",
+  "@dockerVolumesNoMatch": {
+    "description": "Volumes list: the search hides every volume."
+  },
+  "dockerVolumesNoneUnused": "Every volume is mounted by a container.",
+  "@dockerVolumesNoneUnused": {
+    "description": "Volumes list: the Unused filter hides every volume."
+  },
+  "dockerVolumesFailed": "{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} daemonError{The engine refused or failed to list the volumes.} connectionFailed{The connection to the engine failed while listing the volumes.} other{The volumes could not be listed.}}",
+  "@dockerVolumesFailed": {
+    "description": "Volumes list: why the list could not be read. reason is the engine's failure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerVolumesUseUnknown": "Which volumes are in use is unknown: the containers, whose mounts tell, could not be listed.",
+  "@dockerVolumesUseUnknown": {
+    "description": "Volumes list: the volume list carries no use count, and the container list it is computed from failed."
   },
   "dockerDetailsClose": "Close the container details",
   "@dockerDetailsClose": {

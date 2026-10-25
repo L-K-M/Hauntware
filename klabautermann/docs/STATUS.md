@@ -1924,6 +1924,13 @@ is on main:
   folder, each where its app takes links and the builders can name the
   folder. The `/var/log` browser (LOG-08) offers the same two for the
   folder, and each file a compact "Open in Poltergeist" beside it.
+- Volumes (M6 N10a, VOL-01): the Docker tab gains a Volumes sub-tab
+  after Stacks, listing every volume by name with its driver, age and
+  date of creation and how many containers mount it, counted from the
+  containers' mounts, with an Unused filter and a search by name or
+  driver. A watch naming `volumes` reads `/volumes` and reads it again
+  on a `volume` event; labels are masked by key. Create and remove come
+  next (N10b).
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container

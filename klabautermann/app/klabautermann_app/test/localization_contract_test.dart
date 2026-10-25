@@ -224,6 +224,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'compose-${_count++}'",
     r"'images-${_count++}'",
     r"'stacks-${_count++}'",
+    r"'volumes-${_count++}'",
     r"'stack-file-${_count++}'",
   },
   'lib/controllers/docker_endpoint_choices.dart': {
@@ -525,6 +526,19 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The keys tests find a stack's row and the unlisted section by.
     r"'stacks.row.${project.name}'",
     r"'stacks.unlisted.${widget.serverId}'",
+  },
+  'lib/ui/docker/volumes_panel.dart': {
+    // The key tests find a phone row by, in the table rows' form, and the
+    // line break between its cells in its screen-reader label, each ARB
+    // text.
+    r"'${DockerWatchList.volumes.name}.row.${_rowKey(entry)}'",
+    r"'\n'",
+  },
+  'lib/ui/docker/volumes_view.dart': {
+    // The mount type of a named volume, matched, never shown; the line
+    // break between the fields the search reads.
+    "'volume'",
+    r"'\n'",
   },
   'lib/ui/docker/unlisted_stacks.dart': {
     // The path separator a found file's folder and name split at, the
