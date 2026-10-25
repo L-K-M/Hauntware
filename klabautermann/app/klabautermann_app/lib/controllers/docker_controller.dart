@@ -48,6 +48,11 @@ import 'docker_endpoint_choices.dart';
 /// re-lists the containers but not the images, so only the container
 /// list follows a container created or removed.
 ///
+/// A Volumes view that shows a server ([watchVolumes]) has its volumes
+/// watched with its containers (03 §7.15 VOL-01), as an Images view has
+/// its images: the containers' mounts tell which volumes are in use, and
+/// a container event re-lists the containers but not the volumes.
+///
 /// A Stacks view that shows a server ([watchStacks]) has its compose
 /// stacks watched (03 §7.16 STK-01, STK-02, STK-05): a [DockerWatch] of
 /// the stacks alone, one per server while any such view shows. Asking
@@ -221,6 +226,11 @@ final class DockerController {
   /// could not be read.
   ValueListenable<DockerImageList> imagesFor(String serverId) =>
       _server(serverId).images;
+
+  /// What [serverId]'s watches last delivered of its volumes, or why they
+  /// could not be read.
+  ValueListenable<DockerVolumeList> volumesFor(String serverId) =>
+      _server(serverId).volumes;
 
   /// [serverId]'s last disk use measurement ([measureDiskUse]).
   ValueListenable<DockerDiskUse> diskUseFor(String serverId) =>
@@ -437,6 +447,57 @@ final class DockerController {
   void _unwatchImages(String serverId, _DockerServer server) {
     final watchId = server.imagesWatchId;
     server.imagesWatchId = null;
+    if (watchId == null || _stopped) return;
+    _send(DockerUnwatch(serverId: serverId, watchId: watchId));
+  }
+
+  /// A Volumes view shows [serverId]; [unwatchVolumes] says it no longer
+  /// does. The first view starts the server's volume watch.
+  void watchVolumes(String serverId) {
+    if (!_listed(serverId)) return;
+    final server = _server(serverId);
+    server.volumeViews++;
+    if (server.volumeViews > 1) return;
+
+    _watchVolumes(serverId, server);
+  }
+
+  /// The last view to hide ends the server's volume watch.
+  void unwatchVolumes(String serverId) {
+    final server = _servers[serverId];
+    if (server == null || server.volumeViews == 0) return;
+    server.volumeViews--;
+    if (server.volumeViews > 0) return;
+
+    _unwatchVolumes(serverId, server);
+  }
+
+  /// Watches [serverId]'s volumes anew after a failure, under a new id, as
+  /// [retryContainers] does.
+  void retryVolumes(String serverId) {
+    final server = _servers[serverId];
+    if (server == null || server.volumesWatchId == null) return;
+
+    _unwatchVolumes(serverId, server);
+    _watchVolumes(serverId, server);
+  }
+
+  void _watchVolumes(String serverId, _DockerServer server) {
+    if (_stopped) return;
+
+    final watchId = server.volumesWatchId ??= 'volumes-${_count++}';
+    _send(
+      DockerWatch(
+        serverId: serverId,
+        watchId: watchId,
+        lists: const {DockerWatchList.volumes, DockerWatchList.containers},
+      ),
+    );
+  }
+
+  void _unwatchVolumes(String serverId, _DockerServer server) {
+    final watchId = server.volumesWatchId;
+    server.volumesWatchId = null;
     if (watchId == null || _stopped) return;
     _send(DockerUnwatch(serverId: serverId, watchId: watchId));
   }
@@ -867,6 +928,9 @@ final class DockerController {
         if (list == DockerWatchList.images) {
           server.images.value = server.images.value.took(payload, at);
         }
+        if (list == DockerWatchList.volumes) {
+          server.volumes.value = server.volumes.value.took(payload, at);
+        }
         if (list == DockerWatchList.stacks) {
           server.stacks.value = server.stacks.value.took(payload, at);
           // The grouping holds every container the list read.
@@ -1088,6 +1152,37 @@ final class DockerImageList {
   };
 }
 
+/// What a server's watches delivered of its volumes (03 §7.15 VOL-01).
+@immutable
+final class DockerVolumeList {
+  const DockerVolumeList({this.volumes, this.at, this.failure});
+
+  /// The latest list read; null until one was.
+  final List<VolumeSummary>? volumes;
+
+  /// When the engine read [volumes], by this device's clock.
+  final DateTime? at;
+
+  /// Why the latest read failed while [volumes] keeps the list before;
+  /// null once one is read.
+  final DockerQueryFailed? failure;
+
+  /// This list with [payload], read at [at], taken in.
+  DockerVolumeList took(DockerPayload payload, DateTime at) =>
+      switch (payload) {
+        DockerVolumesPayload(:final volumes) => DockerVolumeList(
+          volumes: volumes,
+          at: at,
+        ),
+        final DockerQueryFailed failure => DockerVolumeList(
+          volumes: volumes,
+          at: this.at,
+          failure: failure,
+        ),
+        _ => this,
+      };
+}
+
 /// A server's disk use measurement (02 OV-05): the last `/system/df`
 /// read, and whether one is under way or why the last one failed.
 @immutable
@@ -1265,6 +1360,9 @@ final class _DockerServer {
   final ValueNotifier<DockerImageList> images = ValueNotifier(
     const DockerImageList(),
   );
+  final ValueNotifier<DockerVolumeList> volumes = ValueNotifier(
+    const DockerVolumeList(),
+  );
   final ValueNotifier<DockerDiskUse> diskUse = ValueNotifier(
     const DockerDiskUse(),
   );
@@ -1313,6 +1411,12 @@ final class _DockerServer {
   /// The image watch the engine holds, while any Images view shows.
   String? imagesWatchId;
 
+  /// How many Volumes views show the server.
+  int volumeViews = 0;
+
+  /// The volume watch the engine holds, while any Volumes view shows.
+  String? volumesWatchId;
+
   /// How many Stacks views show the server.
   int stackViews = 0;
 
@@ -1342,6 +1446,7 @@ final class _DockerServer {
     compose.dispose();
     containers.dispose();
     images.dispose();
+    volumes.dispose();
     diskUse.dispose();
     stacks.dispose();
     for (final container in inspected.values) {

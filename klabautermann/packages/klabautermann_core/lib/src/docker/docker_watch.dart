@@ -198,6 +198,7 @@ final class DockerWatcher {
   // the stream can resume.
   List<ContainerSummary>? _containers;
   List<ImageSummary>? _images;
+  List<VolumeSummary>? _volumes;
   final Map<String, ContainerStats> _previous = {};
   LogTimestamp? _lastEvent;
   DateTime? _lostAt;
@@ -222,6 +223,7 @@ final class DockerWatcher {
     _previous.removeWhere((id, _) => !_statsFor.contains(id));
     if (!_wantsContainers) _containers = null;
     if (!_lists.contains(DockerWatchList.images)) _images = null;
+    if (!_lists.contains(DockerWatchList.volumes)) _volumes = null;
 
     // A view that opens the stacks again sees the files checked again.
     if (asked.contains(DockerWatchList.stacks)) {
@@ -236,6 +238,7 @@ final class DockerWatcher {
       final held = switch (list) {
         DockerWatchList.containers || DockerWatchList.stacks => _containers,
         DockerWatchList.images => _images,
+        DockerWatchList.volumes => _volumes,
         DockerWatchList.stats => null,
       };
       if (attached && held != null) {
@@ -259,6 +262,7 @@ final class DockerWatcher {
     if (target.socketPath != _socketPath) {
       _containers = null;
       _images = null;
+      _volumes = null;
       _previous.clear();
       _lastEvent = null;
       _lostAt = null;
@@ -299,6 +303,7 @@ final class DockerWatcher {
     _statsFor = const {};
     _containers = null;
     _images = null;
+    _volumes = null;
     _previous.clear();
     _relist.clear();
     _fresh.clear();
@@ -427,6 +432,8 @@ final class DockerWatcher {
           }
         case DockerList.images when _lists.contains(DockerWatchList.images):
           _due(DockerWatchList.images, fresh: false);
+        case DockerList.volumes when _lists.contains(DockerWatchList.volumes):
+          _due(DockerWatchList.volumes, fresh: false);
         default:
           break;
       }
@@ -479,6 +486,7 @@ final class DockerWatcher {
         lists.contains(DockerWatchList.stacks))
       DockerWatchList.containers,
     if (lists.contains(DockerWatchList.images)) DockerWatchList.images,
+    if (lists.contains(DockerWatchList.volumes)) DockerWatchList.volumes,
   };
 
   /// Reads what is due, until nothing is; one run at a time per
@@ -563,6 +571,24 @@ final class DockerWatcher {
           return false;
       }
     }
+
+    if (relist.contains(DockerWatchList.volumes) &&
+        _lists.contains(DockerWatchList.volumes)) {
+      final read = await _list(target, epoch, (c) => c.listVolumes());
+      if (epoch != _epoch) return false;
+      switch (read) {
+        case final List<VolumeSummary> list:
+          _volumes = list;
+          _send(
+            DockerWatchList.volumes,
+            fresh: fresh.contains(DockerWatchList.volumes),
+          );
+        case final DockerQueryFailed failure:
+          _fail(DockerWatchList.volumes, failure);
+        case null:
+          return false;
+      }
+    }
     return true;
   }
 
@@ -618,6 +644,8 @@ final class DockerWatcher {
         }
       case DockerWatchList.images:
         payload = DockerImagesPayload(_images!);
+      case DockerWatchList.volumes:
+        payload = DockerVolumesPayload(_volumes!);
       case DockerWatchList.stats:
         return;
     }

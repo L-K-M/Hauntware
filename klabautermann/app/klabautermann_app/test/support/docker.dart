@@ -77,6 +77,7 @@ ContainerSummary dockerContainer(
   String? project,
   List<ContainerPort> ports = const [],
   HealthStatus? health,
+  List<String> volumes = const [],
 }) => ContainerSummary(
   id: id,
   names: ['/${name ?? id}'],
@@ -87,6 +88,10 @@ ContainerSummary dockerContainer(
       status ?? (state == 'running' ? 'Up 2 hours' : 'Exited (0) 1 day ago'),
   ports: ports,
   health: health,
+  mounts: [
+    for (final volume in volumes)
+      ContainerMount(type: 'volume', name: volume, destination: '/$volume'),
+  ],
   labels: {
     if (project != null)
       'com.docker.compose.project': MaskedValue.plain(project),
@@ -159,6 +164,19 @@ DockerListChanged dockerImageList(
   serverId: serverId,
   list: DockerWatchList.images,
   payload: DockerImagesPayload(images),
+  at: at,
+  fullRelist: true,
+);
+
+/// [volumes] on [serverId], as a watch of the volumes delivers them.
+DockerListChanged dockerVolumeList(
+  String serverId,
+  List<VolumeSummary> volumes, {
+  required DateTime at,
+}) => DockerListChanged(
+  serverId: serverId,
+  list: DockerWatchList.volumes,
+  payload: DockerVolumesPayload(volumes),
   at: at,
   fullRelist: true,
 );

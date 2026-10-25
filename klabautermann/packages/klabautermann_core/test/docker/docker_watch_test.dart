@@ -103,7 +103,18 @@ final class _Harness {
       ])
       ..routes['/v1.52/images/json'] = jsonEncode([
         {'Id': 'sha256:1'},
-      ]);
+      ])
+      ..routes['/v1.52/volumes'] = jsonEncode({
+        'Volumes': [
+          {
+            'Name': 'data',
+            'Driver': 'local',
+            'Mountpoint': '/var/lib/docker/volumes/data/_data',
+            'Labels': {'backup.token': 's3cret'},
+          },
+        ],
+        'Warnings': null,
+      });
   }
 
   final bool relay;
@@ -331,6 +342,50 @@ void main() {
       await h.clock.elapse(kDockerEventBatch);
       expect(h.lists(), [_list(DockerWatchList.images)]);
       expect(h.requests('/images/json'), hasLength(2));
+    });
+
+    test('volume events re-read the volumes, labels masked; image and '
+        'container events read no volumes (VOL-01)', () async {
+      final h = _Harness();
+      final first = await h.start({DockerWatchList.volumes});
+
+      expect(first, [_list(DockerWatchList.volumes, fullRelist: true)]);
+      final volumes = (first.single.payload as DockerVolumesPayload).volumes;
+      expect(volumes.single.name, 'data');
+      expect(volumes.single.labels['backup.token']?.isMasked, isTrue);
+
+      h.daemon
+        ..emit(_event('sha256:2', type: 'image', action: 'pull'))
+        ..emit(_event('abc', action: 'die'));
+      await h.clock.elapse(const Duration(seconds: 1));
+      expect(h.lists(), isEmpty);
+      expect(h.requests('/volumes'), hasLength(1));
+
+      h.daemon.emit(_event('cache', type: 'volume', action: 'create'));
+      await h.clock.elapse(kDockerEventBatch);
+      expect(h.lists(), [_list(DockerWatchList.volumes)]);
+      expect(h.requests('/volumes'), hasLength(2));
+    });
+
+    test('a failed volume read reaches the watch, and the next event reads '
+        'again', () async {
+      final h = _Harness();
+      h.daemon.failures['/v1.52/volumes'] = (500, 'boom');
+      final first = await h.start({DockerWatchList.volumes});
+
+      expect(
+        first.single.payload,
+        isA<DockerQueryFailed>().having(
+          (f) => f.failure,
+          'failure',
+          DockerQueryFailure.daemonError,
+        ),
+      );
+
+      h.daemon.failures.remove('/v1.52/volumes');
+      h.daemon.emit(_event('cache', type: 'volume', action: 'destroy'));
+      await h.clock.elapse(kDockerEventBatch);
+      expect(h.lists().single.payload, isA<DockerVolumesPayload>());
     });
 
     test('a second watch gets the lists held without a read, and a list it '
