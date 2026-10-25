@@ -225,6 +225,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'images-${_count++}'",
     r"'stacks-${_count++}'",
     r"'volumes-${_count++}'",
+    r"'networks-${_count++}'",
     r"'stack-file-${_count++}'",
   },
   'lib/controllers/docker_endpoint_choices.dart': {
@@ -532,6 +533,17 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // line break between its cells in its screen-reader label, each ARB
     // text.
     r"'${DockerWatchList.volumes.name}.row.${_rowKey(entry)}'",
+    r"'\n'",
+  },
+  'lib/ui/docker/networks_panel.dart': {
+    // The key tests find a phone row by, in the table rows' form, and the
+    // line break between its cells in its screen-reader label, each ARB
+    // text.
+    r"'${DockerWatchList.networks.name}.row.${_rowKey(entry)}'",
+    r"'\n'",
+  },
+  'lib/ui/docker/networks_view.dart': {
+    // The line break between the fields the search reads.
     r"'\n'",
   },
   'lib/ui/docker/volumes_view.dart': {

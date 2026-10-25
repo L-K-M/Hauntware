@@ -70,6 +70,7 @@ final class _Engine extends FakeDaemon {
   final containers = <Map<String, Object?>>[];
   final images = <Map<String, Object?>>[];
   final volumes = <Map<String, Object?>>[];
+  final networks = <Map<String, Object?>>[];
 
   /// Statuses by `METHOD path`; actions answer 204 otherwise.
   final statuses = <String, int>{};
@@ -103,6 +104,13 @@ final class _Engine extends FakeDaemon {
               (mounted == null || mounted.every((v) => _mounts(c, v))))
             c,
       ]);
+    }
+    if (method == 'GET' && rest.startsWith('/networks/')) {
+      final key = Uri.decodeComponent(rest.substring('/networks/'.length));
+      for (final n in networks) {
+        if (n['Id'] == key || n['Name'] == key) return _reply(200, n);
+      }
+      return _reply(404, {'message': 'network $key not found'});
     }
     if (method == 'GET' && rest.startsWith('/volumes/')) {
       final key = Uri.decodeComponent(rest.substring('/volumes/'.length));
@@ -594,6 +602,7 @@ void main() {
         ('-data', null),
         ('da ta', null),
         ('data', ''),
+        ('cache', ' '),
       ]) {
         expect(
           (await _plan(
@@ -665,6 +674,67 @@ void main() {
           ),
         ),
         'docker volume create --driver nfs cache',
+      );
+    });
+  });
+
+  group('networks (DNW-02)', () {
+    final netId = _id('ne7');
+
+    _Engine withNetwork({
+      String name = 'shop_default',
+      Map<String, Object?> containers = const {},
+    }) => _Engine()
+      ..networks.add({
+        'Id': netId,
+        'Name': name,
+        'Driver': 'bridge',
+        'Containers': containers,
+      });
+
+    test('a network no container is on is removed by its id after a plain '
+        'confirmation, re-validated by that id', () async {
+      final plan = _planned(
+        await _plan(RemoveNetwork(_server, networkId: netId), withNetwork()),
+      );
+      expect(plan.kind, OperationKind.removeNetwork);
+      expect(plan.tier, ConfirmationTier.acknowledge);
+      expect(plan.targetName, 'shop_default');
+      expect(_step(plan).display, 'DELETE /v1.52/networks/$netId');
+      final check = plan.revalidate.single as DockerTargetUnchanged;
+      expect((check.kind, check.id), (DockerTargetKind.network, netId));
+      expect(cliEquivalent(_step(plan)), 'docker network rm $netId');
+    });
+
+    test('a built-in network, one a container is on and a gone one are '
+        'refused', () async {
+      for (final name in ['bridge', 'host', 'none']) {
+        expect(
+          (await _plan(
+            RemoveNetwork(_server, networkId: netId),
+            withNetwork(name: name),
+          )).refusal,
+          ActionRefusalReason.builtinNetwork,
+          reason: name,
+        );
+      }
+      expect(
+        (await _plan(
+          RemoveNetwork(_server, networkId: netId),
+          withNetwork(
+            containers: {
+              _id('c1'): {'Name': 'shop-web-1'},
+            },
+          ),
+        )).refusal,
+        ActionRefusalReason.networkInUse,
+      );
+      expect(
+        (await _plan(
+          RemoveNetwork(_server, networkId: netId),
+          _Engine(),
+        )).refusal,
+        ActionRefusalReason.targetChanged,
       );
     });
   });
@@ -800,7 +870,7 @@ void main() {
         apiStepChanges(
           ApiStep(method: 'POST', path: '/v1.44/containers/c1/pause'),
         ),
-        (container: 'c1', images: false, volumes: false),
+        (container: 'c1', images: false, volumes: false, networks: false),
       );
       expect(
         apiStepChanges(
@@ -810,21 +880,25 @@ void main() {
             query: {'v': '1'},
           ),
         ),
-        (container: 'c1', images: false, volumes: false),
+        (container: 'c1', images: false, volumes: false, networks: false),
       );
       expect(
         apiStepChanges(
           ApiStep(method: 'DELETE', path: '/v1.44/images/nginx%3Alatest'),
         ),
-        (container: null, images: true, volumes: false),
+        (container: null, images: true, volumes: false, networks: false),
       );
       expect(
         apiStepChanges(ApiStep(method: 'POST', path: '/v1.44/volumes/create')),
-        (container: null, images: false, volumes: true),
+        (container: null, images: false, volumes: true, networks: false),
+      );
+      expect(
+        apiStepChanges(ApiStep(method: 'DELETE', path: '/v1.44/networks/n1')),
+        (container: null, images: false, volumes: false, networks: true),
       );
       expect(
         apiStepChanges(ApiStep(method: 'DELETE', path: '/v1.44/volumes/data')),
-        (container: null, images: false, volumes: true),
+        (container: null, images: false, volumes: true, networks: false),
       );
     });
 
