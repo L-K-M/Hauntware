@@ -35,8 +35,10 @@ Map<String, Object?> _container(
   Map<String, String> labels = const {},
   List<Map<String, Object?>> ports = const [],
   List<String> volumes = const [],
+  int? sizeRw,
 }) => {
   'Id': id ?? _id(name.codeUnits.map((c) => c.toRadixString(16)).join()),
+  'SizeRw': ?sizeRw,
   'Names': ['/$name'],
   'Image': 'app:1',
   'ImageID': ?imageId,
@@ -72,6 +74,13 @@ final class _Engine extends FakeDaemon {
   final volumes = <Map<String, Object?>>[];
   final networks = <Map<String, Object?>>[];
 
+  /// `GET /system/df`'s body.
+  Map<String, Object?> df = const {};
+
+  /// The JSON values `POST /images/create` streams, and its status.
+  List<Map<String, Object?>> pull = const [];
+  int pullStatus = 200;
+
   /// Statuses by `METHOD path`; actions answer 204 otherwise.
   final statuses = <String, int>{};
 
@@ -97,13 +106,37 @@ final class _Engine extends FakeDaemon {
       final ids = (decoded['id'] as List?)?.cast<String>();
       final labels = (decoded['label'] as List?)?.cast<String>();
       final mounted = (decoded['volume'] as List?)?.cast<String>();
+      final states = (decoded['status'] as List?)?.cast<String>();
       return _reply(200, [
         for (final c in containers)
           if ((ids == null || ids.any((id) => '${c['Id']}'.startsWith(id))) &&
               (labels == null || labels.every((l) => _hasLabel(c, l))) &&
-              (mounted == null || mounted.every((v) => _mounts(c, v))))
+              (mounted == null || mounted.every((v) => _mounts(c, v))) &&
+              (states == null || states.contains(c['State'])))
             c,
       ]);
+    }
+    if (method == 'GET' && rest == '/volumes') {
+      final filters = uri.queryParameters['filters'];
+      final dangling = filters != null && filters.contains('dangling');
+      return _reply(200, {
+        'Volumes': [
+          for (final v in volumes)
+            if (!dangling || !containers.any((c) => _mounts(c, '${v['Name']}')))
+              v,
+        ],
+      });
+    }
+    if (method == 'GET' && rest == '/networks') return _reply(200, networks);
+    if (method == 'GET' && rest == '/system/df') return _reply(200, df);
+    if (method == 'POST' && rest == '/images/create') {
+      if (pullStatus != 200) {
+        return _reply(pullStatus, {'message': 'pull access denied'});
+      }
+      // Concatenated values, as the daemon streams them.
+      final body = pull.map(jsonEncode).join('\r\n');
+      return 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n'
+          'Content-Length: ${utf8.encode(body).length}\r\n\r\n$body';
     }
     if (method == 'GET' && rest.startsWith('/networks/')) {
       final key = Uri.decodeComponent(rest.substring('/networks/'.length));
@@ -739,6 +772,454 @@ void main() {
     });
   });
 
+  group('prune (DKE-05, IMG-06)', () {
+    Map<String, Object?> image(String seed, {List<String> tags = const []}) => {
+      'Id': 'sha256:${_id(seed)}',
+      'RepoTags': tags,
+      'Size': 1000,
+    };
+    Map<String, Object?> network(
+      String name, {
+      Map<String, Object?> containers = const {},
+    }) => {
+      'Id': _id(name.codeUnits.first.toRadixString(16)),
+      'Name': name,
+      'Driver': 'bridge',
+      'Containers': containers,
+    };
+
+    Future<PrunePreview> preview(PruneDocker intent, _Engine engine) async =>
+        _planned(await _plan(intent, engine)).prune!;
+
+    test('containers: the stopped ones, with their sizes, behind the typed '
+        'confirmation', () async {
+      final engine = _Engine()
+        ..containers.addAll([
+          _container('web-1'),
+          _container('old-1', state: 'exited', sizeRw: 300),
+          _container('new-1', state: 'created', sizeRw: 0),
+          _container('dead-1', state: 'dead', sizeRw: 20),
+        ]);
+      final plan = _planned(
+        await _plan(
+          const PruneDocker(_server, kind: DockerPruneKind.containers),
+          engine,
+        ),
+      );
+      expect(plan.kind, OperationKind.prune);
+      expect(plan.tier, ConfirmationTier.typedPhrase);
+      expect(plan.targetName, 'containers');
+      expect(_step(plan).display, 'POST /v1.52/containers/prune');
+      expect(
+        [for (final item in plan.prune!.removes) (item.name, item.size)],
+        [('old-1', 300), ('new-1', 0), ('dead-1', 20)],
+      );
+      expect(plan.prune!.freed, 320);
+      expect(cliEquivalent(_step(plan)), 'docker container prune -f');
+    });
+
+    test('images: dangling ones, or with all every unused one, keeping '
+        'those in use', () async {
+      final engine = _Engine()
+        ..images.addAll([
+          image('d1'),
+          image('d2', tags: ['<none>:<none>']),
+          image('t1', tags: ['app:old']),
+          image('t2', tags: ['app:1']),
+        ])
+        ..containers.addAll([
+          _container('web-1', imageId: 'sha256:${_id('d2')}'),
+          _container('api-1', state: 'exited', imageId: 'sha256:${_id('t2')}'),
+        ]);
+
+      final dangling = _planned(
+        await _plan(
+          const PruneDocker(_server, kind: DockerPruneKind.images),
+          engine,
+        ),
+      );
+      expect(dangling.targetName, 'images');
+      expect(
+        [for (final i in dangling.prune!.removes) i.name],
+        [_id('d1').substring(0, 12)],
+      );
+      expect(
+        [for (final k in dangling.prune!.kept) (k.name, k.reason)],
+        [(_id('d2').substring(0, 12), PruneExemption.inUse)],
+      );
+      expect(
+        _step(dangling).query['filters'],
+        jsonEncode({
+          'dangling': ['true'],
+        }),
+      );
+      expect(cliEquivalent(_step(dangling)), 'docker image prune -f');
+
+      final every = _planned(
+        await _plan(
+          const PruneDocker(_server, kind: DockerPruneKind.images, all: true),
+          engine,
+        ),
+      );
+      expect(every.targetName, 'images-all');
+      expect(
+        [for (final i in every.prune!.removes) i.name],
+        [_id('d1').substring(0, 12), 'app:old'],
+      );
+      expect(every.prune!.freed, 2000);
+      expect(
+        [for (final k in every.prune!.kept) k.name],
+        [_id('d2').substring(0, 12), 'app:1'],
+      );
+      expect(cliEquivalent(_step(every)), 'docker image prune -a -f');
+    });
+
+    test('volumes: every unused one, named ones too, with the reclaimable '
+        'bytes and the data warning', () async {
+      _Engine engine(String api) => _Engine(api: api)
+        ..volumes.addAll([
+          {'Name': 'pgdata', 'Driver': 'local'},
+          {'Name': 'orphan', 'Driver': 'local'},
+        ])
+        ..containers.add(_container('db-1', volumes: ['pgdata']))
+        ..df = {
+          'VolumeUsage': {
+            'TotalCount': 2,
+            'ActiveCount': 1,
+            'Reclaimable': 4096,
+          },
+        };
+
+      final plan = _planned(
+        await _plan(
+          const PruneDocker(_server, kind: DockerPruneKind.volumes),
+          engine('1.52'),
+        ),
+      );
+      expect([for (final i in plan.prune!.removes) i.name], ['orphan']);
+      expect(
+        [for (final k in plan.prune!.kept) (k.name, k.reason)],
+        [('pgdata', PruneExemption.inUse)],
+      );
+      expect(plan.prune!.freed, 4096);
+      expect(
+        (plan.impact!.kind, plan.impact!.count),
+        (ImpactKind.deletesVolumeData, 1),
+      );
+      expect(
+        _step(plan).query['filters'],
+        jsonEncode({
+          'all': ['true'],
+        }),
+      );
+      expect(cliEquivalent(_step(plan)), 'docker volume prune -a -f');
+
+      // Before 1.42 a prune already removes named volumes, and the filter
+      // does not exist.
+      final old = _planned(
+        await _plan(
+          const PruneDocker(_server, kind: DockerPruneKind.volumes),
+          engine('1.41'),
+        ),
+      );
+      expect(_step(old).query, isEmpty);
+    });
+
+    test('networks: user-defined ones no container is on, keeping the '
+        'built-in and the used ones', () async {
+      final engine = _Engine()
+        ..networks.addAll([
+          network('bridge'),
+          network(
+            'shop_default',
+            containers: {
+              _id('c1'): {'Name': 'shop-web-1'},
+            },
+          ),
+          network('old_net'),
+        ]);
+      final result = await preview(
+        const PruneDocker(_server, kind: DockerPruneKind.networks),
+        engine,
+      );
+      expect([for (final i in result.removes) i.name], ['old_net']);
+      expect(
+        [for (final k in result.kept) (k.name, k.reason)],
+        [
+          ('bridge', PruneExemption.builtin),
+          ('shop_default', PruneExemption.inUse),
+        ],
+      );
+    });
+
+    test('the build cache: the unused records counted and sized by the '
+        'engine, with nothing to re-validate', () async {
+      final engine = _Engine()
+        ..df = {
+          'BuildCacheUsage': {
+            'TotalCount': 5,
+            'ActiveCount': 2,
+            'Reclaimable': 8192,
+          },
+        };
+      final plan = _planned(
+        await _plan(
+          const PruneDocker(_server, kind: DockerPruneKind.buildCache),
+          engine,
+        ),
+      );
+      expect(plan.targetName, 'build-cache');
+      expect((plan.prune!.count, plan.prune!.freed), (3, 8192));
+      expect(plan.revalidate, isEmpty);
+      expect(_step(plan).display, 'POST /v1.52/build/prune?all=1');
+      expect(cliEquivalent(_step(plan)), 'docker builder prune -a -f');
+    });
+
+    test('nothing to remove is refused', () async {
+      final engine = _Engine()..containers.add(_container('web-1'));
+      for (final kind in DockerPruneKind.values) {
+        expect(
+          (await _plan(PruneDocker(_server, kind: kind), engine)).refusal,
+          ActionRefusalReason.nothingToPrune,
+          reason: kind.name,
+        );
+      }
+    });
+
+    test('the runner refuses when what the prune matches changed after the '
+        'preview', () async {
+      final engine = _Engine()
+        ..containers.add(_container('old-1', state: 'exited'));
+      final plan = _planned(
+        await _plan(
+          const PruneDocker(_server, kind: DockerPruneKind.containers),
+          engine,
+        ),
+      );
+      final check = plan.revalidate.single as DockerTargetUnchanged;
+      expect(check.kind, DockerTargetKind.prune);
+      expect(await revalidateDockerTarget(_client(engine), check), isNull);
+
+      engine.containers.add(_container('web-1', state: 'exited'));
+      expect(
+        await revalidateDockerTarget(_client(engine), check),
+        RevalidationFailure.targetChanged,
+      );
+    });
+
+    test('a prune target no prune names is refused, not passed', () async {
+      final check = DockerTargetUnchanged(
+        DockerTargetKind.prune,
+        'everything',
+        pruneFingerprint(PrunePreview(removes: const [], freed: 0)),
+      );
+      expect(
+        await revalidateDockerTarget(_client(_Engine()), check),
+        RevalidationFailure.targetChanged,
+      );
+    });
+
+    test('a prune reads the lists it changed again', () {
+      expect(
+        apiStepChanges(
+          ApiStep(method: 'POST', path: '/v1.52/containers/prune'),
+        ),
+        (
+          container: null,
+          containers: true,
+          images: false,
+          volumes: false,
+          networks: false,
+        ),
+      );
+      expect(
+        apiStepChanges(ApiStep(method: 'POST', path: '/v1.52/images/prune')),
+        (
+          container: null,
+          containers: false,
+          images: true,
+          volumes: false,
+          networks: false,
+        ),
+      );
+    });
+  });
+
+  group('pull (IMG-03)', () {
+    test('a reference pulls its tag, latest without one, and a digest '
+        'whole, behind a plain confirmation', () async {
+      final engine = _Engine();
+      for (final (reference, query) in [
+        ('nginx:1.27', {'fromImage': 'nginx', 'tag': '1.27'}),
+        ('nginx', {'fromImage': 'nginx', 'tag': 'latest'}),
+        (
+          'registry:5000/klab/app:1',
+          {'fromImage': 'registry:5000/klab/app', 'tag': '1'},
+        ),
+        (
+          'registry:5000/klab/app',
+          {'fromImage': 'registry:5000/klab/app', 'tag': 'latest'},
+        ),
+        ('nginx@sha256:${'a' * 64}', {'fromImage': 'nginx@sha256:${'a' * 64}'}),
+      ]) {
+        final plan = _planned(
+          await _plan(PullImage(_server, reference: reference), engine),
+        );
+        expect(plan.kind, OperationKind.pullImage, reason: reference);
+        expect(plan.tier, ConfirmationTier.acknowledge);
+        expect(plan.targetName, reference);
+        expect(_step(plan).path, '/v1.52/images/create');
+        expect(_step(plan).query, query, reason: reference);
+      }
+      // The linter has no rule about pulls: nothing they do is dangerous.
+      expect(
+        cliEquivalent(
+          _step(
+            _planned(
+              await _plan(const PullImage(_server, reference: 'nginx'), engine),
+            ),
+          ),
+        ),
+        isNull,
+      );
+    });
+
+    test('a reference Docker would reject is refused', () async {
+      for (final reference in ['', 'NGINX', 'nginx:', 'a b', '-x', 'x;rm']) {
+        expect(
+          (await _plan(
+            PullImage(_server, reference: reference),
+            _Engine(),
+          )).refusal,
+          ActionRefusalReason.invalidTarget,
+          reason: reference,
+        );
+      }
+    });
+
+    final step = ApiStep(
+      method: 'POST',
+      path: '/v1.52/images/create',
+      query: const {'fromImage': 'nginx', 'tag': 'latest'},
+    );
+
+    test('the run reports each layer in the order the daemon named it, '
+        'and the messages about the image', () async {
+      final engine = _Engine()
+        ..pull = [
+          {'status': 'Pulling from library/nginx', 'id': 'latest'},
+          {'status': 'Pulling fs layer', 'id': 'aaaaaaaaaaaa'},
+          {'status': 'Pulling fs layer', 'id': 'bbbbbbbbbbbb'},
+          {
+            'status': 'Downloading',
+            'id': 'aaaaaaaaaaaa',
+            'progressDetail': {'current': 50, 'total': 100},
+          },
+          {'status': 'Pull complete', 'id': 'bbbbbbbbbbbb'},
+          {'status': 'Digest: sha256:${'c' * 64}'},
+        ];
+      final reports = <(List<PullLayer>, String?)>[];
+      final status = await runPullStep(
+        _client(engine),
+        step,
+        cancel: DockerCancelToken(),
+        onProgress: (layers, status) => reports.add((layers, status)),
+        interval: Duration.zero,
+      );
+      expect(status, 200);
+      final (layers, last) = reports.last;
+      expect(
+        [for (final l in layers) (l.id, l.status, l.current, l.total)],
+        [
+          ('aaaaaaaaaaaa', 'Downloading', 50, 100),
+          ('bbbbbbbbbbbb', 'Pull complete', null, null),
+        ],
+      );
+      expect(last, 'Digest: sha256:${'c' * 64}');
+      expect(reports.first.$2, 'latest: Pulling from library/nginx');
+    });
+
+    test('an error in the stream or an error answer carries what the '
+        'daemon said; a cancel throws before anything is sent', () async {
+      final failing = _Engine()
+        ..pull = [
+          {'status': 'Pulling fs layer', 'id': 'aaaaaaaaaaaa'},
+          {
+            'errorDetail': {'message': 'unexpected EOF'},
+            'error': 'unexpected EOF',
+          },
+        ];
+      await expectLater(
+        runPullStep(
+          _client(failing),
+          step,
+          cancel: DockerCancelToken(),
+          onProgress: (_, _) {},
+        ),
+        throwsA(
+          isA<ApiStepError>()
+              .having((e) => e.detail, 'detail', 'unexpected EOF')
+              .having((e) => e.status, 'status', isNull),
+        ),
+      );
+
+      final denied = _Engine()..pullStatus = 404;
+      await expectLater(
+        runPullStep(
+          _client(denied),
+          step,
+          cancel: DockerCancelToken(),
+          onProgress: (_, _) {},
+        ),
+        throwsA(
+          isA<ApiStepError>()
+              .having((e) => e.detail, 'detail', 'pull access denied')
+              .having((e) => e.status, 'status', 404),
+        ),
+      );
+
+      await expectLater(
+        runPullStep(
+          _client(_Engine()),
+          step,
+          cancel: DockerCancelToken()..cancel(),
+          onProgress: (_, _) {},
+        ),
+        throwsA(isA<DockerCancelledException>()),
+      );
+    });
+  });
+
+  group('pull cancels (IMG-03)', () {
+    test('a cancel stops the running pull', () {
+      final cancels = PullCancels();
+      final token = cancels.start('plan-1');
+      expect(token.isCancelled, isFalse);
+
+      cancels.cancel('plan-1');
+      expect(token.isCancelled, isTrue);
+    });
+
+    test('a cancel that comes before the pull starts it cancelled', () {
+      final cancels = PullCancels()..cancel('plan-1');
+
+      expect(cancels.start('plan-1').isCancelled, isTrue);
+      // Held once: a later pull of another plan is not touched.
+      expect(cancels.start('plan-2').isCancelled, isFalse);
+    });
+
+    test('a cancel after the pull ended touches no other pull', () {
+      final cancels = PullCancels();
+      final first = cancels.start('plan-1');
+      cancels
+        ..finish('plan-1')
+        ..cancel('plan-1');
+
+      expect(first.isCancelled, isFalse);
+      expect(cancels.start('plan-2').isCancelled, isFalse);
+    });
+  });
+
   group('stacks (STK-03)', () {
     _Engine shop({String dbDependsOn = ''}) => _Engine()
       ..containers.addAll([
@@ -870,7 +1351,13 @@ void main() {
         apiStepChanges(
           ApiStep(method: 'POST', path: '/v1.44/containers/c1/pause'),
         ),
-        (container: 'c1', images: false, volumes: false, networks: false),
+        (
+          container: 'c1',
+          containers: false,
+          images: false,
+          volumes: false,
+          networks: false,
+        ),
       );
       expect(
         apiStepChanges(
@@ -880,25 +1367,55 @@ void main() {
             query: {'v': '1'},
           ),
         ),
-        (container: 'c1', images: false, volumes: false, networks: false),
+        (
+          container: 'c1',
+          containers: false,
+          images: false,
+          volumes: false,
+          networks: false,
+        ),
       );
       expect(
         apiStepChanges(
           ApiStep(method: 'DELETE', path: '/v1.44/images/nginx%3Alatest'),
         ),
-        (container: null, images: true, volumes: false, networks: false),
+        (
+          container: null,
+          containers: false,
+          images: true,
+          volumes: false,
+          networks: false,
+        ),
       );
       expect(
         apiStepChanges(ApiStep(method: 'POST', path: '/v1.44/volumes/create')),
-        (container: null, images: false, volumes: true, networks: false),
+        (
+          container: null,
+          containers: false,
+          images: false,
+          volumes: true,
+          networks: false,
+        ),
       );
       expect(
         apiStepChanges(ApiStep(method: 'DELETE', path: '/v1.44/networks/n1')),
-        (container: null, images: false, volumes: false, networks: true),
+        (
+          container: null,
+          containers: false,
+          images: false,
+          volumes: false,
+          networks: true,
+        ),
       );
       expect(
         apiStepChanges(ApiStep(method: 'DELETE', path: '/v1.44/volumes/data')),
-        (container: null, images: false, volumes: true, networks: false),
+        (
+          container: null,
+          containers: false,
+          images: false,
+          volumes: true,
+          networks: false,
+        ),
       );
     });
 

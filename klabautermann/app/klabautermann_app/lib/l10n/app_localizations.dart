@@ -1684,6 +1684,90 @@ abstract class AppLocalizations {
   /// **'{ms} ms'**
   String systemDiskMilliseconds(double ms);
 
+  /// System tab: the section of the host's temperature sensors (HW-01). It is hidden where the host has none, as VMs and containers usually do.
+  ///
+  /// In en, this message translates to:
+  /// **'Temperatures'**
+  String get systemTemperaturesTitle;
+
+  /// Temperatures table: column of the sensor's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Sensor'**
+  String get systemTemperatureSensor;
+
+  /// Temperatures table: a sensor named by its chip (coretemp, nvme, k10temp) and the chip's label for it (Package id 0, Composite). Both are the kernel's technical names.
+  ///
+  /// In en, this message translates to:
+  /// **'{chip}: {label}'**
+  String systemTemperatureSensorName(String chip, String label);
+
+  /// Temperatures table: column of the sensor's current reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Temperature'**
+  String get systemTemperatureReading;
+
+  /// Temperatures table: column of the temperature the chip calls high for the sensor (its max limit).
+  ///
+  /// In en, this message translates to:
+  /// **'High'**
+  String get systemTemperatureHigh;
+
+  /// Temperatures table: column of the temperature the chip calls critical for the sensor.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical'**
+  String get systemTemperatureCritical;
+
+  /// A temperature in degrees Celsius, as a whole number in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{celsius} °C'**
+  String systemTemperatureCelsius(double celsius);
+
+  /// System tab: the section of the host's GPUs (HW-03). It is hidden where the host has none the app can read.
+  ///
+  /// In en, this message translates to:
+  /// **'GPUs'**
+  String get systemGpusTitle;
+
+  /// GPUs table: column of the GPU's name, or its device name (card1, nvidia0) where the driver reports no product name.
+  ///
+  /// In en, this message translates to:
+  /// **'GPU'**
+  String get systemGpuColumn;
+
+  /// GPUs table: column of the share of time the GPU was busy.
+  ///
+  /// In en, this message translates to:
+  /// **'Busy'**
+  String get systemGpuBusy;
+
+  /// GPUs table: column of the GPU's own memory (VRAM) in use, of its total.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get systemGpuMemory;
+
+  /// GPUs table: column of the GPU's current power draw.
+  ///
+  /// In en, this message translates to:
+  /// **'Power'**
+  String get systemGpuPower;
+
+  /// A power draw in watts, as a whole number in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{watts} W'**
+  String systemGpuWatts(double watts);
+
+  /// System tab, GPUs: nvidia-smi ran and failed, as when its driver is not loaded; message is the tool's own first line, untranslated.
+  ///
+  /// In en, this message translates to:
+  /// **'nvidia-smi is installed but failed: {message}'**
+  String systemGpuNvidiaFailed(String message);
+
   /// Disks table column: where the filesystem is mounted.
   ///
   /// In en, this message translates to:
@@ -3838,6 +3922,84 @@ abstract class AppLocalizations {
   /// **'The setting could not be changed.'**
   String get settingsAnnounceNotChanged;
 
+  /// App lock screen (SAF-20): its heading, shown over the whole app while the app lock is engaged.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann is locked'**
+  String get appLockTitle;
+
+  /// App lock screen: what unlocking asks for, and that open links are not closed by the lock.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock with this device\'s passcode, PIN or biometrics. Connections already open keep running.'**
+  String get appLockDetail;
+
+  /// The desktop settings window while the app is locked, under the title that it is locked.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock it in its main window to change settings.'**
+  String get settingsWindowLocked;
+
+  /// App lock screen: the button that asks for device authentication again.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock'**
+  String get appLockUnlock;
+
+  /// App lock screen: the last device authentication was rejected or dismissed.
+  ///
+  /// In en, this message translates to:
+  /// **'Authentication failed or was cancelled. Try again.'**
+  String get appLockFailed;
+
+  /// App lock screen: device authentication is not set up or not available, so the lock cannot be opened yet.
+  ///
+  /// In en, this message translates to:
+  /// **'This device has no passcode, PIN or biometrics to ask for. Set one up, then try again.'**
+  String get appLockUnavailable;
+
+  /// The reason line the operating system's authentication prompt shows when the app lock asks for it.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock Klabautermann'**
+  String get appLockReason;
+
+  /// Settings > Safety: the heading over the app lock switch (SAF-20).
+  ///
+  /// In en, this message translates to:
+  /// **'App lock'**
+  String get settingsAppLockTitle;
+
+  /// Settings > Safety: the app lock switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Require device authentication'**
+  String get settingsAppLock;
+
+  /// Settings > Safety: what the app lock switch does.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask for this device\'s passcode, PIN or biometrics when Klabautermann opens and after {minutes, plural, =1{1 minute} other{{minutes} minutes}} in the background. Locking turns admin mode off on every server.'**
+  String settingsAppLockDetail(int minutes);
+
+  /// Settings > Safety: why the app lock switch is off and disabled on Linux.
+  ///
+  /// In en, this message translates to:
+  /// **'This platform has no device authentication Klabautermann can ask for.'**
+  String get settingsAppLockUnsupported;
+
+  /// Settings > Safety: why the app lock switch cannot be turned on right now.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up a passcode, PIN or biometrics on this device to use the app lock.'**
+  String get settingsAppLockUnavailable;
+
+  /// Settings > Safety: a toast after turning the app lock on or off did not take effect, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, notAuthenticated{The app lock did not change: authentication failed or was cancelled.} unavailable{The app lock did not change: this device has no authentication to ask for.} notSaved{The app lock did not change: the setting could not be saved.} other{The app lock did not change.}}'**
+  String settingsAppLockNotChanged(String reason);
+
   /// Section heading on the Sync settings tab over the sync passwords switch (SYN-02).
   ///
   /// In en, this message translates to:
@@ -4696,6 +4858,36 @@ abstract class AppLocalizations {
   /// **'Runs on the server and continues if you leave the app or the connection drops. Its result shows under Operations when you come back.'**
   String get actionPreviewDetachedIos;
 
+  /// Heading above what a prune removes (DKE-05).
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Removes 1 object} other{Removes {count} objects}}'**
+  String actionPreviewPruneRemoves(int count);
+
+  /// Under a prune's heading: the disk space it frees, as the engine reports it (DKE-05).
+  ///
+  /// In en, this message translates to:
+  /// **'Frees {size}'**
+  String actionPreviewPruneFrees(String size);
+
+  /// One object a prune removes, with its size (DKE-05).
+  ///
+  /// In en, this message translates to:
+  /// **'{name} ({size})'**
+  String actionPreviewPruneItem(String name, String size);
+
+  /// Heading above what a prune leaves, each with why (DKE-05's exemption labels).
+  ///
+  /// In en, this message translates to:
+  /// **'Kept'**
+  String get actionPreviewPruneKeeps;
+
+  /// One object a prune leaves and why (DKE-05).
+  ///
+  /// In en, this message translates to:
+  /// **'{name}: {reason, select, inUse{in use} builtin{the engine\'s own} other{kept}}'**
+  String actionPreviewPruneKept(String name, String reason);
+
   /// Heading above a redeploy's orphan containers (STK-06).
   ///
   /// In en, this message translates to:
@@ -4789,7 +4981,7 @@ abstract class AppLocalizations {
   /// Toast when the engine refused to plan or run an action; reason is the engine's ActionRefusalReason name.
   ///
   /// In en, this message translates to:
-  /// **'{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server\'s container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} networkInUse{A container is on this network. Stop or disconnect it first.} builtinNetwork{This is one of the engine\'s own networks, which stay.} dependencyCycle{The stack\'s services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack\'s files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}'**
+  /// **'{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server\'s container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} networkInUse{A container is on this network. Stop or disconnect it first.} builtinNetwork{This is one of the engine\'s own networks, which stay.} nothingToPrune{There is nothing to prune.} dependencyCycle{The stack\'s services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack\'s files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}'**
   String actionRefused(String reason);
 
   /// Process action (PRC-02): sends SIGTERM, asking the process to end.
@@ -5197,7 +5389,7 @@ abstract class AppLocalizations {
   /// An activity log row's action; action is the engine's intent type name.
   ///
   /// In en, this message translates to:
-  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
+  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
   String activityAction(String action);
 
   /// An activity log row's confirmation; tier is the engine's ConfirmationTier name.
@@ -6579,6 +6771,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Which volumes are in use is unknown: the containers, whose mounts tell, could not be listed.'**
   String get dockerVolumesUseUnknown;
+
+  /// Images list: the button over the list that opens the pull sheet (IMG-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Pull image…'**
+  String get dockerPullOpen;
+
+  /// Pull sheet: its title (IMG-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Pull an image'**
+  String get dockerPullTitle;
+
+  /// Pull sheet: the label of the image reference field.
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get dockerPullReference;
+
+  /// Pull sheet: example references in the empty field. A name without a tag pulls latest.
+  ///
+  /// In en, this message translates to:
+  /// **'nginx:1.27 or registry.example.com/app:2'**
+  String get dockerPullReferenceHint;
+
+  /// Pull sheet: the button that plans the pull and shows its preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Pull'**
+  String get dockerPullStart;
+
+  /// Pull sheet: the button that stops a running pull.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop pull'**
+  String get dockerPullCancel;
+
+  /// Pull sheet: while a pull runs. The pull runs over this connection and the daemon stops it when the sheet closes (03 §7.14).
+  ///
+  /// In en, this message translates to:
+  /// **'Pulling. Closing this sheet stops the pull.'**
+  String get dockerPullForeground;
+
+  /// Pull sheet: one layer's status with the bytes done of its total.
+  ///
+  /// In en, this message translates to:
+  /// **'{status}: {current} of {total}'**
+  String dockerPullLayerBytes(String status, String current, String total);
+
+  /// Images list: the button over the list that opens the menu of prunes (DKE-05, IMG-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Prune…'**
+  String get dockerPrune;
+
+  /// A prune's button or menu row, which opens its preview (DKE-05, IMG-06).
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, containers{Prune stopped containers…} images{Prune dangling images…} imagesAll{Prune all unused images…} volumes{Prune unused volumes…} networks{Prune unused networks…} buildCache{Prune the build cache…} other{Prune…}}'**
+  String dockerPruneChoice(String kind);
 
   /// Volumes list: the button over the list that opens the create dialog (VOL-02).
   ///
@@ -8968,7 +9220,13 @@ abstract class AppLocalizations {
   /// **'{severity, select, critical{Critical} warning{Warning} other{Info}}'**
   String alertSeverity(String severity);
 
-  /// When a raised alert's breach began, in the alert center; time is a time of day in the UI locale.
+  /// An alert center time from before today: a date and time in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'{time}'**
+  String alertDateTime(DateTime time);
+
+  /// When a raised alert's breach began, in the alert center; time is a time of day when the breach began today, else a date and time, in the UI locale.
   ///
   /// In en, this message translates to:
   /// **'since {time}'**
@@ -9015,6 +9273,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Inodes used'**
   String get alertMetricDiskInodes;
+
+  /// The Overview card that charts a server's on-device history (HIS-01).
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get historyTitle;
+
+  /// The History card's range choice of the 1-minute tier; count is 48.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Last hour} other{Last {count} hours}}'**
+  String historyLastHours(int count);
+
+  /// The History card's range choice of the 10-minute tier; count is 30.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Last day} other{Last {count} days}}'**
+  String historyLastDays(int count);
+
+  /// Tooltip of the History card's button that reads the history again.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get historyRefresh;
+
+  /// The History card when this device recorded nothing for the server in the chosen range.
+  ///
+  /// In en, this message translates to:
+  /// **'No history yet. Klabautermann keeps 48 hours and 30 days of this server\'s readings while it is open.'**
+  String get historyEmpty;
+
+  /// The History chart's series of each bucket's mean.
+  ///
+  /// In en, this message translates to:
+  /// **'Average'**
+  String get historyLaneMean;
+
+  /// The History chart's series of each bucket's highest reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Peak'**
+  String get historyLanePeak;
+
+  /// Where the History chart's data comes from, as its legend says.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded on this device while Klabautermann was open'**
+  String get historySource;
+
+  /// A History metric: the share of CPU time spent busy.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU busy'**
+  String get historyMetricCpu;
+
+  /// A History metric: used memory as a share of the total.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory used'**
+  String get historyMetricMemory;
+
+  /// A History metric: the fullest filesystem's used space.
+  ///
+  /// In en, this message translates to:
+  /// **'Disk space used'**
+  String get historyMetricDisk;
+
+  /// A History metric: the fullest filesystem's used inodes.
+  ///
+  /// In en, this message translates to:
+  /// **'Inodes used'**
+  String get historyMetricInodes;
+
+  /// A History metric: the 1-minute load average per core.
+  ///
+  /// In en, this message translates to:
+  /// **'Load per core'**
+  String get historyMetricLoad;
 
   /// Title of the alert rules page (ALR-01), and the tooltip and button that open it.
   ///

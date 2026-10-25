@@ -4,7 +4,7 @@ description: >-
   Poltergeist, over file_picker. Kept out of ghost_marks so an app on
   another picker, or on a win32 major file_picker 11 cannot share, takes
   the shared appearance without it.
-version: 1.9.2
+version: 1.9.3
 publish_to: none
 
 environment:

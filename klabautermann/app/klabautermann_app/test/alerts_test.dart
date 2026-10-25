@@ -222,4 +222,47 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Show alerts'), findsNothing);
   });
+
+  testWidgets('a time from before today carries its date, one from today '
+      'only the time', (tester) async {
+    final harness = await pumpApp(
+      tester,
+      size: _phone,
+      servers: twoServers,
+      alerts: true,
+    );
+    final now = DateTime.now();
+    final earlier = now.subtract(const Duration(days: 3));
+    harness.engine
+      ..emit(
+        LocalAlertChanged(
+          serverId: 'srv-1',
+          ruleId: 'old',
+          metric: 'cpu.busy',
+          severity: AlertSeverity.warning,
+          raised: true,
+          at: earlier,
+          since: earlier,
+        ),
+      )
+      ..emit(
+        LocalAlertChanged(
+          serverId: 'srv-2',
+          ruleId: 'new',
+          metric: 'cpu.busy',
+          severity: AlertSeverity.warning,
+          raised: true,
+          at: now,
+          since: now,
+        ),
+      );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Show alerts'));
+    await tester.pumpAndSettle();
+
+    final year = '${earlier.year}';
+    expect(find.textContaining(RegExp('since .*$year')), findsOneWidget);
+    expect(find.textContaining(RegExp('Raised at .*$year')), findsOneWidget);
+    expect(find.textContaining(RegExp('since [^,]*\$')), findsWidgets);
+  });
 }

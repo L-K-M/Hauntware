@@ -335,6 +335,40 @@ void main() {
       expect((h.planned.single as RemoveNetwork).networkId, 'n1');
     });
 
+    testWidgets('one prune is a button, several a menu, each planning its '
+        'prune', (tester) async {
+      final h = await _pump(
+        tester,
+        const Column(
+          children: [
+            PruneButton(
+              choices: [PruneDocker(_srv, kind: DockerPruneKind.volumes)],
+            ),
+            PruneButton(
+              choices: [
+                PruneDocker(_srv, kind: DockerPruneKind.images),
+                PruneDocker(_srv, kind: DockerPruneKind.images, all: true),
+                PruneDocker(_srv, kind: DockerPruneKind.buildCache),
+              ],
+            ),
+          ],
+        ),
+      );
+      await tester.tap(find.text('Prune unused volumes…'));
+      await tester.pumpAndSettle();
+      expect((h.planned.last as PruneDocker).kind, DockerPruneKind.volumes);
+      await h.refuse(tester);
+
+      await tester.tap(find.text('Prune…'));
+      await tester.pumpAndSettle();
+      expect(find.text('Prune dangling images…'), findsOneWidget);
+      expect(find.text('Prune the build cache…'), findsOneWidget);
+      await tester.tap(find.text('Prune all unused images…'));
+      await tester.pumpAndSettle();
+      final images = h.planned.last as PruneDocker;
+      expect((images.kind, images.all), (DockerPruneKind.images, true));
+    });
+
     testWidgets('observe-only and read-only offer none', (tester) async {
       for (final safety in [
         const SafetyPolicy(),
@@ -364,6 +398,9 @@ void main() {
                 entry: VolumeEntry(VolumeSummary(name: 'pgdata'), 0),
               ),
               const CreateVolumeButton(serverId: _srv),
+              const PruneButton(
+                choices: [PruneDocker(_srv, kind: DockerPruneKind.networks)],
+              ),
               const NetworkActionsButton(
                 serverId: _srv,
                 entry: NetworkEntry(

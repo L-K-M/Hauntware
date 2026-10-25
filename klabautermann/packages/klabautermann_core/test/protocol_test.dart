@@ -258,6 +258,7 @@ void main() {
         const SetAdminMode('srv-1', enabled: true),
         AuditQuery('srv-1', before: DateTime.utc(2026, 10, 18), limit: 20),
         const ReadUserCrontabs('srv-1', requestId: 'r-1'),
+        const ReadHistory('srv-1', HistoryTier.minute, requestId: 'h-1'),
         const AcknowledgeOperation('srv-1', '0123456789abcdef'),
         const AnswerPrompt('prompt-1', PromptTrustAnswer(true)),
         const AnswerPrompt('prompt-2', PromptCancelAnswer()),
@@ -1306,6 +1307,8 @@ void main() {
         // The user manager's streams share the system streams' variants.
         SampleStream.userUnits: UnitsResult(UnitsSnapshot()),
         SampleStream.userTimers: TimersResult(TimersSnapshot()),
+        SampleStream.temps: const TempsResult(TempsSnapshot([])),
+        SampleStream.gpu: const GpuResult(GpuSnapshot([])),
       };
       expect(variants.keys, SampleStream.values);
       const unavailable = CollectorUnavailable(

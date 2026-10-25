@@ -1278,6 +1278,96 @@
       }
     }
   },
+  "systemTemperaturesTitle": "Temperatures",
+  "@systemTemperaturesTitle": {
+    "description": "System tab: the section of the host's temperature sensors (HW-01). It is hidden where the host has none, as VMs and containers usually do."
+  },
+  "systemTemperatureSensor": "Sensor",
+  "@systemTemperatureSensor": {
+    "description": "Temperatures table: column of the sensor's name."
+  },
+  "systemTemperatureSensorName": "{chip}: {label}",
+  "@systemTemperatureSensorName": {
+    "description": "Temperatures table: a sensor named by its chip (coretemp, nvme, k10temp) and the chip's label for it (Package id 0, Composite). Both are the kernel's technical names.",
+    "placeholders": {
+      "chip": {
+        "type": "String",
+        "example": "coretemp"
+      },
+      "label": {
+        "type": "String",
+        "example": "Package id 0"
+      }
+    }
+  },
+  "systemTemperatureReading": "Temperature",
+  "@systemTemperatureReading": {
+    "description": "Temperatures table: column of the sensor's current reading."
+  },
+  "systemTemperatureHigh": "High",
+  "@systemTemperatureHigh": {
+    "description": "Temperatures table: column of the temperature the chip calls high for the sensor (its max limit)."
+  },
+  "systemTemperatureCritical": "Critical",
+  "@systemTemperatureCritical": {
+    "description": "Temperatures table: column of the temperature the chip calls critical for the sensor."
+  },
+  "systemTemperatureCelsius": "{celsius} °C",
+  "@systemTemperatureCelsius": {
+    "description": "A temperature in degrees Celsius, as a whole number in the UI locale.",
+    "placeholders": {
+      "celsius": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 0
+        }
+      }
+    }
+  },
+  "systemGpusTitle": "GPUs",
+  "@systemGpusTitle": {
+    "description": "System tab: the section of the host's GPUs (HW-03). It is hidden where the host has none the app can read."
+  },
+  "systemGpuColumn": "GPU",
+  "@systemGpuColumn": {
+    "description": "GPUs table: column of the GPU's name, or its device name (card1, nvidia0) where the driver reports no product name."
+  },
+  "systemGpuBusy": "Busy",
+  "@systemGpuBusy": {
+    "description": "GPUs table: column of the share of time the GPU was busy."
+  },
+  "systemGpuMemory": "Memory",
+  "@systemGpuMemory": {
+    "description": "GPUs table: column of the GPU's own memory (VRAM) in use, of its total."
+  },
+  "systemGpuPower": "Power",
+  "@systemGpuPower": {
+    "description": "GPUs table: column of the GPU's current power draw."
+  },
+  "systemGpuWatts": "{watts} W",
+  "@systemGpuWatts": {
+    "description": "A power draw in watts, as a whole number in the UI locale.",
+    "placeholders": {
+      "watts": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 0
+        }
+      }
+    }
+  },
+  "systemGpuNvidiaFailed": "nvidia-smi is installed but failed: {message}",
+  "@systemGpuNvidiaFailed": {
+    "description": "System tab, GPUs: nvidia-smi ran and failed, as when its driver is not loaded; message is the tool's own first line, untranslated.",
+    "placeholders": {
+      "message": {
+        "type": "String",
+        "example": "NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver."
+      }
+    }
+  },
   "systemColumnMount": "Mount",
   "@systemColumnMount": {
     "description": "Disks table column: where the filesystem is mounted."
@@ -3512,6 +3602,68 @@
   "@settingsAnnounceNotChanged": {
     "description": "Toast when the app did not take a change of the threshold announcement switch."
   },
+  "appLockTitle": "Klabautermann is locked",
+  "@appLockTitle": {
+    "description": "App lock screen (SAF-20): its heading, shown over the whole app while the app lock is engaged."
+  },
+  "appLockDetail": "Unlock with this device's passcode, PIN or biometrics. Connections already open keep running.",
+  "@appLockDetail": {
+    "description": "App lock screen: what unlocking asks for, and that open links are not closed by the lock."
+  },
+  "settingsWindowLocked": "Unlock it in its main window to change settings.",
+  "@settingsWindowLocked": {
+    "description": "The desktop settings window while the app is locked, under the title that it is locked."
+  },
+  "appLockUnlock": "Unlock",
+  "@appLockUnlock": {
+    "description": "App lock screen: the button that asks for device authentication again."
+  },
+  "appLockFailed": "Authentication failed or was cancelled. Try again.",
+  "@appLockFailed": {
+    "description": "App lock screen: the last device authentication was rejected or dismissed."
+  },
+  "appLockUnavailable": "This device has no passcode, PIN or biometrics to ask for. Set one up, then try again.",
+  "@appLockUnavailable": {
+    "description": "App lock screen: device authentication is not set up or not available, so the lock cannot be opened yet."
+  },
+  "appLockReason": "Unlock Klabautermann",
+  "@appLockReason": {
+    "description": "The reason line the operating system's authentication prompt shows when the app lock asks for it."
+  },
+  "settingsAppLockTitle": "App lock",
+  "@settingsAppLockTitle": {
+    "description": "Settings > Safety: the heading over the app lock switch (SAF-20)."
+  },
+  "settingsAppLock": "Require device authentication",
+  "@settingsAppLock": {
+    "description": "Settings > Safety: the app lock switch."
+  },
+  "settingsAppLockDetail": "Ask for this device's passcode, PIN or biometrics when Klabautermann opens and after {minutes, plural, =1{1 minute} other{{minutes} minutes}} in the background. Locking turns admin mode off on every server.",
+  "@settingsAppLockDetail": {
+    "description": "Settings > Safety: what the app lock switch does.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsAppLockUnsupported": "This platform has no device authentication Klabautermann can ask for.",
+  "@settingsAppLockUnsupported": {
+    "description": "Settings > Safety: why the app lock switch is off and disabled on Linux."
+  },
+  "settingsAppLockUnavailable": "Set up a passcode, PIN or biometrics on this device to use the app lock.",
+  "@settingsAppLockUnavailable": {
+    "description": "Settings > Safety: why the app lock switch cannot be turned on right now."
+  },
+  "settingsAppLockNotChanged": "{reason, select, notAuthenticated{The app lock did not change: authentication failed or was cancelled.} unavailable{The app lock did not change: this device has no authentication to ask for.} notSaved{The app lock did not change: the setting could not be saved.} other{The app lock did not change.}}",
+  "@settingsAppLockNotChanged": {
+    "description": "Settings > Safety: a toast after turning the app lock on or off did not take effect, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
   "settingsSyncSecretsTitle": "Passwords and keys",
   "@settingsSyncSecretsTitle": {
     "description": "Section heading on the Sync settings tab over the sync passwords switch (SYN-02)."
@@ -4341,6 +4493,56 @@
   "@actionPreviewDetachedIos": {
     "description": "Preview note for a detached operation on iOS, where the app does not run in the background (03 §7.17)."
   },
+  "actionPreviewPruneRemoves": "{count, plural, =1{Removes 1 object} other{Removes {count} objects}}",
+  "@actionPreviewPruneRemoves": {
+    "description": "Heading above what a prune removes (DKE-05).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "actionPreviewPruneFrees": "Frees {size}",
+  "@actionPreviewPruneFrees": {
+    "description": "Under a prune's heading: the disk space it frees, as the engine reports it (DKE-05).",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "1.2 GiB"
+      }
+    }
+  },
+  "actionPreviewPruneItem": "{name} ({size})",
+  "@actionPreviewPruneItem": {
+    "description": "One object a prune removes, with its size (DKE-05).",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "app:old"
+      },
+      "size": {
+        "type": "String",
+        "example": "12 MiB"
+      }
+    }
+  },
+  "actionPreviewPruneKeeps": "Kept",
+  "@actionPreviewPruneKeeps": {
+    "description": "Heading above what a prune leaves, each with why (DKE-05's exemption labels)."
+  },
+  "actionPreviewPruneKept": "{name}: {reason, select, inUse{in use} builtin{the engine's own} other{kept}}",
+  "@actionPreviewPruneKept": {
+    "description": "One object a prune leaves and why (DKE-05).",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "pgdata"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
   "actionPreviewOrphans": "Containers the stack's files no longer name",
   "@actionPreviewOrphans": {
     "description": "Heading above a redeploy's orphan containers (STK-06)."
@@ -4457,7 +4659,7 @@
       }
     }
   },
-  "actionRefused": "{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server's container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} networkInUse{A container is on this network. Stop or disconnect it first.} builtinNetwork{This is one of the engine's own networks, which stay.} dependencyCycle{The stack's services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack's files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}",
+  "actionRefused": "{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server's container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} networkInUse{A container is on this network. Stop or disconnect it first.} builtinNetwork{This is one of the engine's own networks, which stay.} nothingToPrune{There is nothing to prune.} dependencyCycle{The stack's services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack's files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}",
   "@actionRefused": {
     "description": "Toast when the engine refused to plan or run an action; reason is the engine's ActionRefusalReason name.",
     "placeholders": {
@@ -4815,7 +5017,7 @@
   "@activityColumnResult": {
     "description": "Column of the activity log: how the run ended."
   },
-  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
+  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
   "@activityAction": {
     "description": "An activity log row's action; action is the engine's intent type name.",
     "placeholders": {
@@ -6062,6 +6264,65 @@
   "dockerVolumesUseUnknown": "Which volumes are in use is unknown: the containers, whose mounts tell, could not be listed.",
   "@dockerVolumesUseUnknown": {
     "description": "Volumes list: the volume list carries no use count, and the container list it is computed from failed."
+  },
+  "dockerPullOpen": "Pull image…",
+  "@dockerPullOpen": {
+    "description": "Images list: the button over the list that opens the pull sheet (IMG-03)."
+  },
+  "dockerPullTitle": "Pull an image",
+  "@dockerPullTitle": {
+    "description": "Pull sheet: its title (IMG-03)."
+  },
+  "dockerPullReference": "Image",
+  "@dockerPullReference": {
+    "description": "Pull sheet: the label of the image reference field."
+  },
+  "dockerPullReferenceHint": "nginx:1.27 or registry.example.com/app:2",
+  "@dockerPullReferenceHint": {
+    "description": "Pull sheet: example references in the empty field. A name without a tag pulls latest."
+  },
+  "dockerPullStart": "Pull",
+  "@dockerPullStart": {
+    "description": "Pull sheet: the button that plans the pull and shows its preview."
+  },
+  "dockerPullCancel": "Stop pull",
+  "@dockerPullCancel": {
+    "description": "Pull sheet: the button that stops a running pull."
+  },
+  "dockerPullForeground": "Pulling. Closing this sheet stops the pull.",
+  "@dockerPullForeground": {
+    "description": "Pull sheet: while a pull runs. The pull runs over this connection and the daemon stops it when the sheet closes (03 §7.14)."
+  },
+  "dockerPullLayerBytes": "{status}: {current} of {total}",
+  "@dockerPullLayerBytes": {
+    "description": "Pull sheet: one layer's status with the bytes done of its total.",
+    "placeholders": {
+      "status": {
+        "type": "String",
+        "example": "Downloading"
+      },
+      "current": {
+        "type": "String",
+        "example": "12 MiB"
+      },
+      "total": {
+        "type": "String",
+        "example": "40 MiB"
+      }
+    }
+  },
+  "dockerPrune": "Prune…",
+  "@dockerPrune": {
+    "description": "Images list: the button over the list that opens the menu of prunes (DKE-05, IMG-06)."
+  },
+  "dockerPruneChoice": "{kind, select, containers{Prune stopped containers…} images{Prune dangling images…} imagesAll{Prune all unused images…} volumes{Prune unused volumes…} networks{Prune unused networks…} buildCache{Prune the build cache…} other{Prune…}}",
+  "@dockerPruneChoice": {
+    "description": "A prune's button or menu row, which opens its preview (DKE-05, IMG-06).",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
   },
   "dockerVolumeCreate": "Create volume…",
   "@dockerVolumeCreate": {
@@ -8191,9 +8452,19 @@
       }
     }
   },
+  "alertDateTime": "{time}",
+  "@alertDateTime": {
+    "description": "An alert center time from before today: a date and time in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
   "alertSince": "since {time}",
   "@alertSince": {
-    "description": "When a raised alert's breach began, in the alert center; time is a time of day in the UI locale.",
+    "description": "When a raised alert's breach began, in the alert center; time is a time of day when the breach began today, else a date and time, in the UI locale.",
     "placeholders": {
       "time": {
         "type": "String"
@@ -8237,6 +8508,68 @@
   "alertMetricDiskInodes": "Inodes used",
   "@alertMetricDiskInodes": {
     "description": "The alert metric disk.inodes: the fullest filesystem's used inodes."
+  },
+  "historyTitle": "History",
+  "@historyTitle": {
+    "description": "The Overview card that charts a server's on-device history (HIS-01)."
+  },
+  "historyLastHours": "{count, plural, =1{Last hour} other{Last {count} hours}}",
+  "@historyLastHours": {
+    "description": "The History card's range choice of the 1-minute tier; count is 48.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "historyLastDays": "{count, plural, =1{Last day} other{Last {count} days}}",
+  "@historyLastDays": {
+    "description": "The History card's range choice of the 10-minute tier; count is 30.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "historyRefresh": "Refresh",
+  "@historyRefresh": {
+    "description": "Tooltip of the History card's button that reads the history again."
+  },
+  "historyEmpty": "No history yet. Klabautermann keeps 48 hours and 30 days of this server's readings while it is open.",
+  "@historyEmpty": {
+    "description": "The History card when this device recorded nothing for the server in the chosen range."
+  },
+  "historyLaneMean": "Average",
+  "@historyLaneMean": {
+    "description": "The History chart's series of each bucket's mean."
+  },
+  "historyLanePeak": "Peak",
+  "@historyLanePeak": {
+    "description": "The History chart's series of each bucket's highest reading."
+  },
+  "historySource": "Recorded on this device while Klabautermann was open",
+  "@historySource": {
+    "description": "Where the History chart's data comes from, as its legend says."
+  },
+  "historyMetricCpu": "CPU busy",
+  "@historyMetricCpu": {
+    "description": "A History metric: the share of CPU time spent busy."
+  },
+  "historyMetricMemory": "Memory used",
+  "@historyMetricMemory": {
+    "description": "A History metric: used memory as a share of the total."
+  },
+  "historyMetricDisk": "Disk space used",
+  "@historyMetricDisk": {
+    "description": "A History metric: the fullest filesystem's used space."
+  },
+  "historyMetricInodes": "Inodes used",
+  "@historyMetricInodes": {
+    "description": "A History metric: the fullest filesystem's used inodes."
+  },
+  "historyMetricLoad": "Load per core",
+  "@historyMetricLoad": {
+    "description": "A History metric: the 1-minute load average per core."
   },
   "alertRulesTitle": "Alert rules",
   "@alertRulesTitle": {

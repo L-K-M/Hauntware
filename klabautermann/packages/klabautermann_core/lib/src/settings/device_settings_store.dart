@@ -34,6 +34,7 @@ const String _monitorSetKey = 'klabautermann.monitorSet';
 const String _safetyKey = 'klabautermann.safety';
 const String _syncSecretsKey = 'klabautermann.sync.secrets';
 const String _deviceNameKey = 'klabautermann.audit.deviceName';
+const String _appLockKey = 'klabautermann.appLock';
 
 const String _endpointOverridesKey = 'klabautermann.docker.endpointOverrides';
 const String _stackFoldersKey = 'klabautermann.docker.stackFolders';
@@ -335,6 +336,23 @@ final class DeviceSettingsStore {
   /// way.
   Future<void> setSyncSecrets(bool enabled) async {
     _values[_syncSecretsKey] = enabled;
+    await _save();
+  }
+
+  /// The device's app lock (SAF-20), `klabautermann.appLock`: off until
+  /// the user turns it on. Any other value than `false` that is there
+  /// reads as on, so a damaged value can never drop the lock; an absent
+  /// one, as on a fresh install, reads as off.
+  bool get appLock => switch (_values[_appLockKey]) {
+    null || false => false,
+    _ => true,
+  };
+
+  /// Stores [enabled] and writes the document. Throws when the write
+  /// fails or this session is read-only; the value stays in memory either
+  /// way.
+  Future<void> setAppLock(bool enabled) async {
+    _values[_appLockKey] = enabled;
     await _save();
   }
 

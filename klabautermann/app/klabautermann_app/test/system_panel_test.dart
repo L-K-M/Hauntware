@@ -67,6 +67,43 @@ const _disks = {
   ),
 };
 
+/// A CPU package with its limits and a drive without any.
+const _temps = TempsSnapshot([
+  TempSensor(
+    id: 'hwmon2/temp1',
+    chip: 'coretemp',
+    label: 'Package id 0',
+    celsius: 48,
+    highCelsius: 84,
+    criticalCelsius: 100,
+  ),
+  TempSensor(id: 'hwmon4/temp1', chip: 'drivetemp', celsius: 38.6),
+]);
+
+/// An NVIDIA GPU with every figure and an amdgpu card without a name or
+/// a power reading.
+const _gpus = GpuSnapshot([
+  GpuDevice(
+    id: 'nvidia0',
+    source: GpuSource.nvidia,
+    name: 'NVIDIA GeForce RTX 3080',
+    busyPercent: 12,
+    memoryUsedBytes: 1024 * _mib,
+    memoryTotalBytes: 10240 * _mib,
+    celsius: 45,
+    powerWatts: 35.2,
+    powerLimitWatts: 320,
+  ),
+  GpuDevice(
+    id: 'card1',
+    source: GpuSource.amdgpu,
+    busyPercent: 37,
+    memoryUsedBytes: 512 * _mib,
+    memoryTotalBytes: 8192 * _mib,
+    celsius: 52,
+  ),
+]);
+
 const _network = {
   'eth0': NetRate(
     rxBytesPerSecond: 1.25 * _mib,
@@ -157,6 +194,8 @@ final class _Panel {
     await sample(tester, SampleStream.identity, _identity);
     await sample(tester, SampleStream.core, _core());
     await sample(tester, SampleStream.fs, FsResult(_fs));
+    await sample(tester, SampleStream.temps, const TempsResult(_temps));
+    await sample(tester, SampleStream.gpu, const GpuResult(_gpus));
   }
 }
 
@@ -366,6 +405,84 @@ void main() {
     expect(activity('Rates show from the second reading.'), findsOneWidget);
     await panel.sample(tester, SampleStream.core, _core(disks: const {}));
     expect(activity('No disk has done any I/O yet.'), findsOneWidget);
+  });
+
+  testWidgets('HW-01 lists each sensor with its reading and limits; a '
+      'host without sensors, or a container, shows no section', (tester) async {
+    final panel = await _pump(tester);
+    Finder temps(String text) =>
+        _inSection(SystemSection.temperatures, find.text(text));
+
+    // No reading yet: no section rather than a wait for one that VMs
+    // never send.
+    expect(find.text('Temperatures'), findsNothing);
+
+    await panel.sample(tester, SampleStream.temps, const TempsResult(_temps));
+    expect(find.text('Temperatures'), findsOneWidget);
+    expect(temps('coretemp: Package id 0'), findsOneWidget);
+    expect(temps('48 °C'), findsOneWidget);
+    expect(temps('84 °C'), findsOneWidget);
+    expect(temps('100 °C'), findsOneWidget);
+    expect(temps('drivetemp'), findsOneWidget);
+    expect(temps('39 °C'), findsOneWidget);
+    expect(temps('Unknown'), findsNWidgets(2));
+
+    await panel.sample(
+      tester,
+      SampleStream.temps,
+      const TempsResult(TempsSnapshot([])),
+    );
+    expect(find.text('Temperatures'), findsNothing);
+
+    await panel.sample(tester, SampleStream.temps, const TempsResult(_temps));
+    await panel.profile(tester, _container);
+    expect(find.text('Temperatures'), findsNothing);
+  });
+
+  testWidgets('HW-03 lists each GPU with its busy share, memory, '
+      'temperature and power; a failed nvidia-smi says so; no GPU, no '
+      'section', (tester) async {
+    final panel = await _pump(tester);
+    Finder gpus(String text) => _inSection(SystemSection.gpus, find.text(text));
+    expect(find.text('GPUs'), findsNothing);
+
+    await panel.sample(tester, SampleStream.gpu, const GpuResult(_gpus));
+    expect(find.text('GPUs'), findsOneWidget);
+    expect(gpus('NVIDIA GeForce RTX 3080'), findsOneWidget);
+    expect(gpus('12%'), findsOneWidget);
+    expect(gpus('1 GiB of 10 GiB'), findsOneWidget);
+    expect(gpus('45 °C'), findsOneWidget);
+    expect(gpus('35 W'), findsOneWidget);
+    expect(gpus('card1'), findsOneWidget);
+    expect(gpus('512 MiB of 8 GiB'), findsOneWidget);
+    expect(gpus('Unknown'), findsOneWidget);
+
+    await panel.sample(
+      tester,
+      SampleStream.gpu,
+      const GpuResult(
+        GpuSnapshot(
+          [],
+          nvidiaFailure:
+              'NVIDIA-SMI has failed because it couldn\'t communicate with '
+              'the NVIDIA driver.',
+        ),
+      ),
+    );
+    expect(
+      gpus(
+        'nvidia-smi is installed but failed: NVIDIA-SMI has failed because '
+        'it couldn\'t communicate with the NVIDIA driver.',
+      ),
+      findsOneWidget,
+    );
+
+    await panel.sample(
+      tester,
+      SampleStream.gpu,
+      const GpuResult(GpuSnapshot([])),
+    );
+    expect(find.text('GPUs'), findsNothing);
   });
 
   testWidgets('where every column does not fit, the disk activity table '

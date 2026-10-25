@@ -35,6 +35,7 @@ final class OperationPlan {
     this.protected,
     this.followUnit,
     Iterable<String> orphans = const [],
+    this.prune,
     Iterable<PlanWarning> warnings = const [],
     Iterable<Revalidation> revalidate = const [],
     Iterable<ShellStep> cleanup = const [],
@@ -82,6 +83,9 @@ final class OperationPlan {
 
   /// The stack containers `--remove-orphans` would remove (STK-06).
   final List<String> orphans;
+
+  /// What a prune removes and leaves (DKE-05).
+  final PrunePreview? prune;
   final Set<PlanWarning> warnings;
   final List<Revalidation> revalidate;
 
@@ -107,6 +111,7 @@ final class OperationPlan {
     protected: protected,
     followUnit: followUnit,
     orphans: orphans,
+    prune: prune,
     warnings: warnings,
     revalidate: revalidate,
     cleanup: cleanup,
@@ -129,6 +134,7 @@ final class OperationPlan {
     requiredTier: tier,
     followUnit: followUnit,
     orphans: orphans,
+    prune: prune,
     warnings: warnings,
   );
 }
@@ -159,7 +165,7 @@ final class ProcessStarted extends Revalidation {
 }
 
 /// What a [DockerTargetUnchanged] names.
-enum DockerTargetKind { container, image, stack, volume, network }
+enum DockerTargetKind { container, image, stack, volume, network, prune }
 
 /// A Docker target is unchanged: the container or image still has [id],
 /// or the stack still has the containers [id] fingerprints. The runner
@@ -170,13 +176,14 @@ final class DockerTargetUnchanged extends Revalidation {
   final DockerTargetKind kind;
 
   /// The container name, the image reference, the stack's project, the
-  /// volume's name or the network's id.
+  /// volume's name, the network's id or the prune's kind
+  /// ([pruneTarget]).
   final String target;
 
   /// The container, image or network id, the stack's fingerprint
-  /// ([stackFingerprint]) or the volume's creation time, which a volume
-  /// removed and created again under its name changes, as the preview
-  /// saw it.
+  /// ([stackFingerprint]), the volume's creation time, which a volume
+  /// removed and created again under its name changes, or the ids a prune
+  /// removes ([pruneFingerprint]), as the preview saw it.
   final String id;
 }
 
