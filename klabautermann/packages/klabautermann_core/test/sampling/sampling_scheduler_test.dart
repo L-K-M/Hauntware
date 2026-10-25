@@ -150,6 +150,7 @@ void main() {
       'userUnits': [15, 15, 15],
       'userTimers': [60, 60, null],
       'temps': [10, 10, null],
+      'gpu': [30, 30, null],
     });
   });
 

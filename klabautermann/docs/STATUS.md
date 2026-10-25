@@ -1941,6 +1941,12 @@ is on main:
   created again under its name is not removed. An API step can now
   carry a JSON body, which the preview shows as sent. The Docker
   actions suite creates, refuses and removes a volume on the fixture.
+- GPUs (M6 N37b, HW-03): collector-set version 12 adds the slow `gpu`
+  collector, which asks `nvidia-smi` and reads the amdgpu sysfs files
+  every 30 s. The System tab's GPUs section lists each GPU's busy share,
+  memory, temperature and power, says when an installed `nvidia-smi`
+  fails, and does not show where the host has no GPU it reads. Intel
+  GPUs are not read.
 - App lock (M6 N66, SAF-20): Settings > Safety's "Require device
   authentication" (Android, iOS, macOS, Windows; off and disabled on
   Linux) opens the app behind a lock screen that asks for the device's

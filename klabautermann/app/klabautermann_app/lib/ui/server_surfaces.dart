@@ -26,12 +26,13 @@ enum ServerPanel {
   docker({}),
 
   /// Identity (SYS-01), uptime and boot (BOOT-01), disks (DSK-01 to
-  /// DSK-04), network (NET-01) and temperatures (HW-01).
+  /// DSK-04), network (NET-01), temperatures (HW-01) and GPUs (HW-03).
   system({
     SampleStream.identity,
     SampleStream.fs,
     SampleStream.core,
     SampleStream.temps,
+    SampleStream.gpu,
   }),
   access({});
 

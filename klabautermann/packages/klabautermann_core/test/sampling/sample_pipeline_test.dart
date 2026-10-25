@@ -540,6 +540,26 @@ void main() {
     expect(temps.sensors.single.celsius, 48);
   });
 
+  test('a gpu section reads as its devices (HW-03)', () {
+    final streams = {SampleStream.gpu};
+    final p = _sampling(streams: streams);
+    final gpu = _result<GpuResult>(
+      p.addTick(
+        streams,
+        reply(1, 1000, [
+          ok(
+            'gpu',
+            '== nvidia ==\nrc=0\n0, Tesla T4, 5, 100, 15360, 38, 27.5, 70'
+                '\n== amdgpu ==',
+          ),
+        ]),
+        _at(0),
+      ),
+    ).gpu;
+    expect(gpu.devices.single.name, 'Tesla T4');
+    expect(gpu.devices.single.busyPercent, 5);
+  });
+
   test('a reply\'s uptime times procs only when procs leads it', () {
     // The host reads the `B` uptime before the first collector, so a slow
     // `fs` ahead of `procs` would count toward the interval.
