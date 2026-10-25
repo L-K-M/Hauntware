@@ -93,6 +93,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // An empty security cell, a missing detail, and the separator between
   // package names the server reported.
   'lib/ui/updates.dart': {"''", "', '"},
+  // A failed check's missing detail.
+  'lib/ui/fleet_updates.dart': {"''"},
   // The not-saved diagnostic; the Safety tab and the header's Safety menu
   // print it and show their own ARB text (settingsSafetyNotSaved).
   'lib/controllers/safety_controller.dart': {

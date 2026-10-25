@@ -1962,7 +1962,9 @@ is on main:
   admin mode, "Find services to restart" (N36c, PKG-04) lists the
   services still running replaced libraries (needrestart,
   needs-restarting or zypper ps) and says when a newer kernel waits for
-  a reboot.
+  a reboot. "All servers" (N36d, PKG-06) opens the fleet update center:
+  each server's updates, security updates and restart flag from its
+  check of the last hour, most security updates first.
 - Drive health (M6 N37c, HW-04): in admin mode, the System tab's Drive
   health section reads every drive's SMART health on request through an
   elevated `smartctl --scan-open`, then `smartctl -n standby -a` per

@@ -1401,6 +1401,40 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get fleetUpdatesTitle => 'Updates on all servers';
+
+  @override
+  String get fleetUpdatesOpen => 'All servers';
+
+  @override
+  String get fleetUpdatesCheckAll => 'Check every server again';
+
+  @override
+  String get fleetUpdatesNoServers => 'No servers yet.';
+
+  @override
+  String fleetUpdatesSummary(int updates, int security, String restart) {
+    String _temp0 = intl.Intl.pluralLogic(
+      updates,
+      locale: localeName,
+      other: '$updates updates',
+      one: '1 update',
+      zero: 'Up to date',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      security,
+      locale: localeName,
+      other: ', $security security',
+      zero: '',
+    );
+    String _temp2 = intl.Intl.selectLogic(restart, {
+      'true': ' · restart required',
+      'other': '',
+    });
+    return '$_temp0$_temp1$_temp2';
+  }
+
+  @override
   String systemUpdatesCheckedAt(DateTime time) {
     final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
       localeName,

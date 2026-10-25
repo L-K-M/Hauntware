@@ -2002,6 +2002,36 @@ abstract class AppLocalizations {
   /// **'{reason, select, noLink{The server is not connected, so services to restart could not be read.} adminRequired{Admin mode ended before services to restart were read.} elevationRefused{Elevation was refused, so services to restart were not read.} missing{None of needrestart, needs-restarting or zypper is installed on this server.} transport{The connection failed while services to restart were read.} other{Services to restart could not be read.}}'**
   String systemUpdatesRestartsFailed(String reason);
 
+  /// Title of PKG-06's fleet update center, listing every server's pending updates.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates on all servers'**
+  String get fleetUpdatesTitle;
+
+  /// System tab, Updates: button that opens the fleet update center.
+  ///
+  /// In en, this message translates to:
+  /// **'All servers'**
+  String get fleetUpdatesOpen;
+
+  /// Fleet update center: button that runs a new package check on every server instead of using the ones from the last hour.
+  ///
+  /// In en, this message translates to:
+  /// **'Check every server again'**
+  String get fleetUpdatesCheckAll;
+
+  /// Fleet update center: the fleet is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'No servers yet.'**
+  String get fleetUpdatesNoServers;
+
+  /// Fleet update center: one server's line: pending updates, security updates (omitted at zero) and whether it asks for a restart.
+  ///
+  /// In en, this message translates to:
+  /// **'{updates, plural, =0{Up to date} =1{1 update} other{{updates} updates}}{security, plural, =0{} other{, {security} security}}{restart, select, true{ · restart required} other{}}'**
+  String fleetUpdatesSummary(int updates, int security, String restart);
+
   /// System tab, Updates: when the shown check ran, in the UI locale and this device's time zone.
   ///
   /// In en, this message translates to:

@@ -1583,6 +1583,37 @@
       }
     }
   },
+  "fleetUpdatesTitle": "Updates on all servers",
+  "@fleetUpdatesTitle": {
+    "description": "Title of PKG-06's fleet update center, listing every server's pending updates."
+  },
+  "fleetUpdatesOpen": "All servers",
+  "@fleetUpdatesOpen": {
+    "description": "System tab, Updates: button that opens the fleet update center."
+  },
+  "fleetUpdatesCheckAll": "Check every server again",
+  "@fleetUpdatesCheckAll": {
+    "description": "Fleet update center: button that runs a new package check on every server instead of using the ones from the last hour."
+  },
+  "fleetUpdatesNoServers": "No servers yet.",
+  "@fleetUpdatesNoServers": {
+    "description": "Fleet update center: the fleet is empty."
+  },
+  "fleetUpdatesSummary": "{updates, plural, =0{Up to date} =1{1 update} other{{updates} updates}}{security, plural, =0{} other{, {security} security}}{restart, select, true{ · restart required} other{}}",
+  "@fleetUpdatesSummary": {
+    "description": "Fleet update center: one server's line: pending updates, security updates (omitted at zero) and whether it asks for a restart.",
+    "placeholders": {
+      "updates": {
+        "type": "int"
+      },
+      "security": {
+        "type": "int"
+      },
+      "restart": {
+        "type": "String"
+      }
+    }
+  },
   "systemUpdatesCheckedAt": "Checked {time}",
   "@systemUpdatesCheckedAt": {
     "description": "System tab, Updates: when the shown check ran, in the UI locale and this device's time zone.",

@@ -6,11 +6,13 @@ import 'package:ghost_ui/ghost_ui.dart' show scaledGhostFileRowExtent;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/admin_controller.dart';
+import '../controllers/fleet_controller.dart';
 import '../controllers/package_reads.dart';
 import '../l10n/app_localizations.dart';
 import 'actions/action_entry.dart';
 import 'actions/action_preview.dart' show startAction;
 import 'admin_mode_chip.dart' show AdminScope;
+import 'fleet_updates.dart';
 import 'sortable_table.dart';
 import 'system_panel.dart' show PanelSection;
 
@@ -85,10 +87,14 @@ class UpdatesSection extends StatefulWidget {
     required this.reads,
     required this.serverId,
     required this.tableId,
+    this.fleet,
   });
 
   final PackageReads reads;
   final String serverId;
+
+  /// The fleet, for the button to the fleet update center (PKG-06).
+  final FleetController? fleet;
 
   /// The table's identity for its keys and remembered widths.
   final String tableId;
@@ -223,6 +229,17 @@ class _UpdatesSectionState extends State<UpdatesSection> {
                 child: Text(l10n.systemUpdatesCheckAgain),
               ),
               ?_refreshButton(context, l10n, check),
+              if (widget.fleet case final fleet?)
+                TextButton(
+                  onPressed: () => unawaited(
+                    showFleetUpdates(
+                      context,
+                      reads: widget.reads,
+                      fleet: fleet,
+                    ),
+                  ),
+                  child: Text(l10n.fleetUpdatesOpen),
+                ),
               if (report?.checkedAt case final checkedAt?)
                 Text(l10n.systemUpdatesCheckedAt(checkedAt.toLocal())),
             ],

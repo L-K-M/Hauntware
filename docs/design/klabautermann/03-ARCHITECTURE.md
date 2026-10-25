@@ -3875,8 +3875,12 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   `zypper ps -sss` as root through the elevation executor, since each
   reads every process's maps. `RestartReport` lists the systemd units to
   restart, once each, and from needrestart whether a newer kernel waits
-  for a reboot. The Updates section reads it on request. The fleet update
-  center follows.
+  for a reboot. The Updates section reads it on request.
+- **As built (M6 N36d).** PKG-06's fleet update center, opened from the
+  Updates section ("All servers"), reads every server's check, which the
+  engine answers from the last hour where it has one, and lists each
+  server's updates, security updates and restart flag, most security
+  updates first. Its refresh checks every server afresh.
 - **v1.x.** Apply updates (PKG-07) only as a detached operation with a typed
   confirmation and `DEBIAN_FRONTEND=noninteractive`, never in a client-held
   channel; holds; automatic-update status; old kernels; scheduled checks
