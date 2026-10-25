@@ -123,11 +123,12 @@ enum SettingsLinkKey {
   safety,
   labels,
 
-  /// The app lock, an object of [enabled] and [support], or null when the
-  /// app offers none.
+  /// The app lock, an object of [enabled], [support] and [locked], or
+  /// null when the app offers none.
   appLock,
   enabled,
   support,
+  locked,
 }
 
 /// The palette's stored form, bound to Klabautermann's style.
@@ -168,6 +169,7 @@ PinPublication decodePinPublication(Map<Object?, Object?>? json) => json == null
 Map<String, Object?> encodeAppLock(AppLockSettings lock) => {
   SettingsLinkKey.enabled.name: lock.enabled,
   SettingsLinkKey.support.name: lock.support.name,
+  SettingsLinkKey.locked.name: lock.locked,
 };
 
 /// The monitor set's candidates as the snapshot carries them, in fleet
@@ -252,6 +254,13 @@ PlatformException encodeLinkError(Object error) => PlatformException(
   },
   message: '$error',
 );
+
+/// A settings window call the app refused because it is locked (SAF-20):
+/// the window covers itself then, and changes nothing until the app is
+/// unlocked in its own window.
+final class AppLockedException implements Exception {
+  const AppLockedException();
+}
 
 /// The inverse of [encodeLinkError], in the window.
 Exception decodeLinkError(PlatformException error) {

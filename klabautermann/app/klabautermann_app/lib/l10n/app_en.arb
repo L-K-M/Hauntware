@@ -3567,6 +3567,10 @@
   "@appLockDetail": {
     "description": "App lock screen: what unlocking asks for, and that open links are not closed by the lock."
   },
+  "settingsWindowLocked": "Unlock it in its main window to change settings.",
+  "@settingsWindowLocked": {
+    "description": "The desktop settings window while the app is locked, under the title that it is locked."
+  },
   "appLockUnlock": "Unlock",
   "@appLockUnlock": {
     "description": "App lock screen: the button that asks for device authentication again."

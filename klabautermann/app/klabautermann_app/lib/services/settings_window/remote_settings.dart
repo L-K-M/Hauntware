@@ -242,6 +242,7 @@ final class RemoteAppLock extends ChangeNotifier implements AppLockSettings {
 
   bool _enabled = false;
   AppLockSupport _support = AppLockSupport.unsupported;
+  bool _locked = false;
 
   void _apply(Map<Object?, Object?>? json) {
     final enabled = json?[SettingsLinkKey.enabled.name] as bool? ?? false;
@@ -249,14 +250,21 @@ final class RemoteAppLock extends ChangeNotifier implements AppLockSettings {
       final String name => AppLockSupport.values.byName(name),
       _ => AppLockSupport.unsupported,
     };
-    if (enabled == _enabled && support == _support) return;
+    final locked = json?[SettingsLinkKey.locked.name] as bool? ?? false;
+    if (enabled == _enabled && support == _support && locked == _locked) {
+      return;
+    }
     _enabled = enabled;
     _support = support;
+    _locked = locked;
     notifyListeners();
   }
 
   @override
   bool get enabled => _enabled;
+
+  @override
+  bool get locked => _locked;
 
   @override
   AppLockSupport get support => _support;

@@ -49,6 +49,9 @@ abstract interface class AppLockSettings implements Listenable {
   /// Whether the lock is on.
   bool get enabled;
 
+  /// Whether the app is locked now, behind its lock screen.
+  bool get locked;
+
   AppLockSupport get support;
 
   /// Turns the lock on or off after a fresh device authentication; a
@@ -114,6 +117,7 @@ final class AppLockController extends ChangeNotifier
   }
 
   /// Whether the lock screen covers the app.
+  @override
   bool get locked => _lock.requiresAuthentication;
 
   /// Asks the device again whether it can authenticate; the switch and
