@@ -325,6 +325,13 @@ packages:
       relative: true
     source: path
     version: "1.9.2"
+  ghost_marks:
+    dependency: transitive
+    description:
+      path: "../../packages/ghost_marks"
+      relative: true
+    source: path
+    version: "1.9.2"
   ghost_servers:
     dependency: "direct main"
     description:
