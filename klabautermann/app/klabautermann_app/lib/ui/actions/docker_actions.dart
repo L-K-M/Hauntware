@@ -627,8 +627,6 @@ class VolumeActionsButton extends StatelessWidget {
   }
 }
 
-/// "Create volume…" over the Volumes list (VOL-02): asks for a name and
-/// an optional driver, then plans the create.
 /// The prune [intent] names, as its button or menu row reads.
 String pruneLabel(AppLocalizations l10n, PruneDocker intent) =>
     l10n.dockerPruneChoice(switch (intent.kind) {
@@ -649,6 +647,7 @@ class PruneButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     const icon = Icon(Icons.cleaning_services_outlined);
+    assert(choices.isNotEmpty, 'a prune button offers at least one prune');
     final serverId = choices.first.serverId;
     if (choices case [final only]) {
       return ActionEntry(
@@ -683,6 +682,8 @@ class PruneButton extends StatelessWidget {
   }
 }
 
+/// "Create volume…" over the Volumes list (VOL-02): asks for a name and
+/// an optional driver, then plans the create.
 class CreateVolumeButton extends StatelessWidget {
   const CreateVolumeButton({super.key, required this.serverId});
 

@@ -4423,7 +4423,8 @@ enum DockerPruneKind { containers, images, volumes, networks, buildCache }
 /// uses, volumes no container mounts, user-defined networks no container
 /// is on, or the build cache no build uses. The preview lists them first.
 final class PruneDocker extends ActionIntent {
-  const PruneDocker(super.serverId, {required this.kind, this.all = false});
+  const PruneDocker(super.serverId, {required this.kind, this.all = false})
+    : assert(!all || kind == DockerPruneKind.images, 'only images prune all');
 
   final DockerPruneKind kind;
 
