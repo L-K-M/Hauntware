@@ -1368,6 +1368,91 @@
       }
     }
   },
+  "systemDriveHealthTitle": "Drive health",
+  "@systemDriveHealthTitle": {
+    "description": "System tab: the section of each drive's SMART health (HW-04), read on request in admin mode."
+  },
+  "systemDriveHealthAdminNeeded": "Turn on admin mode to read drive health: smartctl needs the drives' device nodes.",
+  "@systemDriveHealthAdminNeeded": {
+    "description": "System tab, Drive health: shown while admin mode is off for the server."
+  },
+  "systemDriveHealthRead": "Read drive health",
+  "@systemDriveHealthRead": {
+    "description": "System tab, Drive health: the button that reads every drive's SMART health. Drives that are spun down are left asleep."
+  },
+  "systemDriveHealthReadAgain": "Read again",
+  "@systemDriveHealthReadAgain": {
+    "description": "System tab, Drive health: the button that reads every drive's health again."
+  },
+  "systemDriveHealthReading": "Reading drive health…",
+  "@systemDriveHealthReading": {
+    "description": "System tab, Drive health: shown while the read runs."
+  },
+  "systemDriveHealthFailed": "{reason, select, noLink{The server is not connected, so drive health could not be read.} adminRequired{Admin mode ended before drive health was read.} elevationRefused{Elevation was refused, so drive health was not read.} missing{smartmontools is not installed on this server.} unreadable{smartctl did not answer as smartmontools 7.0 or later does.} transport{The connection failed while drive health was read.} other{Drive health could not be read.}}",
+  "@systemDriveHealthFailed": {
+    "description": "System tab, Drive health: why a read read nothing, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "systemDriveHealthNone": "No drive answered smartctl's scan.",
+  "@systemDriveHealthNone": {
+    "description": "System tab, Drive health: the read found no drive, as in a VM without passed-through disks."
+  },
+  "systemDriveHealthNotRead": "{count, plural, =1{1 more drive was not read.} other{{count} more drives were not read.}}",
+  "@systemDriveHealthNotRead": {
+    "description": "System tab, Drive health: drives past the read's limit, which were not read.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemDriveColumn": "Drive",
+  "@systemDriveColumn": {
+    "description": "Drive health table: column of the drive's model, or its device where it reports none."
+  },
+  "systemDriveDevice": "Device",
+  "@systemDriveDevice": {
+    "description": "Drive health table: column of the drive's device node, such as /dev/sda."
+  },
+  "systemDriveHealth": "Health",
+  "@systemDriveHealth": {
+    "description": "Drive health table: column of the drive's health verdict."
+  },
+  "systemDriveVerdict": "{verdict, select, passed{Passed} warning{Warning} failing{Failing} asleep{Asleep} other{Unknown}}",
+  "@systemDriveVerdict": {
+    "description": "Drive health table: a drive's health. Passed: its own assessment passed. Warning: it passed, but shows wear or damage. Failing: its own assessment failed. Asleep: it was spun down and was left asleep.",
+    "placeholders": {
+      "verdict": {
+        "type": "String"
+      }
+    }
+  },
+  "systemDriveWear": "Wear",
+  "@systemDriveWear": {
+    "description": "Drive health table: column of an NVMe drive's endurance used, as a percentage that may pass 100."
+  },
+  "systemDriveBadSectors": "Bad sectors",
+  "@systemDriveBadSectors": {
+    "description": "Drive health table: column of an ATA drive's reallocated, pending and uncorrectable sectors, summed."
+  },
+  "systemDrivePowerOn": "Powered on",
+  "@systemDrivePowerOn": {
+    "description": "Drive health table: column of how long the drive has been powered on over its life."
+  },
+  "systemDriveHours": "{hours} h",
+  "@systemDriveHours": {
+    "description": "Drive health table: a number of hours in the UI locale.",
+    "placeholders": {
+      "hours": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
   "systemColumnMount": "Mount",
   "@systemColumnMount": {
     "description": "Disks table column: where the filesystem is mounted."

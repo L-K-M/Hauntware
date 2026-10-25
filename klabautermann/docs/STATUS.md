@@ -1941,6 +1941,14 @@ is on main:
   created again under its name is not removed. An API step can now
   carry a JSON body, which the preview shows as sent. The Docker
   actions suite creates, refuses and removes a volume on the fixture.
+- Drive health (M6 N37c, HW-04): in admin mode, the System tab's Drive
+  health section reads every drive's SMART health on request through an
+  elevated `smartctl --scan-open`, then `smartctl -n standby -a` per
+  drive, so a sleeping drive stays asleep. Each drive shows a verdict
+  (passed, warning, failing, asleep or unknown) with its temperature,
+  NVMe wear, bad sectors and powered-on hours, and a failed read says
+  why (smartmontools missing or older than 7.0, elevation refused, link
+  lost).
 - GPUs (M6 N37b, HW-03): collector-set version 12 adds the slow `gpu`
   collector, which asks `nvidia-smi` and reads the amdgpu sysfs files
   every 30 s. The System tab's GPUs section lists each GPU's busy share,

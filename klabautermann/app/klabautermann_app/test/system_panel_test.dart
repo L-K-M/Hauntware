@@ -5,9 +5,11 @@ import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:intl/intl.dart' show DateFormat;
+import 'package:klabautermann_app/controllers/admin_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
+import 'package:klabautermann_app/ui/admin_mode_chip.dart' show AdminScope;
 import 'package:klabautermann_app/ui/server_surfaces.dart';
 import 'package:klabautermann_app/ui/system_panel.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -221,7 +223,9 @@ Future<_Panel> _pump(
 
   final engine = FakeEngineClient();
   final monitoring = MonitoringController(engine);
+  final admin = AdminController(engine);
   addTearDown(() async {
+    admin.dispose();
     monitoring.dispose();
     await engine.close();
   });
@@ -243,10 +247,13 @@ Future<_Panel> _pump(
           body: RepaintBoundary(
             child: ColoredBox(
               color: theme.colorScheme.surface,
-              child: ValueListenableBuilder(
-                valueListenable: serverId,
-                builder: (context, serverId, _) =>
-                    SystemPanel(monitoring: monitoring, serverId: serverId),
+              child: AdminScope(
+                admin: admin,
+                child: ValueListenableBuilder(
+                  valueListenable: serverId,
+                  builder: (context, serverId, _) =>
+                      SystemPanel(monitoring: monitoring, serverId: serverId),
+                ),
               ),
             ),
           ),
@@ -483,6 +490,86 @@ void main() {
       const GpuResult(GpuSnapshot([])),
     );
     expect(find.text('GPUs'), findsNothing);
+  });
+
+  testWidgets('HW-04 reads drive health on request in admin mode, with '
+      'each drive\'s verdict and figures, or why nothing was read', (
+    tester,
+  ) async {
+    // Wide enough for every column of the drive table.
+    final panel = await _pump(tester, size: const Size(1100, 1200));
+    Finder drives(String text) =>
+        _inSection(SystemSection.driveHealth, find.text(text));
+    expect(
+      drives(
+        'Turn on admin mode to read drive health: smartctl needs the '
+        'drives\' device nodes.',
+      ),
+      findsOneWidget,
+    );
+    expect(drives('Read drive health'), findsNothing);
+
+    panel.engine.emit(const AdminModeState(_serverId, AdminModePhase.on));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(drives('Read drive health'));
+    await tester.tap(drives('Read drive health'));
+    await tester.pumpAndSettle();
+    expect(drives('Reading drive health…'), findsOneWidget);
+    final read = panel.engine.sentOfType<ReadSmart>().cast<ReadSmart>().single;
+    expect(read.serverId, _serverId);
+
+    panel.engine.emit(
+      SmartReport(
+        serverId: _serverId,
+        requestId: read.requestId,
+        disks: const [
+          SmartDisk(
+            device: '/dev/nvme0',
+            verdict: SmartVerdict.passed,
+            model: 'WD Blue SN570 1TB',
+            celsius: 38,
+            percentageUsed: 3,
+            powerOnHours: 1000,
+          ),
+          SmartDisk(
+            device: '/dev/sda',
+            verdict: SmartVerdict.warning,
+            model: 'Samsung SSD 860 EVO 500GB',
+            badSectors: 8,
+            powerOnHours: 12345,
+          ),
+          SmartDisk(device: '/dev/sdb', verdict: SmartVerdict.asleep),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(drives('WD Blue SN570 1TB'), findsOneWidget);
+    expect(drives('Passed'), findsOneWidget);
+    expect(drives('38 °C'), findsOneWidget);
+    expect(drives('3%'), findsOneWidget);
+    expect(drives('1,000 h'), findsOneWidget);
+    expect(drives('Warning'), findsOneWidget);
+    expect(drives('8'), findsOneWidget);
+    expect(drives('12,345 h'), findsOneWidget);
+    expect(drives('/dev/sdb'), findsNWidgets(2));
+    expect(drives('Asleep'), findsOneWidget);
+    expect(drives('Read again'), findsOneWidget);
+
+    await tester.tap(drives('Read again'));
+    await tester.pumpAndSettle();
+    final again = panel.engine.sentOfType<ReadSmart>().cast<ReadSmart>().last;
+    panel.engine.emit(
+      SmartReport(
+        serverId: _serverId,
+        requestId: again.requestId,
+        failure: SmartReportFailure.missing,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      drives('smartmontools is not installed on this server.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('where every column does not fit, the disk activity table '

@@ -22,6 +22,7 @@ import '../admin/admin_mode.dart';
 import '../audit/audit_log.dart';
 import '../audit/host_audit_line.dart';
 import '../admin/safety_policy.dart';
+import '../admin/smart.dart';
 import '../admin/user_crontabs.dart';
 import '../capabilities/capability_cache.dart';
 import '../catalog/engine_sync.dart';
@@ -1581,6 +1582,36 @@ void engineMain(
               session: session,
               profile: profiles[serverId],
               now: DateTime.now().toUtc(),
+            ),
+          ).then(uiPort.send),
+        );
+      case ReadSmart(:final serverId, :final requestId):
+        void fail(SmartReportFailure failure) => uiPort.send(
+          SmartReport(
+            serverId: serverId,
+            requestId: requestId,
+            failure: failure,
+          ),
+        );
+        if (links?.link(serverId) == null) {
+          fail(SmartReportFailure.noLink);
+          return;
+        }
+        final session = admin?.session(serverId);
+        if (session == null) {
+          fail(SmartReportFailure.adminRequired);
+          return;
+        }
+        admin?.touch(serverId);
+        // Not awaited, as the crontab read above.
+        unawaited(
+          lendSession(
+            serverId,
+            () => readSmart(
+              serverId,
+              requestId: requestId,
+              session: session,
+              profile: profiles[serverId],
             ),
           ).then(uiPort.send),
         );

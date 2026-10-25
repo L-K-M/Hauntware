@@ -20,6 +20,9 @@ final class AdminController extends ChangeNotifier {
   /// The crontab reads waiting on the engine, by request id, each with
   /// its server.
   final Map<String, (String, Completer<UserCrontabs>)> _crontabReads = {};
+
+  /// The drive health reads waiting on the engine, likewise.
+  final Map<String, (String, Completer<SmartReport>)> _smartReads = {};
   int _nextRead = 0;
   bool _engineStopped = false;
 
@@ -63,6 +66,31 @@ final class AdminController extends ChangeNotifier {
     return read.future;
   }
 
+  /// Reads every drive's health on [serverId] (HW-04), which needs admin
+  /// mode; the engine answers with [SmartReport], a failure included. A
+  /// stopped engine answers no link.
+  Future<SmartReport> readSmart(String serverId) {
+    final requestId = (_nextRead++).toString();
+    if (_engineStopped) {
+      return Future.value(_noSmartLink(serverId, requestId));
+    }
+    final read = Completer<SmartReport>();
+    _smartReads[requestId] = (serverId, read);
+    try {
+      _engine.send(ReadSmart(serverId, requestId: requestId));
+    } on StateError {
+      _onEngineDone();
+    }
+    return read.future;
+  }
+
+  static SmartReport _noSmartLink(String serverId, String requestId) =>
+      SmartReport(
+        serverId: serverId,
+        requestId: requestId,
+        failure: SmartReportFailure.noLink,
+      );
+
   static UserCrontabs _noLink(String serverId, String requestId) =>
       UserCrontabs(
         serverId: serverId,
@@ -77,6 +105,8 @@ final class AdminController extends ChangeNotifier {
         notifyListeners();
       case UserCrontabs(:final requestId):
         _crontabReads.remove(requestId)?.$2.complete(event);
+      case SmartReport(:final requestId):
+        _smartReads.remove(requestId)?.$2.complete(event);
       default:
     }
   }
@@ -90,6 +120,11 @@ final class AdminController extends ChangeNotifier {
       read.complete(_noLink(serverId, requestId));
     }
     _crontabReads.clear();
+    for (final MapEntry(key: requestId, value: (serverId, read))
+        in _smartReads.entries) {
+      read.complete(_noSmartLink(serverId, requestId));
+    }
+    _smartReads.clear();
     notifyListeners();
   }
 

@@ -860,6 +860,37 @@ abstract final class HostCommands {
     };
   }
 
+  /// `smartctl --scan-open -j`: the drives smartctl can open, with the
+  /// device type it would read each as (03 §7.11, HW-04).
+  static List<String> smartScan() => const ['smartctl', '--scan-open', '-j'];
+
+  /// `smartctl -n standby -a -j -d <type> <device>` for one drive's
+  /// health (03 §7.11, HW-04): a drive that is spun down is left asleep,
+  /// and smartctl says so instead of reading it. [device] and [type] come
+  /// from [smartScan]'s output, so both are checked before use.
+  static List<String> smartRead(String device, String type) {
+    _check(_smartDevice, device);
+    _check(_smartType, type);
+    return ['smartctl', '-n', 'standby', '-a', '-j', '-d', type, device];
+  }
+
+  static String? _smartDevice(String value) {
+    if (!_smartDevicePattern.hasMatch(value) || value.contains('..')) {
+      return 'not a device node';
+    }
+    return null;
+  }
+
+  static String? _smartType(String value) =>
+      _smartTypePattern.hasMatch(value) ? null : 'not a smartctl device type';
+
+  /// A device node: `/dev/sda`, `/dev/nvme0`, `/dev/bus/0`.
+  static final _smartDevicePattern = RegExp(r'^/dev/[A-Za-z0-9._/-]{1,64}$');
+
+  /// A `-d` type as `--scan-open` prints it: `sat`, `nvme`,
+  /// `megaraid,0`, `sat+megaraid,1`.
+  static final _smartTypePattern = RegExp(r'^[a-z0-9][a-z0-9_,+-]{0,31}$');
+
   /// `crontab -l -u <user>` for the jobs view's user switch (03 §7.7).
   static List<String> crontabList(String user) {
     _check(ArgValidators.userName, user);

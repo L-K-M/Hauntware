@@ -3914,6 +3914,22 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   section lists each GPU's busy share, and its memory, temperature and
   power where every column fits; an installed `nvidia-smi` that fails,
   as without its driver, shows its first line instead.
+
+  SMART (M6 N37c) is not a collector: smartctl opens the drives' device
+  nodes, which are root's on every distribution the probe has met, so
+  the System tab's Drive health section reads it on request in admin
+  mode, as JOB-03 reads other users' crontabs. `ReadSmart` runs an
+  elevated `smartctl --scan-open -j`, then `smartctl -n standby -a -j -d
+  <type> <device>` for each drive it lists (at most 32, the rest
+  counted), so a spun-down drive is left asleep and reads as such. The
+  verdict is the drive's own assessment, failing when it failed or
+  smartctl's bit 3 is set, and a warning when it passed but shows
+  reallocated, pending or uncorrectable sectors, a prefailure attribute
+  at its threshold (bit 4), self-test errors (bit 7), an NVMe critical
+  warning or NVMe endurance used up; the error log alone (bit 6) is too
+  common to warn on. A probe that found no smartctl answers without
+  running anything. The read is not repeated on its own; the
+  minutes-scale cadence and HW-05's scoring wait for history (v1.x).
 - **v1.x.** Fans, battery, inventory, crash markers, boot performance,
   incident snapshot (redacted by default), deploy pre-flight checks.
 
