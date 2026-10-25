@@ -178,7 +178,8 @@ class _VolumesPanelState extends State<VolumesPanel> {
                 text: l10n.dockerVolumesUseUnknown,
                 detail: containers.failure?.detail,
               ),
-            if (volumes != null) _filters(l10n),
+            if (volumes != null)
+              _filters(l10n, useKnown: containers.containers != null),
             if (volumes != null && !wide) _sortControls(l10n),
           ],
         );
@@ -229,10 +230,11 @@ class _VolumesPanelState extends State<VolumesPanel> {
     final l10n = AppLocalizations.of(context);
     final columns = _columns(l10n, widget.monitoring.clock.value);
     final terms = searchTerms(_search.text);
+    final filter = _shownFilter(useKnown: containers != null);
     final entries = volumeEntries(
       volumes,
       containers: containers,
-      filter: _filter,
+      filter: filter,
       terms: terms,
     );
     final empty = Padding(
@@ -242,7 +244,7 @@ class _VolumesPanelState extends State<VolumesPanel> {
             ? l10n.dockerVolumesEmpty
             : terms.isNotEmpty
             ? l10n.dockerVolumesNoMatch
-            : switch (_filter) {
+            : switch (filter) {
                 VolumeFilter.unused => l10n.dockerVolumesNoneUnused,
                 // Every volume passes; the engine listed none.
                 VolumeFilter.all => l10n.dockerVolumesEmpty,
@@ -264,7 +266,13 @@ class _VolumesPanelState extends State<VolumesPanel> {
     );
   }
 
-  Widget _filters(AppLocalizations l10n) => Wrap(
+  /// The filter the list applies: every volume while no container list
+  /// says which are unused, so an empty list never claims that every
+  /// volume is mounted when that is unknown.
+  VolumeFilter _shownFilter({required bool useKnown}) =>
+      useKnown ? _filter : VolumeFilter.all;
+
+  Widget _filters(AppLocalizations l10n, {required bool useKnown}) => Wrap(
     spacing: 12,
     runSpacing: 8,
     crossAxisAlignment: WrapCrossAlignment.center,
@@ -297,8 +305,10 @@ class _VolumesPanelState extends State<VolumesPanel> {
                 VolumeFilter.all => l10n.dockerImagesFilterAll,
                 VolumeFilter.unused => l10n.dockerImagesFilterUnused,
               }),
-              selected: _filter == filter,
-              onSelected: (_) => setState(() => _filter = filter),
+              selected: _shownFilter(useKnown: useKnown) == filter,
+              onSelected: useKnown
+                  ? (_) => setState(() => _filter = filter)
+                  : null,
             ),
         ],
       ),
