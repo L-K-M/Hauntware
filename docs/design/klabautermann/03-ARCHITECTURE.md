@@ -4412,6 +4412,19 @@ arrives with E22's Docker actions.
   owner on 2026-10-10, D10; no notification plugin resolves in any lockfile
   today [R: c3 §5.4]). Every rule row and the notification permission prompt say
   "evaluated on this device while Klabautermann is open".
+- **As built (M6 N50a).** The engine's `AlertEvaluator` takes the live
+  `rule` records after every sync round and the fleet with its groups
+  whenever it changes, and evaluates each `client` rule on every sample
+  of the servers its scope names (a `server` rule its target, a `group`
+  rule the servers of that group, `all` every fleet server). The metric
+  vocabulary is what the samples carry: `cpu.busy`, `memory.used` and
+  `load.perCore` from `overview` and `core`, and `disk.used` and
+  `disk.inodes`, the fullest real filesystem, from `fs`; a rule naming
+  another metric stays idle. An unknown value holds the rule's phase. A
+  raise and a clear each send `LocalAlertChanged`; a rule removed or
+  changed, or a server leaving its scope, clears a raised alert at once.
+  The alert center, badges, notifications and the rule editor follow
+  (N50b, N51).
 - **v1.x.** Flap damping (the rest of ALR-16), desktop tray monitoring
   (ALR-03, PLT-10), Android watch mode for a session (PLT-11, D34), Android
   credential-free reachability checks every 15 minutes or more (PLT-15), and T1
@@ -5147,6 +5160,32 @@ unchanged backup restores.
 
 Out of scope: enforced RBAC and tamper-proof audit; a client cannot restrict
 the holder of a root-equivalent socket (NG-08).
+
+### 8.13 App lock (SAF-20)
+
+Off by default, per device in `settings.json` (`klabautermann.appLock`),
+on Android, iOS, macOS and Windows; Linux has no system prompt
+`local_auth` can call, so the switch stays off there. The lock is
+ghost_keystore's `AppLock` (F5f), Séance's own, behind a lock screen:
+
+- With the lock on, the app opens behind the screen, which asks for
+  device authentication (biometrics, the passcode or PIN as fallback) at
+  once and on "Unlock". After `appLockBackgroundTimeout` (5 minutes) in
+  the background or hidden, by wall and monotonic time, it locks again.
+  The covered app stays mounted but takes no pointer, focus or semantics.
+- The engine's keystore reads (the master key, API keys such as the sync
+  token) wait for it: the app answers a read while locked with a refusal,
+  so a locked app hands the engine no new credential. Writes and deletes
+  are not held back, so a sign-out finishes. Links already open keep
+  running, as in Séance.
+- Admin mode ends on every server when the lock engages (8.2).
+- Turning the lock on or off asks for authentication first and takes
+  effect only once saved; the desktop settings window asks the app's
+  window to run it.
+- The lock fails closed: a device whose passcode, PIN and biometrics are
+  removed while it is on keeps the app behind the screen, which says to
+  set one up again, since unlocking and turning the lock off both need
+  that authentication.
 
 ---
 

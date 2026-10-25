@@ -14,6 +14,7 @@ import 'package:ghost_theme/ghost_theme.dart';
 
 import '../../controllers/announcement_controller.dart'
     show AnnouncementNotSavedException;
+import '../../controllers/app_lock_controller.dart';
 import '../../controllers/appearance_controller.dart'
     show AppearanceNotSavedException;
 import '../../controllers/device_name.dart' show DeviceNameNotSavedException;
@@ -89,6 +90,11 @@ enum SettingsLinkMethod {
   /// object of [SettingsLinkKey.serverId] and [SettingsLinkKey.safety] in
   /// `encodeServerSafety`'s form.
   setServerSafety,
+
+  /// The Safety tab's app lock switch (SAF-20); the argument is a bool,
+  /// the answer an [AppLockChange] name. The device authentication it
+  /// needs runs in the app's window.
+  setAppLock,
 }
 
 /// The keys of every JSON object on the link, spelled once for both sides.
@@ -116,6 +122,12 @@ enum SettingsLinkKey {
   monitored,
   safety,
   labels,
+
+  /// The app lock, an object of [enabled] and [support], or null when the
+  /// app offers none.
+  appLock,
+  enabled,
+  support,
 }
 
 /// The palette's stored form, bound to Klabautermann's style.
@@ -151,6 +163,12 @@ PinPublication decodePinPublication(Map<Object?, Object?>? json) => json == null
         release: json[SettingsLinkKey.release.name] as String?,
         asserted: json[SettingsLinkKey.asserted.name]! as bool,
       );
+
+/// The app lock as the snapshot carries it, its support by name.
+Map<String, Object?> encodeAppLock(AppLockSettings lock) => {
+  SettingsLinkKey.enabled.name: lock.enabled,
+  SettingsLinkKey.support.name: lock.support.name,
+};
 
 /// The monitor set's candidates as the snapshot carries them, in fleet
 /// order, the eligibility by name.

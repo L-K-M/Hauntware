@@ -2867,6 +2867,46 @@ final class KeystoreRequest extends EngineEvent {
   final KeystoreOperation operation;
 }
 
+/// One in-app threshold alert raised or cleared (ALR-01, 03 §7.19, D29):
+/// the engine evaluates every synced rule on the live samples of the
+/// servers it applies to, on this device while Klabautermann is open. A
+/// rule that is removed or changed, or a server that leaves its scope,
+/// clears a raised alert at once.
+final class LocalAlertChanged extends EngineEvent {
+  const LocalAlertChanged({
+    required this.serverId,
+    required this.ruleId,
+    required this.metric,
+    required this.severity,
+    required this.raised,
+    required this.at,
+    this.value,
+    this.since,
+  });
+
+  final String serverId;
+
+  /// The `rule` record's id.
+  final String ruleId;
+
+  /// The rule's metric id, such as `cpu.busy`.
+  final String metric;
+
+  final AlertSeverity severity;
+
+  /// True when the alert went up, false when it cleared.
+  final bool raised;
+
+  /// The reading that raised or cleared it, by the engine's clock in UTC.
+  final DateTime at;
+
+  /// The value that reading had; null for a clear without a reading.
+  final double? value;
+
+  /// When the breach behind a raise began, as the rule's `for` counts it.
+  final DateTime? since;
+}
+
 /// Alerts fetched for one server inside a sync round (v1.x, 03 §10.1, D42).
 final class AlertsArrived extends EngineEvent {
   const AlertsArrived(this.serverId, this.alerts);

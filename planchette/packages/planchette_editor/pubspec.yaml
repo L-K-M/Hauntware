@@ -1,6 +1,6 @@
 name: planchette_editor
 description: Shared Flutter text editor for Planchette, Poltergeist, and Seance.
-version: 1.9.2
+version: 1.9.3
 publish_to: none
 
 environment:
