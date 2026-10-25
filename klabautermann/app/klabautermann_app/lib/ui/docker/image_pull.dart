@@ -296,7 +296,7 @@ class _PullResult extends StatelessWidget {
       RunInProgress() => l10n.dockerPullRunning(via.name),
       RunFinished(:final finished) => switch (finished.outcome) {
         // A detached pull only started: its log follows it (03 §7.17).
-        ActionOutcome.succeeded when finished.operationId != null =>
+        ActionOutcome.succeeded when via == PullRoute.hostDetached =>
           l10n.dockerPullDetached(target),
         ActionOutcome.succeeded => l10n.actionSucceeded(target),
         ActionOutcome.cancelled => l10n.actionCancelled(target),

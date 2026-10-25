@@ -257,4 +257,20 @@ void main() {
       findsOne,
     );
   });
+
+  testWidgets('a pull on the server\'s login that finished reads as done, '
+      'whatever the run reports', (tester) async {
+    await pumpSheet(tester);
+    await pull(tester, 'nginx:1.27', route: "Server's login");
+    engine.emit(
+      const ActionFinished(
+        planId: 'plan-1',
+        outcome: ActionOutcome.succeeded,
+        operationId: 'op-1',
+      ),
+    );
+    await _settle(tester);
+    expect(find.text('Done: nginx:1.27'), findsOne);
+    expect(find.textContaining('started on the server'), findsNothing);
+  });
 }
