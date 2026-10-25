@@ -218,6 +218,7 @@ void main() {
           expect(field.top, stripTop);
           expect(field.bottom, strip.bottom);
         } else {
+          // The kit's compact field: 4 px down, 26 px tall.
           expect(field.top, 4);
           expect(field.height, 26);
         }

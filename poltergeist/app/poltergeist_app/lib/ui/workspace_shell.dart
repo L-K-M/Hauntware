@@ -1996,6 +1996,8 @@ class _WorkspaceShellState extends State<WorkspaceShell>
               backgroundColor: chrome.sidebarBackground,
               // macOS: clear the toolbar band the inline column's
               // spacer clears, or the filter and first rows sit under it.
+              // The drawer floats over the panes rather than beside their
+              // tab strips, so its filter field stays compact.
               child: ReserveMacosToolbarBand(
                 child: SafeArea(child: _buildSidebarView(sshImportCommand)),
               ),
@@ -2310,7 +2312,11 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         // draws the header under the unified toolbar band, whose empty
         // space the system already drags and zooms.
         header,
-        Divider(height: _headerRuleHeight, color: chrome.separator),
+        Divider(
+          height: _headerRuleHeight,
+          thickness: _headerRuleHeight,
+          color: chrome.separator,
+        ),
         // D19's update banner lives in Alerts now (D32 §3); the pane
         // row owns the rest of the column.
         Expanded(child: paneRow),

@@ -364,7 +364,8 @@ void main() {
         'under a banner', (tester) async {
       final field = find.byKey(const ValueKey('servers.filter.field'));
       await boot(tester, [
-        for (final name in ['a', 'b', 'c', 'd', 'e']) server(name),
+        for (var i = 0; i < ServerListPane.filterThreshold; i++)
+          server('box$i'),
       ]);
       await pumpRail(tester);
       expect(tester.getRect(field).top, 0);

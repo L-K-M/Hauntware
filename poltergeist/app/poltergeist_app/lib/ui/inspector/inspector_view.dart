@@ -198,7 +198,7 @@ class _TabSwitcher extends StatelessWidget {
             child: Container(
               width: 40,
               // Centred, 2 px inside the strip's top and bottom edges.
-              height: 26,
+              height: paneTabStripHeight - 4,
               alignment: Alignment.center,
               decoration: isSelected
                   ? BoxDecoration(

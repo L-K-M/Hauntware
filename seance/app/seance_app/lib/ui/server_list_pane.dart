@@ -353,7 +353,9 @@ class _ServerListPaneState extends State<ServerListPane> {
     final update = state.updateInfo;
     final localShell = state.localShellAvailable && widget.onOpenLocal != null;
     // The field spans the tab strip's band only at the rail's top, level
-    // with the strip; under a banner or the local shell it stays compact.
+    // with the strip. Under the update banner, the inbox banner or the
+    // local shell it stays compact; anything new drawn above the field
+    // belongs in this condition too.
     final levelWithTabs =
         update == null && state.inboxPending.isEmpty && !localShell;
     return Column(

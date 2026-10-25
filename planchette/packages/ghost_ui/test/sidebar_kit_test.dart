@@ -1195,6 +1195,7 @@ void main() {
               ),
             ),
           ),
+          platform: TargetPlatform.macOS,
         );
         expect(tester.getSize(find.byKey(const ValueKey('f'))).height, extent);
       });
