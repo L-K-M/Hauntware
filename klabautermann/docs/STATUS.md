@@ -1962,6 +1962,12 @@ is on main:
   sub-tab, the Unused filter stays off until a container list says
   which are unused. The Docker actions suite refuses and removes a network on
   the fixture. Prune (DNW-02, DKE-05) comes with N12.
+- Alert evaluation (M6 N50a, ALR-01): the engine evaluates every synced
+  `rule` record on the live samples of the servers its scope names, with
+  the rule's raise and clear thresholds and durations, over `cpu.busy`,
+  `memory.used`, `load.perCore`, `disk.used` and `disk.inodes`, and
+  sends `LocalAlertChanged` on each raise and clear. Nothing in the app
+  shows them yet (N50b).
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container
