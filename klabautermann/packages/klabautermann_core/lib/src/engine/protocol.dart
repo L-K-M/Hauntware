@@ -5383,8 +5383,9 @@ enum CadenceProfile {
   phone,
 
   /// The Cellular saver column, which reads `timers`, `cron`, `temps`
-  /// and `gpu` on demand: once per [Subscribe] that names them, as soon as the link is
-  /// ready and the app is in the foreground (see [Subscribe]).
+  /// and `gpu` on demand: once per [Subscribe] that names them, as soon
+  /// as the link is ready and the app is in the foreground (see
+  /// [Subscribe]).
   cellularSaver,
 }
 
