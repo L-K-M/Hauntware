@@ -5389,7 +5389,7 @@ abstract class AppLocalizations {
   /// An activity log row's action; action is the engine's intent type name.
   ///
   /// In en, this message translates to:
-  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
+  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
   String activityAction(String action);
 
   /// An activity log row's confirmation; tier is the engine's ConfirmationTier name.
@@ -6771,6 +6771,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Which volumes are in use is unknown: the containers, whose mounts tell, could not be listed.'**
   String get dockerVolumesUseUnknown;
+
+  /// Images list: the button over the list that opens the pull sheet (IMG-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Pull image…'**
+  String get dockerPullOpen;
+
+  /// Pull sheet: its title (IMG-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Pull an image'**
+  String get dockerPullTitle;
+
+  /// Pull sheet: the label of the image reference field.
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get dockerPullReference;
+
+  /// Pull sheet: example references in the empty field. A name without a tag pulls latest.
+  ///
+  /// In en, this message translates to:
+  /// **'nginx:1.27 or registry.example.com/app:2'**
+  String get dockerPullReferenceHint;
+
+  /// Pull sheet: the button that plans the pull and shows its preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Pull'**
+  String get dockerPullStart;
+
+  /// Pull sheet: the button that stops a running pull.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop pull'**
+  String get dockerPullCancel;
+
+  /// Pull sheet: while a pull runs. The pull runs over this connection and the daemon stops it when the sheet closes (03 §7.14).
+  ///
+  /// In en, this message translates to:
+  /// **'Pulling. Closing this sheet stops the pull.'**
+  String get dockerPullForeground;
+
+  /// Pull sheet: one layer's status with the bytes done of its total.
+  ///
+  /// In en, this message translates to:
+  /// **'{status}: {current} of {total}'**
+  String dockerPullLayerBytes(String status, String current, String total);
 
   /// Images list: the button over the list that opens the menu of prunes (DKE-05, IMG-06).
   ///

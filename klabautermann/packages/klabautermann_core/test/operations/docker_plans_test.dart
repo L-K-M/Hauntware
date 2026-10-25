@@ -77,6 +77,10 @@ final class _Engine extends FakeDaemon {
   /// `GET /system/df`'s body.
   Map<String, Object?> df = const {};
 
+  /// The JSON values `POST /images/create` streams, and its status.
+  List<Map<String, Object?>> pull = const [];
+  int pullStatus = 200;
+
   /// Statuses by `METHOD path`; actions answer 204 otherwise.
   final statuses = <String, int>{};
 
@@ -125,6 +129,15 @@ final class _Engine extends FakeDaemon {
     }
     if (method == 'GET' && rest == '/networks') return _reply(200, networks);
     if (method == 'GET' && rest == '/system/df') return _reply(200, df);
+    if (method == 'POST' && rest == '/images/create') {
+      if (pullStatus != 200) {
+        return _reply(pullStatus, {'message': 'pull access denied'});
+      }
+      // Concatenated values, as the daemon streams them.
+      final body = pull.map(jsonEncode).join('\r\n');
+      return 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n'
+          'Content-Length: ${utf8.encode(body).length}\r\n\r\n$body';
+    }
     if (method == 'GET' && rest.startsWith('/networks/')) {
       final key = Uri.decodeComponent(rest.substring('/networks/'.length));
       for (final n in networks) {
@@ -994,6 +1007,18 @@ void main() {
       );
     });
 
+    test('a prune target no prune names is refused, not passed', () async {
+      final check = DockerTargetUnchanged(
+        DockerTargetKind.prune,
+        'everything',
+        pruneFingerprint(PrunePreview(removes: const [], freed: 0)),
+      );
+      expect(
+        await revalidateDockerTarget(_client(_Engine()), check),
+        RevalidationFailure.targetChanged,
+      );
+    });
+
     test('a prune reads the lists it changed again', () {
       expect(
         apiStepChanges(
@@ -1017,6 +1042,181 @@ void main() {
           networks: false,
         ),
       );
+    });
+  });
+
+  group('pull (IMG-03)', () {
+    test('a reference pulls its tag, latest without one, and a digest '
+        'whole, behind a plain confirmation', () async {
+      final engine = _Engine();
+      for (final (reference, query) in [
+        ('nginx:1.27', {'fromImage': 'nginx', 'tag': '1.27'}),
+        ('nginx', {'fromImage': 'nginx', 'tag': 'latest'}),
+        (
+          'registry:5000/klab/app:1',
+          {'fromImage': 'registry:5000/klab/app', 'tag': '1'},
+        ),
+        (
+          'registry:5000/klab/app',
+          {'fromImage': 'registry:5000/klab/app', 'tag': 'latest'},
+        ),
+        ('nginx@sha256:${'a' * 64}', {'fromImage': 'nginx@sha256:${'a' * 64}'}),
+      ]) {
+        final plan = _planned(
+          await _plan(PullImage(_server, reference: reference), engine),
+        );
+        expect(plan.kind, OperationKind.pullImage, reason: reference);
+        expect(plan.tier, ConfirmationTier.acknowledge);
+        expect(plan.targetName, reference);
+        expect(_step(plan).path, '/v1.52/images/create');
+        expect(_step(plan).query, query, reason: reference);
+      }
+      // The linter has no rule about pulls: nothing they do is dangerous.
+      expect(
+        cliEquivalent(
+          _step(
+            _planned(
+              await _plan(const PullImage(_server, reference: 'nginx'), engine),
+            ),
+          ),
+        ),
+        isNull,
+      );
+    });
+
+    test('a reference Docker would reject is refused', () async {
+      for (final reference in ['', 'NGINX', 'nginx:', 'a b', '-x', 'x;rm']) {
+        expect(
+          (await _plan(
+            PullImage(_server, reference: reference),
+            _Engine(),
+          )).refusal,
+          ActionRefusalReason.invalidTarget,
+          reason: reference,
+        );
+      }
+    });
+
+    final step = ApiStep(
+      method: 'POST',
+      path: '/v1.52/images/create',
+      query: const {'fromImage': 'nginx', 'tag': 'latest'},
+    );
+
+    test('the run reports each layer in the order the daemon named it, '
+        'and the messages about the image', () async {
+      final engine = _Engine()
+        ..pull = [
+          {'status': 'Pulling from library/nginx', 'id': 'latest'},
+          {'status': 'Pulling fs layer', 'id': 'aaaaaaaaaaaa'},
+          {'status': 'Pulling fs layer', 'id': 'bbbbbbbbbbbb'},
+          {
+            'status': 'Downloading',
+            'id': 'aaaaaaaaaaaa',
+            'progressDetail': {'current': 50, 'total': 100},
+          },
+          {'status': 'Pull complete', 'id': 'bbbbbbbbbbbb'},
+          {'status': 'Digest: sha256:${'c' * 64}'},
+        ];
+      final reports = <(List<PullLayer>, String?)>[];
+      final status = await runPullStep(
+        _client(engine),
+        step,
+        cancel: DockerCancelToken(),
+        onProgress: (layers, status) => reports.add((layers, status)),
+        interval: Duration.zero,
+      );
+      expect(status, 200);
+      final (layers, last) = reports.last;
+      expect(
+        [for (final l in layers) (l.id, l.status, l.current, l.total)],
+        [
+          ('aaaaaaaaaaaa', 'Downloading', 50, 100),
+          ('bbbbbbbbbbbb', 'Pull complete', null, null),
+        ],
+      );
+      expect(last, 'Digest: sha256:${'c' * 64}');
+      expect(reports.first.$2, 'latest: Pulling from library/nginx');
+    });
+
+    test('an error in the stream or an error answer carries what the '
+        'daemon said; a cancel throws before anything is sent', () async {
+      final failing = _Engine()
+        ..pull = [
+          {'status': 'Pulling fs layer', 'id': 'aaaaaaaaaaaa'},
+          {
+            'errorDetail': {'message': 'unexpected EOF'},
+            'error': 'unexpected EOF',
+          },
+        ];
+      await expectLater(
+        runPullStep(
+          _client(failing),
+          step,
+          cancel: DockerCancelToken(),
+          onProgress: (_, _) {},
+        ),
+        throwsA(
+          isA<ApiStepError>()
+              .having((e) => e.detail, 'detail', 'unexpected EOF')
+              .having((e) => e.status, 'status', isNull),
+        ),
+      );
+
+      final denied = _Engine()..pullStatus = 404;
+      await expectLater(
+        runPullStep(
+          _client(denied),
+          step,
+          cancel: DockerCancelToken(),
+          onProgress: (_, _) {},
+        ),
+        throwsA(
+          isA<ApiStepError>()
+              .having((e) => e.detail, 'detail', 'pull access denied')
+              .having((e) => e.status, 'status', 404),
+        ),
+      );
+
+      await expectLater(
+        runPullStep(
+          _client(_Engine()),
+          step,
+          cancel: DockerCancelToken()..cancel(),
+          onProgress: (_, _) {},
+        ),
+        throwsA(isA<DockerCancelledException>()),
+      );
+    });
+  });
+
+  group('pull cancels (IMG-03)', () {
+    test('a cancel stops the running pull', () {
+      final cancels = PullCancels();
+      final token = cancels.start('plan-1');
+      expect(token.isCancelled, isFalse);
+
+      cancels.cancel('plan-1');
+      expect(token.isCancelled, isTrue);
+    });
+
+    test('a cancel that comes before the pull starts it cancelled', () {
+      final cancels = PullCancels()..cancel('plan-1');
+
+      expect(cancels.start('plan-1').isCancelled, isTrue);
+      // Held once: a later pull of another plan is not touched.
+      expect(cancels.start('plan-2').isCancelled, isFalse);
+    });
+
+    test('a cancel after the pull ended touches no other pull', () {
+      final cancels = PullCancels();
+      final first = cancels.start('plan-1');
+      cancels
+        ..finish('plan-1')
+        ..cancel('plan-1');
+
+      expect(first.isCancelled, isFalse);
+      expect(cancels.start('plan-2').isCancelled, isFalse);
     });
   });
 

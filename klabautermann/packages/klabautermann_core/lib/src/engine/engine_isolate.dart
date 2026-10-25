@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:klabautermann_docker/klabautermann_docker.dart'
+    show DockerCancelToken;
 import 'package:klabautermann_host/klabautermann_host.dart'
     show HostProfile, OpDirectoryKind;
 import 'package:meta/meta.dart';
@@ -271,6 +273,10 @@ void engineMain(
   final profiles = <String, HostProfile>{};
   OperationRunner? runner;
 
+  // The running image pulls by plan id, which [CancelAction] stops
+  // (IMG-03).
+  final pullCancels = PullCancels();
+
   // Each server's channel slots, one quota for both routers, so the host
   // log reads and the Docker session's channels count against the same
   // shares (M9).
@@ -534,15 +540,35 @@ void engineMain(
       linkFor: links.link,
       emit: uiPort.send,
       lend: lendSession,
-      api: (serverId, step) async {
+      api: (serverId, planId, step) async {
         final router = docker;
         if (router == null) {
           throw const DockerEndpointUnavailable(DockerQueryFailure.cancelled);
         }
-        final status = await router.useEndpoint(
-          serverId,
-          (client, _) => runApiStep(client, step),
-        );
+        final pull = isPullStep(step);
+        final cancel = pull ? pullCancels.start(planId) : DockerCancelToken();
+        final int status;
+        try {
+          status = await router.useEndpoint(
+            serverId,
+            (client, _) => pull
+                ? runPullStep(
+                    client,
+                    step,
+                    cancel: cancel,
+                    onProgress: (layers, status) => uiPort.send(
+                      ImagePullProgress(
+                        planId: planId,
+                        layers: layers,
+                        status: status,
+                      ),
+                    ),
+                  )
+                : runApiStep(client, step),
+          );
+        } finally {
+          if (pull) pullCancels.finish(planId);
+        }
         if (status >= 200 && status < 300) {
           final (:container, :containers, :images, :volumes, :networks) =
               apiStepChanges(step);
@@ -1417,6 +1443,7 @@ void engineMain(
               RemoveVolume() ||
               RemoveNetwork() ||
               PruneDocker() ||
+              PullImage() ||
               StackAction() ||
               ContainerExec():
             final router = docker;
@@ -1750,6 +1777,8 @@ void engineMain(
         // Not awaited: the password prompt's answer comes through this
         // queue.
         unawaited(admin!.enable(serverId));
+      case CancelAction(:final planId):
+        pullCancels.cancel(planId);
       case RunAction(:final planId, :final confirmation):
         // A plan is taken once: a refused run needs a new preview.
         final (:plan, :missing) = plans.take(

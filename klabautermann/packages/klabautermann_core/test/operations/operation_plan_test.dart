@@ -196,6 +196,7 @@ void main() {
         OperationKind.removeUnusedImage,
         OperationKind.createVolume,
         OperationKind.removeNetwork,
+        OperationKind.pullImage,
         OperationKind.editFile,
         OperationKind.keepLastBackups,
       };

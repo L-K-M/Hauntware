@@ -1,7 +1,7 @@
 // The Docker action planners (M4 E15): CTR-02's state changes, CTR-06's
 // removal, IMG-02's image removal, STK-03's stack verbs, VOL-02's
-// volume create and remove (M6 N10b), DNW-02's network removal (N11)
-// and DKE-05's prune (N12). Each reads its target over the server's Docker endpoint at
+// volume create and remove (M6 N10b), DNW-02's network removal (N11),
+// DKE-05's prune (N12) and IMG-03's pull (N13). Each reads its target over the server's Docker endpoint at
 // planning time and builds one plan of exact API steps addressed by full
 // id, which the runner re-validates by inspect before the first one runs
 // (03 §8.5).
@@ -63,6 +63,7 @@ Future<PlanAttempt> planDockerAction(
       RemoveVolume() => await _planRemoveVolume(intent, context),
       RemoveNetwork() => await _planRemoveNetwork(intent, context),
       PruneDocker() => await _planPrune(intent, context),
+      PullImage() => _planPullImage(intent, context),
       StackAction() => await _planStack(intent, context),
       ContainerExec() => await _planExec(intent, context),
       _ => _refused(ActionRefusalReason.notImplemented),
@@ -380,10 +381,169 @@ Future<PlanAttempt> _planRemoveNetwork(
   );
 }
 
+/// The image references a pull accepts, loosely as Docker's reference
+/// grammar has them: an optional registry host and port, path components
+/// of lower-case letters and digits with `.`, `_`, `__` or `-` between,
+/// then a tag, a digest or both.
+final _imageReference = RegExp(
+  r'^(?:[a-zA-Z0-9.-]+(?::[0-9]+)?/)?'
+  r'[a-z0-9]+(?:(?:\.|_|__|-+)[a-z0-9]+)*'
+  r'(?:/[a-z0-9]+(?:(?:\.|_|__|-+)[a-z0-9]+)*)*'
+  r'(?::\w[\w.-]{0,127})?'
+  r'(?:@sha256:[a-f0-9]{64})?$',
+);
+
+/// IMG-03: one `POST /images/create` after a plain confirmation. The
+/// daemon pulls anonymously; the runner streams its progress
+/// ([runPullStep]).
+PlanAttempt _planPullImage(PullImage intent, DockerPlanContext c) {
+  final reference = intent.reference;
+  if (!_imageReference.hasMatch(reference)) {
+    return _refused(ActionRefusalReason.invalidTarget);
+  }
+
+  final (:fromImage, :tag) = pullTarget(reference);
+  return _planned(
+    OperationPlan(
+      intent: intent,
+      kind: OperationKind.pullImage,
+      targetName: reference,
+      steps: [
+        ApiStep(
+          method: 'POST',
+          path: _path(c, '/images/create'),
+          query: {'fromImage': fromImage, 'tag': ?tag},
+        ),
+      ],
+      requiredLevel: _level(c),
+      runner: _runner(c),
+      hostWrites: const [HostWriteRow.engineState],
+    ),
+  );
+}
+
+/// What `POST /images/create` takes for [reference]: the name, and the
+/// tag after its last `:` past the last `/`. A digest reference is sent
+/// whole. Without a tag the daemon would pull every tag of the name, so
+/// a bare name pulls `latest`, as `docker pull` does.
+({String fromImage, String? tag}) pullTarget(String reference) {
+  if (reference.contains('@')) return (fromImage: reference, tag: null);
+  final colon = reference.lastIndexOf(':');
+  if (colon > reference.lastIndexOf('/')) {
+    return (
+      fromImage: reference.substring(0, colon),
+      tag: reference.substring(colon + 1),
+    );
+  }
+  return (fromImage: reference, tag: 'latest');
+}
+
+/// The running image pulls' cancel tokens by plan id (IMG-03). A cancel
+/// can arrive before its pull starts, while the plan revalidates or the
+/// endpoint connects; it is held, so that pull starts cancelled rather
+/// than running on behind a closed sheet. Plan ids are never reused, so
+/// a cancel held for a plan that never pulls only costs its id.
+final class PullCancels {
+  final _tokens = <String, DockerCancelToken>{};
+  final _early = <String>{};
+
+  /// The token [planId]'s pull runs with, cancelled already when a
+  /// cancel came first.
+  DockerCancelToken start(String planId) {
+    final token = DockerCancelToken();
+    _tokens[planId] = token;
+    if (_early.remove(planId)) token.cancel();
+    return token;
+  }
+
+  /// [planId]'s pull ended.
+  void finish(String planId) => _tokens.remove(planId);
+
+  /// Stops [planId]'s pull, now or when it starts.
+  void cancel(String planId) {
+    final token = _tokens[planId];
+    if (token == null) {
+      _early.add(planId);
+    } else {
+      token.cancel();
+    }
+  }
+}
+
+/// Whether [step] is an image pull, which [runPullStep] streams.
+bool isPullStep(ApiStep step) =>
+    step.method == 'POST' && step.path.endsWith('/images/create');
+
+/// A layer's id in a pull's messages: the first 12 hex digits of its
+/// digest. Other ids name the tag being pulled.
+final _layerId = RegExp(r'^[a-f0-9]{12}$');
+
+/// Runs the pull [step] on [client], reporting its layers to [onProgress]
+/// at most once per [interval] and once more at the end (03 §7.14
+/// IMG-03). [cancel] closes the request, which cancels the pull on the
+/// daemon unless another client pulls the same image; the call then
+/// throws [DockerCancelledException]. An `errorDetail` in the stream, or
+/// an error answer, throws [ApiStepError] with the daemon's words.
+Future<int> runPullStep(
+  DockerClient client,
+  ApiStep step, {
+  required DockerCancelToken cancel,
+  required void Function(List<PullLayer> layers, String? status) onProgress,
+  Duration interval = const Duration(milliseconds: 250),
+}) async {
+  // Insertion order is the order the daemon first named each layer.
+  final layers = <String, PullLayer>{};
+  String? status;
+  final clock = Stopwatch()..start();
+  Duration? sent;
+  void report({bool last = false}) {
+    if (!last && sent != null && clock.elapsed - sent! < interval) return;
+    sent = clock.elapsed;
+    onProgress(List.of(layers.values), status);
+  }
+
+  try {
+    final response = await client.requestJsonValues(
+      step.method,
+      step.path,
+      query: step.query,
+      versioned: false,
+      cancelToken: cancel,
+    );
+    await for (final value in response.body) {
+      final message = parsePullProgress(value).value;
+      if (message.isError) {
+        throw ApiStepError(message.errorDetail ?? message.error!);
+      }
+      final id = message.id;
+      if (id != null && _layerId.hasMatch(id)) {
+        layers[id] = PullLayer(
+          id,
+          status: message.status,
+          current: message.progressDetail?.current,
+          total: message.progressDetail?.total,
+        );
+      } else if (message.status case final text?) {
+        status = id == null ? text : '$id: $text';
+      }
+      report();
+    }
+    report(last: true);
+    return response.statusCode;
+  } on DockerApiException catch (e) {
+    throw ApiStepError(
+      e.daemonMessage ?? 'HTTP ${e.statusCode}',
+      status: e.statusCode,
+    );
+  }
+}
+
 /// DKE-05, IMG-06: the objects a prune's filters match now are listed with
 /// what they leave and why, and the prune runs after the typed
 /// confirmation. The runner reads the same list again before the step
-/// and refuses when it changed, so what runs is what the preview showed.
+/// and refuses when it changed, so what runs is what the preview showed;
+/// the build cache, whose records carry no ids to compare, is the
+/// exception.
 Future<PlanAttempt> _planPrune(PruneDocker intent, DockerPlanContext c) async {
   final preview = await prunePreview(c.client, intent.kind, all: intent.all);
   if (preview.count == 0) return _refused(ActionRefusalReason.nothingToPrune);
@@ -787,14 +947,12 @@ Future<RevalidationFailure?> revalidateDockerTarget(
       DockerTargetKind.network => (await client.inspectNetwork(
         check.target,
       )).id,
-      DockerTargetKind.prune => switch (_pruneKindOf(check.target)) {
+      // A target no prune names reads as null, which no fingerprint
+      // equals, so the step is refused.
+      DockerTargetKind.prune => switch (_pruneOf(check.target)) {
         null => null,
-        final kind => pruneFingerprint(
-          await prunePreview(
-            client,
-            kind,
-            all: check.target == pruneTarget(DockerPruneKind.images, all: true),
-          ),
+        (final kind, final all) => pruneFingerprint(
+          await prunePreview(client, kind, all: all),
         ),
       },
     };
@@ -806,11 +964,12 @@ Future<RevalidationFailure?> revalidateDockerTarget(
   }
 }
 
-/// The prune kind [target] ([pruneTarget]) names, or null for none.
-DockerPruneKind? _pruneKindOf(String target) {
+/// The prune kind and `all` flag [target] ([pruneTarget]) names, or null
+/// for none.
+(DockerPruneKind, bool)? _pruneOf(String target) {
   for (final kind in DockerPruneKind.values) {
     for (final all in const [false, true]) {
-      if (pruneTarget(kind, all: all) == target) return kind;
+      if (pruneTarget(kind, all: all) == target) return (kind, all);
     }
   }
   return null;

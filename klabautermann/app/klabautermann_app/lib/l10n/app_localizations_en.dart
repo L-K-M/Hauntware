@@ -4179,6 +4179,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'RemoveVolume': 'Remove volume',
       'RemoveNetwork': 'Remove network',
       'PruneDocker': 'Prune',
+      'PullImage': 'Pull image',
       'StackAction': 'Stack action',
       'RedeployStack': 'Redeploy stack',
       'ContainerExec': 'Run command',
@@ -5180,6 +5181,34 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dockerVolumesUseUnknown =>
       'Which volumes are in use is unknown: the containers, whose mounts tell, could not be listed.';
+
+  @override
+  String get dockerPullOpen => 'Pull image…';
+
+  @override
+  String get dockerPullTitle => 'Pull an image';
+
+  @override
+  String get dockerPullReference => 'Image';
+
+  @override
+  String get dockerPullReferenceHint =>
+      'nginx:1.27 or registry.example.com/app:2';
+
+  @override
+  String get dockerPullStart => 'Pull';
+
+  @override
+  String get dockerPullCancel => 'Stop pull';
+
+  @override
+  String get dockerPullForeground =>
+      'Pulling. Closing this sheet stops the pull.';
+
+  @override
+  String dockerPullLayerBytes(String status, String current, String total) {
+    return '$status: $current of $total';
+  }
 
   @override
   String get dockerPrune => 'Prune…';

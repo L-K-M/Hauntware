@@ -276,6 +276,10 @@ import '../operations/plan_types.dart';
 /// Prune then joined v3 the same way (03 §7.12 DKE-05, IMG-06, M6 plan
 /// N12): the [PruneDocker] intent, whose preview carries a
 /// [PrunePreview], and the refusal `nothingToPrune`.
+///
+/// The image pull then joined v3 the same way (03 §7.14 IMG-03, M6 plan
+/// N13): the [PullImage] intent, [ImagePullProgress] while it runs, and
+/// [CancelAction], which stops it.
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -790,6 +794,16 @@ final class RunAction extends EngineRequest {
 
   final String planId;
   final ActionConfirmation confirmation;
+}
+
+/// Stops the running plan [planId] where its step can stop: an image pull
+/// (IMG-03), whose request the engine closes, which cancels the pull on
+/// the daemon. The plan finishes as [ActionOutcome.cancelled]; a step
+/// that cannot stop runs to its end.
+final class CancelAction extends EngineRequest {
+  const CancelAction(this.planId);
+
+  final String planId;
 }
 
 /// The safety preferences the app keeps in `settings.json` (03 §4.10, M4
@@ -2085,6 +2099,37 @@ final class ActionProgress extends EngineEvent {
   final int stepIndex;
   final int stepCount;
   final String? message;
+}
+
+/// Where a running image pull stands (03 §7.14 IMG-03): each layer the
+/// daemon reported, in the order it first did, and the latest message
+/// about the image as a whole. Sent at most a few times a second.
+final class ImagePullProgress extends EngineEvent {
+  ImagePullProgress({
+    required this.planId,
+    required Iterable<PullLayer> layers,
+    this.status,
+  }) : layers = List.unmodifiable(layers);
+
+  final String planId;
+  final List<PullLayer> layers;
+
+  /// The daemon's last message without a layer id, such as
+  /// `Pulling from library/nginx` or `Digest: sha256:...`.
+  final String? status;
+}
+
+/// One layer of an [ImagePullProgress]: the daemon's status for it
+/// (`Downloading`, `Extracting`, `Pull complete`, ...) and the bytes done
+/// of the total, when it reports them.
+@immutable
+final class PullLayer {
+  const PullLayer(this.id, {this.status, this.current, this.total});
+
+  final String id;
+  final String? status;
+  final int? current;
+  final int? total;
 }
 
 /// The answer to the [ReadEditable] with [requestId].
@@ -4486,6 +4531,16 @@ final class RemoveNetwork extends ActionIntent {
   const RemoveNetwork(super.serverId, {required this.networkId});
 
   final String networkId;
+}
+
+/// Pulls the image [reference] (03 §7.14 IMG-03): `name`, `name:tag` or
+/// `name@digest`, with a registry host when it has one. A name without a
+/// tag pulls `latest`, never every tag. The daemon pulls anonymously; a
+/// private registry's credentials are the host's own (REG-01).
+final class PullImage extends ActionIntent {
+  const PullImage(super.serverId, {required this.reference});
+
+  final String reference;
 }
 
 /// The kinds of unused Docker objects a prune removes (03 §7.12 DKE-05).

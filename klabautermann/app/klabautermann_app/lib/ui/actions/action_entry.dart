@@ -51,6 +51,9 @@ enum ActionEntryPoint {
   /// (DKE-05, IMG-06).
   prune,
 
+  /// Pulling an image (IMG-03).
+  imagePull,
+
   /// A stack's start, stop and restart (STK-03).
   stackVerb,
 
