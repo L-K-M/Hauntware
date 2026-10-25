@@ -84,6 +84,10 @@ enum Collector {
     wireName: 'timer_detail',
   ),
 
+  /// Temperature sensors from the hwmon and thermal sysfs classes with
+  /// builtins (03 §6.4, HW-01, slow sampler).
+  temps(SamplerKind.slow, [], guardedCommands: 0),
+
   /// Detached-operation records for re-attach: both operation directories
   /// of 03 §7.17, at most `kOpsRecordCap` records each, each cut at
   /// `kOpsRecordBytes` (slow sampler, one guarded listing per directory).
