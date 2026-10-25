@@ -1,7 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_keystore/app_lock.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:seance_app/services/app_lock.dart';
 import 'package:seance_app/services/device_authenticator.dart';
 
 class _Authentication extends LocalAuthentication {

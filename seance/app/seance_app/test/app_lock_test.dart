@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:seance_app/services/app_lock.dart';
+import 'package:ghost_keystore/app_lock.dart';
 import 'package:seance_app/services/app_settings.dart';
 
 import 'support/device_authenticator.dart';
