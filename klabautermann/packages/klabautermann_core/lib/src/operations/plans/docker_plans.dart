@@ -1,9 +1,10 @@
 // The Docker action planners (M4 E15): CTR-02's state changes, CTR-06's
-// removal, IMG-02's image removal, STK-03's stack verbs and VOL-02's
-// volume create and remove (M6 N10b). Each reads its
-// target over the server's Docker endpoint at planning time and builds
-// one plan of exact API steps addressed by full id, which the runner
-// re-validates by inspect before the first one runs (03 §8.5).
+// removal, IMG-02's image removal, STK-03's stack verbs, VOL-02's
+// volume create and remove (M6 N10b) and DNW-02's network removal
+// (N11). Each reads its target over the server's Docker endpoint at
+// planning time and builds one plan of exact API steps addressed by full
+// id, which the runner re-validates by inspect before the first one runs
+// (03 §8.5).
 import 'package:klabautermann_docker/klabautermann_docker.dart';
 import 'package:meta/meta.dart';
 
@@ -58,6 +59,7 @@ Future<PlanAttempt> planDockerAction(
       RemoveImage() => await _planRemoveImage(intent, context),
       CreateVolume() => await _planCreateVolume(intent, context),
       RemoveVolume() => await _planRemoveVolume(intent, context),
+      RemoveNetwork() => await _planRemoveNetwork(intent, context),
       StackAction() => await _planStack(intent, context),
       ContainerExec() => await _planExec(intent, context),
       _ => _refused(ActionRefusalReason.notImplemented),
@@ -260,7 +262,8 @@ Future<PlanAttempt> _planCreateVolume(
   DockerPlanContext c,
 ) async {
   final driver = intent.driver;
-  if (!_volumeName.hasMatch(intent.name) || driver == '') {
+  if (!_volumeName.hasMatch(intent.name) ||
+      (driver != null && driver.trim().isEmpty)) {
     return _refused(ActionRefusalReason.invalidTarget);
   }
   try {
@@ -333,6 +336,42 @@ Future<PlanAttempt> _planRemoveVolume(
           intent.name,
           volumeFingerprint(volume),
         ),
+      ],
+    ),
+  );
+}
+
+/// DNW-02: a user-defined network no container holds an endpoint on is
+/// removed by its id after a plain confirmation; a built-in one is never
+/// removed, and one in use is refused, as the engine would refuse it.
+Future<PlanAttempt> _planRemoveNetwork(
+  RemoveNetwork intent,
+  DockerPlanContext c,
+) async {
+  if (intent.networkId.isEmpty) {
+    return _refused(ActionRefusalReason.invalidTarget);
+  }
+  final network = await c.client.inspectNetwork(intent.networkId);
+  if (network.isBuiltin) return _refused(ActionRefusalReason.builtinNetwork);
+  if (network.containers.isNotEmpty) {
+    return _refused(ActionRefusalReason.networkInUse);
+  }
+  return _planned(
+    OperationPlan(
+      intent: intent,
+      kind: OperationKind.removeNetwork,
+      targetName: network.name,
+      steps: [
+        ApiStep(
+          method: 'DELETE',
+          path: _path(c, '/networks/${Uri.encodeComponent(network.id)}'),
+        ),
+      ],
+      requiredLevel: _level(c),
+      runner: _runner(c),
+      hostWrites: const [HostWriteRow.engineState],
+      revalidate: [
+        DockerTargetUnchanged(DockerTargetKind.network, network.id, network.id),
       ],
     ),
   );
@@ -475,18 +514,26 @@ Future<int> runApiStep(DockerClient client, ApiStep step) async {
 
 /// What [step] changes once it succeeds, for the watched lists to read
 /// again: the container its path addresses (`/containers/<id>/...`), the
-/// images for an image removal, or the volumes for a volume's create or
-/// removal.
-({String? container, bool images, bool volumes}) apiStepChanges(ApiStep step) {
+/// images for an image removal, the volumes for a volume's create or
+/// removal, or the networks for a network's removal.
+({String? container, bool images, bool volumes, bool networks}) apiStepChanges(
+  ApiStep step,
+) {
   final segments = Uri(path: step.path).pathSegments;
   final at = segments.indexOf('containers');
   if (at >= 0 && at + 1 < segments.length) {
-    return (container: segments[at + 1], images: false, volumes: false);
+    return (
+      container: segments[at + 1],
+      images: false,
+      volumes: false,
+      networks: false,
+    );
   }
   return (
     container: null,
     images: segments.contains('images'),
     volumes: segments.contains('volumes'),
+    networks: segments.contains('networks'),
   );
 }
 
@@ -510,6 +557,9 @@ Future<RevalidationFailure?> revalidateDockerTarget(
       DockerTargetKind.volume => volumeFingerprint(
         await client.inspectVolume(check.target),
       ),
+      DockerTargetKind.network => (await client.inspectNetwork(
+        check.target,
+      )).id,
     };
     return id == check.id ? null : RevalidationFailure.targetChanged;
   } on DockerNotFoundException {

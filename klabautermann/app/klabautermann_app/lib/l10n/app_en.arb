@@ -4452,7 +4452,7 @@
       }
     }
   },
-  "actionRefused": "{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server's container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} dependencyCycle{The stack's services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack's files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}",
+  "actionRefused": "{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server's container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} networkInUse{A container is on this network. Stop or disconnect it first.} builtinNetwork{This is one of the engine's own networks, which stay.} dependencyCycle{The stack's services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack's files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}",
   "@actionRefused": {
     "description": "Toast when the engine refused to plan or run an action; reason is the engine's ActionRefusalReason name.",
     "placeholders": {
@@ -4810,7 +4810,7 @@
   "@activityColumnResult": {
     "description": "Column of the activity log: how the run ended."
   },
-  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
+  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
   "@activityAction": {
     "description": "An activity log row's action; action is the engine's intent type name.",
     "placeholders": {
@@ -5204,6 +5204,10 @@
   "dockerTabVolumes": "Volumes",
   "@dockerTabVolumes": {
     "description": "Docker tab: the sub-tab listing volumes."
+  },
+  "dockerTabNetworks": "Networks",
+  "@dockerTabNetworks": {
+    "description": "Docker tab: the sub-tab listing networks."
   },
   "dockerTabStacks": "Stacks",
   "@dockerTabStacks": {
@@ -6081,6 +6085,81 @@
   "dockerVolumeRemove": "Remove",
   "@dockerVolumeRemove": {
     "description": "Volumes list: the row action that removes a volume and its data, behind a typed confirmation."
+  },
+  "dockerNetworksColumnScope": "Scope",
+  "@dockerNetworksColumnScope": {
+    "description": "Networks list: the column of network scopes, such as local or swarm."
+  },
+  "dockerNetworksColumnSubnet": "Subnet",
+  "@dockerNetworksColumnSubnet": {
+    "description": "Networks list: the column of each network's first configured subnet."
+  },
+  "dockerNetworksColumnGateway": "Gateway",
+  "@dockerNetworksColumnGateway": {
+    "description": "Networks list: the column of the gateway of each network's first configured subnet."
+  },
+  "dockerNetworksNoSubnet": "None",
+  "@dockerNetworksNoSubnet": {
+    "description": "Networks list: a network with no subnet or gateway configured, such as host or none."
+  },
+  "dockerNetworksBuiltin": "Built-in",
+  "@dockerNetworksBuiltin": {
+    "description": "Networks list: the badge on the engine's own networks (bridge, host, none), which cannot be removed."
+  },
+  "dockerNetworksBuiltinName": "{name}, built-in",
+  "@dockerNetworksBuiltinName": {
+    "description": "Networks list: what a screen reader hears for a built-in network's name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerNetworksInUse": "{count, plural, =1{1 container on it} other{{count} containers on it}}",
+  "@dockerNetworksInUse": {
+    "description": "Networks list: what a screen reader hears, and a phone row shows, for a network running containers are on.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerNetworksSearchHint": "Search by name, driver or subnet",
+  "@dockerNetworksSearchHint": {
+    "description": "Networks list: the search field's hint."
+  },
+  "dockerNetworksReading": "Reading the networks…",
+  "@dockerNetworksReading": {
+    "description": "Networks list: shown until the first list arrives."
+  },
+  "dockerNetworksEmpty": "This engine has no networks.",
+  "@dockerNetworksEmpty": {
+    "description": "Networks list: the engine listed none."
+  },
+  "dockerNetworksNoMatch": "No network matches the search.",
+  "@dockerNetworksNoMatch": {
+    "description": "Networks list: the search hides every network."
+  },
+  "dockerNetworksNoneUnused": "Every network you made has a container on it.",
+  "@dockerNetworksNoneUnused": {
+    "description": "Networks list: the Unused filter hides every network; built-in networks never count as unused."
+  },
+  "dockerNetworksFailed": "{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} daemonError{The engine refused or failed to list the networks.} connectionFailed{The connection to the engine failed while listing the networks.} other{The networks could not be listed.}}",
+  "@dockerNetworksFailed": {
+    "description": "Networks list: why the list could not be read. reason is the engine's failure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerNetworksUseUnknown": "Which networks are in use is unknown: the containers, which name their networks, could not be listed.",
+  "@dockerNetworksUseUnknown": {
+    "description": "Networks list: the network list names no containers, and the container list it is computed from failed."
+  },
+  "dockerNetworkRemove": "Remove",
+  "@dockerNetworkRemove": {
+    "description": "Networks list: the row action that removes a network no container is on."
   },
   "dockerDetailsClose": "Close the container details",
   "@dockerDetailsClose": {

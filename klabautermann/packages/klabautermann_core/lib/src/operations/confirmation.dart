@@ -47,6 +47,9 @@ enum OperationKind {
 
   /// Removing a volume deletes its data (03 §7.15).
   removeVolume(ConfirmationTier.typedPhrase),
+
+  /// Removing a user-defined network no container is on (DNW-02).
+  removeNetwork(ConfirmationTier.acknowledge),
   prune(ConfirmationTier.typedPhrase),
   composeDown(ConfirmationTier.typedPhrase),
 

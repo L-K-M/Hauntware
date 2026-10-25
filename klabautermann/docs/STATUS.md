@@ -1953,6 +1953,19 @@ is on main:
   with a fake authenticator; the system prompts themselves (Face ID,
   Android BiometricPrompt, Touch ID, Windows Hello) are a manual check per
   OS.
+- Networks (M6 N11, DNW-01, DNW-02): the Docker tab gains a Networks
+  sub-tab after Volumes, listing every network by name with its driver,
+  scope, first subnet and its gateway, and how many containers are on
+  it, counted from the containers' endpoints, with the built-in
+  `bridge`, `host` and `none` marked, an Unused filter that never lists
+  a built-in one, and a search by name, driver or subnet. A watch naming
+  `networks` reads `/networks` and reads it again on a `network` event.
+  Where actions are allowed, a user-defined network's Remove plans one
+  `DELETE /networks/{id}` behind a plain confirmation, refused for a
+  built-in network and while any container is on it. As on the Volumes
+  sub-tab, the Unused filter stays off until a container list says
+  which are unused. The Docker actions suite refuses and removes a network on
+  the fixture. Prune (DNW-02, DKE-05) comes with N12.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container
