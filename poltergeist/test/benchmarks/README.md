@@ -313,9 +313,10 @@ dir=build/d12-refresh                # one <run-id>/ per artifact
 dart run test/benchmarks/refresh.dart collect \
   --since 2026-10-23T15:00:00Z --artifacts "$dir"
 
-# Optional while main CI is held up: side-branch samples. Each run is
-# cancelled once its D12 job uploads results, then redispatched until
-# three runs qualify (--runs, --max-dispatches).
+# Optional while main CI is held up: side-branch samples (bench/*
+# branches only). Each run is cancelled once its D12 job uploads
+# results, then redispatched until three runs qualify (--runs,
+# --max-dispatches).
 git push origin origin/main:refs/heads/bench/d12-sample
 dart run test/benchmarks/refresh.dart sample --branch bench/d12-sample \
   --artifacts "$dir" --set runnerImage="$image"

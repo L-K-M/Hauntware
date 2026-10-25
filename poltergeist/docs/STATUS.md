@@ -10,8 +10,8 @@ next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 baseline refresh:
 - `collect` downloads main-branch artifacts.
 - `sample` dispatches CI on side branches at main's tip when main CI is
-  held up. It cancels each of its runs once the D12 job uploads results,
-  and it refuses main.
+  held up. It dispatches only on `bench/*` branches, cancels only its own
+  runs, and cancels each one once the D12 job uploads results.
 - `pool` pools exact-fingerprint runs through the checker's parser and
   median, and `--write` updates the baseline and the tier-A machine axes.
 
