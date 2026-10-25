@@ -92,6 +92,8 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         LoadAvg,
         NetRate,
         ProcsSelection,
+        SmartDisk,
+        SmartVerdict,
         SystemWideProcFile,
         SystemdUnit,
         TempSensor,

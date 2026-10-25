@@ -1199,6 +1199,101 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get systemDriveHealthTitle => 'Drive health';
+
+  @override
+  String get systemDriveHealthAdminNeeded =>
+      'Turn on admin mode to read drive health: smartctl needs the drives\' device nodes.';
+
+  @override
+  String get systemDriveHealthRead => 'Read drive health';
+
+  @override
+  String get systemDriveHealthReadAgain => 'Read again';
+
+  @override
+  String get systemDriveHealthReading => 'Reading drive health…';
+
+  @override
+  String systemDriveHealthFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noLink':
+          'The server is not connected, so drive health could not be read.',
+      'adminRequired': 'Admin mode ended before drive health was read.',
+      'elevationRefused':
+          'Elevation was refused, so drive health was not read.',
+      'missing': 'smartmontools is not installed on this server.',
+      'unreadable':
+          'smartctl did not answer as smartmontools 7.0 or later does.',
+      'transport': 'The connection failed while drive health was read.',
+      'other': 'Drive health could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemDriveHealthNone => 'No drive answered smartctl\'s scan.';
+
+  @override
+  String systemDriveHealthNotRead(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count more drives were not read.',
+      one: '1 more drive was not read.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get systemDriveColumn => 'Drive';
+
+  @override
+  String get systemDriveDevice => 'Device';
+
+  @override
+  String get systemDriveHealth => 'Health';
+
+  @override
+  String systemDriveVerdict(String verdict) {
+    String _temp0 = intl.Intl.selectLogic(verdict, {
+      'passed': 'Passed',
+      'warning': 'Warning',
+      'failing': 'Failing',
+      'asleep': 'Asleep',
+      'other': 'Unknown',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemDriveWear => 'Wear';
+
+  @override
+  String get systemDriveBadSectors => 'Bad sectors';
+
+  @override
+  String systemDriveBadSectorCount(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return '$countString';
+  }
+
+  @override
+  String get systemDrivePowerOn => 'Powered on';
+
+  @override
+  String systemDriveHours(int hours) {
+    final intl.NumberFormat hoursNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String hoursString = hoursNumberFormat.format(hours);
+
+    return '$hoursString h';
+  }
+
+  @override
   String get systemColumnMount => 'Mount';
 
   @override

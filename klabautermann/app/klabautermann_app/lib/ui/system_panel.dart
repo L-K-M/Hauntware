@@ -11,6 +11,7 @@ import '../l10n/app_localizations.dart';
 import 'chart_strings.dart';
 import 'charts/charts.dart' show BarSegment, ChartUnit, StackedBar;
 import 'disk_activity.dart';
+import 'drive_health.dart';
 import 'gpus.dart';
 import 'sortable_table.dart';
 import 'system_view.dart';
@@ -26,6 +27,7 @@ enum SystemSection {
   diskActivity,
   temperatures,
   gpus,
+  driveHealth,
 }
 
 /// The panel width from which the fact sections sit side by side and the
@@ -194,6 +196,11 @@ class _SystemPanelState extends State<SystemPanel> {
               ),
               ?temperatures,
               ?gpus,
+              DriveHealthSection(
+                key: const ValueKey(SystemSection.driveHealth),
+                serverId: widget.serverId,
+                tableId: SystemSection.driveHealth.name,
+              ),
             ],
           ),
         );

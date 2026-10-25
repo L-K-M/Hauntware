@@ -1768,6 +1768,108 @@ abstract class AppLocalizations {
   /// **'nvidia-smi is installed but failed: {message}'**
   String systemGpuNvidiaFailed(String message);
 
+  /// System tab: the section of each drive's SMART health (HW-04), read on request in admin mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Drive health'**
+  String get systemDriveHealthTitle;
+
+  /// System tab, Drive health: shown while admin mode is off for the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on admin mode to read drive health: smartctl needs the drives\' device nodes.'**
+  String get systemDriveHealthAdminNeeded;
+
+  /// System tab, Drive health: the button that reads every drive's SMART health. Drives that are spun down are left asleep.
+  ///
+  /// In en, this message translates to:
+  /// **'Read drive health'**
+  String get systemDriveHealthRead;
+
+  /// System tab, Drive health: the button that reads every drive's health again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemDriveHealthReadAgain;
+
+  /// System tab, Drive health: shown while the read runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading drive health…'**
+  String get systemDriveHealthReading;
+
+  /// System tab, Drive health: why a read read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{The server is not connected, so drive health could not be read.} adminRequired{Admin mode ended before drive health was read.} elevationRefused{Elevation was refused, so drive health was not read.} missing{smartmontools is not installed on this server.} unreadable{smartctl did not answer as smartmontools 7.0 or later does.} transport{The connection failed while drive health was read.} other{Drive health could not be read.}}'**
+  String systemDriveHealthFailed(String reason);
+
+  /// System tab, Drive health: the read found no drive, as in a VM without passed-through disks.
+  ///
+  /// In en, this message translates to:
+  /// **'No drive answered smartctl\'s scan.'**
+  String get systemDriveHealthNone;
+
+  /// System tab, Drive health: drives past the read's limit, which were not read.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more drive was not read.} other{{count} more drives were not read.}}'**
+  String systemDriveHealthNotRead(int count);
+
+  /// Drive health table: column of the drive's model, or its device where it reports none.
+  ///
+  /// In en, this message translates to:
+  /// **'Drive'**
+  String get systemDriveColumn;
+
+  /// Drive health table: column of the drive's device node, such as /dev/sda.
+  ///
+  /// In en, this message translates to:
+  /// **'Device'**
+  String get systemDriveDevice;
+
+  /// Drive health table: column of the drive's health verdict.
+  ///
+  /// In en, this message translates to:
+  /// **'Health'**
+  String get systemDriveHealth;
+
+  /// Drive health table: a drive's health. Passed: its own assessment passed. Warning: it passed, but shows wear or damage. Failing: its own assessment failed. Asleep: it was spun down and was left asleep.
+  ///
+  /// In en, this message translates to:
+  /// **'{verdict, select, passed{Passed} warning{Warning} failing{Failing} asleep{Asleep} other{Unknown}}'**
+  String systemDriveVerdict(String verdict);
+
+  /// Drive health table: column of an NVMe drive's endurance used, as a percentage that may pass 100.
+  ///
+  /// In en, this message translates to:
+  /// **'Wear'**
+  String get systemDriveWear;
+
+  /// Drive health table: column of an ATA drive's reallocated, pending and uncorrectable sectors, summed.
+  ///
+  /// In en, this message translates to:
+  /// **'Bad sectors'**
+  String get systemDriveBadSectors;
+
+  /// Drive health table: a drive's bad sectors, a whole number in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}'**
+  String systemDriveBadSectorCount(int count);
+
+  /// Drive health table: column of how long the drive has been powered on over its life.
+  ///
+  /// In en, this message translates to:
+  /// **'Powered on'**
+  String get systemDrivePowerOn;
+
+  /// Drive health table: a number of hours in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h'**
+  String systemDriveHours(int hours);
+
   /// Disks table column: where the filesystem is mounted.
   ///
   /// In en, this message translates to:

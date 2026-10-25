@@ -24,6 +24,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         OpDirectoryKind,
         OpDirectoryListing,
         ProcsSelection,
+        SmartDisk,
         SystemdUnit,
         SystemctlVerb,
         TempsSnapshot,
@@ -1176,6 +1177,17 @@ final class AcknowledgeOperation extends EngineRequest {
 /// [requestId] answers it.
 final class ReadUserCrontabs extends EngineRequest {
   const ReadUserCrontabs(this.serverId, {required this.requestId});
+
+  final String serverId;
+  final String requestId;
+}
+
+/// Reads every drive's SMART health on [serverId] (HW-04, 03 §7.11): in
+/// admin mode only, since smartctl needs the device nodes, which are
+/// root's on every distribution; never cached, and a spun-down drive is
+/// left asleep. One [SmartReport] with [requestId] answers it.
+final class ReadSmart extends EngineRequest {
+  const ReadSmart(this.serverId, {required this.requestId});
 
   final String serverId;
   final String requestId;
@@ -2509,6 +2521,50 @@ enum UserCrontabsFailure {
 
   /// The link failed while reading.
   transport,
+}
+
+/// Why a [ReadSmart] read nothing.
+enum SmartReportFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// Admin mode is off for the server.
+  adminRequired,
+
+  /// Elevation refused, so nothing ran.
+  elevationRefused,
+
+  /// smartmontools is not installed.
+  missing,
+
+  /// `smartctl --scan-open` did not answer with its JSON, as smartctl
+  /// before 7.0 does.
+  unreadable,
+
+  /// The link failed while reading.
+  transport,
+}
+
+/// The answer to [ReadSmart]: each drive smartctl opens, at most
+/// `kSmartDrivesRead`, with its health.
+final class SmartReport extends EngineEvent {
+  SmartReport({
+    required this.serverId,
+    required this.requestId,
+    Iterable<SmartDisk> disks = const [],
+    this.notRead = 0,
+    this.failure,
+  }) : disks = List.unmodifiable(disks);
+
+  final String serverId;
+  final String requestId;
+  final List<SmartDisk> disks;
+
+  /// Drives past `kSmartDrivesRead`, which were not read.
+  final int notRead;
+
+  /// Why nothing was read, or null.
+  final SmartReportFailure? failure;
 }
 
 /// The answer to [ReadUserCrontabs]: the listed users' crontab lines as

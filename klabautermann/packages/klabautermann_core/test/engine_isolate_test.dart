@@ -265,6 +265,12 @@ void main() {
       expect(crontabs.requestId, 'r-1');
       expect(crontabs.failure, UserCrontabsFailure.noLink);
 
+      // HW-04's read too.
+      client.send(const ReadSmart('ssh-config:web', requestId: 'r-2'));
+      final smart = (await next(events)) as SmartReport;
+      expect(smart.requestId, 'r-2');
+      expect(smart.failure, SmartReportFailure.noLink);
+
       // A detached operation's result is acknowledged over a link.
       client.send(
         const AcknowledgeOperation('ssh-config:web', '0123456789abcdef'),
