@@ -533,12 +533,12 @@ void engineMain(
           (client, _) => runApiStep(client, step),
         );
         if (status >= 200 && status < 300) {
-          final (:container, :images, :volumes, :networks) = apiStepChanges(
-            step,
-          );
+          final (:container, :containers, :images, :volumes, :networks) =
+              apiStepChanges(step);
           router.actionRan(
             serverId,
             containers: {?container},
+            everyContainer: containers,
             images: images,
             volumes: volumes,
             networks: networks,
@@ -1397,6 +1397,7 @@ void engineMain(
               CreateVolume() ||
               RemoveVolume() ||
               RemoveNetwork() ||
+              PruneDocker() ||
               StackAction() ||
               ContainerExec():
             final router = docker;

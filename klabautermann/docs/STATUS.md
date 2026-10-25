@@ -1985,6 +1985,22 @@ is on main:
   built-in network and while any container is on it. As on the Volumes
   sub-tab, the Unused filter stays off until a container list says
   which are unused. The Docker actions suite refuses and removes a network on
+  the fixture.
+- Prune (M6 N12, DKE-05, IMG-06): the Containers, Images, Volumes and
+  Networks sub-tabs offer a prune where actions are allowed: stopped
+  containers; dangling images, every unused image (`-a`) or the build
+  cache from the Images menu; unused volumes; unused user-defined
+  networks. The preview lists what the prune removes, with sizes where
+  the engine reports them per object and the bytes freed, and what it
+  keeps and why (in use, or one of the engine's own networks). Every
+  prune asks for the typed confirmation (03 §8.6 tier 2; DKE-05's typed
+  rule for volumes and `-a` is the stricter subset). Volume prune sends
+  `all=true` from API 1.42, so named volumes go as the preview says,
+  and warns that the data has no way back. The runner reads the matches
+  again before the step and refuses when they changed, so what runs is
+  what the preview showed; the build cache, whose records have no ids,
+  is not re-validated. The Docker actions suite previews a volume prune
+  and runs a dangling-image prune on the fixture.
   the fixture. Prune (DNW-02, DKE-05) comes with N12.
 - Alert evaluation (M6 N50a, ALR-01): the engine evaluates every synced
   `client` rule on the live samples of the servers its scope names, with

@@ -4852,6 +4852,36 @@ abstract class AppLocalizations {
   /// **'Runs on the server and continues if you leave the app or the connection drops. Its result shows under Operations when you come back.'**
   String get actionPreviewDetachedIos;
 
+  /// Heading above what a prune removes (DKE-05).
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Removes 1 object} other{Removes {count} objects}}'**
+  String actionPreviewPruneRemoves(int count);
+
+  /// Under a prune's heading: the disk space it frees, as the engine reports it (DKE-05).
+  ///
+  /// In en, this message translates to:
+  /// **'Frees {size}'**
+  String actionPreviewPruneFrees(String size);
+
+  /// One object a prune removes, with its size (DKE-05).
+  ///
+  /// In en, this message translates to:
+  /// **'{name} ({size})'**
+  String actionPreviewPruneItem(String name, String size);
+
+  /// Heading above what a prune leaves, each with why (DKE-05's exemption labels).
+  ///
+  /// In en, this message translates to:
+  /// **'Kept'**
+  String get actionPreviewPruneKeeps;
+
+  /// One object a prune leaves and why (DKE-05).
+  ///
+  /// In en, this message translates to:
+  /// **'{name}: {reason, select, inUse{in use} builtin{the engine\'s own} other{kept}}'**
+  String actionPreviewPruneKept(String name, String reason);
+
   /// Heading above a redeploy's orphan containers (STK-06).
   ///
   /// In en, this message translates to:
@@ -4945,7 +4975,7 @@ abstract class AppLocalizations {
   /// Toast when the engine refused to plan or run an action; reason is the engine's ActionRefusalReason name.
   ///
   /// In en, this message translates to:
-  /// **'{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server\'s container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} networkInUse{A container is on this network. Stop or disconnect it first.} builtinNetwork{This is one of the engine\'s own networks, which stay.} dependencyCycle{The stack\'s services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack\'s files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}'**
+  /// **'{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server\'s container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} networkInUse{A container is on this network. Stop or disconnect it first.} builtinNetwork{This is one of the engine\'s own networks, which stay.} nothingToPrune{There is nothing to prune.} dependencyCycle{The stack\'s services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack\'s files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}'**
   String actionRefused(String reason);
 
   /// Process action (PRC-02): sends SIGTERM, asking the process to end.
@@ -5353,7 +5383,7 @@ abstract class AppLocalizations {
   /// An activity log row's action; action is the engine's intent type name.
   ///
   /// In en, this message translates to:
-  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
+  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
   String activityAction(String action);
 
   /// An activity log row's confirmation; tier is the engine's ConfirmationTier name.
@@ -6735,6 +6765,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Which volumes are in use is unknown: the containers, whose mounts tell, could not be listed.'**
   String get dockerVolumesUseUnknown;
+
+  /// Images list: the button over the list that opens the menu of prunes (DKE-05, IMG-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Prune…'**
+  String get dockerPrune;
+
+  /// A prune's button or menu row, which opens its preview (DKE-05, IMG-06).
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, containers{Prune stopped containers…} images{Prune dangling images…} imagesAll{Prune all unused images…} volumes{Prune unused volumes…} networks{Prune unused networks…} buildCache{Prune the build cache…} other{Prune…}}'**
+  String dockerPruneChoice(String kind);
 
   /// Volumes list: the button over the list that opens the create dialog (VOL-02).
   ///

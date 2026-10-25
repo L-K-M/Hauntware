@@ -271,6 +271,10 @@ import '../operations/plan_types.dart';
 /// M6 plan N11): [DockerWatchList.networks], delivered as
 /// [DockerNetworksPayload], and the [RemoveNetwork] intent with the
 /// refusals `networkInUse` and `builtinNetwork`.
+///
+/// Prune then joined v3 the same way (03 §7.12 DKE-05, IMG-06, M6 plan
+/// N12): the [PruneDocker] intent, whose preview carries a
+/// [PrunePreview], and the refusal `nothingToPrune`.
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -2400,6 +2404,9 @@ enum ActionRefusalReason {
   /// `bridge`, `host` and `none` are the engine's own and stay (DNW-01).
   builtinNetwork,
 
+  /// A prune's filters match nothing now (DKE-05).
+  nothingToPrune,
+
   /// The stack's services depend on each other in a cycle, so there is no
   /// order to act in (STK-03).
   dependencyCycle,
@@ -4452,6 +4459,24 @@ final class RemoveNetwork extends ActionIntent {
   final String networkId;
 }
 
+/// The kinds of unused Docker objects a prune removes (03 §7.12 DKE-05).
+enum DockerPruneKind { containers, images, volumes, networks, buildCache }
+
+/// Removes the unused objects of [kind] (DKE-05, IMG-06): stopped
+/// containers, dangling images or with [all] every image no container
+/// uses, volumes no container mounts, user-defined networks no container
+/// is on, or the build cache no build uses. The preview lists them first.
+final class PruneDocker extends ActionIntent {
+  const PruneDocker(super.serverId, {required this.kind, this.all = false})
+    : assert(!all || kind == DockerPruneKind.images, 'only images prune all');
+
+  final DockerPruneKind kind;
+
+  /// For images, every unused one rather than the dangling ones only
+  /// (`docker image prune -a`).
+  final bool all;
+}
+
 /// What [StackAction] does to a Compose project (STK-03).
 enum StackVerb { start, stop, restart }
 
@@ -4738,6 +4763,7 @@ final class ActionPreview {
     this.protected,
     this.followUnit,
     this.orphans = const [],
+    this.prune,
     this.warnings = const {},
   });
 
@@ -4771,6 +4797,9 @@ final class ActionPreview {
   /// The stack's containers whose service its files no longer name,
   /// which `--remove-orphans` would remove (STK-06).
   final List<String> orphans;
+
+  /// What a prune removes and what it leaves, and why (DKE-05).
+  final PrunePreview? prune;
 
   final Set<PlanWarning> warnings;
 }

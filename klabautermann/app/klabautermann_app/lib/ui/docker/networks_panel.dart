@@ -7,7 +7,7 @@ import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
 import '../actions/docker_actions.dart'
-    show NetworkActionsButton, networkActionEntries;
+    show NetworkActionsButton, PruneButton, networkActionEntries;
 import '../sortable_table.dart';
 import 'containers_panel.dart' show DockerNotice;
 import 'containers_view.dart' show searchTerms;
@@ -176,6 +176,23 @@ class _NetworksPanelState extends State<NetworksPanel> {
                 icon: Icons.error_outline,
                 text: l10n.dockerNetworksUseUnknown,
                 detail: containers.failure?.detail,
+              ),
+            if (networks != null &&
+                actionsAllowedAt(
+                  context,
+                  widget.serverId,
+                  ActionEntryPoint.prune,
+                ))
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: PruneButton(
+                  choices: [
+                    PruneDocker(
+                      widget.serverId,
+                      kind: DockerPruneKind.networks,
+                    ),
+                  ],
+                ),
               ),
             if (networks != null)
               _filters(l10n, useKnown: containers.containers != null),
