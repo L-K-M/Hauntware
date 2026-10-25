@@ -13,6 +13,7 @@ import 'package:klabautermann_core/klabautermann_core.dart'
 import 'controllers/admin_controller.dart';
 import 'controllers/alert_center.dart';
 import 'controllers/announcement_controller.dart';
+import 'controllers/app_lock_controller.dart';
 import 'controllers/pin_publication_controller.dart';
 import 'controllers/safety_controller.dart';
 import 'controllers/appearance_controller.dart';
@@ -35,6 +36,7 @@ import 'ui/actions/action_preview.dart' show ActionResultToasts;
 import 'ui/adaptive_shell.dart';
 import 'ui/admin_mode_chip.dart' show AdminScope;
 import 'ui/alerts.dart' show AlertScope;
+import 'ui/app_lock_gate.dart';
 import 'ui/docker/docker_panel.dart' show DockerNoticeScope;
 import 'ui/hand_off_actions.dart' show HandOffScope;
 import 'ui/macos_toolbar_band.dart';
@@ -66,6 +68,7 @@ class KlabautermannApp extends StatelessWidget {
     required this.announcements,
     this.deviceName,
     this.safety,
+    this.appLock,
     this.syncSecrets,
     this.pinPublication,
     this.admin,
@@ -104,6 +107,10 @@ class KlabautermannApp extends StatelessWidget {
   /// safety out: Settings then shows its placeholder and the server header
   /// neither the Safety menu nor its notices.
   final SafetyController? safety;
+
+  /// The app lock (SAF-20), whose screen covers every route while locked;
+  /// null in tests that leave it out.
+  final AppLockController? appLock;
 
   /// The device name the host syslog line gives (M5 plan Q6); like
   /// [appearance], it outlives an engine run. Null in tests that leave it
@@ -292,12 +299,16 @@ class KlabautermannApp extends StatelessWidget {
               final alerts? => AlertScope(alerts: alerts, child: withEditing),
               null => withEditing,
             };
-            return switch (handOff) {
+            final withHandOff = switch (handOff) {
               final handOff? => HandOffScope(
                 launcher: handOff,
                 child: withAlerts,
               ),
               null => withAlerts,
+            };
+            return switch (appLock) {
+              final appLock? => AppLockGate(lock: appLock, child: withHandOff),
+              null => withHandOff,
             };
           },
           // The shell's settings callback and the menus' commands need a
@@ -363,6 +374,7 @@ class KlabautermannApp extends StatelessWidget {
               appVersion: appVersion,
               monitorSet: fleet.monitorSettings,
               safety: safety,
+              appLock: appLock,
               syncSecrets: syncSecrets,
               pinPublication: pinPublication,
             ),
