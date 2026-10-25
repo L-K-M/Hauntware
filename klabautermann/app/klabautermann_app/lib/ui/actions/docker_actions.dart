@@ -629,6 +629,60 @@ class VolumeActionsButton extends StatelessWidget {
 
 /// "Create volume…" over the Volumes list (VOL-02): asks for a name and
 /// an optional driver, then plans the create.
+/// The prune [intent] names, as its button or menu row reads.
+String pruneLabel(AppLocalizations l10n, PruneDocker intent) =>
+    l10n.dockerPruneChoice(switch (intent.kind) {
+      DockerPruneKind.images when intent.all => 'imagesAll',
+      final kind => kind.name,
+    });
+
+/// A sub-tab's prune (DKE-05, IMG-06): one button for one [choices]
+/// entry, or a menu of them. Each opens the preview of what the prune
+/// removes and what it keeps.
+class PruneButton extends StatelessWidget {
+  const PruneButton({super.key, required this.choices});
+
+  /// The prunes offered, one or more, all on one server.
+  final List<PruneDocker> choices;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    const icon = Icon(Icons.cleaning_services_outlined);
+    final serverId = choices.first.serverId;
+    if (choices case [final only]) {
+      return ActionEntry(
+        serverId: serverId,
+        point: ActionEntryPoint.prune,
+        child: OutlinedButton.icon(
+          onPressed: () => startAction(context, only),
+          icon: icon,
+          label: Text(pruneLabel(l10n, only)),
+        ),
+      );
+    }
+
+    return ActionEntry(
+      serverId: serverId,
+      point: ActionEntryPoint.prune,
+      child: MenuAnchor(
+        menuChildren: [
+          for (final choice in choices)
+            MenuItemButton(
+              onPressed: () => startAction(context, choice),
+              child: Text(pruneLabel(l10n, choice)),
+            ),
+        ],
+        builder: (context, menu, _) => OutlinedButton.icon(
+          onPressed: () => menu.isOpen ? menu.close() : menu.open(),
+          icon: icon,
+          label: Text(l10n.dockerPrune),
+        ),
+      ),
+    );
+  }
+}
+
 class CreateVolumeButton extends StatelessWidget {
   const CreateVolumeButton({super.key, required this.serverId});
 

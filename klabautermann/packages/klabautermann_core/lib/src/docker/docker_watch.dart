@@ -449,14 +449,16 @@ final class DockerWatcher {
   }
 
   /// Reads again what a finished action changed: the [containers] it
-  /// addressed, the images after an image removal, the volumes after a
-  /// volume's create or removal, and the networks after a removal. The
+  /// addressed, or with [everyContainer] the whole list after a prune,
+  /// the images after an image removal, the volumes after a volume's
+  /// create or removal, and the networks after a removal. The
   /// engine can log a change's event before the list endpoint holds the
   /// change (Docker's containerPause logs `pause` first), so the read that
   /// event starts may still show the old state, while the action's reply
   /// only comes once the list holds it.
   void changed({
     Set<String> containers = const {},
+    bool everyContainer = false,
     bool images = false,
     bool volumes = false,
     bool networks = false,
@@ -464,6 +466,7 @@ final class DockerWatcher {
     if (_target == null) return;
     if (_wantsContainers) {
       _changedIds.addAll(containers.where((id) => id.isNotEmpty));
+      if (everyContainer) _due(DockerWatchList.containers, fresh: false);
     }
     if (images && _lists.contains(DockerWatchList.images)) {
       _due(DockerWatchList.images, fresh: false);

@@ -164,6 +164,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The Activity table's key prefix, never shown, and the copied log's
   // line break between JSON records.
   'lib/ui/actions/activity_page.dart': {"'activity'", r"'\n'"},
+  // The ARB select key of every unused image's prune (DKE-05).
+  'lib/ui/actions/docker_actions.dart': {"'imagesAll'"},
   'lib/controllers/fleet_controller.dart': {
     // The row subtitle's address: host or user@host, with :port when the
     // port is not 22 and an IPv6 host then bracketed before it. Machine

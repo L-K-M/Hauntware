@@ -306,3 +306,60 @@ final class PlanOwnership {
   /// The manager's name as its marker gives it, for example `coolify`.
   final String manager;
 }
+
+/// One object a prune removes, as its preview lists it (DKE-05): its
+/// name, or a short id when it has none, and its size in bytes when the
+/// engine reports one per object.
+@immutable
+final class PruneItem {
+  const PruneItem(this.name, {this.size});
+
+  final String name;
+  final int? size;
+}
+
+/// Why a prune leaves an object that its kind covers (DKE-05's exemption
+/// labels).
+enum PruneExemption {
+  /// A container uses the image, mounts the volume or is on the network.
+  inUse,
+
+  /// One of the engine's own networks: `bridge`, `host` or `none`.
+  builtin,
+}
+
+/// An object a prune leaves, and why (DKE-05).
+@immutable
+final class PruneKept {
+  const PruneKept(this.name, this.reason);
+
+  final String name;
+  final PruneExemption reason;
+}
+
+/// What a prune's preview lists (03 §7.12 DKE-05): what the same filters
+/// the prune sends match now, what they leave and why, and the bytes the
+/// prune frees when the engine reports them.
+@immutable
+final class PrunePreview {
+  PrunePreview({
+    required Iterable<PruneItem> removes,
+    Iterable<PruneKept> kept = const [],
+    int? count,
+    this.freed,
+  }) : removes = List.unmodifiable(removes),
+       kept = List.unmodifiable(kept),
+       count = count ?? removes.length;
+
+  /// The objects removed, by name; empty for the build cache, whose
+  /// records have no names to show.
+  final List<PruneItem> removes;
+  final List<PruneKept> kept;
+
+  /// How many objects the prune removes.
+  final int count;
+
+  /// The bytes the prune frees: the sum of [removes]' sizes, or the
+  /// engine's reclaimable figure where it reports no size per object.
+  final int? freed;
+}

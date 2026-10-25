@@ -61,6 +61,8 @@ String? cliEquivalent(ApiStep step) {
         if (step.query['signal'] case final signal?) '-s $signal',
         id,
       ].join(' ');
+    case ('POST', ['build', 'prune']):
+      return ['docker builder prune', if (flag('all')) '-a', '-f'].join(' ');
     case ('POST', [final kind, 'prune'])
         when const {
           'containers',
@@ -68,7 +70,16 @@ String? cliEquivalent(ApiStep step) {
           'volumes',
           'networks',
         }.contains(kind):
-      return 'docker ${kind.substring(0, kind.length - 1)} prune -f';
+      // `dangling=false` and `all=true` are the CLI's `-a` (DKE-05).
+      final filters = step.query['filters'] ?? '';
+      final all =
+          filters.contains('"dangling":["false"]') ||
+          filters.contains('"all":["true"]');
+      return [
+        'docker ${kind.substring(0, kind.length - 1)} prune',
+        if (all) '-a',
+        '-f',
+      ].join(' ');
     case ('POST', ['containers', final id, final verb])
         when const {
           'start',
