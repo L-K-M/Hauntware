@@ -21,9 +21,8 @@
 # every later job on that runner instead of one per job. A local build
 # has no tool cache and keeps flatpak's own default. The directory needs
 # no lock: it is one per runner, and a runner executes one job at a time,
-# so no two jobs ever write the same installation. The ci.yml
-# flatpak-runtime-download concurrency group serializes the downloads
-# for the shared uplink, not to protect this directory.
+# so no two jobs ever write the same installation. CI serializes runtime
+# staging to bound scratch memory across the runner pool.
 if [[ -z "${FLATPAK_USER_DIR:-}" && -n "${RUNNER_TOOL_CACHE:-}" ]]; then
   export FLATPAK_USER_DIR="$RUNNER_TOOL_CACHE/flatpak-user"
 fi
@@ -90,14 +89,81 @@ flatpak_stage_deb() {
   fi
 }
 
+# ZFS publishes O_TMPFILE inodes by waiting for a pool transaction per
+# file. Stage runtime updates elsewhere, then persist them as named files.
+_flatpak_stage_zfs_cache() (
+  local manifest="$1" flathub_repo="$2"
+  local cache="$FLATPAK_USER_DIR" scratch installation fingerprint updates
+  local cached_fingerprint=
+  local -r marker_name=.hauntware-runtime-ready
+
+  # App sources and permissions do not select installed runtime dependencies.
+  fingerprint="$(flatpak-builder --show-manifest "$manifest" | python3 -c '
+import hashlib, json, sys
+manifest = json.load(sys.stdin)
+for key in ("id", "app-id", "command", "finish-args", "modules"):
+    manifest.pop(key, None)
+payload = json.dumps([sys.argv[1], manifest], sort_keys=True).encode()
+print(hashlib.sha256(payload).hexdigest())
+' "$flathub_repo")"
+  if [[ -f "$cache/$marker_name" ]]; then
+    cached_fingerprint="$(cat "$cache/$marker_name")"
+  fi
+  if [[ "$cached_fingerprint" == "$fingerprint" ]]; then
+    updates="$(flatpak remote-ls --user --all --updates --columns=ref flathub)"
+    [[ -n "$updates" ]] || return 0
+  fi
+
+  scratch="$(mktemp -d "${TMPDIR:-/tmp}/hauntware-flatpak-XXXXXX")"
+  trap 'rm -rf "$scratch"' EXIT
+  trap 'exit 1' HUP INT TERM
+
+  case "$(stat -f -c %T "$scratch")" in
+    tmpfs|ramfs|ext2/ext3|xfs|btrfs) ;;
+    *) die 'set TMPDIR to tmpfs, ext4, XFS or Btrfs for Flatpak runtime staging' ;;
+  esac
+
+  installation="$scratch/installation"
+  # Discard partial or different dependency sets so retired refs cannot linger.
+  if [[ "$cached_fingerprint" == "$fingerprint" ]]; then
+    cp -a "$cache" "$installation"
+    rm -f "$installation/$marker_name"
+  fi
+  FLATPAK_USER_DIR="$installation" flatpak remote-add \
+    --user --if-not-exists flathub "$flathub_repo"
+  FLATPAK_USER_DIR="$installation" flatpak-builder \
+    --user --install-deps-from=flathub --install-deps-only \
+    "$scratch/build" "$manifest"
+
+  # Replace the managed cache so removed runtimes cannot accumulate.
+  rm -rf "$cache"
+  cp -a "$installation" "$cache"
+  sync -f "$cache"
+  printf '%s\n' "$fingerprint" > "$cache/$marker_name"
+)
+
 # Builds <work>/stage per <manifest> into <work>/build and <work>/repo, with
 # the runtime from <flathub-repo>, then runs the smoke check in the result.
 flatpak_build() {
-  local work="$1" manifest="$2" flathub_repo="$3" command_name
-  flatpak remote-add --user --if-not-exists flathub "$flathub_repo"
+  local work="$1" manifest="$2" flathub_repo="$3" command_name cache_filesystem=
+  local -a dependency_options=(--install-deps-from=flathub)
+
+  if [[ "${RUNNER_ENVIRONMENT:-}" == self-hosted &&
+        -n "${RUNNER_TOOL_CACHE:-}" &&
+        "$FLATPAK_USER_DIR" == "$RUNNER_TOOL_CACHE/flatpak-user" ]]; then
+    mkdir -p "$FLATPAK_USER_DIR"
+    cache_filesystem="$(stat -f -c %T "$FLATPAK_USER_DIR")"
+  fi
+  if [[ "$cache_filesystem" == zfs ]]; then
+    _flatpak_stage_zfs_cache "$manifest" "$flathub_repo"
+    dependency_options=()
+  else
+    flatpak remote-add --user --if-not-exists flathub "$flathub_repo"
+  fi
+
   # --disable-rofiles-fuse: containers (CI) have no FUSE, and a copy-only
   # build gains nothing from it.
-  flatpak-builder --user --install-deps-from=flathub --force-clean \
+  flatpak-builder --user "${dependency_options[@]}" --force-clean \
     --disable-rofiles-fuse \
     --state-dir="$work/state" --repo="$work/repo" \
     "$work/build" "$manifest"

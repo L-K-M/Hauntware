@@ -173,6 +173,321 @@ void main() {
     });
   });
 
+  group('ZFS runtime cache', () {
+    late String cache;
+    late String scratch;
+
+    setUp(() {
+      cache = p.join(sandbox.path, 'tools/flatpak-user');
+      scratch = p.join(sandbox.path, 'scratch');
+    });
+
+    Future<ProcessResult> build({
+      String runnerEnvironment = 'self-hosted',
+      String cacheFilesystem = 'zfs',
+      String scratchFilesystem = 'tmpfs',
+      String? userInstallation,
+      String revision = '1',
+      String commandName = 'demo',
+      String runtimeVersion = '50',
+      String availableUpdates = '',
+      String updatesRequireFile = '',
+      int dependencyExitCode = 0,
+      int copyExitCode = 0,
+      int updateQueryExitCode = 0,
+    }) async {
+      Directory(scratch).createSync(recursive: true);
+      final manifest = File(p.join(sandbox.path, 'manifest.yml'))
+        ..writeAsStringSync('command: $commandName\n');
+      final environment = Map<String, String>.of(Platform.environment)
+        ..remove('FLATPAK_USER_DIR');
+
+      return Process.run(
+        'bash',
+        [
+          '-c',
+          r'''
+set -euo pipefail
+die() { printf '%s\n' "$*" >&2; exit 1; }
+flatpak() {
+  if [[ "$1" == remote-ls ]]; then
+    for option in --user --all --updates --columns=ref; do
+      [[ " $* " == *" $option "* ]]
+    done
+    if [[ -z "$UPDATES_REQUIRE_FILE" || -f "$FLATPAK_USER_DIR/$UPDATES_REQUIRE_FILE" ]]; then
+      printf '%s' "$AVAILABLE_UPDATES"
+    fi
+    return "$UPDATE_QUERY_EXIT_CODE"
+  fi
+  mkdir -p "$FLATPAK_USER_DIR"
+}
+stat() {
+  if [[ "${@: -1}" == "$TMPDIR/"* ]]; then
+    printf '%s\n' "$SCRATCH_FILESYSTEM"
+    return
+  fi
+  printf '%s\n' "$CACHE_FILESYSTEM"
+}
+sync() {
+  [[ "$1" == -f && "$2" == "$RUNNER_TOOL_CACHE/flatpak-user" ]]
+  printf 'flush\n'
+}
+cp() {
+  local destination="${@: -1}"
+  if [[ "${destination%/}" == "$RUNNER_TOOL_CACHE/flatpak-user" && "$COPY_EXIT_CODE" != 0 ]]; then
+    rm -rf "$destination"
+    mkdir -p "$destination"
+    printf incomplete > "$destination/runtime"
+    return "$COPY_EXIT_CODE"
+  fi
+  command cp "$@"
+}
+flatpak-builder() {
+  case " $* " in
+    *' --show-manifest '*)
+      printf '{"id":"com.example.%s","command":"%s","runtime":"org.gnome.Platform","runtime-version":"%s","sdk":"org.gnome.Sdk","modules":[{"name":"%s"}]}\n' \
+        "$COMMAND_NAME" "$COMMAND_NAME" "$RUNTIME_VERSION" "$COMMAND_NAME" ;;
+    *' --install-deps-only '*)
+      [[ "$FLATPAK_USER_DIR" == "$TMPDIR/"* ]]
+      if [[ -f "$FLATPAK_USER_DIR/runtime" ]]; then
+        printf 'deps:reuse\n'
+      else
+        printf 'deps:fresh\n'
+      fi
+      if [[ "$DEPENDENCY_EXIT_CODE" != 0 ]]; then
+        return "$DEPENDENCY_EXIT_CODE"
+      fi
+      rm -f "$FLATPAK_USER_DIR/obsolete"
+      rm -f "$FLATPAK_USER_DIR/runtime"
+      printf '%s' "$DEPENDENCY_REVISION" > "$FLATPAK_USER_DIR/runtime"
+      chmod 444 "$FLATPAK_USER_DIR/runtime"
+      ln -sfn runtime "$FLATPAK_USER_DIR/active" ;;
+    *' --run '*) printf 'smoke\n' ;;
+    *' --install-deps-from=flathub '*) printf 'build:pull\n' ;;
+    *) printf 'build:cached\n' ;;
+  esac
+}
+source "$1"
+flatpak_build "$2" "$3" https://example.test/flathub.flatpakrepo
+''',
+          '_',
+          _repackScript,
+          p.join(sandbox.path, 'work'),
+          manifest.path,
+        ],
+        environment: {
+          ...environment,
+          'RUNNER_ENVIRONMENT': runnerEnvironment,
+          'RUNNER_TOOL_CACHE': p.join(sandbox.path, 'tools'),
+          'TMPDIR': scratch,
+          'CACHE_FILESYSTEM': cacheFilesystem,
+          'SCRATCH_FILESYSTEM': scratchFilesystem,
+          'DEPENDENCY_REVISION': revision,
+          'COMMAND_NAME': commandName,
+          'RUNTIME_VERSION': runtimeVersion,
+          'AVAILABLE_UPDATES': availableUpdates,
+          'UPDATES_REQUIRE_FILE': updatesRequireFile,
+          'DEPENDENCY_EXIT_CODE': '$dependencyExitCode',
+          'COPY_EXIT_CODE': '$copyExitCode',
+          'UPDATE_QUERY_EXIT_CODE': '$updateQueryExitCode',
+          if (userInstallation != null) 'FLATPAK_USER_DIR': userInstallation,
+        },
+        includeParentEnvironment: false,
+      );
+    }
+
+    test(
+      'fills off ZFS, persists, then builds from the original cache',
+      () async {
+        final result = await build();
+
+        expect(result.exitCode, 0, reason: result.stderr as String);
+        expect(result.stdout, 'deps:fresh\nflush\nbuild:cached\nsmoke\n');
+        expect(File(p.join(cache, 'runtime')).readAsStringSync(), '1');
+        expect(Link(p.join(cache, 'active')).targetSync(), 'runtime');
+        expect(Directory(scratch).listSync(), isEmpty);
+      },
+    );
+
+    test('reuses cached runtimes and stages their updates off ZFS', () async {
+      expect((await build()).exitCode, 0);
+
+      final result = await build(
+        revision: '2',
+        availableUpdates: 'runtime/org.gnome.Sdk/x86_64/50',
+      );
+
+      expect(result.exitCode, 0, reason: result.stderr as String);
+      expect(result.stdout, 'deps:reuse\nflush\nbuild:cached\nsmoke\n');
+      expect(File(p.join(cache, 'active')).readAsStringSync(), '2');
+      expect(Directory(scratch).listSync(), isEmpty);
+    });
+
+    test('preserves the cache and stops when dependency setup fails', () async {
+      expect((await build()).exitCode, 0);
+      const dependencyFailure = 23;
+
+      final result = await build(
+        dependencyExitCode: dependencyFailure,
+        availableUpdates: 'runtime/org.gnome.Sdk/x86_64/50',
+      );
+
+      expect(result.exitCode, dependencyFailure);
+      expect(result.stdout, 'deps:reuse\n');
+      expect(File(p.join(cache, 'runtime')).readAsStringSync(), '1');
+      expect(Directory(scratch).listSync(), isEmpty);
+    });
+
+    test('propagates runtime removals back to the persistent cache', () async {
+      expect((await build()).exitCode, 0);
+      final obsolete = File(p.join(cache, 'obsolete'))
+        ..writeAsStringSync('old');
+
+      final result = await build(
+        availableUpdates: 'runtime/org.gnome.Sdk/x86_64/50',
+      );
+
+      expect(result.exitCode, 0, reason: result.stderr as String);
+      expect(obsolete.existsSync(), isFalse);
+    });
+
+    test(
+      'rebuilds an installation without a completed cache snapshot',
+      () async {
+        File(p.join(cache, 'runtime'))
+          ..createSync(recursive: true)
+          ..writeAsStringSync('incomplete');
+
+        final result = await build();
+
+        expect(result.exitCode, 0, reason: result.stderr as String);
+        expect(result.stdout, 'deps:fresh\nflush\nbuild:cached\nsmoke\n');
+        expect(File(p.join(cache, 'runtime')).readAsStringSync(), '1');
+      },
+    );
+
+    test('recovers from a failed persistent copy on the next build', () async {
+      expect((await build()).exitCode, 0);
+      const copyFailure = 28;
+
+      final failed = await build(
+        copyExitCode: copyFailure,
+        availableUpdates: 'runtime/org.gnome.Sdk/x86_64/50',
+      );
+
+      expect(failed.exitCode, copyFailure);
+      expect(Directory(scratch).listSync(), isEmpty);
+
+      final retried = await build();
+
+      expect(retried.exitCode, 0, reason: retried.stderr as String);
+      expect(retried.stdout, 'deps:fresh\nflush\nbuild:cached\nsmoke\n');
+      expect(File(p.join(cache, 'runtime')).readAsStringSync(), '1');
+    });
+
+    test('skips all cache copies when dependencies are current', () async {
+      expect((await build()).exitCode, 0);
+      const unexpectedCopyFailure = 28;
+
+      final result = await build(copyExitCode: unexpectedCopyFailure);
+
+      expect(result.exitCode, 0, reason: result.stderr as String);
+      expect(result.stdout, 'build:cached\nsmoke\n');
+      expect(File(p.join(cache, 'runtime')).readAsStringSync(), '1');
+      expect(Directory(scratch).listSync(), isEmpty);
+    });
+
+    test('app metadata does not invalidate the runtime snapshot', () async {
+      expect((await build()).exitCode, 0);
+
+      final result = await build(commandName: 'another_app');
+
+      expect(result.exitCode, 0, reason: result.stderr as String);
+      expect(result.stdout, 'build:cached\nsmoke\n');
+    });
+
+    test(
+      'changed runtime dependencies are staged even without updates',
+      () async {
+        expect((await build()).exitCode, 0);
+
+        final result = await build(runtimeVersion: '51', revision: '2');
+
+        expect(result.exitCode, 0, reason: result.stderr as String);
+        expect(result.stdout, 'deps:fresh\nflush\nbuild:cached\nsmoke\n');
+        expect(File(p.join(cache, 'runtime')).readAsStringSync(), '2');
+      },
+    );
+
+    test(
+      'retired dependency updates cannot disable the warm fast path',
+      () async {
+        expect((await build()).exitCode, 0);
+        final retiredSdk = File(p.join(cache, 'retired-sdk'))
+          ..writeAsStringSync('50');
+        expect((await build(runtimeVersion: '51')).exitCode, 0);
+        expect(retiredSdk.existsSync(), isFalse);
+
+        final result = await build(
+          runtimeVersion: '51',
+          availableUpdates: 'runtime/org.gnome.Platform/x86_64/50',
+          updatesRequireFile: 'retired-sdk',
+        );
+
+        expect(result.exitCode, 0, reason: result.stderr as String);
+        expect(result.stdout, 'build:cached\nsmoke\n');
+      },
+    );
+
+    test('fails closed when checking upstream updates fails', () async {
+      expect((await build()).exitCode, 0);
+      const queryFailure = 17;
+
+      final result = await build(updateQueryExitCode: queryFailure);
+
+      expect(result.exitCode, queryFailure);
+      expect(result.stdout, isEmpty);
+      expect(File(p.join(cache, 'runtime')).readAsStringSync(), '1');
+    });
+
+    for (final environment in ['', 'github-hosted']) {
+      test('keeps normal dependency setup for "$environment" builds', () async {
+        final result = await build(runnerEnvironment: environment);
+
+        expect(result.exitCode, 0, reason: result.stderr as String);
+        expect(result.stdout, 'build:pull\nsmoke\n');
+      });
+    }
+
+    test('keeps normal setup for a non-ZFS runner cache', () async {
+      final result = await build(cacheFilesystem: 'ext2/ext3');
+
+      expect(result.exitCode, 0, reason: result.stderr as String);
+      expect(result.stdout, 'build:pull\nsmoke\n');
+    });
+
+    test('respects a caller-chosen installation', () async {
+      final result = await build(
+        userInstallation: p.join(sandbox.path, 'installation'),
+      );
+
+      expect(result.exitCode, 0, reason: result.stderr as String);
+      expect(result.stdout, 'build:pull\nsmoke\n');
+    });
+
+    test(
+      'rejects slow scratch storage before installing dependencies',
+      () async {
+        final result = await build(scratchFilesystem: 'zfs');
+
+        expect(result.exitCode, isNot(0));
+        expect(result.stderr, contains('TMPDIR'));
+        expect(result.stdout, isEmpty);
+        expect(Directory(scratch).listSync(), isEmpty);
+      },
+    );
+  });
+
   final dpkgDeb = Process.runSync('bash', ['-c', 'command -v dpkg-deb']);
   group(
     'staging a .deb',
