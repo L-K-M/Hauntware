@@ -41,7 +41,9 @@ const kSamplerStartCommand =
 /// (03 §7.17).
 /// Version 9 adds the slow `user_units` and `user_timers` collectors for
 /// the login user's own manager (03 §7.5, SVC-09).
-const kCollectorSetVersion = '9';
+/// Version 10 adds DSK-04's ms reading, ms writing and ms doing I/O to
+/// `core`'s diskstats rows (D48).
+const kCollectorSetVersion = '10';
 
 /// The most `procs` rows one reply carries (D48). With more processes the
 /// fragment keeps the union of the [kProcsRowCap] / 2 with the highest CPU
@@ -338,8 +340,9 @@ hw_netdev() {
   o="$o${_d:-${_v:-$_a}}"
 }
 
-# DSK-03's counters as `<device> <reads> <sectors read> <writes>
-# <sectors written>` of whole disks. A partition (a `partition` file
+# DSK-03's counters and DSK-04's timings as `<device> <reads> <sectors
+# read> <writes> <sectors written> <ms reading> <ms writing> <ms doing
+# I/O>` of whole disks. A partition (a `partition` file
 # in sysfs) or a stacked device (entries under `slaves/`: LVM, dm-crypt,
 # multipath, md) repeats its disks' I/O, and without sysfs both stay;
 # loop, ram, zram and ZFS volume (zd) devices are files or memory, or
@@ -352,13 +355,13 @@ hw_diskstats() {
   o="$o$NL== diskstats =="
   hw_readable /proc/diskstats || return 0
   _k=; _p=
-  while read -r _x _x _n _r _x _sr _x _w _x _sw _x; do
+  while read -r _x _x _n _r _x _sr _dr _w _x _sw _dw _x _di _x; do
     case $_n in
       loop* | ram* | zram* | zd*)
         continue ;;
     esac
-    case $_r:$_sr:$_w:$_sw in
-      0:0:0:0 | *::* | :* | *: | *[!0-9:]*)
+    case $_r:$_sr:$_w:$_sw:$_dr:$_dw:$_di in
+      0:0:0:0:* | *::* | :* | *: | *[!0-9:]*)
         continue ;;
     esac
     [ -e "/sys/class/block/$_n/partition" ] && continue
@@ -366,9 +369,9 @@ hw_diskstats() {
     [ -e "$_s" ] && continue
     case $_n in
       nvme[0-9]*c[0-9]*n[0-9]*)
-        _p="$_p$NL$_n $_r $_sr $_w $_sw" ;;
+        _p="$_p$NL$_n $_r $_sr $_w $_sw $_dr $_dw $_di" ;;
       *)
-        _k="$_k$NL$_n $_r $_sr $_w $_sw" ;;
+        _k="$_k$NL$_n $_r $_sr $_w $_sw $_dr $_dw $_di" ;;
     esac
   done </proc/diskstats || st=error
   while [ -n "$_p" ]; do

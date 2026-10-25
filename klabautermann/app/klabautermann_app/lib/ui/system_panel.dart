@@ -10,12 +10,13 @@ import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'chart_strings.dart';
 import 'charts/charts.dart' show BarSegment, ChartUnit, StackedBar;
+import 'disk_activity.dart';
 import 'sortable_table.dart';
 import 'system_view.dart';
 
 /// The System tab's sections, which key them; the Disks section's id also
 /// prefixes its table's keys.
-enum SystemSection { identity, uptime, network, disks }
+enum SystemSection { identity, uptime, network, disks, diskActivity }
 
 /// The panel width from which the fact sections sit side by side and the
 /// mounts table adds its type and bytes columns and usage bars. The desktop
@@ -65,6 +66,9 @@ class _SystemPanelState extends State<SystemPanel> {
   /// the workspace keeps a panel built once opened.
   TableSort? _sort;
   bool _showPseudo = false;
+
+  /// The Disk activity table's order, which outlives tab switches too.
+  TableSort? _activitySort;
 
   List<Listenable> get _slow => [_identity, _fs, _listed, _profile];
 
@@ -158,6 +162,10 @@ class _SystemPanelState extends State<SystemPanel> {
                 network,
               ],
               _disksSection(context, l10n, wide: wide),
+              ListenableBuilder(
+                listenable: _core,
+                builder: (context, _) => _diskActivitySection(l10n, profile),
+              ),
             ],
           ),
         );
@@ -240,6 +248,32 @@ class _SystemPanelState extends State<SystemPanel> {
           _Fact(
             label: l10n.systemTransmit,
             value: totals == null ? null : ghostFormatBinaryRate(totals.tx),
+          ),
+        ];
+      }),
+    );
+  }
+
+  /// DSK-03 and DSK-04: each whole disk's throughput, operations, await
+  /// and busy share since the previous `core` reading. `/proc/diskstats`
+  /// is the host's inside a container, so there it is withheld (D50).
+  Widget _diskActivitySection(AppLocalizations l10n, HostProfile? profile) {
+    return PanelSection(
+      key: const ValueKey(SystemSection.diskActivity),
+      title: l10n.systemDiskActivityTitle,
+      children: _readingOr<CoreResult>(l10n, _core.value, (core) {
+        if (withholdsHostFigure(profile, SystemWideProcFile.diskstats)) {
+          return [Text(l10n.systemUnknownContainer)];
+        }
+        final rates = core.disks;
+        if (rates == null) return [Text(l10n.systemDiskActivityWaiting)];
+        if (rates.isEmpty) return [Text(l10n.systemDiskActivityEmpty)];
+        return [
+          DiskActivityTable(
+            tableId: SystemSection.diskActivity.name,
+            rows: diskActivityRows(rates),
+            sort: _activitySort,
+            onSort: (sort) => setState(() => _activitySort = sort),
           ),
         ];
       }),
