@@ -4,11 +4,11 @@ import 'dart:io' show Platform;
 import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:ghost_keystore/app_lock.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'app_state.dart';
 import 'services/app_services.dart';
-import 'services/app_lock.dart';
 import 'services/link_intake.dart';
 import 'services/macos_titlebar.dart';
 import 'services/secure_master_key.dart';
