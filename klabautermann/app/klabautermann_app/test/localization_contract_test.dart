@@ -97,6 +97,14 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // A migration the engine refused, printed; it is tried again.
     r"'Safety preferences of $serverId stay on this device: $error'",
   },
+  // A rule write's request id, never shown, and its refusal's diagnostic.
+  'lib/controllers/alert_rules_controller.dart': {
+    r"'rule-${_count++}'",
+    r"'AlertRuleNotSavedException: $failure, $detail'",
+  },
+  // An unexpected write error, printed in the refusal's other case; a
+  // missing target's empty name; and a typed number's comma and point.
+  'lib/ui/alert_rules.dart': {r"'$error'", "''", "','", "'.'"},
   // A pref write's request id, never shown, and its refusal's diagnostic.
   'lib/controllers/server_prefs_controller.dart': {
     r"'prefs-${_count++}'",

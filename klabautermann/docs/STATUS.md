@@ -2045,8 +2045,16 @@ is on main:
   (Y3); it opens the alert center, whose rows open their server. Each
   fleet row badges its raised alerts with the icon of the highest
   severity and their count, which its label and tooltip say too. The
-  app icon's badge waits on notifications (N51), and there is no rule
-  editor yet (N50c).
+  app icon's badge waits on notifications (N51).
+- Alert rule editor (M6 N50c, ALR-01, ALR-16): the engine reports the
+  account's alert rules whenever they change. The server header's bell
+  opens the rules that apply to that server, and the alert center every
+  rule; each row states the condition, scope, severity, clear threshold
+  and durations, and that it is evaluated on this device while
+  Klabautermann is open. While a sync account is enrolled the page adds,
+  edits and deletes rules, checking that percentages stay within 0 to
+  100 and that the clear threshold sits on the recovered side of the
+  raise one.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container

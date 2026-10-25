@@ -8497,7 +8497,7 @@
   },
   "alertSince": "since {time}",
   "@alertSince": {
-    "description": "When a raised alert's breach began, in the alert center; time is a time of day in the UI locale.",
+    "description": "When a raised alert's breach began, in the alert center; time is a time of day when the breach began today, else a date and time, in the UI locale.",
     "placeholders": {
       "time": {
         "type": "String"
@@ -8603,5 +8603,203 @@
   "historyMetricLoad": "Load per core",
   "@historyMetricLoad": {
     "description": "A History metric: the 1-minute load average per core."
+  },
+  "alertRulesTitle": "Alert rules",
+  "@alertRulesTitle": {
+    "description": "Title of the alert rules page (ALR-01), and the tooltip and button that open it."
+  },
+  "alertRulesEmpty": "No alert rules yet.",
+  "@alertRulesEmpty": {
+    "description": "The alert rules page with no rule in the account."
+  },
+  "alertRulesEmptyServer": "No rule applies to this server yet.",
+  "@alertRulesEmptyServer": {
+    "description": "The alert rules page opened from a server, when no rule applies to it."
+  },
+  "alertRulesNeedSync": "Alert rules sync through your sync account, so adding or changing one needs you signed in.",
+  "@alertRulesNeedSync": {
+    "description": "Note on the alert rules page while no sync account is enrolled; rules are rule records in the account (03 §4.8)."
+  },
+  "alertRuleAdd": "Add rule",
+  "@alertRuleAdd": {
+    "description": "Button on the alert rules page that opens the editor on a new rule."
+  },
+  "alertRuleNew": "New rule",
+  "@alertRuleNew": {
+    "description": "Title of the rule editor for a new rule."
+  },
+  "alertRuleEdit": "Edit rule",
+  "@alertRuleEdit": {
+    "description": "Title of the rule editor for an existing rule."
+  },
+  "alertRuleSave": "Save",
+  "@alertRuleSave": {
+    "description": "The rule editor's save button."
+  },
+  "alertRuleDelete": "Delete rule",
+  "@alertRuleDelete": {
+    "description": "Tooltip of a rule row's delete button."
+  },
+  "alertRuleDeleteConfirm": "Delete this rule? It is removed on every device that syncs your account.",
+  "@alertRuleDeleteConfirm": {
+    "description": "Confirmation before a rule is deleted."
+  },
+  "alertRuleDeleteAction": "Delete",
+  "@alertRuleDeleteAction": {
+    "description": "The confirmation's delete button."
+  },
+  "alertRuleCondition": "{op, select, greaterThan{{metric} above {value}} greaterOrEqual{{metric} at or above {value}} lessThan{{metric} below {value}} other{{metric} at or below {value}}}",
+  "@alertRuleCondition": {
+    "description": "A rule row's title: when the rule raises. op is the comparison, metric the metric's name, such as CPU busy, and value the threshold, such as 90%.",
+    "placeholders": {
+      "op": {
+        "type": "String"
+      },
+      "metric": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRuleClears": "{op, select, greaterThan{Clears at or below {value}} greaterOrEqual{Clears below {value}} lessThan{Clears at or above {value}} other{Clears above {value}}}",
+  "@alertRuleClears": {
+    "description": "When a rule clears: op is the rule's comparison, and value the clear threshold, such as 80%.",
+    "placeholders": {
+      "op": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRuleFor": "after {duration}",
+  "@alertRuleFor": {
+    "description": "How long a rule's condition must hold before it raises or clears, at the end of a rule row's line; duration is a number of minutes or seconds.",
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRuleMinutes": "{count, plural, =1{1 minute} other{{count} minutes}}",
+  "@alertRuleMinutes": {
+    "description": "A rule duration in whole minutes.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "alertRuleSeconds": "{count, plural, =1{1 second} other{{count} seconds}}",
+  "@alertRuleSeconds": {
+    "description": "A rule duration that is not whole minutes, in seconds.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "alertRuleScopeServer": "On {server}",
+  "@alertRuleScopeServer": {
+    "description": "Which servers a rule applies to: one server; server is its name (server data).",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRuleScopeGroup": "On the {group} group",
+  "@alertRuleScopeGroup": {
+    "description": "Which servers a rule applies to: one group; group is its name (server data).",
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRuleScopeAll": "On every server",
+  "@alertRuleScopeAll": {
+    "description": "Which servers a rule applies to: all of them."
+  },
+  "alertRuleMetricLabel": "Metric",
+  "@alertRuleMetricLabel": {
+    "description": "The rule editor's metric field."
+  },
+  "alertRuleOpLabel": "Raise when the value is",
+  "@alertRuleOpLabel": {
+    "description": "The rule editor's comparison field."
+  },
+  "alertRuleOp": "{op, select, greaterThan{Above} greaterOrEqual{At or above} lessThan{Below} other{At or below}}",
+  "@alertRuleOp": {
+    "description": "A comparison in the rule editor's comparison field.",
+    "placeholders": {
+      "op": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRuleRaiseValueLabel": "Raise at",
+  "@alertRuleRaiseValueLabel": {
+    "description": "The rule editor's raise threshold field."
+  },
+  "alertRuleClearValueLabel": "Clear at",
+  "@alertRuleClearValueLabel": {
+    "description": "The rule editor's clear threshold field."
+  },
+  "alertRuleForLabel": "Held for (minutes)",
+  "@alertRuleForLabel": {
+    "description": "The rule editor's duration fields: how long the value must stay past its threshold."
+  },
+  "alertRuleSeverityLabel": "Severity",
+  "@alertRuleSeverityLabel": {
+    "description": "The rule editor's severity field."
+  },
+  "alertRuleScopeLabel": "Applies to",
+  "@alertRuleScopeLabel": {
+    "description": "The rule editor's scope field."
+  },
+  "alertRulePercentSuffix": "%",
+  "@alertRulePercentSuffix": {
+    "description": "The unit after a percentage threshold in the rule editor."
+  },
+  "alertRuleNumberInvalid": "Enter a number.",
+  "@alertRuleNumberInvalid": {
+    "description": "Rule editor error: a threshold is not a number."
+  },
+  "alertRulePercentInvalid": "Enter a value from 0 to 100.",
+  "@alertRulePercentInvalid": {
+    "description": "Rule editor error: a percentage threshold is out of range."
+  },
+  "alertRuleMinutesInvalid": "Enter 0 or more minutes.",
+  "@alertRuleMinutesInvalid": {
+    "description": "Rule editor error: a duration is not a number of minutes, 0 or more."
+  },
+  "alertRuleClearAboveRaise": "The clear value must not be above the raise value.",
+  "@alertRuleClearAboveRaise": {
+    "description": "Rule editor error: an above or at-or-above rule whose clear threshold is higher than its raise threshold."
+  },
+  "alertRuleClearBelowRaise": "The clear value must not be below the raise value.",
+  "@alertRuleClearBelowRaise": {
+    "description": "Rule editor error: a below or at-or-below rule whose clear threshold is lower than its raise threshold."
+  },
+  "alertRuleRefused": "{reason, select, directoryShared{Another Klabautermann may be using this device's data folder, so nothing was saved.} notEnrolled{Sign in to your sync account to change alert rules.} keystoreUnavailable{Your account key could not be read from the system keystore, so nothing was saved.} unknownTarget{This rule is no longer in your account.} invalidDraft{A field is missing or out of range.} tooMany{Your account holds as many rules as it can.} tooLarge{This rule is too large to save.} storeUnavailable{Klabautermann's sync files could not be written this session, so nothing was saved.} other{Nothing was saved: {detail}}}",
+  "@alertRuleRefused": {
+    "description": "Why the engine refused to save or delete an alert rule, as a toast. reason is the engine's CatalogWriteFailure; detail is its own words, used for other only.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      },
+      "detail": {
+        "type": "String",
+        "example": "pull-only"
+      }
+    }
+  },
+  "alertRuleEngineStopped": "Klabautermann's engine stopped before the rule was saved.",
+  "@alertRuleEngineStopped": {
+    "description": "Toast when the engine stopped before it answered a rule write."
   }
 }

@@ -390,6 +390,87 @@ void main() {
     expect(again.prefs?.marks, {'nginx'});
   });
 
+  test('alert rules go out when they change, before the write that '
+      'changed them is answered', () async {
+    final server = await FakeSyncServer.create();
+    const cpu = SyncedRule(
+      id: 'rule-a',
+      target: 'srv-a',
+      rule: ThresholdRule(
+        metric: 'cpu.busy',
+        op: ThresholdOp.greaterThan,
+        raise: ThresholdBound(value: 90),
+        clear: ThresholdBound(value: 80),
+      ),
+    );
+    await server.seedServer(fakeServer('srv-a', 'alpha'));
+    await server.seedKlabautermann(
+      KlabautermannRecordType.rule.idOf(cpu.id),
+      encodeSyncedRule(cpu),
+    );
+    final (client, events) = await spawn(
+      entryPoint: (start) => engineMain(start, syncTransport: server.transport),
+    );
+    final keystore = MemoryKeystore();
+
+    client.send(
+      const EnrollSync(
+        baseUrl: 'https://sync.example.com',
+        username: fakeSyncUser,
+        password: fakeSyncPassword,
+        encryptionPassphrase: fakeSyncPassword,
+      ),
+    );
+    final enrolled = await untilSyncEnds(client, events, keystore);
+    final pulled = enrolled.whereType<AlertRulesChanged>().single;
+    expect(
+      [for (final r in pulled.rules) (r.id, r.target)],
+      [('rule-a', 'srv-a')],
+    );
+
+    // Nothing changed: nothing goes out.
+    client.send(const RunSyncRound());
+    final quiet = await untilSyncEnds(client, events, keystore);
+    expect(quiet.whereType<AlertRulesChanged>(), isEmpty);
+
+    // The write is answered, then pushed in a round.
+    void expectChangedBeforeWritten(List<EngineEvent> seen) => expect(
+      seen.indexOf(seen.whereType<AlertRulesChanged>().single),
+      lessThan(seen.indexOf(seen.whereType<CatalogWritten>().single)),
+    );
+
+    client.send(
+      PutRule(
+        requestId: 'put-1',
+        ruleId: 'rule-b',
+        rule: alertRule(
+          metric: 'disk.used',
+          scope: RuleScope.all,
+          op: ThresholdOp.greaterOrEqual,
+          raise: const ThresholdBound(value: 95),
+          clear: const ThresholdBound(value: 90),
+          severity: AlertSeverity.critical,
+        ),
+      ),
+    );
+    final put = await untilSyncEnds(client, events, keystore);
+    expectChangedBeforeWritten(put);
+    final added = put.whereType<AlertRulesChanged>().single;
+    expect([for (final r in added.rules) r.id], ['rule-a', 'rule-b']);
+    expect(alertRuleSeverity(added.rules.last.rule), AlertSeverity.critical);
+
+    client.send(const RemoveRule(requestId: 'remove-1', ruleId: 'rule-a'));
+    final removed = await untilSyncEnds(client, events, keystore);
+    expectChangedBeforeWritten(removed);
+    expect(
+      [
+        for (final r in removed.whereType<AlertRulesChanged>().single.rules)
+          r.id,
+      ],
+      ['rule-b'],
+    );
+  });
+
   group('pin publication (D15, M5 plan M07)', () {
     const enroll = EnrollSync(
       baseUrl: 'https://sync.example.com',

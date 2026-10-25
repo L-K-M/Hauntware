@@ -6,6 +6,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../controllers/alert_center.dart';
 import '../controllers/fleet_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'alert_rules.dart';
 import 'charts/charts.dart';
 
 /// Hands the [AlertCenter] to the fleet rows' badges and the fleet list's
@@ -292,14 +293,23 @@ class AlertCenterView extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-              child: Align(
-                alignment: AlignmentDirectional.centerEnd,
-                child: TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: Text(
-                    MaterialLocalizations.of(context).closeButtonLabel,
+              child: OverflowBar(
+                alignment: MainAxisAlignment.end,
+                spacing: 8,
+                children: [
+                  if (AlertRulesScope.maybeOf(context) != null)
+                    TextButton(
+                      onPressed: () =>
+                          unawaited(openAlertRules(context, fleet: fleet)),
+                      child: Text(l10n.alertRulesTitle),
+                    ),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(
+                      MaterialLocalizations.of(context).closeButtonLabel,
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ],

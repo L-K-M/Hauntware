@@ -9244,7 +9244,7 @@ abstract class AppLocalizations {
   /// **'{time}'**
   String alertDateTime(DateTime time);
 
-  /// When a raised alert's breach began, in the alert center; time is a time of day in the UI locale.
+  /// When a raised alert's breach began, in the alert center; time is a time of day when the breach began today, else a date and time, in the UI locale.
   ///
   /// In en, this message translates to:
   /// **'since {time}'**
@@ -9369,6 +9369,216 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Load per core'**
   String get historyMetricLoad;
+
+  /// Title of the alert rules page (ALR-01), and the tooltip and button that open it.
+  ///
+  /// In en, this message translates to:
+  /// **'Alert rules'**
+  String get alertRulesTitle;
+
+  /// The alert rules page with no rule in the account.
+  ///
+  /// In en, this message translates to:
+  /// **'No alert rules yet.'**
+  String get alertRulesEmpty;
+
+  /// The alert rules page opened from a server, when no rule applies to it.
+  ///
+  /// In en, this message translates to:
+  /// **'No rule applies to this server yet.'**
+  String get alertRulesEmptyServer;
+
+  /// Note on the alert rules page while no sync account is enrolled; rules are rule records in the account (03 §4.8).
+  ///
+  /// In en, this message translates to:
+  /// **'Alert rules sync through your sync account, so adding or changing one needs you signed in.'**
+  String get alertRulesNeedSync;
+
+  /// Button on the alert rules page that opens the editor on a new rule.
+  ///
+  /// In en, this message translates to:
+  /// **'Add rule'**
+  String get alertRuleAdd;
+
+  /// Title of the rule editor for a new rule.
+  ///
+  /// In en, this message translates to:
+  /// **'New rule'**
+  String get alertRuleNew;
+
+  /// Title of the rule editor for an existing rule.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit rule'**
+  String get alertRuleEdit;
+
+  /// The rule editor's save button.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get alertRuleSave;
+
+  /// Tooltip of a rule row's delete button.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete rule'**
+  String get alertRuleDelete;
+
+  /// Confirmation before a rule is deleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this rule? It is removed on every device that syncs your account.'**
+  String get alertRuleDeleteConfirm;
+
+  /// The confirmation's delete button.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get alertRuleDeleteAction;
+
+  /// A rule row's title: when the rule raises. op is the comparison, metric the metric's name, such as CPU busy, and value the threshold, such as 90%.
+  ///
+  /// In en, this message translates to:
+  /// **'{op, select, greaterThan{{metric} above {value}} greaterOrEqual{{metric} at or above {value}} lessThan{{metric} below {value}} other{{metric} at or below {value}}}'**
+  String alertRuleCondition(String op, String metric, String value);
+
+  /// When a rule clears: op is the rule's comparison, and value the clear threshold, such as 80%.
+  ///
+  /// In en, this message translates to:
+  /// **'{op, select, greaterThan{Clears at or below {value}} greaterOrEqual{Clears below {value}} lessThan{Clears at or above {value}} other{Clears above {value}}}'**
+  String alertRuleClears(String op, String value);
+
+  /// How long a rule's condition must hold before it raises or clears, at the end of a rule row's line; duration is a number of minutes or seconds.
+  ///
+  /// In en, this message translates to:
+  /// **'after {duration}'**
+  String alertRuleFor(String duration);
+
+  /// A rule duration in whole minutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 minute} other{{count} minutes}}'**
+  String alertRuleMinutes(int count);
+
+  /// A rule duration that is not whole minutes, in seconds.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 second} other{{count} seconds}}'**
+  String alertRuleSeconds(int count);
+
+  /// Which servers a rule applies to: one server; server is its name (server data).
+  ///
+  /// In en, this message translates to:
+  /// **'On {server}'**
+  String alertRuleScopeServer(String server);
+
+  /// Which servers a rule applies to: one group; group is its name (server data).
+  ///
+  /// In en, this message translates to:
+  /// **'On the {group} group'**
+  String alertRuleScopeGroup(String group);
+
+  /// Which servers a rule applies to: all of them.
+  ///
+  /// In en, this message translates to:
+  /// **'On every server'**
+  String get alertRuleScopeAll;
+
+  /// The rule editor's metric field.
+  ///
+  /// In en, this message translates to:
+  /// **'Metric'**
+  String get alertRuleMetricLabel;
+
+  /// The rule editor's comparison field.
+  ///
+  /// In en, this message translates to:
+  /// **'Raise when the value is'**
+  String get alertRuleOpLabel;
+
+  /// A comparison in the rule editor's comparison field.
+  ///
+  /// In en, this message translates to:
+  /// **'{op, select, greaterThan{Above} greaterOrEqual{At or above} lessThan{Below} other{At or below}}'**
+  String alertRuleOp(String op);
+
+  /// The rule editor's raise threshold field.
+  ///
+  /// In en, this message translates to:
+  /// **'Raise at'**
+  String get alertRuleRaiseValueLabel;
+
+  /// The rule editor's clear threshold field.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear at'**
+  String get alertRuleClearValueLabel;
+
+  /// The rule editor's duration fields: how long the value must stay past its threshold.
+  ///
+  /// In en, this message translates to:
+  /// **'Held for (minutes)'**
+  String get alertRuleForLabel;
+
+  /// The rule editor's severity field.
+  ///
+  /// In en, this message translates to:
+  /// **'Severity'**
+  String get alertRuleSeverityLabel;
+
+  /// The rule editor's scope field.
+  ///
+  /// In en, this message translates to:
+  /// **'Applies to'**
+  String get alertRuleScopeLabel;
+
+  /// The unit after a percentage threshold in the rule editor.
+  ///
+  /// In en, this message translates to:
+  /// **'%'**
+  String get alertRulePercentSuffix;
+
+  /// Rule editor error: a threshold is not a number.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a number.'**
+  String get alertRuleNumberInvalid;
+
+  /// Rule editor error: a percentage threshold is out of range.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a value from 0 to 100.'**
+  String get alertRulePercentInvalid;
+
+  /// Rule editor error: a duration is not a number of minutes, 0 or more.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter 0 or more minutes.'**
+  String get alertRuleMinutesInvalid;
+
+  /// Rule editor error: an above or at-or-above rule whose clear threshold is higher than its raise threshold.
+  ///
+  /// In en, this message translates to:
+  /// **'The clear value must not be above the raise value.'**
+  String get alertRuleClearAboveRaise;
+
+  /// Rule editor error: a below or at-or-below rule whose clear threshold is lower than its raise threshold.
+  ///
+  /// In en, this message translates to:
+  /// **'The clear value must not be below the raise value.'**
+  String get alertRuleClearBelowRaise;
+
+  /// Why the engine refused to save or delete an alert rule, as a toast. reason is the engine's CatalogWriteFailure; detail is its own words, used for other only.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, directoryShared{Another Klabautermann may be using this device\'s data folder, so nothing was saved.} notEnrolled{Sign in to your sync account to change alert rules.} keystoreUnavailable{Your account key could not be read from the system keystore, so nothing was saved.} unknownTarget{This rule is no longer in your account.} invalidDraft{A field is missing or out of range.} tooMany{Your account holds as many rules as it can.} tooLarge{This rule is too large to save.} storeUnavailable{Klabautermann\'s sync files could not be written this session, so nothing was saved.} other{Nothing was saved: {detail}}}'**
+  String alertRuleRefused(String reason, String detail);
+
+  /// Toast when the engine stopped before it answered a rule write.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann\'s engine stopped before the rule was saved.'**
+  String get alertRuleEngineStopped;
 }
 
 class _AppLocalizationsDelegate
