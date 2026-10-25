@@ -363,6 +363,9 @@ Future<int> refreshMain(
   } on ProcessException catch (error) {
     stderrSink.writeln('error: $error');
     return ioExitCode;
+  } on ActionsException catch (error) {
+    stderrSink.writeln('error: $error');
+    return ioExitCode;
   }
 }
 

@@ -657,11 +657,29 @@ void main() {
       expect(File('$artifacts/2/$benchResultsFileName').existsSync(), isTrue);
     });
 
+    test('collect reports a cut-off run list as an error', () async {
+      final actions = _FakeActions(cutOffListing: true);
+
+      await run([
+        'collect',
+        '--since',
+        '2026-01-01T00:00:00Z',
+        '--artifacts',
+        artifacts,
+      ], actions);
+
+      expect(exitCode, 74);
+      expect(err.text, contains('error: over 1000 ci.yml runs on main'));
+    });
+
     test('pool --write updates both committed files', () async {
       for (final runId in [1, 2, 3]) {
         storeArtifact(runId, _artifact(p1Values: [runId + 20]));
       }
       Directory('$artifacts/4').createSync(recursive: true);
+      // A download killed mid-swap leaves its staging directory behind.
+      storeArtifact(5, _artifact(p1Values: [99]));
+      Directory('$artifacts/5').renameSync('$artifacts/5.download');
 
       await run([
         'pool',
@@ -674,6 +692,7 @@ void main() {
       ], _FakeActions());
 
       expect(exitCode, 0);
+      expect(out.text, contains('Used runs (3): 1 2 3'));
       expect(out.text, contains('4: no readable $benchResultsFileName'));
       final baseline = TierBBaseline.fromJson(
         jsonDecode(File(baselinePath).readAsStringSync()),
@@ -786,7 +805,7 @@ void main() {
       expect(
         () => gh.client.dispatchSample('bench/side'),
         throwsA(
-          isA<StateError>().having(
+          isA<ActionsException>().having(
             (error) => error.message,
             'message',
             contains('gh run list --branch bench/side'),
@@ -829,7 +848,7 @@ void main() {
       ]);
       await expectLater(
         gh.client.listRuns('main', since),
-        throwsA(isA<StateError>()),
+        throwsA(isA<ActionsException>()),
       );
     });
 
@@ -985,6 +1004,9 @@ class _FakeActions implements ActionsClient {
 
   /// Runs whose every runState call fails, e.g. a 404.
   final Set<int> unreachableRuns;
+
+  /// Whether listRuns answers like a window too long to list in full.
+  final bool cutOffListing;
   var unreachablePolls = 0;
 
   final dispatched = <(String, int)>[];
@@ -1005,6 +1027,7 @@ class _FakeActions implements ActionsClient {
     this.failingStateCalls = 0,
     this.failingDispatch,
     this.unreachableRuns = const {},
+    this.cutOffListing = false,
   });
 
   bool _benchDone(int runId) => (_polls[runId] ?? 0) > benchPolls;
@@ -1078,8 +1101,13 @@ class _FakeActions implements ActionsClient {
   }
 
   @override
-  Future<List<CiRun>> listRuns(String branch, DateTime since) async => [
-    for (final run in runsByBranch[branch] ?? const <CiRun>[])
-      if (!run.createdAt.isBefore(since)) run,
-  ];
+  Future<List<CiRun>> listRuns(String branch, DateTime since) async {
+    if (cutOffListing) {
+      throw ActionsException('over 1000 ci.yml runs on $branch since $since');
+    }
+    return [
+      for (final run in runsByBranch[branch] ?? const <CiRun>[])
+        if (!run.createdAt.isBefore(since)) run,
+    ];
+  }
 }

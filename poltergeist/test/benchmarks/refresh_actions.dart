@@ -24,6 +24,17 @@ const _stagingSuffix = '.download';
 /// gh's run status once a run can no longer change.
 const _completedStatus = 'completed';
 
+/// GitHub answered in a way the refresh cannot use; [message] says what
+/// to do instead.
+class ActionsException implements Exception {
+  final String message;
+
+  const ActionsException(this.message);
+
+  @override
+  String toString() => message;
+}
+
 /// Run events whose bench job records tier B (ci.yml runs tier B only on
 /// main pushes and manual dispatch, never on pull requests).
 enum RunEvent {
@@ -120,7 +131,7 @@ class GhActionsClient implements ActionsClient {
 
     // A full page may have cut off the window's oldest runs.
     if (runs.length >= _runListLimit) {
-      throw StateError(
+      throw ActionsException(
         'over $_runListLimit $ciWorkflow runs on $branch since $since; '
         'pass a later --since',
       );
@@ -229,7 +240,7 @@ class GhActionsClient implements ActionsClient {
       return runId;
     }
 
-    throw StateError(
+    throw ActionsException(
       'dispatched $ciWorkflow on $branch, but GitHub returned no run id; '
       'find the run with `gh run list --branch $branch --event '
       'workflow_dispatch` and cancel it by hand',
