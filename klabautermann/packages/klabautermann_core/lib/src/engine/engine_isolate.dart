@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert' show jsonEncode;
 import 'dart:io';
 import 'dart:isolate';
 
@@ -27,7 +28,8 @@ import '../alerts/alert_evaluator.dart';
 import '../capabilities/capability_cache.dart';
 import '../catalog/engine_sync.dart';
 import '../catalog/engine_vault.dart';
-import '../catalog/klabautermann_records.dart' show diffServerPrefs;
+import '../catalog/klabautermann_records.dart'
+    show diffServerPrefs, encodeSyncedRule;
 import '../catalog/server_drafts.dart'
     show serverConfigOfDraft, serverDraftProblem;
 import '../catalog/keystore_channel.dart';
@@ -702,6 +704,8 @@ void engineMain(
   // The synced preferences the app last heard, so a round sends only
   // what changed.
   var prefsSent = <String, String>{};
+  // The alert rules the app last heard, encoded; none to start with.
+  var rulesSent = '[]';
   Future<void> sendServerPrefs() async {
     final (changes, sent) = diffServerPrefs(
       prefsSent,
@@ -709,9 +713,17 @@ void engineMain(
     );
     changes.forEach(uiPort.send);
     prefsSent = sent;
-    alerts
-        .setRules(await sync.rules(), DateTime.now().toUtc())
-        .forEach(uiPort.send);
+    // By id, so a reload that lists the same rules in another order
+    // sends nothing.
+    final rules = (await sync.rules())..sort((a, b) => a.id.compareTo(b.id));
+    final encoded = jsonEncode([
+      for (final rule in rules) encodeSyncedRule(rule),
+    ]);
+    if (encoded != rulesSent) {
+      uiPort.send(AlertRulesChanged(List.unmodifiable(rules)));
+      rulesSent = encoded;
+    }
+    alerts.setRules(rules, DateTime.now().toUtc()).forEach(uiPort.send);
   }
 
   void probeFleet() {

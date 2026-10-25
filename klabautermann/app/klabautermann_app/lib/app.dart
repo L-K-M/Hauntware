@@ -12,6 +12,7 @@ import 'package:klabautermann_core/klabautermann_core.dart'
 
 import 'controllers/admin_controller.dart';
 import 'controllers/alert_center.dart';
+import 'controllers/alert_rules_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/pin_publication_controller.dart';
 import 'controllers/safety_controller.dart';
@@ -34,6 +35,7 @@ import 'ui/actions/action_entry.dart' show OperationsScope;
 import 'ui/actions/action_preview.dart' show ActionResultToasts;
 import 'ui/adaptive_shell.dart';
 import 'ui/admin_mode_chip.dart' show AdminScope;
+import 'ui/alert_rules.dart' show AlertRulesScope;
 import 'ui/alerts.dart' show AlertScope;
 import 'ui/docker/docker_panel.dart' show DockerNoticeScope;
 import 'ui/hand_off_actions.dart' show HandOffScope;
@@ -70,6 +72,7 @@ class KlabautermannApp extends StatelessWidget {
     this.pinPublication,
     this.admin,
     this.alerts,
+    this.alertRules,
     this.operations,
     required this.dockerNotice,
     this.sync,
@@ -127,6 +130,11 @@ class KlabautermannApp extends StatelessWidget {
   /// like [fleet]. Null in tests that leave it out, where the fleet shows
   /// no alert notice or badges.
   final AlertCenter? alerts;
+
+  /// The account's alert rules and their editor (ALR-01), one engine
+  /// run's like [fleet]. Null in tests that leave it out, where no surface
+  /// offers the rules page.
+  final AlertRulesController? alertRules;
 
   /// Previews and runs of actions (03 §8.5), one engine run's like
   /// [fleet]. Null in tests that leave it out, where no action can run.
@@ -288,9 +296,13 @@ class KlabautermannApp extends StatelessWidget {
               ),
               null => withSafety,
             };
-            final withAlerts = switch (alerts) {
-              final alerts? => AlertScope(alerts: alerts, child: withEditing),
+            final withRules = switch (alertRules) {
+              final rules? => AlertRulesScope(rules: rules, child: withEditing),
               null => withEditing,
+            };
+            final withAlerts = switch (alerts) {
+              final alerts? => AlertScope(alerts: alerts, child: withRules),
+              null => withRules,
             };
             return switch (handOff) {
               final handOff? => HandOffScope(

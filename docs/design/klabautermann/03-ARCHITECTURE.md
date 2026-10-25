@@ -4407,7 +4407,21 @@ arrives with E22's Docker actions.
   (ALR-02) with the highest severity's icon, a shape per severity, and
   the count, which its label and tooltip say too. An engine that stops
   ends its raised alerts. Notifications and the app icon's badge (N51)
-  and the rule editor (N50c) follow.
+  follow.
+- **As built (M6 N50c).** The engine sends `AlertRulesChanged` with
+  every live rule whenever the rules change: after a round that pulled
+  one, and after a rule write, before its answer. The server header's
+  bell opens the rules that apply to that server, and the alert center
+  opens every rule. Each rule row gives the condition, the servers it
+  applies to, the severity, the clear threshold and how long each must
+  hold, and says it is evaluated on this device while Klabautermann is
+  open. While an account is enrolled (P16) the page adds, changes and
+  deletes rules with `PutRule` and `RemoveRule`: the editor takes a
+  metric, one of the four comparisons, the raise and clear thresholds
+  (percentages from 0 to 100, the clear one on the recovered side of the
+  raise one) with their durations in minutes, a severity, and the
+  server, its group or every server. A new rule from a server starts on
+  that server.
 - **v1.x.** Flap damping (the rest of ALR-16), desktop tray monitoring
   (ALR-03, PLT-10), Android watch mode for a session (PLT-11, D34), Android
   credential-free reachability checks every 15 minutes or more (PLT-15), and T1
@@ -5652,7 +5666,7 @@ shows there.
 | Requests (UI to engine) | Events (engine to UI) |
 |---|---|
 | `EnrollSync(baseUrl, username, password, encryptionPassphrase)`, `RunSyncRound` | `CatalogReplaced(entries)`, `SyncStatus(phase, operation, account, failure, passphraseUnverified)` |
-| `ReadServerDraft(requestId, serverId)`; `SaveServer(requestId, draft, credential?)`, `DeleteServer(requestId, serverId)`, `SetServerPrefs(requestId, serverId, prefs?)`, `PutRule(requestId, ruleId, rule, target?)`, `RemoveRule(requestId, ruleId)` (M05) | `ServerDraftRead(requestId, draft?)`; `CatalogReplaced`, then `CatalogWritten(requestId, serverId?, credentialWritten)` or `CatalogWriteRefused(requestId, failure, detail?)`, then the round's `SyncStatus` |
+| `ReadServerDraft(requestId, serverId)`; `SaveServer(requestId, draft, credential?)`, `DeleteServer(requestId, serverId)`, `SetServerPrefs(requestId, serverId, prefs?)`, `PutRule(requestId, ruleId, rule, target?)`, `RemoveRule(requestId, ruleId)` (M05) | `ServerDraftRead(requestId, draft?)`; `CatalogReplaced`, then `AlertRulesChanged(rules)` when a rule write changed the rules (M6 N50c), then `CatalogWritten(requestId, serverId?, credentialWritten)` or `CatalogWriteRefused(requestId, failure, detail?)`, then the round's `SyncStatus` |
 | `DuplicateServer(requestId, serverId)` (M09b): a new server from a synced one, its own id, timestamps and "copy" label, and its own copy of the credential, never a shared vault entry; a copy of a confirmed endpoint is confirmed | As `SaveServer`, with the copy's id in `CatalogWritten.serverId` |
 | `TestServerConnection(requestId, draft, credential)` (M09b): the editor's Test connection over the links' credentials, pins and prompts; a host key trusted during it holds for that attempt only; rejected while links are off | `Prompt`s as a connect sends them, then `ServerConnectionTested(requestId, ok, summary, notes, log)`, the summary, notes and redacted transcript as seance_core's `runConnectionTest` words them |
 | `DockerWatch` naming `volumes` (M6 N10a, VOL-01): the volume list, re-read on a `volume` event; a Volumes view watches it with the containers, whose mounts tell which volumes are in use | `DockerListChanged` with `DockerVolumesPayload(volumes)`, labels masked by key |

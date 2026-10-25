@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'app.dart';
 import 'controllers/admin_controller.dart';
 import 'controllers/alert_center.dart';
+import 'controllers/alert_rules_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/device_name.dart';
@@ -204,6 +205,8 @@ Future<void> main(List<String> args) async {
   // In-app alerts (ALR-01): the engine evaluates the synced rules on live
   // samples; the fleet list and rows show what they raise.
   final alerts = AlertCenter(engine);
+  // The synced rules behind them, and the editor's writes (03 §4.8).
+  final alertRules = AlertRulesController(engine);
   // Action previews and runs (03 §8.5): the engine plans and runs them;
   // the app shows the preview and the results.
   final operations = OperationsController(
@@ -341,6 +344,7 @@ Future<void> main(List<String> args) async {
       pinPublication: pinPublication,
       admin: admin,
       alerts: alerts,
+      alertRules: alertRules,
       operations: operations,
       dockerNotice: dockerNotice,
       sync: sync,

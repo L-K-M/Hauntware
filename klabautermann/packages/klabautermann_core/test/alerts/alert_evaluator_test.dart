@@ -2,17 +2,6 @@
 // raise and clear hysteresis, per server their scope names.
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/alerts/alert_evaluator.dart';
-import 'package:klabautermann_core/src/catalog/klabautermann_records.dart'
-    show SyncedRule;
-import 'package:klabautermann_host/klabautermann_host.dart'
-    show
-        CpuPercentages,
-        FsMount,
-        RuleEvalScope,
-        RuleScope,
-        ThresholdBound,
-        ThresholdOp,
-        ThresholdRule;
 import 'package:klabautermann_host/klabautermann_host.dart'
     as host
     show AlertSeverity;
