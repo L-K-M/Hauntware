@@ -438,6 +438,38 @@ PlanAttempt _planPullImage(PullImage intent, DockerPlanContext c) {
   return (fromImage: reference, tag: 'latest');
 }
 
+/// The running image pulls' cancel tokens by plan id (IMG-03). A cancel
+/// can arrive before its pull starts, while the plan revalidates or the
+/// endpoint connects; it is held, so that pull starts cancelled rather
+/// than running on behind a closed sheet. Plan ids are never reused, so
+/// a cancel held for a plan that never pulls only costs its id.
+final class PullCancels {
+  final _tokens = <String, DockerCancelToken>{};
+  final _early = <String>{};
+
+  /// The token [planId]'s pull runs with, cancelled already when a
+  /// cancel came first.
+  DockerCancelToken start(String planId) {
+    final token = DockerCancelToken();
+    _tokens[planId] = token;
+    if (_early.remove(planId)) token.cancel();
+    return token;
+  }
+
+  /// [planId]'s pull ended.
+  void finish(String planId) => _tokens.remove(planId);
+
+  /// Stops [planId]'s pull, now or when it starts.
+  void cancel(String planId) {
+    final token = _tokens[planId];
+    if (token == null) {
+      _early.add(planId);
+    } else {
+      token.cancel();
+    }
+  }
+}
+
 /// Whether [step] is an image pull, which [runPullStep] streams.
 bool isPullStep(ApiStep step) =>
     step.method == 'POST' && step.path.endsWith('/images/create');

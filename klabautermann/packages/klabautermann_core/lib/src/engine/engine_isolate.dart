@@ -267,7 +267,7 @@ void engineMain(
 
   // The running image pulls by plan id, which [CancelAction] stops
   // (IMG-03).
-  final pullCancels = <String, DockerCancelToken>{};
+  final pullCancels = PullCancels();
 
   // Each server's channel slots, one quota for both routers, so the host
   // log reads and the Docker session's channels count against the same
@@ -534,9 +534,8 @@ void engineMain(
         if (router == null) {
           throw const DockerEndpointUnavailable(DockerQueryFailure.cancelled);
         }
-        final cancel = DockerCancelToken();
         final pull = isPullStep(step);
-        if (pull) pullCancels[planId] = cancel;
+        final cancel = pull ? pullCancels.start(planId) : DockerCancelToken();
         final int status;
         try {
           status = await router.useEndpoint(
@@ -557,7 +556,7 @@ void engineMain(
                 : runApiStep(client, step),
           );
         } finally {
-          if (pull) pullCancels.remove(planId);
+          if (pull) pullCancels.finish(planId);
         }
         if (status >= 200 && status < 300) {
           final (:container, :containers, :images, :volumes, :networks) =
@@ -1744,7 +1743,7 @@ void engineMain(
         // queue.
         unawaited(admin!.enable(serverId));
       case CancelAction(:final planId):
-        pullCancels[planId]?.cancel();
+        pullCancels.cancel(planId);
       case RunAction(:final planId, :final confirmation):
         // A plan is taken once: a refused run needs a new preview.
         final (:plan, :missing) = plans.take(

@@ -1190,6 +1190,36 @@ void main() {
     });
   });
 
+  group('pull cancels (IMG-03)', () {
+    test('a cancel stops the running pull', () {
+      final cancels = PullCancels();
+      final token = cancels.start('plan-1');
+      expect(token.isCancelled, isFalse);
+
+      cancels.cancel('plan-1');
+      expect(token.isCancelled, isTrue);
+    });
+
+    test('a cancel that comes before the pull starts it cancelled', () {
+      final cancels = PullCancels()..cancel('plan-1');
+
+      expect(cancels.start('plan-1').isCancelled, isTrue);
+      // Held once: a later pull of another plan is not touched.
+      expect(cancels.start('plan-2').isCancelled, isFalse);
+    });
+
+    test('a cancel after the pull ended touches no other pull', () {
+      final cancels = PullCancels();
+      final first = cancels.start('plan-1');
+      cancels
+        ..finish('plan-1')
+        ..cancel('plan-1');
+
+      expect(first.isCancelled, isFalse);
+      expect(cancels.start('plan-2').isCancelled, isFalse);
+    });
+  });
+
   group('stacks (STK-03)', () {
     _Engine shop({String dbDependsOn = ''}) => _Engine()
       ..containers.addAll([

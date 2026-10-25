@@ -89,6 +89,14 @@ void main() {
     return intent;
   }
 
+  /// The texts the sheet paints in its theme's error color.
+  Finder errorTexts(WidgetTester tester) {
+    final error = Theme.of(
+      tester.element(find.byType(ImagePullSheet)),
+    ).colorScheme.error;
+    return find.byWidgetPredicate((w) => w is Text && w.style?.color == error);
+  }
+
   testWidgets('pulls the reference as typed and shows each layer with its '
       'bytes, then the end', (tester) async {
     await pumpSheet(tester);
@@ -149,6 +157,25 @@ void main() {
     );
     await _settle(tester);
     expect(find.text('manifest unknown'), findsOneWidget);
+    expect(errorTexts(tester), findsOneWidget);
+  });
+
+  testWidgets('a pull the user stopped ends without an error', (tester) async {
+    await pumpSheet(tester);
+    await pull(tester, 'nginx:1.27');
+    await tester.tap(find.text('Stop pull'));
+    await tester.pump();
+
+    engine.emit(
+      const ActionFinished(
+        planId: 'plan-1',
+        outcome: ActionOutcome.cancelled,
+        failedStep: 0,
+      ),
+    );
+    await _settle(tester);
+    expect(find.textContaining('nginx:1.27'), findsWidgets);
+    expect(errorTexts(tester), findsNothing);
   });
 
   testWidgets('closing the sheet while it pulls stops the pull, and after '
