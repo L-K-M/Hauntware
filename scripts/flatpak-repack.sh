@@ -161,8 +161,8 @@ flatpak_build() {
     flatpak remote-add --user --if-not-exists flathub "$flathub_repo"
   fi
 
-  # --disable-rofiles-fuse: containers (CI) have no FUSE, and a copy-only
-  # build gains nothing from it.
+  # --disable-rofiles-fuse, here and for --run: containers (CI) have no
+  # FUSE, and a copy-only build gains nothing from it.
   flatpak-builder --user "${dependency_options[@]}" --force-clean \
     --disable-rofiles-fuse \
     --state-dir="$work/state" --repo="$work/repo" \
@@ -170,6 +170,6 @@ flatpak_build() {
 
   command_name="$(sed -n '/^command:[[:space:]]*/{s///;p;q}' "$manifest")"
   [ -n "$command_name" ] || die "no command: key in $manifest"
-  flatpak-builder --run "$work/build" "$manifest" \
+  flatpak-builder --run --disable-rofiles-fuse "$work/build" "$manifest" \
     sh -c "$FLATPAK_SMOKE_CHECK" _ "$command_name" /app
 }

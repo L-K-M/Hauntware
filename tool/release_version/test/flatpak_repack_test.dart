@@ -243,6 +243,13 @@ cp() {
   command cp "$@"
 }
 flatpak-builder() {
+  # Runner containers have no FUSE: a build or --run that mounts the
+  # build directory through rofiles-fuse fails there.
+  case " $* " in
+    *' --show-manifest '* | *' --install-deps-only '*) ;;
+    *' --disable-rofiles-fuse '*) ;;
+    *) printf 'fuse: device not found\n' >&2; return 1 ;;
+  esac
   case " $* " in
     *' --show-manifest '*)
       printf '{"id":"com.example.%s","command":"%s","runtime":"org.gnome.Platform","runtime-version":"%s","sdk":"org.gnome.Sdk","modules":[{"name":"%s"}]}\n' \
@@ -308,6 +315,14 @@ flatpak_build "$2" "$3" https://example.test/flathub.flatpakrepo
         expect(Directory(scratch).listSync(), isEmpty);
       },
     );
+
+    test('builds and smoke-checks without FUSE', () async {
+      final result = await build();
+
+      expect(result.exitCode, 0, reason: result.stderr as String);
+      expect(result.stderr, isNot(contains('fuse')));
+      expect(result.stdout, endsWith('smoke\n'));
+    });
 
     test('reuses cached runtimes and stages their updates off ZFS', () async {
       expect((await build()).exitCode, 0);
