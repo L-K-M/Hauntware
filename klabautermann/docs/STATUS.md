@@ -1968,6 +1968,13 @@ is on main:
   `memory.used`, `load.perCore`, `disk.used` and `disk.inodes`, and
   sends `LocalAlertChanged` on each raise and clear. Nothing in the app
   shows them yet (N50b).
+- On-device history (M6 N52a, HIS-01): the engine rolls each server's
+  CPU, memory, load per core and fullest-disk readings into 1-minute
+  buckets for 48 hours and 10-minute buckets for 30 days (min, max,
+  mean, count), keeps the gaps it saw with their causes, and stores
+  them in fixed-size rings under `history/` that survive restarts and
+  go when the server leaves the fleet. `ReadHistory` answers them; no
+  chart shows them yet (N52b).
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container

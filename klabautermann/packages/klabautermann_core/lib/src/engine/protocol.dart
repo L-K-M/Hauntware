@@ -59,6 +59,7 @@ import 'package:meta/meta.dart';
 // DangerLinter's findings are plain data: a severity and three values.
 import 'package:seance_core/seance_core.dart' show DangerFinding;
 
+import '../history/history_store.dart' show HistoryRange, HistoryTier;
 import '../docker/docker_ladder.dart'
     show
         DockerNoRouteReason,
@@ -1156,6 +1157,17 @@ final class ReadUserCrontabs extends EngineRequest {
   const ReadUserCrontabs(this.serverId, {required this.requestId});
 
   final String serverId;
+  final String requestId;
+}
+
+/// Reads [serverId]'s on-device history in [tier] (HIS-01, 03 §7.20):
+/// the buckets and gaps within the tier's span. One [HistoryRead] with
+/// [requestId] answers it.
+final class ReadHistory extends EngineRequest {
+  const ReadHistory(this.serverId, this.tier, {required this.requestId});
+
+  final String serverId;
+  final HistoryTier tier;
   final String requestId;
 }
 
@@ -2901,6 +2913,23 @@ final class LocalAlertChanged extends EngineEvent {
 
   /// When the breach behind a raise began, as the rule's `for` counts it.
   final DateTime? since;
+}
+
+/// The answer to [ReadHistory]: [serverId]'s buckets in [tier], oldest
+/// first, the one still filling included, and the gaps the engine saw
+/// within their span; empty before the engine opens its store.
+final class HistoryRead extends EngineEvent {
+  const HistoryRead({
+    required this.requestId,
+    required this.serverId,
+    required this.tier,
+    required this.range,
+  });
+
+  final String requestId;
+  final String serverId;
+  final HistoryTier tier;
+  final HistoryRange range;
 }
 
 /// Alerts fetched for one server inside a sync round (v1.x, 03 §10.1, D42).
