@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart' show scaledGhostFileRowExtent;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import '../controllers/admin_controller.dart';
 import '../controllers/package_reads.dart';
 import '../l10n/app_localizations.dart';
 import 'actions/action_entry.dart';
@@ -100,6 +101,8 @@ class _UpdatesSectionState extends State<UpdatesSection> {
   PackagesReport? _report;
   bool _reading = false;
   bool _refreshStarted = false;
+  RestartReport? _restarts;
+  bool _readingRestarts = false;
   int _ticket = 0;
   TableSort? _sort = TableSort(
     UpdateColumn.security.name,
@@ -121,7 +124,20 @@ class _UpdatesSectionState extends State<UpdatesSection> {
     }
     _report = null;
     _refreshStarted = false;
+    _restarts = null;
+    _readingRestarts = false;
     unawaited(_read(fresh: false));
+  }
+
+  Future<void> _readRestarts(AdminController admin) async {
+    final serverId = widget.serverId;
+    setState(() => _readingRestarts = true);
+    final report = await admin.readRestarts(serverId);
+    if (!mounted || serverId != widget.serverId) return;
+    setState(() {
+      _restarts = report;
+      _readingRestarts = false;
+    });
   }
 
   Future<void> _read({required bool fresh}) async {
@@ -212,6 +228,7 @@ class _UpdatesSectionState extends State<UpdatesSection> {
             ],
           ),
         if (_refreshStarted) Text(l10n.systemUpdatesRefreshStarted),
+        ..._restartLines(context, l10n),
       ],
     );
   }
@@ -245,6 +262,50 @@ class _UpdatesSectionState extends State<UpdatesSection> {
         child: Text(l10n.systemUpdatesRefresh),
       ),
     );
+  }
+
+  /// PKG-04: the services still running replaced libraries, read on
+  /// request in admin mode, and a newer kernel waiting for a reboot.
+  List<Widget> _restartLines(BuildContext context, AppLocalizations l10n) {
+    final admin = AdminScope.maybeOf(context);
+    final adminOn =
+        admin?.stateFor(widget.serverId)?.phase == AdminModePhase.on;
+    final report = _restarts;
+    final check = report?.check;
+    final failure = report?.failure;
+    return [
+      Text(
+        l10n.systemUpdatesRestartsTitle,
+        style: Theme.of(context).textTheme.titleSmall,
+      ),
+      if (failure != null)
+        Text(l10n.systemUpdatesRestartsFailed(failure.name))
+      else if (check != null) ...[
+        if (check.services.isEmpty)
+          Text(l10n.systemUpdatesRestartsNone)
+        else
+          Text(l10n.systemUpdatesRestartsList(check.services.join(', '))),
+        if (check.kernel
+            case KernelState.abiCompatibleUpgrade || KernelState.versionUpgrade)
+          Text(l10n.systemUpdatesKernelWaiting),
+      ],
+      if (_readingRestarts)
+        Text(l10n.systemUpdatesRestartsReading)
+      else if (!adminOn || admin == null)
+        Text(l10n.systemUpdatesRestartsAdminNeeded)
+      else
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: OutlinedButton(
+            onPressed: () => unawaited(_readRestarts(admin)),
+            child: Text(
+              report == null
+                  ? l10n.systemUpdatesRestartsRead
+                  : l10n.systemUpdatesRestartsReadAgain,
+            ),
+          ),
+        ),
+    ];
   }
 
   Widget? _securityLine(AppLocalizations l10n, PackageCheck check) {

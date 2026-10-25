@@ -25,6 +25,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         OpDirectoryListing,
         PackageCheck,
         ProcsSelection,
+        RestartCheck,
         SmartDisk,
         SystemdUnit,
         SystemctlVerb,
@@ -1183,6 +1184,16 @@ final class ReadPackages extends EngineRequest {
   final String serverId;
   final String requestId;
   final bool fresh;
+}
+
+/// Reads [serverId]'s services still running replaced libraries (PKG-04,
+/// 03 §7.8): in admin mode only, since the tools read every process's
+/// memory maps. One [RestartReport] with [requestId] answers it.
+final class ReadRestarts extends EngineRequest {
+  const ReadRestarts(this.serverId, {required this.requestId});
+
+  final String serverId;
+  final String requestId;
 }
 
 /// Answers an outstanding [Prompt] event (03 §10.1).
@@ -2524,6 +2535,39 @@ final class SmartReport extends EngineEvent {
 
   /// Why nothing was read, or null.
   final SmartReportFailure? failure;
+}
+
+/// Why a [ReadRestarts] read nothing.
+enum RestartReportFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// Admin mode is off for the server.
+  adminRequired,
+
+  /// Elevation refused, so nothing ran.
+  elevationRefused,
+
+  /// None of needrestart, needs-restarting and zypper is installed.
+  missing,
+
+  /// The link failed while reading.
+  transport,
+}
+
+/// The answer to [ReadRestarts]: what the check found, or why nothing.
+final class RestartReport extends EngineEvent {
+  const RestartReport({
+    required this.serverId,
+    required this.requestId,
+    this.check,
+    this.failure,
+  });
+
+  final String serverId;
+  final String requestId;
+  final RestartCheck? check;
+  final RestartReportFailure? failure;
 }
 
 /// Why a [ReadPackages] checked nothing.

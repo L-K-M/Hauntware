@@ -255,6 +255,12 @@ void main() {
       expect(packages.requestId, 'r-3');
       expect(packages.failure, PackagesReportFailure.noLink);
 
+      // PKG-04's read needs the link, then admin mode.
+      client.send(const ReadRestarts('ssh-config:web', requestId: 'r-4'));
+      final restarts = (await next(events)) as RestartReport;
+      expect(restarts.requestId, 'r-4');
+      expect(restarts.failure, RestartReportFailure.noLink);
+
       // A detached operation's result is acknowledged over a link.
       client.send(
         const AcknowledgeOperation('ssh-config:web', '0123456789abcdef'),

@@ -44,6 +44,7 @@ export 'src/parse/ops.dart';
 export 'src/parse/packages.dart';
 export 'src/parse/parse_result.dart';
 export 'src/parse/procs.dart';
+export 'src/parse/restarts.dart';
 export 'src/parse/smart.dart';
 export 'src/parse/temps.dart';
 export 'src/parse/timers.dart';

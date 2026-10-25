@@ -21,6 +21,7 @@ import 'package:seance_core/seance_core.dart'
 import '../admin/admin_mode.dart';
 import '../audit/audit_log.dart';
 import '../audit/host_audit_line.dart';
+import '../admin/restarts.dart';
 import '../admin/safety_policy.dart';
 import '../admin/smart.dart';
 import '../admin/user_crontabs.dart';
@@ -1620,6 +1621,32 @@ void engineMain(
               session: session,
               profile: profiles[serverId],
             ),
+          ).then(uiPort.send),
+        );
+      case ReadRestarts(:final serverId, :final requestId):
+        void fail(RestartReportFailure failure) => uiPort.send(
+          RestartReport(
+            serverId: serverId,
+            requestId: requestId,
+            failure: failure,
+          ),
+        );
+        if (links?.link(serverId) == null) {
+          fail(RestartReportFailure.noLink);
+          return;
+        }
+        final session = admin?.session(serverId);
+        if (session == null) {
+          fail(RestartReportFailure.adminRequired);
+          return;
+        }
+        admin?.touch(serverId);
+        // Not awaited, as the drive health read.
+        unawaited(
+          lendSession(
+            serverId,
+            () =>
+                readRestarts(serverId, requestId: requestId, session: session),
           ).then(uiPort.send),
         );
       case ReadPackages(:final serverId, :final requestId, :final fresh):

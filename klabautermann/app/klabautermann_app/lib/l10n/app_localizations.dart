@@ -1948,6 +1948,60 @@ abstract class AppLocalizations {
   /// **'When the refresh has finished, check again to read the new lists.'**
   String get systemUpdatesRefreshStarted;
 
+  /// System tab, Updates: heading of the services still running libraries an update replaced.
+  ///
+  /// In en, this message translates to:
+  /// **'Services to restart'**
+  String get systemUpdatesRestartsTitle;
+
+  /// System tab, Updates: button that reads, in admin mode, which services still run replaced libraries.
+  ///
+  /// In en, this message translates to:
+  /// **'Find services to restart'**
+  String get systemUpdatesRestartsRead;
+
+  /// System tab, Updates: button that reads the services to restart again.
+  ///
+  /// In en, this message translates to:
+  /// **'Look again'**
+  String get systemUpdatesRestartsReadAgain;
+
+  /// System tab, Updates: the services-to-restart read is running.
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for services to restart…'**
+  String get systemUpdatesRestartsReading;
+
+  /// System tab, Updates: the services-to-restart read needs admin mode, since it reads every process.
+  ///
+  /// In en, this message translates to:
+  /// **'Finding services that still run replaced libraries needs admin mode.'**
+  String get systemUpdatesRestartsAdminNeeded;
+
+  /// System tab, Updates: the read found no service to restart.
+  ///
+  /// In en, this message translates to:
+  /// **'No service runs a replaced library.'**
+  String get systemUpdatesRestartsNone;
+
+  /// System tab, Updates: the services still running replaced libraries; services is a comma-separated list of systemd unit names (server data).
+  ///
+  /// In en, this message translates to:
+  /// **'Restart to load the updated libraries: {services}'**
+  String systemUpdatesRestartsList(String services);
+
+  /// System tab, Updates: needrestart reports a newer kernel than the running one.
+  ///
+  /// In en, this message translates to:
+  /// **'A newer kernel is installed and waits for a reboot.'**
+  String get systemUpdatesKernelWaiting;
+
+  /// System tab, Updates: why the services-to-restart read read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{The server is not connected, so services to restart could not be read.} adminRequired{Admin mode ended before services to restart were read.} elevationRefused{Elevation was refused, so services to restart were not read.} missing{None of needrestart, needs-restarting or zypper is installed on this server.} transport{The connection failed while services to restart were read.} other{Services to restart could not be read.}}'**
+  String systemUpdatesRestartsFailed(String reason);
+
   /// System tab, Updates: when the shown check ran, in the UI locale and this device's time zone.
   ///
   /// In en, this message translates to:

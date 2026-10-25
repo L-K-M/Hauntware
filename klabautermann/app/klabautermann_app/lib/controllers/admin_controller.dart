@@ -23,6 +23,9 @@ final class AdminController extends ChangeNotifier {
 
   /// The drive health reads waiting on the engine, likewise.
   final Map<String, (String, Completer<SmartReport>)> _smartReads = {};
+
+  /// The services-needing-restart reads waiting on the engine, likewise.
+  final Map<String, (String, Completer<RestartReport>)> _restartReads = {};
   int _nextRead = 0;
   bool _engineStopped = false;
 
@@ -84,6 +87,32 @@ final class AdminController extends ChangeNotifier {
     return read.future;
   }
 
+  /// Reads the services on [serverId] still running replaced libraries
+  /// (PKG-04), which needs admin mode; the engine answers with
+  /// [RestartReport], a failure included. A stopped engine answers no
+  /// link.
+  Future<RestartReport> readRestarts(String serverId) {
+    final requestId = (_nextRead++).toString();
+    if (_engineStopped) {
+      return Future.value(_noRestartsLink(serverId, requestId));
+    }
+    final read = Completer<RestartReport>();
+    _restartReads[requestId] = (serverId, read);
+    try {
+      _engine.send(ReadRestarts(serverId, requestId: requestId));
+    } on StateError {
+      _onEngineDone();
+    }
+    return read.future;
+  }
+
+  static RestartReport _noRestartsLink(String serverId, String requestId) =>
+      RestartReport(
+        serverId: serverId,
+        requestId: requestId,
+        failure: RestartReportFailure.noLink,
+      );
+
   static SmartReport _noSmartLink(String serverId, String requestId) =>
       SmartReport(
         serverId: serverId,
@@ -107,6 +136,8 @@ final class AdminController extends ChangeNotifier {
         _crontabReads.remove(requestId)?.$2.complete(event);
       case SmartReport(:final requestId):
         _smartReads.remove(requestId)?.$2.complete(event);
+      case RestartReport(:final requestId):
+        _restartReads.remove(requestId)?.$2.complete(event);
       default:
     }
   }
@@ -125,6 +156,11 @@ final class AdminController extends ChangeNotifier {
       read.complete(_noSmartLink(serverId, requestId));
     }
     _smartReads.clear();
+    for (final MapEntry(key: requestId, value: (serverId, read))
+        in _restartReads.entries) {
+      read.complete(_noRestartsLink(serverId, requestId));
+    }
+    _restartReads.clear();
     notifyListeners();
   }
 

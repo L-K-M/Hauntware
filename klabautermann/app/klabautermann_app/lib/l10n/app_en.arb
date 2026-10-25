@@ -1536,6 +1536,53 @@
   "@systemUpdatesRefreshStarted": {
     "description": "System tab, Updates: shown after the refresh starts, until the next check."
   },
+  "systemUpdatesRestartsTitle": "Services to restart",
+  "@systemUpdatesRestartsTitle": {
+    "description": "System tab, Updates: heading of the services still running libraries an update replaced."
+  },
+  "systemUpdatesRestartsRead": "Find services to restart",
+  "@systemUpdatesRestartsRead": {
+    "description": "System tab, Updates: button that reads, in admin mode, which services still run replaced libraries."
+  },
+  "systemUpdatesRestartsReadAgain": "Look again",
+  "@systemUpdatesRestartsReadAgain": {
+    "description": "System tab, Updates: button that reads the services to restart again."
+  },
+  "systemUpdatesRestartsReading": "Looking for services to restart…",
+  "@systemUpdatesRestartsReading": {
+    "description": "System tab, Updates: the services-to-restart read is running."
+  },
+  "systemUpdatesRestartsAdminNeeded": "Finding services that still run replaced libraries needs admin mode.",
+  "@systemUpdatesRestartsAdminNeeded": {
+    "description": "System tab, Updates: the services-to-restart read needs admin mode, since it reads every process."
+  },
+  "systemUpdatesRestartsNone": "No service runs a replaced library.",
+  "@systemUpdatesRestartsNone": {
+    "description": "System tab, Updates: the read found no service to restart."
+  },
+  "systemUpdatesRestartsList": "Restart to load the updated libraries: {services}",
+  "@systemUpdatesRestartsList": {
+    "description": "System tab, Updates: the services still running replaced libraries; services is a comma-separated list of systemd unit names (server data).",
+    "placeholders": {
+      "services": {
+        "type": "String",
+        "example": "ssh.service, cron.service"
+      }
+    }
+  },
+  "systemUpdatesKernelWaiting": "A newer kernel is installed and waits for a reboot.",
+  "@systemUpdatesKernelWaiting": {
+    "description": "System tab, Updates: needrestart reports a newer kernel than the running one."
+  },
+  "systemUpdatesRestartsFailed": "{reason, select, noLink{The server is not connected, so services to restart could not be read.} adminRequired{Admin mode ended before services to restart were read.} elevationRefused{Elevation was refused, so services to restart were not read.} missing{None of needrestart, needs-restarting or zypper is installed on this server.} transport{The connection failed while services to restart were read.} other{Services to restart could not be read.}}",
+  "@systemUpdatesRestartsFailed": {
+    "description": "System tab, Updates: why the services-to-restart read read nothing, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
   "systemUpdatesCheckedAt": "Checked {time}",
   "@systemUpdatesCheckedAt": {
     "description": "System tab, Updates: when the shown check ran, in the UI locale and this device's time zone.",

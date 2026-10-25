@@ -902,6 +902,21 @@ abstract final class HostCommands {
         ),
       };
 
+  /// PKG-04's restart check (03 §7.8), run as root, since the tools read
+  /// every process's maps: the first of `needrestart -b`,
+  /// `needs-restarting -s` and `zypper ps -sss` installed, after a
+  /// `== tool <name>` line for `parseRestartCheck`, or `== tool none`.
+  static List<String> restartCheck() => const ['sh', '-c', _restartCheck];
+
+  static const _restartCheck =
+      'if command -v needrestart >/dev/null 2>&1; then '
+      'echo "== tool needrestart"; exec needrestart -b; '
+      'elif command -v needs-restarting >/dev/null 2>&1; then '
+      'echo "== tool needs-restarting"; exec needs-restarting -s; '
+      'elif command -v zypper >/dev/null 2>&1; then '
+      'echo "== tool zypper"; exec zypper ps -sss; '
+      'else echo "== tool none"; fi';
+
   static const _packageCheck = r'''
 have() { command -v "$1" >/dev/null 2>&1; }
 mtime() { stat -c %Y "$1" 2>/dev/null; }

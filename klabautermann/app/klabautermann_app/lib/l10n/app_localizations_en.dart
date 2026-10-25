@@ -1357,6 +1357,50 @@ class AppLocalizationsEn extends AppLocalizations {
       'When the refresh has finished, check again to read the new lists.';
 
   @override
+  String get systemUpdatesRestartsTitle => 'Services to restart';
+
+  @override
+  String get systemUpdatesRestartsRead => 'Find services to restart';
+
+  @override
+  String get systemUpdatesRestartsReadAgain => 'Look again';
+
+  @override
+  String get systemUpdatesRestartsReading => 'Looking for services to restart…';
+
+  @override
+  String get systemUpdatesRestartsAdminNeeded =>
+      'Finding services that still run replaced libraries needs admin mode.';
+
+  @override
+  String get systemUpdatesRestartsNone => 'No service runs a replaced library.';
+
+  @override
+  String systemUpdatesRestartsList(String services) {
+    return 'Restart to load the updated libraries: $services';
+  }
+
+  @override
+  String get systemUpdatesKernelWaiting =>
+      'A newer kernel is installed and waits for a reboot.';
+
+  @override
+  String systemUpdatesRestartsFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noLink':
+          'The server is not connected, so services to restart could not be read.',
+      'adminRequired': 'Admin mode ended before services to restart were read.',
+      'elevationRefused':
+          'Elevation was refused, so services to restart were not read.',
+      'missing':
+          'None of needrestart, needs-restarting or zypper is installed on this server.',
+      'transport': 'The connection failed while services to restart were read.',
+      'other': 'Services to restart could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
   String systemUpdatesCheckedAt(DateTime time) {
     final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
       localeName,

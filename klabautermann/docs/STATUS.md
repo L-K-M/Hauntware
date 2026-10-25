@@ -1958,7 +1958,11 @@ is on main:
   check for an hour; "Check again" runs a new one. In admin mode,
   "Refresh package lists" (N36b, PKG-05) downloads the lists as root
   through the action preview (apt, dnf, zypper and apk; never pacman,
-  whose refresh without an upgrade breaks partial installs).
+  whose refresh without an upgrade breaks partial installs). Also in
+  admin mode, "Find services to restart" (N36c, PKG-04) lists the
+  services still running replaced libraries (needrestart,
+  needs-restarting or zypper ps) and says when a newer kernel waits for
+  a reboot.
 - Drive health (M6 N37c, HW-04): in admin mode, the System tab's Drive
   health section reads every drive's SMART health on request through an
   elevated `smartctl --scan-open`, then `smartctl -n standby -a` per

@@ -185,8 +185,9 @@ void main() {
     expect(find.text('Checking for updates…'), findsOneWidget);
   });
 
-  testWidgets('in admin mode the lists can be refreshed, and without it a '
-      'check that found none says admin mode downloads them', (tester) async {
+  testWidgets('in admin mode the lists can be refreshed and the services '
+      'to restart read, and without it a check that found no lists says '
+      'admin mode downloads them', (tester) async {
     final admin = AdminController(engine);
     final operations = OperationsController(engine);
     final safety = SafetyController(
@@ -241,5 +242,33 @@ void main() {
     final plan = engine.sentOfType<PlanAction>().single as PlanAction;
     expect(plan.intent, isA<RefreshPackageLists>());
     expect(plan.intent.serverId, _server);
+
+    // PKG-04: the services to restart, read on request.
+    await tester.tap(find.text('Find services to restart'));
+    await tester.pump();
+    final read = engine.sentOfType<ReadRestarts>().single as ReadRestarts;
+    engine.emit(
+      RestartReport(
+        serverId: _server,
+        requestId: read.requestId,
+        check: RestartCheck(
+          tool: RestartTool.needrestart,
+          services: const ['ssh.service', 'cron.service'],
+          kernel: KernelState.versionUpgrade,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Restart to load the updated libraries: ssh.service, cron.service',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('A newer kernel is installed and waits for a reboot.'),
+      findsOneWidget,
+    );
+    expect(find.text('Look again'), findsOneWidget);
   });
 }

@@ -3869,8 +3869,14 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   pacman is refused, since `pacman -Sy` without an upgrade leaves a
   partly upgraded system. The Updates section offers it in admin mode,
   says admin mode downloads lists that were never downloaded, and asks
-  for a new check once the refresh has run. Services needing restart and
-  the fleet update center follow.
+  for a new check once the refresh has run.
+- **As built (M6 N36c).** PKG-04's `ReadRestarts`, in admin mode only,
+  runs the first of `needrestart -b`, `needs-restarting -s` and
+  `zypper ps -sss` as root through the elevation executor, since each
+  reads every process's maps. `RestartReport` lists the systemd units to
+  restart, once each, and from needrestart whether a newer kernel waits
+  for a reboot. The Updates section reads it on request. The fleet update
+  center follows.
 - **v1.x.** Apply updates (PKG-07) only as a detached operation with a typed
   confirmation and `DEBIAN_FRONTEND=noninteractive`, never in a client-held
   channel; holds; automatic-update status; old kernels; scheduled checks
