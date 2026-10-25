@@ -252,14 +252,16 @@ human opens a **dedicated baseline-refresh PR** that re-measures on the
 current fingerprint and updates `tier-b-baseline.json` in one commit.
 The refresh is measurement, not authoring:
 
-1. Download the `bench-results` artifact of the last few **main-branch**
-   `ci.yml` runs whose collectors completed (the tier-B leg runs only on
-   main pushes and manual dispatch; PR artifacts never carry it). During
-   enforced controlled-axis drift, the expected stale-baseline failure does
-   not invalidate an otherwise complete artifact:
-   `gh run list --repo L-K-M/Poltergeist --workflow ci.yml --branch main`
-   then `gh run download <run-id> --repo L-K-M/Poltergeist --name
-   bench-results`. Use at least three runs that include the tier-B leg
+1. Download the `bench-results` artifact of the last few `ci.yml` runs
+   whose collectors completed (the tier-B leg runs only on main pushes
+   and manual dispatch; PR artifacts never carry it). During enforced
+   controlled-axis drift, the expected stale-baseline failure does not
+   invalidate an otherwise complete artifact. Main-branch runs are the
+   default source. When main CI is held up, dispatch `ci.yml` on side
+   branches pushed at main's tip instead: they measure main's tree and
+   never write drift state. Never dispatch on main while a push run is
+   queued there, because the dispatch supersedes it. Use at least three
+   runs that include the tier-B leg
    (a scenario whose suite has reached main fewer times pools whatever
    `ok` rows exist — its `repetitions` records the shortfall, as P4's
    first entry below does); the merged `bench-results.json` holds the
@@ -299,6 +301,36 @@ The refresh is measurement, not authoring:
    A shared controlled-axis change, such as the runner image, also updates
    tier A's calibration metadata so its existing thresholds become active
    on the new fingerprint.
+
+`refresh.dart` automates steps 1–3 with the checker's own parser and
+median, and needs an authenticated `gh`. Run it from `poltergeist/`:
+
+```bash
+image=ubuntu-latest@20261023.334.3   # the rotated runnerImage
+dir=build/d12-refresh                # one <run-id>/ per artifact
+
+# Step 1: main-branch artifacts since the rotation surfaced.
+dart run test/benchmarks/refresh.dart collect \
+  --since 2026-10-23T15:00:00Z --artifacts "$dir"
+
+# Optional while main CI is held up: side-branch samples (bench/*
+# branches only). Each run is cancelled once its D12 job uploads
+# results, then redispatched until three runs qualify (--runs,
+# --max-dispatches).
+git fetch origin main
+git push origin origin/main:refs/heads/bench/d12-sample
+dart run test/benchmarks/refresh.dart sample --branch bench/d12-sample \
+  --artifacts "$dir" --set runnerImage="$image"
+
+# Steps 2-3: print used and excluded runs, entries and warnings; --write
+# updates tier-b-baseline.json and the tier-A calibration's machine axes.
+dart run test/benchmarks/refresh.dart pool \
+  --artifacts "$dir" --set runnerImage="$image" --write
+```
+
+`--set` moves any fingerprint axis, e.g. `dartVersion` and
+`flutterVersion` after a Flutter pin bump. Step 4 stays manual. Delete
+the side branch afterwards and cite its runs in the refresh entry.
 
 ## First committed baseline (2026-09-15)
 
