@@ -873,7 +873,10 @@ Platform notes to carry: macOS uses the legacy login keychain via
 (`seance/AGENTS.md` platform notes, `poltergeist/AGENTS.md` gotchas).
 The PR records a manual macOS keychain check: automated compilation is
 not device/keychain verification (root `AGENTS.md`, releases and
-review). Stays app-side: `AppLock` integration, product error copy,
+review). Stays app-side: `AppLock` integration (the `AppLock` class
+itself moved here later, F5f: `package:ghost_keystore/app_lock.dart`,
+with the authentication plugin behind `DeviceAuthenticator` still
+app-side), product error copy,
 `SyncCredentialStore` bindings (`sync_credentials.dart:151`,
 `poltergeist.sync.deviceId` mint-once).
 

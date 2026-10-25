@@ -2,9 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:ghost_keystore/app_lock.dart';
 import 'package:seance_core/seance_core.dart';
-
-import 'app_lock.dart';
 
 /// Thrown when the OS keystore reports no master key but an encrypted vault is
 /// already on disk.

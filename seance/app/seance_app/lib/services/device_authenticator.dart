@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:ghost_keystore/app_lock.dart';
 import 'package:local_auth/local_auth.dart';
-
-import 'app_lock.dart';
 
 bool appLockSupportedOn(TargetPlatform platform) => switch (platform) {
   TargetPlatform.android ||

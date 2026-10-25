@@ -5,10 +5,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:ghost_keystore/app_lock.dart';
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/main.dart';
 import 'package:seance_app/services/app_services.dart';
-import 'package:seance_app/services/app_lock.dart';
 import 'package:seance_app/services/local_settings_backend.dart';
 import 'package:seance_app/theme/app_appearance.dart';
 import 'package:seance_app/theme/theme_presets.dart';

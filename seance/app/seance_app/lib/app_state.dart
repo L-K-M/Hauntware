@@ -7,6 +7,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:ghost_apk_update/ghost_apk_update.dart';
+import 'package:ghost_keystore/app_lock.dart';
 import 'package:planchette_editor/planchette_editor.dart'
     show EditorLigatures, EditorTextSize, EditorZoom;
 import 'package:seance_core/catalog.dart' show HostKeyConflict;
@@ -14,7 +15,6 @@ import 'package:seance_core/seance_core.dart';
 import 'package:xterm/xterm.dart' show TerminalController;
 
 import 'services/app_services.dart';
-import 'services/app_lock.dart';
 import 'services/app_settings.dart';
 import 'services/background_keep_alive.dart';
 import 'services/chat_session.dart';

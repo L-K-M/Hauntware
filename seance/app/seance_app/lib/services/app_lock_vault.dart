@@ -1,8 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:ghost_keystore/app_lock.dart';
 import 'package:seance_core/seance_core.dart';
-
-import 'app_lock.dart';
 
 /// Guard blobs too: recovery and sync sometimes open entries themselves.
 class AppLockVaultStore implements VaultStore {
