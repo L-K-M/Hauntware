@@ -9225,6 +9225,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Inodes used'**
   String get alertMetricDiskInodes;
+
+  /// The Overview card that charts a server's on-device history (HIS-01).
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get historyTitle;
+
+  /// The History card's range choice of the 1-minute tier; count is 48.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Last hour} other{Last {count} hours}}'**
+  String historyLastHours(int count);
+
+  /// The History card's range choice of the 10-minute tier; count is 30.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Last day} other{Last {count} days}}'**
+  String historyLastDays(int count);
+
+  /// Tooltip of the History card's button that reads the history again.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get historyRefresh;
+
+  /// The History card when this device recorded nothing for the server in the chosen range.
+  ///
+  /// In en, this message translates to:
+  /// **'No history yet. Klabautermann keeps 48 hours and 30 days of this server\'s readings while it is open.'**
+  String get historyEmpty;
+
+  /// The History chart's series of each bucket's mean.
+  ///
+  /// In en, this message translates to:
+  /// **'Average'**
+  String get historyLaneMean;
+
+  /// The History chart's series of each bucket's highest reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Peak'**
+  String get historyLanePeak;
+
+  /// Where the History chart's data comes from, as its legend says.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded on this device while Klabautermann was open'**
+  String get historySource;
+
+  /// A History metric: the share of CPU time spent busy.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU busy'**
+  String get historyMetricCpu;
+
+  /// A History metric: used memory as a share of the total.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory used'**
+  String get historyMetricMemory;
+
+  /// A History metric: the fullest filesystem's used space.
+  ///
+  /// In en, this message translates to:
+  /// **'Disk space used'**
+  String get historyMetricDisk;
+
+  /// A History metric: the fullest filesystem's used inodes.
+  ///
+  /// In en, this message translates to:
+  /// **'Inodes used'**
+  String get historyMetricInodes;
+
+  /// A History metric: the 1-minute load average per core.
+  ///
+  /// In en, this message translates to:
+  /// **'Load per core'**
+  String get historyMetricLoad;
 }
 
 class _AppLocalizationsDelegate

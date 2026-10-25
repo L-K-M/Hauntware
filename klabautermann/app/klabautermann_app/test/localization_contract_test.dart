@@ -88,6 +88,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // A job history read's request id, matched in the engine's answer.
   'lib/controllers/job_history_reads.dart': {r"'history-${_count++}'"},
+  // A history rollup read's request id, matched in the engine's answer.
+  'lib/controllers/history_reads.dart': {r"'rollup-${_count++}'"},
   // The not-saved diagnostic; the Safety tab and the header's Safety menu
   // print it and show their own ARB text (settingsSafetyNotSaved).
   'lib/controllers/safety_controller.dart': {

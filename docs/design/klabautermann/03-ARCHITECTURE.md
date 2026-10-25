@@ -2391,7 +2391,7 @@ platform identities in 04, section 12.3):
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
 | `klabautermann_records.json` [E] | The `klabautermann:` records the coordinator applied (4.8, M5, M04): per record id, the `(updatedAt, deviceId)` it won with and its sealed payload, sealed removals, unknown types and newer versions included, so the tuple guard holds across restarts and §3.1's recovery re-seals them verbatim. A `pref` whose server is absent waits here. Kept like the sync state files. Never pushed while sync is pull-only | `klabautermann_core` | v1 |
 | `operations_shown.json` [E] | Detached operations this device remembers (M4, E17b, 7.17): per server and operation id, the operation's directory, whether its result was shown and audited here, and, for one this device launched, the audit record's facts (action, target, redacted steps, tier, start). An entry goes once the operation's files are gone. Kept like the sync state files: written only with exclusive access, a damaged file set aside; losing it costs a result's launch facts and the reminder of a root cleanup, which the 7-day prune covers. Never synced | `klabautermann_core` | MVP |
-| `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample) | `klabautermann_core` | v1 |
+| `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample). Built in M6 N52a: `minute.ring` (2,880 slots) and `tenMinutes.ring` (4,320 slots) of 92 bytes, a slot per bucket with its start, provenance and per metric the count and the min, max and mean as 32-bit floats (about 0.66 MB per server), and `gaps.ring`, the last 256 gaps. The directory is the server's file stem; a file of another layout starts over | `klabautermann_core` | v1 |
 | `alerts.jsonl` | In-app alert history, 30 days [E]; from v1.x also host alerts fetched from the inbox or read from a host spool, with source tier, server item ids and status (D42) | `klabautermann_core` | v1 |
 | `alert_inbox.json` | Inbox cursor, sender metadata (app id, allowed server), per-sender failure counts, pending item deletions; keys stay in `vault.json` | `klabautermann_core` | v1.x |
 
@@ -4541,6 +4541,30 @@ arrives with E22's Docker actions.
   provenance (`liveSampler`, `sessionRollup`; later `hostRecorder`,
   `hostRing`, `companion`) and gaps are explicit records, so charts can draw
   "app closed" bands. Purged on removal, exclusion or endpoint change.
+- **As built (M6 N52a).** The engine rolls every `overview`, `core`
+  and `fs` reading into the current 1-minute bucket of the alert
+  metrics (`cpu.busy`, `memory.used`, `load.perCore`, `disk.used`,
+  `disk.inodes`), writes it once a reading of a later minute arrives,
+  and folds written minutes into the current 10-minute bucket
+  (`sessionRollup`) the same way; the buckets still filling are written
+  at shutdown and answered with every read. Each `Gap` of those streams
+  is kept as a gap record with its cause. Rings are written only while
+  the process holds the support directory alone, one write at a time,
+  and kept in memory otherwise; they are purged with the capability
+  cache's rule: at open for servers outside the fleet, and when a
+  server leaves it or changes endpoint. `ReadHistory` answers a tier's
+  buckets and gaps.
+- **As built (M6 N52b).** The Overview's History card reads a server's
+  rollups when it shows, on refresh, and when the user picks "Last 48
+  hours" (1-minute buckets) or "Last 30 days" (10-minute buckets). It
+  charts one of the percentage metrics (CPU busy, memory, disk space,
+  inodes; load per core has no fixed ceiling) as the mean and the peak
+  per bucket, each at its bucket's middle. Wherever buckets stop, the
+  chart draws a labelled band with the cause of the recorded gap that
+  covers most of it (disconnected, in background, reading failed), or
+  "app closed" when none was recorded; a run that ends before the read
+  leaves its band open to the chart's edge (Y4). Time before the first
+  bucket has no band. A read with no buckets shows a notice instead.
 - **v1.x.** Existing recorders read over SSH (sysstat `sadf -j`,
   node_exporter on `localhost:9100`, Netdata, Glances), the T1 ring file,
   forecasts. When sysstat is missing, an "Enable sysstat" action (HIS-03)
@@ -5727,6 +5751,7 @@ shows there.
 | `DockerQuery(serverId, queryId, query)`, `DockerWatch(serverId, watchId, lists, statsFor)`, `DockerUnwatch(serverId, watchId)`, `SetDockerEndpoint(serverId, choice)` (M3 below) | `DockerResult(serverId, queryId, payload, warnings)`, `DockerEndpointState(serverId, phase, route, negotiatedApi, lowSession, failure, noRouteReason, choice)`, `DockerListChanged(serverId, list, payload, at, fullRelist)` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(planId, preview)`, `ActionProgress`, `ActionFinished`, `ActionRefused(reason, intent or planId)` |
 | `AuditQuery(serverId, before, limit)` (8.10, M4) | `AuditRecords(serverId, records, more)` |
+| `ReadHistory(serverId, tier, requestId)` (7.20, M6 N52a) | `HistoryRead(requestId, serverId, tier, range)`: the tier's buckets and gaps within its span, the filling bucket included |
 | `SetSafetyPolicy(policy)`, `SetAdminMode(serverId, enabled)` (8.2, M4) | `AdminModeState(serverId, phase, expiresAt, retry, failure, ended)`; a refused plan's `ActionRefused` names `observeOnly` or `readOnly` |
 | `AnswerPrompt(promptId, answer)` (trust, responses or cancel, secret) | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
 | `SetAppActivity(activity)` (foreground or background; D34, D45) | no event: it changes what runs |

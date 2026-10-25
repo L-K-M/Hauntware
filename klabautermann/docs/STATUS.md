@@ -2007,6 +2007,16 @@ is on main:
   the rule's raise and clear thresholds and durations, over `cpu.busy`,
   `memory.used`, `load.perCore`, `disk.used` and `disk.inodes`, and
   sends `LocalAlertChanged` on each raise and clear.
+- On-device history (M6 N52a, HIS-01): the engine rolls each server's
+  CPU, memory, load per core and fullest-disk readings into 1-minute
+  buckets for 48 hours and 10-minute buckets for 30 days (min, max,
+  mean, count), keeps the gaps it saw with their causes, and stores
+  them in fixed-size rings under `history/` that survive restarts and
+  go when the server leaves the fleet. `ReadHistory` answers them.
+  The Overview's History card (N52b) charts CPU, memory, disk or inode
+  use over 48 hours or 30 days as each bucket's mean and peak, with a
+  labelled band for each gap: disconnected, in background, reading
+  failed, or app closed where nothing was recorded.
 - Alert center and badges (M6 N50b, ALR-01, ALR-02): the app's alert
   center keeps the raised alerts and the latest 100 raises and clears of
   the engine run. A notice heads the fleet list while an alert is raised,
