@@ -29,8 +29,8 @@ import 'sampler_session.dart';
 import 'subscriptions.dart';
 
 /// [stream]'s 03 §6.4 period under [profile]; null for `identity`, read
-/// once per link, and for `timers` and `cron` under the cellular saver,
-/// read once per [Subscribe] naming them.
+/// once per link, and for `timers`, `cron` and `temps` under the cellular
+/// saver, read once per [Subscribe] naming them.
 Duration? samplingPeriod(SampleStream stream, CadenceProfile profile) {
   int? seconds(int desktop, int phone, int? cellularSaver) => switch (profile) {
     CadenceProfile.desktop => desktop,
@@ -47,6 +47,7 @@ Duration? samplingPeriod(SampleStream stream, CadenceProfile profile) {
     SampleStream.timers ||
     SampleStream.cron ||
     SampleStream.userTimers => seconds(60, 60, null),
+    SampleStream.temps => seconds(10, 10, null),
     SampleStream.identity => null,
   };
   return period == null ? null : Duration(seconds: period);

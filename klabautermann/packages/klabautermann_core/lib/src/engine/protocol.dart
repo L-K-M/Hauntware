@@ -25,6 +25,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         ProcsSelection,
         SystemdUnit,
         SystemctlVerb,
+        TempsSnapshot,
         ThresholdRule,
         TimerLastRun,
         TimersSnapshot,
@@ -1628,7 +1629,8 @@ final class Sample extends EngineEvent {
              (stream == SampleStream.timers && result is TimersResult) ||
              (stream == SampleStream.cron && result is CronResult) ||
              (stream == SampleStream.userUnits && result is UnitsResult) ||
-             (stream == SampleStream.userTimers && result is TimersResult),
+             (stream == SampleStream.userTimers && result is TimersResult) ||
+             (stream == SampleStream.temps && result is TempsResult),
          'result must be the variant for stream, or CollectorUnavailable',
        );
 
@@ -5431,6 +5433,9 @@ enum SampleStream {
 
   /// The login user's own systemd timers ([TimersResult], 7.7, JOB-08).
   userTimers,
+
+  /// Temperature sensors ([TempsResult], HW-01).
+  temps,
 }
 
 /// The 03 §6.4 cadence columns [SetCadenceProfile] picks among.
@@ -5441,8 +5446,8 @@ enum CadenceProfile {
   /// The Phone column.
   phone,
 
-  /// The Cellular saver column, which reads `timers` and `cron` on
-  /// demand: once per [Subscribe] that names them, as soon as the link is
+  /// The Cellular saver column, which reads `timers`, `cron` and
+  /// `temps` on demand: once per [Subscribe] that names them, as soon as the link is
   /// ready and the app is in the foreground (see [Subscribe]).
   cellularSaver,
 }
@@ -5713,6 +5718,14 @@ final class FsResult extends SampleResult {
   const FsResult(this.fs);
 
   final FsSnapshot fs;
+}
+
+/// Temperature sensors ([SampleStream.temps], HW-01): empty where the
+/// host has none, as VMs and containers usually do.
+final class TempsResult extends SampleResult {
+  const TempsResult(this.temps);
+
+  final TempsSnapshot temps;
 }
 
 /// SYS-01's identity ([SampleStream.identity]); virtualization comes with

@@ -1278,6 +1278,53 @@
       }
     }
   },
+  "systemTemperaturesTitle": "Temperatures",
+  "@systemTemperaturesTitle": {
+    "description": "System tab: the section of the host's temperature sensors (HW-01). It is hidden where the host has none, as VMs and containers usually do."
+  },
+  "systemTemperatureSensor": "Sensor",
+  "@systemTemperatureSensor": {
+    "description": "Temperatures table: column of the sensor's name."
+  },
+  "systemTemperatureSensorName": "{chip}: {label}",
+  "@systemTemperatureSensorName": {
+    "description": "Temperatures table: a sensor named by its chip (coretemp, nvme, k10temp) and the chip's label for it (Package id 0, Composite). Both are the kernel's technical names.",
+    "placeholders": {
+      "chip": {
+        "type": "String",
+        "example": "coretemp"
+      },
+      "label": {
+        "type": "String",
+        "example": "Package id 0"
+      }
+    }
+  },
+  "systemTemperatureReading": "Temperature",
+  "@systemTemperatureReading": {
+    "description": "Temperatures table: column of the sensor's current reading."
+  },
+  "systemTemperatureHigh": "High",
+  "@systemTemperatureHigh": {
+    "description": "Temperatures table: column of the temperature the chip calls high for the sensor (its max limit)."
+  },
+  "systemTemperatureCritical": "Critical",
+  "@systemTemperatureCritical": {
+    "description": "Temperatures table: column of the temperature the chip calls critical for the sensor."
+  },
+  "systemTemperatureCelsius": "{celsius} °C",
+  "@systemTemperatureCelsius": {
+    "description": "A temperature in degrees Celsius, as a whole number in the UI locale.",
+    "placeholders": {
+      "celsius": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 0
+        }
+      }
+    }
+  },
   "systemColumnMount": "Mount",
   "@systemColumnMount": {
     "description": "Disks table column: where the filesystem is mounted."

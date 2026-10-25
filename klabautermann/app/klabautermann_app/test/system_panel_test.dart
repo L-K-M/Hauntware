@@ -67,6 +67,19 @@ const _disks = {
   ),
 };
 
+/// A CPU package with its limits and a drive without any.
+const _temps = TempsSnapshot([
+  TempSensor(
+    id: 'hwmon2/temp1',
+    chip: 'coretemp',
+    label: 'Package id 0',
+    celsius: 48,
+    highCelsius: 84,
+    criticalCelsius: 100,
+  ),
+  TempSensor(id: 'hwmon4/temp1', chip: 'drivetemp', celsius: 38.6),
+]);
+
 const _network = {
   'eth0': NetRate(
     rxBytesPerSecond: 1.25 * _mib,
@@ -157,6 +170,7 @@ final class _Panel {
     await sample(tester, SampleStream.identity, _identity);
     await sample(tester, SampleStream.core, _core());
     await sample(tester, SampleStream.fs, FsResult(_fs));
+    await sample(tester, SampleStream.temps, const TempsResult(_temps));
   }
 }
 
@@ -366,6 +380,38 @@ void main() {
     expect(activity('Rates show from the second reading.'), findsOneWidget);
     await panel.sample(tester, SampleStream.core, _core(disks: const {}));
     expect(activity('No disk has done any I/O yet.'), findsOneWidget);
+  });
+
+  testWidgets('HW-01 lists each sensor with its reading and limits; a '
+      'host without sensors, or a container, shows no section', (tester) async {
+    final panel = await _pump(tester);
+    Finder temps(String text) =>
+        _inSection(SystemSection.temperatures, find.text(text));
+
+    // No reading yet: no section rather than a wait for one that VMs
+    // never send.
+    expect(find.text('Temperatures'), findsNothing);
+
+    await panel.sample(tester, SampleStream.temps, const TempsResult(_temps));
+    expect(find.text('Temperatures'), findsOneWidget);
+    expect(temps('coretemp: Package id 0'), findsOneWidget);
+    expect(temps('48 °C'), findsOneWidget);
+    expect(temps('84 °C'), findsOneWidget);
+    expect(temps('100 °C'), findsOneWidget);
+    expect(temps('drivetemp'), findsOneWidget);
+    expect(temps('39 °C'), findsOneWidget);
+    expect(temps('Unknown'), findsNWidgets(2));
+
+    await panel.sample(
+      tester,
+      SampleStream.temps,
+      const TempsResult(TempsSnapshot([])),
+    );
+    expect(find.text('Temperatures'), findsNothing);
+
+    await panel.sample(tester, SampleStream.temps, const TempsResult(_temps));
+    await panel.profile(tester, _container);
+    expect(find.text('Temperatures'), findsNothing);
   });
 
   testWidgets('where every column does not fit, the disk activity table '
