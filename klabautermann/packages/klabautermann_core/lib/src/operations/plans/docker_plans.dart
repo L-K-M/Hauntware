@@ -262,7 +262,8 @@ Future<PlanAttempt> _planCreateVolume(
   DockerPlanContext c,
 ) async {
   final driver = intent.driver;
-  if (!_volumeName.hasMatch(intent.name) || driver == '') {
+  if (!_volumeName.hasMatch(intent.name) ||
+      (driver != null && driver.trim().isEmpty)) {
     return _refused(ActionRefusalReason.invalidTarget);
   }
   try {

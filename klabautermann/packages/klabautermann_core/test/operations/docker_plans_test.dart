@@ -602,6 +602,7 @@ void main() {
         ('-data', null),
         ('da ta', null),
         ('data', ''),
+        ('cache', ' '),
       ]) {
         expect(
           (await _plan(
