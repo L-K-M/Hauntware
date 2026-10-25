@@ -44,9 +44,10 @@ const _fast = {SampleStream.overview, SampleStream.core};
 /// shapes, which these fixtures read.
 const _userManager = {SampleStream.userUnits, SampleStream.userTimers};
 
-/// `temps` has no captured fixture either: capture containers and VMs
-/// have no sensors; its parser and fragment have their own tests.
-const _temps = {SampleStream.temps};
+/// `temps` and `gpu` have no captured fixture either: capture containers
+/// and VMs have no sensors or GPUs; their parsers and fragments have
+/// their own tests.
+const _temps = {SampleStream.temps, SampleStream.gpu};
 final _slow = SampleStream.values.toSet().difference({
   ..._fast,
   ..._userManager,

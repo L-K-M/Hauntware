@@ -27,6 +27,7 @@ Collector sampleStreamCollector(SampleStream stream) => switch (stream) {
   SampleStream.userUnits => Collector.userUnits,
   SampleStream.userTimers => Collector.userTimers,
   SampleStream.temps => Collector.temps,
+  SampleStream.gpu => Collector.gpu,
 };
 
 /// K04's external-monitor rule over a `units` reading (03 §9.5 item 3).
