@@ -11,6 +11,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         DiskRate,
         FootprintRow,
         FsSnapshot,
+        GpuSnapshot,
         HostProfile,
         JobEntry,
         JournalBoot,
@@ -25,6 +26,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         ProcsSelection,
         SystemdUnit,
         SystemctlVerb,
+        TempsSnapshot,
         ThresholdRule,
         TimerLastRun,
         TimersSnapshot,
@@ -59,6 +61,7 @@ import 'package:meta/meta.dart';
 // DangerLinter's findings are plain data: a severity and three values.
 import 'package:seance_core/seance_core.dart' show DangerFinding;
 
+import '../history/history_store.dart' show HistoryRange, HistoryTier;
 import '../docker/docker_ladder.dart'
     show
         DockerNoRouteReason,
@@ -1178,6 +1181,17 @@ final class ReadUserCrontabs extends EngineRequest {
   final String requestId;
 }
 
+/// Reads [serverId]'s on-device history in [tier] (HIS-01, 03 §7.20):
+/// the buckets and gaps within the tier's span. One [HistoryRead] with
+/// [requestId] answers it.
+final class ReadHistory extends EngineRequest {
+  const ReadHistory(this.serverId, this.tier, {required this.requestId});
+
+  final String serverId;
+  final HistoryTier tier;
+  final String requestId;
+}
+
 /// Answers an outstanding [Prompt] event (03 §10.1).
 final class AnswerPrompt extends EngineRequest {
   const AnswerPrompt(this.promptId, this.answer);
@@ -1635,7 +1649,9 @@ final class Sample extends EngineEvent {
              (stream == SampleStream.timers && result is TimersResult) ||
              (stream == SampleStream.cron && result is CronResult) ||
              (stream == SampleStream.userUnits && result is UnitsResult) ||
-             (stream == SampleStream.userTimers && result is TimersResult),
+             (stream == SampleStream.userTimers && result is TimersResult) ||
+             (stream == SampleStream.temps && result is TempsResult) ||
+             (stream == SampleStream.gpu && result is GpuResult),
          'result must be the variant for stream, or CollectorUnavailable',
        );
 
@@ -2914,6 +2930,63 @@ final class KeystoreRequest extends EngineEvent {
   /// Unique for the engine's lifetime.
   final int requestId;
   final KeystoreOperation operation;
+}
+
+/// One in-app threshold alert raised or cleared (ALR-01, 03 §7.19, D29):
+/// the engine evaluates every synced rule on the live samples of the
+/// servers it applies to, on this device while Klabautermann is open. A
+/// rule that is removed or changed, or a server that leaves its scope,
+/// clears a raised alert at once.
+final class LocalAlertChanged extends EngineEvent {
+  const LocalAlertChanged({
+    required this.serverId,
+    required this.ruleId,
+    required this.metric,
+    required this.severity,
+    required this.raised,
+    required this.at,
+    this.value,
+    this.since,
+  });
+
+  final String serverId;
+
+  /// The `rule` record's id.
+  final String ruleId;
+
+  /// The rule's metric id, such as `cpu.busy`.
+  final String metric;
+
+  final AlertSeverity severity;
+
+  /// True when the alert went up, false when it cleared.
+  final bool raised;
+
+  /// The reading that raised or cleared it, by the engine's clock in UTC.
+  final DateTime at;
+
+  /// The value that reading had; null for a clear without a reading.
+  final double? value;
+
+  /// When the breach behind a raise began, as the rule's `for` counts it.
+  final DateTime? since;
+}
+
+/// The answer to [ReadHistory]: [serverId]'s buckets in [tier], oldest
+/// first, the one still filling included, and the gaps the engine saw
+/// within their span; empty before the engine opens its store.
+final class HistoryRead extends EngineEvent {
+  const HistoryRead({
+    required this.requestId,
+    required this.serverId,
+    required this.tier,
+    required this.range,
+  });
+
+  final String requestId;
+  final String serverId;
+  final HistoryTier tier;
+  final HistoryRange range;
 }
 
 /// Alerts fetched for one server inside a sync round (v1.x, 03 §10.1, D42).
@@ -4500,7 +4573,8 @@ enum DockerPruneKind { containers, images, volumes, networks, buildCache }
 /// uses, volumes no container mounts, user-defined networks no container
 /// is on, or the build cache no build uses. The preview lists them first.
 final class PruneDocker extends ActionIntent {
-  const PruneDocker(super.serverId, {required this.kind, this.all = false});
+  const PruneDocker(super.serverId, {required this.kind, this.all = false})
+    : assert(!all || kind == DockerPruneKind.images, 'only images prune all');
 
   final DockerPruneKind kind;
 
@@ -5467,6 +5541,12 @@ enum SampleStream {
 
   /// The login user's own systemd timers ([TimersResult], 7.7, JOB-08).
   userTimers,
+
+  /// Temperature sensors ([TempsResult], HW-01).
+  temps,
+
+  /// GPUs ([GpuResult], HW-03).
+  gpu,
 }
 
 /// The 03 §6.4 cadence columns [SetCadenceProfile] picks among.
@@ -5477,9 +5557,10 @@ enum CadenceProfile {
   /// The Phone column.
   phone,
 
-  /// The Cellular saver column, which reads `timers` and `cron` on
-  /// demand: once per [Subscribe] that names them, as soon as the link is
-  /// ready and the app is in the foreground (see [Subscribe]).
+  /// The Cellular saver column, which reads `timers`, `cron`, `temps`
+  /// and `gpu` on demand: once per [Subscribe] that names them, as soon
+  /// as the link is ready and the app is in the foreground (see
+  /// [Subscribe]).
   cellularSaver,
 }
 
@@ -5629,8 +5710,8 @@ final class CoreResult extends SampleResult {
   /// As [OverviewResult.network].
   final Map<String, NetRate>? network;
 
-  /// Byte rates per block device since the previous reading; null without
-  /// one, as [OverviewResult.network].
+  /// Throughput, requests, waits and busy share per block device since
+  /// the previous reading; null without one, as [OverviewResult.network].
   final Map<String, DiskRate>? disks;
 
   /// Pressure stall information; null where the kernel has none, which is
@@ -5749,6 +5830,22 @@ final class FsResult extends SampleResult {
   const FsResult(this.fs);
 
   final FsSnapshot fs;
+}
+
+/// Temperature sensors ([SampleStream.temps], HW-01): empty where the
+/// host has none, as VMs and containers usually do.
+final class TempsResult extends SampleResult {
+  const TempsResult(this.temps);
+
+  final TempsSnapshot temps;
+}
+
+/// GPUs ([SampleStream.gpu], HW-03): empty where the host has none the
+/// collector reads.
+final class GpuResult extends SampleResult {
+  const GpuResult(this.gpu);
+
+  final GpuSnapshot gpu;
 }
 
 /// SYS-01's identity ([SampleStream.identity]); virtualization comes with

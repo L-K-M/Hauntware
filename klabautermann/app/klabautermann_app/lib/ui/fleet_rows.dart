@@ -18,6 +18,7 @@ import 'chart_strings.dart';
 import 'charts/charts.dart';
 import 'fleet_rail.dart' show FleetEmptyState, linkFailureText, linkStatusWord;
 import 'fleet_row_state.dart';
+import 'alerts.dart';
 import 'monitor_set_feedback.dart';
 import 'server_editing.dart';
 import 'sidebar_kit.dart';
@@ -609,6 +610,15 @@ class FleetServerRow extends StatelessWidget {
         ? null
         : pressureSummary(cells, chartStrings, stale: reading!.stale);
     final conflict = _conflictWarning(l10n);
+    // ALR-02: the server's raised alerts, where the app evaluates rules.
+    final alerts = AlertScope.maybeOf(context);
+    final alertCount = alerts?.countFor(server.id) ?? 0;
+    final alertSeverity = alertCount == 0
+        ? null
+        : alerts?.severityFor(server.id);
+    final alertText = alertSeverity == null
+        ? null
+        : l10n.alertsRowCount(alertCount);
     // Why the link failed takes a sentence, more than a fixed-height row
     // has room for, so only the tooltip and the label carry it.
     final failure = linkFailureText(l10n, link);
@@ -627,6 +637,7 @@ class FleetServerRow extends StatelessWidget {
       ?freshness,
       ?pressure,
       ?conflict,
+      ?alertText,
     ].join('\n');
     final row = SidebarRow(
       mark: const Icon(Icons.dns_outlined),
@@ -660,6 +671,7 @@ class FleetServerRow extends StatelessWidget {
         ?freshness,
         ?pressure,
         ?conflict,
+        ?alertText,
       ].join(l10n.fleetRowListSeparator),
     );
 
@@ -708,6 +720,19 @@ class FleetServerRow extends StatelessWidget {
               ),
             ),
           );
+    final badge = alertSeverity == null
+        ? null
+        : AlertBadge(count: alertCount, severity: alertSeverity);
+    final badgeWidth = badge == null
+        ? 0.0
+        : AlertBadge.iconSize +
+              AlertBadge.gap +
+              _textWidth(
+                context,
+                l10n.alertsBadgeCount(alertCount),
+                AlertBadge.textStyle(context),
+              ) +
+              _extrasGap;
     final bar = cells == null
         ? null
         : Flexible(
@@ -757,10 +782,13 @@ class FleetServerRow extends StatelessWidget {
     // and state word in full and the age fits too, each measured as drawn
     // at this text scale (03 §10.10); elsewhere they give way, and the
     // tooltip and the label still say what they show. The warning stays:
-    // on touch it is the only way to its words.
+    // on touch it is the only way to its words. The alert badge stays too,
+    // as the fleet's one glance at which servers need attention.
+    final fixedExtrasWidth =
+        (warning == null ? 0 : _warningExtent + _extrasGap) + badgeWidth;
     final barExtrasWidth = ageText == null
         ? null
-        : (warning == null ? 0 : _warningExtent + _extrasGap) +
+        : fixedExtrasWidth +
               math.max(
                 _barWidth,
                 (reading!.stale ? _staleIconSize + _staleIconGap : 0) +
@@ -774,7 +802,7 @@ class FleetServerRow extends StatelessWidget {
       builder: (context, constraints) {
         final showsBar =
             barRowWidth != null && constraints.maxWidth >= barRowWidth;
-        final extras = [?warning, if (showsBar) ?bar];
+        final extras = [?warning, ?badge, if (showsBar) ?bar];
         return Row(
           children: [
             Expanded(child: row),
@@ -783,7 +811,8 @@ class FleetServerRow extends StatelessWidget {
                 constraints: BoxConstraints(
                   maxWidth: showsBar
                       ? barExtrasWidth!.ceilToDouble()
-                      : _warningExtent + _extrasEndPadding,
+                      : (fixedExtrasWidth - _extrasGap + _extrasEndPadding)
+                            .ceilToDouble(),
                 ),
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,

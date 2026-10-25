@@ -349,7 +349,12 @@ final class PrunePreview {
     this.freed,
   }) : removes = List.unmodifiable(removes),
        kept = List.unmodifiable(kept),
-       count = count ?? removes.length;
+       count = count ?? removes.length {
+    assert(
+      this.removes.isEmpty || this.count == this.removes.length,
+      'only the build cache counts what it does not list',
+    );
+  }
 
   /// The objects removed, by name; empty for the build cache, whose
   /// records have no names to show.

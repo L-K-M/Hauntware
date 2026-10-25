@@ -296,6 +296,8 @@ final class ServerSamplePipeline {
             SampleStream.timers || SampleStream.userTimers => TimersResult(
               parseTimers(text(s), ctx).value,
             ),
+            SampleStream.gpu => GpuResult(parseGpu(text(s), ctx).value),
+            SampleStream.temps => TempsResult(parseTemps(text(s), ctx).value),
             SampleStream.cron => cronResult(
               parseCron(text(s), ctx).value,
               _profile,

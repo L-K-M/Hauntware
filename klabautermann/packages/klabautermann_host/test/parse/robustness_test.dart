@@ -139,6 +139,8 @@ void main() {
         'sda 1 2 3 4',
         'sdb 1 2 3',
         'sdc 1 2 3 x',
+        'sdd 1 2 3 4 5 6 7',
+        'sde 1 2 3 4 5',
         '== arcstats ==',
         'size 4096',
         'c_min -1',
@@ -148,10 +150,16 @@ void main() {
       // A 32-bit shell's eight counters (D48).
       expect(r.value.perCpu['cpu2']!.busy, 1 + 2 + 3 + 6 + 7 + 8);
       expect(r.value.perCpu['cpu2']!.idle, 4 + 5);
-      expect(r.value.diskstats.map((d) => d.name), ['sda']);
+      // Four counters, or seven with DSK-04's timings; nothing between.
+      expect(r.value.diskstats.map((d) => d.name), ['sda', 'sdd']);
+      expect(r.value.diskstats.first.ioMs, isNull);
+      expect(
+        (r.value.diskstats.last.readMs, r.value.diskstats.last.ioMs),
+        (5, 7),
+      );
       expect(r.value.zfsArc!.sizeBytes, 4096);
       expect(r.value.zfsArc!.minBytes, isNull);
-      expect(r.warnings.where((w) => w.contains('malformed')), hasLength(4));
+      expect(r.warnings.where((w) => w.contains('malformed')), hasLength(5));
     });
 
     test('fs tolerates df rows with padded columns', () {

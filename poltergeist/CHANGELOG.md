@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **The header band lines up.** The inspector's tabs are as tall as the
+  panes' tab bars, so the line under them continues the panes' line.
+  Tabs now fill their bar from top to bottom. On macOS the sidebar's
+  filter field is as tall as the tabs and level with them.
 - **Large bookmark backups sync in pieces.** A backup round now sends
   its changes in batches within the limits the sync server advertises.
   Before, one push past a limit was refused whole and failed the same

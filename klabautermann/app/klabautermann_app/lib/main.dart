@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' show AppExitType;
+import 'dart:ui' show AppExitType, PlatformDispatcher;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -10,7 +10,9 @@ import 'package:path_provider/path_provider.dart';
 
 import 'app.dart';
 import 'controllers/admin_controller.dart';
+import 'controllers/alert_center.dart';
 import 'controllers/announcement_controller.dart';
+import 'controllers/app_lock_controller.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/device_name.dart';
 import 'controllers/pin_publication_controller.dart';
@@ -26,7 +28,9 @@ import 'controllers/server_prefs_controller.dart';
 import 'controllers/stack_folders.dart';
 import 'controllers/sync_controller.dart';
 import 'controllers/sync_secrets_controller.dart';
+import 'l10n/app_localizations.dart';
 import 'services/app_version.dart';
+import 'services/device_authenticator.dart';
 import 'services/engine_keystore.dart';
 import 'services/hand_off.dart';
 import 'services/instance_guard.dart';
@@ -200,6 +204,9 @@ Future<void> main(List<String> args) async {
   // Admin mode per server (03 §8.2): the engine runs it and holds the
   // password; the header's chip asks and shows its state.
   final admin = AdminController(engine);
+  // In-app alerts (ALR-01): the engine evaluates the synced rules on live
+  // samples; the fleet list and rows show what they raise.
+  final alerts = AlertCenter(engine);
   // Action previews and runs (03 §8.5): the engine plans and runs them;
   // the app shows the preview and the results.
   final operations = OperationsController(
@@ -222,7 +229,27 @@ Future<void> main(List<String> args) async {
   );
   // In-app server editing (FL-03): offered while enrolled (P16).
   final serverEditor = ServerEditorController(engine);
-  EngineKeystoreResponder(engine, klabautermannMasterKeyManager());
+  // The app lock (SAF-20), device-local in settings.json: the engine's
+  // keystore reads wait for it, and admin mode ends when it engages.
+  final appLock = AppLockController(
+    authenticator: LocalDeviceAuthenticator(
+      reason: () => lookupAppLocalizations(
+        basicLocaleListResolution(
+          PlatformDispatcher.instance.locales,
+          AppLocalizations.supportedLocales,
+        ),
+      ).appLockReason,
+    ),
+    supported: appLockSupportedOn(defaultTargetPlatform),
+    enabled: settings.appLock,
+    save: settings.setAppLock,
+    onLocked: admin.turnOffAll,
+  );
+  EngineKeystoreResponder(
+    engine,
+    klabautermannMasterKeyManager(),
+    guard: appLock.read,
+  );
   for (final issue in engine.ready.syncStoreIssues) {
     debugPrint('${issue.fileName}: ${issue.kind.name} ${issue.detail ?? ''}');
   }
@@ -319,6 +346,7 @@ Future<void> main(List<String> args) async {
     appVersion: appVersion,
     monitorSet: fleet.monitorSettings,
     safety: safety,
+    appLock: appLock,
     syncSecrets: syncSecrets,
     pinPublication: pinPublication,
   );
@@ -333,9 +361,11 @@ Future<void> main(List<String> args) async {
       announcements: announcements,
       deviceName: deviceName,
       safety: safety,
+      appLock: appLock,
       syncSecrets: syncSecrets,
       pinPublication: pinPublication,
       admin: admin,
+      alerts: alerts,
       operations: operations,
       dockerNotice: dockerNotice,
       sync: sync,

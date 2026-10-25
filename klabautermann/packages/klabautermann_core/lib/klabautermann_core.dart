@@ -7,6 +7,15 @@ library;
 // Pull-only sync (D14, D63): the policy the engine's coordinator runs
 // under, which the app's pull-only test checks, and the keystore entry
 // names the app binds ghost_keystore with (03 §4.5, D62).
+export 'src/alerts/alert_evaluator.dart' show AlertMetric;
+export 'src/history/history_store.dart'
+    show
+        HistoryBucket,
+        HistoryGap,
+        HistoryProvenance,
+        HistoryRange,
+        HistoryStat,
+        HistoryTier;
 export 'src/catalog/engine_sync.dart' show engineSyncPushPolicy;
 export 'src/catalog/sync_credentials.dart'
     show klabautermannApiKeyPrefix, klabautermannMasterKeyEntry;
@@ -73,6 +82,9 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         DiskRate,
         FsMount,
         FsSnapshot,
+        GpuDevice,
+        GpuSnapshot,
+        GpuSource,
         HostProfile,
         JournalEntry,
         LoadAvg,
@@ -80,6 +92,8 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         ProcsSelection,
         SystemWideProcFile,
         SystemdUnit,
+        TempSensor,
+        TempsSnapshot,
         TimersSnapshot,
         UnitListFormat,
         UnitsSnapshot;

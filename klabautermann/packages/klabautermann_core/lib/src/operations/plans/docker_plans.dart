@@ -251,20 +251,23 @@ Future<PlanAttempt> _planRemoveImage(
   );
 }
 
-/// The names Docker accepts for a volume or a driver
-/// (`[a-zA-Z0-9][a-zA-Z0-9_.-]+`, the daemon's `RestrictedNamePattern`).
+/// The names Docker accepts for a volume (`[a-zA-Z0-9][a-zA-Z0-9_.-]+`,
+/// the daemon's `RestrictedNamePattern`). A driver is not held to it: a
+/// plugin driver is a reference such as `vieux/sshfs:latest`, which the
+/// daemon looks up and refuses itself when it has none.
 final _volumeName = RegExp(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]+$');
 
 /// VOL-02: a new empty volume, after a plain confirmation. A name taken
 /// is refused rather than sent: the engine would answer the existing
-/// volume as created.
+/// volume as created. For the same reason the runner checks again that
+/// the name is still free right before the create.
 Future<PlanAttempt> _planCreateVolume(
   CreateVolume intent,
   DockerPlanContext c,
 ) async {
   final driver = intent.driver;
   if (!_volumeName.hasMatch(intent.name) ||
-      (driver != null && !_volumeName.hasMatch(driver))) {
+      (driver != null && driver.trim().isEmpty)) {
     return _refused(ActionRefusalReason.invalidTarget);
   }
   try {
@@ -288,6 +291,13 @@ Future<PlanAttempt> _planCreateVolume(
       requiredLevel: _level(c),
       runner: _runner(c),
       hostWrites: const [HostWriteRow.engineState],
+      revalidate: [
+        DockerTargetUnchanged(
+          DockerTargetKind.volume,
+          intent.name,
+          kAbsentTarget,
+        ),
+      ],
     ),
   );
 }
@@ -437,6 +447,38 @@ PlanAttempt _planPullImage(PullImage intent, DockerPlanContext c) {
   return (fromImage: reference, tag: 'latest');
 }
 
+/// The running image pulls' cancel tokens by plan id (IMG-03). A cancel
+/// can arrive before its pull starts, while the plan revalidates or the
+/// endpoint connects; it is held, so that pull starts cancelled rather
+/// than running on behind a closed sheet. Plan ids are never reused, so
+/// a cancel held for a plan that never pulls only costs its id.
+final class PullCancels {
+  final _tokens = <String, DockerCancelToken>{};
+  final _early = <String>{};
+
+  /// The token [planId]'s pull runs with, cancelled already when a
+  /// cancel came first.
+  DockerCancelToken start(String planId) {
+    final token = DockerCancelToken();
+    _tokens[planId] = token;
+    if (_early.remove(planId)) token.cancel();
+    return token;
+  }
+
+  /// [planId]'s pull ended.
+  void finish(String planId) => _tokens.remove(planId);
+
+  /// Stops [planId]'s pull, now or when it starts.
+  void cancel(String planId) {
+    final token = _tokens[planId];
+    if (token == null) {
+      _early.add(planId);
+    } else {
+      token.cancel();
+    }
+  }
+}
+
 /// Whether [step] is an image pull, which [runPullStep] streams.
 bool isPullStep(ApiStep step) =>
     step.method == 'POST' && step.path.endsWith('/images/create');
@@ -508,7 +550,9 @@ Future<int> runPullStep(
 /// DKE-05, IMG-06: the objects a prune's filters match now are listed with
 /// what they leave and why, and the prune runs after the typed
 /// confirmation. The runner reads the same list again before the step
-/// and refuses when it changed, so what runs is what the preview showed.
+/// and refuses when it changed, so what runs is what the preview showed;
+/// the build cache, whose records carry no ids to compare, is the
+/// exception.
 Future<PlanAttempt> _planPrune(PruneDocker intent, DockerPlanContext c) async {
   final preview = await prunePreview(c.client, intent.kind, all: intent.all);
   if (preview.count == 0) return _refused(ActionRefusalReason.nothingToPrune);
@@ -726,6 +770,11 @@ int? _sum(List<PruneItem> items) {
   return total;
 }
 
+/// The identity [DockerTargetUnchanged] expects of a target that must
+/// not exist yet, as a volume about to be created. No id, fingerprint or
+/// timestamp reads as it, so an existing target never passes for absent.
+const kAbsentTarget = '<absent>';
+
 /// A volume's identity for re-validation: its creation time, which a
 /// volume removed and created again under the same name changes.
 String volumeFingerprint(VolumeSummary volume) =>
@@ -907,30 +956,29 @@ Future<RevalidationFailure?> revalidateDockerTarget(
       DockerTargetKind.network => (await client.inspectNetwork(
         check.target,
       )).id,
-      DockerTargetKind.prune => switch (_pruneKindOf(check.target)) {
+      // A target no prune names reads as null, which no fingerprint
+      // equals, so the step is refused.
+      DockerTargetKind.prune => switch (_pruneOf(check.target)) {
         null => null,
-        final kind => pruneFingerprint(
-          await prunePreview(
-            client,
-            kind,
-            all: check.target == pruneTarget(DockerPruneKind.images, all: true),
-          ),
+        (final kind, final all) => pruneFingerprint(
+          await prunePreview(client, kind, all: all),
         ),
       },
     };
     return id == check.id ? null : RevalidationFailure.targetChanged;
   } on DockerNotFoundException {
-    return RevalidationFailure.targetChanged;
+    return check.id == kAbsentTarget ? null : RevalidationFailure.targetChanged;
   } on DockerApiException {
     return RevalidationFailure.unreadable;
   }
 }
 
-/// The prune kind [target] ([pruneTarget]) names, or null for none.
-DockerPruneKind? _pruneKindOf(String target) {
+/// The prune kind and `all` flag [target] ([pruneTarget]) names, or null
+/// for none.
+(DockerPruneKind, bool)? _pruneOf(String target) {
   for (final kind in DockerPruneKind.values) {
     for (final all in const [false, true]) {
-      if (pruneTarget(kind, all: all) == target) return kind;
+      if (pruneTarget(kind, all: all) == target) return (kind, all);
     }
   }
   return null;

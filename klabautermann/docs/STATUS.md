@@ -1933,12 +1933,46 @@ is on main:
   allowed (M6 N10b, VOL-02), "Create volume…" asks for a name and an
   optional driver and plans one `POST /volumes/create` behind a plain
   confirmation, refusing a name Docker would reject or one already
-  taken; a row's Remove deletes the volume and its data behind the
+  taken, and checking again right before the create that the name is
+  still free (the engine answers an existing volume as created); a
+  plugin driver such as `vieux/sshfs` is the daemon's to resolve; a row's Remove deletes the volume and its data behind the
   typed confirmation, refused while any container, running or not,
   mounts it, and re-validated by the volume's creation time so one
   created again under its name is not removed. An API step can now
   carry a JSON body, which the preview shows as sent. The Docker
   actions suite creates, refuses and removes a volume on the fixture.
+- GPUs (M6 N37b, HW-03): collector-set version 12 adds the slow `gpu`
+  collector, which asks `nvidia-smi` and reads the amdgpu sysfs files
+  every 30 s. The System tab's GPUs section lists each GPU's busy share,
+  memory, temperature and power, says when an installed `nvidia-smi`
+  fails, and does not show where the host has no GPU it reads. Intel
+  GPUs are not read.
+- App lock (M6 N66, SAF-20): Settings > Safety's "Require device
+  authentication" (Android, iOS, macOS, Windows; off and disabled on
+  Linux) opens the app behind a lock screen that asks for the device's
+  biometrics or passcode, and locks it again after 5 minutes in the
+  background or hidden. It is Séance's `AppLock`, moved into
+  ghost_keystore (N01). While locked the keystore answers the engine's
+  reads with a refusal, writes still go through, open links keep running,
+  and admin mode ends on every server. Turning it on or off asks first and
+  applies only once saved, the desktop settings window included. Tested
+  with a fake authenticator; the system prompts themselves (Face ID,
+  Android BiometricPrompt, Touch ID, Windows Hello) are a manual check per
+  OS.
+- Temperatures (M6 N37a, HW-01): collector-set version 11 adds the
+  slow `temps` collector, which reads the hwmon temperature inputs and
+  their limits and labels with builtins, falling back to the thermal
+  zones, every 10 s. The System tab's Temperatures section lists each
+  sensor with its high and critical limits, and does not show where the
+  host has no sensor, as VMs, or inside a container.
+- Disk activity (M6 N30, DSK-03, DSK-04): collector-set version 10's
+  `diskstats` rows add ms reading, ms writing and `io_ticks`, and the
+  rates add reads and writes per second, await per request and the busy
+  share. The System tab's Disk activity table lists each whole disk's
+  read and write throughput and busy share, and its requests per second
+  and waits where every column fits; a figure the reading cannot give
+  reads as unknown, and inside a container the section is withheld as
+  the host's (D50).
 - Networks (M6 N11, DNW-01, DNW-02): the Docker tab gains a Networks
   sub-tab after Volumes, listing every network by name with its driver,
   scope, first subnet and its gateway, and how many containers are on
@@ -1988,6 +2022,31 @@ is on main:
   run as root, so only in admin mode. The Docker actions suite pulls a
   tag pushed to the fixture registry through the engine and the host's
   CLI, and fails on a tag it lacks.
+- Alert evaluation (M6 N50a, ALR-01): the engine evaluates every synced
+  `client` rule on the live samples of the servers its scope names, with
+  the rule's raise and clear thresholds and durations, over `cpu.busy`,
+  `memory.used`, `load.perCore`, `disk.used` and `disk.inodes`, and
+  sends `LocalAlertChanged` on each raise and clear.
+- On-device history (M6 N52a, HIS-01): the engine rolls each server's
+  CPU, memory, load per core and fullest-disk readings into 1-minute
+  buckets for 48 hours and 10-minute buckets for 30 days (min, max,
+  mean, count), keeps the gaps it saw with their causes, and stores
+  them in fixed-size rings under `history/` that survive restarts and
+  go when the server leaves the fleet. `ReadHistory` answers them.
+  The Overview's History card (N52b) charts CPU, memory, disk or inode
+  use over 48 hours or 30 days as each bucket's mean and peak, with a
+  labelled band for each gap: disconnected, in background, reading
+  failed, or app closed where nothing was recorded.
+- Alert center and badges (M6 N50b, ALR-01, ALR-02): the app's alert
+  center keeps the raised alerts and the latest 100 raises and clears of
+  the engine run. A notice heads the fleet list while an alert is raised,
+  or when alerts came and went since the user last looked, and states
+  that rules are evaluated on this device while Klabautermann is open
+  (Y3); it opens the alert center, whose rows open their server. Each
+  fleet row badges its raised alerts with the icon of the highest
+  severity and their count, which its label and tooltip say too. The
+  app icon's badge waits on notifications (N51), and there is no rule
+  editor yet (N50c).
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container
@@ -2111,6 +2170,9 @@ is not a device smoke test:
 - iOS background disclosure and the return banner (PLT-04).
 - Android battery and data use.
 - macOS keychain prompts.
+- The app lock's system prompt (SAF-20) on each OS: Face ID or the
+  passcode on iOS, BiometricPrompt on Android, Touch ID or the password on
+  macOS, Windows Hello; and the lock returning after 5 minutes away.
 - VM passes on Debian 12, Ubuntu 24.04 and 26.04 (sudo-rs), RHEL 8 and 9,
   Alpine and a BusyBox NAS, plus a Synology host (11.3).
 - Docker on real hosts (M3, Q1): rootful Docker, which CI runs only in

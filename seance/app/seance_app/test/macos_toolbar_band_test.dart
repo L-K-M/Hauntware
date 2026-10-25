@@ -58,14 +58,28 @@ void main() {
     updatedAt: 1,
   );
 
+  /// Enough servers beside [server] for the rail to show its filter field.
+  final others = [
+    for (var i = 2; i <= ServerListPane.filterThreshold; i++)
+      ServerConfig(
+        id: 'box$i',
+        label: 'box$i',
+        host: 'box$i.example.com',
+        username: 'deploy',
+        createdAt: 1,
+        updatedAt: 1,
+      ),
+  ];
+
   /// The shell over one server with an open (still connecting) tab, in a
   /// MaterialApp composed like the app's: the band's scope and
-  /// reservation above the navigator.
+  /// reservation above the navigator. [more] servers join it in the rail.
   Future<GlobalKey<NavigatorState>> pumpShell(
     WidgetTester tester, {
     required TargetPlatform platform,
     ValueListenable<bool>? band,
     Size size = const Size(1280, 800),
+    List<ServerConfig> more = const [],
   }) async {
     await tester.runAsync(() async {
       directory = await Directory.systemTemp.createTemp('seance-band-');
@@ -78,6 +92,9 @@ void main() {
       services = await AppServices.initialize();
       state = AppState(services!);
       await state!.saveServer(server);
+      for (final other in more) {
+        await state!.saveServer(other);
+      }
     });
     final session = TerminalSession(
       id: 'tab',
@@ -159,16 +176,11 @@ void main() {
     );
 
     // The traffic lights sit over the rail's top band; its content and
-    // the tab strip start below the header.
+    // the tab strip start level, below the header and its rule.
     expect(rail.top, 0);
-    expect(
-      tester.getRect(find.byType(ServerListPane)).top,
-      macosToolbarBandHeight,
-    );
-    expect(
-      tester.getRect(find.byType(TerminalTabStrip)).top,
-      greaterThanOrEqualTo(macosToolbarBandHeight),
-    );
+    final strip = tester.getRect(find.byType(TerminalTabStrip));
+    expect(strip.top, macosToolbarBandHeight + 1);
+    expect(tester.getRect(find.byType(ServerListPane)).top, strip.top);
 
     // The layout took the band back: the side panel's safe area does not
     // push its tabs a band further down.
@@ -187,6 +199,48 @@ void main() {
     expect(inStrip(find.byTooltip('New tab')), findsOneWidget);
     await unmount(tester);
   });
+
+  // The rail, the terminal and the side panel meet in one band under the
+  // header: the filter field is as tall as the tabs and level with them,
+  // and the side panel's rule continues the strip's across the seam.
+  for (final (platform, unified) in [
+    (TargetPlatform.macOS, true),
+    (TargetPlatform.linux, false),
+  ]) {
+    testWidgets('${platform.name}: the filter field, the tabs and the side '
+        "panel's rule line up", (tester) async {
+      final band = ValueNotifier(true);
+      addTearDown(band.dispose);
+      await pumpShell(
+        tester,
+        platform: platform,
+        band: unified ? band : null,
+        more: others,
+      );
+      expect(
+        find.byType(HeaderToolbar),
+        unified ? findsOneWidget : findsNothing,
+      );
+
+      final strip = tester.getRect(find.byType(TerminalTabStrip));
+      expect(strip.height, TerminalTabStrip.height);
+      final field = tester.getRect(
+        find.byKey(const ValueKey('servers.filter.field')),
+      );
+      expect(field.top, strip.top);
+      expect(field.bottom, strip.bottom);
+      expect(
+        tester.getRect(find.byKey(SidebarPanel.tabStripKey)),
+        Rect.fromLTRB(
+          tester.getRect(find.byKey(AdaptivePaneLayout.utilityPaneKey)).left,
+          strip.top,
+          1280,
+          strip.bottom,
+        ),
+      );
+      await unmount(tester);
+    });
+  }
 
   testWidgets('macOS: only the controls take clicks through the band', (
     tester,

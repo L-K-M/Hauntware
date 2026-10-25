@@ -8,6 +8,7 @@ import 'package:macos_window_utils/widgets/macos_toolbar_passthrough.dart';
 import 'package:poltergeist_app/app.dart';
 import 'package:poltergeist_app/services/engine_session.dart';
 import 'package:poltergeist_app/ui/panes/pane_commands.dart';
+import 'package:poltergeist_app/ui/panes/pane_tabs_view.dart';
 import 'package:poltergeist_app/ui/shell/header_toolbar.dart';
 import 'package:poltergeist_app/ui/shell/macos_toolbar_band.dart';
 import 'package:poltergeist_app/ui/sidebar/sidebar_view.dart';
@@ -169,6 +170,63 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     }
   });
+
+  // The sidebar, the panes and the inspector meet in one band under the
+  // header: the inspector's rule continues the pane strips', and on macOS,
+  // where the sidebar starts below the header too, the filter field spans
+  // the strips' height. Linux and Windows run the sidebar from the window's
+  // top beside the header (10 §3), so their field stays compact.
+  for (final platform in [TargetPlatform.macOS, TargetPlatform.linux]) {
+    testWidgets('${platform.name}: the inspector rule continues the pane '
+        'strips, and the sidebar filter lines up where it can', (tester) async {
+      try {
+        await pumpApp(tester, platform);
+        await runShellCommand(tester, kViewFilterSidebarCommandId);
+
+        final rules = find.byWidgetPredicate(
+          (widget) =>
+              widget.key is ValueKey<String> &&
+              (widget.key! as ValueKey<String>).value.endsWith(
+                '.stripSeparator',
+              ),
+        );
+        expect(rules, findsWidgets);
+        final strip = tester.getRect(rules.first);
+        final stripTop = strip.bottom - paneTabStripHeight;
+        for (final rule in tester.widgetList(rules)) {
+          expect(tester.getRect(find.byWidget(rule)).bottom, strip.bottom);
+        }
+
+        // The inspector's tab row, found by its rule-bearing box.
+        final inspectorRow = find.ancestor(
+          of: find.byKey(const ValueKey('inspector.tab.info')),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is DecoratedBox &&
+                widget.decoration is BoxDecoration &&
+                (widget.decoration as BoxDecoration).border is Border,
+          ),
+        );
+        final row = tester.getRect(inspectorRow.first);
+        expect(row.top, stripTop);
+        expect(row.bottom, strip.bottom);
+
+        final field = tester.getRect(
+          find.byKey(const ValueKey('sidebar.filter.field')),
+        );
+        if (platform == TargetPlatform.macOS) {
+          expect(field.top, stripTop);
+          expect(field.bottom, strip.bottom);
+        } else {
+          // The kit's compact field: 4 px down, 26 px tall.
+          expect(field.top, 4);
+          expect(field.height, 26);
+        }
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+  }
 
   testWidgets('macOS: the narrow-window sidebar drawer starts below the band', (
     tester,
