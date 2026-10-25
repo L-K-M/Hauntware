@@ -730,23 +730,23 @@ class _CreateVolumeDialogState extends State<_CreateVolumeDialog> {
     super.dispose();
   }
 
-  /// Why the typed name or driver cannot be sent, or null; an empty
-  /// driver asks for the engine's default.
-  String? _problem(
-    AppLocalizations l10n,
-    String text, {
-    bool optional = false,
-  }) {
+  /// Whether the user tried to submit, after which an empty name says
+  /// it is required rather than staying quiet.
+  bool _submitted = false;
+
+  /// Why the typed name cannot be sent, or null. The driver is not
+  /// checked: a plugin driver is a reference such as `vieux/sshfs`, which
+  /// the daemon resolves, and an empty one asks for its default.
+  String? _problem(AppLocalizations l10n, String text) {
     final value = text.trim();
-    if (value.isEmpty) return optional ? null : l10n.dockerVolumeNameRequired;
+    if (value.isEmpty) return l10n.dockerVolumeNameRequired;
     return validVolumeName(value) ? null : l10n.dockerVolumeNameInvalid;
   }
 
   void _submit() {
     final l10n = AppLocalizations.of(context);
-    if (_problem(l10n, _name.text) != null ||
-        _problem(l10n, _driver.text, optional: true) != null) {
-      setState(() {});
+    if (_problem(l10n, _name.text) != null) {
+      setState(() => _submitted = true);
       return;
     }
     final driver = _driver.text.trim();
@@ -758,8 +758,9 @@ class _CreateVolumeDialogState extends State<_CreateVolumeDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final nameProblem = _name.text.isEmpty ? null : _problem(l10n, _name.text);
-    final driverProblem = _problem(l10n, _driver.text, optional: true);
+    final nameProblem = _name.text.isEmpty && !_submitted
+        ? null
+        : _problem(l10n, _name.text);
     return AlertDialog(
       title: Text(l10n.dockerVolumeCreateTitle),
       content: Column(
@@ -783,7 +784,6 @@ class _CreateVolumeDialogState extends State<_CreateVolumeDialog> {
             decoration: InputDecoration(
               labelText: l10n.dockerVolumesColumnDriver,
               hintText: l10n.dockerVolumeDriverHint,
-              errorText: driverProblem,
             ),
           ),
         ],

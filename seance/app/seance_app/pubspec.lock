@@ -348,6 +348,13 @@ packages:
       relative: true
     source: path
     version: "1.9.2"
+  ghost_keystore:
+    dependency: "direct main"
+    description:
+      path: "../../../planchette/packages/ghost_keystore"
+      relative: true
+    source: path
+    version: "1.9.2"
   ghost_marks:
     dependency: "direct main"
     description:

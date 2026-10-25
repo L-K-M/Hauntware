@@ -6085,7 +6085,7 @@
   },
   "dockerVolumeNameInvalid": "Use letters, digits, '_', '.' and '-', starting with a letter or digit, at least two characters.",
   "@dockerVolumeNameInvalid": {
-    "description": "Create volume dialog: a name or driver Docker would refuse."
+    "description": "Create volume dialog: a name Docker would refuse."
   },
   "dockerVolumeRemove": "Remove",
   "@dockerVolumeRemove": {

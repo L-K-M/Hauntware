@@ -1933,7 +1933,9 @@ is on main:
   allowed (M6 N10b, VOL-02), "Create volume…" asks for a name and an
   optional driver and plans one `POST /volumes/create` behind a plain
   confirmation, refusing a name Docker would reject or one already
-  taken; a row's Remove deletes the volume and its data behind the
+  taken, and checking again right before the create that the name is
+  still free (the engine answers an existing volume as created); a
+  plugin driver such as `vieux/sshfs` is the daemon's to resolve; a row's Remove deletes the volume and its data behind the
   typed confirmation, refused while any container, running or not,
   mounts it, and re-validated by the volume's creation time so one
   created again under its name is not removed. An API step can now
