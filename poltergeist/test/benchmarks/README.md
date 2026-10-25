@@ -421,6 +421,29 @@ rotation. Only the shared runner-image calibration moves. Budget
 thresholds, landed flags, enforcement, and per-scenario configs are
 unchanged.
 
+## Baseline refresh: runner image rotation (2026-10-25)
+
+Main run 40135900306 exposed the controlled `ubuntu-latest` rotation from
+`20261012.334.1` to `20261023.334.3`. Main CI then stalled behind that
+run's pre-#454 Flatpak legs, and a dispatch on main would have superseded
+the queued main push run. The other samples therefore come from `ci.yml`
+dispatches on side branches at main's tip 49e835007: runs 40193700726,
+40193702588, and 40195802077. They measure main's tree, a side-branch
+dispatch never writes drift state, and each was cancelled only after its
+D12 job uploaded `bench-results`. All four runs share the complete
+recorded fingerprint, including `AMD EPYC 7763 64-Core Processor`, and the
+scenario configs are unchanged. Pooled medians: P1 1100.812 ms (n=12), P2
+11233.333 ms (n=12), and P4 52.090 ms (n=20). P6 still has no entry: all
+twelve rows errored at 720–902 captured frames against the required
+minimum of 1799–1800.
+
+Main runs 39985181416, 40007390312, 40036896303, 40047931891, and
+40056084851 still carried the old image and were excluded. The pooled
+tier-A medians are P3 609.639 ms, P5 618.894 ms, and P7 16447.233
+entries/s; all pass the unchanged budgets. Only the shared runner-image
+calibration moves. Budget thresholds, landed flags, enforcement, and
+per-scenario configs are unchanged.
+
 ## First fixture-backed observations (2026-09-14)
 
 The job's first real runs produced stable medians (within-run spread

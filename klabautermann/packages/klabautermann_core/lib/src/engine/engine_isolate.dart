@@ -530,8 +530,13 @@ void engineMain(
           (client, _) => runApiStep(client, step),
         );
         if (status >= 200 && status < 300) {
-          final (:container, :images) = apiStepChanges(step);
-          router.actionRan(serverId, containers: {?container}, images: images);
+          final (:container, :images, :volumes) = apiStepChanges(step);
+          router.actionRan(
+            serverId,
+            containers: {?container},
+            images: images,
+            volumes: volumes,
+          );
         }
         return status;
       },
@@ -1367,6 +1372,8 @@ void engineMain(
           case ContainerAction() ||
               RemoveContainer() ||
               RemoveImage() ||
+              CreateVolume() ||
+              RemoveVolume() ||
               StackAction() ||
               ContainerExec():
             final router = docker;

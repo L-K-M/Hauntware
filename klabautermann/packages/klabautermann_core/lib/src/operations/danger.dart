@@ -45,6 +45,12 @@ String? cliEquivalent(ApiStep step) {
       ].join(' ');
     case ('DELETE', ['images', ...final name]) when name.isNotEmpty:
       return ['docker rmi', if (flag('force')) '-f', name.join('/')].join(' ');
+    case ('POST', ['volumes', 'create']):
+      return [
+        'docker volume create',
+        if (step.json?['Driver'] case final driver?) '--driver $driver',
+        ?step.json?['Name'],
+      ].join(' ');
     case ('DELETE', ['volumes', final name]):
       return ['docker volume rm', if (flag('force')) '-f', name].join(' ');
     case ('POST', ['containers', final id, 'kill']):

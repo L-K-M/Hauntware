@@ -1929,8 +1929,18 @@ is on main:
   date of creation and how many containers mount it, counted from the
   containers' mounts, with an Unused filter and a search by name or
   driver. A watch naming `volumes` reads `/volumes` and reads it again
-  on a `volume` event; labels are masked by key. Create and remove come
-  next (N10b).
+  on a `volume` event; labels are masked by key. Where actions are
+  allowed (M6 N10b, VOL-02), "Create volume…" asks for a name and an
+  optional driver and plans one `POST /volumes/create` behind a plain
+  confirmation, refusing a name Docker would reject or one already
+  taken, and checking again right before the create that the name is
+  still free (the engine answers an existing volume as created); a
+  plugin driver such as `vieux/sshfs` is the daemon's to resolve; a row's Remove deletes the volume and its data behind the
+  typed confirmation, refused while any container, running or not,
+  mounts it, and re-validated by the volume's creation time so one
+  created again under its name is not removed. An API step can now
+  carry a JSON body, which the preview shows as sent. The Docker
+  actions suite creates, refuses and removes a volume on the fixture.
 - App lock (M6 N66, SAF-20): Settings > Safety's "Require device
   authentication" (Android, iOS, macOS, Windows; off and disabled on
   Linux) opens the app behind a lock screen that asks for the device's

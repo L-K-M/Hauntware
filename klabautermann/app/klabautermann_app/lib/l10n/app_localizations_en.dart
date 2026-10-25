@@ -3562,6 +3562,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'removesVolumes':
           'This deletes the container\'s volumes and the data in them.',
       'forcesImageInUse': '$count containers still use this image.',
+      'deletesVolumeData': 'This deletes the volume and the data in it.',
       'interruptsTarget': 'This interrupts what the target is doing.',
       'other': '',
     });
@@ -3704,6 +3705,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'engineUnavailable': 'The server\'s container engine cannot be reached.',
       'imageInUse':
           'Containers use this image. Remove them first, or force the removal.',
+      'volumeInUse':
+          'A container mounts this volume. Remove the container first.',
+      'volumeExists': 'A volume with this name already exists.',
       'dependencyCycle':
           'The stack\'s services depend on each other in a loop, so there is no order to act in.',
       'stackManaged': 'A manager deploys this stack. Redeploy it there.',
@@ -4007,6 +4011,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'ContainerAction': 'Container action',
       'RemoveContainer': 'Remove container',
       'RemoveImage': 'Remove image',
+      'CreateVolume': 'Create volume',
+      'RemoveVolume': 'Remove volume',
       'StackAction': 'Stack action',
       'RedeployStack': 'Redeploy stack',
       'ContainerExec': 'Run command',
@@ -5005,6 +5011,28 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dockerVolumesUseUnknown =>
       'Which volumes are in use is unknown: the containers, whose mounts tell, could not be listed.';
+
+  @override
+  String get dockerVolumeCreate => 'Create volume…';
+
+  @override
+  String get dockerVolumeCreateTitle => 'Create a volume';
+
+  @override
+  String get dockerVolumeCreateSubmit => 'Continue';
+
+  @override
+  String get dockerVolumeDriverHint => 'local';
+
+  @override
+  String get dockerVolumeNameRequired => 'Enter a name.';
+
+  @override
+  String get dockerVolumeNameInvalid =>
+      'Use letters, digits, \'_\', \'.\' and \'-\', starting with a letter or digit, at least two characters.';
+
+  @override
+  String get dockerVolumeRemove => 'Remove';
 
   @override
   String get dockerDetailsClose => 'Close the container details';

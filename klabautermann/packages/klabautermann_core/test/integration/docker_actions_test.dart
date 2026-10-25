@@ -1,8 +1,8 @@
 // The engine's Docker and process actions end to end on the Docker
 // fixture (M4 E28, X2 and X3): the real engine in its own isolate, links
 // on, as the fixture user in the Docker host's `docker` group. Every
-// container, image and stack action of the MVP with the watched list
-// following it; the refusals a managed stack, a protected container and
+// container, image and stack action of the MVP, and v1's volume create
+// and remove, with the watched list following it; the refusals a managed stack, a protected container and
 // an unverified or managed redeploy get; a kill and a stop and continue
 // of the user's own process, with the start-time guard; and STK-06's
 // detached redeploy under BusyBox `setsid` (spike S4), which pulls a new
@@ -272,6 +272,84 @@ void main() {
     // The tag went; the image its containers run stays.
     expect(await dind(['image', 'ls', '--quiet', inUse]), isEmpty);
     expect(await dind(['image', 'ls', '--quiet', _image]), isNotEmpty);
+  });
+
+  test('a volume is created, refused while a container mounts it, and '
+      'removed with its typed name (VOL-02)', () async {
+    const volume = 'actions-volume';
+    const user = 'actions-volume-user';
+    addTearDown(() async {
+      for (final arguments in [
+        ['rm', '--force', user],
+        ['volume', 'rm', volume],
+      ]) {
+        try {
+          await dind(arguments);
+        } on Object {
+          // Removed by the test.
+        }
+      }
+    });
+    final engine = await start('volume-actions');
+    watch(engine, {DockerWatchList.volumes});
+
+    bool listed(DockerPayload payload) =>
+        payload is DockerVolumesPayload &&
+        payload.volumes.any((v) => v.name == volume);
+
+    final created = await plan(
+      engine,
+      CreateVolume(dockerServer, name: volume, driver: 'local'),
+    );
+    expect(created.preview.requiredTier, ConfirmationTier.acknowledge);
+    expectSucceeded(await run(engine, created));
+    await untilList(engine, DockerWatchList.volumes, listed);
+    expect(
+      (await dind([
+        'volume',
+        'inspect',
+        '--format',
+        '{{.Driver}}',
+        volume,
+      ])).trim(),
+      'local',
+    );
+    expect(
+      await planAnswer(engine, CreateVolume(dockerServer, name: volume)),
+      isA<ActionRefused>().having(
+        (r) => r.reason,
+        'reason',
+        ActionRefusalReason.volumeExists,
+      ),
+    );
+
+    // A stopped container still holds the volume.
+    await dind(['create', '--name', user, '-v', '$volume:/data', _image]);
+    expect(
+      await planAnswer(engine, RemoveVolume(dockerServer, name: volume)),
+      isA<ActionRefused>().having(
+        (r) => r.reason,
+        'reason',
+        ActionRefusalReason.volumeInUse,
+      ),
+    );
+    await dind(['rm', user]);
+
+    final removal = await plan(
+      engine,
+      RemoveVolume(dockerServer, name: volume),
+    );
+    expect(removal.preview.requiredTier, ConfirmationTier.typedPhrase);
+    expectSucceeded(await run(engine, removal));
+    await untilList(
+      engine,
+      DockerWatchList.volumes,
+      (payload) => payload is DockerVolumesPayload && !listed(payload),
+    );
+    expect(
+      await dind(['volume', 'ls', '--quiet', '--filter', 'name=^$volume\$']),
+      isEmpty,
+    );
   });
 
   test('a stack stops, starts and restarts its containers (STK-03)', () async {

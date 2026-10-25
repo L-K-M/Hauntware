@@ -442,18 +442,26 @@ final class DockerWatcher {
   }
 
   /// Reads again what a finished action changed: the [containers] it
-  /// addressed, and the images after an image removal. The engine can
+  /// addressed, the images after an image removal, and the volumes after
+  /// a volume's create or removal. The engine can
   /// log a change's event before the list endpoint holds the change
   /// (Docker's containerPause logs `pause` first), so the read that event
   /// starts may still show the old state, while the action's reply only
   /// comes once the list holds it.
-  void changed({Set<String> containers = const {}, bool images = false}) {
+  void changed({
+    Set<String> containers = const {},
+    bool images = false,
+    bool volumes = false,
+  }) {
     if (_target == null) return;
     if (_wantsContainers) {
       _changedIds.addAll(containers.where((id) => id.isNotEmpty));
     }
     if (images && _lists.contains(DockerWatchList.images)) {
       _due(DockerWatchList.images, fresh: false);
+    }
+    if (volumes && _lists.contains(DockerWatchList.volumes)) {
+      _due(DockerWatchList.volumes, fresh: false);
     }
     _schedule();
   }

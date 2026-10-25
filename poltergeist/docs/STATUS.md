@@ -4,6 +4,23 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## D12 runner-image baseline refresh (2026-10-25)
+
+Main run 40135900306 exposed `ubuntu-latest` rotating from
+`20261012.334.1` to `20261023.334.3`: enforced tier B failed on the
+controlled fingerprint and tier A drift-skipped. Exact-fingerprint
+artifacts from that run and side-branch dispatches 40193700726,
+40193702588, and 40195802077 at main's tip, all on `AMD EPYC 7763
+64-Core Processor`, yield P1 1100.812 ms (n=12), P2 11233.333 ms (n=12),
+and P4 52.090 ms (n=20). P6 remains absent because all twelve rows errored
+below its frame-capture floor.
+
+The tier-A calibrated runner image moves with no threshold,
+scenario-config, landed-state, or enforcement change. The enforced `ab`
+checker passes against all four pooled artifacts. Main runs still on the
+old image during the rollout tail fail tier B on the controlled axis. No
+Séance source or port changed.
+
 ## Font catalog and previews (2026-10-17)
 
 Settings → Appearance uses the shared `ghost_fonts` picker for 20 offline

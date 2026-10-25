@@ -194,6 +194,7 @@ void main() {
         OperationKind.stackServiceScale,
         OperationKind.removeContainer,
         OperationKind.removeUnusedImage,
+        OperationKind.createVolume,
         OperationKind.editFile,
         OperationKind.keepLastBackups,
       };
