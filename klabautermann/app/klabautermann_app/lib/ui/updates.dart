@@ -7,6 +7,9 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/package_reads.dart';
 import '../l10n/app_localizations.dart';
+import 'actions/action_entry.dart';
+import 'actions/action_preview.dart' show startAction;
+import 'admin_mode_chip.dart' show AdminScope;
 import 'sortable_table.dart';
 import 'system_panel.dart' show PanelSection;
 
@@ -96,6 +99,7 @@ class UpdatesSection extends StatefulWidget {
 class _UpdatesSectionState extends State<UpdatesSection> {
   PackagesReport? _report;
   bool _reading = false;
+  bool _refreshStarted = false;
   int _ticket = 0;
   TableSort? _sort = TableSort(
     UpdateColumn.security.name,
@@ -116,6 +120,7 @@ class _UpdatesSectionState extends State<UpdatesSection> {
       return;
     }
     _report = null;
+    _refreshStarted = false;
     unawaited(_read(fresh: false));
   }
 
@@ -129,6 +134,7 @@ class _UpdatesSectionState extends State<UpdatesSection> {
     setState(() {
       _report = report;
       _reading = false;
+      if (fresh) _refreshStarted = false;
     });
   }
 
@@ -200,11 +206,44 @@ class _UpdatesSectionState extends State<UpdatesSection> {
                 onPressed: () => unawaited(_read(fresh: true)),
                 child: Text(l10n.systemUpdatesCheckAgain),
               ),
+              ?_refreshButton(context, l10n, check),
               if (report?.checkedAt case final checkedAt?)
                 Text(l10n.systemUpdatesCheckedAt(checkedAt.toLocal())),
             ],
           ),
+        if (_refreshStarted) Text(l10n.systemUpdatesRefreshStarted),
       ],
+    );
+  }
+
+  /// PKG-05's refresh, in admin mode, for a manager it refreshes; a
+  /// note that it needs admin mode where the lists were never downloaded.
+  Widget? _refreshButton(
+    BuildContext context,
+    AppLocalizations l10n,
+    PackageCheck? check,
+  ) {
+    final manager = check?.manager;
+    if (manager == null || manager == PackageManager.pacman) return null;
+    final admin = AdminScope.maybeOf(context);
+    final adminOn =
+        admin?.stateFor(widget.serverId)?.phase == AdminModePhase.on;
+    if (!adminOn) {
+      return check?.failure == PackageCheckFailure.noCache
+          ? Text(l10n.systemUpdatesRefreshAdminNeeded)
+          : null;
+    }
+    return ActionEntry(
+      serverId: widget.serverId,
+      point: ActionEntryPoint.packageRefresh,
+      child: OutlinedButton(
+        onPressed: () => startAction(
+          context,
+          RefreshPackageLists(widget.serverId),
+          onRun: (_, _) => setState(() => _refreshStarted = true),
+        ),
+        child: Text(l10n.systemUpdatesRefresh),
+      ),
     );
   }
 

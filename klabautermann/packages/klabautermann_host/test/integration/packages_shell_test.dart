@@ -96,6 +96,36 @@ esac
       expect(check.reboot, RebootState.required);
     });
 
+    test('$name: the refresh names the manager the check reads, apt-get '
+        'as apt', () async {
+      final root = await Directory.systemTemp.createTemp('klab-pkg-');
+      addTearDown(() => root.delete(recursive: true));
+      final bin = Directory('${root.path}/bin')..createSync();
+      Future<ProcessResult> name() => Process.run(
+        shell,
+        [
+          HostCommands.packageManagerName()[1],
+          HostCommands.packageManagerName()[2],
+        ],
+        environment: {'PATH': bin.path},
+        includeParentEnvironment: false,
+      );
+
+      expect((await name()).exitCode, 1);
+      await _stub(root, 'dnf', 'exit 0');
+      await _stub(root, 'apt-get', 'exit 0');
+      expect((await name()).stdout, 'apt\n');
+      expect(
+        PackageManager.values.asNameMap()[((await name()).stdout as String)
+            .trim()],
+        PackageManager.apt,
+      );
+      expect(
+        () => HostCommands.packageRefresh(PackageManager.pacman),
+        throwsA(isA<HostCommandError>()),
+      );
+    });
+
     test('$name: without a manager the check says so, and nothing says '
         'whether to reboot', () async {
       final root = await Directory.systemTemp.createTemp('klab-pkg-');

@@ -4402,6 +4402,12 @@ final class StartTimer extends ActionIntent {
   final UnitScope scope;
 }
 
+/// Refreshes the package manager's lists as root (PKG-05, 03 §7.8), in
+/// admin mode, so the next package check reads current metadata.
+final class RefreshPackageLists extends ActionIntent {
+  const RefreshPackageLists(super.serverId);
+}
+
 /// Which systemd manager a unit action or query addresses (03 §7.5,
 /// SVC-09).
 enum UnitScope {

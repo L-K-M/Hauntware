@@ -4,8 +4,15 @@
 // request.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:klabautermann_app/controllers/admin_controller.dart';
+import 'package:klabautermann_app/controllers/operations_controller.dart';
 import 'package:klabautermann_app/controllers/package_reads.dart';
+import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
+import 'package:klabautermann_app/ui/actions/action_entry.dart'
+    show OperationsScope;
+import 'package:klabautermann_app/ui/admin_mode_chip.dart' show AdminScope;
+import 'package:klabautermann_app/ui/server_safety.dart';
 import 'package:klabautermann_app/ui/updates.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -176,5 +183,63 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Up to date'), findsNothing);
     expect(find.text('Checking for updates…'), findsOneWidget);
+  });
+
+  testWidgets('in admin mode the lists can be refreshed, and without it a '
+      'check that found none says admin mode downloads them', (tester) async {
+    final admin = AdminController(engine);
+    final operations = OperationsController(engine);
+    final safety = SafetyController(
+      initial: const SafetyPolicy(
+        servers: {_server: ServerSafety(management: true)},
+      ),
+      apply: (_) {},
+    );
+    addTearDown(() {
+      admin.dispose();
+      operations.dispose();
+      safety.dispose();
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: SafetyScope(
+            safety: safety,
+            child: OperationsScope(
+              operations: operations,
+              child: AdminScope(
+                admin: admin,
+                child: SingleChildScrollView(
+                  child: UpdatesSection(
+                    reads: reads,
+                    serverId: _server,
+                    tableId: 'updates',
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await answer(
+      tester,
+      check: PackageCheck(
+        manager: PackageManager.dnf,
+        failure: PackageCheckFailure.noCache,
+      ),
+    );
+    expect(find.text('Refresh package lists'), findsNothing);
+    expect(find.text('Turn on admin mode to download them.'), findsOneWidget);
+
+    engine.emit(const AdminModeState(_server, AdminModePhase.on));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Refresh package lists'));
+    await tester.pump();
+    final plan = engine.sentOfType<PlanAction>().single as PlanAction;
+    expect(plan.intent, isA<RefreshPackageLists>());
+    expect(plan.intent.serverId, _server);
   });
 }

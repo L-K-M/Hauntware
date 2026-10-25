@@ -3861,8 +3861,16 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   a `PackagesReport`; the engine keeps each server's check for an hour
   (`fresh` runs a new one), shares a running check between reads, keeps
   no failed one, and forgets a server's with its capabilities. At most
-  1,000 updates are kept [E]. The check runs for at most 120 s. Services
-  needing restart, refresh and the fleet update center follow (N36b).
+  1,000 updates are kept [E]. The check runs for at most 120 s.
+- **As built (M6 N36b).** PKG-05's `RefreshPackageLists` plans, in admin
+  mode only, the found manager's refresh as one elevated step:
+  `apt-get -q update`, `dnf -q makecache`, `zypper --non-interactive
+  refresh` or `apk update`, with the package lists as its host-write row.
+  pacman is refused, since `pacman -Sy` without an upgrade leaves a
+  partly upgraded system. The Updates section offers it in admin mode,
+  says admin mode downloads lists that were never downloaded, and asks
+  for a new check once the refresh has run. Services needing restart and
+  the fleet update center follow.
 - **v1.x.** Apply updates (PKG-07) only as a detached operation with a typed
   confirmation and `DEBIAN_FRONTEND=noninteractive`, never in a client-held
   channel; holds; automatic-update status; old kernels; scheduled checks

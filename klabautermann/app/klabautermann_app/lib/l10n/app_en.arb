@@ -1524,6 +1524,18 @@
   "@systemUpdatesCheckAgain": {
     "description": "System tab, Updates: button that runs a new check instead of using the one from the last hour."
   },
+  "systemUpdatesRefresh": "Refresh package lists",
+  "@systemUpdatesRefresh": {
+    "description": "System tab, Updates: button that downloads the server's package lists as root, in admin mode, so the next check reads current metadata."
+  },
+  "systemUpdatesRefreshAdminNeeded": "Turn on admin mode to download them.",
+  "@systemUpdatesRefreshAdminNeeded": {
+    "description": "System tab, Updates: after the note that the package lists were never downloaded, says that refreshing them needs admin mode."
+  },
+  "systemUpdatesRefreshStarted": "When the refresh has finished, check again to read the new lists.",
+  "@systemUpdatesRefreshStarted": {
+    "description": "System tab, Updates: shown after the refresh starts, until the next check."
+  },
   "systemUpdatesCheckedAt": "Checked {time}",
   "@systemUpdatesCheckedAt": {
     "description": "System tab, Updates: when the shown check ran, in the UI locale and this device's time zone.",
@@ -4685,7 +4697,7 @@
   "@actionPreviewHostWrites": {
     "description": "Heading above the host writes the action causes (03 §8.11)."
   },
-  "actionPreviewHostWrite": "{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine's own state} loginRecords{Login records, as every SSH command leaves} editTarget{The file or crontab you edited} editTempFile{A temporary copy beside the file, renamed over it or removed} userBackups{A backup in your Klabautermann backups folder} rootBackups{A backup under /var/lib/klabautermann/backups} footprintManifest{The list of what Klabautermann keeps on the server} auditSyslog{One line in the system log naming this action and this device} other{A change on the server}}",
+  "actionPreviewHostWrite": "{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine's own state} loginRecords{Login records, as every SSH command leaves} editTarget{The file or crontab you edited} editTempFile{A temporary copy beside the file, renamed over it or removed} userBackups{A backup in your Klabautermann backups folder} rootBackups{A backup under /var/lib/klabautermann/backups} footprintManifest{The list of what Klabautermann keeps on the server} packageLists{The package manager's cached package lists} auditSyslog{One line in the system log naming this action and this device} other{A change on the server}}",
   "@actionPreviewHostWrite": {
     "description": "One host write in the action preview; row is the engine's HostWriteRow name.",
     "placeholders": {
@@ -5206,7 +5218,7 @@
   "@activityColumnResult": {
     "description": "Column of the activity log: how the run ended."
   },
-  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
+  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
   "@activityAction": {
     "description": "An activity log row's action; action is the engine's intent type name.",
     "placeholders": {

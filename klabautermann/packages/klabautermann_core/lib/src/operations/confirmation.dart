@@ -24,6 +24,9 @@ enum OperationKind {
 
   /// A cron line's command, run once now (JOB-19).
   cronRunNow(ConfirmationTier.acknowledge),
+
+  /// The package manager's lists, refreshed (PKG-05).
+  refreshPackageLists(ConfirmationTier.acknowledge),
   stackStart(ConfirmationTier.acknowledge),
   stackStop(ConfirmationTier.acknowledge),
   stackRestart(ConfirmationTier.acknowledge),

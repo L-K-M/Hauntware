@@ -1955,7 +1955,10 @@ is on main:
   patches), when the package lists were last downloaded, and whether the
   server asks for a restart (`/var/run/reboot-required` with the packages
   that asked, or `needs-restarting -r`). The engine keeps each server's
-  check for an hour; "Check again" runs a new one.
+  check for an hour; "Check again" runs a new one. In admin mode,
+  "Refresh package lists" (N36b, PKG-05) downloads the lists as root
+  through the action preview (apt, dnf, zypper and apk; never pacman,
+  whose refresh without an upgrade breaks partial installs).
 - Drive health (M6 N37c, HW-04): in admin mode, the System tab's Drive
   health section reads every drive's SMART health on request through an
   elevated `smartctl --scan-open`, then `smartctl -n standby -a` per

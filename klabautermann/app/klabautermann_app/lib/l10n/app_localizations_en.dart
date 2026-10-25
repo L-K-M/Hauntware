@@ -1346,6 +1346,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get systemUpdatesCheckAgain => 'Check again';
 
   @override
+  String get systemUpdatesRefresh => 'Refresh package lists';
+
+  @override
+  String get systemUpdatesRefreshAdminNeeded =>
+      'Turn on admin mode to download them.';
+
+  @override
+  String get systemUpdatesRefreshStarted =>
+      'When the refresh has finished, check again to read the new lists.';
+
+  @override
   String systemUpdatesCheckedAt(DateTime time) {
     final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
       localeName,
@@ -3885,6 +3896,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'userBackups': 'A backup in your Klabautermann backups folder',
       'rootBackups': 'A backup under /var/lib/klabautermann/backups',
       'footprintManifest': 'The list of what Klabautermann keeps on the server',
+      'packageLists': 'The package manager\'s cached package lists',
       'auditSyslog':
           'One line in the system log naming this action and this device',
       'other': 'A change on the server',
@@ -4346,6 +4358,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'KillProcess': 'Signal',
       'UnitAction': 'Unit action',
       'StartTimer': 'Run timer now',
+      'RefreshPackageLists': 'Refresh package lists',
       'ContainerAction': 'Container action',
       'RemoveContainer': 'Remove container',
       'RemoveImage': 'Remove image',

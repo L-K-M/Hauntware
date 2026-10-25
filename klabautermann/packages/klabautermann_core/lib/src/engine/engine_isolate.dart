@@ -1352,7 +1352,11 @@ void engineMain(
         );
         final Future<PlanAttempt> attempt;
         switch (intent) {
-          case KillProcess() || UnitAction() || StartTimer() || RunCronJob():
+          case KillProcess() ||
+              UnitAction() ||
+              StartTimer() ||
+              RunCronJob() ||
+              RefreshPackageLists():
             // Planning reads the target over the link, as the run will.
             final session = admin?.session(serverId);
             attempt = lendSession(

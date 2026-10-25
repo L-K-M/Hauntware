@@ -7,6 +7,7 @@ library;
 import '../cron/document.dart' show splitCronCommand;
 import '../hws/collector.dart' show ArgValidators;
 import '../hws/request.dart' show ShellQuote;
+import '../parse/packages.dart' show PackageManager;
 import 'proc_stat.dart';
 
 /// The first systemd major whose `systemd-analyze calendar` takes
@@ -868,6 +869,38 @@ abstract final class HostCommands {
   /// manager has one, `== security`, each body ended by `== rc <status>`,
   /// then `== reboot required|no|unknown` with the packages that asked.
   static List<String> packageCheck() => const ['sh', '-c', _packageCheck];
+
+  /// The first package manager the check would read, by name, as
+  /// `parsePackageCheck` names them: what PKG-05's refresh plans for.
+  static List<String> packageManagerName() => const [
+    'sh',
+    '-c',
+    _packageManagerName,
+  ];
+
+  static const _packageManagerName =
+      'for m in apt-get dnf zypper pacman apk; do '
+      'command -v "\$m" >/dev/null 2>&1 && { echo "\${m%-get}"; exit 0; }; '
+      'done; exit 1';
+
+  /// PKG-05's refresh of [manager]'s package lists, run as root: what the
+  /// check reads afterwards. pacman has none, since `pacman -Sy` without
+  /// upgrading leaves a partly upgraded system, so it throws
+  /// [HostCommandError].
+  static List<String> packageRefresh(PackageManager manager) =>
+      switch (manager) {
+        PackageManager.apt => const ['apt-get', '-q', 'update'],
+        PackageManager.dnf => const ['dnf', '-q', 'makecache'],
+        PackageManager.zypper => const [
+          'zypper',
+          '--non-interactive',
+          'refresh',
+        ],
+        PackageManager.apk => const ['apk', 'update'],
+        PackageManager.pacman => throw const HostCommandError(
+          'pacman lists refresh only with an upgrade',
+        ),
+      };
 
   static const _packageCheck = r'''
 have() { command -v "$1" >/dev/null 2>&1; }
