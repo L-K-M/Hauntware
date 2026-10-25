@@ -318,6 +318,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/services/device_authenticator.dart': {
     r"'device authentication failed: ${error.code}'",
     "'device authentication was rejected'",
+    "'device authentication is unavailable'",
   },
   // A keystore failure's text, which the answer carries to the engine as
   // a diagnostic; surfaces show ARB text (syncFailedKeystore).
