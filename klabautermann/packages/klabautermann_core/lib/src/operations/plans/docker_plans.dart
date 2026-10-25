@@ -509,7 +509,9 @@ Future<int> runPullStep(
 /// DKE-05, IMG-06: the objects a prune's filters match now are listed with
 /// what they leave and why, and the prune runs after the typed
 /// confirmation. The runner reads the same list again before the step
-/// and refuses when it changed, so what runs is what the preview showed.
+/// and refuses when it changed, so what runs is what the preview showed;
+/// the build cache, whose records carry no ids to compare, is the
+/// exception.
 Future<PlanAttempt> _planPrune(PruneDocker intent, DockerPlanContext c) async {
   final preview = await prunePreview(c.client, intent.kind, all: intent.all);
   if (preview.count == 0) return _refused(ActionRefusalReason.nothingToPrune);
@@ -913,14 +915,12 @@ Future<RevalidationFailure?> revalidateDockerTarget(
       DockerTargetKind.network => (await client.inspectNetwork(
         check.target,
       )).id,
-      DockerTargetKind.prune => switch (_pruneKindOf(check.target)) {
+      // A target no prune names reads as null, which no fingerprint
+      // equals, so the step is refused.
+      DockerTargetKind.prune => switch (_pruneOf(check.target)) {
         null => null,
-        final kind => pruneFingerprint(
-          await prunePreview(
-            client,
-            kind,
-            all: check.target == pruneTarget(DockerPruneKind.images, all: true),
-          ),
+        (final kind, final all) => pruneFingerprint(
+          await prunePreview(client, kind, all: all),
         ),
       },
     };
@@ -932,11 +932,12 @@ Future<RevalidationFailure?> revalidateDockerTarget(
   }
 }
 
-/// The prune kind [target] ([pruneTarget]) names, or null for none.
-DockerPruneKind? _pruneKindOf(String target) {
+/// The prune kind and `all` flag [target] ([pruneTarget]) names, or null
+/// for none.
+(DockerPruneKind, bool)? _pruneOf(String target) {
   for (final kind in DockerPruneKind.values) {
     for (final all in const [false, true]) {
-      if (pruneTarget(kind, all: all) == target) return kind;
+      if (pruneTarget(kind, all: all) == target) return (kind, all);
     }
   }
   return null;

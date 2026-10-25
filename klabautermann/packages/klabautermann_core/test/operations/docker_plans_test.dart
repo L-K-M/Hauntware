@@ -1007,6 +1007,18 @@ void main() {
       );
     });
 
+    test('a prune target no prune names is refused, not passed', () async {
+      final check = DockerTargetUnchanged(
+        DockerTargetKind.prune,
+        'everything',
+        pruneFingerprint(PrunePreview(removes: const [], freed: 0)),
+      );
+      expect(
+        await revalidateDockerTarget(_client(_Engine()), check),
+        RevalidationFailure.targetChanged,
+      );
+    });
+
     test('a prune reads the lists it changed again', () {
       expect(
         apiStepChanges(
