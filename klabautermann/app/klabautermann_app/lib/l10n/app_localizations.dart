@@ -3979,7 +3979,7 @@ abstract class AppLocalizations {
   /// Settings > Safety: what the app lock switch does.
   ///
   /// In en, this message translates to:
-  /// **'Ask for this device\'s passcode, PIN or biometrics when Klabautermann opens and after {minutes} minutes in the background. Locking turns admin mode off on every server.'**
+  /// **'Ask for this device\'s passcode, PIN or biometrics when Klabautermann opens and after {minutes, plural, =1{1 minute} other{{minutes} minutes}} in the background. Locking turns admin mode off on every server.'**
   String settingsAppLockDetail(int minutes);
 
   /// Settings > Safety: why the app lock switch is off and disabled on Linux.

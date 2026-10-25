@@ -13,6 +13,10 @@ final class FakeDeviceAuthenticator implements DeviceAuthenticator {
   /// While non-null, a prompt waits for it.
   Completer<void>? hold;
 
+  /// While non-null, a prompt throws it, as a platform channel that fails
+  /// some other way than refusing.
+  Object? failWith;
+
   @override
   Future<AppLockAvailability> availability() async => available
       ? AppLockAvailability.available
@@ -22,6 +26,7 @@ final class FakeDeviceAuthenticator implements DeviceAuthenticator {
   Future<void> authenticate() async {
     prompts++;
     await hold?.future;
+    if (failWith case final error?) throw error;
     if (!accept) throw const AppLockException('rejected');
   }
 }
