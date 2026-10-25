@@ -6674,4 +6674,61 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get serverEditorKeyFileImportFailed =>
       'Could not read that file as a key.';
+
+  @override
+  String get historyTitle => 'History';
+
+  @override
+  String historyLastHours(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Last $count hours',
+      one: 'Last hour',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String historyLastDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Last $count days',
+      one: 'Last day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get historyRefresh => 'Refresh';
+
+  @override
+  String get historyEmpty =>
+      'No history yet. Klabautermann keeps 48 hours and 30 days of this server\'s readings while it is open.';
+
+  @override
+  String get historyLaneMean => 'Average';
+
+  @override
+  String get historyLanePeak => 'Peak';
+
+  @override
+  String get historySource =>
+      'Recorded on this device while Klabautermann was open';
+
+  @override
+  String get historyMetricCpu => 'CPU busy';
+
+  @override
+  String get historyMetricMemory => 'Memory used';
+
+  @override
+  String get historyMetricDisk => 'Disk space used';
+
+  @override
+  String get historyMetricInodes => 'Inodes used';
+
+  @override
+  String get historyMetricLoad => 'Load per core';
 }

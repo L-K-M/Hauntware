@@ -1973,8 +1973,11 @@ is on main:
   buckets for 48 hours and 10-minute buckets for 30 days (min, max,
   mean, count), keeps the gaps it saw with their causes, and stores
   them in fixed-size rings under `history/` that survive restarts and
-  go when the server leaves the fleet. `ReadHistory` answers them; no
-  chart shows them yet (N52b).
+  go when the server leaves the fleet. `ReadHistory` answers them.
+  The Overview's History card (N52b) charts CPU, memory, disk or inode
+  use over 48 hours or 30 days as each bucket's mean and peak, with a
+  labelled band for each gap: disconnected, in background, reading
+  failed, or app closed where nothing was recorded.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container

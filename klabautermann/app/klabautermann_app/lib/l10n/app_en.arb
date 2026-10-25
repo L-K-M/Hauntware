@@ -8113,5 +8113,67 @@
   "serverEditorKeyFileImportFailed": "Could not read that file as a key.",
   "@serverEditorKeyFileImportFailed": {
     "description": "Toast when a picked key file is too large or not text."
+  },
+  "historyTitle": "History",
+  "@historyTitle": {
+    "description": "The Overview card that charts a server's on-device history (HIS-01)."
+  },
+  "historyLastHours": "{count, plural, =1{Last hour} other{Last {count} hours}}",
+  "@historyLastHours": {
+    "description": "The History card's range choice of the 1-minute tier; count is 48.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "historyLastDays": "{count, plural, =1{Last day} other{Last {count} days}}",
+  "@historyLastDays": {
+    "description": "The History card's range choice of the 10-minute tier; count is 30.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "historyRefresh": "Refresh",
+  "@historyRefresh": {
+    "description": "Tooltip of the History card's button that reads the history again."
+  },
+  "historyEmpty": "No history yet. Klabautermann keeps 48 hours and 30 days of this server's readings while it is open.",
+  "@historyEmpty": {
+    "description": "The History card when this device recorded nothing for the server in the chosen range."
+  },
+  "historyLaneMean": "Average",
+  "@historyLaneMean": {
+    "description": "The History chart's series of each bucket's mean."
+  },
+  "historyLanePeak": "Peak",
+  "@historyLanePeak": {
+    "description": "The History chart's series of each bucket's highest reading."
+  },
+  "historySource": "Recorded on this device while Klabautermann was open",
+  "@historySource": {
+    "description": "Where the History chart's data comes from, as its legend says."
+  },
+  "historyMetricCpu": "CPU busy",
+  "@historyMetricCpu": {
+    "description": "A History metric: the share of CPU time spent busy."
+  },
+  "historyMetricMemory": "Memory used",
+  "@historyMetricMemory": {
+    "description": "A History metric: used memory as a share of the total."
+  },
+  "historyMetricDisk": "Disk space used",
+  "@historyMetricDisk": {
+    "description": "A History metric: the fullest filesystem's used space."
+  },
+  "historyMetricInodes": "Inodes used",
+  "@historyMetricInodes": {
+    "description": "A History metric: the fullest filesystem's used inodes."
+  },
+  "historyMetricLoad": "Load per core",
+  "@historyMetricLoad": {
+    "description": "A History metric: the 1-minute load average per core."
   }
 }

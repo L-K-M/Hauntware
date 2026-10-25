@@ -4520,7 +4520,18 @@ arrives with E22's Docker actions.
   and kept in memory otherwise; they are purged with the capability
   cache's rule: at open for servers outside the fleet, and when a
   server leaves it or changes endpoint. `ReadHistory` answers a tier's
-  buckets and gaps. Charts follow in N52b.
+  buckets and gaps.
+- **As built (M6 N52b).** The Overview's History card reads a server's
+  rollups when it shows, on refresh, and when the user picks "Last 48
+  hours" (1-minute buckets) or "Last 30 days" (10-minute buckets). It
+  charts one of the percentage metrics (CPU busy, memory, disk space,
+  inodes; load per core has no fixed ceiling) as the mean and the peak
+  per bucket, each at its bucket's middle. Wherever buckets stop, the
+  chart draws a labelled band with the cause of the recorded gap that
+  covers most of it (disconnected, in background, reading failed), or
+  "app closed" when none was recorded; a run that ends before the read
+  leaves its band open to the chart's edge (Y4). Time before the first
+  bucket has no band. A read with no buckets shows a notice instead.
 - **v1.x.** Existing recorders read over SSH (sysstat `sadf -j`,
   node_exporter on `localhost:9100`, Netdata, Glances), the T1 ring file,
   forecasts. When sysstat is missing, an "Enable sysstat" action (HIS-03)
