@@ -391,8 +391,51 @@ void main() {
         ...files,
       ], actions);
 
+      expect(exitCode, 1);
       expect(actions.dispatched, hasLength(2));
       expect(out.text, contains('dispatch budget spent with 1 of 3'));
+    });
+
+    test('sample rides out a transient gh failure', () async {
+      final actions = _FakeActions(
+        artifactsByRun: {1: _artifact()},
+        failingStateCalls: 2,
+      );
+
+      await run([
+        'sample',
+        '--branch',
+        'bench/side',
+        '--artifacts',
+        artifacts,
+        '--set',
+        'runnerImage=$_newImage',
+        '--runs',
+        '1',
+        ...files,
+      ], actions);
+
+      expect(exitCode, 0);
+      expect(actions.cancelled, [1]);
+      expect(out.text, contains('run 1: gh failed, retrying'));
+      expect(out.text, contains('run 1 qualifies; 1 of 1 qualify'));
+    });
+
+    test('sample rejects a repeated branch', () async {
+      final actions = _FakeActions();
+
+      await run([
+        'sample',
+        '--branch',
+        'bench/side',
+        '--branch',
+        'bench/side',
+        '--artifacts',
+        artifacts,
+      ], actions);
+
+      expect(exitCode, 64);
+      expect(actions.dispatched, isEmpty);
     });
 
     test('sample dispatches nothing once enough runs qualify', () async {
@@ -533,6 +576,10 @@ class _FakeActions implements ActionsClient {
   final Map<String, List<CiRun>> runsByBranch;
   final CiRunState Function(int runId)? stateOf;
 
+  /// runState calls that fail like an unreachable GitHub before the
+  /// fake starts answering.
+  int failingStateCalls;
+
   final dispatched = <(String, int)>[];
   final cancelled = <int>[];
   final downloads = <int>[];
@@ -542,6 +589,7 @@ class _FakeActions implements ActionsClient {
     this.artifactsByRun = const {},
     this.runsByBranch = const {},
     this.stateOf,
+    this.failingStateCalls = 0,
   });
 
   @override
@@ -553,14 +601,19 @@ class _FakeActions implements ActionsClient {
   }
 
   @override
-  Future<CiRunState> runState(int runId) async =>
-      stateOf?.call(runId) ??
-      CiRunState(
-        branch: _branchOf[runId]!,
-        event: RunEvent.workflowDispatch,
-        runCompleted: cancelled.contains(runId),
-        benchCompleted: true,
-      );
+  Future<CiRunState> runState(int runId) async {
+    if (failingStateCalls > 0) {
+      failingStateCalls--;
+      throw const ProcessException('gh', ['run', 'view'], 'timeout', 1);
+    }
+    return stateOf?.call(runId) ??
+        CiRunState(
+          branch: _branchOf[runId]!,
+          event: RunEvent.workflowDispatch,
+          runCompleted: cancelled.contains(runId),
+          benchCompleted: true,
+        );
+  }
 
   @override
   Future<bool> downloadBenchResults(int runId, String directory) async {

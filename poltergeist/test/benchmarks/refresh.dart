@@ -43,6 +43,10 @@ const defaultMaxDispatches = 6;
 /// How often `sample` polls its runs.
 const defaultPollInterval = Duration(minutes: 1);
 
+/// Consecutive gh failures `sample` rides out before giving up; a single
+/// transient failure must not abandon the runs it dispatched.
+const _maxConsecutiveGhFailures = 10;
+
 const _usageText =
     '''
 Usage: dart run test/benchmarks/refresh.dart <command> [options]
@@ -200,6 +204,9 @@ class RefreshArguments {
     }
     if (command != RefreshCommand.collect && since != null) {
       throw const RefreshUsageException('--since applies to collect only');
+    }
+    if (branches.toSet().length != branches.length) {
+      throw const RefreshUsageException('each --branch may appear once');
     }
     if (command == RefreshCommand.collect && branches.isEmpty) {
       branches.add(mainBranch);
@@ -378,24 +385,35 @@ Future<void> _sample(
     await dispatch(branch);
   }
 
+  final cancelling = <int>{};
+  var ghFailures = 0;
   while (active.isNotEmpty) {
     await Future<void>.delayed(pollInterval);
 
     for (final MapEntry(key: branch, value: runId) in active.entries.toList()) {
-      final state = await actions.runState(runId);
-      if (!state.benchCompleted && !state.runCompleted) {
+      final bool finished;
+      try {
+        finished = await _advanceRun(
+          actions,
+          cli.artifacts,
+          branch,
+          runId,
+          cancelling,
+        );
+        ghFailures = 0;
+      } on ProcessException catch (error) {
+        ghFailures++;
+        if (ghFailures > _maxConsecutiveGhFailures) {
+          rethrow;
+        }
+        out.writeln('run $runId: gh failed, retrying ($error)');
+        continue;
+      }
+      if (!finished) {
         continue;
       }
 
-      await actions.downloadBenchResults(
-        runId,
-        _runDirectory(cli.artifacts, runId),
-      );
-      if (!state.runCompleted) {
-        await _cancelOwnRun(actions, runId, branch, state);
-      }
       active.remove(branch);
-
       final pool = repool();
       qualifying = pool.usedRuns.length;
       final verdict = pool.usedRuns.contains(runId)
@@ -405,19 +423,44 @@ Future<void> _sample(
       if (qualifying >= cli.runs || dispatchesLeft == 0) {
         continue;
       }
-
-      // A new dispatch would queue behind the cancelling run in the
-      // branch's concurrency group; let it settle first.
-      while (!(await actions.runState(runId)).runCompleted) {
-        await Future<void>.delayed(pollInterval);
-      }
       await dispatch(branch);
     }
   }
 
   if (qualifying < cli.runs) {
     out.writeln('dispatch budget spent with $qualifying of ${cli.runs}');
+    exitCode = gradedFailureExitCode;
   }
+}
+
+/// Moves one dispatched run along: keeps its artifact once the D12 job
+/// finishes, then cancels the rest of the run to free the runners. True
+/// once the run has completed; until then a redispatch on its branch
+/// would only queue behind it in the branch's concurrency group.
+Future<bool> _advanceRun(
+  ActionsClient actions,
+  String artifacts,
+  String branch,
+  int runId,
+  Set<int> cancelling,
+) async {
+  final state = await actions.runState(runId);
+  if (!state.benchCompleted && !state.runCompleted) {
+    return false;
+  }
+
+  if (!_hasArtifact(artifacts, runId)) {
+    await actions.downloadBenchResults(runId, _runDirectory(artifacts, runId));
+  }
+  if (state.runCompleted) {
+    return true;
+  }
+
+  if (!cancelling.contains(runId)) {
+    await _cancelOwnRun(actions, runId, branch, state);
+    cancelling.add(runId);
+  }
+  return false;
 }
 
 /// Cancels a run this tool dispatched, after proving it is one: a side
