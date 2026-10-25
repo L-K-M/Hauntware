@@ -55,6 +55,9 @@ env:
 # archive I/O binds fstat, a symbol glibc exports only from 2.33 and
 # the runner images lack) and the timing measurements, whose budgets
 # assume GitHub's runner images.
+# Self-hosted runner images bake in the Linux packages the client jobs
+# need and give jobs no sudo; scripts/ci-apt-install.sh only checks for
+# them there.
 # Self-hosted runners keep the Flutter SDK and pub cache on disk, so
 # flutter-action's actions/cache, which downloads the 1.6 GB SDK
 # archive on every hit, runs on GitHub-hosted runners only.
@@ -1562,7 +1565,7 @@ jobs:
       - name: Linux toolchain
         if: matrix.target == 'linux'
         run: >-
-          sudo apt-get update && sudo apt-get install -y
+          "$GITHUB_WORKSPACE"/scripts/ci-apt-install.sh
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
           libsecret-1-dev libjsoncpp-dev dpkg-dev file binutils imagemagick xvfb xdotool
       - uses: subosito/flutter-action@v2
@@ -1602,11 +1605,13 @@ jobs:
         if: matrix.target == 'linux'
         working-directory: planchette
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
+          "$GITHUB_WORKSPACE"/scripts/ci-apt-install.sh --no-install-recommends flatpak flatpak-builder elfutils
           # Ubuntu 24.04 denies the unprivileged user namespaces bubblewrap
-          # (flatpak's sandbox helper) builds in.
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
+          # (flatpak's sandbox helper) builds in. Kernels without the knob,
+          # like the self-hosted runners', need no change.
+          if [[ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null)" == 1 ]]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
           scripts/build-flatpak.sh "$(find dist -maxdepth 1 -type f -name 'planchette_*.deb' -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
       - name: Native keyboard modifiers
         if: matrix.target == 'macos'
@@ -1690,7 +1695,7 @@ jobs:
       - name: Install Linux desktop toolchain
         if: startsWith(matrix.target, 'linux')
         run: >-
-          sudo apt-get update && sudo apt-get install -y
+          "$GITHUB_WORKSPACE"/scripts/ci-apt-install.sh
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
           libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool
       - uses: subosito/flutter-action@v2
@@ -1767,11 +1772,13 @@ jobs:
         if: startsWith(matrix.target, 'linux')
         working-directory: seance
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
+          "$GITHUB_WORKSPACE"/scripts/ci-apt-install.sh --no-install-recommends flatpak flatpak-builder elfutils
           # Ubuntu 24.04 denies the unprivileged user namespaces bubblewrap
-          # (flatpak's sandbox helper) builds in.
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
+          # (flatpak's sandbox helper) builds in. Kernels without the knob,
+          # like the self-hosted runners', need no change.
+          if [[ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null)" == 1 ]]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
           deb="$(find dist-packages -maxdepth 1 -type f -name 'seance_*.deb' -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
           [ -n "$deb" ] || { echo "::error::no seance_*.deb in dist-packages" >&2; exit 1; }
           scripts/build-flatpak.sh "$deb"
@@ -1839,7 +1846,7 @@ jobs:
       - name: Install Linux desktop toolchain
         if: startsWith(matrix.target, 'linux')
         run: >-
-          sudo apt-get update && sudo apt-get install -y
+          "$GITHUB_WORKSPACE"/scripts/ci-apt-install.sh
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
           libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool
       - uses: subosito/flutter-action@v2
@@ -1911,11 +1918,13 @@ jobs:
         if: startsWith(matrix.target, 'linux')
         working-directory: poltergeist
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
+          "$GITHUB_WORKSPACE"/scripts/ci-apt-install.sh --no-install-recommends flatpak flatpak-builder elfutils
           # Ubuntu 24.04 denies the unprivileged user namespaces bubblewrap
-          # (flatpak's sandbox helper) builds in.
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
+          # (flatpak's sandbox helper) builds in. Kernels without the knob,
+          # like the self-hosted runners', need no change.
+          if [[ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null)" == 1 ]]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
           scripts/build-flatpak.sh "$(find dist-packages -maxdepth 1 -type f -name 'poltergeist_*.deb' -print -quit)"
 
   # Klabautermann's legs copy poltergeist_client and add the two native
@@ -1977,7 +1986,7 @@ jobs:
       - name: Install Linux desktop toolchain
         if: startsWith(matrix.target, 'linux')
         run: >-
-          sudo apt-get update && sudo apt-get install -y
+          "$GITHUB_WORKSPACE"/scripts/ci-apt-install.sh
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
           libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool
       - uses: subosito/flutter-action@v2
@@ -2055,11 +2064,13 @@ jobs:
         if: startsWith(matrix.target, 'linux')
         working-directory: klabautermann
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
+          "$GITHUB_WORKSPACE"/scripts/ci-apt-install.sh --no-install-recommends flatpak flatpak-builder elfutils
           # Ubuntu 24.04 denies the unprivileged user namespaces bubblewrap
-          # (flatpak's sandbox helper) builds in.
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
+          # (flatpak's sandbox helper) builds in. Kernels without the knob,
+          # like the self-hosted runners', need no change.
+          if [[ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null)" == 1 ]]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
           deb="$(find dist-packages -maxdepth 1 -type f -name 'klabautermann_*.deb' -print -quit)"
           [ -n "$deb" ] || { echo "::error::no klabautermann_*.deb in dist-packages" >&2; exit 1; }
           scripts/build-flatpak.sh "$deb"
