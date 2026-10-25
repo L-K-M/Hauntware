@@ -169,26 +169,52 @@ Map<String, NetRate> netRates(
   return out;
 }
 
-/// Throughput of one block device between two readings (03 §6.4, CN-04).
+/// One block device between two readings (03 §6.4): its throughput
+/// (CN-04, DSK-03), and with collector-set version 10's timings its
+/// latency and utilization (DSK-04).
 @immutable
 final class DiskRate {
   const DiskRate({
     required this.readBytesPerSecond,
     required this.writeBytesPerSecond,
+    this.readsPerSecond = 0,
+    this.writesPerSecond = 0,
+    this.readAwaitMs,
+    this.writeAwaitMs,
+    this.busyPercent,
   });
 
   /// Sectors converted at 512 bytes each (CN-04).
   final double readBytesPerSecond, writeBytesPerSecond;
 
+  /// Completed reads and writes per second (IOPS).
+  final double readsPerSecond, writesPerSecond;
+
+  /// The mean time a read or write took, queueing included (iostat's
+  /// `r_await` and `w_await`): null without the timings, or when none
+  /// completed in the interval.
+  final double? readAwaitMs, writeAwaitMs;
+
+  /// The share of the interval with any I/O in flight (iostat's `%util`),
+  /// 0 to 100; null without the timings. A device serving requests in
+  /// parallel, as SSDs and arrays do, can be busy at 100 % with room left.
+  final double? busyPercent;
+
   Map<String, Object?> toJson() => {
     'readBytesPerSecond': readBytesPerSecond,
     'writeBytesPerSecond': writeBytesPerSecond,
+    'readsPerSecond': readsPerSecond,
+    'writesPerSecond': writesPerSecond,
+    'readAwaitMs': ?readAwaitMs,
+    'writeAwaitMs': ?writeAwaitMs,
+    'busyPercent': ?busyPercent,
   };
 }
 
-/// Per-device byte rates from /proc/diskstats sector counters (03 §6.4).
-/// Devices missing from either side, reset counters and a zero interval
-/// yield no entry.
+/// Per-device rates from /proc/diskstats counters (03 §6.4). Devices
+/// missing from either side, reset counters and a zero interval yield no
+/// entry; a device whose timings are missing on either side, or reset,
+/// keeps its throughput without latency and utilization.
 Map<String, DiskRate> diskRates(
   List<DiskStatEntry> previous,
   List<DiskStatEntry> next,
@@ -203,10 +229,36 @@ Map<String, DiskRate> diskRates(
     if (p == null) continue;
     final rd = counterDelta(p.sectorsRead, n.sectorsRead, width: width);
     final wr = counterDelta(p.sectorsWritten, n.sectorsWritten, width: width);
-    if (rd == null || wr == null) continue;
+    final reads = counterDelta(
+      p.readsCompleted,
+      n.readsCompleted,
+      width: width,
+    );
+    final writes = counterDelta(
+      p.writesCompleted,
+      n.writesCompleted,
+      width: width,
+    );
+    if (rd == null || wr == null || reads == null || writes == null) continue;
+
+    int? delta(int? before, int? after) => before == null || after == null
+        ? null
+        : counterDelta(before, after, width: width);
+    final readMs = delta(p.readMs, n.readMs);
+    final writeMs = delta(p.writeMs, n.writeMs);
+    final ioMs = delta(p.ioMs, n.ioMs);
     out[n.name] = DiskRate(
       readBytesPerSecond: rd * DiskStatEntry.sectorBytes / elapsedSeconds,
       writeBytesPerSecond: wr * DiskStatEntry.sectorBytes / elapsedSeconds,
+      readsPerSecond: reads / elapsedSeconds,
+      writesPerSecond: writes / elapsedSeconds,
+      readAwaitMs: readMs == null || reads == 0 ? null : readMs / reads,
+      writeAwaitMs: writeMs == null || writes == 0 ? null : writeMs / writes,
+      // io_ticks advances in jiffies on some kernels, so a reading can
+      // overshoot the interval a little; the share never exceeds 100 %.
+      busyPercent: ioMs == null
+          ? null
+          : (ioMs / (elapsedSeconds * 1000) * 100).clamp(0, 100).toDouble(),
     );
   }
   return out;

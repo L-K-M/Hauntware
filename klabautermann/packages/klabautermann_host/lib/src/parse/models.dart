@@ -296,7 +296,12 @@ final class NetDevEntry {
 /// Parses `== netdev ==` rows of `<name> <rx bytes> <tx bytes>`.
 List<NetDevEntry> parseNetDevBlock(List<String> lines, List<String> warnings) {
   final out = <NetDevEntry>[];
-  for (final (name, counters) in _counterRows(lines, 2, 'netdev', warnings)) {
+  for (final (name, counters) in _counterRows(
+    lines,
+    const {2},
+    'netdev',
+    warnings,
+  )) {
     out.add(NetDevEntry(name, rxBytes: counters[0], txBytes: counters[1]));
   }
   return out;
@@ -304,7 +309,10 @@ List<NetDevEntry> parseNetDevBlock(List<String> lines, List<String> warnings) {
 
 /// One disk as the core collector sends it (D48): the name, then
 /// fields 4, 6, 8 and 10 of /proc/diskstats (reads completed, sectors
-/// read, writes completed, sectors written).
+/// read, writes completed, sectors written) and, from collector-set
+/// version 10 (DSK-04), fields 7, 11 and 13 (ms reading, ms writing,
+/// ms doing I/O). A row of the four counters alone, as earlier versions
+/// and the recorded fixtures send, leaves the three timings null.
 @immutable
 final class DiskStatEntry {
   const DiskStatEntry(
@@ -313,10 +321,17 @@ final class DiskStatEntry {
     required this.sectorsRead,
     required this.writesCompleted,
     required this.sectorsWritten,
+    this.readMs,
+    this.writeMs,
+    this.ioMs,
   });
 
   final String name;
   final int readsCompleted, sectorsRead, writesCompleted, sectorsWritten;
+
+  /// Milliseconds spent on reads, on writes, and with any I/O in flight
+  /// (`io_ticks`); null from a four-counter row.
+  final int? readMs, writeMs, ioMs;
 
   /// /proc/diskstats counts sectors of 512 bytes (CN-04).
   static const sectorBytes = 512;
@@ -327,16 +342,26 @@ final class DiskStatEntry {
     'sectorsRead': sectorsRead,
     'writesCompleted': writesCompleted,
     'sectorsWritten': sectorsWritten,
+    'readMs': ?readMs,
+    'writeMs': ?writeMs,
+    'ioMs': ?ioMs,
   };
 }
 
-/// Parses `== diskstats ==` rows of `<name>` and four counters.
+/// Parses `== diskstats ==` rows of `<name>` and four counters, or seven
+/// with DSK-04's timings.
 List<DiskStatEntry> parseDiskStatsBlock(
   List<String> lines,
   List<String> warnings,
 ) {
   final out = <DiskStatEntry>[];
-  for (final (name, c) in _counterRows(lines, 4, 'diskstats', warnings)) {
+  for (final (name, c) in _counterRows(
+    lines,
+    const {4, 7},
+    'diskstats',
+    warnings,
+  )) {
+    final timed = c.length == 7;
     out.add(
       DiskStatEntry(
         name,
@@ -344,17 +369,20 @@ List<DiskStatEntry> parseDiskStatsBlock(
         sectorsRead: c[1],
         writesCompleted: c[2],
         sectorsWritten: c[3],
+        readMs: timed ? c[4] : null,
+        writeMs: timed ? c[5] : null,
+        ioMs: timed ? c[6] : null,
       ),
     );
   }
   return out;
 }
 
-/// The rows of a `<name> <counter>...` block with exactly [count]
+/// The rows of a `<name> <counter>...` block with one of [counts]
 /// non-negative counters each; any other row warns and is skipped.
 Iterable<(String, List<int>)> _counterRows(
   List<String> lines,
-  int count,
+  Set<int> counts,
   String block,
   List<String> warnings,
 ) sync* {
@@ -363,7 +391,8 @@ Iterable<(String, List<int>)> _counterRows(
     if (t.isEmpty) continue;
     final parts = t.split(RegExp(r'\s+'));
     final counters = parts.skip(1).map(int.tryParse).toList();
-    if (counters.length != count || counters.any((c) => c == null || c < 0)) {
+    if (!counts.contains(counters.length) ||
+        counters.any((c) => c == null || c < 0)) {
       warnings.add('$block: malformed row "$t"');
       continue;
     }
@@ -495,7 +524,12 @@ final class ZfsArc {
 /// Parses `== arcstats ==` rows of `<name> <bytes>`.
 ZfsArc parseArcStatsBlock(List<String> lines, List<String> warnings) {
   int? size, min;
-  for (final (name, c) in _counterRows(lines, 1, 'arcstats', warnings)) {
+  for (final (name, c) in _counterRows(
+    lines,
+    const {1},
+    'arcstats',
+    warnings,
+  )) {
     switch (name) {
       case 'size':
         size = c.single;

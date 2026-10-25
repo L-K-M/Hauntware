@@ -5524,8 +5524,8 @@ final class CoreResult extends SampleResult {
   /// As [OverviewResult.network].
   final Map<String, NetRate>? network;
 
-  /// Byte rates per block device since the previous reading; null without
-  /// one, as [OverviewResult.network].
+  /// Throughput, requests, waits and busy share per block device since
+  /// the previous reading; null without one, as [OverviewResult.network].
   final Map<String, DiskRate>? disks;
 
   /// Pressure stall information; null where the kernel has none, which is

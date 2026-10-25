@@ -1941,6 +1941,14 @@ is on main:
   created again under its name is not removed. An API step can now
   carry a JSON body, which the preview shows as sent. The Docker
   actions suite creates, refuses and removes a volume on the fixture.
+- Disk activity (M6 N30, DSK-03, DSK-04): collector-set version 10's
+  `diskstats` rows add ms reading, ms writing and `io_ticks`, and the
+  rates add reads and writes per second, await per request and the busy
+  share. The System tab's Disk activity table lists each whole disk's
+  read and write throughput and busy share, and its requests per second
+  and waits where every column fits; a figure the reading cannot give
+  reads as unknown, and inside a container the section is withheld as
+  the host's (D50).
 - Networks (M6 N11, DNW-01, DNW-02): the Docker tab gains a Networks
   sub-tab after Volumes, listing every network by name with its driver,
   scope, first subnet and its gateway, and how many containers are on

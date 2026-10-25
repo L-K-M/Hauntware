@@ -1612,6 +1612,78 @@ abstract class AppLocalizations {
   /// **'Device'**
   String get systemDevice;
 
+  /// System tab: the section of each whole disk's I/O rates since the previous reading (DSK-03, DSK-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Disk activity'**
+  String get systemDiskActivityTitle;
+
+  /// System tab, Disk activity: a rate needs two readings, and only one has arrived.
+  ///
+  /// In en, this message translates to:
+  /// **'Rates show from the second reading.'**
+  String get systemDiskActivityWaiting;
+
+  /// System tab, Disk activity: the server reports no whole disk that ever did I/O (loop, RAM and partition devices are left out).
+  ///
+  /// In en, this message translates to:
+  /// **'No disk has done any I/O yet.'**
+  String get systemDiskActivityEmpty;
+
+  /// Disk activity column: bytes read per second.
+  ///
+  /// In en, this message translates to:
+  /// **'Read'**
+  String get systemDiskRead;
+
+  /// Disk activity column: bytes written per second.
+  ///
+  /// In en, this message translates to:
+  /// **'Write'**
+  String get systemDiskWrite;
+
+  /// Disk activity column: completed read requests per second (read IOPS).
+  ///
+  /// In en, this message translates to:
+  /// **'Reads/s'**
+  String get systemDiskReadsPerSecond;
+
+  /// Disk activity column: completed write requests per second (write IOPS).
+  ///
+  /// In en, this message translates to:
+  /// **'Writes/s'**
+  String get systemDiskWritesPerSecond;
+
+  /// Disk activity column: the mean time a read took, queueing included (iostat's r_await).
+  ///
+  /// In en, this message translates to:
+  /// **'Read wait'**
+  String get systemDiskReadAwait;
+
+  /// Disk activity column: the mean time a write took, queueing included (iostat's w_await).
+  ///
+  /// In en, this message translates to:
+  /// **'Write wait'**
+  String get systemDiskWriteAwait;
+
+  /// Disk activity column: the share of the interval the disk had any request in flight (iostat's %util).
+  ///
+  /// In en, this message translates to:
+  /// **'Busy'**
+  String get systemDiskBusy;
+
+  /// Disk activity: a whole number of requests per second, in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}'**
+  String systemDiskOperations(int count);
+
+  /// Disk activity: a mean request time in milliseconds with one decimal, in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{ms} ms'**
+  String systemDiskMilliseconds(double ms);
+
   /// Disks table column: where the filesystem is mounted.
   ///
   /// In en, this message translates to:
