@@ -149,6 +149,7 @@ void main() {
       'cron': [60, 60, null],
       'userUnits': [15, 15, 15],
       'userTimers': [60, 60, null],
+      'temps': [10, 10, null],
     });
   });
 

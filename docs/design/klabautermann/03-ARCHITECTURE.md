@@ -3889,6 +3889,19 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   and reboot-and-wait; boot timeline with unclean shutdowns; running against
   installed kernel; doctor checklist; "why is it slow"; attention queue
   (acknowledgements device-local); container diagnose without an LLM.
+
+  As built (M6 N37a, collector-set version 11), the slow `temps`
+  collector reads each hwmon chip's `temp<N>_input` with its `_max`,
+  `_crit` and `_label` through builtins, without `sensors`, and lists the
+  thermal zones, which the parser takes only where no hwmon input read:
+  a zone mostly repeats a chip's reading (`acpitz`, `x86_pkg_temp`
+  beside `coretemp`). A reading outside -60 to 250 °C is an unwired
+  input or an error code and is dropped; a limit of 0 is unset. The
+  `temps` stream runs every 10 s on desktop and phone and once per
+  subscription under the cellular saver. The System tab's Temperatures
+  section lists each sensor, sortable hottest first, with the chip's high
+  and critical limits where they fit, and does not show while the host
+  reports no sensor or inside a container, whose sysfs shows the host's.
 - **v1.x.** Fans, battery, inventory, crash markers, boot performance,
   incident snapshot (redacted by default), deploy pre-flight checks.
 

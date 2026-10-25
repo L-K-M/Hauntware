@@ -19,7 +19,9 @@ import 'redaction.dart';
 /// `klabautermann_host/test/parse/ops_records/`; and the user manager's
 /// `user_units` and `user_timers`, which read the system collectors'
 /// block shapes, and which a capture container, with no login session,
-/// could only answer with its missing bus.
+/// could only answer with its missing bus; and `temps`, which a capture
+/// container or VM, with no sensors, answers with empty blocks, and
+/// whose fragment runs against a stand-in sysfs tree in its own test.
 final kFixtureCollectors = [
   for (final c in Collector.values)
     if (!_unfixtured.contains(c) && c.argValidators.isEmpty) c,
@@ -30,6 +32,7 @@ const _unfixtured = {
   Collector.ops,
   Collector.userUnits,
   Collector.userTimers,
+  Collector.temps,
 };
 
 /// A capture could not produce or write its fixture.

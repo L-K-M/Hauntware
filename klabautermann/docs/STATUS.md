@@ -1941,6 +1941,12 @@ is on main:
   created again under its name is not removed. An API step can now
   carry a JSON body, which the preview shows as sent. The Docker
   actions suite creates, refuses and removes a volume on the fixture.
+- Temperatures (M6 N37a, HW-01): collector-set version 11 adds the
+  slow `temps` collector, which reads the hwmon temperature inputs and
+  their limits and labels with builtins, falling back to the thermal
+  zones, every 10 s. The System tab's Temperatures section lists each
+  sensor with its high and critical limits, and does not show where the
+  host has no sensor, as VMs, or inside a container.
 - Disk activity (M6 N30, DSK-03, DSK-04): collector-set version 10's
   `diskstats` rows add ms reading, ms writing and `io_ticks`, and the
   rates add reads and writes per second, await per request and the busy
