@@ -13,6 +13,7 @@ import 'package:klabautermann_app/ui/actions/action_entry.dart';
 import 'package:klabautermann_app/ui/actions/docker_actions.dart';
 import 'package:klabautermann_app/ui/admin_mode_chip.dart';
 import 'package:klabautermann_app/ui/docker/images_view.dart';
+import 'package:klabautermann_app/ui/docker/networks_view.dart';
 import 'package:klabautermann_app/ui/docker/volumes_view.dart';
 import 'package:klabautermann_app/ui/server_safety.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -293,6 +294,34 @@ void main() {
       expect((h.planned.single as RemoveVolume).name, 'pgdata');
     });
 
+    testWidgets('the network button plans its removal, and a built-in '
+        'network offers none', (tester) async {
+      final h = await _pump(
+        tester,
+        const Column(
+          children: [
+            NetworkActionsButton(
+              serverId: _srv,
+              entry: NetworkEntry(
+                NetworkSummary(id: 'n1', name: 'shop_default'),
+                0,
+              ),
+            ),
+            NetworkActionsButton(
+              serverId: _srv,
+              entry: NetworkEntry(NetworkSummary(id: 'n2', name: 'bridge'), 0),
+            ),
+          ],
+        ),
+      );
+      expect(find.byTooltip('Actions'), findsOneWidget);
+      await tester.tap(find.byTooltip('Actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove'));
+      await tester.pumpAndSettle();
+      expect((h.planned.single as RemoveNetwork).networkId, 'n1');
+    });
+
     testWidgets('observe-only and read-only offer none', (tester) async {
       for (final safety in [
         const SafetyPolicy(),
@@ -322,6 +351,13 @@ void main() {
                 entry: VolumeEntry(VolumeSummary(name: 'pgdata'), 0),
               ),
               const CreateVolumeButton(serverId: _srv),
+              const NetworkActionsButton(
+                serverId: _srv,
+                entry: NetworkEntry(
+                  NetworkSummary(id: 'n1', name: 'shop_default'),
+                  0,
+                ),
+              ),
               const TurnOnAdminModeButton(serverId: _srv),
             ],
           ),

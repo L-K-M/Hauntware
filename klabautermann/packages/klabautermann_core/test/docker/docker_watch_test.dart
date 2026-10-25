@@ -114,7 +114,15 @@ final class _Harness {
           },
         ],
         'Warnings': null,
-      });
+      })
+      ..routes['/v1.52/networks'] = jsonEncode([
+        {
+          'Id': 'n1',
+          'Name': 'shop_default',
+          'Driver': 'bridge',
+          'Labels': {'com.example.token': 's3cret'},
+        },
+      ]);
   }
 
   final bool relay;
@@ -365,6 +373,26 @@ void main() {
       await h.clock.elapse(kDockerEventBatch);
       expect(h.lists(), [_list(DockerWatchList.volumes)]);
       expect(h.requests('/volumes'), hasLength(2));
+    });
+
+    test('network events re-read the networks, labels masked; volume '
+        'events read no networks (DNW-01)', () async {
+      final h = _Harness();
+      final first = await h.start({DockerWatchList.networks});
+
+      expect(first, [_list(DockerWatchList.networks, fullRelist: true)]);
+      final networks = (first.single.payload as DockerNetworksPayload).networks;
+      expect(networks.single.name, 'shop_default');
+      expect(networks.single.labels['com.example.token']?.isMasked, isTrue);
+
+      h.daemon.emit(_event('cache', type: 'volume', action: 'create'));
+      await h.clock.elapse(const Duration(seconds: 1));
+      expect(h.lists(), isEmpty);
+
+      h.daemon.emit(_event('n2', type: 'network', action: 'create'));
+      await h.clock.elapse(kDockerEventBatch);
+      expect(h.lists(), [_list(DockerWatchList.networks)]);
+      expect(h.requests('/networks'), hasLength(2));
     });
 
     test('a failed volume read reaches the watch, and the next event reads '

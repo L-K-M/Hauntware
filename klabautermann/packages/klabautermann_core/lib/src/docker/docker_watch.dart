@@ -199,6 +199,7 @@ final class DockerWatcher {
   List<ContainerSummary>? _containers;
   List<ImageSummary>? _images;
   List<VolumeSummary>? _volumes;
+  List<NetworkSummary>? _networks;
   final Map<String, ContainerStats> _previous = {};
   LogTimestamp? _lastEvent;
   DateTime? _lostAt;
@@ -224,6 +225,7 @@ final class DockerWatcher {
     if (!_wantsContainers) _containers = null;
     if (!_lists.contains(DockerWatchList.images)) _images = null;
     if (!_lists.contains(DockerWatchList.volumes)) _volumes = null;
+    if (!_lists.contains(DockerWatchList.networks)) _networks = null;
 
     // A view that opens the stacks again sees the files checked again.
     if (asked.contains(DockerWatchList.stacks)) {
@@ -239,6 +241,7 @@ final class DockerWatcher {
         DockerWatchList.containers || DockerWatchList.stacks => _containers,
         DockerWatchList.images => _images,
         DockerWatchList.volumes => _volumes,
+        DockerWatchList.networks => _networks,
         DockerWatchList.stats => null,
       };
       if (attached && held != null) {
@@ -263,6 +266,7 @@ final class DockerWatcher {
       _containers = null;
       _images = null;
       _volumes = null;
+      _networks = null;
       _previous.clear();
       _lastEvent = null;
       _lostAt = null;
@@ -304,6 +308,7 @@ final class DockerWatcher {
     _containers = null;
     _images = null;
     _volumes = null;
+    _networks = null;
     _previous.clear();
     _relist.clear();
     _fresh.clear();
@@ -434,6 +439,8 @@ final class DockerWatcher {
           _due(DockerWatchList.images, fresh: false);
         case DockerList.volumes when _lists.contains(DockerWatchList.volumes):
           _due(DockerWatchList.volumes, fresh: false);
+        case DockerList.networks when _lists.contains(DockerWatchList.networks):
+          _due(DockerWatchList.networks, fresh: false);
         default:
           break;
       }
@@ -442,16 +449,17 @@ final class DockerWatcher {
   }
 
   /// Reads again what a finished action changed: the [containers] it
-  /// addressed, the images after an image removal, and the volumes after
-  /// a volume's create or removal. The engine can
-  /// log a change's event before the list endpoint holds the change
-  /// (Docker's containerPause logs `pause` first), so the read that event
-  /// starts may still show the old state, while the action's reply only
-  /// comes once the list holds it.
+  /// addressed, the images after an image removal, the volumes after a
+  /// volume's create or removal, and the networks after a removal. The
+  /// engine can log a change's event before the list endpoint holds the
+  /// change (Docker's containerPause logs `pause` first), so the read that
+  /// event starts may still show the old state, while the action's reply
+  /// only comes once the list holds it.
   void changed({
     Set<String> containers = const {},
     bool images = false,
     bool volumes = false,
+    bool networks = false,
   }) {
     if (_target == null) return;
     if (_wantsContainers) {
@@ -462,6 +470,9 @@ final class DockerWatcher {
     }
     if (volumes && _lists.contains(DockerWatchList.volumes)) {
       _due(DockerWatchList.volumes, fresh: false);
+    }
+    if (networks && _lists.contains(DockerWatchList.networks)) {
+      _due(DockerWatchList.networks, fresh: false);
     }
     _schedule();
   }
@@ -495,6 +506,7 @@ final class DockerWatcher {
       DockerWatchList.containers,
     if (lists.contains(DockerWatchList.images)) DockerWatchList.images,
     if (lists.contains(DockerWatchList.volumes)) DockerWatchList.volumes,
+    if (lists.contains(DockerWatchList.networks)) DockerWatchList.networks,
   };
 
   /// Reads what is due, until nothing is; one run at a time per
@@ -597,6 +609,24 @@ final class DockerWatcher {
           return false;
       }
     }
+
+    if (relist.contains(DockerWatchList.networks) &&
+        _lists.contains(DockerWatchList.networks)) {
+      final read = await _list(target, epoch, (c) => c.listNetworks());
+      if (epoch != _epoch) return false;
+      switch (read) {
+        case final List<NetworkSummary> list:
+          _networks = list;
+          _send(
+            DockerWatchList.networks,
+            fresh: fresh.contains(DockerWatchList.networks),
+          );
+        case final DockerQueryFailed failure:
+          _fail(DockerWatchList.networks, failure);
+        case null:
+          return false;
+      }
+    }
     return true;
   }
 
@@ -654,6 +684,8 @@ final class DockerWatcher {
         payload = DockerImagesPayload(_images!);
       case DockerWatchList.volumes:
         payload = DockerVolumesPayload(_volumes!);
+      case DockerWatchList.networks:
+        payload = DockerNetworksPayload(_networks!);
       case DockerWatchList.stats:
         return;
     }

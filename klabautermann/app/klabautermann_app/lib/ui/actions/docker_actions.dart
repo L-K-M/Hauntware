@@ -8,6 +8,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../l10n/app_localizations.dart';
 import '../docker/containers_view.dart' show EngineContainerState;
 import '../docker/images_view.dart' show ImageEntry;
+import '../docker/networks_view.dart' show NetworkEntry;
 import '../docker/volumes_view.dart' show VolumeEntry, validVolumeName;
 import 'action_entry.dart';
 import 'action_preview.dart';
@@ -743,6 +744,70 @@ class _CreateVolumeDialogState extends State<_CreateVolumeDialog> {
           child: Text(l10n.dockerVolumeCreateSubmit),
         ),
       ],
+    );
+  }
+}
+
+/// [entry]'s actions for the Networks table's row menu, where actions on
+/// [serverId] are allowed (DNW-02): Remove for a user-defined network,
+/// none for a built-in one, which stays.
+List<SidebarMenuEntry> networkActionEntries(
+  BuildContext context, {
+  required String serverId,
+  required NetworkEntry entry,
+}) {
+  if (entry.builtin ||
+      !actionsAllowedAt(context, serverId, ActionEntryPoint.networkRemove)) {
+    return const [];
+  }
+  return [
+    SidebarMenuAction(
+      label: AppLocalizations.of(context).dockerNetworkRemove,
+      onSelected: () => startAction(
+        context,
+        RemoveNetwork(serverId, networkId: entry.network.id),
+      ),
+    ),
+  ];
+}
+
+/// The same action behind a button on the Networks phone row, which has
+/// no row menu; a built-in network shows none.
+class NetworkActionsButton extends StatelessWidget {
+  const NetworkActionsButton({
+    super.key,
+    required this.serverId,
+    required this.entry,
+  });
+
+  final String serverId;
+  final NetworkEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    if (entry.builtin) return const SizedBox.shrink();
+
+    final l10n = AppLocalizations.of(context);
+    return ActionEntry(
+      serverId: serverId,
+      point: ActionEntryPoint.networkRemove,
+      child: MenuAnchor(
+        menuChildren: [
+          MenuItemButton(
+            onPressed: () => startAction(
+              context,
+              RemoveNetwork(serverId, networkId: entry.network.id),
+            ),
+            child: Text(l10n.dockerNetworkRemove),
+          ),
+        ],
+        builder: (context, controller, _) => IconButton(
+          tooltip: l10n.dockerActions,
+          icon: const Icon(Icons.more_vert),
+          onPressed: () =>
+              controller.isOpen ? controller.close() : controller.open(),
+        ),
+      ),
     );
   }
 }

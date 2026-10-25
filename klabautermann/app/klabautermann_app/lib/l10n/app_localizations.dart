@@ -4717,7 +4717,7 @@ abstract class AppLocalizations {
   /// Toast when the engine refused to plan or run an action; reason is the engine's ActionRefusalReason name.
   ///
   /// In en, this message translates to:
-  /// **'{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server\'s container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} dependencyCycle{The stack\'s services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack\'s files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}'**
+  /// **'{reason, select, notImplemented{This action is not available yet.} unknownPlan{The preview is out of date. Open it again.} expiredPlan{The preview is out of date. Open it again.} stalePlan{The connection changed since the preview. Open it again.} confirmationMismatch{The confirmation did not match.} observeOnly{Turn on Allow actions for this server first.} readOnly{The server is read-only.} adminRequired{Turn on admin mode first.} invalidTarget{This target cannot be acted on.} targetChanged{The target changed. Look again before acting.} noLink{Connect to the server first.} engineUnavailable{The server\'s container engine cannot be reached.} imageInUse{Containers use this image. Remove them first, or force the removal.} volumeInUse{A container mounts this volume. Remove the container first.} volumeExists{A volume with this name already exists.} networkInUse{A container is on this network. Stop or disconnect it first.} builtinNetwork{This is one of the engine\'s own networks, which stay.} dependencyCycle{The stack\'s services depend on each other in a loop, so there is no order to act in.} stackManaged{A manager deploys this stack. Redeploy it there.} stackUnverified{The stack\'s files are not verified as its source, so it cannot be redeployed from them.} legacyComposeOnly{Only the legacy docker-compose is installed, which Klabautermann does not run.} sudoRightMissing{This needs root, and your sudo rule allows only docker.} other{The action was refused.}}'**
   String actionRefused(String reason);
 
   /// Process action (PRC-02): sends SIGTERM, asking the process to end.
@@ -5125,7 +5125,7 @@ abstract class AppLocalizations {
   /// An activity log row's action; action is the engine's intent type name.
   ///
   /// In en, this message translates to:
-  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
+  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
   String activityAction(String action);
 
   /// An activity log row's confirmation; tier is the engine's ConfirmationTier name.
@@ -5583,6 +5583,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Volumes'**
   String get dockerTabVolumes;
+
+  /// Docker tab: the sub-tab listing networks.
+  ///
+  /// In en, this message translates to:
+  /// **'Networks'**
+  String get dockerTabNetworks;
 
   /// Docker tab: the sub-tab listing compose stacks.
   ///
@@ -6543,6 +6549,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Remove'**
   String get dockerVolumeRemove;
+
+  /// Networks list: the column of network scopes, such as local or swarm.
+  ///
+  /// In en, this message translates to:
+  /// **'Scope'**
+  String get dockerNetworksColumnScope;
+
+  /// Networks list: the column of each network's first configured subnet.
+  ///
+  /// In en, this message translates to:
+  /// **'Subnet'**
+  String get dockerNetworksColumnSubnet;
+
+  /// Networks list: the column of the gateway of each network's first configured subnet.
+  ///
+  /// In en, this message translates to:
+  /// **'Gateway'**
+  String get dockerNetworksColumnGateway;
+
+  /// Networks list: a network with no subnet or gateway configured, such as host or none.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get dockerNetworksNoSubnet;
+
+  /// Networks list: the badge on the engine's own networks (bridge, host, none), which cannot be removed.
+  ///
+  /// In en, this message translates to:
+  /// **'Built-in'**
+  String get dockerNetworksBuiltin;
+
+  /// Networks list: what a screen reader hears for a built-in network's name.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}, built-in'**
+  String dockerNetworksBuiltinName(String name);
+
+  /// Networks list: what a screen reader hears, and a phone row shows, for a network running containers are on.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 container on it} other{{count} containers on it}}'**
+  String dockerNetworksInUse(int count);
+
+  /// Networks list: the search field's hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search by name, driver or subnet'**
+  String get dockerNetworksSearchHint;
+
+  /// Networks list: shown until the first list arrives.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the networks…'**
+  String get dockerNetworksReading;
+
+  /// Networks list: the engine listed none.
+  ///
+  /// In en, this message translates to:
+  /// **'This engine has no networks.'**
+  String get dockerNetworksEmpty;
+
+  /// Networks list: the search hides every network.
+  ///
+  /// In en, this message translates to:
+  /// **'No network matches the search.'**
+  String get dockerNetworksNoMatch;
+
+  /// Networks list: the Unused filter hides every network; built-in networks never count as unused.
+  ///
+  /// In en, this message translates to:
+  /// **'Every network you made has a container on it.'**
+  String get dockerNetworksNoneUnused;
+
+  /// Networks list: why the list could not be read. reason is the engine's failure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} daemonError{The engine refused or failed to list the networks.} connectionFailed{The connection to the engine failed while listing the networks.} other{The networks could not be listed.}}'**
+  String dockerNetworksFailed(String reason);
+
+  /// Networks list: the network list names no containers, and the container list it is computed from failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Which networks are in use is unknown: the containers, which name their networks, could not be listed.'**
+  String get dockerNetworksUseUnknown;
+
+  /// Networks list: the row action that removes a network no container is on.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get dockerNetworkRemove;
 
   /// Tooltip of the button that closes a container's details in the desktop inspector (03 §10.2).
   ///
