@@ -3396,6 +3396,22 @@ the guarded kill needs it.
   listening socket with `userland-proxy: false` [U]); firewall view (`ufw
   status verbose`, `nft -j list ruleset`, `firewall-cmd --list-all-zones`,
   `iptables-save`; admin mode); local port forward (5.11).
+- **As built (M6 N33).** NET-02 and NET-03 are one host query,
+  `InterfacesQuery`, which the System tab's Interfaces section runs when
+  it shows and on request. One `grep -H` prints each interface's sysfs
+  `operstate`, `mtu`, `address`, `speed` and error, drop and byte
+  counters; interfaces with a `device` link are physical. Addresses come
+  from `ip -j addr`, or `ip -o addr` where `ip` has no JSON (BusyBox),
+  and are left out, with a note, without `ip`. TCP sockets are counted
+  per state from `/proc/net/tcp` and `tcp6` by `awk` on the server, so a
+  busy host sends a dozen lines, and `/proc/net/sockstat` gives the UDP
+  and total counts; both are the reader's network namespace's (D50). The
+  section lists physical interfaces first, folds the loopback and
+  software interfaces without a routable address (containers' veth
+  pairs) behind a checkbox, keeps bridges, bonds, VLANs and tunnels that
+  have one, and shows each interface's current rates from the `core`
+  stream's per-interface rates. 02's `ss -s` is not read: the files
+  answer without `iproute2`.
 - **v1.x.** Exposure map (the device probe is the ground truth and is
   labelled with its vantage point; Docker-published ports bypass ufw INPUT
   rules unless `DOCKER-USER` restricts them [U: current wording]); routes and

@@ -1614,6 +1614,162 @@
       }
     }
   },
+  "systemNetInterfacesTitle": "Interfaces",
+  "@systemNetInterfacesTitle": {
+    "description": "System tab: the heading of the network interfaces section (NET-02, NET-03)."
+  },
+  "systemNetReading": "Reading the network interfaces…",
+  "@systemNetReading": {
+    "description": "System tab, Interfaces: shown while the interfaces are read."
+  },
+  "systemNetReadAgain": "Read again",
+  "@systemNetReadAgain": {
+    "description": "System tab, Interfaces: the button that reads the interfaces again."
+  },
+  "systemNetFailed": "{failure, select, noLink{Not connected to the server.} denied{The server refused the interface read.} missing{The server lacks the tools the interface read runs.} other{The interface read failed.}}",
+  "@systemNetFailed": {
+    "description": "System tab, Interfaces: why the interface read read nothing, by reason.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "systemNetNoAddresses": "The server has no ip command that lists addresses, so none are shown.",
+  "@systemNetNoAddresses": {
+    "description": "System tab, Interfaces: shown when the server could not list the interfaces' IP addresses."
+  },
+  "systemNetShowAll": "Show loopback and virtual interfaces ({count})",
+  "@systemNetShowAll": {
+    "description": "System tab, Interfaces: the checkbox that also lists the loopback and software interfaces without a routable address, such as containers' veth pairs; count is how many it adds.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemNetNone": "The server lists no network interfaces.",
+  "@systemNetNone": {
+    "description": "System tab, Interfaces: shown when the read found no interface."
+  },
+  "systemNetInterface": "{name}: {state, select, up{up} down{down} dormant{dormant} lowerLayerDown{lower layer down} notPresent{not present} testing{testing} other{state not reported}}",
+  "@systemNetInterface": {
+    "description": "System tab, Interfaces: an interface's name and its operational state. name is the interface's name on the server, never translated.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "systemNetAddress": "{address}/{prefix}",
+  "@systemNetAddress": {
+    "description": "System tab, Interfaces: an IP address with its prefix length in CIDR notation.",
+    "placeholders": {
+      "address": {
+        "type": "String"
+      },
+      "prefix": {
+        "type": "int"
+      }
+    }
+  },
+  "systemNetMtu": "MTU {mtu}",
+  "@systemNetMtu": {
+    "description": "System tab, Interfaces: the interface's maximum transmission unit in bytes.",
+    "placeholders": {
+      "mtu": {
+        "type": "int"
+      }
+    }
+  },
+  "systemNetSpeedMbps": "Link speed {speed} Mb/s",
+  "@systemNetSpeedMbps": {
+    "description": "System tab, Interfaces: the negotiated link speed in megabits per second.",
+    "placeholders": {
+      "speed": {
+        "type": "int"
+      }
+    }
+  },
+  "systemNetSpeedGbps": "Link speed {speed} Gb/s",
+  "@systemNetSpeedGbps": {
+    "description": "System tab, Interfaces: the negotiated link speed in gigabits per second, such as 2.5.",
+    "placeholders": {
+      "speed": {
+        "type": "double",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "systemNetRates": "Receiving {rx}, sending {tx}",
+  "@systemNetRates": {
+    "description": "System tab, Interfaces: the interface's current receive and transmit rates, already formatted.",
+    "placeholders": {
+      "rx": {
+        "type": "String"
+      },
+      "tx": {
+        "type": "String"
+      }
+    }
+  },
+  "systemNetErrors": "Errors: {rxErrors} in, {txErrors} out. Dropped: {rxDropped} in, {txDropped} out.",
+  "@systemNetErrors": {
+    "description": "System tab, Interfaces: the interface's receive and transmit errors and dropped packets, counted since it came up.",
+    "placeholders": {
+      "rxErrors": {
+        "type": "int"
+      },
+      "txErrors": {
+        "type": "int"
+      },
+      "rxDropped": {
+        "type": "int"
+      },
+      "txDropped": {
+        "type": "int"
+      }
+    }
+  },
+  "systemNetConnectionsTitle": "Connections",
+  "@systemNetConnectionsTitle": {
+    "description": "System tab, Interfaces: the heading over the socket counts (NET-03)."
+  },
+  "systemNetConnectionsUnknown": "The server's socket counts could not be read.",
+  "@systemNetConnectionsUnknown": {
+    "description": "System tab, Interfaces: shown when /proc/net gave no socket counts."
+  },
+  "systemNetTcpEstablished": "TCP established",
+  "@systemNetTcpEstablished": {
+    "description": "System tab, Interfaces: the label of the number of established TCP connections."
+  },
+  "systemNetTcpListening": "TCP listening",
+  "@systemNetTcpListening": {
+    "description": "System tab, Interfaces: the label of the number of TCP sockets listening for connections."
+  },
+  "systemNetTcpTimeWait": "TCP time wait",
+  "@systemNetTcpTimeWait": {
+    "description": "System tab, Interfaces: the label of the number of closed TCP connections the kernel still holds in TIME-WAIT."
+  },
+  "systemNetTcpCloseWait": "TCP close wait",
+  "@systemNetTcpCloseWait": {
+    "description": "System tab, Interfaces: the label of the number of TCP connections the peer closed and the local program has not; many point to a program leaking connections."
+  },
+  "systemNetTcpOther": "TCP in other states",
+  "@systemNetTcpOther": {
+    "description": "System tab, Interfaces: the label of the number of TCP sockets opening or closing."
+  },
+  "systemNetUdp": "UDP sockets",
+  "@systemNetUdp": {
+    "description": "System tab, Interfaces: the label of the number of UDP sockets in use."
+  },
+  "systemNetSocketsUsed": "All sockets",
+  "@systemNetSocketsUsed": {
+    "description": "System tab, Interfaces: the label of the number of sockets of every kind in use."
+  },
   "systemBootsTimelineTitle": "Boot timeline",
   "@systemBootsTimelineTitle": {
     "description": "System tab, Boots: the heading over the list of boots, newest first (BOOT-02)."
