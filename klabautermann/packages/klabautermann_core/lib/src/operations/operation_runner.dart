@@ -208,6 +208,27 @@ final class OperationRunner {
         switch (plan.steps[i]) {
           case ShellStep(bestEffort: true) && final step:
             if (!await _tryStep(link, step)) skipped.add(i);
+          case ShellStep(endsLink: true) && final step:
+            // The host going down can take the link before the exit
+            // status arrives: that is the step taking effect (SYS-03).
+            final RemoteCommandResult result;
+            try {
+              result = await _runShell(link, step, session);
+            } on RemoteCommandException {
+              return ActionFinished(
+                planId: planId,
+                outcome: ActionOutcome.succeeded,
+                skippedSteps: skipped,
+              );
+            }
+            if (result.exitCode != 0) {
+              return failed(
+                ActionFailure.stepFailed,
+                step: i,
+                exitCode: result.exitCode,
+                output: capturedOutput(result.stdout, result.stderr),
+              );
+            }
           case final ShellStep step:
             final result = await _runShell(link, step, session);
             if (step.captureOutput) {

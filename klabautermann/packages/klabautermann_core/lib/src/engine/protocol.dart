@@ -24,6 +24,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         OpDirectoryKind,
         OpDirectoryListing,
         PackageCheck,
+        PowerVerb,
         ProcsSelection,
         RestartCheck,
         SmartDisk,
@@ -4604,6 +4605,15 @@ final class StartTimer extends ActionIntent {
 /// admin mode, so the next package check reads current metadata.
 final class RefreshPackageLists extends ActionIntent {
   const RefreshPackageLists(super.serverId);
+}
+
+/// Reboots or powers off the server (SYS-03, 03 §7.11) as root, in admin
+/// mode, after the user types its host name. The run ends once the host
+/// takes the command; the app waits for a rebooted host to answer again.
+final class PowerAction extends ActionIntent {
+  const PowerAction(super.serverId, this.verb);
+
+  final PowerVerb verb;
 }
 
 /// Which systemd manager a unit action or query addresses (03 §7.5,
