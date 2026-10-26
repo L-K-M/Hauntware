@@ -4006,6 +4006,26 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   measured once per probe, so per link, which is enough for a clock that
   drifts by seconds a day; durations on the server's clock (CN-17's
   second half) already use the server's times.
+
+  Boots and kernels (M6 N39, BOOT-02, BOOT-03) are host queries the
+  System tab's Boots section runs one after another when it shows and
+  on request. `KernelsQuery` prints `uname -r` and the directories under
+  `/lib/modules` (or `/usr/lib/modules`), ordered as `sort -V` orders
+  them: the running kernel is current when it is the newest, a newer one
+  is installed when a later directory exists, and removed when its own
+  directory is gone, as after an upgrade that cleaned up; no directory
+  reads as unknown, as in a container. The package database would name
+  pending kernels more precisely, but differs per distribution, and every
+  kernel package installs its modules there. The boot list is LOG-09's
+  `BootsQuery`; `BootEndsQuery` reads how the last ten boots before the
+  current one ended from their journals: clean when the last 40 lines
+  show journald stopping or a reboot, power-off, halt or shutdown
+  target, unclean otherwise, and unknown when the journal holds no line
+  from PID 1 for the boot, as for a user outside the journal's groups.
+  02's `last -x` alternative is not read: the journal already lists the
+  boots, and newer distributions replace wtmp with wtmpdb. The section lists the current boot and those ten,
+  newest first, each with its start and how long its journal ran, and
+  counts the older boots the Logs panel's boot picker still lists.
 - **v1.x.** Fans, battery, inventory, crash markers, boot performance,
   incident snapshot (redacted by default), deploy pre-flight checks.
 

@@ -85,6 +85,26 @@ final class HostQueries {
           }
         case ProcessDetailQuery(:final pid, :final startTicks):
           answer(await _processDetail(link, pid, startTicks));
+        case BootEndsQuery():
+          switch (await _run(link, HostCommands.bootEnds())) {
+            case _Failed(:final payload):
+              answer(payload);
+            case _Ran(:final stdout):
+              answer(BootEnds(parseBootEnds(stdout)));
+          }
+        case KernelsQuery():
+          switch (await _run(link, HostCommands.kernels())) {
+            case _Failed(:final payload):
+              answer(payload);
+            case _Ran(:final stdout):
+              answer(switch (parseKernels(stdout)) {
+                final check? => Kernels(check),
+                null => const HostQueryFailed(
+                  HostQueryFailure.failed,
+                  detail: 'The kernel read printed something else.',
+                ),
+              });
+          }
       }
     } on Object catch (error) {
       answer(HostQueryFailed(HostQueryFailure.failed, detail: '$error'));

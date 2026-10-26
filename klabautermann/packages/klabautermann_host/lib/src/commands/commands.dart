@@ -327,6 +327,13 @@ final class JournalBoot {
 /// (03 §7.6).
 const int kListBootsJsonSystemd = 251;
 
+/// How many earlier boots [HostCommands.bootEnds] reads the ends of.
+const kBootEndsRead = 10;
+
+/// The marker between the running release and the installed kernels in
+/// [HostCommands.kernels]' output.
+const kKernelsMarker = '== modules';
+
 /// How [HostCommands.journalBoots] asks for the boot list: JSON on
 /// systemd [kListBootsJsonSystemd] and later, the text table below.
 enum JournalBootsFormat { json, text }
@@ -827,6 +834,37 @@ abstract final class HostCommands {
     '--no-pager',
     if (format == JournalBootsFormat.json) ...['-o', 'json'],
   ];
+
+  /// BOOT-02's ends of the boots before the current one, at most
+  /// [kBootEndsRead], one `<boot id> clean|unclean|unknown` line each:
+  /// clean when the boot's last journal lines show journald stopping or
+  /// a shutdown target, unknown when the system journal is not readable
+  /// for it (no message from PID 1), as for a user outside the journal
+  /// groups. `parseBootEnds` reads it. Each `journalctl` reads no
+  /// stdin, which is the loop's list of boot IDs.
+  static List<String> bootEnds() => const ['sh', '-c', _kBootEndsScript];
+
+  static const _kBootEndsScript =
+      'ids=\$(journalctl --list-boots --no-pager 2>/dev/null '
+      "| awk 'length(\$2) == 32 { print \$2 }'); "
+      'n=\$(printf "%s\\n" "\$ids" | grep -c .); '
+      '[ "\$n" -gt 1 ] || exit 0; '
+      'printf "%s\\n" "\$ids" | head -n \$((n - 1)) '
+      '| tail -n $kBootEndsRead | while read -r id; do '
+      'if [ -z "\$(journalctl -b "\$id" -q -n 1 -o cat --no-pager _PID=1 '
+      '</dev/null 2>/dev/null)" ]; then echo "\$id unknown"; continue; fi; '
+      'if journalctl -b "\$id" -q -n 40 -o cat --no-pager </dev/null 2>/dev/null '
+      "| grep -qE 'Journal stopped|Reached target .*(Reboot|Power-Off|Halt|Shutdown)'; "
+      'then echo "\$id clean"; else echo "\$id unclean"; fi; done';
+
+  /// BOOT-03's read: the running kernel's release, then the module
+  /// directories of the kernels installed. `parseKernels` reads it.
+  static List<String> kernels() => const ['sh', '-c', _kKernelsScript];
+
+  static const _kKernelsScript =
+      'uname -r; echo "$kKernelsMarker"; '
+      'ls -1 /lib/modules 2>/dev/null || ls -1 /usr/lib/modules 2>/dev/null; '
+      'exit 0';
 
   /// The files under `/var/log` (LOG-08, 03 §7.6); `parseLogFiles`
   /// reads the output.
