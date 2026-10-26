@@ -8,6 +8,7 @@ library;
 import 'dart:async';
 
 import 'package:klabautermann_host/klabautermann_host.dart';
+import 'package:klabautermann_docker/klabautermann_docker.dart' show parseEnv;
 import 'package:seance_core/seance_core.dart' show SshLink, quoteShellWord;
 
 import '../engine/protocol.dart';
@@ -82,6 +83,8 @@ final class HostQueries {
               final parsed = parseJournalBoots(stdout, format);
               answer(JournalBoots(parsed.value), parsed.warnings);
           }
+        case ProcessDetailQuery(:final pid, :final startTicks):
+          answer(await _processDetail(link, pid, startTicks));
         case OomKillsQuery():
           switch (await _run(link, HostCommands.oomKills())) {
             case _Failed(:final payload):
@@ -147,8 +150,56 @@ final class HostQueries {
     }
   }
 
-  /// Runs [argv] and returns its stdout, or the failure to answer with.
-  Future<_Outcome> _run(SshLink link, List<String> argv) async {
+  /// PRC-04's read of [pid]: its details with the environment masked by
+  /// key, or how it ended. The script exits with the start-ticks guard's
+  /// codes when the process is gone or its PID reused.
+  Future<HostPayload> _processDetail(
+    SshLink link,
+    int pid,
+    int startTicks,
+  ) async {
+    final List<String> argv;
+    try {
+      argv = HostCommands.processDetail(pid, startTicks);
+    } on HostCommandError catch (error) {
+      return HostQueryFailed(HostQueryFailure.failed, detail: error.reason);
+    }
+    switch (await _run(link, argv, accept: _processEnds.keys.toSet())) {
+      case _Failed(:final payload):
+        return payload;
+      case _Ran(:final exitCode) when _processEnds.containsKey(exitCode):
+        return ProcessEnded(_processEnds[exitCode]!);
+      case _Ran(:final stdout):
+        final detail = parseProcessDetail(stdout);
+        if (detail == null) {
+          return const HostQueryFailed(
+            HostQueryFailure.failed,
+            detail: 'The process read printed something else.',
+          );
+        }
+        return ProcessDetails(
+          detail.withoutEnvironment(),
+          environment: switch (detail.environment) {
+            final entries? => parseEnv(entries),
+            null => null,
+          },
+        );
+    }
+  }
+
+  /// The process read's exits for a process no longer there.
+  static const _processEnds = {
+    kGuardedKillGone: ProcessEnd.gone,
+    kProcessDetailReused: ProcessEnd.reused,
+  };
+
+  /// Runs [argv] and returns its stdout and exit status, which is 0 or
+  /// one of [accept], or the failure to answer with.
+  Future<_Outcome> _run(
+    SshLink link,
+    List<String> argv, {
+    Set<int> accept = const {},
+  }) async {
     try {
       final result = await link.run(
         HostCommands.commandLine(argv, quote: _quote),
@@ -156,6 +207,9 @@ final class HostQueries {
         timeout: _timeout,
         maxOutputBytes: kHostQueryMaxOutputBytes,
       );
+      if (result.exitCode case final code? when accept.contains(code)) {
+        return _Ran(result.stdout, exitCode: code);
+      }
       final failure = switch (result.exitCode) {
         0 => null,
         127 => HostQueryFailure.missing,
@@ -185,9 +239,10 @@ sealed class _Outcome {
 }
 
 final class _Ran extends _Outcome {
-  const _Ran(this.stdout);
+  const _Ran(this.stdout, {this.exitCode = 0});
 
   final String stdout;
+  final int exitCode;
 }
 
 final class _Failed extends _Outcome {
