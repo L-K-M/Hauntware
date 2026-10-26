@@ -27,7 +27,7 @@
 #   DEB_SECTION          Debian Section field
 #   DEB_DESCRIPTION      Debian Description field: the synopsis, then
 #                        extended lines each starting with one space
-#   DEB_COPYRIGHT_TITLE  first line of the Debian copyright file
+#   DEB_COPYRIGHT_TITLE  opening comment of the Debian copyright file
 #   EXTRA_DEPENDS        optional array of Depends entries for runtime tools
 #                        the app spawns (invisible to the ELF scan)
 #
@@ -183,27 +183,47 @@ install_icons() {  # $1 = destination usr/ root (deb tree or AppDir)
 # --- copyright file writer (tests extract this block; keep the markers) -----
 # The Debian copyright file must carry the license text verbatim — a bare
 # pointer to the repository leaves the .deb's licensing undiscoverable
-# offline. The Unlicense covers the package's own code only; the bundled
-# components keep their own licenses, whose texts write_third_party_notices
-# puts next to this file. Uses $DEB_COPYRIGHT_TITLE, $VERSION and
+# offline. It is machine-readable (DEP-5): the Unlicense covers the
+# package's own code only; the Flutter bundle also holds third-party
+# components that keep their own licenses, whose texts
+# write_third_party_notices puts next to this file. Uses
+# $DEB_COPYRIGHT_TITLE, $PRODUCT_NAME, $PACKAGE_NAME, $VERSION and
 # $LICENSE_FILE.
 write_copyright() {  # $1 = destination
   {
     cat <<EOF
-$DEB_COPYRIGHT_TITLE
-Source: https://github.com/L-K-M/Hauntware
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: $PRODUCT_NAME
 Upstream-Version: $VERSION
-License: Unlicense — the full text follows. It covers this package's own
-code; the bundled third-party components below keep their own licenses.
+Source: https://github.com/L-K-M/Hauntware
+Comment: $DEB_COPYRIGHT_TITLE.
+ The Unlicense covers this package's own code. The bundled third-party
+ components keep their own licenses; their license and notice texts are
+ in Third-Party-Notices.txt next to this file.
 
+Files: *
+Copyright: 2026 L-K-M
+License: Unlicense
+
+Files: usr/lib/$PACKAGE_NAME/*
+Copyright: 2026 L-K-M
+ The authors of the bundled components, as listed in Third-Party-Notices.txt
+License: Unlicense and LicenseRef-Bundled-Flutter
+Comment: The Flutter bundle compiles the app's own code together with the
+ Flutter engine, the Dart runtime, the pub packages and native libraries
+ it uses (vendored ones included) and the bundled fonts.
+
+License: Unlicense
 EOF
-    cat "$LICENSE_FILE"
+    # DEP-5 continuation lines: one leading space, "." for an empty line.
+    sed -e 's/^[[:space:]]*$/./' -e 's/^/ /' "$LICENSE_FILE"
     cat <<EOF
 
-Bundled third-party components: the Flutter engine, the Dart runtime, the
-pub packages and native libraries the app compiles in (vendored ones
-included) and the bundled fonts keep their own licenses. Their license and
-notice texts are in Third-Party-Notices.txt next to this file.
+License: LicenseRef-Bundled-Flutter
+ The Flutter engine, the Dart runtime, the pub packages and native
+ libraries the app compiles in (vendored ones included) and the bundled
+ fonts keep their own licenses. Their license and notice texts are in
+ Third-Party-Notices.txt next to this file.
 EOF
   } > "$1"
 }
