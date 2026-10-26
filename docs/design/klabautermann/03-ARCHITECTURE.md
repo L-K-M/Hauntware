@@ -3984,6 +3984,18 @@ them again. Admin mode that ends returns the tab to the streams' rows.
 - **Later.** CrowdSec, domain expiry through RDAP from the device (+E,
   opt-in).
 
+As built in M6 (N41b), CRT-01's endpoints are listed per server in the
+System tab's Certificates section. They are kept device-local in
+`settings.json` (`klabautermann.certificates.endpoints`) as `host:port`,
+at most 20, port 443 by default, since the check runs from this device.
+The engine checks them at once, each with a 10-second handshake through
+`SecureSocket`. The handshake accepts any certificate so a bad one can
+still be read, and records whether the device's trust store accepted it
+for the host name. Each line shows the expiry and days left, warning
+within 14 days, the issuer, and a distrust note. A failed check names
+the failure: lookup, connection, timeout, or a port that does not speak
+TLS. The section checks when it shows, after an edit and on request.
+
 ### 7.11 Hardware, system, boot and triage (HW, SYS, BOOT, TRI)
 
 - **v1.** Temperatures (hidden in VMs and LXC), GPU (forking tools on the

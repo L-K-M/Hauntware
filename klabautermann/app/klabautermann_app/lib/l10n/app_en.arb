@@ -1910,6 +1910,112 @@
       }
     }
   },
+  "systemCertificatesTitle": "Certificates",
+  "@systemCertificatesTitle": {
+    "description": "System tab: the heading of the section that checks the TLS certificates of endpoints the user lists (CRT-01)."
+  },
+  "systemCertificatesNone": "List the host names and ports whose certificates this device should check, such as this server's web sites.",
+  "@systemCertificatesNone": {
+    "description": "System tab, Certificates: shown while the server has no endpoints listed."
+  },
+  "systemCertificatesNotSaved": "The endpoints could not be saved on this device; they are kept until the app quits.",
+  "@systemCertificatesNotSaved": {
+    "description": "System tab, Certificates: the list was changed but writing settings.json failed."
+  },
+  "systemCertificatesCheck": "Check again",
+  "@systemCertificatesCheck": {
+    "description": "System tab, Certificates: the button that checks every listed endpoint again."
+  },
+  "systemCertificatesEdit": "Edit endpoints…",
+  "@systemCertificatesEdit": {
+    "description": "System tab, Certificates: the button that opens the list of endpoints to check."
+  },
+  "systemCertificatesChecking": "Checking…",
+  "@systemCertificatesChecking": {
+    "description": "System tab, Certificates: an endpoint's line while its check runs."
+  },
+  "systemCertificatesNotChecked": "Not checked yet",
+  "@systemCertificatesNotChecked": {
+    "description": "System tab, Certificates: an endpoint's line before any check answered, as after the engine stopped."
+  },
+  "systemCertificatesFailed": "{reason, select, lookup{The host name did not resolve from this device.} connect{This device could not connect.} timeout{No answer within 10 seconds.} handshake{The endpoint answered, but not with TLS.} other{The check failed.}}",
+  "@systemCertificatesFailed": {
+    "description": "System tab, Certificates: why an endpoint's check read no certificate, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "systemCertificatesExpires": "Expires {date}, {days, plural, =0{today} =1{in 1 day} other{in {days} days}}",
+  "@systemCertificatesExpires": {
+    "description": "System tab, Certificates: when an endpoint's certificate expires and how many whole days are left.",
+    "placeholders": {
+      "date": {
+        "type": "DateTime",
+        "format": "yMMMd"
+      },
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "systemCertificatesExpired": "Expired {date}",
+  "@systemCertificatesExpired": {
+    "description": "System tab, Certificates: an endpoint presents a certificate that has expired.",
+    "placeholders": {
+      "date": {
+        "type": "DateTime",
+        "format": "yMMMd"
+      }
+    }
+  },
+  "systemCertificatesUntrusted": "This device does not trust this certificate for the host name: it may be self-signed, expired or issued for another name.",
+  "@systemCertificatesUntrusted": {
+    "description": "System tab, Certificates: the device's trust store rejected the certificate."
+  },
+  "systemCertificatesIssuer": "Issued by {issuer}",
+  "@systemCertificatesIssuer": {
+    "description": "System tab, Certificates: who issued an endpoint's certificate, as the certificate names it.",
+    "placeholders": {
+      "issuer": {
+        "type": "String"
+      }
+    }
+  },
+  "systemCertificatesEditTitle": "Endpoints to check",
+  "@systemCertificatesEditTitle": {
+    "description": "System tab, Certificates: the title of the dialog that lists the endpoints."
+  },
+  "systemCertificatesHelper": "One per line: a host name or address, with :port for a port other than 443. At most {max}.",
+  "@systemCertificatesHelper": {
+    "description": "System tab, Certificates: how to list endpoints.",
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "systemCertificatesProblem": "{problem, select, notEndpoint{Each line needs a host name or address, with an optional :port.} tooMany{List at most {max} endpoints.} other{These endpoints cannot be checked.}}",
+  "@systemCertificatesProblem": {
+    "description": "System tab, Certificates: why the list was not taken, by problem.",
+    "placeholders": {
+      "problem": {
+        "type": "String"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "systemCertificatesCancel": "Cancel",
+  "@systemCertificatesCancel": {
+    "description": "System tab, Certificates: closes the endpoints dialog without changes."
+  },
+  "systemCertificatesSave": "Save",
+  "@systemCertificatesSave": {
+    "description": "System tab, Certificates: keeps the listed endpoints and checks them."
+  },
   "systemAccountsTitle": "Users",
   "@systemAccountsTitle": {
     "description": "System tab: heading of the section listing the server's accounts and who is logged in (ACC-01, ACC-02)."
