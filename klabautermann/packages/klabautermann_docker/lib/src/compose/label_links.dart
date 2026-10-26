@@ -138,6 +138,10 @@ LabelLink? _dockhand(String key, String text, {int? port}) {
   );
 }
 
+/// What a URL label holds in place of an address: a wildcard or a
+/// `{...}`, `\${...}` or `<...>` template placeholder.
+final _placeholder = RegExp(r'[*{}$<>]');
+
 /// [text] as an absolute `http` or `https` address with a host and no
 /// credentials, or null.
 Uri? _webUri(String text) {
@@ -145,6 +149,9 @@ Uri? _webUri(String text) {
   if (uri == null || !uri.hasScheme || uri.host.isEmpty) return null;
   if (uri.scheme != 'http' && uri.scheme != 'https') return null;
   if (uri.userInfo.isNotEmpty) return null;
+  // A wildcard or a template placeholder names no host a browser can
+  // open; Uri.tryParse takes `*` and percent-encodes braces.
+  if (_placeholder.hasMatch(text)) return null;
   return uri;
 }
 

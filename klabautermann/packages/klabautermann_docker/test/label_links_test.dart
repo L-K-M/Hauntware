@@ -107,6 +107,26 @@ void main() {
     );
     expect(uris({'dev.dozzle.url': MaskedValue.plain('/logs')}), isEmpty);
     expect(uris({'dockhand.url': MaskedValue.plain('ssh://host')}), isEmpty);
+    // A wildcard or a placeholder, in any label that takes a URL.
+    for (final address in [
+      'https://*.example.com',
+      'https://{host}/admin',
+      'https://\${DOMAIN}',
+      'https://<host>',
+    ]) {
+      expect(
+        uris({
+          'dockhand.url': MaskedValue.plain(address),
+          'dev.dozzle.url': MaskedValue.plain(address),
+          'caddy': MaskedValue.plain(address),
+        }),
+        isEmpty,
+        reason: address,
+      );
+    }
+    expect(uris({'dev.dozzle.url': MaskedValue.plain('http://[::1]:8080/')}), [
+      'http://[::1]:8080/',
+    ]);
     expect(
       uris({'dockhand.url': MaskedValue.plain('https://u:p@host.example')}),
       isEmpty,
