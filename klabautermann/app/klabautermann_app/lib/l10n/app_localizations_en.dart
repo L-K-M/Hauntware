@@ -6596,7 +6596,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String dockerDiagnosisWhy(String kind) {
     String _temp0 = intl.Intl.selectLogic(kind, {
       'oomLimit':
-          'The kernel stopped it for going over its memory limit. Raise the limit or find what keeps growing.',
+          'The kernel stopped it, most likely for going over its memory limit. Raise the limit or find what keeps growing.',
       'oomHost':
           'The kernel stopped it while the host ran out of memory. It has no memory limit of its own.',
       'killed':
@@ -6613,7 +6613,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'exitsAtOnce':
           'It exited with code 0 and its restart policy starts it again: its main process does not stay in the foreground.',
       'restartLoop':
-          'The engine keeps starting it again after it exits. Its logs show what each run ended with.',
+          'Its restart policy has started it again after each exit since it was last started by hand. Its logs show what each run ended with.',
       'unhealthy':
           'Its health check keeps failing. Health checks shows what each check printed.',
       'other': 'Its state says something went wrong.',
