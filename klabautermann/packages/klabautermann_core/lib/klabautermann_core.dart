@@ -134,6 +134,10 @@ export 'package:klabautermann_host/klabautermann_host.dart'
 // The System tab's processor section (CPU-07): the model and topology a
 // HostResult carries.
 export 'package:klabautermann_host/klabautermann_host.dart' show CpuTopology;
+// The Disks section's mount details and the Swap section (DSK-05,
+// DSK-14): the mounts and swap devices a HostResult carries.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show MountEntry, MountsRead, SwapDevice, SwapKind;
 // The Jobs panel (JOB-01, JOB-02): the jobs rows a CronResult carries, the
 // timer rows the app builds from a TimersResult, their schedule
 // descriptions and their runs as plain CronRun values (D52), and the

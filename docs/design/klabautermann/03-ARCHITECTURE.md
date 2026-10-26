@@ -3386,6 +3386,16 @@ the guarded kill needs it.
   (util-linux 2.27+); swap devices; the disk space explorer (DSK-07), which
   streams `ncdu -x -o -` or `gdu -o-` when installed, else incremental `du -x
   -B1 -d1` per opened directory, read-only, sudo for a complete tree.
+- **As built (M6 N31).** DSK-05 and DSK-14 are one host query,
+  `MountsQuery`: `findmnt -J -l -o TARGET,SOURCE,FSTYPE,OPTIONS` where
+  findmnt is installed and takes `-J`, else `/proc/self/mounts` with its
+  octal escapes read back, then `/proc/swaps`. A mount's details in the
+  Disks section read it when they open and add the mount's source and
+  options, saying when it is mounted read-only; the last mount over a
+  point is the one in effect. The System tab's Swap section reads it
+  when it shows and on request, and lists each swap partition or file
+  with how much is used of its size and its priority, the device used
+  first at the top.
 - **v1.x.** "Open in Poltergeist" for deletion (DSK-08), layout (`lsblk -J
   -b`, LVM JSON reports with sudo), ZFS, mdraid, network mounts with
   stale-mount detection, cleanup suggestions with sizes and previews, fill
