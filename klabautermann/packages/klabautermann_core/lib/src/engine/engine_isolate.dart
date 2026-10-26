@@ -70,6 +70,7 @@ import '../operations/plans/backup_plans.dart';
 import '../operations/plans/docker_plans.dart';
 import '../operations/plans/edit_plan.dart';
 import '../jobs/job_history_query.dart';
+import '../services/accounts.dart';
 import '../services/unit_queries.dart';
 import '../operations/stack_edits.dart';
 import '../operations/plans/host_plans.dart';
@@ -1683,6 +1684,35 @@ void engineMain(
               now: DateTime.now().toUtc(),
             ),
           ).then(uiPort.send),
+        );
+      case ReadAccounts(:final serverId, :final requestId):
+        final link = links?.link(serverId);
+        if (!fleetIds.contains(serverId) || link == null) {
+          uiPort.send(
+            AccountsReport(
+              serverId: serverId,
+              requestId: requestId,
+              failure: AccountsReportFailure.noLink,
+            ),
+          );
+          return;
+        }
+        // Not awaited, as the other reads; a lend that fails still
+        // answers.
+        unawaited(
+          lendSession(
+            serverId,
+            () => readAccounts(serverId, requestId: requestId, link: link),
+          ).then(
+            uiPort.send,
+            onError: (Object _) => uiPort.send(
+              AccountsReport(
+                serverId: serverId,
+                requestId: requestId,
+                failure: AccountsReportFailure.transport,
+              ),
+            ),
+          ),
         );
       case ReadSmart(:final serverId, :final requestId):
         void fail(SmartReportFailure failure) => uiPort.send(

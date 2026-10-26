@@ -259,6 +259,7 @@ void main() {
         AuditQuery('srv-1', before: DateTime.utc(2026, 10, 18), limit: 20),
         const ReadUserCrontabs('srv-1', requestId: 'r-1'),
         const ReadSmart('srv-1', requestId: 'r-1'),
+        const ReadAccounts('srv-1', requestId: 'r-1'),
         const ReadHistory('srv-1', HistoryTier.minute, requestId: 'h-1'),
         const AcknowledgeOperation('srv-1', '0123456789abcdef'),
         const AnswerPrompt('prompt-1', PromptTrustAnswer(true)),
