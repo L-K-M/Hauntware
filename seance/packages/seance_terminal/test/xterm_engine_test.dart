@@ -159,6 +159,13 @@ void main() {
       expect(ticks, 1);
       e.sendKey([0x0d]);
       expect(ticks, 2);
+
+      // Once per hand-back: a redundant exit is no second one.
+      e.feed(Uint8List.fromList(utf8.encode('\x1b[?1049l')));
+      expect(ticks, 2);
+      e.feed(Uint8List.fromList(utf8.encode('\x1b[?1049h')));
+      e.feed(Uint8List.fromList(utf8.encode('\x1b[?1049l')));
+      expect(ticks, 3);
       await e.dispose();
     },
   );

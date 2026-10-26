@@ -17,14 +17,20 @@ class _FakeRunner {
   RemoteCommandRunner get call => (command, {timeout}) async {
     commands.add(command);
     timeouts.add(timeout);
+    if (answers.isEmpty) {
+      throw StateError('No canned answer left for: $command');
+    }
     final answer = answers.removeAt(0);
-    if (answer is RemoteCommandException) throw answer;
+    if (answer is Exception) throw answer;
     return answer as RemoteCommandResult;
   };
 }
 
 RemoteCommandResult _exit(int? code, [String stdout = '']) =>
     RemoteCommandResult(stdout: stdout, exitCode: code);
+
+/// What the script prints when it finds the shell in [path].
+RemoteCommandResult _answer(String path) => _exit(0, 'seance-cwd\n$path\n');
 
 /// Stands in for an sshd connection process: forks one PTY session leader
 /// per entry of `ptys` (each in its directory, like a login shell on a PTY
@@ -42,21 +48,28 @@ for cwd in spec['ptys']:
     ready_r, ready_w = os.pipe()
     pid = os.fork()
     if pid == 0:
-        master, slave = os.openpty()
-        name = os.ttyname(slave)
-        os.setsid()
-        tty = os.open(name, os.O_RDWR)  # becomes the controlling terminal
-        for fd in (0, 1, 2):
-            os.dup2(tty, fd)
-        os.set_inheritable(master, True)
-        os.chdir(cwd)
-        if not spec['shells']:
-            os.write(ready_w, b'.')
-            time.sleep(60)
-        # The pipe closes on exec, which is when the child is the shell.
-        os.execvp('sleep', ['sleep', '60'])
+        report = os.dup(2)
+        try:
+            master, slave = os.openpty()
+            name = os.ttyname(slave)
+            os.setsid()
+            tty = os.open(name, os.O_RDWR)  # becomes the controlling terminal
+            for fd in (0, 1, 2):
+                os.dup2(tty, fd)
+            os.set_inheritable(master, True)
+            os.chdir(cwd)
+            if not spec['shells']:
+                os.write(ready_w, b'.')
+                time.sleep(60)
+            # The pipe closes on exec, which is when the child is the shell.
+            os.execvp('sleep', ['sleep', '60'])
+        except BaseException as error:
+            os.write(ready_w, b'!')
+            os.write(report, ('PTY child: %r\n' % error).encode())
+            os._exit(125)
     os.close(ready_w)
-    os.read(ready_r, 1)
+    if os.read(ready_r, 1) == b'!':
+        sys.exit('the PTY child failed in %r' % cwd)
     shells.append(pid)
 for cwd in spec['remove']:
     os.rmdir(cwd)
@@ -69,7 +82,8 @@ _, status = os.waitpid(probe, 0)
 for pid in shells:
     os.kill(pid, 9)
     os.waitpid(pid, 0)
-sys.exit(os.waitstatus_to_exitcode(status))
+sys.exit(-os.WTERMSIG(status) if os.WIFSIGNALED(status)
+         else os.WEXITSTATUS(status))
 ''';
 
 /// A `skip:` value for the real-process tests: they read Linux `/proc` and
@@ -107,9 +121,11 @@ RemoteCommandRunner _besidePtyShells(
     stdoutEncoding: utf8,
     stderrEncoding: utf8,
   );
+  final stderr = result.stderr as String;
+  if (stderr.isNotEmpty) printOnFailure('harness stderr: $stderr');
   return RemoteCommandResult(
     stdout: result.stdout as String,
-    stderr: result.stderr as String,
+    stderr: stderr,
     exitCode: result.exitCode,
   );
 };
@@ -119,7 +135,7 @@ void main() {
 
   group('RemoteShellDirectory with a fake runner', () {
     test('sends one quoted sh script that every login shell keeps', () async {
-      final runner = _FakeRunner([_exit(0, '/srv')]);
+      final runner = _FakeRunner([_answer('/srv')]);
 
       await RemoteShellDirectory(runner.call).read();
 
@@ -139,7 +155,7 @@ void main() {
     });
 
     test('returns the printed directory', () async {
-      final runner = _FakeRunner([_exit(0, '/mnt/tank/media files')]);
+      final runner = _FakeRunner([_answer('/mnt/tank/media files')]);
 
       expect(
         await RemoteShellDirectory(runner.call).read(),
@@ -147,13 +163,21 @@ void main() {
       );
     });
 
+    test("finds the answer after a startup file's output", () async {
+      final runner = _FakeRunner([
+        _exit(0, 'Welcome to TrueNAS\n/etc/motd\nseance-cwd\n/mnt/tank\n'),
+      ]);
+
+      expect(await RemoteShellDirectory(runner.call).read(), '/mnt/tank');
+    });
+
     test('does not follow a removed directory or one it cannot name', () async {
       final runner = _FakeRunner([
-        _exit(0, '/srv/old (deleted)\n'),
-        _exit(0, '/a\n/b\n'),
-        _exit(0, '/a\u001b]0;x\n'),
-        _exit(0, '/caf\ufffd\n'),
-        _exit(0, '/srv\n'),
+        _answer('/srv/old (deleted)'),
+        _answer('/a\n/b'),
+        _answer('/a\u001b]0;x'),
+        _answer('/caf\ufffd'),
+        _answer('/srv'),
       ]);
       final directory = RemoteShellDirectory(runner.call);
 
@@ -164,7 +188,7 @@ void main() {
     });
 
     test('asks again after a read with no answer', () async {
-      final runner = _FakeRunner([_exit(4), _exit(4), _exit(0, '/tmp')]);
+      final runner = _FakeRunner([_exit(4), _exit(4), _answer('/tmp')]);
       final directory = RemoteShellDirectory(runner.call);
 
       expect(await directory.read(), isNull);
@@ -174,9 +198,9 @@ void main() {
     });
 
     test('stops asking a server that cannot answer', () async {
-      // No /proc, no sh, and a startup file or forced command speaking
-      // instead of the script.
-      final answers = [_exit(3), _exit(126), _exit(127), _exit(0, 'Welcome')];
+      // No /proc, no sh, and a forced command or a login shell that is not
+      // one answering instead of the script.
+      final answers = [_exit(3), _exit(126), _exit(127), _exit(0, '/srv\n')];
       for (final answer in answers) {
         final runner = _FakeRunner([answer]);
         final directory = RemoteShellDirectory(runner.call);
@@ -192,9 +216,9 @@ void main() {
       const dropped = RemoteCommandException('channel closed');
       // Exit 2 is dash failing to fork under a process limit.
       final runner = _FakeRunner([
-        dropped,
+        const ChannelOpenException(ChannelRefusal.other, 'refused'),
         _exit(2),
-        _exit(0, '/srv\n'),
+        _answer('/srv'),
         dropped,
         const RemoteCommandException('timed out'),
         _exit(null),

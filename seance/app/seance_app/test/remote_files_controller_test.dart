@@ -127,10 +127,7 @@ void main() {
         return switch (answer) {
           final Future<RemoteCommandResult> later => await later,
           final RemoteCommandResult result => result,
-          final String path => RemoteCommandResult(
-            stdout: '$path\n',
-            exitCode: 0,
-          ),
+          final String path => _shellAnswer(path),
           _ => const RemoteCommandResult(exitCode: 4),
         };
       });
@@ -294,9 +291,7 @@ void main() {
       await _pastDebounce();
       expect(reads, 2, reason: 'no second read while one is in flight');
 
-      slow.complete(
-        const RemoteCommandResult(stdout: '/home/test/docker\n', exitCode: 0),
-      );
+      slow.complete(_shellAnswer('/home/test/docker'));
       await _until(() => files.currentPath == '/var/log');
       expect(reads, 3);
     });
@@ -309,9 +304,7 @@ void main() {
       final opening = files.initialize();
       await _until(() => reads == 1);
       shellMoved.value++; // `cd /var/log` typed right after connecting
-      first.complete(
-        const RemoteCommandResult(stdout: '/home/test\n', exitCode: 0),
-      );
+      first.complete(_shellAnswer('/home/test'));
       await opening;
 
       await _until(() => files.currentPath == '/var/log');
@@ -326,9 +319,7 @@ void main() {
       await files.initialize();
       expect(files.currentPath, '/home/test');
 
-      slow.complete(
-        const RemoteCommandResult(stdout: '/var/log\n', exitCode: 0),
-      );
+      slow.complete(_shellAnswer('/var/log'));
       await _until(() => files.currentPath == '/var/log');
     });
 
@@ -344,9 +335,7 @@ void main() {
 
       final opening = files.initialize();
       await _until(() => remote.listed.contains('/home/test'));
-      slow.complete(
-        const RemoteCommandResult(stdout: '/var/log\n', exitCode: 0),
-      );
+      slow.complete(_shellAnswer('/var/log'));
       await _until(() => remote.listed.contains('/var/log'));
       listings['/home/test']!.complete();
       await opening;
@@ -1253,6 +1242,10 @@ void main() {
     shellDirectory.dispose();
   });
 }
+
+/// What [RemoteShellDirectory]'s script prints when the shell is in [path].
+RemoteCommandResult _shellAnswer(String path) =>
+    RemoteCommandResult(stdout: 'seance-cwd\n$path\n', exitCode: 0);
 
 /// Waits in real time until [condition] holds: the shell directory is read
 /// on a real debounce timer.

@@ -52,6 +52,11 @@ class RemoteShellDirectory {
   /// was removed.
   static const String _deletedSuffix = ' (deleted)';
 
+  /// The line the script prints before its answer. bash sources `~/.bashrc`
+  /// for commands sshd runs, and anything a startup file prints comes first,
+  /// so the answer is what follows this line.
+  static const String _answerMarker = 'seance-cwd';
+
   /// One line of POSIX sh: csh and tcsh reject a newline inside quotes, and
   /// the script has no `'`, `\` or `!`, so [quoteShellWord] keeps it literal
   /// through every login shell.
@@ -65,7 +70,8 @@ class RemoteShellDirectory {
   /// scan of `/proc` is the fallback. A candidate still named like the
   /// connection has not become the shell yet: sshd gives it the terminal
   /// before it changes directory and starts the shell. `readlink` names the
-  /// directory without touching its file system, which may hang.
+  /// directory without touching its file system, which may hang. The answer
+  /// follows [_answerMarker].
   static const String _script =
       r'[ -r /proc/self/stat ] && command -v readlink >/dev/null || exit 3; '
       r'st() { IFS= read -r s < "/proc/$1/stat" || return 1; '
@@ -81,6 +87,7 @@ class RemoteShellDirectory {
       r'[ "$tty" = 0 ] && continue; [ -z "$shell" ] || exit 4; '
       r'shell=$p; sc=$c; done; [ -n "$shell" ] || exit 4; '
       r'[ "$sc" = "$cc" ] && exit 4; '
+      'echo $_answerMarker; '
       r'readlink "/proc/$shell/cwd" 2>/dev/null || exit 4';
 
   /// False once the server cannot answer: reads then return null without
@@ -99,7 +106,9 @@ class RemoteShellDirectory {
         'exec sh -c ${quoteShellWord(_script)}',
         timeout: _timeout,
       );
-    } on RemoteCommandException {
+    } on Exception {
+      // The transport failed: a [RemoteCommandException], or a budgeted
+      // runner refusing the channel.
       _fail();
       return null;
     }
@@ -116,18 +125,32 @@ class RemoteShellDirectory {
       _fail();
       return null;
     }
-    // The script prints one `readlink` line and nothing else, so other
-    // output came from elsewhere (a startup file, a forced command) and will
-    // again.
-    final output = result.stdout;
-    if (!output.startsWith('/')) {
+    // Without the marker the script never ran: a forced command or a login
+    // shell that is not one, which will not change.
+    final answer = _answerIn(result.stdout);
+    if (answer == null) {
       _gaveUp = true;
       return null;
     }
     _failures = 0;
-    return _followable(
-      output.endsWith('\n') ? output.substring(0, output.length - 1) : output,
-    );
+    return _followable(answer);
+  }
+
+  /// The line after the first [_answerMarker] line, without its newline.
+  static String? _answerIn(String output) {
+    const markerLine = '$_answerMarker\n';
+    final int start;
+    if (output.startsWith(markerLine)) {
+      start = markerLine.length;
+    } else {
+      final at = output.indexOf('\n$markerLine');
+      if (at < 0) return null;
+      start = at + 1 + markerLine.length;
+    }
+    final answer = output.substring(start);
+    return answer.endsWith('\n')
+        ? answer.substring(0, answer.length - 1)
+        : answer;
   }
 
   void _fail() {
@@ -139,7 +162,7 @@ class RemoteShellDirectory {
   /// open), is not followed. A newline would also mean the output is not
   /// one path.
   static String? _followable(String path) {
-    if (path.endsWith(_deletedSuffix)) return null;
+    if (!path.startsWith('/') || path.endsWith(_deletedSuffix)) return null;
     final unfollowable = path.runes.any(
       (codePoint) =>
           codePoint <= 0x1f ||
