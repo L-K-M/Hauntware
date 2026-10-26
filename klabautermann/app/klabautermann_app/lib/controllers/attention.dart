@@ -102,8 +102,19 @@ AttentionScan scanAttention(Iterable<AttentionSource> sources) {
   for (final source in sources) {
     final id = source.serverId;
     final seen = observed[id] = {
-      AttentionKind.blocked,
-      AttentionKind.unreachable,
+      // An idle link has not tried yet, and one connecting or waiting for
+      // the user has not settled: a stored blocked or unreachable
+      // acknowledgement stands until the link settles, so a relaunch or a
+      // retry between backoffs does not reopen it.
+      if (source.link
+          case LinkReady() ||
+              LinkDegraded() ||
+              LinkBlocked() ||
+              LinkBackoff() ||
+              LinkClosed()) ...[
+        AttentionKind.blocked,
+        AttentionKind.unreachable,
+      ],
       AttentionKind.alert,
     };
 
@@ -213,14 +224,13 @@ final class AttentionAcks extends ChangeNotifier {
   AttentionAck? ackFor(AttentionItem item) => _acks[item.serverId]?[item.key];
 
   /// Acknowledges [item] with [note], trimmed and cut to
-  /// [kAttentionNoteMax] characters.
+  /// [kAttentionNoteMax] code points.
   Future<void> acknowledge(AttentionItem item, {String note = ''}) {
     final trimmed = note.trim();
     _acks.putIfAbsent(item.serverId, () => {})[item.key] = AttentionAck(
       at: _now().toUtc(),
-      note: trimmed.length > kAttentionNoteMax
-          ? trimmed.substring(0, kAttentionNoteMax)
-          : trimmed,
+      // Cut by code points, so no surrogate pair is split.
+      note: String.fromCharCodes(trimmed.runes.take(kAttentionNoteMax)),
     );
     return _changed();
   }

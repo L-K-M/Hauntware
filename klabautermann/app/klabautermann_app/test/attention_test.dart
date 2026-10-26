@@ -1,5 +1,7 @@
 // TRI-03: the fleet's attention queue, with acknowledgements and notes
 // kept on this device.
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/alert_center.dart';
@@ -107,6 +109,44 @@ void main() {
       );
       expect(kinds(const LinkClosed(LinkClosedReason.closedByOwner)), isEmpty);
     });
+
+    test('a link that has not settled leaves its acknowledgements alone', () {
+      Set<AttentionKind>? observed(LinkStatus link) => scanAttention([
+        AttentionSource(serverId: _web, link: link),
+      ]).observed[_web];
+      for (final link in const <LinkStatus>[
+        LinkIdle(),
+        LinkConnecting(),
+        LinkAuthenticating(),
+      ]) {
+        expect(observed(link), {AttentionKind.alert}, reason: '$link');
+      }
+      expect(observed(const LinkReady()), {
+        AttentionKind.blocked,
+        AttentionKind.unreachable,
+        AttentionKind.alert,
+      });
+
+      // An unreachable server's retry between backoffs keeps the note.
+      final acks = AttentionAcks();
+      const down = AttentionItem(
+        serverId: _web,
+        kind: AttentionKind.unreachable,
+      );
+      unawaited(acks.acknowledge(down));
+      acks.prune(
+        scanAttention([
+          const AttentionSource(serverId: _web, link: LinkConnecting()),
+        ]),
+      );
+      expect(acks.ackFor(down), isNotNull);
+      acks.prune(
+        scanAttention([
+          const AttentionSource(serverId: _web, link: LinkReady()),
+        ]),
+      );
+      expect(acks.ackFor(down), isNull);
+    });
   });
 
   group('AttentionAcks', () {
@@ -153,16 +193,21 @@ void main() {
 
       await acks.acknowledge(disk, note: 'x' * (kAttentionNoteMax + 10));
       expect(acks.ackFor(disk)?.note.length, kAttentionNoteMax);
+
+      // A cut never splits a surrogate pair.
+      await acks.acknowledge(disk, note: '\u{1F6A2}' * (kAttentionNoteMax + 1));
+      expect(acks.ackFor(disk)?.note.runes.length, kAttentionNoteMax);
+      expect(acks.ackFor(disk)?.note.runes.toSet(), {0x1F6A2});
     });
 
     test('drops what cleared, keeps what it could not see, and forgets '
         'servers that left', () async {
-      final acks = AttentionAcks()
-        ..acknowledge(unit)
-        ..acknowledge(disk)
-        ..acknowledge(
-          const AttentionItem(serverId: _db, kind: AttentionKind.blocked),
-        );
+      final acks = AttentionAcks();
+      await acks.acknowledge(unit);
+      await acks.acknowledge(disk);
+      await acks.acknowledge(
+        const AttentionItem(serverId: _db, kind: AttentionKind.blocked),
+      );
 
       // The units still list nginx; no mounts held this time.
       expect(

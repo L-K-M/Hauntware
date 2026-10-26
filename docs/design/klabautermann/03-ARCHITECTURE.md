@@ -4022,10 +4022,12 @@ TLS. The section checks when it shows, after an edit and on request.
   at the fleet rows' critical level (space or inodes, 90 %) and
   unhealthy containers. The fleet list counts the unacknowledged ones in
   a notice that opens the queue (`ui/attention.dart`). Acknowledging
-  takes an optional note of up to 500 characters and hides the problem
+  takes an optional note of up to 500 code points and hides the problem
   until a reading shows it cleared, so the same problem coming back asks
   again; a kind the run holds no reading for keeps its
-  acknowledgements, and a server that leaves the fleet loses them. They
+  acknowledgements, as do a link's while it is idle, connecting or
+  waiting for the user, so a relaunch or a retry between backoffs does
+  not reopen them, and a server that leaves the fleet loses them. They
   stay on this device in `settings.json`
   (`klabautermann.attention.acknowledged`: by server id, each problem's
   kind and subject with when and the note; anything unreadable reads as
