@@ -775,7 +775,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The ellipsis ending a cut command line, the space between its
     // arguments, and the filter's term separator and the line break
     // between the fields it searches. The plus sign GNU ps ends a cut
-    // user name with, which is matched, never shown.
+    // user name with, and the run states PRC-06 flags (zombie and
+    // uninterruptible sleep), which are matched, never shown.
+    "'Z'",
+    "'D'",
     r"'${text.substring(0, end)}…'",
     "' '",
     r"r'\s+'",
