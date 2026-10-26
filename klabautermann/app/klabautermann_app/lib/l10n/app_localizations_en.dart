@@ -5251,6 +5251,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'PowerAction': 'Reboot or shut down',
       'ContainerAction': 'Container action',
       'RemoveContainer': 'Remove container',
+      'ContainerBulkAction': 'Containers action',
       'RemoveImage': 'Remove image',
       'CreateVolume': 'Create volume',
       'RemoveVolume': 'Remove volume',

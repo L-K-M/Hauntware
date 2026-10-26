@@ -1482,6 +1482,7 @@ void engineMain(
             );
           case ContainerAction() ||
               RemoveContainer() ||
+              ContainerBulkAction() ||
               RemoveImage() ||
               CreateVolume() ||
               RemoveVolume() ||

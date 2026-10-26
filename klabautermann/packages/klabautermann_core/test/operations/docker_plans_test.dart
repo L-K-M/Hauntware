@@ -386,6 +386,234 @@ void main() {
     });
   });
 
+  group('bulk actions (CTR-07)', () {
+    late _Engine engine;
+    setUp(
+      () => engine = _Engine()
+        ..containers.addAll([
+          _container('web-1'),
+          _container('db-1', state: 'exited'),
+          _container('api-1', state: 'restarting'),
+          _container('cache-1', state: 'paused'),
+        ]),
+    );
+
+    String idOf(String name) =>
+        '${engine.containers.firstWhere((c) => (c['Names'] as List).first == '/$name')['Id']}';
+
+    List<String> ids() => [for (final c in engine.containers) '${c['Id']}'];
+
+    test('a stop takes each container that is up, in the order given, as '
+        'one plan', () async {
+      final plan = _planned(
+        await _plan(
+          ContainerBulkAction(
+            _server,
+            containerIds: ids().reversed,
+            verb: ContainerBulkVerb.stop,
+          ),
+          engine,
+        ),
+      );
+      expect(plan.kind, OperationKind.stop);
+      expect(plan.targetName, 'api-1, web-1');
+      expect(
+        [for (final step in plan.steps) (step as ApiStep).display],
+        [
+          'POST /v1.52/containers/${idOf('api-1')}/stop',
+          'POST /v1.52/containers/${idOf('web-1')}/stop',
+        ],
+      );
+      expect(plan.impact?.kind, ImpactKind.stopsContainers);
+      expect(plan.impact?.count, 2);
+      expect(plan.tier, ConfirmationTier.acknowledge);
+      expect(
+        [
+          for (final check in plan.revalidate.cast<DockerTargetUnchanged>())
+            (check.target, check.id),
+        ],
+        [('api-1', idOf('api-1')), ('web-1', idOf('web-1'))],
+      );
+    });
+
+    test('start and remove take the stopped ones; removal never forces '
+        'or takes volumes', () async {
+      final start = _planned(
+        await _plan(
+          ContainerBulkAction(
+            _server,
+            containerIds: ids(),
+            verb: ContainerBulkVerb.start,
+          ),
+          engine,
+        ),
+      );
+      expect(start.targetName, 'db-1');
+      expect(start.impact, isNull);
+
+      final remove = _planned(
+        await _plan(
+          ContainerBulkAction(
+            _server,
+            containerIds: ids(),
+            verb: ContainerBulkVerb.remove,
+          ),
+          engine,
+        ),
+      );
+      expect(remove.kind, OperationKind.removeContainer);
+      expect(_step(remove).method, 'DELETE');
+      expect(_step(remove).path, '/v1.52/containers/${idOf('db-1')}');
+      expect(_step(remove).query, {'v': '0', 'force': '0'});
+    });
+
+    test('the most guarded container sets the tier', () async {
+      engine.containers.add(
+        _container('agent', labels: {'coolify.managed': 'true'}),
+      );
+      engine.containers.add(
+        _container(
+          'sshd',
+          ports: [
+            {'PrivatePort': 22, 'PublicPort': 2222, 'Type': 'tcp'},
+          ],
+        ),
+      );
+      final plan = _planned(
+        await _plan(
+          ContainerBulkAction(
+            _server,
+            containerIds: ids(),
+            verb: ContainerBulkVerb.restart,
+          ),
+          engine,
+          protection: const ProtectionContext(sshPort: 2222),
+        ),
+      );
+      expect(plan.targetName, 'web-1, agent, sshd');
+      expect(plan.ownership?.manager, 'Coolify');
+      expect(plan.protected, ProtectedReason.publishesSessionPort);
+      expect(plan.impact?.kind, ImpactKind.dropsSession);
+      expect(plan.tier, ConfirmationTier.typedPhrase);
+    });
+
+    test('another manager\'s container alone needs the typed phrase', () async {
+      engine.containers.add(
+        _container('agent', labels: {'coolify.managed': 'true'}),
+      );
+      final plan = _planned(
+        await _plan(
+          ContainerBulkAction(
+            _server,
+            containerIds: ids(),
+            verb: ContainerBulkVerb.restart,
+          ),
+          engine,
+        ),
+      );
+      expect(plan.ownership?.manager, 'Coolify');
+      expect(plan.protected, isNull);
+      expect(plan.tier, ConfirmationTier.typedPhrase);
+    });
+
+    test(
+      'a mixed batch names the session port, which its impact follows',
+      () async {
+        engine.containers
+          ..add(_container('marked'))
+          ..add(
+            _container(
+              'sshd',
+              ports: [
+                {'PrivatePort': 22, 'PublicPort': 2222, 'Type': 'tcp'},
+              ],
+            ),
+          );
+        final plan = _planned(
+          await _plan(
+            ContainerBulkAction(
+              _server,
+              containerIds: ids(),
+              verb: ContainerBulkVerb.stop,
+            ),
+            engine,
+            protection: const ProtectionContext(
+              sshPort: 2222,
+              marks: {'marked'},
+            ),
+          ),
+        );
+        expect(plan.protected, ProtectedReason.publishesSessionPort);
+        expect(plan.impact?.kind, ImpactKind.dropsSession);
+      },
+    );
+
+    test('refuses a gone, short, repeated or missing id, too many, and a '
+        'verb no container takes', () async {
+      Future<ActionRefusalReason?> refusal(
+        List<String> containerIds, [
+        ContainerBulkVerb verb = ContainerBulkVerb.stop,
+      ]) async => (await _plan(
+        ContainerBulkAction(_server, containerIds: containerIds, verb: verb),
+        engine,
+      )).refusal;
+
+      expect(
+        await refusal([idOf('web-1'), _id('ffff')]),
+        ActionRefusalReason.targetChanged,
+      );
+      // The id filter matches a prefix; a plan needs the full id.
+      expect(
+        await refusal([idOf('web-1').substring(0, 12)]),
+        ActionRefusalReason.targetChanged,
+      );
+      expect(
+        await refusal([idOf('web-1'), idOf('web-1')]),
+        ActionRefusalReason.invalidTarget,
+      );
+      expect(await refusal([]), ActionRefusalReason.invalidTarget);
+      expect(await refusal(['']), ActionRefusalReason.invalidTarget);
+      expect(
+        await refusal([
+          for (var i = 0; i <= kContainerBulkMax; i++) _id('a$i'),
+        ]),
+        ActionRefusalReason.invalidTarget,
+      );
+      expect(
+        await refusal([idOf('cache-1')], ContainerBulkVerb.restart),
+        ActionRefusalReason.invalidTarget,
+      );
+    });
+
+    test('each verb takes the states its single action offers', () {
+      const states = [
+        'created',
+        'running',
+        'restarting',
+        'paused',
+        'removing',
+        'exited',
+        'dead',
+        null,
+      ];
+      expect(
+        {
+          for (final verb in ContainerBulkVerb.values)
+            verb: [
+              for (final state in states)
+                if (verb.appliesTo(state)) state,
+            ],
+        },
+        {
+          ContainerBulkVerb.start: ['created', 'exited', 'dead'],
+          ContainerBulkVerb.stop: ['running', 'restarting'],
+          ContainerBulkVerb.restart: ['running'],
+          ContainerBulkVerb.remove: ['created', 'exited', 'dead'],
+        },
+      );
+    });
+  });
+
   group('one-off commands (CTX-08)', () {
     late _Engine engine;
     setUp(() => engine = _Engine()..containers.add(_container('web-1')));
