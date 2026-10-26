@@ -60,6 +60,25 @@ Pre-import commits use original root paths; later commits use product prefixes.
 History-only parents preserve rejected code without enabling it. Do not
 squash the initial migration PR: original source ancestry must reach main.
 
+## Licensing
+
+- Hauntware's own code is Unlicense (`LICENSE`). Keep license statements in
+  the READMEs, the macOS `PRODUCT_COPYRIGHT`, the Linux copyright writers,
+  the licenses strings and the image label consistent with it; CI checks the
+  README and `PRODUCT_COPYRIGHT`.
+- Before adding a dependency, vendored file or bundled asset (fonts, images,
+  data), confirm its license allows redistribution in our artifacts. Never
+  vendor third-party code without its license file.
+- Flutter's NOTICES carries the pub packages' licenses. Anything else a
+  client bundles needs a Flutter license chunk in a package `LICENSE`
+  (ghost_fonts, pdfium_dart through its `tool/pdfium_licenses.py`, Séance's
+  app `LICENSE` for the Windows NuGet packages), and every Android Maven
+  license a text in the app's `android/app/config/`. The sync server's
+  notices come from `seance/scripts/licenses/`. The generators and the
+  AboutLibraries build fail on a component without license text; keep
+  `scripts/check-flutter-notices.sh`, `scripts/check-release-notices.sh`
+  and the APK and image checks passing.
+
 ## Releases and review
 
 Only root `scripts/release.sh` cuts suite releases through `lkm-release`.
