@@ -51,6 +51,7 @@ export 'src/parse/parse_result.dart';
 export 'src/parse/procs.dart';
 export 'src/parse/restarts.dart';
 export 'src/parse/smart.dart';
+export 'src/parse/sshd.dart';
 export 'src/parse/temps.dart';
 export 'src/parse/timers.dart';
 export 'src/parse/unit_details.dart';

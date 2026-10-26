@@ -33,6 +33,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         ProcsSelection,
         RestartCheck,
         SmartDisk,
+        SshdPosture,
         AccountsSnapshot,
         SystemdUnit,
         SystemctlVerb,
@@ -1263,6 +1264,17 @@ final class ReadPackages extends EngineRequest {
 /// memory maps. One [RestartReport] with [requestId] answers it.
 final class ReadRestarts extends EngineRequest {
   const ReadRestarts(this.serverId, {required this.requestId});
+
+  final String serverId;
+  final String requestId;
+}
+
+/// Reads [serverId]'s effective sshd configuration for the app's own
+/// connection (SEC-01, 03 §7.10): in admin mode only, since `sshd -T`
+/// loads the host keys. One [SshdPostureReport] with [requestId] answers
+/// it.
+final class ReadSshdPosture extends EngineRequest {
+  const ReadSshdPosture(this.serverId, {required this.requestId});
 
   final String serverId;
   final String requestId;
@@ -2764,6 +2776,50 @@ final class RestartReport extends EngineEvent {
   final String requestId;
   final RestartCheck? check;
   final RestartReportFailure? failure;
+}
+
+/// Why a [ReadSshdPosture] read nothing.
+enum SshdPostureFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// Admin mode is off for the server.
+  adminRequired,
+
+  /// Elevation refused, so nothing ran.
+  elevationRefused,
+
+  /// No sshd binary was found.
+  missing,
+
+  /// `sshd -T` refused, as for a broken configuration; the report's
+  /// detail carries its error.
+  refused,
+
+  /// The read printed something else.
+  unreadable,
+
+  /// The link failed while reading.
+  transport,
+}
+
+/// The answer to [ReadSshdPosture].
+final class SshdPostureReport extends EngineEvent {
+  const SshdPostureReport({
+    required this.serverId,
+    required this.requestId,
+    this.posture,
+    this.failure,
+    this.detail,
+  });
+
+  final String serverId;
+  final String requestId;
+  final SshdPosture? posture;
+  final SshdPostureFailure? failure;
+
+  /// sshd's error lines for [SshdPostureFailure.refused].
+  final String? detail;
 }
 
 /// Why a [ReadPackages] checked nothing.

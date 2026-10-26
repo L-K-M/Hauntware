@@ -119,6 +119,15 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         RestartCheck,
         RestartTool,
         kPackageUpdatesKept;
+// The System tab's SSH server section (SEC-01): what an
+// SshdPostureReport read.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show
+        SshdForwarding,
+        SshdForwardingBlock,
+        SshdMatchContext,
+        SshdPosture,
+        SshdRootLogin;
 // The Logs panel's boot picker and /var/log browser (LOG-08, LOG-09): a
 // HostResult's rows and the boot a source reads.
 export 'package:klabautermann_host/klabautermann_host.dart'

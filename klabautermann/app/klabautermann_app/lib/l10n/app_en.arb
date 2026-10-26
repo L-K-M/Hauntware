@@ -1861,6 +1861,143 @@
       }
     }
   },
+  "systemSshdTitle": "SSH server",
+  "@systemSshdTitle": {
+    "description": "System tab: the heading of the SSH server section (SEC-01)."
+  },
+  "systemSshdAdminNeeded": "Turn on admin mode to read the SSH server's settings: sshd needs root to print them.",
+  "@systemSshdAdminNeeded": {
+    "description": "System tab, SSH server: why the read waits for admin mode."
+  },
+  "systemSshdRead": "Read SSH server settings",
+  "@systemSshdRead": {
+    "description": "System tab, SSH server: the button that reads the settings."
+  },
+  "systemSshdReadAgain": "Read again",
+  "@systemSshdReadAgain": {
+    "description": "System tab, SSH server: the button that reads the settings again."
+  },
+  "systemSshdReading": "Reading the SSH server's settings…",
+  "@systemSshdReading": {
+    "description": "System tab, SSH server: shown while the settings are read."
+  },
+  "systemSshdFailed": "{reason, select, noLink{The server is not connected, so the SSH server's settings could not be read.} adminRequired{Admin mode ended before the SSH server's settings were read.} elevationRefused{Elevation was refused, so the SSH server's settings were not read.} missing{No sshd was found on this server.} refused{sshd refused to print its settings, as for an error in its configuration.} unreadable{sshd's settings could not be read.} transport{The connection failed while the SSH server's settings were read.} other{The SSH server's settings could not be read.}}",
+  "@systemSshdFailed": {
+    "description": "System tab, SSH server: why a read read nothing, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "systemSshdMatchRemote": "Match blocks for the server's own address or port are not applied: this sshd is too old to be told them.",
+  "@systemSshdMatchRemote": {
+    "description": "System tab, SSH server: the settings apply the Match blocks for the user and the device's address, but not those for the server's local address and port."
+  },
+  "systemSshdMatchNone": "No Match blocks are applied: these are sshd's settings before any Match block, as the read could not name this connection.",
+  "@systemSshdMatchNone": {
+    "description": "System tab, SSH server: the settings ignore every Match block in the configuration."
+  },
+  "systemSshdPorts": "Port",
+  "@systemSshdPorts": {
+    "description": "System tab, SSH server: the label of the ports sshd listens on."
+  },
+  "systemSshdListen": "Listens on",
+  "@systemSshdListen": {
+    "description": "System tab, SSH server: the label of the addresses and ports sshd listens on."
+  },
+  "systemSshdRootLogin": "Root login",
+  "@systemSshdRootLogin": {
+    "description": "System tab, SSH server: the label of whether root may log in (PermitRootLogin)."
+  },
+  "systemSshdRoot": "{value, select, yes{Allowed} no{Not allowed} keysOnly{With a key only} forcedCommandsOnly{Forced commands only} other{Unknown}}",
+  "@systemSshdRoot": {
+    "description": "System tab, SSH server: whether root may log in.",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "systemSshdPassword": "Password login",
+  "@systemSshdPassword": {
+    "description": "System tab, SSH server: the label of whether passwords are accepted (PasswordAuthentication)."
+  },
+  "systemSshdKeyboard": "Keyboard-interactive login",
+  "@systemSshdKeyboard": {
+    "description": "System tab, SSH server: the label of whether keyboard-interactive login is accepted, as for one-time codes (KbdInteractiveAuthentication)."
+  },
+  "systemSshdPubkey": "Key login",
+  "@systemSshdPubkey": {
+    "description": "System tab, SSH server: the label of whether public keys are accepted (PubkeyAuthentication)."
+  },
+  "systemSshdEnabled": "{state, select, true{On} false{Off} other{Unknown}}",
+  "@systemSshdEnabled": {
+    "description": "System tab, SSH server: whether a login method is accepted.",
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "systemSshdMethods": "Required login methods",
+  "@systemSshdMethods": {
+    "description": "System tab, SSH server: the label of the login methods every login must pass, in sshd's notation (AuthenticationMethods)."
+  },
+  "systemSshdHostKeys": "Host keys",
+  "@systemSshdHostKeys": {
+    "description": "System tab, SSH server: the label of the server's host key types."
+  },
+  "systemSshdUserKeys": "Accepted user key types",
+  "@systemSshdUserKeys": {
+    "description": "System tab, SSH server: the label of the user key types sshd accepts (PubkeyAcceptedAlgorithms)."
+  },
+  "systemSshdMaxSessions": "Sessions per connection",
+  "@systemSshdMaxSessions": {
+    "description": "System tab, SSH server: the label of how many sessions one connection may open at once (MaxSessions); the app needs several."
+  },
+  "systemSshdTcpForwarding": "TCP forwarding",
+  "@systemSshdTcpForwarding": {
+    "description": "System tab, SSH server: the label of whether ports may be forwarded (AllowTcpForwarding)."
+  },
+  "systemSshdSocketForwarding": "Socket forwarding",
+  "@systemSshdSocketForwarding": {
+    "description": "System tab, SSH server: the label of whether Unix sockets may be forwarded (AllowStreamLocalForwarding)."
+  },
+  "systemSshdForwarding": "{value, select, all{Allowed} local{Local only} remote{Remote only} no{Off} other{Unknown}}",
+  "@systemSshdForwarding": {
+    "description": "System tab, SSH server: whether forwarding is allowed, and in which direction.",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "systemSshdPermitOpen": "Forwarding targets",
+  "@systemSshdPermitOpen": {
+    "description": "System tab, SSH server: the label of where forwarded connections may go, in sshd's notation (PermitOpen); any means anywhere."
+  },
+  "systemSshdDocker": "Docker over SSH",
+  "@systemSshdDocker": {
+    "description": "System tab, SSH server: the label of whether sshd lets the app reach Docker's socket by forwarding it."
+  },
+  "systemSshdDockerAllowed": "Not blocked by sshd's settings",
+  "@systemSshdDockerAllowed": {
+    "description": "System tab, SSH server: no sshd setting blocks the forwarding of Docker's socket."
+  },
+  "systemSshdDockerBlocked": "Blocked by {settings}",
+  "@systemSshdDockerBlocked": {
+    "description": "System tab, SSH server: the sshd settings that block the forwarding of Docker's socket; settings lists their names as in sshd_config.",
+    "placeholders": {
+      "settings": {
+        "type": "String"
+      }
+    }
+  },
+  "systemSshdDockerNote": "A key's options in authorized_keys, such as restrict, can block it too; sshd does not show those.",
+  "@systemSshdDockerNote": {
+    "description": "System tab, SSH server: why Docker may still be blocked when no setting blocks it."
+  },
   "systemAccountsTitle": "Users",
   "@systemAccountsTitle": {
     "description": "System tab: heading of the section listing the server's accounts and who is logged in (ACC-01, ACC-02)."
