@@ -15,8 +15,9 @@ typedef ProcessorFact =
 /// CPU-07's section of the System tab: the processor's model and how many
 /// sockets, cores and threads it has. It reads when it shows and on
 /// request; a server switch reads the new server's. Inside a container
-/// ([inContainer]) the counts other than the usable CPUs are the host
-/// machine's, so they show as unknown with D50's reason.
+/// ([inContainer]) the socket, core and logical CPU counts are the host
+/// machine's, so they show as unknown with D50's reason; threads per core,
+/// a property of each core, and the usable CPUs stay.
 class ProcessorSection extends StatefulWidget {
   const ProcessorSection({
     super.key,

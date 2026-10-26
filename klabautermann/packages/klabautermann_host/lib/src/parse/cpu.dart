@@ -31,7 +31,8 @@ final class CpuTopology {
   /// `lscpu`'s vendor ID, such as `GenuineIntel` or `ARM`.
   final String? vendor;
 
-  /// The CPUs the kernel counts, online or not.
+  /// The CPUs the kernel counts: `lscpu`'s count includes offline ones,
+  /// `/proc/cpuinfo`, the fallback, lists only those online.
   final int? logicalCpus;
 
   /// The CPUs the login's processes may run on (`nproc`): fewer than
@@ -76,7 +77,8 @@ CpuTopology? parseCpuTopology(String raw) {
     return null;
   }
 
-  final usable = int.tryParse(lines.sublist(1, lscpuAt).join().trim());
+  // One line, `nproc`'s or `getconf`'s.
+  final usable = lscpuAt == 2 ? _count(lines[1]) : null;
   final fields = _lscpuFields(lines.sublist(lscpuAt + 1, infoAt).join('\n'));
   final info = _CpuInfo.parse(lines.sublist(infoAt + 1));
 
@@ -112,11 +114,13 @@ CpuTopology? parseCpuTopology(String raw) {
     vendor: _text(field('Vendor ID')),
     logicalCpus: _count(field('CPU(s)')) ?? info.processors,
     usableCpus: usable,
-    sockets: groups.isEmpty ? info.sockets : _maxOf(groups, _sockets),
-    cores: groups.isEmpty ? info.cores : _coresOf(groups),
-    threadsPerCore: groups.isEmpty
-        ? info.threadsPerCore
-        : _maxOf(groups, _threadsPerCore),
+    // lscpu's figures first; a field it leaves out or prints as `-`
+    // falls back to the CPUs /proc/cpuinfo places.
+    sockets: (groups.isEmpty ? null : _maxOf(groups, _sockets)) ?? info.sockets,
+    cores: (groups.isEmpty ? null : _coresOf(groups)) ?? info.cores,
+    threadsPerCore:
+        (groups.isEmpty ? null : _maxOf(groups, _threadsPerCore)) ??
+        info.threadsPerCore,
   );
 }
 

@@ -1480,7 +1480,7 @@
   },
   "systemProcessorUsable": "Usable CPUs",
   "@systemProcessorUsable": {
-    "description": "System tab, Processor: the label of how many CPUs the login's processes may run on, fewer than the logical CPUs under a CPU limit."
+    "description": "System tab, Processor: the label of how many CPUs the login's processes may run on: fewer than the logical CPUs when the processes are pinned to some of them, as in a container given a CPU set. A CPU time quota does not lower it."
   },
   "systemProcessorFailed": "{failure, select, noLink{Not connected to the server.} denied{The server refused the processor read.} missing{The server lacks the tools the processor read runs.} other{The processor read failed.}}",
   "@systemProcessorFailed": {

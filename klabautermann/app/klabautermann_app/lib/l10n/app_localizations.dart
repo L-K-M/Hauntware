@@ -1882,7 +1882,7 @@ abstract class AppLocalizations {
   /// **'Logical CPUs'**
   String get systemProcessorLogical;
 
-  /// System tab, Processor: the label of how many CPUs the login's processes may run on, fewer than the logical CPUs under a CPU limit.
+  /// System tab, Processor: the label of how many CPUs the login's processes may run on: fewer than the logical CPUs when the processes are pinned to some of them, as in a container given a CPU set. A CPU time quota does not lower it.
   ///
   /// In en, this message translates to:
   /// **'Usable CPUs'**

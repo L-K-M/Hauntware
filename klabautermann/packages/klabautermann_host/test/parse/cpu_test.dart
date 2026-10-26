@@ -146,6 +146,29 @@ void main() {
     expect((cpu.sockets, cpu.cores, cpu.threadsPerCore), (1, 2, 2));
   });
 
+  test('a figure lscpu leaves out falls back to /proc/cpuinfo', () {
+    final cpu = parseCpuTopology(
+      _read(
+        lscpu: [_f('CPU(s)', '2'), _f('Model name', 'QEMU Virtual CPU')],
+        cpuinfo: [
+          for (final n in [0, 1]) ...[
+            'processor\t: $n',
+            'physical id\t: 0',
+            'core id\t\t: $n',
+          ],
+        ],
+      ),
+    )!;
+    expect(cpu.models, ['QEMU Virtual CPU']);
+    expect((cpu.sockets, cpu.cores, cpu.threadsPerCore), (1, 2, 1));
+  });
+
+  test('a usable CPU count that is not one positive number is unknown', () {
+    for (final nproc in ['0', '2\n3', 'x']) {
+      expect(parseCpuTopology(_read(nproc: nproc))!.usableCpus, isNull);
+    }
+  });
+
   test('arm64 /proc/cpuinfo names no model and places no CPU', () {
     final cpu = parseCpuTopology(
       _read(cpuinfo: ['processor\t: 0', 'processor\t: 1']),
