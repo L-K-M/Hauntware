@@ -16,6 +16,7 @@ import 'charts/charts.dart' show BarSegment, ChartUnit, StackedBar;
 import 'disk_activity.dart';
 import 'drive_health.dart';
 import 'gpus.dart';
+import 'listening_ports.dart';
 import 'oom_kills.dart';
 import 'power.dart';
 import 'sortable_table.dart';
@@ -35,6 +36,7 @@ enum SystemSection {
   temperatures,
   gpus,
   oomKills,
+  ports,
   boots,
   driveHealth,
   updates,
@@ -220,6 +222,11 @@ class _SystemPanelState extends State<SystemPanel> {
               ?gpus,
               OomKillsSection(
                 key: const ValueKey(SystemSection.oomKills),
+                monitoring: widget.monitoring,
+                serverId: widget.serverId,
+              ),
+              ListeningPortsSection(
+                key: const ValueKey(SystemSection.ports),
                 monitoring: widget.monitoring,
                 serverId: widget.serverId,
               ),

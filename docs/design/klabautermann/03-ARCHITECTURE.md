@@ -3386,6 +3386,17 @@ the guarded kill needs it.
   listening socket with `userland-proxy: false` [U]); firewall view (`ufw
   status verbose`, `nft -j list ruleset`, `firewall-cmd --list-all-zones`,
   `iptables-save`; admin mode); local port forward (5.11).
+- **As built (M6 N34a).** NET-04 is a host query,
+  `ListeningPortsQuery`, which the System tab's Listening ports section
+  runs when it shows and on request. It runs `ss -Htulpn`, or BusyBox's
+  `netstat -tulpn` where there is no `ss`, and reads each named
+  process's `/proc/<pid>/cgroup`, so PRC-05's attribution gives each
+  port's systemd unit or container. The login user sees only its own
+  processes' sockets' owners; the section says when others are hidden.
+  Sockets the same processes hold on one port, as a daemon's IPv4 and
+  IPv6 listeners, share a row. Merging in Docker's published ports,
+  which with `userland-proxy: false` have no listening socket, and
+  reading other users' owners in admin mode follow in N34b.
 - **v1.x.** Exposure map (the device probe is the ground truth and is
   labelled with its vantage point; Docker-published ports bypass ufw INPUT
   rules unless `DOCKER-USER` restricts them [U: current wording]); routes and

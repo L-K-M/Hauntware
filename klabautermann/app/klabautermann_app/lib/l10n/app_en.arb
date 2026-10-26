@@ -1536,6 +1536,100 @@
       }
     }
   },
+  "systemPortsTitle": "Listening ports",
+  "@systemPortsTitle": {
+    "description": "System tab: the heading of the listening ports section (NET-04)."
+  },
+  "systemPortsReading": "Reading the listening ports…",
+  "@systemPortsReading": {
+    "description": "System tab, Listening ports: shown while the ports are read."
+  },
+  "systemPortsReadAgain": "Read again",
+  "@systemPortsReadAgain": {
+    "description": "System tab, Listening ports: the button that reads the ports again."
+  },
+  "systemPortsFailed": "{failure, select, noLink{Not connected to the server.} denied{The server refused the port read.} missing{The server lacks the tools the port read runs.} other{The port read failed.}}",
+  "@systemPortsFailed": {
+    "description": "System tab, Listening ports: why the port read read nothing, by reason.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "systemPortsNoTool": "The server has neither ss nor netstat, so its ports cannot be listed.",
+  "@systemPortsNoTool": {
+    "description": "System tab, Listening ports: shown when neither listing tool is installed. ss and netstat are command names, never translated."
+  },
+  "systemPortsHidden": "Some ports belong to other users' processes, whose names only root may see.",
+  "@systemPortsHidden": {
+    "description": "System tab, Listening ports: shown when the login user could not see which process holds some sockets."
+  },
+  "systemPortsNone": "Nothing listens on this server.",
+  "@systemPortsNone": {
+    "description": "System tab, Listening ports: shown when no socket listens."
+  },
+  "systemPortsEvery": "{protocol, select, tcp{TCP} udp{UDP} other{{protocol}}} {port} on every address",
+  "@systemPortsEvery": {
+    "description": "System tab, Listening ports: a port that accepts connections on all of the server's addresses.",
+    "placeholders": {
+      "protocol": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "systemPortsOn": "{protocol, select, tcp{TCP} udp{UDP} other{{protocol}}} {port} on {addresses}",
+  "@systemPortsOn": {
+    "description": "System tab, Listening ports: a port that accepts connections only on the listed addresses, such as 127.0.0.1.",
+    "placeholders": {
+      "protocol": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int"
+      },
+      "addresses": {
+        "type": "String"
+      }
+    }
+  },
+  "systemPortsProcess": "{name} (PID {pid})",
+  "@systemPortsProcess": {
+    "description": "System tab, Listening ports: a process holding the port, by its command name and process ID.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "pid": {
+        "type": "int"
+      }
+    }
+  },
+  "systemPortsOwnerHidden": "Held by another user's process",
+  "@systemPortsOwnerHidden": {
+    "description": "System tab, Listening ports: shown under a port whose process the login user may not see."
+  },
+  "systemPortsUnit": "Unit {unit}",
+  "@systemPortsUnit": {
+    "description": "System tab, Listening ports: the systemd unit the process runs in, such as nginx.service.",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "systemPortsContainer": "Container {id}",
+  "@systemPortsContainer": {
+    "description": "System tab, Listening ports: the container the process runs in, by its short ID.",
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
   "systemBootsTimelineTitle": "Boot timeline",
   "@systemBootsTimelineTitle": {
     "description": "System tab, Boots: the heading over the list of boots, newest first (BOOT-02)."

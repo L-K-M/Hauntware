@@ -23,6 +23,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         KillSignal,
         LoadAvg,
         LogFileEntry,
+        ListeningPortsRead,
         OomKillsRead,
         LoggedCronRun,
         NetRate,
@@ -743,6 +744,12 @@ final class ProcessDetailQuery extends HostQuerySpec {
 /// names (MEM-03), as [OomKills].
 final class OomKillsQuery extends HostQuerySpec {
   const OomKillsQuery();
+}
+
+/// The listening TCP and bound UDP sockets with their processes and
+/// those processes' units and containers (NET-04), as [ListeningPorts].
+final class ListeningPortsQuery extends HostQuerySpec {
+  const ListeningPortsQuery();
 }
 
 /// How the boots before the current one ended (BOOT-02), as [BootEnds]:
@@ -2116,6 +2123,13 @@ final class OomKills extends HostPayload {
   const OomKills(this.read);
 
   final OomKillsRead read;
+}
+
+/// [ListeningPortsQuery]'s sockets.
+final class ListeningPorts extends HostPayload {
+  const ListeningPorts(this.read);
+
+  final ListeningPortsRead read;
 }
 
 /// [BootEndsQuery]'s ends by boot ID; a boot it did not read is absent.

@@ -1364,6 +1364,75 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get systemPortsTitle => 'Listening ports';
+
+  @override
+  String get systemPortsReading => 'Reading the listening ports…';
+
+  @override
+  String get systemPortsReadAgain => 'Read again';
+
+  @override
+  String systemPortsFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server refused the port read.',
+      'missing': 'The server lacks the tools the port read runs.',
+      'other': 'The port read failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemPortsNoTool =>
+      'The server has neither ss nor netstat, so its ports cannot be listed.';
+
+  @override
+  String get systemPortsHidden =>
+      'Some ports belong to other users\' processes, whose names only root may see.';
+
+  @override
+  String get systemPortsNone => 'Nothing listens on this server.';
+
+  @override
+  String systemPortsEvery(String protocol, int port) {
+    String _temp0 = intl.Intl.selectLogic(protocol, {
+      'tcp': 'TCP',
+      'udp': 'UDP',
+      'other': '$protocol',
+    });
+    return '$_temp0 $port on every address';
+  }
+
+  @override
+  String systemPortsOn(String protocol, int port, String addresses) {
+    String _temp0 = intl.Intl.selectLogic(protocol, {
+      'tcp': 'TCP',
+      'udp': 'UDP',
+      'other': '$protocol',
+    });
+    return '$_temp0 $port on $addresses';
+  }
+
+  @override
+  String systemPortsProcess(String name, int pid) {
+    return '$name (PID $pid)';
+  }
+
+  @override
+  String get systemPortsOwnerHidden => 'Held by another user\'s process';
+
+  @override
+  String systemPortsUnit(String unit) {
+    return 'Unit $unit';
+  }
+
+  @override
+  String systemPortsContainer(String id) {
+    return 'Container $id';
+  }
+
+  @override
   String get systemBootsTimelineTitle => 'Boot timeline';
 
   @override
