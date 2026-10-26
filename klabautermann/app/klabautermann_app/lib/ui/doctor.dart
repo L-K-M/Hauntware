@@ -253,7 +253,8 @@ List<DoctorCheck> _packages(DoctorInputs inputs) {
 DoctorCheck _timeSync(HostProfile? profile, Duration? skew) {
   const kind = DoctorCheckKind.timeSync;
   final synchronized = profile?.ntpSynchronized;
-  if (synchronized == false || profile?.ntpEnabled == false) {
+  if (synchronized == false ||
+      (synchronized == null && profile?.ntpEnabled == false)) {
     return DoctorCheck(kind, DoctorVerdict.problem, skew: skew);
   }
   if (skew != null && skew.abs() >= kClockInStep) {

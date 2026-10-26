@@ -51,6 +51,24 @@ Map<DoctorCheckKind, DoctorCheck> _byKind(DoctorInputs inputs) => {
 };
 
 void main() {
+  test('a clock the kernel says is synchronized passes with timedated\'s '
+      'NTP switch off, as under chrony, and the switch decides only when '
+      'the kernel flag is unknown', () {
+    DoctorVerdict timeSync(HostProfile profile) => _byKind(
+      DoctorInputs(now: _now, profile: profile),
+    )[DoctorCheckKind.timeSync]!.verdict;
+
+    expect(
+      timeSync(HostProfile(ntpEnabled: false, ntpSynchronized: true)),
+      DoctorVerdict.ok,
+    );
+    expect(
+      timeSync(HostProfile(ntpEnabled: true, ntpSynchronized: false)),
+      DoctorVerdict.problem,
+    );
+    expect(timeSync(HostProfile(ntpEnabled: false)), DoctorVerdict.problem);
+  });
+
   test('a healthy server passes every check, in the checklist order', () {
     final checks = doctorChecks(
       DoctorInputs(
