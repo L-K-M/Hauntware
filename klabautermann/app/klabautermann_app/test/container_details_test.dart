@@ -873,11 +873,25 @@ void main() {
         findsNothing,
       );
 
+      // A read again while revealed answers masked.
+      await tester.ensureVisible(reveal);
+      await tester.tap(reveal);
+      await tester.pumpAndSettle();
+      final readAgain = _inDetails(find.text('Read again'));
+      await tester.ensureVisible(readAgain);
+      await tester.tap(readAgain);
+      await tester.pumpAndSettle();
+      await harness.emit(tester, dockerAnswer(tops(harness).last, top));
+      expect(
+        _inDetails(find.text('postgres -c password=s3cret')),
+        findsNothing,
+      );
+
       final again = _inDetails(find.text('Read again'));
       await tester.ensureVisible(again);
       await tester.tap(again);
       await tester.pumpAndSettle();
-      expect(tops(harness), hasLength(2));
+      expect(tops(harness), hasLength(3));
       await harness.emit(
         tester,
         dockerAnswer(
