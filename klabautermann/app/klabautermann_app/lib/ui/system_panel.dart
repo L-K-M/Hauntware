@@ -17,6 +17,7 @@ import 'disk_activity.dart';
 import 'drive_health.dart';
 import 'gpus.dart';
 import 'mounts.dart';
+import 'oom_kills.dart';
 import 'power.dart';
 import 'sortable_table.dart';
 import 'system_view.dart';
@@ -35,6 +36,7 @@ enum SystemSection {
   swap,
   temperatures,
   gpus,
+  oomKills,
   boots,
   driveHealth,
   updates,
@@ -222,6 +224,11 @@ class _SystemPanelState extends State<SystemPanel> {
               ),
               ?temperatures,
               ?gpus,
+              OomKillsSection(
+                key: const ValueKey(SystemSection.oomKills),
+                monitoring: widget.monitoring,
+                serverId: widget.serverId,
+              ),
               BootsSection(
                 key: const ValueKey(SystemSection.boots),
                 monitoring: widget.monitoring,

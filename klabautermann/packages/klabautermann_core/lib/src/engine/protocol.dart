@@ -22,6 +22,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         KillSignal,
         LoadAvg,
         LogFileEntry,
+        OomKillsRead,
         LoggedCronRun,
         NetRate,
         OpDirectoryKind,
@@ -725,6 +726,12 @@ final class VarLogQuery extends HostQuerySpec {
 /// older ones and where the probe found no version.
 final class BootsQuery extends HostQuerySpec {
   const BootsQuery();
+}
+
+/// The kills since boot and the current boot's OOM kills the kernel log
+/// names (MEM-03), as [OomKills].
+final class OomKillsQuery extends HostQuerySpec {
+  const OomKillsQuery();
 }
 
 /// How the boots before the current one ended (BOOT-02), as [BootEnds]:
@@ -2070,6 +2077,13 @@ final class JournalBoots extends HostPayload {
   const JournalBoots(this.boots);
 
   final List<JournalBootEntry> boots;
+}
+
+/// [OomKillsQuery]'s kills.
+final class OomKills extends HostPayload {
+  const OomKills(this.read);
+
+  final OomKillsRead read;
 }
 
 /// [BootEndsQuery]'s ends by boot ID; a boot it did not read is absent.
