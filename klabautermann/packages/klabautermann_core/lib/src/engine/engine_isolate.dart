@@ -24,6 +24,7 @@ import 'package:seance_core/seance_core.dart'
 import '../admin/admin_mode.dart';
 import '../audit/audit_log.dart';
 import '../audit/host_audit_line.dart';
+import '../admin/firewall.dart';
 import '../admin/restarts.dart';
 import '../admin/safety_policy.dart';
 import '../admin/smart.dart';
@@ -1808,6 +1809,34 @@ void engineMain(
           ).then(
             uiPort.send,
             onError: (Object _) => fail(RestartReportFailure.transport),
+          ),
+        );
+      case ReadFirewall(:final serverId, :final requestId):
+        void fail(FirewallReportFailure failure) => uiPort.send(
+          FirewallReport(
+            serverId: serverId,
+            requestId: requestId,
+            failure: failure,
+          ),
+        );
+        if (links?.link(serverId) == null) {
+          fail(FirewallReportFailure.noLink);
+          return;
+        }
+        final session = admin?.session(serverId);
+        if (session == null) {
+          fail(FirewallReportFailure.adminRequired);
+          return;
+        }
+        admin?.touch(serverId);
+        unawaited(
+          lendSession(
+            serverId,
+            () =>
+                readFirewall(serverId, requestId: requestId, session: session),
+          ).then(
+            uiPort.send,
+            onError: (Object _) => fail(FirewallReportFailure.transport),
           ),
         );
       case ReadSshdPosture(:final serverId, :final requestId):

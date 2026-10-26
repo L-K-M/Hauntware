@@ -1784,6 +1784,146 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get systemFirewallTitle => 'Firewall';
+
+  @override
+  String get systemFirewallAdminNeeded =>
+      'Turn on admin mode to read the firewall: every firewall tool needs root to list its rules.';
+
+  @override
+  String get systemFirewallRead => 'Read firewall rules';
+
+  @override
+  String get systemFirewallReadAgain => 'Read again';
+
+  @override
+  String get systemFirewallReading => 'Reading the firewall rules…';
+
+  @override
+  String systemFirewallFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noLink':
+          'The server is not connected, so the firewall could not be read.',
+      'adminRequired': 'Admin mode ended before the firewall was read.',
+      'elevationRefused':
+          'Elevation was refused, so the firewall was not read.',
+      'unreadable':
+          'The firewall tools answered in a way this app cannot read.',
+      'transport': 'The connection failed while the firewall was read.',
+      'other': 'The firewall could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemFirewallNoTool =>
+      'No firewall tool was found on this server: none of ufw, firewalld, nft or iptables is installed.';
+
+  @override
+  String get systemFirewallUfw => 'ufw';
+
+  @override
+  String get systemFirewallFirewalld => 'firewalld';
+
+  @override
+  String get systemFirewallNftables => 'nftables';
+
+  @override
+  String get systemFirewallIptables => 'iptables (IPv4)';
+
+  @override
+  String get systemFirewallIp6tables => 'ip6tables (IPv6)';
+
+  @override
+  String systemFirewallActive(String active) {
+    String _temp0 = intl.Intl.selectLogic(active, {
+      'true': 'Active',
+      'other': 'Inactive: ufw filters nothing',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String systemFirewallRunning(String running) {
+    String _temp0 = intl.Intl.selectLogic(running, {
+      'true': 'Running',
+      'other': 'Not running',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String systemFirewallUfwDefaults(
+    String incoming,
+    String outgoing,
+    String routed,
+  ) {
+    return 'By default: incoming $incoming, outgoing $outgoing, routed $routed';
+  }
+
+  @override
+  String systemFirewallUfwRule(String to, String action, String from) {
+    return '$to: $action from $from';
+  }
+
+  @override
+  String get systemFirewallNoRules => 'No rules.';
+
+  @override
+  String systemFirewallZoneDefault(String zone) {
+    return '$zone (default zone)';
+  }
+
+  @override
+  String systemFirewallZoneInterfaces(String interfaces) {
+    return 'Interfaces: $interfaces';
+  }
+
+  @override
+  String systemFirewallZoneSources(String sources) {
+    return 'Sources: $sources';
+  }
+
+  @override
+  String systemFirewallZoneServices(String services) {
+    return 'Services allowed: $services';
+  }
+
+  @override
+  String systemFirewallZonePorts(String ports) {
+    return 'Ports allowed: $ports';
+  }
+
+  @override
+  String get systemFirewallNone => 'none';
+
+  @override
+  String systemFirewallZonesIdle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count other zones have no interface or source.',
+      one: '1 other zone has no interface or source.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String systemFirewallChain(String chain, String policy, int rules) {
+    String _temp0 = intl.Intl.pluralLogic(
+      rules,
+      locale: localeName,
+      other: '$rules rules',
+      one: '1 rule',
+      zero: 'no rules',
+    );
+    return '$chain: policy $policy, $_temp0';
+  }
+
+  @override
+  String get systemFirewallNoPolicy => 'none';
+
+  @override
   String get systemSshdTitle => 'SSH server';
 
   @override

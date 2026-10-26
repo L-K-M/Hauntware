@@ -2057,6 +2057,188 @@
       }
     }
   },
+  "systemFirewallTitle": "Firewall",
+  "@systemFirewallTitle": {
+    "description": "System tab: the heading of the firewall section (NET-06)."
+  },
+  "systemFirewallAdminNeeded": "Turn on admin mode to read the firewall: every firewall tool needs root to list its rules.",
+  "@systemFirewallAdminNeeded": {
+    "description": "System tab, Firewall: why the read waits for admin mode."
+  },
+  "systemFirewallRead": "Read firewall rules",
+  "@systemFirewallRead": {
+    "description": "System tab, Firewall: the button that reads the rules."
+  },
+  "systemFirewallReadAgain": "Read again",
+  "@systemFirewallReadAgain": {
+    "description": "System tab, Firewall: the button that reads the rules again."
+  },
+  "systemFirewallReading": "Reading the firewall rules…",
+  "@systemFirewallReading": {
+    "description": "System tab, Firewall: shown while the rules are read."
+  },
+  "systemFirewallFailed": "{reason, select, noLink{The server is not connected, so the firewall could not be read.} adminRequired{Admin mode ended before the firewall was read.} elevationRefused{Elevation was refused, so the firewall was not read.} unreadable{The firewall tools answered in a way this app cannot read.} transport{The connection failed while the firewall was read.} other{The firewall could not be read.}}",
+  "@systemFirewallFailed": {
+    "description": "System tab, Firewall: why a read read nothing, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "systemFirewallNoTool": "No firewall tool was found on this server: none of ufw, firewalld, nft or iptables is installed.",
+  "@systemFirewallNoTool": {
+    "description": "System tab, Firewall: the read found no firewall tool."
+  },
+  "systemFirewallUfw": "ufw",
+  "@systemFirewallUfw": {
+    "description": "System tab, Firewall: the heading of ufw's rules; a product name."
+  },
+  "systemFirewallFirewalld": "firewalld",
+  "@systemFirewallFirewalld": {
+    "description": "System tab, Firewall: the heading of firewalld's zones; a product name."
+  },
+  "systemFirewallNftables": "nftables",
+  "@systemFirewallNftables": {
+    "description": "System tab, Firewall: the heading of the nftables chains; a product name."
+  },
+  "systemFirewallIptables": "iptables (IPv4)",
+  "@systemFirewallIptables": {
+    "description": "System tab, Firewall: the heading of the IPv4 iptables chains."
+  },
+  "systemFirewallIp6tables": "ip6tables (IPv6)",
+  "@systemFirewallIp6tables": {
+    "description": "System tab, Firewall: the heading of the IPv6 iptables chains."
+  },
+  "systemFirewallActive": "{active, select, true{Active} other{Inactive: ufw filters nothing}}",
+  "@systemFirewallActive": {
+    "description": "System tab, Firewall: whether ufw is enabled.",
+    "placeholders": {
+      "active": {
+        "type": "String"
+      }
+    }
+  },
+  "systemFirewallRunning": "{running, select, true{Running} other{Not running}}",
+  "@systemFirewallRunning": {
+    "description": "System tab, Firewall: whether firewalld runs.",
+    "placeholders": {
+      "running": {
+        "type": "String"
+      }
+    }
+  },
+  "systemFirewallUfwDefaults": "By default: incoming {incoming}, outgoing {outgoing}, routed {routed}",
+  "@systemFirewallUfwDefaults": {
+    "description": "System tab, Firewall: ufw's default policy per direction, each as ufw names it (deny, allow, reject, disabled).",
+    "placeholders": {
+      "incoming": {
+        "type": "String"
+      },
+      "outgoing": {
+        "type": "String"
+      },
+      "routed": {
+        "type": "String"
+      }
+    }
+  },
+  "systemFirewallUfwRule": "{to}: {action} from {from}",
+  "@systemFirewallUfwRule": {
+    "description": "System tab, Firewall: one ufw rule, its parts as ufw prints them, such as 22/tcp: ALLOW IN from Anywhere.",
+    "placeholders": {
+      "to": {
+        "type": "String"
+      },
+      "action": {
+        "type": "String"
+      },
+      "from": {
+        "type": "String"
+      }
+    }
+  },
+  "systemFirewallNoRules": "No rules.",
+  "@systemFirewallNoRules": {
+    "description": "System tab, Firewall: a tool that holds no rules."
+  },
+  "systemFirewallZoneDefault": "{zone} (default zone)",
+  "@systemFirewallZoneDefault": {
+    "description": "System tab, Firewall: the firewalld zone new interfaces join.",
+    "placeholders": {
+      "zone": {
+        "type": "String"
+      }
+    }
+  },
+  "systemFirewallZoneInterfaces": "Interfaces: {interfaces}",
+  "@systemFirewallZoneInterfaces": {
+    "description": "System tab, Firewall: the interfaces bound to a firewalld zone.",
+    "placeholders": {
+      "interfaces": {
+        "type": "String"
+      }
+    }
+  },
+  "systemFirewallZoneSources": "Sources: {sources}",
+  "@systemFirewallZoneSources": {
+    "description": "System tab, Firewall: the source addresses bound to a firewalld zone.",
+    "placeholders": {
+      "sources": {
+        "type": "String"
+      }
+    }
+  },
+  "systemFirewallZoneServices": "Services allowed: {services}",
+  "@systemFirewallZoneServices": {
+    "description": "System tab, Firewall: the services a firewalld zone lets in.",
+    "placeholders": {
+      "services": {
+        "type": "String"
+      }
+    }
+  },
+  "systemFirewallZonePorts": "Ports allowed: {ports}",
+  "@systemFirewallZonePorts": {
+    "description": "System tab, Firewall: the ports a firewalld zone lets in beside its services.",
+    "placeholders": {
+      "ports": {
+        "type": "String"
+      }
+    }
+  },
+  "systemFirewallNone": "none",
+  "@systemFirewallNone": {
+    "description": "System tab, Firewall: a firewalld zone that allows no service."
+  },
+  "systemFirewallZonesIdle": "{count, plural, =1{1 other zone has no interface or source.} other{{count} other zones have no interface or source.}}",
+  "@systemFirewallZonesIdle": {
+    "description": "System tab, Firewall: zones that apply to no traffic, not listed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemFirewallChain": "{chain}: policy {policy}, {rules, plural, =0{no rules} =1{1 rule} other{{rules} rules}}",
+  "@systemFirewallChain": {
+    "description": "System tab, Firewall: one chain, named by its family, table and name, with its default policy as the tool prints it (accept, drop) and how many rules it holds.",
+    "placeholders": {
+      "chain": {
+        "type": "String"
+      },
+      "policy": {
+        "type": "String"
+      },
+      "rules": {
+        "type": "int"
+      }
+    }
+  },
+  "systemFirewallNoPolicy": "none",
+  "@systemFirewallNoPolicy": {
+    "description": "System tab, Firewall: a chain without a default policy, which only other chains jump to."
+  },
   "systemSshdTitle": "SSH server",
   "@systemSshdTitle": {
     "description": "System tab: the heading of the SSH server section (SEC-01)."

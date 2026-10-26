@@ -129,6 +129,17 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         RestartCheck,
         RestartTool,
         kPackageUpdatesKept;
+// The System tab's Firewall section (NET-06): what a FirewallReport
+// read.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show
+        FirewallChain,
+        FirewallRead,
+        FirewalldStatus,
+        FirewalldZone,
+        UfwRule,
+        UfwStatus;
+
 // The System tab's SSH server section (SEC-01): what an
 // SshdPostureReport read.
 export 'package:klabautermann_host/klabautermann_host.dart'

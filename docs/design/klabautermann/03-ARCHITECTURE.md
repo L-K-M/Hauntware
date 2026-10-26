@@ -3438,6 +3438,18 @@ the guarded kill needs it.
   have one, and shows each interface's current rates from the `core`
   stream's per-interface rates. 02's `ss -s` is not read: the files
   answer without `iproute2`.
+- **As built (M6 N35).** NET-06 is one elevated read in admin mode, as
+  ufw, firewalld, nft and iptables all need root. It prints `ufw status
+  verbose`, firewalld's state and, while it runs, `firewall-cmd
+  --list-all-zones`, `nft -j list ruleset`, `iptables-save` and
+  `ip6tables-save`, each after its marker, only where the tool is
+  installed, and each cut to 4,000 lines. The System tab's Firewall
+  section reads it on request. It shows ufw's state, default policies
+  and rules, and firewalld's default and active zones with their
+  interfaces, sources, services and ports. For nftables and both
+  iptables families it shows each chain with a policy or rules, with
+  its policy and rule count. A host with none of the tools says so.
+  Rules are read, never changed.
 - **v1.x.** Exposure map (the device probe is the ground truth and is
   labelled with its vantage point; Docker-published ports bypass ufw INPUT
   rules unless `DOCKER-USER` restricts them [U: current wording]); routes and
