@@ -1798,6 +1798,84 @@ abstract class AppLocalizations {
   /// **'Boots'**
   String get systemBootsTitle;
 
+  /// A mount's details sheet, while it reads the mount's source and options (DSK-05).
+  ///
+  /// In en, this message translates to:
+  /// **'Reading mount options…'**
+  String get systemMountReading;
+
+  /// A mount's details sheet when its source and options could not be read.
+  ///
+  /// In en, this message translates to:
+  /// **'Mount options could not be read. {failure, select, noLink{Not connected to the server.} denied{The server denied the read.} missing{The server lacks a tool this read needs.} other{The read failed.}}'**
+  String systemMountFailed(String failure);
+
+  /// A mount's details sheet when the mount read no longer lists the mount point.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is mounted here any more.'**
+  String get systemMountGone;
+
+  /// Label of the device, share or image a filesystem is mounted from.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get systemMountSource;
+
+  /// Label of a mount's options, such as rw and relatime.
+  ///
+  /// In en, this message translates to:
+  /// **'Options'**
+  String get systemMountOptions;
+
+  /// A mount's details sheet when the filesystem is mounted read-only.
+  ///
+  /// In en, this message translates to:
+  /// **'Mounted read-only'**
+  String get systemMountReadOnly;
+
+  /// Heading of the System tab's swap devices section (DSK-14).
+  ///
+  /// In en, this message translates to:
+  /// **'Swap'**
+  String get systemSwapTitle;
+
+  /// The swap section while it reads the swap devices.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading swap devices…'**
+  String get systemSwapReading;
+
+  /// The swap section when the server uses no swap.
+  ///
+  /// In en, this message translates to:
+  /// **'No swap devices are in use.'**
+  String get systemSwapNone;
+
+  /// The swap section when the swap devices could not be read.
+  ///
+  /// In en, this message translates to:
+  /// **'Swap devices could not be read. {failure, select, noLink{Not connected to the server.} denied{The server denied the read.} missing{The server lacks a tool this read needs.} other{The read failed.}}'**
+  String systemSwapFailed(String failure);
+
+  /// How much of a swap device is used, out of its size.
+  ///
+  /// In en, this message translates to:
+  /// **'{used} used of {size}'**
+  String systemSwapUsage(String used, String size);
+
+  /// What a swap device is (a disk partition or a file) and its priority; higher is used first.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, partition{Partition} file{File} other{Swap device}}, priority {priority}'**
+  String systemSwapDetail(String kind, int priority);
+
+  /// Button that reads the swap devices again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemSwapReadAgain;
+
   /// System tab, Boots: shown while the first read runs.
   ///
   /// In en, this message translates to:

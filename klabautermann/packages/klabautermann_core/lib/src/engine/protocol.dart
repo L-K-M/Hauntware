@@ -18,6 +18,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         JournalBoot,
         JournalBootEntry,
         KernelCheck,
+        MountsRead,
         KillSignal,
         LoadAvg,
         LogFileEntry,
@@ -733,6 +734,12 @@ final class BootEndsQuery extends HostQuerySpec {
 /// [Kernels].
 final class KernelsQuery extends HostQuerySpec {
   const KernelsQuery();
+}
+
+/// Every mount's source, type and options (DSK-05) and the swap devices
+/// (DSK-14), as [Mounts].
+final class MountsQuery extends HostQuerySpec {
+  const MountsQuery();
 }
 
 /// Redacts [lines] the app holds for an export (LOG-10, 03 §8.9) through
@@ -2047,6 +2054,13 @@ final class Kernels extends HostPayload {
   const Kernels(this.check);
 
   final KernelCheck check;
+}
+
+/// [MountsQuery]'s mounts and swap devices.
+final class Mounts extends HostPayload {
+  const Mounts(this.read);
+
+  final MountsRead read;
 }
 
 /// A [HostQuery] that read nothing; [detail] is the end of its stderr,

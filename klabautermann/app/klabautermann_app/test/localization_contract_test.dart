@@ -771,6 +771,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${placement.group}:${placement.order}'",
     r"'${command.id} shares menu slot ${placement.group}:${placement.order}'",
   },
+  'lib/ui/mounts.dart': {
+    // The separator between a mount's options, machine data as the kernel
+    // lists them.
+    "', '",
+  },
   'lib/ui/processes_panel.dart': {
     // The key tests find a phone row by, in the table rows' form, and the
     // line break between its cells in its screen-reader label, each ARB
