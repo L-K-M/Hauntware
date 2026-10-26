@@ -1772,6 +1772,98 @@ class AppLocalizationsEn extends AppLocalizations {
   String get systemFirewallNoPolicy => 'none';
 
   @override
+  String get systemCertificatesTitle => 'Certificates';
+
+  @override
+  String get systemCertificatesNone =>
+      'List the host names and ports whose certificates this device should check, such as this server\'s web sites.';
+
+  @override
+  String get systemCertificatesNotSaved =>
+      'The endpoints could not be saved on this device; they are kept until the app quits.';
+
+  @override
+  String get systemCertificatesCheck => 'Check again';
+
+  @override
+  String get systemCertificatesEdit => 'Edit endpoints…';
+
+  @override
+  String get systemCertificatesChecking => 'Checking…';
+
+  @override
+  String get systemCertificatesNotChecked => 'Not checked yet';
+
+  @override
+  String systemCertificatesFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'lookup': 'The host name did not resolve from this device.',
+      'connect': 'This device could not connect.',
+      'timeout': 'No answer within 10 seconds.',
+      'handshake': 'The endpoint answered, but not with TLS.',
+      'other': 'The check failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String systemCertificatesExpires(DateTime date, int days) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat.yMMMd(localeName);
+    final String dateString = dateDateFormat.format(date);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'in $days days',
+      one: 'in 1 day',
+      zero: 'today',
+    );
+    return 'Expires $dateString, $_temp0';
+  }
+
+  @override
+  String systemCertificatesExpired(DateTime date) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat.yMMMd(localeName);
+    final String dateString = dateDateFormat.format(date);
+
+    return 'Expired $dateString';
+  }
+
+  @override
+  String get systemCertificatesUntrusted =>
+      'This device does not trust this certificate for the host name: it may be self-signed, expired or issued for another name.';
+
+  @override
+  String systemCertificatesIssuer(String issuer) {
+    return 'Issued by $issuer';
+  }
+
+  @override
+  String get systemCertificatesEditTitle => 'Endpoints to check';
+
+  @override
+  String systemCertificatesHelper(int max) {
+    return 'One per line: a host name or address, with :port for a port other than 443. At most $max.';
+  }
+
+  @override
+  String systemCertificatesProblem(String problem, int max) {
+    String _temp0 = intl.Intl.selectLogic(problem, {
+      'notEndpoint':
+          'Each line needs a host name or address, with an optional :port.',
+      'tooMany': 'List at most $max endpoints.',
+      'other': 'These endpoints cannot be checked.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemCertificatesCancel => 'Cancel';
+
+  @override
+  String get systemCertificatesSave => 'Save';
+
+  @override
   String get systemAccountsTitle => 'Users';
 
   @override

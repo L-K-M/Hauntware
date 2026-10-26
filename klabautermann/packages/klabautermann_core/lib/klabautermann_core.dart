@@ -21,6 +21,16 @@ export 'src/history/history_store.dart'
 export 'src/catalog/engine_sync.dart' show engineSyncPushPolicy;
 export 'src/catalog/sync_credentials.dart'
     show klabautermannApiKeyPrefix, klabautermannMasterKeyEntry;
+// The System tab's Certificates section (CRT-01): the endpoints the
+// device checks and what each check found.
+export 'src/certificates/tls_check.dart'
+    show
+        TlsCertificateFacts,
+        TlsCheckFailure,
+        TlsEndpoint,
+        TlsEndpointCheck,
+        kTlsDefaultPort,
+        kTlsEndpointsMax;
 export 'src/engine/engine_client.dart';
 // What a substitute engine for IsolateEngineClient.spawn's entryPoint is
 // handed; the app's restart test runs one.

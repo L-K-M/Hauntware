@@ -197,6 +197,20 @@ void main() {
       expect(answer.text, isNot(contains('ghp_A1b2C3d4E5f6G7h8I9j0K1')));
     });
 
+    test('the device checks TLS endpoints in the engine (CRT-01)', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+      final probe = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final closed = probe.port;
+      await probe.close();
+
+      client.send(CheckTlsEndpoints('t-1', [TlsEndpoint('127.0.0.1', closed)]));
+      final answer = (await next(events)) as TlsEndpointsChecked;
+      expect(answer.requestId, 't-1');
+      expect(answer.checks.single.endpoint, TlsEndpoint('127.0.0.1', closed));
+      expect(answer.checks.single.failure, TlsCheckFailure.connect);
+    });
+
     test('a host query needs links', () async {
       final client = await spawnEngine();
       final (:events, fleet: _) = await started(client);
