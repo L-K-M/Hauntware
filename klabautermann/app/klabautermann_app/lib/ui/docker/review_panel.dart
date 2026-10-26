@@ -326,13 +326,14 @@ class _ToolRow extends StatelessWidget {
                     style: theme.textTheme.bodySmall,
                   )
                 else
-                  SelectableText(
-                    tool.ports.join(', '),
-                    style: klabautermannMonoStyle.copyWith(
-                      fontSize: theme.textTheme.bodySmall?.fontSize,
-                      color: muted,
+                  for (final port in tool.ports)
+                    SelectableText(
+                      port,
+                      style: klabautermannMonoStyle.copyWith(
+                        fontSize: theme.textTheme.bodySmall?.fontSize,
+                        color: muted,
+                      ),
                     ),
-                  ),
               ],
             ),
           ),
