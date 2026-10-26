@@ -306,6 +306,29 @@ void main() {
     await openSettings(tester);
   }, variant: const TargetPlatformVariant({TargetPlatform.windows}));
 
+  testWidgets('Settings opens the open-source licenses', (tester) async {
+    // A known entry instead of the bundle's NOTICES, which tests lack.
+    LicenseRegistry.reset();
+    LicenseRegistry.addLicense(
+      () => Stream.value(
+        const LicenseEntryWithLineBreaks(['bundled_component'], 'Its text.'),
+      ),
+    );
+    addTearDown(LicenseRegistry.reset);
+    workspace.newDocument();
+    await mount(tester);
+    await openSettings(tester);
+
+    final licenses = find.byKey(const ValueKey('settings.licenses'));
+    await tester.ensureVisible(licenses);
+    await tester.pumpAndSettle();
+    await tester.tap(licenses);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(LicensePage), findsOneWidget);
+    expect(find.text('bundled_component'), findsWidgets);
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
   testWidgets('Settings lives in the application menu on macOS', (
     tester,
   ) async {

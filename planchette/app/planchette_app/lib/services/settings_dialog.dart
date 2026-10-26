@@ -189,6 +189,28 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   ),
                 ),
               ),
+              const SizedBox(height: 16),
+              _section(theme, 'About'),
+              // The notices of everything Planchette includes: Flutter's
+              // NOTICES, plus the APK's Maven libraries on Android
+              // (ghost_licenses).
+              ListTile(
+                key: const ValueKey('settings.licenses'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Open-source licenses'),
+                subtitle: const Text(
+                  'Public domain (Unlicense). The libraries, fonts and engine '
+                  'it includes keep their own licenses.',
+                ),
+                onTap: () => showLicensePage(
+                  context: context,
+                  applicationName: 'Planchette',
+                  applicationLegalese:
+                      "Planchette's own code is public domain (Unlicense). It "
+                      'includes third-party components that keep their own '
+                      'licenses, listed here.',
+                ),
+              ),
               if (widget.settings.error case final error?)
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
