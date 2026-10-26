@@ -3575,7 +3575,12 @@ final class LogStreamSpec {
          'a file tail and a container log have no cursor',
        ),
        assert(
-         !follow || source is! JournalLogSource || source.until == null,
+         !follow ||
+             switch (source) {
+               JournalLogSource(:final until) ||
+               ContainerLogSource(:final until) => until == null,
+               _ => true,
+             },
          'a follow reads up to the present',
        );
 
@@ -3717,12 +3722,24 @@ final class OperationLogSource extends LogSource {
 /// on, after the newest line it delivered, once the container runs
 /// again. The read waits for the server's Docker endpoint
 /// ([DockerEndpointState]) as [LogStreamWaitReason.link].
+///
+/// With a time range (CTX-03), the read is every line from [since] to
+/// [until] instead of the last [LogStreamSpec.window]: Docker applies
+/// `tail` before the range, so the two together would read only the
+/// window's lines that fall in it.
 final class ContainerLogSource extends LogSource {
-  const ContainerLogSource(this.containerId);
+  const ContainerLogSource(this.containerId, {this.since, this.until});
 
   /// The container's id, or its name; the engine validates it before it
   /// puts it in a path.
   final String containerId;
+
+  /// The time range (`since`, `until`), both inclusive. A follow takes no
+  /// [until], since it reads up to the present.
+  final DateTime? since, until;
+
+  /// Whether the read has a time range.
+  bool get ranged => since != null || until != null;
 }
 
 /// A syslog severity as journald and the kernel record it, most urgent

@@ -7929,6 +7929,52 @@
   "@dockerLogsEmpty": {
     "description": "Shown in place of a container's logs when reading them ended without a line."
   },
+  "dockerLogsRangeChoose": "Choose start and end…",
+  "@dockerLogsRangeChoose": {
+    "description": "Container logs time range menu: opens a dialog to pick the range's start and end date and time."
+  },
+  "dockerLogsRangeBetween": "{since} to {until}",
+  "@dockerLogsRangeBetween": {
+    "description": "Container logs time range button when a start and end were chosen.",
+    "placeholders": {
+      "since": {
+        "type": "String",
+        "example": "Oct 26, 2026 12:00"
+      },
+      "until": {
+        "type": "String",
+        "example": "Oct 26, 2026 13:00"
+      }
+    }
+  },
+  "dockerLogsRangeTitle": "Time range",
+  "@dockerLogsRangeTitle": {
+    "description": "Title of the dialog that picks a container log time range's start and end."
+  },
+  "dockerLogsRangeFrom": "From",
+  "@dockerLogsRangeFrom": {
+    "description": "Container log time range dialog: the range's start, a date and time."
+  },
+  "dockerLogsRangeTo": "To",
+  "@dockerLogsRangeTo": {
+    "description": "Container log time range dialog: the range's end, a date and time."
+  },
+  "dockerLogsRangeOrder": "The start must come before the end.",
+  "@dockerLogsRangeOrder": {
+    "description": "Container log time range dialog: why Apply is off."
+  },
+  "dockerLogsRangeCancel": "Cancel",
+  "@dockerLogsRangeCancel": {
+    "description": "Closes the container log time range dialog without changing the range."
+  },
+  "dockerLogsRangeApply": "Apply",
+  "@dockerLogsRangeApply": {
+    "description": "Reads the container's logs in the chosen time range."
+  },
+  "dockerLogsLiveRange": "A range with an end has no new lines to follow.",
+  "@dockerLogsLiveRange": {
+    "description": "Tooltip of the off Live chip while a container's logs read a range with a chosen end."
+  },
   "dockerLogsDriverUnreadable": "{reason, select, none{This container keeps no logs: driver none.} podman{Podman cannot read this container's logs: driver {driver}. Podman reads only the json-file, k8s-file and journald drivers.} cacheDisabled{Docker cannot read this container's logs: driver {driver}, cache disabled. Docker reads another driver's logs only through its local cache.} other{Docker cannot read this container's logs: its logging driver keeps none it can read.}}",
   "@dockerLogsDriverUnreadable": {
     "description": "Shown in place of a container's logs when its logging driver keeps no logs the engine can read back (CTX-01): the none driver; on Podman, a driver other than json-file, k8s-file and journald; on Docker, a remote driver with Docker's dual-logging cache disabled; or a driver the engine could not name. driver is the driver's name as Docker reports it, such as splunk; driver and cache names stay as they are.",

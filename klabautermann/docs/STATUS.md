@@ -311,6 +311,11 @@ is on main:
   container window oldest first, against `LogStreamSpec`'s newest
   first, so the controller keeps that order. Tested against the fake
   engine only.
+- Container log time range (M6 N19a, CTX-03): the log view's range
+  menu reads a container's logs from LOG-01's spans back from now, still
+  following, or between a chosen start and end, read once with Live
+  stopped. The engine sends `since` and `until` and no `tail`, and a
+  follow's resume starts after its newest line.
 - Images in the app (M3, D16, 03 §7.14, §10.4): the Images sub-tab
   holds one `DockerWatch` of the images and containers per server while
   it shows, apart from the Containers view's, and sends `DockerUnwatch`

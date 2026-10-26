@@ -1675,6 +1675,15 @@ void main() {
         reason: 'a follow reads up to the present',
       );
 
+      expect(
+        () => spec(
+          source: ContainerLogSource('db', until: DateTime.utc(2026, 10, 15)),
+          follow: true,
+        ),
+        throwsA(isA<AssertionError>()),
+        reason: 'a container follow reads up to the present too',
+      );
+
       expect(spec(source: bounded).follow, isFalse);
       expect(
         spec(source: const KernelLogSource(), afterCursor: 's=1').afterCursor,

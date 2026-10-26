@@ -59,6 +59,7 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
   late final LogSearch search = LogSearch(logs);
 
   LogQuery _query = const LogQuery();
+  ContainerLogRange _range = const ContainerLogRange();
   bool _live = true;
   bool _visible = false;
 
@@ -81,16 +82,21 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
 
   LogQuery get query => _query;
 
+  /// A container's time range (CTX-03).
+  ContainerLogRange get range => _range;
+
   /// Whether there is something to read: a container, a given source, or
   /// a [query] that is ready.
   bool get ready => containerId != null || _source != null || _query.ready;
 
   /// Whether the stream follows: [setLive]'s choice, while the query can
   /// be followed ([LogQuery.followable]).
-  bool get live => _live && (containerId != null || _query.followable);
+  bool get live => _live && canFollow;
 
-  /// Whether [setLive] can follow the query.
-  bool get canFollow => containerId != null || _query.followable;
+  /// Whether [setLive] can follow the query, or for a container its
+  /// [range]: one with an end has nothing new to follow.
+  bool get canFollow =>
+      containerId != null ? !_range.chosen : _query.followable;
 
   /// Sent, with no answer yet.
   bool get opening => _opening;
@@ -128,6 +134,18 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
     notifyListeners();
   }
 
+  /// Reads a container's logs in [range] from the start.
+  void setRange(ContainerLogRange range) {
+    assert(containerId != null);
+    if (range == _range) return;
+    _range = range;
+    _closeStream();
+    _kept = false;
+    logs.clear();
+    _open();
+    notifyListeners();
+  }
+
   void setLive(bool live) {
     if (live == _live) return;
     _live = live;
@@ -152,7 +170,11 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
 
     // A container's logs, or a given source, are read as a file is.
     final source = switch (containerId) {
-      final container? => ContainerLogSource(container),
+      final container? => ContainerLogSource(
+        container,
+        since: _range.sinceAt(_now()),
+        until: _range.until,
+      ),
       null => _source,
     };
     final follow = live;

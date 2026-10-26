@@ -109,12 +109,14 @@ final class _Harness {
     String containerId = 'abc',
     int window = 50,
     bool follow = true,
+    DateTime? since,
+    DateTime? until,
   }) => router.openLogs(
     OpenLogStream(
       streamId: streamId,
       spec: LogStreamSpec(
         serverId: _srv,
-        source: ContainerLogSource(containerId),
+        source: ContainerLogSource(containerId, since: since, until: until),
         window: window,
         follow: follow,
       ),
@@ -122,8 +124,16 @@ final class _Harness {
   );
 
   /// Opens a stream and lets the endpoint resolve and the read start.
-  Future<void> start({int window = 50, bool follow = true}) async {
-    expect(open(window: window, follow: follow), isNull);
+  Future<void> start({
+    int window = 50,
+    bool follow = true,
+    DateTime? since,
+    DateTime? until,
+  }) async {
+    expect(
+      open(window: window, follow: follow, since: since, until: until),
+      isNull,
+    );
     router.probed(_srv, _profile(relay: relay));
     await settle();
   }
@@ -163,6 +173,45 @@ const _running = LogStreamRunning();
 const _waitingLink = LogStreamWaiting(LogStreamWaitReason.link);
 
 void main() {
+  group('time range (CTX-03)', () {
+    test('a range reads every line in it: since and until, and no tail, '
+        'which Docker would apply first', () async {
+      final h = _Harness();
+      await h.start(
+        follow: false,
+        since: DateTime.utc(2026, 10, 26, 12),
+        until: DateTime.utc(2026, 10, 26, 13, 0, 0, 500),
+      );
+
+      expect(h.logsQuery(), {
+        'follow': '0',
+        'stdout': '1',
+        'stderr': '1',
+        'timestamps': '1',
+        'since': '1793016000.000000000',
+        'until': '1793019600.500000000',
+      });
+    });
+
+    test('a ranged follow resumes after the newest line, not at the '
+        "range's start", () async {
+      final h = _Harness();
+      await h.start(since: DateTime.utc(2026, 10, 26, 12));
+      expect(h.logsQuery()['since'], '1793016000.000000000');
+      expect(h.logsQuery().containsKey('tail'), isFalse);
+
+      h.daemon.writeLogs(_out(1, 'bye'));
+      await h.flush();
+
+      h.daemon.endLogs();
+      await h.settle();
+      await h.clock.elapse(const Duration(seconds: 1));
+      expect(h.requests('/logs'), hasLength(2));
+      expect(h.logsQuery()['since'], LogTimestamp.tryParse(_ts(1))!.sinceQuery);
+      expect(h.logsQuery().containsKey('tail'), isFalse);
+    });
+  });
+
   group('framing and lines (03 §5.6)', () {
     test('a non-TTY follow waits for the endpoint, asks for the tail with '
         'timestamps, and demultiplexes stdout and stderr', () async {

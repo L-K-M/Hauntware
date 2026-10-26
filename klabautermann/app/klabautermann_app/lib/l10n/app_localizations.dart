@@ -8432,6 +8432,60 @@ abstract class AppLocalizations {
   /// **'This container has no log lines.'**
   String get dockerLogsEmpty;
 
+  /// Container logs time range menu: opens a dialog to pick the range's start and end date and time.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose start and end…'**
+  String get dockerLogsRangeChoose;
+
+  /// Container logs time range button when a start and end were chosen.
+  ///
+  /// In en, this message translates to:
+  /// **'{since} to {until}'**
+  String dockerLogsRangeBetween(String since, String until);
+
+  /// Title of the dialog that picks a container log time range's start and end.
+  ///
+  /// In en, this message translates to:
+  /// **'Time range'**
+  String get dockerLogsRangeTitle;
+
+  /// Container log time range dialog: the range's start, a date and time.
+  ///
+  /// In en, this message translates to:
+  /// **'From'**
+  String get dockerLogsRangeFrom;
+
+  /// Container log time range dialog: the range's end, a date and time.
+  ///
+  /// In en, this message translates to:
+  /// **'To'**
+  String get dockerLogsRangeTo;
+
+  /// Container log time range dialog: why Apply is off.
+  ///
+  /// In en, this message translates to:
+  /// **'The start must come before the end.'**
+  String get dockerLogsRangeOrder;
+
+  /// Closes the container log time range dialog without changing the range.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get dockerLogsRangeCancel;
+
+  /// Reads the container's logs in the chosen time range.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get dockerLogsRangeApply;
+
+  /// Tooltip of the off Live chip while a container's logs read a range with a chosen end.
+  ///
+  /// In en, this message translates to:
+  /// **'A range with an end has no new lines to follow.'**
+  String get dockerLogsLiveRange;
+
   /// Shown in place of a container's logs when its logging driver keeps no logs the engine can read back (CTX-01): the none driver; on Podman, a driver other than json-file, k8s-file and journald; on Docker, a remote driver with Docker's dual-logging cache disabled; or a driver the engine could not name. driver is the driver's name as Docker reports it, such as splunk; driver and cache names stay as they are.
   ///
   /// In en, this message translates to:
