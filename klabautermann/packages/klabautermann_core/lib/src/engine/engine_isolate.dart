@@ -24,6 +24,7 @@ import 'package:seance_core/seance_core.dart'
 import '../admin/admin_mode.dart';
 import '../audit/audit_log.dart';
 import '../audit/host_audit_line.dart';
+import '../admin/restarts.dart';
 import '../admin/safety_policy.dart';
 import '../admin/smart.dart';
 import '../admin/user_crontabs.dart';
@@ -70,6 +71,7 @@ import '../operations/plans/backup_plans.dart';
 import '../operations/plans/docker_plans.dart';
 import '../operations/plans/edit_plan.dart';
 import '../jobs/job_history_query.dart';
+import '../services/packages.dart';
 import '../services/accounts.dart';
 import '../services/unit_queries.dart';
 import '../operations/stack_edits.dart';
@@ -275,6 +277,7 @@ void engineMain(
   // Each server's latest probe answer, which the planners read for the
   // login uid, the session's path and its SSH port.
   final profiles = <String, HostProfile>{};
+  final packageReports = PackageReports(now: () => DateTime.now().toUtc());
   OperationRunner? runner;
 
   // The running image pulls by plan id, which [CancelAction] stops
@@ -857,6 +860,7 @@ void engineMain(
       ..retain(fleetIds);
     admin?.forget(forgotten);
     plans.forget(forgotten);
+    packageReports.forget(forgotten);
     profiles.removeWhere((id, _) => forgotten.contains(id));
     // Before the caller sends the fleet or an EndpointChanged, so no
     // probe of a server starts, and no answer for it goes out, once the
@@ -1429,7 +1433,11 @@ void engineMain(
         );
         final Future<PlanAttempt> attempt;
         switch (intent) {
-          case KillProcess() || UnitAction() || StartTimer() || RunCronJob():
+          case KillProcess() ||
+              UnitAction() ||
+              StartTimer() ||
+              RunCronJob() ||
+              RefreshPackageLists():
             // Planning reads the target over the link, as the run will.
             final session = admin?.session(serverId);
             attempt = lendSession(
@@ -1748,6 +1756,78 @@ void engineMain(
             uiPort.send,
             onError: (Object _) => fail(SmartReportFailure.transport),
           ),
+        );
+      case ReadRestarts(:final serverId, :final requestId):
+        void fail(RestartReportFailure failure) => uiPort.send(
+          RestartReport(
+            serverId: serverId,
+            requestId: requestId,
+            failure: failure,
+          ),
+        );
+        if (links?.link(serverId) == null) {
+          fail(RestartReportFailure.noLink);
+          return;
+        }
+        final session = admin?.session(serverId);
+        if (session == null) {
+          fail(RestartReportFailure.adminRequired);
+          return;
+        }
+        admin?.touch(serverId);
+        // Not awaited, as the drive health read, and answering a lend
+        // that fails the same way.
+        unawaited(
+          lendSession(
+            serverId,
+            () =>
+                readRestarts(serverId, requestId: requestId, session: session),
+          ).then(
+            uiPort.send,
+            onError: (Object _) => fail(RestartReportFailure.transport),
+          ),
+        );
+      case ReadPackages(:final serverId, :final requestId, :final fresh):
+        final link = links?.link(serverId);
+        if (!fleetIds.contains(serverId) || link == null) {
+          uiPort.send(
+            PackagesReport(
+              serverId: serverId,
+              requestId: requestId,
+              failure: PackagesReportFailure.noLink,
+            ),
+          );
+          return;
+        }
+        // Not awaited, as the other reads: the check answers rather than
+        // throws, a kept answer goes out without one, and a lend that
+        // fails still answers.
+        unawaited(
+          packageReports
+              .read(
+                serverId,
+                requestId: requestId,
+                fresh: fresh,
+                check: () => lendSession(
+                  serverId,
+                  () => readPackages(
+                    serverId,
+                    requestId: requestId,
+                    link: link,
+                    now: () => DateTime.now().toUtc(),
+                  ),
+                ),
+              )
+              .then(
+                uiPort.send,
+                onError: (Object _) => uiPort.send(
+                  PackagesReport(
+                    serverId: serverId,
+                    requestId: requestId,
+                    failure: PackagesReportFailure.transport,
+                  ),
+                ),
+              ),
         );
       case UnitQuery(:final serverId, :final requestId, :final query):
         final link = links?.link(serverId);

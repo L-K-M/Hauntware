@@ -111,7 +111,11 @@ class ServerWorkspace extends StatelessWidget {
               tabs: [for (final panel in _panels) Tab(text: panel.label(l10n))],
             ),
             Expanded(
-              child: _Panels(monitoring: monitoring, serverId: server.id),
+              child: _Panels(
+                monitoring: monitoring,
+                serverId: server.id,
+                fleet: fleet,
+              ),
             ),
           ],
         ),
@@ -125,10 +129,15 @@ class ServerWorkspace extends StatelessWidget {
 /// the tab controller's index (03 §6.4). A panel the access rules hide
 /// links to the Access tab instead (03 §10.4).
 class _Panels extends StatefulWidget {
-  const _Panels({required this.monitoring, required this.serverId});
+  const _Panels({
+    required this.monitoring,
+    required this.serverId,
+    required this.fleet,
+  });
 
   final MonitoringController monitoring;
   final String serverId;
+  final FleetController fleet;
 
   @override
   State<_Panels> createState() => _PanelsState();
@@ -239,6 +248,7 @@ class _PanelsState extends State<_Panels> {
                     ServerPanel.system => SystemPanel(
                       monitoring: monitoring,
                       serverId: serverId,
+                      fleet: widget.fleet,
                     ),
                     ServerPanel.access => AccessPanel(
                       monitoring: monitoring,

@@ -140,6 +140,7 @@ class _ServerDetailPageState extends State<ServerDetailPage>
         builder: (context) => _PanelPage(
           server: widget.server,
           monitoring: widget.monitoring,
+          fleet: widget.fleet,
           panel: panel,
           onOpenAccess: _openAccess,
         ),
@@ -305,12 +306,14 @@ class _PanelPage extends StatelessWidget {
   const _PanelPage({
     required this.server,
     required this.monitoring,
+    required this.fleet,
     required this.panel,
     required this.onOpenAccess,
   });
 
   final FleetServer server;
   final MonitoringController monitoring;
+  final FleetController fleet;
   final ServerPanel panel;
 
   /// Pushes the Access tab, where a hidden panel's link leads.
@@ -364,6 +367,7 @@ class _PanelPage extends StatelessWidget {
                     ServerPanel.system => SystemPanel(
                       monitoring: monitoring,
                       serverId: serverId,
+                      fleet: fleet,
                     ),
                     _ => const PlaceholderPaneBody(),
                   },

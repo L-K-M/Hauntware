@@ -3990,6 +3990,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'userBackups': 'A backup in your Klabautermann backups folder',
       'rootBackups': 'A backup under /var/lib/klabautermann/backups',
       'footprintManifest': 'The list of what Klabautermann keeps on the server',
+      'packageLists': 'The package manager\'s cached package lists',
       'auditSyslog':
           'One line in the system log naming this action and this device',
       'other': 'A change on the server',
@@ -4490,6 +4491,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'KillProcess': 'Signal',
       'UnitAction': 'Unit action',
       'StartTimer': 'Run timer now',
+      'RefreshPackageLists': 'Refresh package lists',
       'ContainerAction': 'Container action',
       'RemoveContainer': 'Remove container',
       'RemoveImage': 'Remove image',
@@ -7729,4 +7731,217 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get alertNotificationOpen => 'Open';
+
+  @override
+  String get systemUpdatesTitle => 'Updates';
+
+  @override
+  String get systemUpdatesNone => 'Up to date';
+
+  @override
+  String systemUpdatesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count updates available',
+      one: '1 update available',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String systemUpdatesSecurityCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count are security updates',
+      one: '1 is a security update',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String systemUpdatesSecurityPatches(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count security patches are needed',
+      one: '1 security patch is needed',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get systemUpdatesRestart => 'The server asks for a restart.';
+
+  @override
+  String systemUpdatesRestartFor(String packages) {
+    return 'The server asks for a restart, for $packages.';
+  }
+
+  @override
+  String get systemUpdatesNoRestart => 'No restart required';
+
+  @override
+  String systemUpdatesFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noLink': 'The server is not connected, so updates could not be checked.',
+      'transport': 'The connection failed while updates were checked.',
+      'other': 'Updates could not be checked.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemUpdatesNoManager =>
+      'No package manager Klabautermann reads was found (apt, dnf, zypper, pacman or apk).';
+
+  @override
+  String get systemUpdatesNoCache =>
+      'The package lists have not been downloaded on this server yet, and the check never downloads them.';
+
+  @override
+  String systemUpdatesManagerFailed(String detail) {
+    return 'The package manager failed: $detail';
+  }
+
+  @override
+  String get systemUpdatesPackage => 'Package';
+
+  @override
+  String get systemUpdatesInstalled => 'Installed';
+
+  @override
+  String get systemUpdatesAvailable => 'Available';
+
+  @override
+  String get systemUpdatesSecurity => 'Security';
+
+  @override
+  String get systemUpdatesSecurityYes => 'Security';
+
+  @override
+  String systemUpdatesCut(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Only the first $count updates are listed.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String systemUpdatesListsFrom(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return 'Package lists last downloaded $timeString';
+  }
+
+  @override
+  String get systemUpdatesChecking => 'Checking for updates…';
+
+  @override
+  String get systemUpdatesCheckAgain => 'Check again';
+
+  @override
+  String get systemUpdatesRefresh => 'Refresh package lists';
+
+  @override
+  String get systemUpdatesRefreshAdminNeeded =>
+      'Turn on admin mode to download them.';
+
+  @override
+  String get systemUpdatesRefreshStarted =>
+      'When the refresh has finished, check again to read the new lists.';
+
+  @override
+  String get systemUpdatesRestartsTitle => 'Services to restart';
+
+  @override
+  String get systemUpdatesRestartsRead => 'Find services to restart';
+
+  @override
+  String get systemUpdatesRestartsReadAgain => 'Look again';
+
+  @override
+  String get systemUpdatesRestartsReading => 'Looking for services to restart…';
+
+  @override
+  String get systemUpdatesRestartsAdminNeeded =>
+      'Finding services that still run replaced libraries needs admin mode.';
+
+  @override
+  String get systemUpdatesRestartsNone => 'No service runs a replaced library.';
+
+  @override
+  String systemUpdatesRestartsList(String services) {
+    return 'Restart to load the updated libraries: $services';
+  }
+
+  @override
+  String get systemUpdatesKernelWaiting =>
+      'A newer kernel is installed and waits for a reboot.';
+
+  @override
+  String systemUpdatesRestartsFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noLink':
+          'The server is not connected, so services to restart could not be read.',
+      'adminRequired': 'Admin mode ended before services to restart were read.',
+      'elevationRefused':
+          'Elevation was refused, so services to restart were not read.',
+      'missing':
+          'None of needrestart, needs-restarting or zypper is installed on this server.',
+      'transport': 'The connection failed while services to restart were read.',
+      'other': 'Services to restart could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get fleetUpdatesTitle => 'Updates on all servers';
+
+  @override
+  String get fleetUpdatesOpen => 'All servers';
+
+  @override
+  String get fleetUpdatesCheckAll => 'Check every server again';
+
+  @override
+  String get fleetUpdatesNoServers => 'No servers yet.';
+
+  @override
+  String fleetUpdatesSummary(int updates, int security, String restart) {
+    String _temp0 = intl.Intl.pluralLogic(
+      updates,
+      locale: localeName,
+      other: '$updates updates',
+      one: '1 update',
+      zero: 'Up to date',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      security,
+      locale: localeName,
+      other: ', $security security',
+      zero: '',
+    );
+    String _temp2 = intl.Intl.selectLogic(restart, {
+      'true': ' · restart required',
+      'other': '',
+    });
+    return '$_temp0$_temp1$_temp2';
+  }
+
+  @override
+  String systemUpdatesCheckedAt(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return 'Checked $timeString';
+  }
 }
