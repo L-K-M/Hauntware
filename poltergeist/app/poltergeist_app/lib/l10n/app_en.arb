@@ -2821,6 +2821,18 @@
   "@updateCheckEnabledSubtitle": {
     "description": "Explainer under the update-check toggle; the D19/D23 trust claim."
   },
+  "openSourceLicensesLabel": "Open-source licenses",
+  "@openSourceLicensesLabel": {
+    "description": "Settings row that opens the licenses page: the third-party notices of everything the app includes."
+  },
+  "openSourceLicensesSubtitle": "Public domain (Unlicense). The libraries, fonts, PDFium and engine it includes keep their own licenses.",
+  "@openSourceLicensesSubtitle": {
+    "description": "Explainer under the licenses row: the Unlicense covers only the app's own code."
+  },
+  "openSourceLicensesLegalese": "Poltergeist's own code is public domain (Unlicense). It includes third-party components that keep their own licenses, listed here.",
+  "@openSourceLicensesLegalese": {
+    "description": "Line at the top of the licenses page."
+  },
   "backupTitle": "Bookmark backup",
   "@backupTitle": {
     "description": "04 §4.3's verbatim section title."

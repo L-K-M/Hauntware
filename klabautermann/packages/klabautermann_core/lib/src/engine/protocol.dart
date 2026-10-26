@@ -36,6 +36,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         ProcsSelection,
         RestartCheck,
         SmartDisk,
+        SshdPosture,
         SystemctlVerb,
         SystemdUnit,
         TempsSnapshot,
@@ -1286,6 +1287,17 @@ final class ReadPackages extends EngineRequest {
 /// memory maps. One [RestartReport] with [requestId] answers it.
 final class ReadRestarts extends EngineRequest {
   const ReadRestarts(this.serverId, {required this.requestId});
+
+  final String serverId;
+  final String requestId;
+}
+
+/// Reads [serverId]'s effective sshd configuration for the app's own
+/// connection (SEC-01, 03 §7.10): in admin mode only, since `sshd -T`
+/// loads the host keys. One [SshdPostureReport] with [requestId] answers
+/// it.
+final class ReadSshdPosture extends EngineRequest {
+  const ReadSshdPosture(this.serverId, {required this.requestId});
 
   final String serverId;
   final String requestId;
@@ -2825,6 +2837,50 @@ final class RestartReport extends EngineEvent {
   final RestartReportFailure? failure;
 }
 
+/// Why a [ReadSshdPosture] read nothing.
+enum SshdPostureFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// Admin mode is off for the server.
+  adminRequired,
+
+  /// Elevation refused, so nothing ran.
+  elevationRefused,
+
+  /// No sshd binary was found.
+  missing,
+
+  /// `sshd -T` refused, as for a broken configuration; the report's
+  /// detail carries its error.
+  refused,
+
+  /// The read printed something else.
+  unreadable,
+
+  /// The link failed while reading.
+  transport,
+}
+
+/// The answer to [ReadSshdPosture].
+final class SshdPostureReport extends EngineEvent {
+  const SshdPostureReport({
+    required this.serverId,
+    required this.requestId,
+    this.posture,
+    this.failure,
+    this.detail,
+  });
+
+  final String serverId;
+  final String requestId;
+  final SshdPosture? posture;
+  final SshdPostureFailure? failure;
+
+  /// sshd's error lines for [SshdPostureFailure.refused].
+  final String? detail;
+}
+
 /// Why a [ReadPackages] checked nothing.
 enum PackagesReportFailure {
   /// The server has no ready link.
@@ -4125,6 +4181,10 @@ enum DockerWatchList {
 
   /// The network list (03 §7.15 DNW-01), as [DockerNetworksPayload].
   networks,
+
+  /// The engine's events while the app follows them (03 §7.12 DKE-03),
+  /// as [DockerEventsPayload].
+  events,
 }
 
 /// The most watches one server holds [E]: a Docker view holds one or two.
@@ -4239,6 +4299,68 @@ final class DockerNetworksPayload extends DockerPayload {
   const DockerNetworksPayload(this.networks);
 
   final List<NetworkSummary> networks;
+}
+
+/// The events timeline (DKE-03): the newest `kDockerEventsKept` entries,
+/// oldest first, events and the gaps between streams alike.
+final class DockerEventsPayload extends DockerPayload {
+  DockerEventsPayload(Iterable<DockerTimelineEntry> entries)
+    : entries = List.unmodifiable(entries);
+
+  final List<DockerTimelineEntry> entries;
+}
+
+/// One line of the events timeline.
+@immutable
+sealed class DockerTimelineEntry {
+  const DockerTimelineEntry(this.at);
+
+  /// When it happened, in UTC: the event's time, or when a gap began.
+  final DateTime at;
+}
+
+/// One engine event.
+final class DockerTimelineEvent extends DockerTimelineEntry {
+  const DockerTimelineEvent({
+    required DateTime at,
+    required this.type,
+    required this.action,
+    this.actorId,
+    this.name,
+    this.image,
+    this.exitCode,
+  }) : super(at);
+
+  /// `container`, `image`, `volume` or `network`.
+  final String type;
+
+  /// `start`, `die`, `health_status: unhealthy`, `pull`, ...
+  final String action;
+  final String? actorId;
+
+  /// The container's, volume's or network's name; an image's reference.
+  final String? name;
+
+  /// A container's image.
+  final String? image;
+
+  /// A container's exit code, on `die`.
+  final int? exitCode;
+}
+
+/// A span the app did not follow the events: the stream was lost from
+/// [at] until [until]. With [resumed] the stream asked the engine for the
+/// events of the span, which it keeps only in a bounded buffer; without
+/// it the span's events are not shown.
+final class DockerTimelineGap extends DockerTimelineEntry {
+  const DockerTimelineGap({
+    required DateTime at,
+    required this.until,
+    required this.resumed,
+  }) : super(at);
+
+  final DateTime until;
+  final bool resumed;
 }
 
 /// `/system/df`'s totals per type (02 OV-05), read in the shape the

@@ -2148,6 +2148,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'Checks GitHub on launch. Nothing is downloaded until you choose to update.';
 
   @override
+  String get openSourceLicensesLabel => 'Open-source licenses';
+
+  @override
+  String get openSourceLicensesSubtitle =>
+      'Public domain (Unlicense). The libraries, fonts, PDFium and engine it includes keep their own licenses.';
+
+  @override
+  String get openSourceLicensesLegalese =>
+      'Poltergeist\'s own code is public domain (Unlicense). It includes third-party components that keep their own licenses, listed here.';
+
+  @override
   String get backupTitle => 'Bookmark backup';
 
   @override

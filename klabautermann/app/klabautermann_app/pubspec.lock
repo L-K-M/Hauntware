@@ -420,6 +420,13 @@ packages:
       relative: true
     source: path
     version: "1.9.3"
+  ghost_licenses:
+    dependency: "direct main"
+    description:
+      path: "../../../planchette/packages/ghost_licenses"
+      relative: true
+    source: path
+    version: "1.9.3"
   ghost_marks:
     dependency: "direct main"
     description:

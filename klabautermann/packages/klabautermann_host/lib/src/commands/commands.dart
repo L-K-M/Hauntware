@@ -369,6 +369,10 @@ const kMountsFindmntMarker = '== findmnt';
 const kMountsProcMarker = '== proc';
 const kMountsSwapsMarker = '== swaps';
 
+/// The line before [HostCommands.sshdPosture]'s configuration: `== sshd`
+/// and how much of the connection `-C` named, or `missing` or `failed`.
+const kSshdMarker = '== sshd';
+
 /// How [HostCommands.journalBoots] asks for the boot list: JSON on
 /// systemd [kListBootsJsonSystemd] and later, the text table below.
 enum JournalBootsFormat { json, text }
@@ -615,8 +619,11 @@ abstract final class HostCommands {
   /// directory, descriptors and environment, which the kernel shows only
   /// to the owner and root, hold `== denied` when unreadable; `status`,
   /// `cgroup` and `limits` are readable by anyone who sees the process.
-  /// The environment comes last: its values can hold newlines, so no
-  /// section after it could be told from them, and its cap counts lines. It exits as [startTicks] does when the process is
+  /// The environment comes last, an entry a line: a value's newlines
+  /// print as `\x01` so they cannot split it, and the cap counts entries.
+  /// A value's own `\x01` byte comes back as a newline, the one loss
+  /// this accepts.
+  /// It exits as [startTicks] does when the process is
   /// gone or unreadable, and [kProcessDetailReused] when its start ticks
   /// are not [startTicks]: the PID names another process now.
   static List<String> processDetail(int pid, int startTicks) {
@@ -653,7 +660,7 @@ abstract final class HostCommands {
       'if ls "\$p/fd" >/dev/null 2>&1; then ls -1 "\$p/fd" | wc -l; '
       "else echo '$kProcessDetailDenied'; fi\n"
       "echo '$kProcessDetailMarker environ'\n"
-      'if e=\$(tr \'\\0\' \'\\n\' <"\$p/environ" 2>/dev/null); then '
+      'if e=\$(tr \'\\n\\000\' \'\\001\\n\' <"\$p/environ" 2>/dev/null); then '
       'printf \'%s\\n\' "\$e" | head -n $kProcessEnvironLimit; '
       "else echo '$kProcessDetailDenied'; fi\n"
       'exit 0';
@@ -929,6 +936,54 @@ abstract final class HostCommands {
       'echo "$kNetSockstatMarker"; '
       'cat /proc/net/sockstat /proc/net/sockstat6 2>/dev/null; '
       'exit 0';
+
+  /// SEC-01's read (03 §7.10), run as root, since `sshd -T` loads the
+  /// host keys: the effective configuration for this connection, with the
+  /// `Match` blocks that apply to [user] connecting from
+  /// [sshConnection]'s client to its local address and port. sudo drops
+  /// `$SSH_CONNECTION`, so both come from the probe. sshd before 7.x
+  /// refuses `laddr` and `lport`, so the read retries without them, then
+  /// without `-C`, where no `Match` block applies; a [user] or
+  /// [sshConnection] that is not one leaves `-C` out. The client's
+  /// address doubles as its host name, which is what sshd matches with
+  /// its default `UseDNS no`. `parseSshdPosture` reads it.
+  static List<String> sshdPosture({String? user, String? sshConnection}) {
+    final fields = sshConnection?.trim().split(RegExp(r'\s+'));
+    String full = '', basic = '';
+    if (user != null &&
+        ArgValidators.userName(user) == null &&
+        fields != null &&
+        fields.length == 4 &&
+        _ipAddress.hasMatch(fields[0]) &&
+        _ipAddress.hasMatch(fields[2]) &&
+        _port.hasMatch(fields[3]) &&
+        int.parse(fields[3]) <= 65535) {
+      basic = 'user=$user,host=${fields[0]},addr=${fields[0]}';
+      full = '$basic,laddr=${fields[2]},lport=${fields[3]}';
+    }
+    return ['sh', '-c', _sshdPosture, 'sh', full, basic];
+  }
+
+  static final _ipAddress = RegExp(r'^[0-9A-Fa-f.:]{2,45}$');
+  static final _port = RegExp(r'^[1-9][0-9]{0,4}$');
+
+  static const _sshdPosture =
+      '''
+s=
+for p in "\$(command -v sshd 2>/dev/null)" /usr/sbin/sshd /usr/local/sbin/sshd /sbin/sshd; do
+  if [ -n "\$p" ] && [ -x "\$p" ]; then s=\$p; break; fi
+done
+[ -n "\$s" ] || { echo '$kSshdMarker missing'; exit 0; }
+if [ -n "\$1" ] && o=\$("\$s" -T -C "\$1" 2>/dev/null); then m=full
+elif [ -n "\$2" ] && o=\$("\$s" -T -C "\$2" 2>/dev/null); then m=basic
+elif o=\$("\$s" -T 2>/dev/null); then m=none
+else
+  echo '$kSshdMarker failed'
+  "\$s" -T 2>&1 | head -n 5
+  exit 0
+fi
+echo "$kSshdMarker \$m"
+printf '%s\\n' "\$o"''';
 
   /// DSK-05 and DSK-14's read: every mount's source, type and options,
   /// from `findmnt -J -l` (util-linux 2.27+) or `/proc/self/mounts`, then

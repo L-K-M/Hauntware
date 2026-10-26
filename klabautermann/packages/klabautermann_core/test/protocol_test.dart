@@ -292,6 +292,7 @@ void main() {
         const ReadSmart('srv-1', requestId: 'r-1'),
         const ReadPackages('srv-1', requestId: 'r-1', fresh: true),
         const ReadRestarts('srv-1', requestId: 'r-1'),
+        const ReadSshdPosture('srv-1', requestId: 'r-1'),
         const ReadAccounts('srv-1', requestId: 'r-1'),
         const ReadHistory('srv-1', HistoryTier.minute, requestId: 'h-1'),
         const AcknowledgeOperation('srv-1', '0123456789abcdef'),
@@ -574,6 +575,27 @@ void main() {
           serverId: 'srv-1',
           list: DockerWatchList.images,
           payload: const DockerImagesPayload([]),
+          at: DateTime.utc(2026, 10, 17),
+        ),
+        DockerListChanged(
+          serverId: 'srv-1',
+          list: DockerWatchList.events,
+          payload: DockerEventsPayload([
+            DockerTimelineEvent(
+              at: DateTime.utc(2026, 10, 17),
+              type: 'container',
+              action: 'die',
+              actorId: 'abc',
+              name: 'web',
+              image: 'nginx:1',
+              exitCode: 137,
+            ),
+            DockerTimelineGap(
+              at: DateTime.utc(2026, 10, 17, 0, 1),
+              until: DateTime.utc(2026, 10, 17, 0, 2),
+              resumed: true,
+            ),
+          ]),
           at: DateTime.utc(2026, 10, 17),
         ),
         ActionPlanned(

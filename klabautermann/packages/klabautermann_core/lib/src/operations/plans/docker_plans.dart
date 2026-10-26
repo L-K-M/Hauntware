@@ -163,8 +163,13 @@ Future<PlanAttempt> _planBulk(
       ports: container.ports,
       context: c.protection,
     );
-    protected ??= reason;
-    if (reason == ProtectedReason.publishesSessionPort) dropsSession = true;
+    // The session port's reason wins: it is the one the impact names.
+    if (reason == ProtectedReason.publishesSessionPort) {
+      protected = reason;
+      dropsSession = true;
+    } else {
+      protected ??= reason;
+    }
   }
   final verb = intent.verb;
   return _planned(

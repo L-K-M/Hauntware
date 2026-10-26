@@ -65,6 +65,9 @@ dependencies:
   # answer only this isolate.
   ghost_keystore:
     path: ../../../planchette/packages/ghost_keystore
+  # The Android APK's Maven library notices on the licenses page.
+  ghost_licenses:
+    path: ../../../planchette/packages/ghost_licenses
   # The log viewer's text search (LOG-05, 03 D56): Planchette's find-bar
   # search with its case folding.
   planchette_core:
