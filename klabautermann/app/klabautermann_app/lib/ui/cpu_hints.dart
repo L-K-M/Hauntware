@@ -17,8 +17,8 @@ enum CpuHintKind {
 typedef CpuHint = ({CpuHintKind kind, double percent});
 
 /// The share of all CPU time from which a part earns its hint. Below it
-/// steal, iowait and interrupts are ordinary noise on a busy host; at a
-/// quarter of a core's worth on a four-core VPS they are worth saying.
+/// steal, iowait and interrupts are ordinary noise on a busy host; from
+/// it, 0.4 of a core's time on a four-core VPS, they are worth saying.
 const double kCpuHintPercent = 10;
 
 /// [cpu]'s hints, most telling first: steal says the host is short of CPU
