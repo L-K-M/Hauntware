@@ -617,6 +617,8 @@ abstract final class HostCommands {
   /// `cgroup` and `limits` are readable by anyone who sees the process.
   /// The environment comes last, an entry a line: a value's newlines
   /// print as `\x01` so they cannot split it, and the cap counts entries.
+  /// A value's own `\x01` byte comes back as a newline, the one loss
+  /// this accepts.
   /// It exits as [startTicks] does when the process is
   /// gone or unreadable, and [kProcessDetailReused] when its start ticks
   /// are not [startTicks]: the PID names another process now.
