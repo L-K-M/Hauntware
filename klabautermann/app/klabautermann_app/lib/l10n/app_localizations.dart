@@ -8558,6 +8558,42 @@ abstract class AppLocalizations {
   /// **'Changes made outside {manager} can be overwritten by it. The label {label} marks it.'**
   String dockerDetailsManagedByNote(String manager, String label);
 
+  /// Container details: the heading of TRI-04's diagnosis, what the container's state says went wrong.
+  ///
+  /// In en, this message translates to:
+  /// **'Diagnosis'**
+  String get dockerDiagnosisTitle;
+
+  /// Container details, Diagnosis: what went wrong, by ContainerDiagnosisKind name.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, oomLimit{Out of memory} oomHost{Out of memory on the host} killed{Killed} segfault{Crashed} notExecutable{Command not executable} commandNotFound{Command not found} runtimeError{The engine could not start it} exitedWithError{Exited with an error} exitsAtOnce{Exits right after starting} restartLoop{Restart loop} unhealthy{Health check failing} other{Something went wrong}}'**
+  String dockerDiagnosisKind(String kind);
+
+  /// Container details, Diagnosis: what the finding means and where to look, by ContainerDiagnosisKind name.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, oomLimit{The kernel stopped it, most likely for going over its memory limit. Raise the limit or find what keeps growing.} oomHost{The kernel stopped it while the host ran out of memory. It has no memory limit of its own.} killed{It ended with SIGKILL (exit code 137) without running out of memory: a docker kill, a stop that ran past its timeout, or another process.} segfault{It ended with a segmentation fault (exit code 139), a crash inside the program.} notExecutable{Exit code 126: the command exists but cannot run. Check its permissions and its interpreter line.} commandNotFound{Exit code 127: the entrypoint or command names a program the image does not have.} runtimeError{The engine reported this error for it:} exitedWithError{Its process ended with an error. Its last log lines usually say why.} exitsAtOnce{It exited with code 0 and its restart policy starts it again: its main process does not stay in the foreground.} restartLoop{Its restart policy has started it again after each exit since it was last started by hand. Its logs show what each run ended with.} unhealthy{Its health check keeps failing. Health checks shows what each check printed.} other{Its state says something went wrong.}}'**
+  String dockerDiagnosisWhy(String kind);
+
+  /// Container details, Diagnosis: the memory limit an out-of-memory container went over.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory limit: {limit}'**
+  String dockerDiagnosisMemoryLimit(String limit);
+
+  /// Container details, Diagnosis: the exit code of a container that exited with an error.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit code: {code}'**
+  String dockerDiagnosisExitCode(int code);
+
+  /// Container details, Diagnosis: how often the restart policy has started the container again.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Restarting now} =1{Restarted once} other{Restarted {count} times}}'**
+  String dockerDiagnosisRestarts(int count);
+
   /// Container details: heading of the section with the container's state, health, restart policy, image and times.
   ///
   /// In en, this message translates to:

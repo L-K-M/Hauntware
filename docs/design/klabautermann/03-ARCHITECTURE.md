@@ -4130,6 +4130,19 @@ TLS. The section checks when it shows, after an edit and on request.
   boots, and newer distributions replace wtmp with wtmpdb. The section lists the current boot and those ten,
   newest first, each with its start and how long its journal ran, and
   counts the older boots the Logs panel's boot picker still lists.
+
+  As built (M6 N53a), container diagnose (TRI-04) reads the inspect the
+  details already hold, in `ui/docker/container_diagnosis.dart`, with
+  no query of its own: out of memory over the container's limit or on
+  the host; exit code 137 without the OOM flag (SIGKILL), 139
+  (segfault), 126 and 127 (command not executable, not found), any other
+  exit a stop (130, 143) does not leave; the engine's `State.Error`;
+  exit code 0 while restarting (the main process leaves the
+  foreground); a restart loop (restarting, or at least three restarts
+  since the last start by hand); and a failing health check. A running
+  container's exit code is the engine's 0 and is not read. The last log
+  lines are not read yet: the diagnosis points to the logs, which open
+  from the same details.
 - **v1.x.** Fans, battery, inventory, crash markers, boot performance,
   incident snapshot (redacted by default), deploy pre-flight checks.
 
