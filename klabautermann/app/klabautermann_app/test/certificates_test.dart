@@ -154,6 +154,23 @@ void main() {
     // Two of three lines warn: the expired one and the failed one.
     expect(find.byIcon(Icons.warning_amber), findsNWidgets(2));
     expect(find.byIcon(Icons.verified_outlined), findsOneWidget);
+    // The warning icons take the error colour; a good line stays muted.
+    final scheme = Theme.of(
+      tester.element(find.text('Check again')),
+    ).colorScheme;
+    expect(
+      {
+        for (final icon in tester.widgetList<Icon>(
+          find.byIcon(Icons.warning_amber),
+        ))
+          icon.color,
+      },
+      {scheme.error},
+    );
+    expect(
+      tester.widget<Icon>(find.byIcon(Icons.verified_outlined)).color,
+      scheme.onSurfaceVariant,
+    );
 
     await tester.tap(find.text('Check again'));
     await tester.pump();

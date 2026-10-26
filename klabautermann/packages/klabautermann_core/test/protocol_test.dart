@@ -163,6 +163,11 @@ void main() {
         ),
         const HostQuery(
           serverId: 'srv-1',
+          queryId: 'h-cpu',
+          query: CpuTopologyQuery(),
+        ),
+        const HostQuery(
+          serverId: 'srv-1',
           queryId: 'h-net',
           query: InterfacesQuery(),
         ),
@@ -471,6 +476,20 @@ void main() {
         ),
         HostResult(
           serverId: 'srv-1',
+          queryId: 'h-cpu',
+          payload: CpuTopologyRead(
+            CpuTopology(
+              models: ['Cortex-A53', 'Cortex-A72'],
+              vendor: 'ARM',
+              logicalCpus: 6,
+              usableCpus: 6,
+              cores: 6,
+              threadsPerCore: 1,
+            ),
+          ),
+        ),
+        HostResult(
+          serverId: 'srv-1',
           queryId: 'h-net',
           payload: NetInterfaces(
             InterfacesRead(
@@ -575,6 +594,27 @@ void main() {
           serverId: 'srv-1',
           list: DockerWatchList.images,
           payload: const DockerImagesPayload([]),
+          at: DateTime.utc(2026, 10, 17),
+        ),
+        DockerListChanged(
+          serverId: 'srv-1',
+          list: DockerWatchList.events,
+          payload: DockerEventsPayload([
+            DockerTimelineEvent(
+              at: DateTime.utc(2026, 10, 17),
+              type: 'container',
+              action: 'die',
+              actorId: 'abc',
+              name: 'web',
+              image: 'nginx:1',
+              exitCode: 137,
+            ),
+            DockerTimelineGap(
+              at: DateTime.utc(2026, 10, 17, 0, 1),
+              until: DateTime.utc(2026, 10, 17, 0, 2),
+              resumed: true,
+            ),
+          ]),
           at: DateTime.utc(2026, 10, 17),
         ),
         ActionPlanned(

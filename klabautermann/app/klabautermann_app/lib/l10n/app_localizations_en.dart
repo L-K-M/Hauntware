@@ -1538,6 +1538,48 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get systemProcessorTitle => 'Processor';
+
+  @override
+  String get systemProcessorReading => 'Reading the processor…';
+
+  @override
+  String get systemProcessorReadAgain => 'Read again';
+
+  @override
+  String get systemProcessorModel => 'Model';
+
+  @override
+  String get systemProcessorNoModel =>
+      'This processor does not report a model name, as is common on ARM boards.';
+
+  @override
+  String get systemProcessorSockets => 'Sockets';
+
+  @override
+  String get systemProcessorCores => 'Cores';
+
+  @override
+  String get systemProcessorThreadsPerCore => 'Threads per core';
+
+  @override
+  String get systemProcessorLogical => 'Logical CPUs';
+
+  @override
+  String get systemProcessorUsable => 'Usable CPUs';
+
+  @override
+  String systemProcessorFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server refused the processor read.',
+      'missing': 'The server lacks the tools the processor read runs.',
+      'other': 'The processor read failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
   String get systemNetInterfacesTitle => 'Interfaces';
 
   @override
@@ -5251,6 +5293,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'PowerAction': 'Reboot or shut down',
       'ContainerAction': 'Container action',
       'RemoveContainer': 'Remove container',
+      'ContainerBulkAction': 'Containers action',
       'RemoveImage': 'Remove image',
       'CreateVolume': 'Create volume',
       'RemoveVolume': 'Remove volume',
@@ -5599,6 +5642,79 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerTabNetworks => 'Networks';
 
   @override
+  String get dockerTabEvents => 'Events';
+
+  @override
+  String get dockerEventsBuffer =>
+      'Events show from when Klabautermann started following them. The engine keeps only a limited buffer, so events while the stream was lost may be missing.';
+
+  @override
+  String get dockerEventsWaiting => 'Waiting for the events stream…';
+
+  @override
+  String dockerEventsFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'tooManyQueries':
+          'This server already has as many Docker watches open as Klabautermann allows.',
+      'connectionFailed':
+          'The connection to the engine failed while following its events.',
+      'other': 'The engine\'s events could not be followed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerEventsAll => 'All';
+
+  @override
+  String dockerEventsKind(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'container': 'Containers',
+      'image': 'Images',
+      'volume': 'Volumes',
+      'network': 'Networks',
+      'other': 'Other',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerEventsSearch => 'Search by name, action or image';
+
+  @override
+  String get dockerEventsNone =>
+      'No events yet. They appear here as the engine reports them.';
+
+  @override
+  String get dockerEventsNoMatch => 'No event matches the filter.';
+
+  @override
+  String dockerEventsLine(String name, String action) {
+    return '$name: $action';
+  }
+
+  @override
+  String dockerEventsImage(String image) {
+    return 'image $image';
+  }
+
+  @override
+  String dockerEventsExitCode(int code) {
+    return 'exit code $code';
+  }
+
+  @override
+  String dockerEventsGap(String from, String until, String resumed) {
+    String _temp0 = intl.Intl.selectLogic(resumed, {
+      'true':
+          'Not followed from $from to $until. The engine sent the events it still held, so some may be missing.',
+      'other':
+          'Not followed from $from to $until. Events in this span are not shown.',
+    });
+    return '$_temp0';
+  }
+
+  @override
   String get dockerTabStacks => 'Stacks';
 
   @override
@@ -5919,6 +6035,28 @@ class AppLocalizationsEn extends AppLocalizations {
       'exited': 'Exited',
       'dead': 'Dead',
       'other': 'Unknown',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerContainerStateFlagged(String state, String flag) {
+    String _temp0 = intl.Intl.selectLogic(flag, {
+      'restartLoop': 'restart loop',
+      'failed': 'failed',
+      'other': 'flagged',
+    });
+    return '$state ($_temp0)';
+  }
+
+  @override
+  String dockerContainerFlagTooltip(String flag, int code) {
+    String _temp0 = intl.Intl.selectLogic(flag, {
+      'restartLoop':
+          'The engine is starting it again after it exited, as a restart policy does in a loop. The details show how often it restarted.',
+      'failed':
+          'Its last run exited with code $code, which a stop does not leave.',
+      'other': 'Exit code $code',
     });
     return '$_temp0';
   }
