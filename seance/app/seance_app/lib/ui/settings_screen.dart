@@ -602,6 +602,27 @@ class _SettingsScreenState extends State<SettingsScreen>
           _persistCommandSuggestions();
         },
       ),
+      const Divider(height: 40),
+      SettingsSectionHeader('About'),
+      // The notices of everything Séance includes: Flutter's NOTICES, plus
+      // the APK's Maven libraries on Android (ghost_licenses).
+      ListTile(
+        key: const ValueKey('settings.licenses'),
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Open-source licenses'),
+        subtitle: const Text(
+          'Public domain (Unlicense). The libraries, fonts and engine it '
+          'includes keep their own licenses.',
+        ),
+        onTap: () => showLicensePage(
+          context: context,
+          applicationName: 'Séance',
+          applicationLegalese:
+              "Séance's own code is public domain (Unlicense). It includes "
+              'third-party components that keep their own licenses, listed '
+              'here.',
+        ),
+      ),
     ],
   );
 

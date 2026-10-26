@@ -23,6 +23,7 @@ import 'mounts.dart';
 import 'oom_kills.dart';
 import 'power.dart';
 import 'sortable_table.dart';
+import 'sshd_posture.dart';
 import 'system_view.dart';
 import 'temperatures.dart';
 import 'updates.dart';
@@ -46,6 +47,7 @@ enum SystemSection {
   updates,
   accounts,
   firewall,
+  sshd,
   certificates,
   power,
 }
@@ -268,6 +270,12 @@ class _SystemPanelState extends State<SystemPanel> {
               FirewallSection(
                 key: const ValueKey(SystemSection.firewall),
                 serverId: widget.serverId,
+              ),
+              SshdPostureSection(
+                key: const ValueKey(SystemSection.sshd),
+                serverId: widget.serverId,
+                fact: (label, value, {note}) =>
+                    _Fact(label: label, value: value, note: note),
               ),
               CertificatesSection(
                 key: const ValueKey(SystemSection.certificates),

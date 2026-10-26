@@ -103,6 +103,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The space between a firewalld zone's names, as firewalld lists them,
   // and between a chain's family, table and name.
   'lib/ui/firewall.dart': {"' '"},
+  // The separator between the ports, addresses, key types and setting
+  // names sshd printed.
+  'lib/ui/sshd_posture.dart': {"', '"},
   // A history rollup read's request id, matched in the engine's answer.
   'lib/controllers/history_reads.dart': {r"'rollup-${_count++}'"},
   // The not-saved diagnostic; the Safety tab and the header's Safety menu

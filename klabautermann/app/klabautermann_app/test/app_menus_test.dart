@@ -21,8 +21,9 @@ import 'support/harness.dart';
 const _config = 'Host web-1\n  HostName web-1.example\n';
 const _version = '1.2.3';
 const _licence =
-    'Klabautermann is free and unencumbered software released into the '
-    'public domain under the Unlicense.';
+    "Klabautermann's own code is public domain (Unlicense). It includes "
+    'third-party components that keep their own licenses, listed under View '
+    'licenses.';
 const _desktopPlatforms = [
   TargetPlatform.macOS,
   TargetPlatform.linux,

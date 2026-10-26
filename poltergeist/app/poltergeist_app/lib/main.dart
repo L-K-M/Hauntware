@@ -8,6 +8,7 @@ import 'package:flutter/services.dart' show ServicesBinding;
 import 'package:flutter/widgets.dart';
 import 'package:ghost_apk_update/ghost_apk_update.dart' show ApkUpdater;
 import 'package:ghost_desktop/ghost_desktop.dart' show MacosToolbarBandChannel;
+import 'package:ghost_licenses/ghost_licenses.dart';
 import 'package:ghost_ui/ghost_ui.dart' show CheckedPlatformMenuDelegate;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
@@ -76,6 +77,8 @@ import 'ui/editor_window_app.dart';
 
 Future<void> main(List<String> args) async {
   PoltergeistBinding.ensureInitialized();
+  // The licenses page lists the APK's Maven libraries too (Android).
+  registerPlatformLicenses();
   // The Settings window's engine runs this same entrypoint, and gets the
   // Settings sections over the app's models — never a second copy of the
   // stores, the engine session or the window lifecycle below.

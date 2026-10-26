@@ -3327,6 +3327,17 @@ unless the user enables admin mode for that panel.
   them above the table. Runaway thread counts need the thread count,
   which the `procs` rows do not carry yet; they come with the process
   detail (N43b).
+
+  As built (M6 N43c), a process's details sheet reads
+  `ProcessDetailQuery` for its PID and start ticks when it opens and on
+  "Read again": the unit and container that own it (the runtime and the
+  container id's first 12 characters), working directory, threads,
+  swap, context switches, open files against their soft limit and the
+  process limit, then its environment after the arguments. Facts the
+  login user may not read say so; a process that exited or whose PID
+  was reused says which, and a reading without start ticks is not read.
+  Masked variables reveal like masked arguments (SAF-07), and a new
+  read masks them again.
 - **v1.x.** Renice and ionice, per-process I/O (sudo).
 
 As built in M4 (E08, `klabautermann_host/lib/src/commands/commands.dart`),
@@ -3972,6 +3983,20 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   `AllowTcpForwarding`, `PermitOpen` or `DisableForwarding` blocks the
   Docker transport (all four apply to socket forwarding, 5.3). Endpoint TLS
   expiry from the device (CRT-01, Dart `SecureSocket`).
+
+  As built in M6 (N41a), the read runs in admin mode as one elevated
+  command, since `sshd -T` loads the host keys. sudo drops
+  `$SSH_CONNECTION`, so the user and the connection come from the probe
+  (`user`, `ssh_connection`). The client's address serves as `host` too,
+  which is what sshd matches under its default `UseDNS no`, and `laddr`
+  and `lport` name the server's side. An sshd that refuses `laddr`
+  is retried with `user`, `host` and `addr`, then without `-C`. The
+  section says which `Match` blocks the settings reflect. It shows the
+  ports and addresses, root login, password, keyboard-interactive and
+  key login, required methods, host key types, accepted user key types,
+  `MaxSessions` and the forwarding settings. It names the settings that
+  block the Docker transport, with a note that `authorized_keys` options
+  are not shown.
 - **v1.x.** Lynis audit and fleet hardening table, fail2ban, SELinux and
   AppArmor, `systemd-analyze security --json=short` (systemd 250+), CPU
   vulnerability status, the root-equivalent access summary, host-key

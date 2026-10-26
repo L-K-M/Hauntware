@@ -750,6 +750,99 @@ void main() {
     );
   });
 
+  testWidgets('SEC-01: the SSH server\'s settings, read in admin mode, say '
+      'what blocks the Docker transport', (tester) async {
+    final panel = await _pump(tester, size: const Size(1100, 1200));
+    Finder sshd(String text) => _inSection(SystemSection.sshd, find.text(text));
+    expect(
+      sshd(
+        'Turn on admin mode to read the SSH server\'s settings: sshd needs '
+        'root to print them.',
+      ),
+      findsOneWidget,
+    );
+
+    panel.engine.emit(const AdminModeState(_serverId, AdminModePhase.on));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(sshd('Read SSH server settings'));
+    await tester.tap(sshd('Read SSH server settings'));
+    await tester.tap(sshd('Read SSH server settings'));
+    await tester.pumpAndSettle();
+    expect(sshd('Reading the SSH server\'s settings…'), findsOneWidget);
+    final read = panel.engine
+        .sentOfType<ReadSshdPosture>()
+        .cast<ReadSshdPosture>()
+        .single;
+    expect(read.serverId, _serverId);
+
+    panel.engine.emit(
+      SshdPostureReport(
+        serverId: _serverId,
+        requestId: read.requestId,
+        posture: SshdPosture(
+          match: SshdMatchContext.remote,
+          ports: const [22, 2222],
+          permitRootLogin: SshdRootLogin.keysOnly,
+          passwordAuthentication: false,
+          keyboardInteractive: false,
+          pubkeyAuthentication: true,
+          hostKeyTypes: const ['ed25519', 'rsa'],
+          userKeyTypes: const ['ssh-ed25519'],
+          maxSessions: 10,
+          allowTcpForwarding: SshdForwarding.local,
+          allowStreamLocalForwarding: SshdForwarding.no,
+          permitOpen: '127.0.0.1:8080',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(sshd('22, 2222'), findsOneWidget);
+    expect(sshd('With a key only'), findsOneWidget);
+    expect(sshd('Off'), findsNWidgets(3));
+    expect(sshd('On'), findsOneWidget);
+    expect(sshd('ed25519, rsa'), findsOneWidget);
+    expect(sshd('10'), findsOneWidget);
+    expect(sshd('Local only'), findsOneWidget);
+    expect(
+      sshd('Blocked by AllowStreamLocalForwarding, PermitOpen'),
+      findsOneWidget,
+    );
+    expect(
+      sshd(
+        'Match blocks for the server\'s own address or port are not applied: '
+        'this sshd is too old to be told them.',
+      ),
+      findsOneWidget,
+    );
+    // No AuthenticationMethods: its row stays out.
+    expect(sshd('Required login methods'), findsNothing);
+
+    await tester.ensureVisible(sshd('Read again'));
+    await tester.tap(sshd('Read again'));
+    await tester.pumpAndSettle();
+    final again = panel.engine
+        .sentOfType<ReadSshdPosture>()
+        .cast<ReadSshdPosture>()
+        .last;
+    panel.engine.emit(
+      SshdPostureReport(
+        serverId: _serverId,
+        requestId: again.requestId,
+        failure: SshdPostureFailure.refused,
+        detail: 'line 3: Bad configuration option: Prot',
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      sshd(
+        'sshd refused to print its settings, as for an error in its '
+        'configuration.',
+      ),
+      findsOneWidget,
+    );
+    expect(sshd('line 3: Bad configuration option: Prot'), findsOneWidget);
+  });
+
   testWidgets('SYS-02 and CN-17: the time zone, its sync and the clock '
       'against this device\'s, each unknown until the probe says', (
     tester,
