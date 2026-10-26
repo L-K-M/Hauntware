@@ -11,6 +11,7 @@ import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'accounts.dart';
 import 'boots.dart';
+import 'certificates.dart';
 import 'chart_strings.dart';
 import 'charts/charts.dart' show BarSegment, ChartUnit, StackedBar;
 import 'disk_activity.dart';
@@ -45,6 +46,7 @@ enum SystemSection {
   driveHealth,
   updates,
   accounts,
+  certificates,
   power,
 }
 
@@ -267,6 +269,11 @@ class _SystemPanelState extends State<SystemPanel> {
                 reads: widget.monitoring.accounts,
                 serverId: widget.serverId,
                 tableId: SystemSection.accounts.name,
+              ),
+              CertificatesSection(
+                key: const ValueKey(SystemSection.certificates),
+                monitoring: widget.monitoring,
+                serverId: widget.serverId,
               ),
               PowerSection(
                 key: const ValueKey(SystemSection.power),
