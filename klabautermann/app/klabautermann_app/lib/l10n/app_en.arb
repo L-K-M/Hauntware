@@ -1181,6 +1181,100 @@
       }
     }
   },
+  "systemOomTitle": "Out-of-memory kills",
+  "@systemOomTitle": {
+    "description": "Heading of the System tab's MEM-03 section: processes the kernel's OOM killer ended since boot."
+  },
+  "systemOomReading": "Reading the kernel's out-of-memory kills.",
+  "@systemOomReading": {
+    "description": "The OOM kills section while its read runs."
+  },
+  "systemOomFailed": "{failure, select, noLink{Not connected, so the out-of-memory kills cannot be read.} denied{The server refused the out-of-memory read.} missing{The server lacks a tool the out-of-memory read needs.} other{The out-of-memory kills could not be read.}}",
+  "@systemOomFailed": {
+    "description": "The OOM kills section when its read failed; failure is noLink, denied, missing or failed.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "systemOomCount": "{count, plural, =0{No process was killed for lack of memory since boot.} =1{1 process was killed for lack of memory since boot.} other{{count} processes were killed for lack of memory since boot.}}",
+  "@systemOomCount": {
+    "description": "How many processes the kernel's OOM killer ended since boot, from /proc/vmstat.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemOomCountUnknown": "This kernel does not count out-of-memory kills (Linux 4.13 and later do).",
+  "@systemOomCountUnknown": {
+    "description": "The OOM kills section on a kernel without the oom_kill counter in /proc/vmstat."
+  },
+  "systemOomLogDenied": "Your login may not read the kernel log, so the killed processes cannot be named. Membership in the adm or systemd-journal group, or sudo, gives access.",
+  "@systemOomLogDenied": {
+    "description": "The OOM kills section when neither the journal's kernel lines nor dmesg gave any line to the login user."
+  },
+  "systemOomProcess": "{command} (PID {pid})",
+  "@systemOomProcess": {
+    "description": "A killed process: its command name and process ID.",
+    "placeholders": {
+      "command": {
+        "type": "String"
+      },
+      "pid": {
+        "type": "int"
+      }
+    }
+  },
+  "systemOomKilledAt": "Killed {time}",
+  "@systemOomKilledAt": {
+    "description": "When a process was killed, from the journal: a date and time in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "systemOomAfterBoot": "Killed {time} after boot",
+  "@systemOomAfterBoot": {
+    "description": "When a process was killed, from dmesg, which counts from boot; time is a span such as \"3 days, 4 hours\".",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "systemOomMemory": "{size} of its own memory when killed",
+  "@systemOomMemory": {
+    "description": "How much anonymous memory (anon-rss) a killed process held, in binary units.",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "systemOomCgroupLimit": "A memory limit ran out, such as a container's, not the server's memory.",
+  "@systemOomCgroupLimit": {
+    "description": "Shown under a kill the kernel made because a memory cgroup reached its limit."
+  },
+  "systemOomShowLog": "Show in kernel log",
+  "@systemOomShowLog": {
+    "description": "Opens the current boot's kernel log lines of the OOM reports."
+  },
+  "systemOomReadAgain": "Read again",
+  "@systemOomReadAgain": {
+    "description": "Reads the OOM kills again."
+  },
+  "systemOomLogTitle": "Out-of-memory reports",
+  "@systemOomLogTitle": {
+    "description": "Heading of the sheet with the current boot's kernel log lines of OOM reports."
+  },
+  "systemOomLogClose": "Close",
+  "@systemOomLogClose": {
+    "description": "Tooltip of the button that closes the OOM reports sheet."
+  },
   "systemReceive": "Receive",
   "@systemReceive": {
     "description": "Label of the server's total receive rate over all its network interfaces, in the System tab."
@@ -3137,6 +3231,49 @@
   "@overviewCpuIdle": {
     "description": "CPU-01: the share of CPU time spent idle."
   },
+  "overviewCpuIowait": "I/O wait",
+  "@overviewCpuIowait": {
+    "description": "CPU-04: the share of CPU time cores sat idle while tasks waited for storage (iowait)."
+  },
+  "overviewCpuSteal": "Steal",
+  "@overviewCpuSteal": {
+    "description": "CPU-04: the share of CPU time the hypervisor gave to other guests (steal)."
+  },
+  "overviewCpuIrq": "IRQ",
+  "@overviewCpuIrq": {
+    "description": "CPU-04: the share of CPU time spent handling hardware interrupts (irq)."
+  },
+  "overviewCpuSoftirq": "Soft IRQ",
+  "@overviewCpuSoftirq": {
+    "description": "CPU-04: the share of CPU time spent on deferred interrupt work such as network packets (softirq)."
+  },
+  "overviewCpuHintSteal": "Steal {percent}: the host running this virtual machine gives its CPU time to other guests, often a noisy neighbour on a VPS. Programs here run slower than the busy figure suggests.",
+  "@overviewCpuHintSteal": {
+    "description": "CPU-04's hint when steal reaches 10 % of CPU time. percent is the steal share, such as \"25%\".",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewCpuHintIowait": "I/O wait {percent}: cores sat idle while tasks waited for storage. The kernel calls this figure unreliable, so check disk latency before blaming the disks.",
+  "@overviewCpuHintIowait": {
+    "description": "CPU-04's hint when iowait reaches 10 % of CPU time; the kernel documentation calls iowait unreliable. percent is the iowait share, such as \"25%\".",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewCpuHintInterrupts": "Interrupts {percent}: the CPUs spend this much handling devices, often heavy network traffic.",
+  "@overviewCpuHintInterrupts": {
+    "description": "CPU-04's hint when hardware and soft interrupts together reach 10 % of CPU time. percent is their share, such as \"25%\".",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
   "overviewPerCoreTitle": "Per core",
   "@overviewPerCoreTitle": {
     "description": "CPU-02: heading over each core's busy share."
@@ -3214,6 +3351,76 @@
   "@overviewSwapNone": {
     "description": "The swap card of a server with no swap space."
   },
+  "overviewPressureTitle": "Pressure",
+  "@overviewPressureTitle": {
+    "description": "Heading of the Overview's pressure card (CPU-05, MEM-04): Linux pressure stall information."
+  },
+  "overviewPressureCaption": "Share of time tasks stalled, over the last 10 s, 1 min and 5 min. \"Some\" counts time at least one task waited, \"full\" time all of them did.",
+  "@overviewPressureCaption": {
+    "description": "Explains the pressure card's figures and their order."
+  },
+  "overviewPressureNone": "This kernel reports no pressure figures. That is normal before Linux 4.20 or with PSI turned off.",
+  "@overviewPressureNone": {
+    "description": "The pressure card when the server has no /proc/pressure files; their absence is normal."
+  },
+  "overviewPressureCpu": "CPU",
+  "@overviewPressureCpu": {
+    "description": "The resource name in a pressure figure's label, for /proc/pressure/cpu."
+  },
+  "overviewPressureMemory": "Memory",
+  "@overviewPressureMemory": {
+    "description": "The resource name in a pressure figure's label, for /proc/pressure/memory."
+  },
+  "overviewPressureIo": "I/O",
+  "@overviewPressureIo": {
+    "description": "The resource name in a pressure figure's label, for /proc/pressure/io."
+  },
+  "overviewPressureSome": "{resource}, some",
+  "@overviewPressureSome": {
+    "description": "Label of a pressure figure: the share of time at least one task stalled on resource (CPU, Memory or I/O).",
+    "placeholders": {
+      "resource": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewPressureFull": "{resource}, full",
+  "@overviewPressureFull": {
+    "description": "Label of a pressure figure: the share of time all tasks stalled on resource (CPU, Memory or I/O).",
+    "placeholders": {
+      "resource": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewPressureValue": "{avg10}% · {avg60}% · {avg300}%",
+  "@overviewPressureValue": {
+    "description": "A pressure figure's three averages in percent with the kernel's two decimals, over 10 s, 1 min and 5 min, in that order.",
+    "placeholders": {
+      "avg10": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 2
+        }
+      },
+      "avg60": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 2
+        }
+      },
+      "avg300": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 2
+        }
+      }
+    }
+  },
+
   "jobsWaiting": "Waiting for the first reading.",
   "@jobsWaiting": {
     "description": "The Jobs tab before the server's cron jobs or timers have been read."
@@ -4874,7 +5081,7 @@
       }
     }
   },
-  "actionPreviewImpact": "{kind, select, dropsSession{This can drop your connection to the server.} stopsContainers{This stops {count} running containers.} removesVolumes{This deletes the container's volumes and the data in them.} forcesImageInUse{{count} containers still use this image.} deletesVolumeData{This deletes the volume and the data in it.} interruptsTarget{This interrupts what the target is doing.} other{}}",
+  "actionPreviewImpact": "{kind, select, dropsSession{This can drop your connection to the server.} stopsContainers{This stops {count} running containers.} removesVolumes{This deletes the container's volumes and the data in them.} forcesImageInUse{{count} containers still use this image.} deletesVolumeData{This deletes the volume and the data in it.} interruptsTarget{This interrupts what the target is doing.} restartsHost{This restarts the server: everything on it stops, and the connection drops until it is back.} stopsHost{This turns the server off: everything on it stops, and it stays off until someone starts it.} other{}}",
   "@actionPreviewImpact": {
     "description": "The action's impact in the preview; kind is the engine's ImpactKind name and count a number of containers.",
     "placeholders": {
@@ -5436,7 +5643,7 @@
   "@activityColumnResult": {
     "description": "Column of the activity log: how the run ended."
   },
-  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
+  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} PowerAction{Reboot or shut down} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
   "@activityAction": {
     "description": "An activity log row's action; action is the engine's intent type name.",
     "placeholders": {
@@ -9557,6 +9764,50 @@
   "systemUpdatesRefreshStarted": "When the refresh has finished, check again to read the new lists.",
   "@systemUpdatesRefreshStarted": {
     "description": "System tab, Updates: shown after the refresh starts, until the next check."
+  },
+  "systemPowerTitle": "Power",
+  "@systemPowerTitle": {
+    "description": "System tab: heading of the section that reboots or shuts down the server (SYS-03)."
+  },
+  "systemPowerReboot": "Reboot",
+  "@systemPowerReboot": {
+    "description": "System tab, Power: button that restarts the server, after the user types its host name."
+  },
+  "systemPowerShutDown": "Shut down",
+  "@systemPowerShutDown": {
+    "description": "System tab, Power: button that turns the server off, after the user types its host name."
+  },
+  "systemPowerAdminNeeded": "Turn on admin mode to reboot or shut down this server.",
+  "@systemPowerAdminNeeded": {
+    "description": "System tab, Power: shown instead of the buttons while admin mode is off, since both run as root."
+  },
+  "systemPowerWaiting": "Rebooting. Waiting for the server to answer again: {elapsed} so far.",
+  "@systemPowerWaiting": {
+    "description": "System tab, Power: shown after the reboot was taken, until the server reports a new boot; elapsed is a duration such as '45 seconds'.",
+    "placeholders": {
+      "elapsed": {
+        "type": "String",
+        "example": "45 seconds"
+      }
+    }
+  },
+  "systemPowerBack": "The server answered again {elapsed} after the reboot.",
+  "@systemPowerBack": {
+    "description": "System tab, Power: shown once the rebooted server reports a new boot; elapsed is a duration such as '2 minutes'.",
+    "placeholders": {
+      "elapsed": {
+        "type": "String",
+        "example": "2 minutes"
+      }
+    }
+  },
+  "systemPowerOff": "The server is shutting down. It stays off until someone starts it.",
+  "@systemPowerOff": {
+    "description": "System tab, Power: shown after the shutdown was taken."
+  },
+  "systemPowerStopWaiting": "Stop waiting",
+  "@systemPowerStopWaiting": {
+    "description": "System tab, Power: button that stops showing the wait for a rebooted server."
   },
   "systemUpdatesRestartsTitle": "Services to restart",
   "@systemUpdatesRestartsTitle": {

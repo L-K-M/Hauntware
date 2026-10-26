@@ -69,6 +69,9 @@ enum OperationKind {
   /// Remove every backup of one file: its edits' only undo (Q11).
   removeAllBackups(ConfirmationTier.typedPhrase),
   reboot(ConfirmationTier.typedPhrase),
+
+  /// The host stays off until someone starts it (SYS-03).
+  powerOff(ConfirmationTier.typedPhrase),
   packageUpgrade(ConfirmationTier.typedPhrase);
 
   const OperationKind(this.baseTier);

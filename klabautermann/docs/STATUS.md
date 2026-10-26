@@ -1958,6 +1958,15 @@ is on main:
   clock against this device's. The System tab's Time section shows the
   time zone, whether the clock is synchronized, and how far it is ahead
   or behind (in step within two seconds).
+- Reboot and shutdown (M6 N38b, SYS-03): in admin mode, the System
+  tab's Power section reboots or shuts down the server after the user
+  types the host's own name, which planning reads with `uname -n`. The
+  engine runs `systemctl reboot` or `systemctl poweroff` as root, or
+  init's own `reboot` and `poweroff` without systemd. A link that drops
+  while that step runs counts as the host having taken it, and the host
+  syslog line is written before it. After a reboot the section waits,
+  counting the time, until a `core` reading reports a later boot. A
+  reboot and shutdown on a real host stay a manual check.
 - Pending updates (M6 N36a, PKG-01 to PKG-03): the System tab's Updates
   section asks the server's package manager (apt, dnf, zypper, pacman or
   apk) for its pending updates as the login user and from cached
@@ -2015,6 +2024,23 @@ is on main:
   zones, every 10 s. The System tab's Temperatures section lists each
   sensor with its high and critical limits, and does not show where the
   host has no sensor, as VMs, or inside a container.
+- Out-of-memory kills (M6 N42b, MEM-03): the System tab's new section
+  counts the kills since boot from `/proc/vmstat`'s `oom_kill` (Linux
+  4.13+) and names the current boot's victims, newest first, from the
+  kernel log: the journal's where the login user may read it, else
+  `dmesg`. Each kill shows its command and PID, when it happened (from
+  boot with `dmesg`), its memory and its memory cgroup, and says when a
+  cgroup's limit ran out rather than the server's memory. "Show in
+  kernel log" opens the boot's OOM report lines from the journal. An
+  unreadable kernel log and a kernel without the counter say so.
+- CPU breakdown and pressure (M6 N42a, CPU-04, CPU-05, MEM-04): the
+  Overview's CPU card adds I/O wait, steal, IRQ and soft IRQ beside
+  user, system and idle, with a plain-language hint once steal, iowait
+  or interrupts reach 10 % of CPU time; the iowait hint says the kernel
+  calls the figure unreliable. A Pressure card shows each
+  `/proc/pressure` line's 10 s, 1 min and 5 min averages with two
+  decimals, says plainly when the kernel has none (before 4.20 or with
+  PSI off), and gives SYS-04's reason for a file a container withholds.
 - Disk activity (M6 N30, DSK-03, DSK-04): collector-set version 10's
   `diskstats` rows add ms reading, ms writing and `io_ticks`, and the
   rates add reads and writes per second, await per request and the busy

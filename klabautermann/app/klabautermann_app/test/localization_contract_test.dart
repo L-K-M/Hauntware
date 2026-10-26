@@ -778,6 +778,12 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${placement.group}:${placement.order}'",
     r"'${command.id} shares menu slot ${placement.group}:${placement.order}'",
   },
+  'lib/ui/oom_kills.dart': {
+    // The journal pattern of an OOM report's kernel lines and the syslog
+    // identifier the kernel's lines carry, both machine data.
+    "'oom-kill|out of memory|killed process'",
+    "'kernel'",
+  },
   'lib/ui/processes_panel.dart': {
     // The key tests find a phone row by, in the table rows' form, and the
     // line break between its cells in its screen-reader label, each ARB

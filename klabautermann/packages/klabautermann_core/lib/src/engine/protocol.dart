@@ -21,11 +21,13 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         KillSignal,
         LoadAvg,
         LogFileEntry,
+        OomKillsRead,
         LoggedCronRun,
         NetRate,
         OpDirectoryKind,
         OpDirectoryListing,
         PackageCheck,
+        PowerVerb,
         ProcsSelection,
         RestartCheck,
         SmartDisk,
@@ -723,6 +725,12 @@ final class VarLogQuery extends HostQuerySpec {
 /// older ones and where the probe found no version.
 final class BootsQuery extends HostQuerySpec {
   const BootsQuery();
+}
+
+/// The kills since boot and the current boot's OOM kills the kernel log
+/// names (MEM-03), as [OomKills].
+final class OomKillsQuery extends HostQuerySpec {
+  const OomKillsQuery();
 }
 
 /// How the boots before the current one ended (BOOT-02), as [BootEnds]:
@@ -2062,6 +2070,13 @@ final class JournalBoots extends HostPayload {
   const JournalBoots(this.boots);
 
   final List<JournalBootEntry> boots;
+}
+
+/// [OomKillsQuery]'s kills.
+final class OomKills extends HostPayload {
+  const OomKills(this.read);
+
+  final OomKillsRead read;
 }
 
 /// [BootEndsQuery]'s ends by boot ID; a boot it did not read is absent.
@@ -4755,6 +4770,15 @@ final class StartTimer extends ActionIntent {
 /// admin mode, so the next package check reads current metadata.
 final class RefreshPackageLists extends ActionIntent {
   const RefreshPackageLists(super.serverId);
+}
+
+/// Reboots or powers off the server (SYS-03, 03 §7.11) as root, in admin
+/// mode, after the user types its host name. The run ends once the host
+/// takes the command; the app waits for a rebooted host to answer again.
+final class PowerAction extends ActionIntent {
+  const PowerAction(super.serverId, this.verb);
+
+  final PowerVerb verb;
 }
 
 /// Which systemd manager a unit action or query addresses (03 §7.5,

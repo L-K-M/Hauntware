@@ -25,6 +25,9 @@ enum ActionEntryPoint {
   /// Refreshing the package lists (PKG-05).
   packageRefresh,
 
+  /// Reboot and Shut down (SYS-03).
+  power,
+
   /// A container's state verbs (CTR-02).
   containerVerb,
 

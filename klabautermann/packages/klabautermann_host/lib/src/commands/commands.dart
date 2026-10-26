@@ -41,6 +41,15 @@ final class HostCommandError implements Exception {
   }
 }
 
+/// SYS-03's power verbs (03 §7.11).
+enum PowerVerb {
+  /// Restart the host.
+  reboot,
+
+  /// Turn the host off; it answers again only once someone starts it.
+  poweroff,
+}
+
 /// The `systemctl` verbs the unit view may run (03 §7.5).
 enum SystemctlVerb {
   show,
@@ -312,6 +321,16 @@ final class JournalBoot {
 /// The first systemd whose `journalctl --list-boots` takes `-o json`
 /// (03 §7.6).
 const int kListBootsJsonSystemd = 251;
+
+/// [HostCommands.oomKills]' section markers: the `oom_kill` count of
+/// `/proc/vmstat`, which kernel log was read, and how many of its lines.
+const kOomVmstatMarker = '== vmstat';
+const kOomSourceMarker = '== source';
+const kOomReadMarker = '== read';
+
+/// How many of the current boot's OOM kill lines [HostCommands.oomKills]
+/// keeps, the newest.
+const kOomLinesKept = 50;
 
 /// How many earlier boots [HostCommands.bootEnds] reads the ends of.
 const kBootEndsRead = 10;
@@ -925,6 +944,16 @@ abstract final class HostCommands {
       'command -v "\$m" >/dev/null 2>&1 && { echo "\${m%-get}"; exit 0; }; '
       'done; exit 1';
 
+  /// The host's own name, as SYS-03's typed confirmation asks for it.
+  static List<String> hostname() => const ['uname', '-n'];
+
+  /// SYS-03's [verb], run as root: `systemctl` where systemd runs the
+  /// host ([systemd]), which queues the job and returns, otherwise the
+  /// `reboot` and `poweroff` that BusyBox and sysvinit provide, which
+  /// signal init and return.
+  static List<String> power(PowerVerb verb, {required bool systemd}) =>
+      systemd ? ['systemctl', verb.name] : [verb.name];
+
   /// PKG-05's refresh of [manager]'s package lists, run as root: what the
   /// check reads afterwards. pacman has none, since `pacman -Sy` without
   /// upgrading leaves a partly upgraded system, so it throws
@@ -958,6 +987,36 @@ abstract final class HostCommands {
       'elif command -v zypper >/dev/null 2>&1; then '
       'echo "== tool zypper"; exec zypper ps -sss; '
       'else echo "== tool none"; fi';
+
+  /// MEM-03's read (03 §7.1): the kills since boot from `/proc/vmstat`'s
+  /// `oom_kill` (Linux 4.13+), then the current boot's kill lines from the
+  /// kernel log, the journal's where the login user may read it, else
+  /// `dmesg`, which `kernel.dmesg_restrict` may refuse. Only the newest
+  /// [kOomLinesKept] are kept; `parseOomKills` reads them.
+  static List<String> oomKills() => const ['sh', '-c', _oomKills];
+
+  static const _oomKills =
+      '''
+echo "$kOomVmstatMarker \$(awk '\$1 == "oom_kill" { print \$2 }' /proc/vmstat 2>/dev/null)"
+kernel() {
+  if command -v journalctl >/dev/null 2>&1 &&
+    journalctl -k -b -q -n 1 --no-pager 2>/dev/null | grep -q .; then
+    echo '$kOomSourceMarker journal'
+    journalctl -k -b -q --no-pager -o short-unix 2>/dev/null
+  else
+    echo '$kOomSourceMarker dmesg'
+    dmesg 2>/dev/null
+  fi
+}
+kernel | awk -v keep=$kOomLinesKept '
+  NR == 1 { print; next }
+  { n++ }
+  /Killed process [0-9]+ \\(|oom-kill:/ { kept[k++ % keep] = \$0 }
+  END {
+    for (i = k > keep ? k - keep : 0; i < k; i++) print kept[i % keep]
+    print "$kOomReadMarker " n + 0
+  }'
+exit 0''';
 
   static const _packageCheck = r'''
 have() { command -v "$1" >/dev/null 2>&1; }
