@@ -927,6 +927,116 @@ class AppLocalizationsEn extends AppLocalizations {
   String get processesCommandLineTitle => 'Command line';
 
   @override
+  String get processesDetailTitle => 'Details';
+
+  @override
+  String get processesDetailReading => 'Reading details…';
+
+  @override
+  String get processesDetailReadAgain => 'Read again';
+
+  @override
+  String processesDetailFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server denied reading this process.',
+      'missing': 'The server lacks a tool this read needs.',
+      'other': 'Reading this process\'s details failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String processesDetailEnded(String end) {
+    String _temp0 = intl.Intl.selectLogic(end, {
+      'gone': 'This process has exited.',
+      'reused':
+          'Its process ID now belongs to another process, so nothing was read.',
+      'other': 'This process has ended.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get processesDetailNoStart =>
+      'The server did not report when this process started, so its details are not read.';
+
+  @override
+  String get processesDetailUnit => 'Unit';
+
+  @override
+  String get processesDetailNoUnit => 'None';
+
+  @override
+  String get processesDetailContainer => 'Container';
+
+  @override
+  String processesDetailContainerValue(String runtime, String id) {
+    String _temp0 = intl.Intl.selectLogic(runtime, {
+      'docker': 'Docker',
+      'podman': 'Podman',
+      'containerd': 'containerd',
+      'crio': 'CRI-O',
+      'other': 'Container',
+    });
+    return '$_temp0 $id';
+  }
+
+  @override
+  String get processesDetailCwd => 'Working directory';
+
+  @override
+  String get processesDetailNotReadable => 'Not readable as this user';
+
+  @override
+  String get processesDetailThreads => 'Threads';
+
+  @override
+  String get processesDetailSwap => 'Swap';
+
+  @override
+  String get processesDetailSwitches => 'Context switches';
+
+  @override
+  String processesDetailSwitchesValue(int voluntary, int involuntary) {
+    return '$voluntary voluntary, $involuntary involuntary';
+  }
+
+  @override
+  String get processesDetailOpenFiles => 'Open files';
+
+  @override
+  String processesDetailOpenFilesOf(int count, int limit) {
+    return '$count of $limit';
+  }
+
+  @override
+  String get processesDetailProcessLimit => 'Process limit';
+
+  @override
+  String get processesDetailUnlimited => 'Unlimited';
+
+  @override
+  String get processesEnvironmentTitle => 'Environment';
+
+  @override
+  String get processesEnvironmentNone => 'No environment variables.';
+
+  @override
+  String get processesEnvironmentDenied =>
+      'The environment is not readable as this user.';
+
+  @override
+  String processesEnvironmentCapped(int count) {
+    return 'Only the first $count variables were read.';
+  }
+
+  @override
+  String processesEnvironmentEntry(String name, String value) {
+    return '$name: $value';
+  }
+
+  @override
   String processesRevealNote(int seconds) {
     return 'Select a masked argument to show it for $seconds seconds.';
   }

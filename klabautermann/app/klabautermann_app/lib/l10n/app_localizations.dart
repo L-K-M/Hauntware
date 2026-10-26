@@ -1402,6 +1402,156 @@ abstract class AppLocalizations {
   /// **'Command line'**
   String get processesCommandLineTitle;
 
+  /// Heading of the facts a process's details read from the server (PRC-04, PRC-05).
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get processesDetailTitle;
+
+  /// Shown while a process's details are read from the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading details…'**
+  String get processesDetailReading;
+
+  /// Button that reads a process's details from the server again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get processesDetailReadAgain;
+
+  /// Shown when a process's details could not be read.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected to the server.} denied{The server denied reading this process.} missing{The server lacks a tool this read needs.} other{Reading this process\'s details failed.}}'**
+  String processesDetailFailed(String failure);
+
+  /// Shown when a process ended before its details were read: it exited, or its PID was reused by another process.
+  ///
+  /// In en, this message translates to:
+  /// **'{end, select, gone{This process has exited.} reused{Its process ID now belongs to another process, so nothing was read.} other{This process has ended.}}'**
+  String processesDetailEnded(String end);
+
+  /// Shown in a process's details when the reading has no start time, which the read needs to make sure it reads the same process.
+  ///
+  /// In en, this message translates to:
+  /// **'The server did not report when this process started, so its details are not read.'**
+  String get processesDetailNoStart;
+
+  /// Label of the systemd unit a process runs in.
+  ///
+  /// In en, this message translates to:
+  /// **'Unit'**
+  String get processesDetailUnit;
+
+  /// Value of a process's unit when it runs outside any systemd unit.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get processesDetailNoUnit;
+
+  /// Label of the container a process runs in.
+  ///
+  /// In en, this message translates to:
+  /// **'Container'**
+  String get processesDetailContainer;
+
+  /// The container a process runs in: its runtime and short ID.
+  ///
+  /// In en, this message translates to:
+  /// **'{runtime, select, docker{Docker} podman{Podman} containerd{containerd} crio{CRI-O} other{Container}} {id}'**
+  String processesDetailContainerValue(String runtime, String id);
+
+  /// Label of a process's working directory.
+  ///
+  /// In en, this message translates to:
+  /// **'Working directory'**
+  String get processesDetailCwd;
+
+  /// Value of a process fact the login user may not read.
+  ///
+  /// In en, this message translates to:
+  /// **'Not readable as this user'**
+  String get processesDetailNotReadable;
+
+  /// Label of a process's thread count.
+  ///
+  /// In en, this message translates to:
+  /// **'Threads'**
+  String get processesDetailThreads;
+
+  /// Label of how much of a process's memory is swapped out.
+  ///
+  /// In en, this message translates to:
+  /// **'Swap'**
+  String get processesDetailSwap;
+
+  /// Label of a process's context switch counts.
+  ///
+  /// In en, this message translates to:
+  /// **'Context switches'**
+  String get processesDetailSwitches;
+
+  /// A process's voluntary and involuntary context switches.
+  ///
+  /// In en, this message translates to:
+  /// **'{voluntary} voluntary, {involuntary} involuntary'**
+  String processesDetailSwitchesValue(int voluntary, int involuntary);
+
+  /// Label of how many files a process holds open.
+  ///
+  /// In en, this message translates to:
+  /// **'Open files'**
+  String get processesDetailOpenFiles;
+
+  /// How many files a process holds open, out of its soft limit.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} of {limit}'**
+  String processesDetailOpenFilesOf(int count, int limit);
+
+  /// Label of the most processes the process's user may run (its soft limit).
+  ///
+  /// In en, this message translates to:
+  /// **'Process limit'**
+  String get processesDetailProcessLimit;
+
+  /// Value of a limit the process does not have.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlimited'**
+  String get processesDetailUnlimited;
+
+  /// Heading of a process's environment variables in its details.
+  ///
+  /// In en, this message translates to:
+  /// **'Environment'**
+  String get processesEnvironmentTitle;
+
+  /// Shown when a process has no environment variables.
+  ///
+  /// In en, this message translates to:
+  /// **'No environment variables.'**
+  String get processesEnvironmentNone;
+
+  /// Shown when the login user may not read a process's environment.
+  ///
+  /// In en, this message translates to:
+  /// **'The environment is not readable as this user.'**
+  String get processesEnvironmentDenied;
+
+  /// Shown under a process's environment when it was cut at the read's limit.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the first {count} variables were read.'**
+  String processesEnvironmentCapped(int count);
+
+  /// Screen-reader label of one of a process's environment variables: its name and its value, or the value's mask in words.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}: {value}'**
+  String processesEnvironmentEntry(String name, String value);
+
   /// Note above a process's arguments when some are masked secrets (SAF-07): a reveal is temporary and stays on this device.
   ///
   /// In en, this message translates to:

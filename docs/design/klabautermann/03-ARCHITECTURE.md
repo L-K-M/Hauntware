@@ -3327,6 +3327,17 @@ unless the user enables admin mode for that panel.
   them above the table. Runaway thread counts need the thread count,
   which the `procs` rows do not carry yet; they come with the process
   detail (N43b).
+
+  As built (M6 N43c), a process's details sheet reads
+  `ProcessDetailQuery` for its PID and start ticks when it opens and on
+  "Read again": the unit and container that own it (the runtime and the
+  container id's first 12 characters), working directory, threads,
+  swap, context switches, open files against their soft limit and the
+  process limit, then its environment after the arguments. Facts the
+  login user may not read say so; a process that exited or whose PID
+  was reused says which, and a reading without start ticks is not read.
+  Masked variables reveal like masked arguments (SAF-07), and a new
+  read masks them again.
 - **v1.x.** Renice and ionice, per-process I/O (sudo).
 
 As built in M4 (E08, `klabautermann_host/lib/src/commands/commands.dart`),
