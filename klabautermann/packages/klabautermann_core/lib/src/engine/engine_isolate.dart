@@ -28,6 +28,7 @@ import '../admin/restarts.dart';
 import '../admin/safety_policy.dart';
 import '../admin/smart.dart';
 import '../admin/user_crontabs.dart';
+import '../certificates/tls_check.dart';
 import '../alerts/alert_evaluator.dart';
 import '../history/history_store.dart';
 import '../capabilities/capability_cache.dart';
@@ -1238,6 +1239,17 @@ void engineMain(
           RedactedLines(
             requestId,
             lines.map(_exportRedactor.redact).join('\n'),
+          ),
+        );
+      case CheckTlsEndpoints(:final requestId, :final endpoints):
+        // Not awaited: each check may wait out its timeout, and the queue
+        // keeps serving meanwhile. checkTlsEndpoint never throws.
+        unawaited(
+          Future.wait([
+            for (final endpoint in endpoints.take(kTlsEndpointsMax))
+              checkTlsEndpoint(endpoint),
+          ]).then(
+            (checks) => uiPort.send(TlsEndpointsChecked(requestId, checks)),
           ),
         );
       case OpenTerminal():
