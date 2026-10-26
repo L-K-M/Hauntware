@@ -975,6 +975,14 @@ is on main:
   view. Zombies and processes in uninterruptible sleep carry a badge in
   words ("zombie", "waiting on I/O"), and the tab counts them above the
   list. Thread counts are not read yet.
+- Process detail read (M6 N43b, PRC-04, PRC-05): the engine reads one
+  process's working directory, threads, swap, context switches, limits,
+  open descriptors, environment and cgroups as the login user, after
+  checking its start ticks, and names the systemd unit or container
+  that owns it. Environment values are masked by key; the working
+  directory, descriptors and environment of another user's process come
+  back marked denied. The Processes tab shows it with
+  N43c.
 - Processes tab (M2, 03 §7.2, §8.9, §10.4, PRC-01, SAF-07, D48, D50,
   K33, #238): the Processes tab lists the `procs` stream while it shows,
   in the sortable table by CPU (busiest first), IEC memory, user, start
