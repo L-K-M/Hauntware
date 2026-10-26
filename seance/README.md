@@ -40,4 +40,6 @@ that for the full rationale, alternatives considered, and roadmap).
 ## License
 
 Séance's original code uses the [Unlicense](LICENSE). Vendored xterm.dart
-remains [MIT-licensed](third_party/xterm/LICENSE).
+and flutter_pty remain MIT-licensed ([xterm](third_party/xterm/LICENSE),
+[flutter_pty](third_party/flutter_pty/LICENSE)). The other bundled code keeps
+its own licenses too; see the suite's [License section](../README.md#license).

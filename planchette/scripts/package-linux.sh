@@ -367,7 +367,9 @@ install_icons "$DEBROOT/usr"
 
 # The Debian copyright file must carry the license text verbatim — a bare
 # pointer to the repository leaves the .deb's licensing undiscoverable
-# offline.
+# offline. It is machine-readable (DEP-5): the Unlicense covers Planchette's
+# own code only; the Flutter bundle also holds third-party components that
+# keep their own licenses, whose texts ship next to it.
 LICENSE_FILE="$ROOT/LICENSE"
 [[ -f "$LICENSE_FILE" ]] \
   || die "LICENSE not found at $LICENSE_FILE — the .deb copyright file embeds it verbatim"
@@ -376,18 +378,59 @@ LICENSE_FILE="$ROOT/LICENSE"
 write_copyright() {  # $1 = destination; uses $VERSION and $LICENSE_FILE
   {
     cat <<EOF
-Planchette — a cross-platform text editor
-Source: https://github.com/L-K-M/Hauntware
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Planchette
 Upstream-Version: $VERSION
-License: Unlicense — the full text follows.
+Source: https://github.com/L-K-M/Hauntware
+Comment: Planchette — a cross-platform text editor.
+ The Unlicense covers this package's own code. The bundled third-party
+ components keep their own licenses; their license and notice texts are
+ in Third-Party-Notices.txt next to this file.
 
+Files: *
+Copyright: 2026 L-K-M
+License: Unlicense
+
+Files: usr/lib/planchette/*
+Copyright: 2026 L-K-M
+ The authors of the bundled components, as listed in Third-Party-Notices.txt
+License: Unlicense and LicenseRef-Bundled-Flutter
+Comment: The Flutter bundle compiles the app's own code together with the
+ Flutter engine, the Dart runtime, the pub packages and native libraries
+ it uses (vendored ones included) and the bundled fonts.
+
+License: Unlicense
 EOF
-    cat "$LICENSE_FILE"
+    # DEP-5 continuation lines: one leading space, "." for an empty line.
+    sed -e 's/^[[:space:]]*$/./' -e 's/^/ /' "$LICENSE_FILE"
+    cat <<EOF
+
+License: LicenseRef-Bundled-Flutter
+ The Flutter engine, the Dart runtime, the pub packages and native
+ libraries the app compiles in (vendored ones included) and the bundled
+ fonts keep their own licenses. Their license and notice texts are in
+ Third-Party-Notices.txt next to this file.
+EOF
   } > "$1"
 }
 # --- end copyright file writer ----------------------------------------------
 
+# --- third-party notices writer (tests extract this block; keep the markers)
+# Flutter collects the license texts of the engine, the Dart runtime, every
+# package and the fonts into the bundle's data/flutter_assets/NOTICES.Z,
+# gzip-compressed. The package ships them readable; a bundle without them
+# must not be packaged.
+write_third_party_notices() {  # $1 = bundle, $2 = destination
+  local notices="$1/data/flutter_assets/NOTICES.Z"
+  [[ -s "$notices" ]] \
+    || die "$notices not found — the package must carry the bundled components' notices"
+  gzip -dc "$notices" > "$2" || die "cannot decompress $notices"
+  [[ -s "$2" ]] || die "$notices holds no notices"
+}
+# --- end third-party notices writer -----------------------------------------
+
 write_copyright "$DEBROOT/usr/share/doc/planchette/copyright"
+write_third_party_notices "$BUNDLE" "$DEBROOT/usr/share/doc/planchette/Third-Party-Notices.txt"
 
 cat > "$DEBROOT/DEBIAN/postinst" <<'EOF'
 #!/bin/sh
