@@ -247,6 +247,66 @@ void main() {
     );
   });
 
+  testWidgets('PRC-03: the tree shows children under their parent, in the '
+      'sort\'s order, and keeps a match\'s parents', (tester) async {
+    final panel = await _pump(tester);
+    await panel.all(tester);
+    expect(_order(tester), [2041, 812, 1, 2, 3100]);
+
+    await tester.tap(find.widgetWithText(FilterChip, 'Tree'));
+    await tester.pumpAndSettle();
+    // systemd's children by CPU under it; kthreadd and bash are roots.
+    expect(_order(tester), [1, 2041, 812, 2, 3100]);
+    final indent =
+        tester.getTopLeft(find.text('node server.js')).dx -
+        tester.getTopLeft(find.text('/sbin/init')).dx;
+    expect(indent, greaterThan(0));
+
+    await tester.enterText(find.byType(TextField), 'mysqld');
+    await tester.pumpAndSettle();
+    expect(_order(tester), [1, 812]);
+  });
+
+  testWidgets('PRC-06: zombies and processes stuck on I/O are flagged in '
+      'words and counted', (tester) async {
+    final panel = await _pump(tester);
+    final base = _procs();
+    await panel.all(
+      tester,
+      ProcsResult(
+        [
+          ...base.processes,
+          const ProcessRow(
+            pid: 4000,
+            parentPid: 2041,
+            name: 'defunct-worker',
+            state: 'Z',
+            uid: 1000,
+          ),
+          ProcessRow(
+            pid: 4001,
+            parentPid: 1,
+            name: 'rsync',
+            state: 'D',
+            uid: 0,
+            arguments: [MaskedValue.plain('rsync'), MaskedValue.plain('-a')],
+          ),
+        ],
+        totalProcesses: 7,
+        selection: ProcsSelection.all,
+      ),
+    );
+    expect(
+      find.text(
+        '1 zombie process; 1 process waiting on I/O it cannot be '
+        'interrupted from',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('zombie'), findsOneWidget);
+    expect(find.text('waiting on I/O'), findsOneWidget);
+  });
+
   testWidgets('a masked argument reads as masked, never as its secret or '
       'asterisks (SAF-07)', (tester) async {
     final handle = tester.ensureSemantics();

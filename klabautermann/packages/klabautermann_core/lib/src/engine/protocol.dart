@@ -25,8 +25,10 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         NetRate,
         OpDirectoryKind,
         OpDirectoryListing,
+        PackageCheck,
         ProcessDetail,
         ProcsSelection,
+        RestartCheck,
         SmartDisk,
         SystemctlVerb,
         SystemdUnit,
@@ -289,6 +291,10 @@ import '../operations/plan_types.dart';
 /// An image's history then joined v3 the same way (03 §7.14 IMG-04, M6
 /// plan N14): [DockerImageHistoryQuery], answered by
 /// [DockerImageHistoryPayload] with each layer's instruction masked.
+///
+/// A container's processes then joined v3 the same way (03 §7.12 CTR-10,
+/// M6 plan N17): [DockerContainerTopQuery], answered by
+/// [DockerContainerTopPayload] with each command line masked.
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -1206,6 +1212,33 @@ final class ReadUserCrontabs extends EngineRequest {
 /// left asleep. One [SmartReport] with [requestId] answers it.
 final class ReadSmart extends EngineRequest {
   const ReadSmart(this.serverId, {required this.requestId});
+
+  final String serverId;
+  final String requestId;
+}
+
+/// Reads [serverId]'s pending updates and reboot flag (PKG-01 to PKG-03,
+/// 03 §7.8) as the login user, from the package manager's cached
+/// metadata. The engine keeps each server's answer for an hour and
+/// answers from it unless [fresh] asks for a new check. One
+/// [PackagesReport] with [requestId] answers it.
+final class ReadPackages extends EngineRequest {
+  const ReadPackages(
+    this.serverId, {
+    required this.requestId,
+    this.fresh = false,
+  });
+
+  final String serverId;
+  final String requestId;
+  final bool fresh;
+}
+
+/// Reads [serverId]'s services still running replaced libraries (PKG-04,
+/// 03 §7.8): in admin mode only, since the tools read every process's
+/// memory maps. One [RestartReport] with [requestId] answers it.
+final class ReadRestarts extends EngineRequest {
+  const ReadRestarts(this.serverId, {required this.requestId});
 
   final String serverId;
   final String requestId;
@@ -2668,6 +2701,70 @@ final class SmartReport extends EngineEvent {
   final SmartReportFailure? failure;
 }
 
+/// Why a [ReadRestarts] read nothing.
+enum RestartReportFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// Admin mode is off for the server.
+  adminRequired,
+
+  /// Elevation refused, so nothing ran.
+  elevationRefused,
+
+  /// None of needrestart, needs-restarting and zypper is installed.
+  missing,
+
+  /// The link failed while reading.
+  transport,
+}
+
+/// The answer to [ReadRestarts]: what the check found, or why nothing.
+final class RestartReport extends EngineEvent {
+  const RestartReport({
+    required this.serverId,
+    required this.requestId,
+    this.check,
+    this.failure,
+  });
+
+  final String serverId;
+  final String requestId;
+  final RestartCheck? check;
+  final RestartReportFailure? failure;
+}
+
+/// Why a [ReadPackages] checked nothing.
+enum PackagesReportFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// The link failed while checking.
+  transport,
+}
+
+/// The answer to [ReadPackages]: what the check found at [checkedAt], by
+/// the engine's clock, or why there was no check.
+final class PackagesReport extends EngineEvent {
+  const PackagesReport({
+    required this.serverId,
+    required this.requestId,
+    this.check,
+    this.checkedAt,
+    this.failure,
+  });
+
+  final String serverId;
+  final String requestId;
+
+  /// What the check found; its own failure says when the host's package
+  /// manager could not answer.
+  final PackageCheck? check;
+
+  final DateTime? checkedAt;
+  final PackagesReportFailure? failure;
+}
+
 /// The answer to [ReadUserCrontabs]: the listed users' crontab lines as
 /// jobs rows, commands masked (8.9), with their next runs as the `cron`
 /// stream's rows have them. A user whose crontab could not be read is in
@@ -3835,6 +3932,17 @@ final class DockerContainerQuery extends DockerQuerySpec {
   final String containerId;
 }
 
+/// One running container's processes (CTR-10). Answered by
+/// [DockerContainerTopPayload]; the daemon refuses a container that is
+/// not running (409), which answers [DockerQueryFailed] with
+/// `daemonError`.
+final class DockerContainerTopQuery extends DockerQuerySpec {
+  const DockerContainerTopQuery(this.containerId);
+
+  /// The container's id or name.
+  final String containerId;
+}
+
 /// The image list (IMG-01). Answered by [DockerImagesPayload].
 final class DockerImagesQuery extends DockerQuerySpec {
   const DockerImagesQuery();
@@ -3973,6 +4081,29 @@ final class DockerImageHistoryPayload extends DockerPayload {
     : layers = List.unmodifiable(layers);
 
   final List<ImageLayer> layers;
+}
+
+/// A container's processes (CTR-10): the columns `ps` named and a row
+/// per process, the command line column masked as Processes masks one
+/// (03 §8.9).
+final class DockerContainerTopPayload extends DockerPayload {
+  DockerContainerTopPayload({
+    required Iterable<String> titles,
+    required Iterable<List<MaskedValue>> processes,
+    this.commandColumn,
+  }) : titles = List.unmodifiable(titles),
+       processes = List.unmodifiable([
+         for (final row in processes) List<MaskedValue>.unmodifiable(row),
+       ]);
+
+  final List<String> titles;
+
+  /// One cell per title; only the command line's can be masked.
+  final List<List<MaskedValue>> processes;
+
+  /// The index of the command line's title, or null where `ps` named
+  /// none (a Windows daemon lists the image name instead).
+  final int? commandColumn;
 }
 
 /// One layer of an image's history (IMG-04).
@@ -4629,6 +4760,12 @@ final class StartTimer extends ActionIntent {
 
   final String timer;
   final UnitScope scope;
+}
+
+/// Refreshes the package manager's lists as root (PKG-05, 03 §7.8), in
+/// admin mode, so the next package check reads current metadata.
+final class RefreshPackageLists extends ActionIntent {
+  const RefreshPackageLists(super.serverId);
 }
 
 /// Which systemd manager a unit action or query addresses (03 §7.5,

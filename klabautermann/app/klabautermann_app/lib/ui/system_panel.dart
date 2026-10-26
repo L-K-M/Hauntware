@@ -6,6 +6,7 @@ import 'package:ghost_ui/ghost_ui.dart'
     show ghostFormatBinaryRate, ghostFormatBinarySize, scaledGhostFileRowExtent;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'accounts.dart';
@@ -17,6 +18,7 @@ import 'gpus.dart';
 import 'sortable_table.dart';
 import 'system_view.dart';
 import 'temperatures.dart';
+import 'updates.dart';
 
 /// The System tab's sections, which key them; the Disks section's id also
 /// prefixes its table's keys.
@@ -30,6 +32,7 @@ enum SystemSection {
   temperatures,
   gpus,
   driveHealth,
+  updates,
   accounts,
 }
 
@@ -57,10 +60,15 @@ class SystemPanel extends StatefulWidget {
     super.key,
     required this.monitoring,
     required this.serverId,
+    this.fleet,
   });
 
   final MonitoringController monitoring;
   final String serverId;
+
+  /// The fleet, for the Updates section's fleet update center (PKG-06);
+  /// without it the section offers none.
+  final FleetController? fleet;
 
   @override
   State<SystemPanel> createState() => _SystemPanelState();
@@ -208,6 +216,13 @@ class _SystemPanelState extends State<SystemPanel> {
                 key: const ValueKey(SystemSection.driveHealth),
                 serverId: widget.serverId,
                 tableId: SystemSection.driveHealth.name,
+              ),
+              UpdatesSection(
+                key: const ValueKey(SystemSection.updates),
+                reads: widget.monitoring.packages,
+                serverId: widget.serverId,
+                tableId: SystemSection.updates.name,
+                fleet: widget.fleet,
               ),
               AccountsSection(
                 key: const ValueKey(SystemSection.accounts),

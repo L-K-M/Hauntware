@@ -93,6 +93,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // A job history read's request id, matched in the engine's answer.
   'lib/controllers/job_history_reads.dart': {r"'history-${_count++}'"},
+  // A package check's request id, matched in the engine's answer.
+  'lib/controllers/package_reads.dart': {r"'packages-${_count++}'"},
+  // An empty security cell, a missing detail, and the separator between
+  // package names the server reported.
+  'lib/ui/updates.dart': {"''", "', '"},
+  // A failed check's missing detail.
+  'lib/ui/fleet_updates.dart': {"''"},
   // A history rollup read's request id, matched in the engine's answer.
   'lib/controllers/history_reads.dart': {r"'rollup-${_count++}'"},
   // The not-saved diagnostic; the Safety tab and the header's Safety menu
@@ -419,6 +426,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "''",
     "', '",
   },
+  // The ps column title of resident memory, matched, never shown.
+  'lib/ui/docker/container_processes.dart': {"'RSS'"},
   'lib/ui/docker/container_details_view.dart': {
     // The Engine API's restart policy names, matched, never shown; the
     // empty one is the default.
@@ -780,7 +789,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The ellipsis ending a cut command line, the space between its
     // arguments, and the filter's term separator and the line break
     // between the fields it searches. The plus sign GNU ps ends a cut
-    // user name with, which is matched, never shown.
+    // user name with, and the run states PRC-06 flags (zombie and
+    // uninterruptible sleep), which are matched, never shown.
+    "'Z'",
+    "'D'",
     r"'${text.substring(0, end)}…'",
     "' '",
     r"r'\s+'",

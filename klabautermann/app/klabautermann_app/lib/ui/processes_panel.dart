@@ -75,6 +75,10 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
   );
   final _filter = TextEditingController();
 
+  /// Whether the rows show as PRC-03's tree, children under their parent
+  /// in the sort's order, rather than one sorted list.
+  bool _tree = false;
+
   @override
   void didUpdateWidget(ProcessesPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -136,6 +140,9 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
       _ => null,
     };
     final leftOut = result == null ? null : processesLeftOut(result);
+    final flagCounts = result == null
+        ? const <ProcessFlag, int>{}
+        : processFlagCounts(result.processes);
     final freshness = _freshness(reading, sampling);
 
     return LayoutBuilder(
@@ -175,8 +182,29 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
                   null => l10n.processesShownSome(leftOut.shown),
                 },
               ),
+            if (flagCounts.isNotEmpty)
+              _Notice(
+                icon: Icons.warning_amber,
+                text: [
+                  for (final MapEntry(:key, :value) in flagCounts.entries)
+                    l10n.processesFlagCount(key.name, value),
+                ].join(l10n.processesFlagSeparator),
+              ),
             if (result != null) _filterField(l10n),
-            if (result != null && !wide) _sortControls(l10n),
+            if (result != null)
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  FilterChip(
+                    label: Text(l10n.processesTree),
+                    selected: _tree,
+                    onSelected: (tree) => setState(() => _tree = tree),
+                  ),
+                  if (!wide) _sortControls(l10n),
+                ],
+              ),
           ],
         );
         final padding = EdgeInsets.all(wide ? 20 : 16);
@@ -184,11 +212,32 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
           return SingleChildScrollView(padding: padding, child: header);
         }
 
-        final columns = _columns(l10n, profile, reading.at);
+        // Filled below in tree mode; the command cell indents by it.
+        final depths = <int, int>{};
+        final columns = _columns(l10n, profile, reading.at, depths: depths);
         final user = columns.firstWhere(
           (column) => column.id == ProcessColumn.user.name,
         );
-        final rows = filterProcesses(result.processes, _filter.text, user.text);
+        final matches = filterProcesses(
+          result.processes,
+          _filter.text,
+          user.text,
+        );
+        final List<ProcessRow> rows;
+        if (_tree) {
+          // Siblings keep the sort's order; a filter keeps each match's
+          // ancestors so it stays in place.
+          final kept = _filter.text.trim().isEmpty || matches.isEmpty
+              ? matches
+              : withAncestors(matches, result.processes);
+          final tree = processTree(sortTableRows(kept, columns, _sort));
+          rows = [for (final entry in tree) entry.row];
+          for (final entry in tree) {
+            depths[entry.row.pid] = entry.depth;
+          }
+        } else {
+          rows = matches;
+        }
         final empty = Text(
           _filter.text.trim().isEmpty
               ? l10n.processesEmpty
@@ -209,7 +258,9 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
                 columns: columns,
                 rows: rows,
                 rowKey: (row) => row.pid,
-                sort: _sort,
+                // The tree is already in order; a header still picks the
+                // order of siblings.
+                sort: _tree ? null : _sort,
                 onSort: (sort) => setState(() => _sort = sort),
                 onRowActivated: open,
                 // PRC-02's signals, where actions are allowed (M4 E21).
@@ -220,7 +271,7 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
                 ),
                 empty: Padding(padding: const EdgeInsets.all(16), child: empty),
               )
-            : _list(rows, columns, empty, open);
+            : _list(rows, columns, empty, open, depths);
         // Values grey once stale (03 §9.5 item 4); the list keeps its place
         // in the tree as they do.
         final greyed = theme.copyWith(
@@ -341,10 +392,11 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
     List<SortableTableColumn<ProcessRow>> columns,
     Widget empty,
     ValueChanged<ProcessRow> open,
+    Map<int, int> depths,
   ) {
     if (rows.isEmpty) return empty;
 
-    final sorted = sortTableRows(rows, columns, _sort);
+    final sorted = _tree ? rows : sortTableRows(rows, columns, _sort);
     final l10n = AppLocalizations.of(context);
     return ListView.separated(
       itemCount: sorted.length,
@@ -369,7 +421,11 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 spacing: 4,
                 children: [
-                  _CommandText(row: row, maxLines: 2),
+                  _CommandText(
+                    row: row,
+                    maxLines: 2,
+                    depth: depths[row.pid] ?? 0,
+                  ),
                   Wrap(
                     spacing: 16,
                     runSpacing: 2,
@@ -423,8 +479,9 @@ String _label(AppLocalizations l10n, ProcessColumn column) => switch (column) {
 List<SortableTableColumn<ProcessRow>> _columns(
   AppLocalizations l10n,
   HostProfile? profile,
-  DateTime at,
-) {
+  DateTime at, {
+  Map<int, int> depths = const {},
+}) {
   final unknown = l10n.chartUnknownValue;
   final day = at.toLocal();
   String started(DateTime? startedAt) {
@@ -468,7 +525,8 @@ List<SortableTableColumn<ProcessRow>> _columns(
       (row) => (commandLineText(row) ?? row.name)?.toLowerCase(),
       extent: const FlexColumnExtent(3),
       alignment: CellAlignment.start,
-      cell: (context, row) => _CommandText(row: row),
+      cell: (context, row) =>
+          _CommandText(row: row, depth: depths[row.pid] ?? 0),
     ),
     column(
       ProcessColumn.pid,
@@ -539,15 +597,19 @@ String _commandText(
 /// icon, so it is told apart without colour (A11Y-01). The table reads
 /// the spoken text instead.
 class _CommandText extends StatelessWidget {
-  const _CommandText({required this.row, this.maxLines = 1});
+  const _CommandText({required this.row, this.maxLines = 1, this.depth = 0});
 
   final ProcessRow row;
   final int maxLines;
+
+  /// Parents above the row in PRC-03's tree; 0 outside it.
+  final int depth;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final flag = processFlag(row);
     final text = Text(
       _commandText(l10n, row),
       maxLines: maxLines,
@@ -555,18 +617,60 @@ class _CommandText extends StatelessWidget {
       softWrap: maxLines > 1,
       style: theme.textTheme.bodyMedium,
     );
-    if (commandLineText(row) != null) return text;
+    final line = commandLineText(row) != null && flag == null
+        ? text
+        : Row(
+            spacing: 4,
+            children: [
+              if (commandLineText(row) == null)
+                Icon(
+                  Icons.info_outline,
+                  size: 14,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              // PRC-06: the state in words beside its colour (A11Y-01).
+              if (flag != null) _FlagBadge(flag: flag),
+              Flexible(child: text),
+            ],
+          );
+    if (depth == 0) return line;
 
-    return Row(
-      spacing: 4,
-      children: [
-        Icon(
-          Icons.info_outline,
-          size: 14,
-          color: theme.colorScheme.onSurfaceVariant,
+    return Padding(
+      padding: EdgeInsetsDirectional.only(
+        start: _treeIndent * depth.clamp(0, kProcessTreeDepthShown),
+      ),
+      child: line,
+    );
+  }
+}
+
+/// How far each tree level indents a command.
+const double _treeIndent = 12;
+
+/// PRC-06's word for a flagged run state, in the error container's
+/// colours.
+class _FlagBadge extends StatelessWidget {
+  const _FlagBadge({required this.flag});
+
+  final ProcessFlag flag;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Text(
+          AppLocalizations.of(context).processesFlag(flag.name),
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onErrorContainer,
+          ),
         ),
-        Flexible(child: text),
-      ],
+      ),
     );
   }
 }

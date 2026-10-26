@@ -406,6 +406,46 @@ void main() {
     });
   });
 
+  group('refresh package lists (PKG-05)', () {
+    const refresh = RefreshPackageLists(_server);
+
+    test('the found manager\'s lists refresh as root, in admin mode '
+        'only', () async {
+      final link = _Link({'command -v': _out('apt\n')});
+      expect(
+        (await planHostAction(refresh, _context(link))).refusal,
+        ActionRefusalReason.adminRequired,
+      );
+      expect(link.commands, isEmpty);
+
+      final preview = (await planHostAction(
+        refresh,
+        _context(link, adminMode: true),
+      )).plan!.preview;
+      expect(preview.targetName, 'apt');
+      final step = preview.steps.single as ShellStep;
+      expect(step.argv, ['apt-get', '-q', 'update']);
+      expect(step.elevated, isTrue);
+      expect(preview.requiredLevel, RequiredLevel.admin);
+      expect(preview.hostWrites, contains(HostWriteRow.packageLists));
+      expect(preview.requiredTier, ConfirmationTier.acknowledge);
+    });
+
+    test('pacman, or no manager, is refused', () async {
+      for (final answer in [
+        _out('pacman\n'),
+        const RemoteCommandResult(exitCode: 1),
+      ]) {
+        final link = _Link({'command -v': answer});
+        final attempt = await planHostAction(
+          refresh,
+          _context(link, adminMode: true),
+        );
+        expect(attempt.refusal, ActionRefusalReason.invalidTarget);
+      }
+    });
+  });
+
   test('a link that fails while planning refuses with noLink', () async {
     final link = _process()
       ..failure = const RemoteCommandException('channel closed');

@@ -105,6 +105,19 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         TimersSnapshot,
         UnitListFormat,
         UnitsSnapshot;
+// The System tab's Updates section (PKG-01 to PKG-04): what a
+// PackagesReport's or a RestartReport's check found.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show
+        KernelState,
+        PackageCheck,
+        PackageCheckFailure,
+        PackageManager,
+        PackageUpdate,
+        RebootState,
+        RestartCheck,
+        RestartTool,
+        kPackageUpdatesKept;
 // A process's details and owner (PRC-04, PRC-05), as a HostResult's
 // ProcessDetails carry them.
 export 'package:klabautermann_host/klabautermann_host.dart'

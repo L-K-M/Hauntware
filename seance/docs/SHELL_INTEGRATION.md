@@ -1,7 +1,9 @@
 # Shell integration
 
 Séance can follow a shell directory without integration when the shell emits
-OSC 7 or a conventional Bash title. The optional setup below also marks an
+OSC 7 or a conventional Bash title. On a Linux server it also follows a shell
+that reports neither, by reading the shell's directory from `/proc` over a
+separate channel after each Enter. The optional setup below also marks an
 idle prompt, which enables **Open terminal here** without guessing whether text
 is already waiting on the command line.
 

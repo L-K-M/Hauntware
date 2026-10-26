@@ -969,12 +969,19 @@ is on main:
   Since K44b turned links on, the app's engine samples a connected server
   and sends its profile, so the tab shows its readings; phones reach it
   through More (K40, above).
+- Process tree and state flags (M6 N43a, PRC-03, PRC-06): the
+  Processes tab's Tree toggle shows each process under its parent, with
+  siblings in the chosen order; a filter keeps the matches' parents in
+  view. Zombies and processes in uninterruptible sleep carry a badge in
+  words ("zombie", "waiting on I/O"), and the tab counts them above the
+  list. Thread counts are not read yet.
 - Process detail read (M6 N43b, PRC-04, PRC-05): the engine reads one
   process's working directory, threads, swap, context switches, limits,
   open descriptors, environment and cgroups as the login user, after
   checking its start ticks, and names the systemd unit or container
-  that owns it. Environment values are masked by key; sections the user
-  may not read come back marked denied. The Processes tab shows it with
+  that owns it. Environment values are masked by key; the working
+  directory, descriptors and environment of another user's process come
+  back marked denied. The Processes tab shows it with
   N43c.
 - Processes tab (M2, 03 §7.2, §8.9, §10.4, PRC-01, SAF-07, D48, D50,
   K33, #238): the Processes tab lists the `procs` stream while it shows,
@@ -1953,6 +1960,25 @@ is on main:
   clock against this device's. The System tab's Time section shows the
   time zone, whether the clock is synchronized, and how far it is ahead
   or behind (in step within two seconds).
+- Pending updates (M6 N36a, PKG-01 to PKG-03): the System tab's Updates
+  section asks the server's package manager (apt, dnf, zypper, pacman or
+  apk) for its pending updates as the login user and from cached
+  metadata only, never refreshing it. It lists each update with its
+  installed and new versions, security ones first (apt's security
+  origins, dnf's security advisories; zypper counts needed security
+  patches), when the package lists were last downloaded, and whether the
+  server asks for a restart (`/var/run/reboot-required` with the packages
+  that asked, or `needs-restarting -r`). The engine keeps each server's
+  check for an hour; "Check again" runs a new one. In admin mode,
+  "Refresh package lists" (N36b, PKG-05) downloads the lists as root
+  through the action preview (apt, dnf, zypper and apk; never pacman,
+  whose refresh without an upgrade breaks partial installs). Also in
+  admin mode, "Find services to restart" (N36c, PKG-04) lists the
+  services still running replaced libraries (needrestart,
+  needs-restarting or zypper ps) and says when a newer kernel waits for
+  a reboot. "All servers" (N36d, PKG-06) opens the fleet update center:
+  each server's updates, security updates and restart flag from its
+  check of the last hour, most security updates first.
 - Users and logins (M6 N40, ACC-01, ACC-02): the System tab's Users
   section reads the server's accounts and groups with `getent` and who
   is logged in with `who`, as the login user, when it shows and on
@@ -2089,6 +2115,16 @@ is on main:
   in settings.json. Each notification states the same limit (Y3). The
   app icon's badge is not built, and whether the notifications show on
   real Android, iOS, macOS, Windows and Linux desktops is a manual check.
+- Container processes (M6 N17a, CTR-10): a running container's details
+  end with a Processes section, read through `GET /containers/{id}/top`
+  when the details show, when the container starts and on "Read again".
+  Each process shows its command line over its PID, user, CPU share,
+  memory and age. The engine masks each command line as Processes masks
+  one, and "Reveal values" shows them for 30 seconds. Where `ps` rejects
+  those columns (BusyBox, a Windows daemon) the engine asks again with
+  the daemon's default. A stopped container says it has no processes.
+  Tested in the docker package, the router and the details view; no
+  Docker fixture runs it yet.
 - Image history (M6 N14, IMG-04): a click or tap on an Images row opens
   a sheet with the image's layers, newest first, read by id through
   `GET /images/{name}/history`. Each layer shows the instruction that
