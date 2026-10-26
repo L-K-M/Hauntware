@@ -98,7 +98,8 @@ bundle third-party code that keeps its own licenses:
   others).
 - The Android apps also bundle AndroidX, Kotlin and other Maven libraries;
   Klabautermann's also bundles desugar_jdk_libs (GPL-2.0 with the Classpath
-  Exception). Séance for Windows also bundles Microsoft's WIL and C++/WinRT.
+  Exception). Séance and Klabautermann for Windows also bundle Microsoft's
+  WIL and C++/WinRT.
 - The sync server bundles the Dart runtime (with BoringSSL, ICU, zlib and
   other code it embeds) and its pub packages; its Docker image adds Debian
   packages.
@@ -123,8 +124,9 @@ The Unlicense covers Hauntware's own code only, which `planchette/LICENSE`,
 per product. These files hold third-party texts, not the project's license:
 the `LICENSE` files under `*/third_party/` (with PDFium's notices appended
 to pdfium_dart's), `planchette/packages/ghost_fonts/LICENSE` (the fonts'
-licenses), `seance/app/seance_app/LICENSE` (WIL and C++/WinRT after
-Séance's own Unlicense), the Unicode License V3 for the generated Unicode
+licenses), `seance/app/seance_app/LICENSE` and
+`klabautermann/app/klabautermann_app/LICENSE` (WIL and C++/WinRT after the
+app's own Unlicense), the Unicode License V3 for the generated Unicode
 tables in `poltergeist/packages/poltergeist_core/LICENSE`,
 `poltergeist/packages/poltergeist_core/tool/unicode/LICENSE.txt` and
 `poltergeist/app/poltergeist_app/tool/unicode/LICENSE.txt`, and the license
