@@ -823,6 +823,55 @@ class AppLocalizationsEn extends AppLocalizations {
   String get processesParentPid => 'Parent PID';
 
   @override
+  String get processesTree => 'Tree';
+
+  @override
+  String processesFlag(String flag) {
+    String _temp0 = intl.Intl.selectLogic(flag, {
+      'zombie': 'zombie',
+      'uninterruptible': 'waiting on I/O',
+      'other': 'flagged',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String processesFlagCount(String flag, int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString zombie processes',
+      one: '1 zombie process',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$countString processes waiting on I/O they cannot be interrupted from',
+      one: '1 process waiting on I/O it cannot be interrupted from',
+    );
+    String _temp2 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString flagged processes',
+      one: '1 flagged process',
+    );
+    String _temp3 = intl.Intl.selectLogic(flag, {
+      'zombie': '$_temp0',
+      'uninterruptible': '$_temp1',
+      'other': '$_temp2',
+    });
+    return '$_temp3';
+  }
+
+  @override
+  String get processesFlagSeparator => '; ';
+
+  @override
   String get processesState => 'State';
 
   @override
@@ -1244,6 +1293,113 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get systemAccountsTitle => 'Users';
+
+  @override
+  String get systemAccountsColumn => 'Account';
+
+  @override
+  String get systemAccountsUid => 'UID';
+
+  @override
+  String get systemAccountsRoot => 'Root access';
+
+  @override
+  String get systemAccountsGroups => 'Groups';
+
+  @override
+  String get systemAccountsShell => 'Shell';
+
+  @override
+  String systemAccountsRootReason(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'uidZero': 'UID 0',
+      'adminGroup': 'sudo, wheel or admin group',
+      'dockerGroup': 'docker group',
+      'other': 'Can become root',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String systemAccountsFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noLink':
+          'The server is not connected, so its accounts could not be read.',
+      'unreadable': 'The server\'s answer could not be read as its accounts.',
+      'transport': 'The connection failed while the accounts were read.',
+      'other': 'The accounts could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemAccountsReading => 'Reading accounts…';
+
+  @override
+  String systemAccountsNotListed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count more accounts are not listed.',
+      one: '1 more account is not listed.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String systemAccountsShowSystem(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Show $count service accounts',
+      one: 'Show 1 service account',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get systemAccountsHideSystem => 'Hide service accounts';
+
+  @override
+  String get systemAccountsSessionsTitle => 'Logged in';
+
+  @override
+  String get systemAccountsSessionsNone => 'No one is logged in.';
+
+  @override
+  String get systemAccountsSessionsUnknown =>
+      'Who is logged in is unknown: this server\'s who prints a format the app does not read.';
+
+  @override
+  String systemAccountsSessionLocal(String user, String line, DateTime since) {
+    final intl.DateFormat sinceDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String sinceString = sinceDateFormat.format(since);
+
+    return '$user on $line, since $sinceString';
+  }
+
+  @override
+  String systemAccountsSessionRemote(
+    String user,
+    String line,
+    String from,
+    DateTime since,
+  ) {
+    final intl.DateFormat sinceDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String sinceString = sinceDateFormat.format(since);
+
+    return '$user on $line from $from, since $sinceString';
+  }
+
+  @override
+  String get systemAccountsReadAgain => 'Read again';
 
   @override
   String get systemDriveColumn => 'Drive';

@@ -969,6 +969,12 @@ is on main:
   Since K44b turned links on, the app's engine samples a connected server
   and sends its profile, so the tab shows its readings; phones reach it
   through More (K40, above).
+- Process tree and state flags (M6 N43a, PRC-03, PRC-06): the
+  Processes tab's Tree toggle shows each process under its parent, with
+  siblings in the chosen order; a filter keeps the matches' parents in
+  view. Zombies and processes in uninterruptible sleep carry a badge in
+  words ("zombie", "waiting on I/O"), and the tab counts them above the
+  list. Thread counts are not read yet.
 - Processes tab (M2, 03 §7.2, §8.9, §10.4, PRC-01, SAF-07, D48, D50,
   K33, #238): the Processes tab lists the `procs` stream while it shows,
   in the sortable table by CPU (busiest first), IEC memory, user, start
@@ -1946,6 +1952,12 @@ is on main:
   clock against this device's. The System tab's Time section shows the
   time zone, whether the clock is synchronized, and how far it is ahead
   or behind (in step within two seconds).
+- Users and logins (M6 N40, ACC-01, ACC-02): the System tab's Users
+  section reads the server's accounts and groups with `getent` and who
+  is logged in with `who`, as the login user, when it shows and on
+  request. Accounts that can become root (UID 0, the sudo, wheel, admin
+  or docker group) are flagged and sort first; service accounts are
+  hidden until shown. Each login shows its terminal, origin and start.
 - Drive health (M6 N37c, HW-04): in admin mode, the System tab's Drive
   health section reads every drive's SMART health on request through an
   elevated `smartctl --scan-open`, then `smartctl -n standby -a` per

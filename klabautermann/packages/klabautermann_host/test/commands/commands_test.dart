@@ -670,4 +670,13 @@ void main() {
       );
     });
   });
+
+  test('ACC-01\'s read lists accounts, groups and logins between its '
+      'markers, each part capped', () {
+    final [shell, flag, script] = HostCommands.accounts();
+    expect([shell, flag], ['sh', '-c']);
+    expect(script, contains('echo "$kAccountsGroupMarker"'));
+    expect(script, contains('echo "$kAccountsWhoMarker"'));
+    expect('head -n'.allMatches(script), hasLength(3));
+  });
 }

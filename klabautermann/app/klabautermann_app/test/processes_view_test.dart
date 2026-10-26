@@ -171,4 +171,58 @@ void main() {
       total: null,
     ));
   });
+
+  group('tree (PRC-03)', () {
+    ProcessRow node(int pid, int? parent) =>
+        ProcessRow(pid: pid, parentPid: parent);
+
+    test('each row follows its parent, depth first, siblings in the given '
+        'order; a row whose parent is missing is a root', () {
+      final tree = processTree([
+        node(1, 0),
+        node(30, 1),
+        node(10, 1),
+        node(31, 30),
+        node(2, 0),
+        node(50, 999),
+      ]);
+      expect(
+        [for (final e in tree) (e.row.pid, e.depth)],
+        [(1, 0), (30, 1), (31, 2), (10, 1), (2, 0), (50, 0)],
+      );
+    });
+
+    test('a cycle from reused PIDs lists each row once', () {
+      final tree = processTree([node(5, 6), node(6, 5), node(7, 7)]);
+      expect([for (final e in tree) e.row.pid]..sort(), [5, 6, 7]);
+    });
+
+    test('a filtered tree keeps each match\'s ancestors, in order', () {
+      final all = [node(1, 0), node(2, 1), node(3, 2), node(4, 1)];
+      expect(
+        [
+          for (final r in withAncestors([all[2]], all)) r.pid,
+        ],
+        [1, 2, 3],
+      );
+    });
+  });
+
+  test('zombies and uninterruptible sleepers are flagged and counted '
+      '(PRC-06)', () {
+    final rows = [
+      const ProcessRow(pid: 1, state: 'S'),
+      const ProcessRow(pid: 2, state: 'Z'),
+      const ProcessRow(pid: 3, state: 'D'),
+      const ProcessRow(pid: 4, state: 'D'),
+      const ProcessRow(pid: 5),
+    ];
+    expect(processFlag(rows[1]), ProcessFlag.zombie);
+    expect(processFlag(rows[0]), isNull);
+    expect(processFlagCounts(rows), {
+      ProcessFlag.zombie: 1,
+      ProcessFlag.uninterruptible: 2,
+    });
+    expect(processFlagCounts(rows.take(1).toList()), isEmpty);
+  });
 }

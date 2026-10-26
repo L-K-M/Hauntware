@@ -1318,6 +1318,30 @@ abstract class AppLocalizations {
   /// **'Parent PID'**
   String get processesParentPid;
 
+  /// Processes tab: the toggle that shows each process under its parent (PRC-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Tree'**
+  String get processesTree;
+
+  /// Processes tab: the badge beside a process in a flagged run state (PRC-06): a zombie (state Z) or in uninterruptible sleep (state D). Lower case, as a label beside the command.
+  ///
+  /// In en, this message translates to:
+  /// **'{flag, select, zombie{zombie} uninterruptible{waiting on I/O} other{flagged}}'**
+  String processesFlag(String flag);
+
+  /// Processes tab: how many processes a run state flag marks (PRC-06), above the list.
+  ///
+  /// In en, this message translates to:
+  /// **'{flag, select, zombie{{count, plural, =1{1 zombie process} other{{count} zombie processes}}} uninterruptible{{count, plural, =1{1 process waiting on I/O it cannot be interrupted from} other{{count} processes waiting on I/O they cannot be interrupted from}}} other{{count, plural, =1{1 flagged process} other{{count} flagged processes}}}}'**
+  String processesFlagCount(String flag, int count);
+
+  /// Processes tab: what joins the flag counts above the list.
+  ///
+  /// In en, this message translates to:
+  /// **'; '**
+  String get processesFlagSeparator;
+
   /// Label of a process's run state letter as the kernel reports it (such as R or S), in a process's details.
   ///
   /// In en, this message translates to:
@@ -1815,6 +1839,119 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 more drive was not read.} other{{count} more drives were not read.}}'**
   String systemDriveHealthNotRead(int count);
+
+  /// System tab: heading of the section listing the server's accounts and who is logged in (ACC-01, ACC-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Users'**
+  String get systemAccountsTitle;
+
+  /// System tab, Users: column of the account's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get systemAccountsColumn;
+
+  /// System tab, Users: column of the account's numeric user ID.
+  ///
+  /// In en, this message translates to:
+  /// **'UID'**
+  String get systemAccountsUid;
+
+  /// System tab, Users: column saying why the account can become root, empty for most accounts.
+  ///
+  /// In en, this message translates to:
+  /// **'Root access'**
+  String get systemAccountsRoot;
+
+  /// System tab, Users: column of the account's groups, its primary group first.
+  ///
+  /// In en, this message translates to:
+  /// **'Groups'**
+  String get systemAccountsGroups;
+
+  /// System tab, Users: column of the account's login shell.
+  ///
+  /// In en, this message translates to:
+  /// **'Shell'**
+  String get systemAccountsShell;
+
+  /// System tab, Users: one reason the account can become root; reason is the engine's RootEquivalence name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, uidZero{UID 0} adminGroup{sudo, wheel or admin group} dockerGroup{docker group} other{Can become root}}'**
+  String systemAccountsRootReason(String reason);
+
+  /// System tab, Users: why a read read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{The server is not connected, so its accounts could not be read.} unreadable{The server\'s answer could not be read as its accounts.} transport{The connection failed while the accounts were read.} other{The accounts could not be read.}}'**
+  String systemAccountsFailed(String reason);
+
+  /// System tab, Users: shown while the first read runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading accounts…'**
+  String get systemAccountsReading;
+
+  /// System tab, Users: accounts past the read's limit, as on a host whose directory lists thousands.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more account is not listed.} other{{count} more accounts are not listed.}}'**
+  String systemAccountsNotListed(int count);
+
+  /// System tab, Users: button that lists the accounts without a login shell or below the people's UID range, hidden by default.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Show 1 service account} other{Show {count} service accounts}}'**
+  String systemAccountsShowSystem(int count);
+
+  /// System tab, Users: button that hides the service accounts again.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide service accounts'**
+  String get systemAccountsHideSystem;
+
+  /// System tab, Users: heading of the list of current logins.
+  ///
+  /// In en, this message translates to:
+  /// **'Logged in'**
+  String get systemAccountsSessionsTitle;
+
+  /// System tab, Users: the server lists no login.
+  ///
+  /// In en, this message translates to:
+  /// **'No one is logged in.'**
+  String get systemAccountsSessionsNone;
+
+  /// System tab, Users: the server's who printed lines the app could not parse, as BusyBox's.
+  ///
+  /// In en, this message translates to:
+  /// **'Who is logged in is unknown: this server\'s who prints a format the app does not read.'**
+  String get systemAccountsSessionsUnknown;
+
+  /// System tab, Users: a local login; since is when it began, in this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'{user} on {line}, since {since}'**
+  String systemAccountsSessionLocal(String user, String line, DateTime since);
+
+  /// System tab, Users: a remote login with the host or address it came from; since is when it began, in this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'{user} on {line} from {from}, since {since}'**
+  String systemAccountsSessionRemote(
+    String user,
+    String line,
+    String from,
+    DateTime since,
+  );
+
+  /// System tab, Users: button that reads the accounts and logins again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemAccountsReadAgain;
 
   /// Drive health table: column of the drive's model, or its device where it reports none.
   ///

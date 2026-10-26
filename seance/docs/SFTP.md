@@ -74,9 +74,24 @@ The cwd is stored per terminal session. When **Follow terminal** is enabled and
 a valid absolute path arrives, the browser navigates to it. The browser falls
 back to a conservative OSC 0/2 title parser when OSC 7 is unavailable. This
 covers the default Ubuntu/Debian Bash title form (`user@host: ~/path` or an
-absolute path), resolving `~` against SFTP's canonical home. If neither source
-is available, Files stays at the SFTP home/current directory. A path outside an
-SFTP chroot is reported without breaking the shell.
+absolute path), resolving `~` against SFTP's canonical home.
+
+Some shells report neither: TrueNAS's zsh sets a prompt and nothing else. So
+without OSC 7, Files also reads the directory beside the shell: when the pane
+opens, when **Follow terminal** is switched on, and shortly after each cue
+that the shell may have moved (an Enter that may reach it, a title change, a
+full-screen program such as a picker handing the terminal back). A read-only
+script on a separate exec channel of the same SSH connection finds the
+connection's PTY shell in Linux `/proc` and prints its directory with
+`readlink`, without touching that directory's file system. The interactive
+shell is never touched, and one read runs at a time. Once a read answers, it
+outranks the title, which nothing clears: a title left behind by `docker exec`
+or an ssh hop would otherwise pin the pane. It reads the login shell, so a
+nested shell (`sudo -i`, `bash` inside zsh, tmux) needs OSC 7. A server
+without `/proc`, or one that keeps failing, is not asked again on that
+connection, and the title leads again. If no source answers, Files stays at
+the SFTP home/current directory. A path outside an SFTP chroot is reported
+without breaking the shell.
 
 Shells do not all emit OSC 7 or a cwd title. Optional prompt hooks for bash,
 zsh, and fish are documented in [SHELL_INTEGRATION.md](SHELL_INTEGRATION.md).
@@ -249,6 +264,9 @@ reliably edit app-private checkouts in place.
 - Added standard OSC 7 cwd extraction with URI validation and percent-decoding.
 - Added an OSC 0/2 title fallback for the cwd titles emitted by default Ubuntu
   and Debian Bash configurations when OSC 7 is absent.
+- Follow mode reads a silent shell's directory from Linux `/proc` over an exec
+  channel when the shell may have moved, for shells such as TrueNAS's zsh that
+  report none.
 - Added a lazy Files utility tab for wide layouts and a full-screen route from
   the terminal app bar for Android/narrow layouts.
 - Added navigation, responsive file rows, path entry, follow mode, upload,

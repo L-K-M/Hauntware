@@ -132,3 +132,94 @@ String _haystack(ProcessRow row, String Function(ProcessRow) userText) => [
   if (!selected && counted == null) return null;
   return (shown: shown, total: counted);
 }
+
+/// A run state PRC-06 flags in the Processes tab.
+enum ProcessFlag {
+  /// `Z`: exited, its parent has not collected it.
+  zombie,
+
+  /// `D`: waiting on I/O it cannot be interrupted from, which no signal
+  /// ends; many at once point at a stuck disk or network mount.
+  uninterruptible,
+}
+
+/// The flag [row]'s run state raises, or null.
+ProcessFlag? processFlag(ProcessRow row) => switch (row.state) {
+  'Z' => ProcessFlag.zombie,
+  'D' => ProcessFlag.uninterruptible,
+  _ => null,
+};
+
+/// How many of [rows] each flag marks, in [ProcessFlag]'s order; the
+/// flags no row raises are absent.
+Map<ProcessFlag, int> processFlagCounts(List<ProcessRow> rows) {
+  final counts = <ProcessFlag, int>{};
+  for (final row in rows) {
+    if (processFlag(row) case final flag?) {
+      counts[flag] = (counts[flag] ?? 0) + 1;
+    }
+  }
+  return {for (final flag in ProcessFlag.values) flag: ?counts[flag]};
+}
+
+/// The deepest a tree indents a row; deeper ones line up at it.
+const int kProcessTreeDepthShown = 12;
+
+/// One row of PRC-03's tree: [depth] parents above it among the rows.
+typedef ProcessTreeRow = ({ProcessRow row, int depth});
+
+/// [rows], already in the order siblings should keep, as a tree: each row
+/// followed by its children, depth first. A row whose parent is not among
+/// them (PID 1, a kernel thread's `kthreadd`, a row the host left out) is
+/// a root. Each row appears once, even where reused PIDs make a cycle.
+List<ProcessTreeRow> processTree(List<ProcessRow> rows) {
+  final pids = {for (final row in rows) row.pid};
+  final children = <int, List<ProcessRow>>{};
+  final roots = <ProcessRow>[];
+  for (final row in rows) {
+    final parent = row.parentPid;
+    if (parent != null && parent != row.pid && pids.contains(parent)) {
+      (children[parent] ??= []).add(row);
+    } else {
+      roots.add(row);
+    }
+  }
+
+  final out = <ProcessTreeRow>[];
+  final placed = <int>{};
+  void visit(ProcessRow row, int depth) {
+    if (!placed.add(row.pid)) return;
+    out.add((row: row, depth: depth));
+    for (final child in children[row.pid] ?? const <ProcessRow>[]) {
+      visit(child, depth + 1);
+    }
+  }
+
+  for (final root in roots) {
+    visit(root, 0);
+  }
+  // Rows only a cycle reaches have no root; they follow as roots.
+  for (final row in rows) {
+    visit(row, 0);
+  }
+  return out;
+}
+
+/// [shown] with each one's ancestors among [all], in [all]'s order, so a
+/// filtered tree keeps the path to each match.
+List<ProcessRow> withAncestors(List<ProcessRow> shown, List<ProcessRow> all) {
+  final byPid = {for (final row in all) row.pid: row};
+  final keep = <int>{};
+  for (final row in shown) {
+    var current = row;
+    while (keep.add(current.pid)) {
+      final parent = byPid[current.parentPid];
+      if (parent == null) break;
+      current = parent;
+    }
+  }
+  return [
+    for (final row in all)
+      if (keep.contains(row.pid)) row,
+  ];
+}
