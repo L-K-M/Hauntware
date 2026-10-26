@@ -32,7 +32,8 @@ enum SshdForwardingBlock {
   /// forwarding permissions to socket paths too.
   allowTcpForwarding('AllowTcpForwarding'),
 
-  /// A `PermitOpen` other than `any`, which no socket path can match.
+  /// A `PermitOpen` without `any` or `*:*`, which no socket path can
+  /// match.
   permitOpen('PermitOpen'),
 
   /// `DisableForwarding yes`.
@@ -83,8 +84,9 @@ enum SshdForwarding {
 }
 
 /// The effective sshd configuration for one connection (SEC-01). A
-/// setting sshd did not print is null; sshd prints every setting it
-/// knows, so null means an sshd too old or too new for it.
+/// setting sshd did not print, or printed with a value this reader does
+/// not know, is null; sshd prints every setting it knows, so null means
+/// an sshd too old or too new for it.
 @immutable
 final class SshdPosture {
   SshdPosture({
@@ -140,7 +142,9 @@ final class SshdPosture {
   final SshdForwarding? allowTcpForwarding;
   final SshdForwarding? allowStreamLocalForwarding;
 
-  /// `any`, `none` or the `host:port` pairs allowed.
+  /// `any`, `none` or the `host:port` pairs allowed. sshd checks a
+  /// socket path against the same list (`channel_connect_to_path`), and
+  /// only `any` or a `*:*` pair matches one.
   final String? permitOpen;
   final bool? disableForwarding;
 
@@ -153,7 +157,8 @@ final class SshdPosture {
       SshdForwardingBlock.allowStreamLocalForwarding,
     if (!(allowTcpForwarding?.allowsLocal ?? true))
       SshdForwardingBlock.allowTcpForwarding,
-    if (permitOpen != null && permitOpen != 'any')
+    if (permitOpen case final open?
+        when !open.split(' ').any((pair) => pair == 'any' || pair == '*:*'))
       SshdForwardingBlock.permitOpen,
     if (disableForwarding ?? false) SshdForwardingBlock.disableForwarding,
   };

@@ -82,6 +82,8 @@ void main() {
     expect(blocks('permitopen 127.0.0.1:1\n'), {
       SshdForwardingBlock.permitOpen,
     });
+    expect(blocks('permitopen none\n'), {SshdForwardingBlock.permitOpen});
+    expect(blocks('permitopen 127.0.0.1:1 *:*\n'), isEmpty);
     expect(blocks('disableforwarding yes\n'), {
       SshdForwardingBlock.disableForwarding,
     });
@@ -146,6 +148,7 @@ void main() {
         ('deploy', '192.0.2.1 50000 192.0.2.2'),
         ('deploy', '192.0.2.1,x 50000 192.0.2.2 22'),
         ('deploy', '192.0.2.1 50000 192.0.2.2 0'),
+        ('deploy', '192.0.2.1 50000 192.0.2.2 65536'),
         ('a,b=c', '192.0.2.1 50000 192.0.2.2 22'),
       ]) {
         expect(specs(user: user, connection: connection), [

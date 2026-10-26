@@ -2280,7 +2280,7 @@ abstract class AppLocalizations {
   /// System tab, SSH server: the label of the ports sshd listens on.
   ///
   /// In en, this message translates to:
-  /// **'Port'**
+  /// **'Ports'**
   String get systemSshdPorts;
 
   /// System tab, SSH server: the label of the addresses and ports sshd listens on.

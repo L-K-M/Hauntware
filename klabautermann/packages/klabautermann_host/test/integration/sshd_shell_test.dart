@@ -59,13 +59,14 @@ void main() {
   for (final MapEntry(key: name, value: shell) in _shells.entries) {
     group(name, () {
       Future<SshdRead> run({String? connection}) async {
-        final argv = [
-          for (final w in HostCommands.sshdPosture(
-            user: 'deploy',
-            sshConnection: connection ?? '192.0.2.1 50000 192.0.2.2 22',
-          ))
-            w == 'sh' ? shell : w,
-        ];
+        final command = HostCommands.sshdPosture(
+          user: 'deploy',
+          sshConnection: connection ?? '192.0.2.1 50000 192.0.2.2 22',
+        );
+        // The swap below runs the script under [shell] only while the
+        // command names `sh`.
+        expect(command.first, 'sh');
+        final argv = [for (final w in command) w == 'sh' ? shell : w];
         final r = await Process.run(
           argv.first,
           argv.sublist(1),
@@ -122,7 +123,10 @@ void main() {
       test('no sshd anywhere reads as missing', () async {
         // The runner may have its own sshd where the script also looks.
         for (final dir in ['/usr/sbin', '/usr/local/sbin', '/sbin']) {
-          if (File('$dir/sshd').existsSync()) return;
+          if (File('$dir/sshd').existsSync()) {
+            markTestSkipped('an sshd is installed in $dir');
+            return;
+          }
         }
         expect(await run(), isA<SshdMissing>());
       });

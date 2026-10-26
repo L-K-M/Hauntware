@@ -1676,7 +1676,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'No Match blocks are applied: these are sshd\'s settings before any Match block, as the read could not name this connection.';
 
   @override
-  String get systemSshdPorts => 'Port';
+  String get systemSshdPorts => 'Ports';
 
   @override
   String get systemSshdListen => 'Listens on';

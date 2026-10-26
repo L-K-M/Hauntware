@@ -953,7 +953,8 @@ abstract final class HostCommands {
         fields.length == 4 &&
         _ipAddress.hasMatch(fields[0]) &&
         _ipAddress.hasMatch(fields[2]) &&
-        _port.hasMatch(fields[3])) {
+        _port.hasMatch(fields[3]) &&
+        int.parse(fields[3]) <= 65535) {
       basic = 'user=$user,host=${fields[0]},addr=${fields[0]}';
       full = '$basic,laddr=${fields[2]},lport=${fields[3]}';
     }

@@ -1898,7 +1898,7 @@
   "@systemSshdMatchNone": {
     "description": "System tab, SSH server: the settings ignore every Match block in the configuration."
   },
-  "systemSshdPorts": "Port",
+  "systemSshdPorts": "Ports",
   "@systemSshdPorts": {
     "description": "System tab, SSH server: the label of the ports sshd listens on."
   },
