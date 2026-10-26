@@ -110,6 +110,37 @@ void main() {
     ]);
   });
 
+  test('boot ends key by boot ID, and the kernels say whether a reboot '
+      'loads a newer one', () async {
+    link = _RunLink(
+      (command) => _ok(
+        command.contains('list-boots')
+            ? '$_boot unclean\n'
+            : '6.1.0-9-amd64\n$kKernelsMarker\n6.1.0-13-amd64\n'
+                  '6.1.0-9-amd64\n',
+      ),
+    );
+
+    final ends = (await ask(const BootEndsQuery())).payload as BootEnds;
+    expect(ends.ends, {_boot: BootEnd.unclean});
+    expect(
+      link!.commands.single,
+      HostCommands.commandLine(HostCommands.bootEnds(), quote: quoteShellWord),
+    );
+
+    events.clear();
+    final kernels = (await ask(const KernelsQuery())).payload as Kernels;
+    expect(kernels.check.state, KernelCheckState.newerInstalled);
+    expect(kernels.check.newest, '6.1.0-13-amd64');
+  });
+
+  test('a kernel read that printed something else fails', () async {
+    link = _RunLink((_) => _ok('sh: uname: not found\n'));
+    final payload =
+        (await ask(const KernelsQuery())).payload as HostQueryFailed;
+    expect(payload.failure, HostQueryFailure.failed);
+  });
+
   test('a server without a ready link is answered at once', () async {
     final payload = (await ask(const BootsQuery())).payload as HostQueryFailed;
     expect(payload.failure, HostQueryFailure.noLink);

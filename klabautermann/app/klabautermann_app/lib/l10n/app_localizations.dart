@@ -1792,6 +1792,84 @@ abstract class AppLocalizations {
   /// **'nvidia-smi is installed but failed: {message}'**
   String systemGpuNvidiaFailed(String message);
 
+  /// System tab: the section of the running kernel against the installed ones (BOOT-03) and the boot timeline (BOOT-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Boots'**
+  String get systemBootsTitle;
+
+  /// System tab, Boots: shown while the first read runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading kernels and boots…'**
+  String get systemBootsReading;
+
+  /// System tab, Boots: the button that reads the kernels and boots again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemBootsReadAgain;
+
+  /// System tab, Boots: the release of the kernel the server runs, as uname -r prints it.
+  ///
+  /// In en, this message translates to:
+  /// **'Running kernel {release}'**
+  String systemKernelRunning(String release);
+
+  /// System tab, Boots: whether a reboot would load a newer kernel (BOOT-03), by state.
+  ///
+  /// In en, this message translates to:
+  /// **'{state, select, current{This is the newest kernel installed.} newerInstalled{Kernel {newest} is installed. A reboot loads it.} runningRemoved{The running kernel\'s modules were removed, as an upgrade does. A reboot loads {newest}.} other{Whether a newer kernel is installed is unknown: no module directory was found, as in a container.}}'**
+  String systemKernelState(String state, String newest);
+
+  /// System tab, Boots: why the kernel check read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected to the server.} denied{The server refused the kernel check.} missing{The server lacks the tools the kernel check runs.} other{The kernel check failed.}}'**
+  String systemKernelFailed(String failure);
+
+  /// System tab, Boots: the heading over the list of boots, newest first (BOOT-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Boot timeline'**
+  String get systemBootsTimelineTitle;
+
+  /// System tab, Boots: the current boot in the timeline.
+  ///
+  /// In en, this message translates to:
+  /// **'This boot'**
+  String get systemBootsCurrent;
+
+  /// System tab, Boots: when a boot's journal starts and how long it ran until its last entry, under its name.
+  ///
+  /// In en, this message translates to:
+  /// **'Started {start}, ran {duration}'**
+  String systemBootsSpan(String start, String duration);
+
+  /// System tab, Boots: how an earlier boot ended (BOOT-02), by kind.
+  ///
+  /// In en, this message translates to:
+  /// **'{end, select, clean{Shut down cleanly} unclean{Ended without a shutdown: a crash, power loss or hard reset} other{How it ended is unknown: its journal is not readable as this user}}'**
+  String systemBootEnd(String end);
+
+  /// System tab, Boots: shown when journalctl lists no boots.
+  ///
+  /// In en, this message translates to:
+  /// **'The journal lists no boots.'**
+  String get systemBootsNone;
+
+  /// System tab, Boots: how many older boots the timeline leaves out; the Logs panel's boot picker lists every boot.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 earlier boot is not listed.} other{{count} earlier boots are not listed.}}'**
+  String systemBootsNotListed(int count);
+
+  /// System tab, Boots: shown under the timeline when reading the boots' ends failed.
+  ///
+  /// In en, this message translates to:
+  /// **'How the earlier boots ended could not be read.'**
+  String get systemBootEndsUnknown;
+
   /// System tab: the section of each drive's SMART health (HW-04), read on request in admin mode.
   ///
   /// In en, this message translates to:
