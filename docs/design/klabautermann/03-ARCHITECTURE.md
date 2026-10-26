@@ -7368,6 +7368,12 @@ there from its own page too.
 - `GhostCommandPalette` in `ghost_ui`, extracted from Planchette's palette
   with Planchette switched (F5e); providers for servers, containers, units,
   stacks and actions; `Cmd/Ctrl-K` opens it and `:` jumps to a resource type.
+  As built (M6 N04, F5e-c), Planchette's palette moved byte for byte
+  into `ghost_ui` (`src/ghost_command_palette.dart`, with its tests), so
+  its public names stay `CommandPalette`, `PaletteCommand`,
+  `showCommandPalette` and `fuzzyMatch`; Planchette imports them from
+  the barrel. The `GhostCommandPalette` name and the providers come with
+  N60.
 - Keyboard: `/` filters the focused list; `j` and `k` move; `Enter` opens;
   `l` logs, `s` shell, `r` restart (opens the confirmation dialog); `?` shows
   the contextual map; `Cmd/Ctrl-1..9` switch tabs; `Esc` goes back; bindings
