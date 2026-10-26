@@ -5,9 +5,11 @@ import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:intl/intl.dart' show DateFormat;
+import 'package:klabautermann_app/controllers/admin_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
+import 'package:klabautermann_app/ui/admin_mode_chip.dart' show AdminScope;
 import 'package:klabautermann_app/ui/server_surfaces.dart';
 import 'package:klabautermann_app/ui/system_panel.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -38,11 +40,71 @@ const _identity = IdentityResult(
   arch: 'x86_64',
 );
 
-CoreResult _core({Map<String, NetRate>? network = _network}) => CoreResult(
+CoreResult _core({
+  Map<String, NetRate>? network = _network,
+  Map<String, DiskRate>? disks = _disks,
+}) => CoreResult(
   uptime: const Duration(days: 12, hours: 3, minutes: 7),
   bootedAt: _booted,
   network: network,
+  disks: disks,
 );
+
+/// Two whole disks: one with collector set 10's timings, one as an older
+/// reading without them.
+const _disks = {
+  'nvme0n1': DiskRate(
+    readBytesPerSecond: 2.5 * _mib,
+    writeBytesPerSecond: 3.0 * _mib,
+    readsPerSecond: 812,
+    writesPerSecond: 140.4,
+    readAwaitMs: 0.42,
+    writeAwaitMs: 1.85,
+    busyPercent: 37.6,
+  ),
+  'sda': DiskRate(
+    readBytesPerSecond: 0,
+    writeBytesPerSecond: 512.0 * _kib,
+    writesPerSecond: 9,
+  ),
+};
+
+/// A CPU package with its limits and a drive without any.
+const _temps = TempsSnapshot([
+  TempSensor(
+    id: 'hwmon2/temp1',
+    chip: 'coretemp',
+    label: 'Package id 0',
+    celsius: 48,
+    highCelsius: 84,
+    criticalCelsius: 100,
+  ),
+  TempSensor(id: 'hwmon4/temp1', chip: 'drivetemp', celsius: 38.6),
+]);
+
+/// An NVIDIA GPU with every figure and an amdgpu card without a name or
+/// a power reading.
+const _gpus = GpuSnapshot([
+  GpuDevice(
+    id: 'nvidia0',
+    source: GpuSource.nvidia,
+    name: 'NVIDIA GeForce RTX 3080',
+    busyPercent: 12,
+    memoryUsedBytes: 1024 * _mib,
+    memoryTotalBytes: 10240 * _mib,
+    celsius: 45,
+    powerWatts: 35.2,
+    powerLimitWatts: 320,
+  ),
+  GpuDevice(
+    id: 'card1',
+    source: GpuSource.amdgpu,
+    busyPercent: 37,
+    memoryUsedBytes: 512 * _mib,
+    memoryTotalBytes: 8192 * _mib,
+    celsius: 52,
+  ),
+]);
 
 const _network = {
   'eth0': NetRate(
@@ -85,6 +147,9 @@ final _vm = HostProfile(
   virtualization: 'kvm',
   container: 'none',
   lxcfsMounts: const [],
+  timezone: 'Europe/Berlin',
+  ntpEnabled: true,
+  ntpSynchronized: true,
 );
 
 /// An LXC container without lxcfs: every system-wide `/proc` file is the
@@ -134,6 +199,8 @@ final class _Panel {
     await sample(tester, SampleStream.identity, _identity);
     await sample(tester, SampleStream.core, _core());
     await sample(tester, SampleStream.fs, FsResult(_fs));
+    await sample(tester, SampleStream.temps, const TempsResult(_temps));
+    await sample(tester, SampleStream.gpu, const GpuResult(_gpus));
   }
 }
 
@@ -159,7 +226,9 @@ Future<_Panel> _pump(
 
   final engine = FakeEngineClient();
   final monitoring = MonitoringController(engine);
+  final admin = AdminController(engine);
   addTearDown(() async {
+    admin.dispose();
     monitoring.dispose();
     await engine.close();
   });
@@ -181,10 +250,13 @@ Future<_Panel> _pump(
           body: RepaintBoundary(
             child: ColoredBox(
               color: theme.colorScheme.surface,
-              child: ValueListenableBuilder(
-                valueListenable: serverId,
-                builder: (context, serverId, _) =>
-                    SystemPanel(monitoring: monitoring, serverId: serverId),
+              child: AdminScope(
+                admin: admin,
+                child: ValueListenableBuilder(
+                  valueListenable: serverId,
+                  builder: (context, serverId, _) =>
+                      SystemPanel(monitoring: monitoring, serverId: serverId),
+                ),
               ),
             ),
           ),
@@ -254,7 +326,7 @@ void main() {
         .cast<Subscribe>()
         .last;
     expect(system.streams, ServerPanel.system.streams);
-    expect(find.text('Waiting for the first reading.'), findsNWidgets(4));
+    expect(find.text('Waiting for the first reading.'), findsNWidgets(5));
 
     await _Panel(harness.engine).all(tester, _vm);
     expect(find.text('Waiting for the first reading.'), findsNothing);
@@ -310,7 +382,237 @@ void main() {
       _inSection(SystemSection.network, find.text('Unknown')),
       findsNWidgets(2),
     );
-    expect(find.textContaining('0 B/s'), findsNothing);
+    expect(
+      _inSection(SystemSection.network, find.textContaining('0 B/s')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('DSK-03 and DSK-04 show each disk\'s throughput, requests, '
+      'wait and busy share; what a reading lacks reads unknown', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.sample(tester, SampleStream.core, _core());
+    Finder activity(String text) =>
+        _inSection(SystemSection.diskActivity, find.text(text));
+
+    expect(activity('nvme0n1'), findsOneWidget);
+    expect(activity('2.5 MiB/s'), findsOneWidget);
+    expect(activity('3 MiB/s'), findsOneWidget);
+    expect(activity('812'), findsOneWidget);
+    expect(activity('140'), findsOneWidget);
+    expect(activity('0.4 ms'), findsOneWidget);
+    expect(activity('1.9 ms'), findsOneWidget);
+    expect(activity('38%'), findsOneWidget);
+    // sda's reading has no timings: its waits and busy share are unknown,
+    // never zero.
+    expect(activity('512 KiB/s'), findsOneWidget);
+    expect(activity('Unknown'), findsNWidgets(3));
+
+    // The first reading after a reset has no rates yet.
+    await panel.sample(tester, SampleStream.core, _core(disks: null));
+    expect(activity('Rates show from the second reading.'), findsOneWidget);
+    await panel.sample(tester, SampleStream.core, _core(disks: const {}));
+    expect(activity('No disk has done any I/O yet.'), findsOneWidget);
+  });
+
+  testWidgets('HW-01 lists each sensor with its reading and limits; a '
+      'host without sensors, or a container, shows no section', (tester) async {
+    final panel = await _pump(tester);
+    Finder temps(String text) =>
+        _inSection(SystemSection.temperatures, find.text(text));
+
+    // No reading yet: no section rather than a wait for one that VMs
+    // never send.
+    expect(find.text('Temperatures'), findsNothing);
+
+    await panel.sample(tester, SampleStream.temps, const TempsResult(_temps));
+    expect(find.text('Temperatures'), findsOneWidget);
+    expect(temps('coretemp: Package id 0'), findsOneWidget);
+    expect(temps('48 °C'), findsOneWidget);
+    expect(temps('84 °C'), findsOneWidget);
+    expect(temps('100 °C'), findsOneWidget);
+    expect(temps('drivetemp'), findsOneWidget);
+    expect(temps('39 °C'), findsOneWidget);
+    expect(temps('Unknown'), findsNWidgets(2));
+
+    await panel.sample(
+      tester,
+      SampleStream.temps,
+      const TempsResult(TempsSnapshot([])),
+    );
+    expect(find.text('Temperatures'), findsNothing);
+
+    await panel.sample(tester, SampleStream.temps, const TempsResult(_temps));
+    await panel.profile(tester, _container);
+    expect(find.text('Temperatures'), findsNothing);
+  });
+
+  testWidgets('HW-03 lists each GPU with its busy share, memory, '
+      'temperature and power; a failed nvidia-smi says so; no GPU, no '
+      'section', (tester) async {
+    final panel = await _pump(tester);
+    Finder gpus(String text) => _inSection(SystemSection.gpus, find.text(text));
+    expect(find.text('GPUs'), findsNothing);
+
+    await panel.sample(tester, SampleStream.gpu, const GpuResult(_gpus));
+    expect(find.text('GPUs'), findsOneWidget);
+    expect(gpus('NVIDIA GeForce RTX 3080'), findsOneWidget);
+    expect(gpus('12%'), findsOneWidget);
+    expect(gpus('1 GiB of 10 GiB'), findsOneWidget);
+    expect(gpus('45 °C'), findsOneWidget);
+    expect(gpus('35 W'), findsOneWidget);
+    expect(gpus('card1'), findsOneWidget);
+    expect(gpus('512 MiB of 8 GiB'), findsOneWidget);
+    expect(gpus('Unknown'), findsOneWidget);
+
+    await panel.sample(
+      tester,
+      SampleStream.gpu,
+      const GpuResult(
+        GpuSnapshot(
+          [],
+          nvidiaFailure:
+              'NVIDIA-SMI has failed because it couldn\'t communicate with '
+              'the NVIDIA driver.',
+        ),
+      ),
+    );
+    expect(
+      gpus(
+        'nvidia-smi is installed but failed: NVIDIA-SMI has failed because '
+        'it couldn\'t communicate with the NVIDIA driver.',
+      ),
+      findsOneWidget,
+    );
+
+    await panel.sample(
+      tester,
+      SampleStream.gpu,
+      const GpuResult(GpuSnapshot([])),
+    );
+    expect(find.text('GPUs'), findsNothing);
+  });
+
+  testWidgets('HW-04 reads drive health on request in admin mode, with '
+      'each drive\'s verdict and figures, or why nothing was read', (
+    tester,
+  ) async {
+    // Wide enough for every column of the drive table.
+    final panel = await _pump(tester, size: const Size(1100, 1200));
+    Finder drives(String text) =>
+        _inSection(SystemSection.driveHealth, find.text(text));
+    expect(
+      drives(
+        'Turn on admin mode to read drive health: smartctl needs the '
+        'drives\' device nodes.',
+      ),
+      findsOneWidget,
+    );
+    expect(drives('Read drive health'), findsNothing);
+
+    panel.engine.emit(const AdminModeState(_serverId, AdminModePhase.on));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(drives('Read drive health'));
+    // A second tap before the button gives way starts no second read.
+    await tester.tap(drives('Read drive health'));
+    await tester.tap(drives('Read drive health'));
+    await tester.pumpAndSettle();
+    expect(drives('Reading drive health…'), findsOneWidget);
+    final read = panel.engine.sentOfType<ReadSmart>().cast<ReadSmart>().single;
+    expect(read.serverId, _serverId);
+
+    panel.engine.emit(
+      SmartReport(
+        serverId: _serverId,
+        requestId: read.requestId,
+        disks: const [
+          SmartDisk(
+            device: '/dev/nvme0',
+            verdict: SmartVerdict.passed,
+            model: 'WD Blue SN570 1TB',
+            celsius: 38,
+            percentageUsed: 3,
+            powerOnHours: 1000,
+          ),
+          SmartDisk(
+            device: '/dev/sda',
+            verdict: SmartVerdict.warning,
+            model: 'Samsung SSD 860 EVO 500GB',
+            badSectors: 8,
+            powerOnHours: 12345,
+          ),
+          SmartDisk(device: '/dev/sdb', verdict: SmartVerdict.asleep),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(drives('WD Blue SN570 1TB'), findsOneWidget);
+    expect(drives('Passed'), findsOneWidget);
+    expect(drives('38 °C'), findsOneWidget);
+    expect(drives('3%'), findsOneWidget);
+    expect(drives('1,000 h'), findsOneWidget);
+    expect(drives('Warning'), findsOneWidget);
+    expect(drives('8'), findsOneWidget);
+    expect(drives('12,345 h'), findsOneWidget);
+    expect(drives('/dev/sdb'), findsNWidgets(2));
+    expect(drives('Asleep'), findsOneWidget);
+    expect(drives('Read again'), findsOneWidget);
+
+    await tester.tap(drives('Read again'));
+    await tester.pumpAndSettle();
+    final again = panel.engine.sentOfType<ReadSmart>().cast<ReadSmart>().last;
+    panel.engine.emit(
+      SmartReport(
+        serverId: _serverId,
+        requestId: again.requestId,
+        failure: SmartReportFailure.missing,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      drives('smartmontools is not installed on this server.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('SYS-02 and CN-17: the time zone, its sync and the clock '
+      'against this device\'s, each unknown until the probe says', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    Finder time(String text) => _inSection(SystemSection.time, find.text(text));
+    expect(time('Unknown'), findsNWidgets(3));
+
+    await panel.profile(tester, _vm);
+    panel.engine.emit(
+      ServerClock(
+        _serverId,
+        skew: const Duration(seconds: -42),
+        at: DateTime.utc(2026, 10, 25),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(time('Europe/Berlin'), findsOneWidget);
+    expect(time('Synchronized'), findsOneWidget);
+    expect(time('42 seconds behind this device'), findsOneWidget);
+  });
+
+  testWidgets('where every column does not fit, the disk activity table '
+      'keeps throughput and busy share and drops the counts and waits', (
+    tester,
+  ) async {
+    final panel = await _pump(tester, size: _phone);
+    await panel.sample(tester, SampleStream.core, _core());
+    Finder activity(String text) =>
+        _inSection(SystemSection.diskActivity, find.text(text));
+
+    expect(activity('2.5 MiB/s'), findsOneWidget);
+    expect(activity('38%'), findsOneWidget);
+    expect(activity('812'), findsNothing);
+    expect(activity('0.4 ms'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('SYS-04: inside a container without lxcfs the host\'s uptime '
@@ -632,7 +934,7 @@ void main() {
     panel.serverId!.value = 'srv-2';
     await tester.pumpAndSettle();
     expect(find.text('Debian GNU/Linux 12 (bookworm)'), findsNothing);
-    expect(find.text('Waiting for the first reading.'), findsNWidgets(4));
+    expect(find.text('Waiting for the first reading.'), findsNWidgets(5));
 
     // A timeout there lists none of the first server's mounts.
     await panel.sample(

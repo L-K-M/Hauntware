@@ -162,6 +162,28 @@ void main() {
       expect(answer.more, isFalse);
     });
 
+    test('a history read answers empty before any reading (HIS-01)', () async {
+      final client = await spawnEngine(
+        access: SupportDirectoryAccess.exclusive,
+      );
+      final (:events, fleet: _) = await started(client);
+
+      client.send(
+        const ReadHistory(
+          'ssh-config:web',
+          HistoryTier.tenMinutes,
+          requestId: 'h-1',
+        ),
+      );
+      final answer = (await next(events)) as HistoryRead;
+      expect(
+        (answer.requestId, answer.serverId, answer.tier),
+        ('h-1', 'ssh-config:web', HistoryTier.tenMinutes),
+      );
+      expect(answer.range.buckets, isEmpty);
+      expect(answer.range.gaps, isEmpty);
+    });
+
     test('an export redacts its lines in the engine (LOG-10)', () async {
       final client = await spawnEngine();
       final (:events, fleet: _) = await started(client);
@@ -242,6 +264,12 @@ void main() {
       final crontabs = (await next(events)) as UserCrontabs;
       expect(crontabs.requestId, 'r-1');
       expect(crontabs.failure, UserCrontabsFailure.noLink);
+
+      // HW-04's read too.
+      client.send(const ReadSmart('ssh-config:web', requestId: 'r-2'));
+      final smart = (await next(events)) as SmartReport;
+      expect(smart.requestId, 'r-2');
+      expect(smart.failure, SmartReportFailure.noLink);
 
       // A detached operation's result is acknowledged over a link.
       client.send(

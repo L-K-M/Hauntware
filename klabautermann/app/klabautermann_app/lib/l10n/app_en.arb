@@ -1215,6 +1215,333 @@
   "@systemDevice": {
     "description": "Label of the device or source a filesystem is mounted from, such as /dev/sda1 or nas:/export, in a mount's details."
   },
+  "systemDiskActivityTitle": "Disk activity",
+  "@systemDiskActivityTitle": {
+    "description": "System tab: the section of each whole disk's I/O rates since the previous reading (DSK-03, DSK-04)."
+  },
+  "systemDiskActivityWaiting": "Rates show from the second reading.",
+  "@systemDiskActivityWaiting": {
+    "description": "System tab, Disk activity: a rate needs two readings, and only one has arrived."
+  },
+  "systemDiskActivityEmpty": "No disk has done any I/O yet.",
+  "@systemDiskActivityEmpty": {
+    "description": "System tab, Disk activity: the server reports no whole disk that ever did I/O (loop, RAM and partition devices are left out)."
+  },
+  "systemDiskRead": "Read",
+  "@systemDiskRead": {
+    "description": "Disk activity column: bytes read per second."
+  },
+  "systemDiskWrite": "Write",
+  "@systemDiskWrite": {
+    "description": "Disk activity column: bytes written per second."
+  },
+  "systemDiskReadsPerSecond": "Reads/s",
+  "@systemDiskReadsPerSecond": {
+    "description": "Disk activity column: completed read requests per second (read IOPS)."
+  },
+  "systemDiskWritesPerSecond": "Writes/s",
+  "@systemDiskWritesPerSecond": {
+    "description": "Disk activity column: completed write requests per second (write IOPS)."
+  },
+  "systemDiskReadAwait": "Read wait",
+  "@systemDiskReadAwait": {
+    "description": "Disk activity column: the mean time a read took, queueing included (iostat's r_await)."
+  },
+  "systemDiskWriteAwait": "Write wait",
+  "@systemDiskWriteAwait": {
+    "description": "Disk activity column: the mean time a write took, queueing included (iostat's w_await)."
+  },
+  "systemDiskBusy": "Busy",
+  "@systemDiskBusy": {
+    "description": "Disk activity column: the share of the interval the disk had any request in flight (iostat's %util)."
+  },
+  "systemDiskOperations": "{count}",
+  "@systemDiskOperations": {
+    "description": "Disk activity: a whole number of requests per second, in the UI locale.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "systemDiskMilliseconds": "{ms} ms",
+  "@systemDiskMilliseconds": {
+    "description": "Disk activity: a mean request time in milliseconds with one decimal, in the UI locale.",
+    "placeholders": {
+      "ms": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 1
+        }
+      }
+    }
+  },
+  "systemTemperaturesTitle": "Temperatures",
+  "@systemTemperaturesTitle": {
+    "description": "System tab: the section of the host's temperature sensors (HW-01). It is hidden where the host has none, as VMs and containers usually do."
+  },
+  "systemTemperatureSensor": "Sensor",
+  "@systemTemperatureSensor": {
+    "description": "Temperatures table: column of the sensor's name."
+  },
+  "systemTemperatureSensorName": "{chip}: {label}",
+  "@systemTemperatureSensorName": {
+    "description": "Temperatures table: a sensor named by its chip (coretemp, nvme, k10temp) and the chip's label for it (Package id 0, Composite). Both are the kernel's technical names.",
+    "placeholders": {
+      "chip": {
+        "type": "String",
+        "example": "coretemp"
+      },
+      "label": {
+        "type": "String",
+        "example": "Package id 0"
+      }
+    }
+  },
+  "systemTemperatureReading": "Temperature",
+  "@systemTemperatureReading": {
+    "description": "Temperatures table: column of the sensor's current reading."
+  },
+  "systemTemperatureHigh": "High",
+  "@systemTemperatureHigh": {
+    "description": "Temperatures table: column of the temperature the chip calls high for the sensor (its max limit)."
+  },
+  "systemTemperatureCritical": "Critical",
+  "@systemTemperatureCritical": {
+    "description": "Temperatures table: column of the temperature the chip calls critical for the sensor."
+  },
+  "systemTemperatureCelsius": "{celsius} °C",
+  "@systemTemperatureCelsius": {
+    "description": "A temperature in degrees Celsius, as a whole number in the UI locale.",
+    "placeholders": {
+      "celsius": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 0
+        }
+      }
+    }
+  },
+  "systemGpusTitle": "GPUs",
+  "@systemGpusTitle": {
+    "description": "System tab: the section of the host's GPUs (HW-03). It is hidden where the host has none the app can read."
+  },
+  "systemGpuColumn": "GPU",
+  "@systemGpuColumn": {
+    "description": "GPUs table: column of the GPU's name, or its device name (card1, nvidia0) where the driver reports no product name."
+  },
+  "systemGpuBusy": "Busy",
+  "@systemGpuBusy": {
+    "description": "GPUs table: column of the share of time the GPU was busy."
+  },
+  "systemGpuMemory": "Memory",
+  "@systemGpuMemory": {
+    "description": "GPUs table: column of the GPU's own memory (VRAM) in use, of its total."
+  },
+  "systemGpuPower": "Power",
+  "@systemGpuPower": {
+    "description": "GPUs table: column of the GPU's current power draw."
+  },
+  "systemGpuWatts": "{watts} W",
+  "@systemGpuWatts": {
+    "description": "A power draw in watts, as a whole number in the UI locale.",
+    "placeholders": {
+      "watts": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 0
+        }
+      }
+    }
+  },
+  "systemGpuNvidiaFailed": "nvidia-smi is installed but failed: {message}",
+  "@systemGpuNvidiaFailed": {
+    "description": "System tab, GPUs: nvidia-smi ran and failed, as when its driver is not loaded; message is the tool's own first line, untranslated.",
+    "placeholders": {
+      "message": {
+        "type": "String",
+        "example": "NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver."
+      }
+    }
+  },
+  "systemDriveHealthTitle": "Drive health",
+  "@systemDriveHealthTitle": {
+    "description": "System tab: the section of each drive's SMART health (HW-04), read on request in admin mode."
+  },
+  "systemDriveHealthAdminNeeded": "Turn on admin mode to read drive health: smartctl needs the drives' device nodes.",
+  "@systemDriveHealthAdminNeeded": {
+    "description": "System tab, Drive health: shown while admin mode is off for the server."
+  },
+  "systemDriveHealthRead": "Read drive health",
+  "@systemDriveHealthRead": {
+    "description": "System tab, Drive health: the button that reads every drive's SMART health. Drives that are spun down are left asleep."
+  },
+  "systemDriveHealthReadAgain": "Read again",
+  "@systemDriveHealthReadAgain": {
+    "description": "System tab, Drive health: the button that reads every drive's health again."
+  },
+  "systemDriveHealthReading": "Reading drive health…",
+  "@systemDriveHealthReading": {
+    "description": "System tab, Drive health: shown while the read runs."
+  },
+  "systemDriveHealthFailed": "{reason, select, noLink{The server is not connected, so drive health could not be read.} adminRequired{Admin mode ended before drive health was read.} elevationRefused{Elevation was refused, so drive health was not read.} missing{smartmontools is not installed on this server.} unreadable{smartctl did not answer as smartmontools 7.0 or later does.} transport{The connection failed while drive health was read.} other{Drive health could not be read.}}",
+  "@systemDriveHealthFailed": {
+    "description": "System tab, Drive health: why a read read nothing, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "systemDriveHealthNone": "No drive answered smartctl's scan.",
+  "@systemDriveHealthNone": {
+    "description": "System tab, Drive health: the read found no drive, as in a VM without passed-through disks."
+  },
+  "systemDriveHealthNotRead": "{count, plural, =1{1 more drive was not read.} other{{count} more drives were not read.}}",
+  "@systemDriveHealthNotRead": {
+    "description": "System tab, Drive health: drives past the read's limit, which were not read.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemDriveColumn": "Drive",
+  "@systemDriveColumn": {
+    "description": "Drive health table: column of the drive's model, or its device where it reports none."
+  },
+  "systemDriveDevice": "Device",
+  "@systemDriveDevice": {
+    "description": "Drive health table: column of the drive's device node, such as /dev/sda."
+  },
+  "systemDriveHealth": "Health",
+  "@systemDriveHealth": {
+    "description": "Drive health table: column of the drive's health verdict."
+  },
+  "systemDriveVerdict": "{verdict, select, passed{Passed} warning{Warning} failing{Failing} asleep{Asleep} other{Unknown}}",
+  "@systemDriveVerdict": {
+    "description": "Drive health table: a drive's health. Passed: its own assessment passed. Warning: it passed, but shows wear or damage. Failing: its own assessment failed. Asleep: it was spun down and was left asleep.",
+    "placeholders": {
+      "verdict": {
+        "type": "String"
+      }
+    }
+  },
+  "systemDriveWear": "Wear",
+  "@systemDriveWear": {
+    "description": "Drive health table: column of an NVMe drive's endurance used, as a percentage that may pass 100."
+  },
+  "systemDriveBadSectors": "Bad sectors",
+  "@systemDriveBadSectors": {
+    "description": "Drive health table: column of an ATA drive's reallocated, pending and uncorrectable sectors, summed."
+  },
+  "systemDriveBadSectorCount": "{count}",
+  "@systemDriveBadSectorCount": {
+    "description": "Drive health table: a drive's bad sectors, a whole number in the UI locale.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "systemDrivePowerOn": "Powered on",
+  "@systemDrivePowerOn": {
+    "description": "Drive health table: column of how long the drive has been powered on over its life."
+  },
+  "systemDriveHours": "{hours} h",
+  "@systemDriveHours": {
+    "description": "Drive health table: a number of hours in the UI locale.",
+    "placeholders": {
+      "hours": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "systemTimeTitle": "Time",
+  "@systemTimeTitle": {
+    "description": "System tab: the section of the server's time zone, time sync and clock against this device's (SYS-02, CN-17)."
+  },
+  "systemTimeZone": "Time zone",
+  "@systemTimeZone": {
+    "description": "System tab, Time: label of the server's time zone, an IANA name such as Europe/Berlin or its UTC offset."
+  },
+  "systemTimeSync": "Time sync",
+  "@systemTimeSync": {
+    "description": "System tab, Time: label of whether the server keeps its clock in sync over NTP."
+  },
+  "systemTimeSynced": "Synchronized",
+  "@systemTimeSynced": {
+    "description": "System tab, Time sync: the kernel clock is in sync."
+  },
+  "systemTimeNotSynced": "Not synchronized",
+  "@systemTimeNotSynced": {
+    "description": "System tab, Time sync: a sync service is on but the clock is not in sync yet."
+  },
+  "systemTimeSyncOff": "Off",
+  "@systemTimeSyncOff": {
+    "description": "System tab, Time sync: no time sync service is enabled."
+  },
+  "systemClock": "Clock",
+  "@systemClock": {
+    "description": "System tab, Time: label of how far the server's clock is from this device's."
+  },
+  "systemClockInStep": "In step with this device",
+  "@systemClockInStep": {
+    "description": "System tab, Time: the server's clock is within about a second of this device's."
+  },
+  "systemClockAhead": "{amount} ahead of this device",
+  "@systemClockAhead": {
+    "description": "System tab, Time: the server's clock is ahead of this device's by amount, such as '3 seconds'.",
+    "placeholders": {
+      "amount": {
+        "type": "String",
+        "example": "3 seconds"
+      }
+    }
+  },
+  "systemClockBehind": "{amount} behind this device",
+  "@systemClockBehind": {
+    "description": "System tab, Time: the server's clock is behind this device's by amount, such as '2 minutes'.",
+    "placeholders": {
+      "amount": {
+        "type": "String",
+        "example": "2 minutes"
+      }
+    }
+  },
+  "systemClockSeconds": "{count, plural, =1{1 second} other{{count} seconds}}",
+  "@systemClockSeconds": {
+    "description": "A clock difference in seconds.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemClockMinutes": "{count, plural, =1{1 minute} other{{count} minutes}}",
+  "@systemClockMinutes": {
+    "description": "A clock difference in minutes.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemClockHours": "{count, plural, =1{1 hour} other{{count} hours}}",
+  "@systemClockHours": {
+    "description": "A clock difference in hours.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "systemColumnMount": "Mount",
   "@systemColumnMount": {
     "description": "Disks table column: where the filesystem is mounted."
@@ -3448,6 +3775,68 @@
   "settingsAnnounceNotChanged": "The setting could not be changed.",
   "@settingsAnnounceNotChanged": {
     "description": "Toast when the app did not take a change of the threshold announcement switch."
+  },
+  "appLockTitle": "Klabautermann is locked",
+  "@appLockTitle": {
+    "description": "App lock screen (SAF-20): its heading, shown over the whole app while the app lock is engaged."
+  },
+  "appLockDetail": "Unlock with this device's passcode, PIN or biometrics. Connections already open keep running.",
+  "@appLockDetail": {
+    "description": "App lock screen: what unlocking asks for, and that open links are not closed by the lock."
+  },
+  "settingsWindowLocked": "Unlock it in its main window to change settings.",
+  "@settingsWindowLocked": {
+    "description": "The desktop settings window while the app is locked, under the title that it is locked."
+  },
+  "appLockUnlock": "Unlock",
+  "@appLockUnlock": {
+    "description": "App lock screen: the button that asks for device authentication again."
+  },
+  "appLockFailed": "Authentication failed or was cancelled. Try again.",
+  "@appLockFailed": {
+    "description": "App lock screen: the last device authentication was rejected or dismissed."
+  },
+  "appLockUnavailable": "This device has no passcode, PIN or biometrics to ask for. Set one up, then try again.",
+  "@appLockUnavailable": {
+    "description": "App lock screen: device authentication is not set up or not available, so the lock cannot be opened yet."
+  },
+  "appLockReason": "Unlock Klabautermann",
+  "@appLockReason": {
+    "description": "The reason line the operating system's authentication prompt shows when the app lock asks for it."
+  },
+  "settingsAppLockTitle": "App lock",
+  "@settingsAppLockTitle": {
+    "description": "Settings > Safety: the heading over the app lock switch (SAF-20)."
+  },
+  "settingsAppLock": "Require device authentication",
+  "@settingsAppLock": {
+    "description": "Settings > Safety: the app lock switch."
+  },
+  "settingsAppLockDetail": "Ask for this device's passcode, PIN or biometrics when Klabautermann opens and after {minutes, plural, =1{1 minute} other{{minutes} minutes}} in the background. Locking turns admin mode off on every server.",
+  "@settingsAppLockDetail": {
+    "description": "Settings > Safety: what the app lock switch does.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsAppLockUnsupported": "This platform has no device authentication Klabautermann can ask for.",
+  "@settingsAppLockUnsupported": {
+    "description": "Settings > Safety: why the app lock switch is off and disabled on Linux."
+  },
+  "settingsAppLockUnavailable": "Set up a passcode, PIN or biometrics on this device to use the app lock.",
+  "@settingsAppLockUnavailable": {
+    "description": "Settings > Safety: why the app lock switch cannot be turned on right now."
+  },
+  "settingsAppLockNotChanged": "{reason, select, notAuthenticated{The app lock did not change: authentication failed or was cancelled.} unavailable{The app lock did not change: this device has no authentication to ask for.} notSaved{The app lock did not change: the setting could not be saved.} other{The app lock did not change.}}",
+  "@settingsAppLockNotChanged": {
+    "description": "Settings > Safety: a toast after turning the app lock on or off did not take effect, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
   },
   "settingsSyncSecretsTitle": "Passwords and keys",
   "@settingsSyncSecretsTitle": {
@@ -6211,7 +6600,7 @@
   },
   "dockerVolumeNameInvalid": "Use letters, digits, '_', '.' and '-', starting with a letter or digit, at least two characters.",
   "@dockerVolumeNameInvalid": {
-    "description": "Create volume dialog: a name or driver Docker would refuse."
+    "description": "Create volume dialog: a name Docker would refuse."
   },
   "dockerVolumeRemove": "Remove",
   "@dockerVolumeRemove": {
@@ -8239,5 +8628,471 @@
   "serverEditorKeyFileImportFailed": "Could not read that file as a key.",
   "@serverEditorKeyFileImportFailed": {
     "description": "Toast when a picked key file is too large or not text."
+  },
+  "alertsTitle": "Alerts",
+  "@alertsTitle": {
+    "description": "Title of the in-app alert center (ALR-01), which lists the alerts the user's rules raised."
+  },
+  "alertsCoverage": "Evaluated on this device while Klabautermann is open.",
+  "@alertsCoverage": {
+    "description": "The coverage limit (Y3) the alert notice and the alert center state: rules are evaluated only on this device and only while the app runs."
+  },
+  "alertsNoticeActive": "{count, plural, =1{1 alert is active} other{{count} alerts are active}}",
+  "@alertsNoticeActive": {
+    "description": "The fleet list's alert notice while rules have raised alerts; count is how many are raised.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "alertsNoticeCleared": "Every alert has cleared since you last looked.",
+  "@alertsNoticeCleared": {
+    "description": "The fleet list's alert notice when alerts were raised and cleared since the user last opened the alert center, and none is raised now."
+  },
+  "alertsShow": "Show alerts",
+  "@alertsShow": {
+    "description": "Button on the fleet list's alert notice that opens the alert center."
+  },
+  "alertsActiveHeading": "Active",
+  "@alertsActiveHeading": {
+    "description": "Alert center heading over the alerts raised now."
+  },
+  "alertsNoneActive": "No alert is active.",
+  "@alertsNoneActive": {
+    "description": "Alert center line under the Active heading when no alert is raised."
+  },
+  "alertsHistoryHeading": "Earlier",
+  "@alertsHistoryHeading": {
+    "description": "Alert center heading over the latest raises and clears since the app started."
+  },
+  "alertsRowCount": "{count, plural, =1{1 alert} other{{count} alerts}}",
+  "@alertsRowCount": {
+    "description": "A fleet row's alert count (ALR-02), in its tooltip and screen-reader label; count is how many alerts are raised for that server.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "alertsBadgeCount": "{count}",
+  "@alertsBadgeCount": {
+    "description": "The number on a fleet row's alert badge (ALR-02), in the UI locale's number format.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "alertRowTitle": "{server}: {metric}",
+  "@alertRowTitle": {
+    "description": "An alert center row's title; server is the server's name (server data) and metric the alert's metric, such as CPU busy.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      },
+      "metric": {
+        "type": "String"
+      }
+    }
+  },
+  "alertSeverity": "{severity, select, critical{Critical} warning{Warning} other{Info}}",
+  "@alertSeverity": {
+    "description": "An alert's severity word in the alert center.",
+    "placeholders": {
+      "severity": {
+        "type": "String"
+      }
+    }
+  },
+  "alertDateTime": "{time}",
+  "@alertDateTime": {
+    "description": "An alert center time from before today: a date and time in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "alertSince": "since {time}",
+  "@alertSince": {
+    "description": "When a raised alert's breach began, in the alert center; time is a time of day when the breach began today, else a date and time, in the UI locale.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRaisedAt": "Raised at {time}",
+  "@alertRaisedAt": {
+    "description": "An alert center history row for a raise; time is a time of day in the UI locale.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "alertClearedAt": "Cleared at {time}",
+  "@alertClearedAt": {
+    "description": "An alert center history row for a clear; time is a time of day in the UI locale.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "alertMetricCpuBusy": "CPU busy",
+  "@alertMetricCpuBusy": {
+    "description": "The alert metric cpu.busy: the share of CPU time spent busy."
+  },
+  "alertMetricMemoryUsed": "Memory used",
+  "@alertMetricMemoryUsed": {
+    "description": "The alert metric memory.used: used memory as a share of the total."
+  },
+  "alertMetricLoadPerCore": "Load per core",
+  "@alertMetricLoadPerCore": {
+    "description": "The alert metric load.perCore: the 1-minute load average divided by the number of cores."
+  },
+  "alertMetricDiskUsed": "Disk space used",
+  "@alertMetricDiskUsed": {
+    "description": "The alert metric disk.used: the fullest filesystem's used space."
+  },
+  "alertMetricDiskInodes": "Inodes used",
+  "@alertMetricDiskInodes": {
+    "description": "The alert metric disk.inodes: the fullest filesystem's used inodes."
+  },
+  "historyTitle": "History",
+  "@historyTitle": {
+    "description": "The Overview card that charts a server's on-device history (HIS-01)."
+  },
+  "historyLastHours": "{count, plural, =1{Last hour} other{Last {count} hours}}",
+  "@historyLastHours": {
+    "description": "The History card's range choice of the 1-minute tier; count is 48.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "historyLastDays": "{count, plural, =1{Last day} other{Last {count} days}}",
+  "@historyLastDays": {
+    "description": "The History card's range choice of the 10-minute tier; count is 30.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "historyRefresh": "Refresh",
+  "@historyRefresh": {
+    "description": "Tooltip of the History card's button that reads the history again."
+  },
+  "historyEmpty": "No history yet. Klabautermann keeps 48 hours and 30 days of this server's readings while it is open.",
+  "@historyEmpty": {
+    "description": "The History card when this device recorded nothing for the server in the chosen range."
+  },
+  "historyLaneMean": "Average",
+  "@historyLaneMean": {
+    "description": "The History chart's series of each bucket's mean."
+  },
+  "historyLanePeak": "Peak",
+  "@historyLanePeak": {
+    "description": "The History chart's series of each bucket's highest reading."
+  },
+  "historySource": "Recorded on this device while Klabautermann was open",
+  "@historySource": {
+    "description": "Where the History chart's data comes from, as its legend says."
+  },
+  "historyMetricCpu": "CPU busy",
+  "@historyMetricCpu": {
+    "description": "A History metric: the share of CPU time spent busy."
+  },
+  "historyMetricMemory": "Memory used",
+  "@historyMetricMemory": {
+    "description": "A History metric: used memory as a share of the total."
+  },
+  "historyMetricDisk": "Disk space used",
+  "@historyMetricDisk": {
+    "description": "A History metric: the fullest filesystem's used space."
+  },
+  "historyMetricInodes": "Inodes used",
+  "@historyMetricInodes": {
+    "description": "A History metric: the fullest filesystem's used inodes."
+  },
+  "historyMetricLoad": "Load per core",
+  "@historyMetricLoad": {
+    "description": "A History metric: the 1-minute load average per core."
+  },
+  "alertRulesTitle": "Alert rules",
+  "@alertRulesTitle": {
+    "description": "Title of the alert rules page (ALR-01), and the tooltip and button that open it."
+  },
+  "alertRulesEmpty": "No alert rules yet.",
+  "@alertRulesEmpty": {
+    "description": "The alert rules page with no rule in the account."
+  },
+  "alertRulesEmptyServer": "No rule applies to this server yet.",
+  "@alertRulesEmptyServer": {
+    "description": "The alert rules page opened from a server, when no rule applies to it."
+  },
+  "alertRulesNeedSync": "Alert rules sync through your sync account, so adding or changing one needs you signed in.",
+  "@alertRulesNeedSync": {
+    "description": "Note on the alert rules page while no sync account is enrolled; rules are rule records in the account (03 §4.8)."
+  },
+  "alertRuleAdd": "Add rule",
+  "@alertRuleAdd": {
+    "description": "Button on the alert rules page that opens the editor on a new rule."
+  },
+  "alertRuleNew": "New rule",
+  "@alertRuleNew": {
+    "description": "Title of the rule editor for a new rule."
+  },
+  "alertRuleEdit": "Edit rule",
+  "@alertRuleEdit": {
+    "description": "Title of the rule editor for an existing rule."
+  },
+  "alertRuleSave": "Save",
+  "@alertRuleSave": {
+    "description": "The rule editor's save button."
+  },
+  "alertRuleDelete": "Delete rule",
+  "@alertRuleDelete": {
+    "description": "Tooltip of a rule row's delete button."
+  },
+  "alertRuleDeleteConfirm": "Delete this rule? It is removed on every device that syncs your account.",
+  "@alertRuleDeleteConfirm": {
+    "description": "Confirmation before a rule is deleted."
+  },
+  "alertRuleDeleteAction": "Delete",
+  "@alertRuleDeleteAction": {
+    "description": "The confirmation's delete button."
+  },
+  "alertRuleCondition": "{op, select, greaterThan{{metric} above {value}} greaterOrEqual{{metric} at or above {value}} lessThan{{metric} below {value}} other{{metric} at or below {value}}}",
+  "@alertRuleCondition": {
+    "description": "A rule row's title: when the rule raises. op is the comparison, metric the metric's name, such as CPU busy, and value the threshold, such as 90%.",
+    "placeholders": {
+      "op": {
+        "type": "String"
+      },
+      "metric": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRuleClears": "{op, select, greaterThan{Clears at or below {value}} greaterOrEqual{Clears below {value}} lessThan{Clears at or above {value}} other{Clears above {value}}}",
+  "@alertRuleClears": {
+    "description": "When a rule clears: op is the rule's comparison, and value the clear threshold, such as 80%.",
+    "placeholders": {
+      "op": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRuleFor": "after {duration}",
+  "@alertRuleFor": {
+    "description": "How long a rule's condition must hold before it raises or clears, at the end of a rule row's line; duration is a number of minutes or seconds.",
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRuleMinutes": "{count, plural, =1{1 minute} other{{count} minutes}}",
+  "@alertRuleMinutes": {
+    "description": "A rule duration in whole minutes.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "alertRuleSeconds": "{count, plural, =1{1 second} other{{count} seconds}}",
+  "@alertRuleSeconds": {
+    "description": "A rule duration that is not whole minutes, in seconds.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "alertRuleScopeServer": "On {server}",
+  "@alertRuleScopeServer": {
+    "description": "Which servers a rule applies to: one server; server is its name (server data).",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRuleScopeGroup": "On the {group} group",
+  "@alertRuleScopeGroup": {
+    "description": "Which servers a rule applies to: one group; group is its name (server data).",
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRuleScopeAll": "On every server",
+  "@alertRuleScopeAll": {
+    "description": "Which servers a rule applies to: all of them."
+  },
+  "alertRuleMetricLabel": "Metric",
+  "@alertRuleMetricLabel": {
+    "description": "The rule editor's metric field."
+  },
+  "alertRuleOpLabel": "Raise when the value is",
+  "@alertRuleOpLabel": {
+    "description": "The rule editor's comparison field."
+  },
+  "alertRuleOp": "{op, select, greaterThan{Above} greaterOrEqual{At or above} lessThan{Below} other{At or below}}",
+  "@alertRuleOp": {
+    "description": "A comparison in the rule editor's comparison field.",
+    "placeholders": {
+      "op": {
+        "type": "String"
+      }
+    }
+  },
+  "alertRuleRaiseValueLabel": "Raise at",
+  "@alertRuleRaiseValueLabel": {
+    "description": "The rule editor's raise threshold field."
+  },
+  "alertRuleClearValueLabel": "Clear at",
+  "@alertRuleClearValueLabel": {
+    "description": "The rule editor's clear threshold field."
+  },
+  "alertRuleForLabel": "Held for (minutes)",
+  "@alertRuleForLabel": {
+    "description": "The rule editor's duration fields: how long the value must stay past its threshold."
+  },
+  "alertRuleSeverityLabel": "Severity",
+  "@alertRuleSeverityLabel": {
+    "description": "The rule editor's severity field."
+  },
+  "alertRuleScopeLabel": "Applies to",
+  "@alertRuleScopeLabel": {
+    "description": "The rule editor's scope field."
+  },
+  "alertRulePercentSuffix": "%",
+  "@alertRulePercentSuffix": {
+    "description": "The unit after a percentage threshold in the rule editor."
+  },
+  "alertRuleNumberInvalid": "Enter a number.",
+  "@alertRuleNumberInvalid": {
+    "description": "Rule editor error: a threshold is not a number."
+  },
+  "alertRulePercentInvalid": "Enter a value from 0 to 100.",
+  "@alertRulePercentInvalid": {
+    "description": "Rule editor error: a percentage threshold is out of range."
+  },
+  "alertRuleMinutesInvalid": "Enter 0 or more minutes.",
+  "@alertRuleMinutesInvalid": {
+    "description": "Rule editor error: a duration is not a number of minutes, 0 or more."
+  },
+  "alertRuleClearAboveRaise": "The clear value must not be above the raise value.",
+  "@alertRuleClearAboveRaise": {
+    "description": "Rule editor error: an above or at-or-above rule whose clear threshold is higher than its raise threshold."
+  },
+  "alertRuleClearBelowRaise": "The clear value must not be below the raise value.",
+  "@alertRuleClearBelowRaise": {
+    "description": "Rule editor error: a below or at-or-below rule whose clear threshold is lower than its raise threshold."
+  },
+  "alertRuleRefused": "{reason, select, directoryShared{Another Klabautermann may be using this device's data folder, so nothing was saved.} notEnrolled{Sign in to your sync account to change alert rules.} keystoreUnavailable{Your account key could not be read from the system keystore, so nothing was saved.} unknownTarget{This rule is no longer in your account.} invalidDraft{A field is missing or out of range.} tooMany{Your account holds as many rules as it can.} tooLarge{This rule is too large to save.} storeUnavailable{Klabautermann's sync files could not be written this session, so nothing was saved.} other{Nothing was saved: {detail}}}",
+  "@alertRuleRefused": {
+    "description": "Why the engine refused to save or delete an alert rule, as a toast. reason is the engine's CatalogWriteFailure; detail is its own words, used for other only.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      },
+      "detail": {
+        "type": "String",
+        "example": "pull-only"
+      }
+    }
+  },
+  "alertRuleEngineStopped": "Klabautermann's engine stopped before the rule was saved.",
+  "@alertRuleEngineStopped": {
+    "description": "Toast when the engine stopped before it answered a rule write."
+  },
+  "alertNotificationsSwitch": "Notify me when an alert is raised",
+  "@alertNotificationsSwitch": {
+    "description": "The switch for raised alerts' system notifications (ALR-01), on the alert rules page and in the alert center."
+  },
+  "alertNotificationsSwitchDetail": "A system notification, posted only while Klabautermann is open.",
+  "@alertNotificationsSwitchDetail": {
+    "description": "Under the notification switch: the coverage limit (Y3)."
+  },
+  "alertNotificationsPromptTitle": "Get notified of raised alerts?",
+  "@alertNotificationsPromptTitle": {
+    "description": "Title of the app's prompt before the system asks to allow notifications."
+  },
+  "alertNotificationsPromptBody": "Klabautermann evaluates your rules on this device while it is open, and posts a notification when one raises. It cannot notify you while it is closed.",
+  "@alertNotificationsPromptBody": {
+    "description": "The notification prompt: the coverage limit (Y3), stated before the system asks."
+  },
+  "alertNotificationsPromptAllow": "Allow notifications",
+  "@alertNotificationsPromptAllow": {
+    "description": "The notification prompt's button that goes on to the system's request."
+  },
+  "alertNotificationsPromptLater": "Not now",
+  "@alertNotificationsPromptLater": {
+    "description": "The notification prompt's button that leaves notifications off."
+  },
+  "alertNotificationsDenied": "Notifications are turned off for Klabautermann in your system settings.",
+  "@alertNotificationsDenied": {
+    "description": "Toast when the system refused the app notifications; they stay off."
+  },
+  "alertNotificationsUnavailable": "This device has no system notifications Klabautermann can post.",
+  "@alertNotificationsUnavailable": {
+    "description": "Toast when the device offers no notifications to the app."
+  },
+  "alertNotificationsNotSaved": "The notification setting applies until Klabautermann restarts; it could not be saved.",
+  "@alertNotificationsNotSaved": {
+    "description": "Toast when the notification switch changed but settings.json could not be written."
+  },
+  "alertNotificationTitle": "{server}: {metric} at {value}",
+  "@alertNotificationTitle": {
+    "description": "A raised alert's system notification title; server is the server's name (server data), metric the metric's name, such as CPU busy, and value the reading, such as 93%.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      },
+      "metric": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "alertNotificationBody": "{severity}. Evaluated on this device while Klabautermann is open.",
+  "@alertNotificationBody": {
+    "description": "A raised alert's system notification text: its severity word, then the coverage limit (Y3).",
+    "placeholders": {
+      "severity": {
+        "type": "String"
+      }
+    }
+  },
+  "alertNotificationChannel": "Raised alerts",
+  "@alertNotificationChannel": {
+    "description": "The Android notification channel's name, shown in the system's notification settings."
+  },
+  "alertNotificationChannelDetail": "Alerts your rules raise while Klabautermann is open.",
+  "@alertNotificationChannelDetail": {
+    "description": "The Android notification channel's description, shown in the system's notification settings."
+  },
+  "alertNotificationOpen": "Open",
+  "@alertNotificationOpen": {
+    "description": "The default action of a desktop notification on Linux: brings the app forward."
   }
 }

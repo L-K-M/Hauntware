@@ -10,12 +10,26 @@ import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'chart_strings.dart';
 import 'charts/charts.dart' show BarSegment, ChartUnit, StackedBar;
+import 'disk_activity.dart';
+import 'drive_health.dart';
+import 'gpus.dart';
 import 'sortable_table.dart';
 import 'system_view.dart';
+import 'temperatures.dart';
 
 /// The System tab's sections, which key them; the Disks section's id also
 /// prefixes its table's keys.
-enum SystemSection { identity, uptime, network, disks }
+enum SystemSection {
+  identity,
+  uptime,
+  time,
+  network,
+  disks,
+  diskActivity,
+  temperatures,
+  gpus,
+  driveHealth,
+}
 
 /// The panel width from which the fact sections sit side by side and the
 /// mounts table adds its type and bytes columns and usage bars. The desktop
@@ -54,7 +68,10 @@ class _SystemPanelState extends State<SystemPanel> {
   late ValueListenable<Sample?> _identity;
   late ValueListenable<Sample?> _core;
   late ValueListenable<Sample?> _fs;
+  late ValueListenable<Sample?> _temps;
+  late ValueListenable<Sample?> _gpu;
   late ValueListenable<HostProfile?> _profile;
+  late ValueListenable<ServerClock?> _clock;
 
   /// The latest `fs` sample that listed mounts. While a later one times
   /// out, as on a stale network mount, its mounts stay listed with their
@@ -66,7 +83,21 @@ class _SystemPanelState extends State<SystemPanel> {
   TableSort? _sort;
   bool _showPseudo = false;
 
-  List<Listenable> get _slow => [_identity, _fs, _listed, _profile];
+  /// The Disk activity, Temperatures and GPUs tables' orders, which
+  /// outlive tab switches too.
+  TableSort? _activitySort;
+  TableSort? _tempsSort;
+  TableSort? _gpuSort;
+
+  List<Listenable> get _slow => [
+    _identity,
+    _fs,
+    _listed,
+    _temps,
+    _gpu,
+    _profile,
+    _clock,
+  ];
 
   @override
   void initState() {
@@ -98,8 +129,11 @@ class _SystemPanelState extends State<SystemPanel> {
     _identity = monitoring.sampleFor(serverId, SampleStream.identity);
     _core = monitoring.sampleFor(serverId, SampleStream.core);
     _fs = monitoring.sampleFor(serverId, SampleStream.fs);
+    _temps = monitoring.sampleFor(serverId, SampleStream.temps);
+    _gpu = monitoring.sampleFor(serverId, SampleStream.gpu);
     _listed = monitoring.lastReadingFor(serverId, SampleStream.fs);
     _profile = monitoring.profileFor(serverId);
+    _clock = monitoring.clockFor(serverId);
     for (final listenable in _slow) {
       listenable.addListener(_onSlowChange);
     }
@@ -127,10 +161,13 @@ class _SystemPanelState extends State<SystemPanel> {
           listenable: _core,
           builder: (context, _) => _uptimeSection(l10n, profile),
         );
+        final time = _timeSection(l10n, profile);
         final network = ListenableBuilder(
           listenable: _core,
           builder: (context, _) => _networkSection(l10n),
         );
+        final temperatures = _temperaturesSection(l10n, profile);
+        final gpus = _gpusSection(l10n);
         return SingleChildScrollView(
           padding: EdgeInsets.all(wide ? 20 : 16),
           child: Column(
@@ -147,7 +184,7 @@ class _SystemPanelState extends State<SystemPanel> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         spacing: _gap,
-                        children: [uptime, network],
+                        children: [uptime, time, network],
                       ),
                     ),
                   ],
@@ -155,9 +192,21 @@ class _SystemPanelState extends State<SystemPanel> {
               else ...[
                 identity,
                 uptime,
+                time,
                 network,
               ],
               _disksSection(context, l10n, wide: wide),
+              ListenableBuilder(
+                listenable: _core,
+                builder: (context, _) => _diskActivitySection(l10n, profile),
+              ),
+              ?temperatures,
+              ?gpus,
+              DriveHealthSection(
+                key: const ValueKey(SystemSection.driveHealth),
+                serverId: widget.serverId,
+                tableId: SystemSection.driveHealth.name,
+              ),
             ],
           ),
         );
@@ -224,6 +273,27 @@ class _SystemPanelState extends State<SystemPanel> {
     );
   }
 
+  /// SYS-02 and CN-17, from the probe: the time zone, whether the clock
+  /// is in sync, and how far it was from this device's when the probe
+  /// answered.
+  Widget _timeSection(AppLocalizations l10n, HostProfile? profile) {
+    return PanelSection(
+      key: const ValueKey(SystemSection.time),
+      title: l10n.systemTimeTitle,
+      children: [
+        _Fact(
+          label: l10n.systemTimeZone,
+          value: profile?.timezone ?? profile?.zoneOffset,
+        ),
+        _Fact(label: l10n.systemTimeSync, value: timeSyncText(l10n, profile)),
+        _Fact(
+          label: l10n.systemClock,
+          value: clockSkewText(l10n, _clock.value?.skew),
+        ),
+      ],
+    );
+  }
+
   /// `/proc/net/dev` is the network namespace's own, so a container's
   /// rates stay as measured (D50).
   Widget _networkSection(AppLocalizations l10n) {
@@ -243,6 +313,86 @@ class _SystemPanelState extends State<SystemPanel> {
           ),
         ];
       }),
+    );
+  }
+
+  /// DSK-03 and DSK-04: each whole disk's throughput, operations, await
+  /// and busy share since the previous `core` reading. `/proc/diskstats`
+  /// is the host's inside a container, so there it is withheld (D50).
+  Widget _diskActivitySection(AppLocalizations l10n, HostProfile? profile) {
+    return PanelSection(
+      key: const ValueKey(SystemSection.diskActivity),
+      title: l10n.systemDiskActivityTitle,
+      children: _readingOr<CoreResult>(l10n, _core.value, (core) {
+        if (withholdsHostFigure(profile, SystemWideProcFile.diskstats)) {
+          return [Text(l10n.systemUnknownContainer)];
+        }
+        final rates = core.disks;
+        if (rates == null) return [Text(l10n.systemDiskActivityWaiting)];
+        if (rates.isEmpty) return [Text(l10n.systemDiskActivityEmpty)];
+        return [
+          DiskActivityTable(
+            tableId: SystemSection.diskActivity.name,
+            rows: diskActivityRows(rates),
+            sort: _activitySort,
+            onSort: (sort) => setState(() => _activitySort = sort),
+          ),
+        ];
+      }),
+    );
+  }
+
+  /// HW-01: each temperature sensor and the chip's limits for it, or no
+  /// section where the host reports none, as VMs usually do. Inside a
+  /// container, sysfs shows the host's sensors, so there is none either.
+  Widget? _temperaturesSection(AppLocalizations l10n, HostProfile? profile) {
+    if (inContainer(profile)) return null;
+    final sensors = switch (_temps.value?.result) {
+      TempsResult(:final temps) when temps.sensors.isNotEmpty => temps.sensors,
+      _ => null,
+    };
+    if (sensors == null) return null;
+
+    return PanelSection(
+      key: const ValueKey(SystemSection.temperatures),
+      title: l10n.systemTemperaturesTitle,
+      children: [
+        TemperaturesTable(
+          tableId: SystemSection.temperatures.name,
+          sensors: sensors,
+          sort: _tempsSort,
+          onSort: (sort) => setState(() => _tempsSort = sort),
+        ),
+      ],
+    );
+  }
+
+  /// HW-03: each GPU's busy share, memory, temperature and power, or no
+  /// section where the host has no GPU the collector reads. An installed
+  /// `nvidia-smi` that fails, as without its driver, says so instead.
+  Widget? _gpusSection(AppLocalizations l10n) {
+    final gpu = switch (_gpu.value?.result) {
+      GpuResult(:final gpu)
+          when gpu.devices.isNotEmpty || gpu.nvidiaFailure != null =>
+        gpu,
+      _ => null,
+    };
+    if (gpu == null) return null;
+
+    final failure = gpu.nvidiaFailure;
+    return PanelSection(
+      key: const ValueKey(SystemSection.gpus),
+      title: l10n.systemGpusTitle,
+      children: [
+        if (gpu.devices.isNotEmpty)
+          GpusTable(
+            tableId: SystemSection.gpus.name,
+            gpus: gpu.devices,
+            sort: _gpuSort,
+            onSort: (sort) => setState(() => _gpuSort = sort),
+          ),
+        if (failure != null) Text(l10n.systemGpuNvidiaFailed(failure)),
+      ],
     );
   }
 

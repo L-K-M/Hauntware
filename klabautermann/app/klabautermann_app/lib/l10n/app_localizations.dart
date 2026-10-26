@@ -1612,6 +1612,342 @@ abstract class AppLocalizations {
   /// **'Device'**
   String get systemDevice;
 
+  /// System tab: the section of each whole disk's I/O rates since the previous reading (DSK-03, DSK-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Disk activity'**
+  String get systemDiskActivityTitle;
+
+  /// System tab, Disk activity: a rate needs two readings, and only one has arrived.
+  ///
+  /// In en, this message translates to:
+  /// **'Rates show from the second reading.'**
+  String get systemDiskActivityWaiting;
+
+  /// System tab, Disk activity: the server reports no whole disk that ever did I/O (loop, RAM and partition devices are left out).
+  ///
+  /// In en, this message translates to:
+  /// **'No disk has done any I/O yet.'**
+  String get systemDiskActivityEmpty;
+
+  /// Disk activity column: bytes read per second.
+  ///
+  /// In en, this message translates to:
+  /// **'Read'**
+  String get systemDiskRead;
+
+  /// Disk activity column: bytes written per second.
+  ///
+  /// In en, this message translates to:
+  /// **'Write'**
+  String get systemDiskWrite;
+
+  /// Disk activity column: completed read requests per second (read IOPS).
+  ///
+  /// In en, this message translates to:
+  /// **'Reads/s'**
+  String get systemDiskReadsPerSecond;
+
+  /// Disk activity column: completed write requests per second (write IOPS).
+  ///
+  /// In en, this message translates to:
+  /// **'Writes/s'**
+  String get systemDiskWritesPerSecond;
+
+  /// Disk activity column: the mean time a read took, queueing included (iostat's r_await).
+  ///
+  /// In en, this message translates to:
+  /// **'Read wait'**
+  String get systemDiskReadAwait;
+
+  /// Disk activity column: the mean time a write took, queueing included (iostat's w_await).
+  ///
+  /// In en, this message translates to:
+  /// **'Write wait'**
+  String get systemDiskWriteAwait;
+
+  /// Disk activity column: the share of the interval the disk had any request in flight (iostat's %util).
+  ///
+  /// In en, this message translates to:
+  /// **'Busy'**
+  String get systemDiskBusy;
+
+  /// Disk activity: a whole number of requests per second, in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}'**
+  String systemDiskOperations(int count);
+
+  /// Disk activity: a mean request time in milliseconds with one decimal, in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{ms} ms'**
+  String systemDiskMilliseconds(double ms);
+
+  /// System tab: the section of the host's temperature sensors (HW-01). It is hidden where the host has none, as VMs and containers usually do.
+  ///
+  /// In en, this message translates to:
+  /// **'Temperatures'**
+  String get systemTemperaturesTitle;
+
+  /// Temperatures table: column of the sensor's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Sensor'**
+  String get systemTemperatureSensor;
+
+  /// Temperatures table: a sensor named by its chip (coretemp, nvme, k10temp) and the chip's label for it (Package id 0, Composite). Both are the kernel's technical names.
+  ///
+  /// In en, this message translates to:
+  /// **'{chip}: {label}'**
+  String systemTemperatureSensorName(String chip, String label);
+
+  /// Temperatures table: column of the sensor's current reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Temperature'**
+  String get systemTemperatureReading;
+
+  /// Temperatures table: column of the temperature the chip calls high for the sensor (its max limit).
+  ///
+  /// In en, this message translates to:
+  /// **'High'**
+  String get systemTemperatureHigh;
+
+  /// Temperatures table: column of the temperature the chip calls critical for the sensor.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical'**
+  String get systemTemperatureCritical;
+
+  /// A temperature in degrees Celsius, as a whole number in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{celsius} °C'**
+  String systemTemperatureCelsius(double celsius);
+
+  /// System tab: the section of the host's GPUs (HW-03). It is hidden where the host has none the app can read.
+  ///
+  /// In en, this message translates to:
+  /// **'GPUs'**
+  String get systemGpusTitle;
+
+  /// GPUs table: column of the GPU's name, or its device name (card1, nvidia0) where the driver reports no product name.
+  ///
+  /// In en, this message translates to:
+  /// **'GPU'**
+  String get systemGpuColumn;
+
+  /// GPUs table: column of the share of time the GPU was busy.
+  ///
+  /// In en, this message translates to:
+  /// **'Busy'**
+  String get systemGpuBusy;
+
+  /// GPUs table: column of the GPU's own memory (VRAM) in use, of its total.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get systemGpuMemory;
+
+  /// GPUs table: column of the GPU's current power draw.
+  ///
+  /// In en, this message translates to:
+  /// **'Power'**
+  String get systemGpuPower;
+
+  /// A power draw in watts, as a whole number in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{watts} W'**
+  String systemGpuWatts(double watts);
+
+  /// System tab, GPUs: nvidia-smi ran and failed, as when its driver is not loaded; message is the tool's own first line, untranslated.
+  ///
+  /// In en, this message translates to:
+  /// **'nvidia-smi is installed but failed: {message}'**
+  String systemGpuNvidiaFailed(String message);
+
+  /// System tab: the section of each drive's SMART health (HW-04), read on request in admin mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Drive health'**
+  String get systemDriveHealthTitle;
+
+  /// System tab, Drive health: shown while admin mode is off for the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on admin mode to read drive health: smartctl needs the drives\' device nodes.'**
+  String get systemDriveHealthAdminNeeded;
+
+  /// System tab, Drive health: the button that reads every drive's SMART health. Drives that are spun down are left asleep.
+  ///
+  /// In en, this message translates to:
+  /// **'Read drive health'**
+  String get systemDriveHealthRead;
+
+  /// System tab, Drive health: the button that reads every drive's health again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemDriveHealthReadAgain;
+
+  /// System tab, Drive health: shown while the read runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading drive health…'**
+  String get systemDriveHealthReading;
+
+  /// System tab, Drive health: why a read read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{The server is not connected, so drive health could not be read.} adminRequired{Admin mode ended before drive health was read.} elevationRefused{Elevation was refused, so drive health was not read.} missing{smartmontools is not installed on this server.} unreadable{smartctl did not answer as smartmontools 7.0 or later does.} transport{The connection failed while drive health was read.} other{Drive health could not be read.}}'**
+  String systemDriveHealthFailed(String reason);
+
+  /// System tab, Drive health: the read found no drive, as in a VM without passed-through disks.
+  ///
+  /// In en, this message translates to:
+  /// **'No drive answered smartctl\'s scan.'**
+  String get systemDriveHealthNone;
+
+  /// System tab, Drive health: drives past the read's limit, which were not read.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more drive was not read.} other{{count} more drives were not read.}}'**
+  String systemDriveHealthNotRead(int count);
+
+  /// Drive health table: column of the drive's model, or its device where it reports none.
+  ///
+  /// In en, this message translates to:
+  /// **'Drive'**
+  String get systemDriveColumn;
+
+  /// Drive health table: column of the drive's device node, such as /dev/sda.
+  ///
+  /// In en, this message translates to:
+  /// **'Device'**
+  String get systemDriveDevice;
+
+  /// Drive health table: column of the drive's health verdict.
+  ///
+  /// In en, this message translates to:
+  /// **'Health'**
+  String get systemDriveHealth;
+
+  /// Drive health table: a drive's health. Passed: its own assessment passed. Warning: it passed, but shows wear or damage. Failing: its own assessment failed. Asleep: it was spun down and was left asleep.
+  ///
+  /// In en, this message translates to:
+  /// **'{verdict, select, passed{Passed} warning{Warning} failing{Failing} asleep{Asleep} other{Unknown}}'**
+  String systemDriveVerdict(String verdict);
+
+  /// Drive health table: column of an NVMe drive's endurance used, as a percentage that may pass 100.
+  ///
+  /// In en, this message translates to:
+  /// **'Wear'**
+  String get systemDriveWear;
+
+  /// Drive health table: column of an ATA drive's reallocated, pending and uncorrectable sectors, summed.
+  ///
+  /// In en, this message translates to:
+  /// **'Bad sectors'**
+  String get systemDriveBadSectors;
+
+  /// Drive health table: a drive's bad sectors, a whole number in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}'**
+  String systemDriveBadSectorCount(int count);
+
+  /// Drive health table: column of how long the drive has been powered on over its life.
+  ///
+  /// In en, this message translates to:
+  /// **'Powered on'**
+  String get systemDrivePowerOn;
+
+  /// Drive health table: a number of hours in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h'**
+  String systemDriveHours(int hours);
+
+  /// System tab: the section of the server's time zone, time sync and clock against this device's (SYS-02, CN-17).
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get systemTimeTitle;
+
+  /// System tab, Time: label of the server's time zone, an IANA name such as Europe/Berlin or its UTC offset.
+  ///
+  /// In en, this message translates to:
+  /// **'Time zone'**
+  String get systemTimeZone;
+
+  /// System tab, Time: label of whether the server keeps its clock in sync over NTP.
+  ///
+  /// In en, this message translates to:
+  /// **'Time sync'**
+  String get systemTimeSync;
+
+  /// System tab, Time sync: the kernel clock is in sync.
+  ///
+  /// In en, this message translates to:
+  /// **'Synchronized'**
+  String get systemTimeSynced;
+
+  /// System tab, Time sync: a sync service is on but the clock is not in sync yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Not synchronized'**
+  String get systemTimeNotSynced;
+
+  /// System tab, Time sync: no time sync service is enabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get systemTimeSyncOff;
+
+  /// System tab, Time: label of how far the server's clock is from this device's.
+  ///
+  /// In en, this message translates to:
+  /// **'Clock'**
+  String get systemClock;
+
+  /// System tab, Time: the server's clock is within about a second of this device's.
+  ///
+  /// In en, this message translates to:
+  /// **'In step with this device'**
+  String get systemClockInStep;
+
+  /// System tab, Time: the server's clock is ahead of this device's by amount, such as '3 seconds'.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} ahead of this device'**
+  String systemClockAhead(String amount);
+
+  /// System tab, Time: the server's clock is behind this device's by amount, such as '2 minutes'.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} behind this device'**
+  String systemClockBehind(String amount);
+
+  /// A clock difference in seconds.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 second} other{{count} seconds}}'**
+  String systemClockSeconds(int count);
+
+  /// A clock difference in minutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 minute} other{{count} minutes}}'**
+  String systemClockMinutes(int count);
+
+  /// A clock difference in hours.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 hour} other{{count} hours}}'**
+  String systemClockHours(int count);
+
   /// Disks table column: where the filesystem is mounted.
   ///
   /// In en, this message translates to:
@@ -3765,6 +4101,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The setting could not be changed.'**
   String get settingsAnnounceNotChanged;
+
+  /// App lock screen (SAF-20): its heading, shown over the whole app while the app lock is engaged.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann is locked'**
+  String get appLockTitle;
+
+  /// App lock screen: what unlocking asks for, and that open links are not closed by the lock.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock with this device\'s passcode, PIN or biometrics. Connections already open keep running.'**
+  String get appLockDetail;
+
+  /// The desktop settings window while the app is locked, under the title that it is locked.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock it in its main window to change settings.'**
+  String get settingsWindowLocked;
+
+  /// App lock screen: the button that asks for device authentication again.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock'**
+  String get appLockUnlock;
+
+  /// App lock screen: the last device authentication was rejected or dismissed.
+  ///
+  /// In en, this message translates to:
+  /// **'Authentication failed or was cancelled. Try again.'**
+  String get appLockFailed;
+
+  /// App lock screen: device authentication is not set up or not available, so the lock cannot be opened yet.
+  ///
+  /// In en, this message translates to:
+  /// **'This device has no passcode, PIN or biometrics to ask for. Set one up, then try again.'**
+  String get appLockUnavailable;
+
+  /// The reason line the operating system's authentication prompt shows when the app lock asks for it.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock Klabautermann'**
+  String get appLockReason;
+
+  /// Settings > Safety: the heading over the app lock switch (SAF-20).
+  ///
+  /// In en, this message translates to:
+  /// **'App lock'**
+  String get settingsAppLockTitle;
+
+  /// Settings > Safety: the app lock switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Require device authentication'**
+  String get settingsAppLock;
+
+  /// Settings > Safety: what the app lock switch does.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask for this device\'s passcode, PIN or biometrics when Klabautermann opens and after {minutes, plural, =1{1 minute} other{{minutes} minutes}} in the background. Locking turns admin mode off on every server.'**
+  String settingsAppLockDetail(int minutes);
+
+  /// Settings > Safety: why the app lock switch is off and disabled on Linux.
+  ///
+  /// In en, this message translates to:
+  /// **'This platform has no device authentication Klabautermann can ask for.'**
+  String get settingsAppLockUnsupported;
+
+  /// Settings > Safety: why the app lock switch cannot be turned on right now.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up a passcode, PIN or biometrics on this device to use the app lock.'**
+  String get settingsAppLockUnavailable;
+
+  /// Settings > Safety: a toast after turning the app lock on or off did not take effect, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, notAuthenticated{The app lock did not change: authentication failed or was cancelled.} unavailable{The app lock did not change: this device has no authentication to ask for.} notSaved{The app lock did not change: the setting could not be saved.} other{The app lock did not change.}}'**
+  String settingsAppLockNotChanged(String reason);
 
   /// Section heading on the Sync settings tab over the sync passwords switch (SYN-02).
   ///
@@ -6688,7 +7102,7 @@ abstract class AppLocalizations {
   /// **'Enter a name.'**
   String get dockerVolumeNameRequired;
 
-  /// Create volume dialog: a name or driver Docker would refuse.
+  /// Create volume dialog: a name Docker would refuse.
   ///
   /// In en, this message translates to:
   /// **'Use letters, digits, \'_\', \'.\' and \'-\', starting with a letter or digit, at least two characters.'**
@@ -8973,6 +9387,504 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not read that file as a key.'**
   String get serverEditorKeyFileImportFailed;
+
+  /// Title of the in-app alert center (ALR-01), which lists the alerts the user's rules raised.
+  ///
+  /// In en, this message translates to:
+  /// **'Alerts'**
+  String get alertsTitle;
+
+  /// The coverage limit (Y3) the alert notice and the alert center state: rules are evaluated only on this device and only while the app runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Evaluated on this device while Klabautermann is open.'**
+  String get alertsCoverage;
+
+  /// The fleet list's alert notice while rules have raised alerts; count is how many are raised.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 alert is active} other{{count} alerts are active}}'**
+  String alertsNoticeActive(int count);
+
+  /// The fleet list's alert notice when alerts were raised and cleared since the user last opened the alert center, and none is raised now.
+  ///
+  /// In en, this message translates to:
+  /// **'Every alert has cleared since you last looked.'**
+  String get alertsNoticeCleared;
+
+  /// Button on the fleet list's alert notice that opens the alert center.
+  ///
+  /// In en, this message translates to:
+  /// **'Show alerts'**
+  String get alertsShow;
+
+  /// Alert center heading over the alerts raised now.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get alertsActiveHeading;
+
+  /// Alert center line under the Active heading when no alert is raised.
+  ///
+  /// In en, this message translates to:
+  /// **'No alert is active.'**
+  String get alertsNoneActive;
+
+  /// Alert center heading over the latest raises and clears since the app started.
+  ///
+  /// In en, this message translates to:
+  /// **'Earlier'**
+  String get alertsHistoryHeading;
+
+  /// A fleet row's alert count (ALR-02), in its tooltip and screen-reader label; count is how many alerts are raised for that server.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 alert} other{{count} alerts}}'**
+  String alertsRowCount(int count);
+
+  /// The number on a fleet row's alert badge (ALR-02), in the UI locale's number format.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}'**
+  String alertsBadgeCount(int count);
+
+  /// An alert center row's title; server is the server's name (server data) and metric the alert's metric, such as CPU busy.
+  ///
+  /// In en, this message translates to:
+  /// **'{server}: {metric}'**
+  String alertRowTitle(String server, String metric);
+
+  /// An alert's severity word in the alert center.
+  ///
+  /// In en, this message translates to:
+  /// **'{severity, select, critical{Critical} warning{Warning} other{Info}}'**
+  String alertSeverity(String severity);
+
+  /// An alert center time from before today: a date and time in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'{time}'**
+  String alertDateTime(DateTime time);
+
+  /// When a raised alert's breach began, in the alert center; time is a time of day when the breach began today, else a date and time, in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'since {time}'**
+  String alertSince(String time);
+
+  /// An alert center history row for a raise; time is a time of day in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Raised at {time}'**
+  String alertRaisedAt(String time);
+
+  /// An alert center history row for a clear; time is a time of day in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'Cleared at {time}'**
+  String alertClearedAt(String time);
+
+  /// The alert metric cpu.busy: the share of CPU time spent busy.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU busy'**
+  String get alertMetricCpuBusy;
+
+  /// The alert metric memory.used: used memory as a share of the total.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory used'**
+  String get alertMetricMemoryUsed;
+
+  /// The alert metric load.perCore: the 1-minute load average divided by the number of cores.
+  ///
+  /// In en, this message translates to:
+  /// **'Load per core'**
+  String get alertMetricLoadPerCore;
+
+  /// The alert metric disk.used: the fullest filesystem's used space.
+  ///
+  /// In en, this message translates to:
+  /// **'Disk space used'**
+  String get alertMetricDiskUsed;
+
+  /// The alert metric disk.inodes: the fullest filesystem's used inodes.
+  ///
+  /// In en, this message translates to:
+  /// **'Inodes used'**
+  String get alertMetricDiskInodes;
+
+  /// The Overview card that charts a server's on-device history (HIS-01).
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get historyTitle;
+
+  /// The History card's range choice of the 1-minute tier; count is 48.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Last hour} other{Last {count} hours}}'**
+  String historyLastHours(int count);
+
+  /// The History card's range choice of the 10-minute tier; count is 30.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Last day} other{Last {count} days}}'**
+  String historyLastDays(int count);
+
+  /// Tooltip of the History card's button that reads the history again.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get historyRefresh;
+
+  /// The History card when this device recorded nothing for the server in the chosen range.
+  ///
+  /// In en, this message translates to:
+  /// **'No history yet. Klabautermann keeps 48 hours and 30 days of this server\'s readings while it is open.'**
+  String get historyEmpty;
+
+  /// The History chart's series of each bucket's mean.
+  ///
+  /// In en, this message translates to:
+  /// **'Average'**
+  String get historyLaneMean;
+
+  /// The History chart's series of each bucket's highest reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Peak'**
+  String get historyLanePeak;
+
+  /// Where the History chart's data comes from, as its legend says.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded on this device while Klabautermann was open'**
+  String get historySource;
+
+  /// A History metric: the share of CPU time spent busy.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU busy'**
+  String get historyMetricCpu;
+
+  /// A History metric: used memory as a share of the total.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory used'**
+  String get historyMetricMemory;
+
+  /// A History metric: the fullest filesystem's used space.
+  ///
+  /// In en, this message translates to:
+  /// **'Disk space used'**
+  String get historyMetricDisk;
+
+  /// A History metric: the fullest filesystem's used inodes.
+  ///
+  /// In en, this message translates to:
+  /// **'Inodes used'**
+  String get historyMetricInodes;
+
+  /// A History metric: the 1-minute load average per core.
+  ///
+  /// In en, this message translates to:
+  /// **'Load per core'**
+  String get historyMetricLoad;
+
+  /// Title of the alert rules page (ALR-01), and the tooltip and button that open it.
+  ///
+  /// In en, this message translates to:
+  /// **'Alert rules'**
+  String get alertRulesTitle;
+
+  /// The alert rules page with no rule in the account.
+  ///
+  /// In en, this message translates to:
+  /// **'No alert rules yet.'**
+  String get alertRulesEmpty;
+
+  /// The alert rules page opened from a server, when no rule applies to it.
+  ///
+  /// In en, this message translates to:
+  /// **'No rule applies to this server yet.'**
+  String get alertRulesEmptyServer;
+
+  /// Note on the alert rules page while no sync account is enrolled; rules are rule records in the account (03 §4.8).
+  ///
+  /// In en, this message translates to:
+  /// **'Alert rules sync through your sync account, so adding or changing one needs you signed in.'**
+  String get alertRulesNeedSync;
+
+  /// Button on the alert rules page that opens the editor on a new rule.
+  ///
+  /// In en, this message translates to:
+  /// **'Add rule'**
+  String get alertRuleAdd;
+
+  /// Title of the rule editor for a new rule.
+  ///
+  /// In en, this message translates to:
+  /// **'New rule'**
+  String get alertRuleNew;
+
+  /// Title of the rule editor for an existing rule.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit rule'**
+  String get alertRuleEdit;
+
+  /// The rule editor's save button.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get alertRuleSave;
+
+  /// Tooltip of a rule row's delete button.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete rule'**
+  String get alertRuleDelete;
+
+  /// Confirmation before a rule is deleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this rule? It is removed on every device that syncs your account.'**
+  String get alertRuleDeleteConfirm;
+
+  /// The confirmation's delete button.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get alertRuleDeleteAction;
+
+  /// A rule row's title: when the rule raises. op is the comparison, metric the metric's name, such as CPU busy, and value the threshold, such as 90%.
+  ///
+  /// In en, this message translates to:
+  /// **'{op, select, greaterThan{{metric} above {value}} greaterOrEqual{{metric} at or above {value}} lessThan{{metric} below {value}} other{{metric} at or below {value}}}'**
+  String alertRuleCondition(String op, String metric, String value);
+
+  /// When a rule clears: op is the rule's comparison, and value the clear threshold, such as 80%.
+  ///
+  /// In en, this message translates to:
+  /// **'{op, select, greaterThan{Clears at or below {value}} greaterOrEqual{Clears below {value}} lessThan{Clears at or above {value}} other{Clears above {value}}}'**
+  String alertRuleClears(String op, String value);
+
+  /// How long a rule's condition must hold before it raises or clears, at the end of a rule row's line; duration is a number of minutes or seconds.
+  ///
+  /// In en, this message translates to:
+  /// **'after {duration}'**
+  String alertRuleFor(String duration);
+
+  /// A rule duration in whole minutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 minute} other{{count} minutes}}'**
+  String alertRuleMinutes(int count);
+
+  /// A rule duration that is not whole minutes, in seconds.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 second} other{{count} seconds}}'**
+  String alertRuleSeconds(int count);
+
+  /// Which servers a rule applies to: one server; server is its name (server data).
+  ///
+  /// In en, this message translates to:
+  /// **'On {server}'**
+  String alertRuleScopeServer(String server);
+
+  /// Which servers a rule applies to: one group; group is its name (server data).
+  ///
+  /// In en, this message translates to:
+  /// **'On the {group} group'**
+  String alertRuleScopeGroup(String group);
+
+  /// Which servers a rule applies to: all of them.
+  ///
+  /// In en, this message translates to:
+  /// **'On every server'**
+  String get alertRuleScopeAll;
+
+  /// The rule editor's metric field.
+  ///
+  /// In en, this message translates to:
+  /// **'Metric'**
+  String get alertRuleMetricLabel;
+
+  /// The rule editor's comparison field.
+  ///
+  /// In en, this message translates to:
+  /// **'Raise when the value is'**
+  String get alertRuleOpLabel;
+
+  /// A comparison in the rule editor's comparison field.
+  ///
+  /// In en, this message translates to:
+  /// **'{op, select, greaterThan{Above} greaterOrEqual{At or above} lessThan{Below} other{At or below}}'**
+  String alertRuleOp(String op);
+
+  /// The rule editor's raise threshold field.
+  ///
+  /// In en, this message translates to:
+  /// **'Raise at'**
+  String get alertRuleRaiseValueLabel;
+
+  /// The rule editor's clear threshold field.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear at'**
+  String get alertRuleClearValueLabel;
+
+  /// The rule editor's duration fields: how long the value must stay past its threshold.
+  ///
+  /// In en, this message translates to:
+  /// **'Held for (minutes)'**
+  String get alertRuleForLabel;
+
+  /// The rule editor's severity field.
+  ///
+  /// In en, this message translates to:
+  /// **'Severity'**
+  String get alertRuleSeverityLabel;
+
+  /// The rule editor's scope field.
+  ///
+  /// In en, this message translates to:
+  /// **'Applies to'**
+  String get alertRuleScopeLabel;
+
+  /// The unit after a percentage threshold in the rule editor.
+  ///
+  /// In en, this message translates to:
+  /// **'%'**
+  String get alertRulePercentSuffix;
+
+  /// Rule editor error: a threshold is not a number.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a number.'**
+  String get alertRuleNumberInvalid;
+
+  /// Rule editor error: a percentage threshold is out of range.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a value from 0 to 100.'**
+  String get alertRulePercentInvalid;
+
+  /// Rule editor error: a duration is not a number of minutes, 0 or more.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter 0 or more minutes.'**
+  String get alertRuleMinutesInvalid;
+
+  /// Rule editor error: an above or at-or-above rule whose clear threshold is higher than its raise threshold.
+  ///
+  /// In en, this message translates to:
+  /// **'The clear value must not be above the raise value.'**
+  String get alertRuleClearAboveRaise;
+
+  /// Rule editor error: a below or at-or-below rule whose clear threshold is lower than its raise threshold.
+  ///
+  /// In en, this message translates to:
+  /// **'The clear value must not be below the raise value.'**
+  String get alertRuleClearBelowRaise;
+
+  /// Why the engine refused to save or delete an alert rule, as a toast. reason is the engine's CatalogWriteFailure; detail is its own words, used for other only.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, directoryShared{Another Klabautermann may be using this device\'s data folder, so nothing was saved.} notEnrolled{Sign in to your sync account to change alert rules.} keystoreUnavailable{Your account key could not be read from the system keystore, so nothing was saved.} unknownTarget{This rule is no longer in your account.} invalidDraft{A field is missing or out of range.} tooMany{Your account holds as many rules as it can.} tooLarge{This rule is too large to save.} storeUnavailable{Klabautermann\'s sync files could not be written this session, so nothing was saved.} other{Nothing was saved: {detail}}}'**
+  String alertRuleRefused(String reason, String detail);
+
+  /// Toast when the engine stopped before it answered a rule write.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann\'s engine stopped before the rule was saved.'**
+  String get alertRuleEngineStopped;
+
+  /// The switch for raised alerts' system notifications (ALR-01), on the alert rules page and in the alert center.
+  ///
+  /// In en, this message translates to:
+  /// **'Notify me when an alert is raised'**
+  String get alertNotificationsSwitch;
+
+  /// Under the notification switch: the coverage limit (Y3).
+  ///
+  /// In en, this message translates to:
+  /// **'A system notification, posted only while Klabautermann is open.'**
+  String get alertNotificationsSwitchDetail;
+
+  /// Title of the app's prompt before the system asks to allow notifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Get notified of raised alerts?'**
+  String get alertNotificationsPromptTitle;
+
+  /// The notification prompt: the coverage limit (Y3), stated before the system asks.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann evaluates your rules on this device while it is open, and posts a notification when one raises. It cannot notify you while it is closed.'**
+  String get alertNotificationsPromptBody;
+
+  /// The notification prompt's button that goes on to the system's request.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow notifications'**
+  String get alertNotificationsPromptAllow;
+
+  /// The notification prompt's button that leaves notifications off.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get alertNotificationsPromptLater;
+
+  /// Toast when the system refused the app notifications; they stay off.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications are turned off for Klabautermann in your system settings.'**
+  String get alertNotificationsDenied;
+
+  /// Toast when the device offers no notifications to the app.
+  ///
+  /// In en, this message translates to:
+  /// **'This device has no system notifications Klabautermann can post.'**
+  String get alertNotificationsUnavailable;
+
+  /// Toast when the notification switch changed but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The notification setting applies until Klabautermann restarts; it could not be saved.'**
+  String get alertNotificationsNotSaved;
+
+  /// A raised alert's system notification title; server is the server's name (server data), metric the metric's name, such as CPU busy, and value the reading, such as 93%.
+  ///
+  /// In en, this message translates to:
+  /// **'{server}: {metric} at {value}'**
+  String alertNotificationTitle(String server, String metric, String value);
+
+  /// A raised alert's system notification text: its severity word, then the coverage limit (Y3).
+  ///
+  /// In en, this message translates to:
+  /// **'{severity}. Evaluated on this device while Klabautermann is open.'**
+  String alertNotificationBody(String severity);
+
+  /// The Android notification channel's name, shown in the system's notification settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Raised alerts'**
+  String get alertNotificationChannel;
+
+  /// The Android notification channel's description, shown in the system's notification settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Alerts your rules raise while Klabautermann is open.'**
+  String get alertNotificationChannelDetail;
+
+  /// The default action of a desktop notification on Linux: brings the app forward.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get alertNotificationOpen;
 }
 
 class _AppLocalizationsDelegate

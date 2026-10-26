@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:ghost_keystore/app_lock.dart';
 import 'package:planchette_editor/planchette_editor.dart'
     show EditorLigatures, EditorTextSize;
 import 'package:seance_core/seance_core.dart';
@@ -14,7 +15,6 @@ import '../theme/theme_presets.dart';
 import '../ui/server_list_density.dart';
 import '../ui/terminal_appearance.dart';
 import 'atomic_file.dart';
-import 'app_lock.dart';
 import 'external_file_opener.dart';
 
 /// A macOS security-scoped bookmark for a Browse…-picked identity file,

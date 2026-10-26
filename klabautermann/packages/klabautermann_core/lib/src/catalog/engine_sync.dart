@@ -332,6 +332,10 @@ final class EngineSync {
     };
   }
 
+  /// Every live `rule` record's alert rule (03 §4.8, ALR-01), whatever
+  /// its scope names.
+  Future<List<SyncedRule>> rules() async => _klabautermannRecords.rules();
+
   /// Signs in to the account [request] names (03 §4.3 step 1), re-keys the
   /// vault through its journal, and applies the pulled records.
   Future<SyncStatus> enroll(EnrollSync request) async {

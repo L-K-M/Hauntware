@@ -296,7 +296,7 @@ class _PullResult extends StatelessWidget {
       RunInProgress() => l10n.dockerPullRunning(via.name),
       RunFinished(:final finished) => switch (finished.outcome) {
         // A detached pull only started: its log follows it (03 §7.17).
-        ActionOutcome.succeeded when finished.operationId != null =>
+        ActionOutcome.succeeded when via == PullRoute.hostDetached =>
           l10n.dockerPullDetached(target),
         ActionOutcome.succeeded => l10n.actionSucceeded(target),
         ActionOutcome.cancelled => l10n.actionCancelled(target),
@@ -319,9 +319,15 @@ class _PullResult extends StatelessWidget {
           child: Text(
             headline,
             style: theme.textTheme.titleSmall?.copyWith(
-              color: finished?.outcome == ActionOutcome.succeeded
-                  ? null
-                  : theme.colorScheme.error,
+              // A pull the user stopped is no error; a refused or failed
+              // one is.
+              color: switch (end) {
+                RunRefused() => theme.colorScheme.error,
+                RunFinished(:final finished)
+                    when finished.outcome == ActionOutcome.failed =>
+                  theme.colorScheme.error,
+                _ => null,
+              },
             ),
           ),
         ),

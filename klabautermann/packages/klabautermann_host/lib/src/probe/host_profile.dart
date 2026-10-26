@@ -151,6 +151,8 @@ final class HostProfile {
     this.timezone,
     this.etcTimezone,
     this.localtimeTarget,
+    this.ntpEnabled,
+    this.ntpSynchronized,
     this.lingerEnabled,
     this.killUserProcesses,
     this.xdgRuntimeDir,
@@ -238,6 +240,11 @@ final class HostProfile {
   final int? epochSeconds;
   final String? zoneOffset;
   final String? timezone, etcTimezone, localtimeTarget;
+
+  /// timedatectl's `NTP` and `NTPSynchronized` (SYS-02): whether a time
+  /// sync service is enabled, and whether the kernel clock is in sync;
+  /// null where timedatectl did not say, as without systemd.
+  final bool? ntpEnabled, ntpSynchronized;
 
   // detached-operation support (03 §6.1).
   final bool? lingerEnabled;
@@ -388,6 +395,8 @@ final class HostProfile {
       timezone: r.string('timezone'),
       etcTimezone: r.string('etcTimezone'),
       localtimeTarget: r.string('localtimeTarget'),
+      ntpEnabled: r.boolean('ntpEnabled'),
+      ntpSynchronized: r.boolean('ntpSynchronized'),
       lingerEnabled: r.boolean('lingerEnabled'),
       killUserProcesses: r.string('killUserProcesses'),
       xdgRuntimeDir: r.string('xdgRuntimeDir'),
@@ -441,6 +450,8 @@ final class HostProfile {
     'timezone': timezone,
     'etcTimezone': etcTimezone,
     'localtimeTarget': localtimeTarget,
+    'ntpEnabled': ntpEnabled,
+    'ntpSynchronized': ntpSynchronized,
     'lingerEnabled': lingerEnabled,
     'killUserProcesses': killUserProcesses,
     'xdgRuntimeDir': xdgRuntimeDir,

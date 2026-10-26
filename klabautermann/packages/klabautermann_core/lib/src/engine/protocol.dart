@@ -11,6 +11,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         DiskRate,
         FootprintRow,
         FsSnapshot,
+        GpuSnapshot,
         HostProfile,
         JobEntry,
         JournalBoot,
@@ -23,8 +24,10 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         OpDirectoryKind,
         OpDirectoryListing,
         ProcsSelection,
+        SmartDisk,
         SystemdUnit,
         SystemctlVerb,
+        TempsSnapshot,
         ThresholdRule,
         TimerLastRun,
         TimersSnapshot,
@@ -59,6 +62,8 @@ import 'package:meta/meta.dart';
 // DangerLinter's findings are plain data: a severity and three values.
 import 'package:seance_core/seance_core.dart' show DangerFinding;
 
+import '../catalog/klabautermann_records.dart' show SyncedRule;
+import '../history/history_store.dart' show HistoryRange, HistoryTier;
 import '../docker/docker_ladder.dart'
     show
         DockerNoRouteReason,
@@ -1109,8 +1114,8 @@ final class SetServerPrefs extends EngineRequest {
   final ServerPrefs? prefs;
 }
 
-/// Seals the alert rule [ruleId] as its `rule` record (03 §4.8); no
-/// surface sends it yet. Answered as [SaveServer].
+/// Seals the alert rule [ruleId] as its `rule` record (03 §4.8); the
+/// app's rule editor sends it. Answered as [SaveServer].
 final class PutRule extends EngineRequest {
   const PutRule({
     required this.requestId,
@@ -1179,6 +1184,28 @@ final class ReadUserCrontabs extends EngineRequest {
   const ReadUserCrontabs(this.serverId, {required this.requestId});
 
   final String serverId;
+  final String requestId;
+}
+
+/// Reads every drive's SMART health on [serverId] (HW-04, 03 §7.11): in
+/// admin mode only, since smartctl needs the device nodes, which are
+/// root's on every distribution; never cached, and a spun-down drive is
+/// left asleep. One [SmartReport] with [requestId] answers it.
+final class ReadSmart extends EngineRequest {
+  const ReadSmart(this.serverId, {required this.requestId});
+
+  final String serverId;
+  final String requestId;
+}
+
+/// Reads [serverId]'s on-device history in [tier] (HIS-01, 03 §7.20):
+/// the buckets and gaps within the tier's span. One [HistoryRead] with
+/// [requestId] answers it.
+final class ReadHistory extends EngineRequest {
+  const ReadHistory(this.serverId, this.tier, {required this.requestId});
+
+  final String serverId;
+  final HistoryTier tier;
   final String requestId;
 }
 
@@ -1639,7 +1666,9 @@ final class Sample extends EngineEvent {
              (stream == SampleStream.timers && result is TimersResult) ||
              (stream == SampleStream.cron && result is CronResult) ||
              (stream == SampleStream.userUnits && result is UnitsResult) ||
-             (stream == SampleStream.userTimers && result is TimersResult),
+             (stream == SampleStream.userTimers && result is TimersResult) ||
+             (stream == SampleStream.temps && result is TempsResult) ||
+             (stream == SampleStream.gpu && result is GpuResult),
          'result must be the variant for stream, or CollectorUnavailable',
        );
 
@@ -1733,6 +1762,24 @@ final class HostProfileChanged extends EngineEvent {
   /// When the probe behind a cached [profile] answered, by the engine's
   /// clock in UTC; null when a probe in this run found it.
   final DateTime? cachedAt;
+}
+
+/// How far [serverId]'s clock is from this device's (CN-17), measured at
+/// each probe answer: the probe's `date +%s` against the engine's clock
+/// when the answer arrived. It is good to a second or two: `date` reads
+/// whole seconds, and the answer's last areas and its transit come after
+/// it, which reads as the server being behind by that much.
+final class ServerClock extends EngineEvent {
+  const ServerClock(this.serverId, {required this.skew, required this.at});
+
+  final String serverId;
+
+  /// The server's time less this device's: positive when the server is
+  /// ahead.
+  final Duration skew;
+
+  /// When the probe answered, by the engine's clock in UTC.
+  final DateTime at;
 }
 
 /// The next records of the [OpenLogStream] stream [streamId], in the
@@ -2499,6 +2546,50 @@ enum UserCrontabsFailure {
   transport,
 }
 
+/// Why a [ReadSmart] read nothing.
+enum SmartReportFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// Admin mode is off for the server.
+  adminRequired,
+
+  /// Elevation refused, so nothing ran.
+  elevationRefused,
+
+  /// smartmontools is not installed.
+  missing,
+
+  /// `smartctl --scan-open` did not answer with its JSON, as smartctl
+  /// before 7.0 does.
+  unreadable,
+
+  /// The link failed while reading.
+  transport,
+}
+
+/// The answer to [ReadSmart]: each drive smartctl opens, at most
+/// `kSmartDrivesRead`, with its health.
+final class SmartReport extends EngineEvent {
+  SmartReport({
+    required this.serverId,
+    required this.requestId,
+    Iterable<SmartDisk> disks = const [],
+    this.notRead = 0,
+    this.failure,
+  }) : disks = List.unmodifiable(disks);
+
+  final String serverId;
+  final String requestId;
+  final List<SmartDisk> disks;
+
+  /// Drives past `kSmartDrivesRead`, which were not read.
+  final int notRead;
+
+  /// Why nothing was read, or null.
+  final SmartReportFailure? failure;
+}
+
 /// The answer to [ReadUserCrontabs]: the listed users' crontab lines as
 /// jobs rows, commands masked (8.9), with their next runs as the `cron`
 /// stream's rows have them. A user whose crontab could not be read is in
@@ -2918,6 +3009,73 @@ final class KeystoreRequest extends EngineEvent {
   /// Unique for the engine's lifetime.
   final int requestId;
   final KeystoreOperation operation;
+}
+
+/// One in-app threshold alert raised or cleared (ALR-01, 03 §7.19, D29):
+/// the engine evaluates every synced rule on the live samples of the
+/// servers it applies to, on this device while Klabautermann is open. A
+/// rule that is removed or changed, or a server that leaves its scope,
+/// clears a raised alert at once.
+final class LocalAlertChanged extends EngineEvent {
+  const LocalAlertChanged({
+    required this.serverId,
+    required this.ruleId,
+    required this.metric,
+    required this.severity,
+    required this.raised,
+    required this.at,
+    this.value,
+    this.since,
+  });
+
+  final String serverId;
+
+  /// The `rule` record's id.
+  final String ruleId;
+
+  /// The rule's metric id, such as `cpu.busy`.
+  final String metric;
+
+  final AlertSeverity severity;
+
+  /// True when the alert went up, false when it cleared.
+  final bool raised;
+
+  /// The reading that raised or cleared it, by the engine's clock in UTC.
+  final DateTime at;
+
+  /// The value that reading had; null for a clear without a reading.
+  final double? value;
+
+  /// When the breach behind a raise began, as the rule's `for` counts it.
+  final DateTime? since;
+}
+
+/// The account's alert rules (03 §4.8, §7.19) changed: a pulled or
+/// written `rule` record applied or was removed. [rules] is every live
+/// rule. The engine sends it only on a change, starting from none, so an
+/// account without rules never hears it.
+final class AlertRulesChanged extends EngineEvent {
+  const AlertRulesChanged(this.rules);
+
+  final List<SyncedRule> rules;
+}
+
+/// The answer to [ReadHistory]: [serverId]'s buckets in [tier], oldest
+/// first, the one still filling included, and the gaps the engine saw
+/// within their span; empty before the engine opens its store.
+final class HistoryRead extends EngineEvent {
+  const HistoryRead({
+    required this.requestId,
+    required this.serverId,
+    required this.tier,
+    required this.range,
+  });
+
+  final String requestId;
+  final String serverId;
+  final HistoryTier tier;
+  final HistoryRange range;
 }
 
 /// Alerts fetched for one server inside a sync round (v1.x, 03 §10.1, D42).
@@ -4545,7 +4703,8 @@ enum DockerPruneKind { containers, images, volumes, networks, buildCache }
 /// uses, volumes no container mounts, user-defined networks no container
 /// is on, or the build cache no build uses. The preview lists them first.
 final class PruneDocker extends ActionIntent {
-  const PruneDocker(super.serverId, {required this.kind, this.all = false});
+  const PruneDocker(super.serverId, {required this.kind, this.all = false})
+    : assert(!all || kind == DockerPruneKind.images, 'only images prune all');
 
   final DockerPruneKind kind;
 
@@ -5512,6 +5671,12 @@ enum SampleStream {
 
   /// The login user's own systemd timers ([TimersResult], 7.7, JOB-08).
   userTimers,
+
+  /// Temperature sensors ([TempsResult], HW-01).
+  temps,
+
+  /// GPUs ([GpuResult], HW-03).
+  gpu,
 }
 
 /// The 03 §6.4 cadence columns [SetCadenceProfile] picks among.
@@ -5522,9 +5687,10 @@ enum CadenceProfile {
   /// The Phone column.
   phone,
 
-  /// The Cellular saver column, which reads `timers` and `cron` on
-  /// demand: once per [Subscribe] that names them, as soon as the link is
-  /// ready and the app is in the foreground (see [Subscribe]).
+  /// The Cellular saver column, which reads `timers`, `cron`, `temps`
+  /// and `gpu` on demand: once per [Subscribe] that names them, as soon
+  /// as the link is ready and the app is in the foreground (see
+  /// [Subscribe]).
   cellularSaver,
 }
 
@@ -5674,8 +5840,8 @@ final class CoreResult extends SampleResult {
   /// As [OverviewResult.network].
   final Map<String, NetRate>? network;
 
-  /// Byte rates per block device since the previous reading; null without
-  /// one, as [OverviewResult.network].
+  /// Throughput, requests, waits and busy share per block device since
+  /// the previous reading; null without one, as [OverviewResult.network].
   final Map<String, DiskRate>? disks;
 
   /// Pressure stall information; null where the kernel has none, which is
@@ -5794,6 +5960,22 @@ final class FsResult extends SampleResult {
   const FsResult(this.fs);
 
   final FsSnapshot fs;
+}
+
+/// Temperature sensors ([SampleStream.temps], HW-01): empty where the
+/// host has none, as VMs and containers usually do.
+final class TempsResult extends SampleResult {
+  const TempsResult(this.temps);
+
+  final TempsSnapshot temps;
+}
+
+/// GPUs ([SampleStream.gpu], HW-03): empty where the host has none the
+/// collector reads.
+final class GpuResult extends SampleResult {
+  const GpuResult(this.gpu);
+
+  final GpuSnapshot gpu;
 }
 
 /// SYS-01's identity ([SampleStream.identity]); virtualization comes with

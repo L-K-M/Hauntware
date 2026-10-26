@@ -1,7 +1,7 @@
 name: seance_app
 description: "Séance — a personal cross-platform SSH client."
 publish_to: none
-version: 1.9.2+1090299
+version: 1.9.3+1090399
 
 environment:
   sdk: ^3.12.0
@@ -62,6 +62,9 @@ dependencies:
     path: ../../third_party/flutter_pty
   # OS keystore for the vault master key and LLM API keys.
   flutter_secure_storage: ^10.0.0
+  # The device-local app lock (AppLock), shared with Klabautermann (F5f).
+  ghost_keystore:
+    path: ../../../planchette/packages/ghost_keystore
   # Optional device-local gate; OS biometrics with device passcode fallback.
   local_auth: ^3.0.2
   path_provider: ^2.1.0

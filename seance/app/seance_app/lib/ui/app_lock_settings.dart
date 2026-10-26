@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:ghost_keystore/app_lock.dart';
 
-import '../services/app_lock.dart';
 import '../services/settings_backend.dart';
 
 /// The route and Settings window use the host's policy and availability.

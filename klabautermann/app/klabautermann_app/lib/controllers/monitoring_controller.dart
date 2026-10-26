@@ -8,6 +8,7 @@ import '../ui/charts/time_series.dart';
 import 'container_terminals.dart';
 import 'docker_controller.dart';
 import 'docker_endpoint_choices.dart';
+import 'history_reads.dart';
 import 'job_history_reads.dart';
 import 'log_reads.dart';
 import 'log_streams.dart';
@@ -158,6 +159,7 @@ final class MonitoringController extends ChangeNotifier {
     logs = LogStreams(_engine);
     terminals = ContainerTerminals(_engine);
     jobHistory = JobHistoryReads(_engine);
+    rollups = HistoryReads(_engine);
     docker = DockerController(
       _engine,
       endpointChoices: dockerEndpointChoices,
@@ -183,6 +185,10 @@ final class MonitoringController extends ChangeNotifier {
   /// The Jobs tab's last runs (JOB-05), a concern of its own beside
   /// [logs].
   late final JobHistoryReads jobHistory;
+
+  /// The on-device history the History card charts (HIS-01), a concern of
+  /// its own beside [logs].
+  late final HistoryReads rollups;
 
   /// Each server's Docker endpoint, which the server header names, and
   /// the engine details the Docker tab shows (03 §5.9, §10.2): a concern
@@ -265,6 +271,11 @@ final class MonitoringController extends ChangeNotifier {
   /// either.
   ValueListenable<HostProfile?> profileFor(String serverId) =>
       _server(serverId).profile;
+
+  /// How far [serverId]'s clock was from this device's at its last probe
+  /// in this engine run (CN-17), or null before one.
+  ValueListenable<ServerClock?> clockFor(String serverId) =>
+      _server(serverId).clock;
 
   /// The session ring of [serverId]'s [series] as [stream] reports it
   /// (OV-03): one reading per kept sample of [stream], null where it had no
@@ -623,6 +634,9 @@ final class MonitoringController extends ChangeNotifier {
         // As for a sample: a server that left the fleet stays purged.
         if (_fleetIds case final ids? when !ids.contains(serverId)) return;
         _server(serverId).profile.value = profile;
+      case ServerClock(:final serverId):
+        if (_fleetIds case final ids? when !ids.contains(serverId)) return;
+        _server(serverId).clock.value = event;
       case CatalogReplaced(:final entries):
         final fleetIds = {for (final entry in entries) entry.serverId};
         final rejected = _connectRejections.value.keys.toList();
@@ -751,6 +765,7 @@ final class MonitoringController extends ChangeNotifier {
     logs.dispose();
     terminals.dispose();
     jobHistory.dispose();
+    rollups.dispose();
     docker.dispose();
     _onEngineDone();
     for (final refresh in _refreshes.toList()) {
@@ -874,6 +889,7 @@ final class _ServerReadings {
   final Map<SampleStream, ValueNotifier<Sample?>> _lastReadings = {};
   final Map<SampleStream, Map<MetricSeries, SeriesRing>> _rings = {};
   final ValueNotifier<HostProfile?> profile = ValueNotifier(null);
+  final ValueNotifier<ServerClock?> clock = ValueNotifier(null);
 
   /// Ring streams no subscription names, and those named again since,
   /// whose next reading follows a hole.
@@ -1026,5 +1042,6 @@ final class _ServerReadings {
       ring.dispose();
     }
     profile.dispose();
+    clock.dispose();
   }
 }

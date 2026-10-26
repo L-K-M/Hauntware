@@ -41,7 +41,13 @@ const kSamplerStartCommand =
 /// (03 §7.17).
 /// Version 9 adds the slow `user_units` and `user_timers` collectors for
 /// the login user's own manager (03 §7.5, SVC-09).
-const kCollectorSetVersion = '9';
+/// Version 10 adds DSK-04's ms reading, ms writing and ms doing I/O to
+/// `core`'s diskstats rows (D48).
+/// Version 11 adds the slow `temps` collector (HW-01).
+/// Version 12 adds the slow `gpu` collector (HW-03).
+/// Version 13 adds NTP and NTPSynchronized to the probe's clock area
+/// (SYS-02).
+const kCollectorSetVersion = '13';
 
 /// The most `procs` rows one reply carries (D48). With more processes the
 /// fragment keeps the union of the [kProcsRowCap] / 2 with the highest CPU
@@ -122,6 +128,8 @@ const collectorFragments = <Collector, String>{
   Collector.cron: _kCronFragment,
   Collector.timerDetail: _kTimerDetailFragment,
   Collector.ops: _kOpsFragment,
+  Collector.temps: _kTempsFragment,
+  Collector.gpu: _kGpuFragment,
 };
 
 /// Assembles the program text for [kind]: the nonce line first, then the
@@ -338,8 +346,9 @@ hw_netdev() {
   o="$o${_d:-${_v:-$_a}}"
 }
 
-# DSK-03's counters as `<device> <reads> <sectors read> <writes>
-# <sectors written>` of whole disks. A partition (a `partition` file
+# DSK-03's counters and DSK-04's timings as `<device> <reads> <sectors
+# read> <writes> <sectors written> <ms reading> <ms writing> <ms doing
+# I/O>` of whole disks. A partition (a `partition` file
 # in sysfs) or a stacked device (entries under `slaves/`: LVM, dm-crypt,
 # multipath, md) repeats its disks' I/O, and without sysfs both stay;
 # loop, ram, zram and ZFS volume (zd) devices are files or memory, or
@@ -352,13 +361,13 @@ hw_diskstats() {
   o="$o$NL== diskstats =="
   hw_readable /proc/diskstats || return 0
   _k=; _p=
-  while read -r _x _x _n _r _x _sr _x _w _x _sw _x; do
+  while read -r _x _x _n _r _x _sr _dr _w _x _sw _dw _x _di _x; do
     case $_n in
       loop* | ram* | zram* | zd*)
         continue ;;
     esac
-    case $_r:$_sr:$_w:$_sw in
-      0:0:0:0 | *::* | :* | *: | *[!0-9:]*)
+    case $_r:$_sr:$_w:$_sw:$_dr:$_dw:$_di in
+      0:0:0:0:* | *::* | :* | *: | *[!0-9:]*)
         continue ;;
     esac
     [ -e "/sys/class/block/$_n/partition" ] && continue
@@ -366,9 +375,9 @@ hw_diskstats() {
     [ -e "$_s" ] && continue
     case $_n in
       nvme[0-9]*c[0-9]*n[0-9]*)
-        _p="$_p$NL$_n $_r $_sr $_w $_sw" ;;
+        _p="$_p$NL$_n $_r $_sr $_w $_sw $_dr $_dw $_di" ;;
       *)
-        _k="$_k$NL$_n $_r $_sr $_w $_sw" ;;
+        _k="$_k$NL$_n $_r $_sr $_w $_sw $_dr $_dw $_di" ;;
     esac
   done </proc/diskstats || st=error
   while [ -n "$_p" ]; do
@@ -490,6 +499,70 @@ c_fs() {
     *)
       st=error ;;
   esac
+}
+""";
+
+/// `temps` (03 §6.4, HW-01): each hwmon chip's temperature inputs as
+/// `<dir>|<chip>|<input>|<millidegrees>|<max>|<crit>|<label>`, then each
+/// thermal zone as `<zone>|<millidegrees>|<type>`, read with builtins. An
+/// input that cannot be read (an unwired sensor answers EIO) is skipped,
+/// and a host without either class sends empty blocks.
+const _kTempsFragment = r"""
+c_temps() {
+  st=ok; o='== hwmon =='
+  for _d in /sys/class/hwmon/hwmon*; do
+    [ -r "$_d/name" ] || continue
+    read -r _c <"$_d/name" || continue
+    for _f in "$_d"/temp*_input; do
+      _v=; read -r _v 2>/dev/null <"$_f"
+      case $_v in '' | *[!0-9-]*) continue ;; esac
+      _b=${_f%_input}; _m=; _k=; _l=
+      [ -r "${_b}_max" ] && read -r _m 2>/dev/null <"${_b}_max"
+      [ -r "${_b}_crit" ] && read -r _k 2>/dev/null <"${_b}_crit"
+      [ -r "${_b}_label" ] && read -r _l 2>/dev/null <"${_b}_label"
+      o="$o$NL${_d##*/}|$_c|${_b##*/}|$_v|$_m|$_k|$_l"
+    done
+  done
+  o="$o$NL== thermal =="
+  for _z in /sys/class/thermal/thermal_zone*; do
+    _v=; read -r _v 2>/dev/null <"$_z/temp"
+    case $_v in '' | *[!0-9-]*) continue ;; esac
+    _t=; [ -r "$_z/type" ] && read -r _t 2>/dev/null <"$_z/type"
+    o="$o$NL${_z##*/}|$_v|$_t"
+  done
+}
+""";
+
+/// `gpu` (03 §6.4, HW-03): `nvidia-smi`'s query of each NVIDIA GPU as
+/// CSV, with its exit status on an `rc=` line, then each amdgpu card as
+/// `<card>|<busy %>|<VRAM used>|<VRAM total>|<millidegrees>|<µW>`, read
+/// with builtins from the card's device directory and its hwmon. A
+/// card whose `gpu_busy_percent` cannot be read is not an amdgpu one and
+/// is skipped. Intel GPUs report busyness only through `intel_gpu_top`,
+/// which needs root and streams, so they are not read.
+const _kGpuFragment = r"""
+c_gpu() {
+  st=ok; o='== nvidia =='
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    n=$(hw_qrun nvidia-smi --query-gpu=index,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,power.limit --format=csv,noheader,nounits </dev/null 2>&1)
+    o="$o${NL}rc=$?$NL$n"
+  fi
+  o="$o$NL== amdgpu =="
+  for _c in /sys/class/drm/card[0-9]*; do
+    case ${_c##*/} in *-*) continue ;; esac
+    _d=$_c/device
+    _b=; read -r _b 2>/dev/null <"$_d/gpu_busy_percent"
+    case $_b in '' | *[!0-9]*) continue ;; esac
+    _u=; _t=; _k=; _p=
+    [ -r "$_d/mem_info_vram_used" ] && read -r _u 2>/dev/null <"$_d/mem_info_vram_used"
+    [ -r "$_d/mem_info_vram_total" ] && read -r _t 2>/dev/null <"$_d/mem_info_vram_total"
+    for _h in "$_d"/hwmon/hwmon*; do
+      [ -r "$_h/temp1_input" ] && read -r _k 2>/dev/null <"$_h/temp1_input"
+      [ -r "$_h/power1_average" ] && read -r _p 2>/dev/null <"$_h/power1_average"
+      [ -r "$_h/power1_input" ] && [ -z "$_p" ] && read -r _p 2>/dev/null <"$_h/power1_input"
+    done
+    o="$o$NL${_c##*/}|$_b|$_u|$_t|$_k|$_p"
+  done
 }
 """;
 
@@ -733,9 +806,9 @@ _probe_clock() {
     _st=error
   fi
   if command -v timedatectl >/dev/null 2>&1; then
-    _t=$(hw_qrun timedatectl show -p Timezone </dev/null 2>&1)
+    _t=$(hw_qrun timedatectl show -p Timezone -p NTP -p NTPSynchronized </dev/null 2>&1)
     case $_t in
-      Timezone=*)
+      *Timezone=*)
         _o="$_o${NL}$_t" ;;
       *)
         _o="$_o${NL}timedatectl_error=yes" ;;

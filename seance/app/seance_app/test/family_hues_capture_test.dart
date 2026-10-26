@@ -358,24 +358,24 @@ void main() {
       expect(glyph(label).color, palette.glyph(hue), reason: label);
     }
 
-    // Snippets opens (no provider is configured); only it is washed.
-    expect(glyph('Snippets').icon, Icons.bookmarks);
+    // Files opens; only it is washed.
+    expect(glyph('Files').icon, Icons.folder);
     expect(glyph('Git').icon, Icons.account_tree_outlined);
     expect(
-      wash('Snippets'),
-      palette.glyph(FamilyHue.teal).withValues(alpha: panelTabWashAlpha),
+      wash('Files'),
+      palette.glyph(FamilyHue.blue).withValues(alpha: panelTabWashAlpha),
     );
     expect(wash('Git'), isNull);
 
     await openTab(tester, 'Git', loaded: find.text('README.md'));
     await tester.pumpAndSettle();
     expect(glyph('Git').icon, Icons.account_tree);
-    expect(glyph('Snippets').icon, Icons.bookmarks_outlined);
+    expect(glyph('Files').icon, Icons.folder_outlined);
     expect(
       wash('Git'),
       palette.glyph(FamilyHue.orange).withValues(alpha: panelTabWashAlpha),
     );
-    expect(wash('Snippets'), isNull);
+    expect(wash('Files'), isNull);
     expect(
       tester.getSemantics(
         find.descendant(

@@ -18,6 +18,7 @@ import 'fleet_row_state.dart';
 import 'fleet_rows.dart' show fleetStatusIcon, fleetStatusStrings;
 import 'hand_off_actions.dart';
 import 'admin_mode_chip.dart';
+import 'alert_rules.dart' show AlertRulesButton;
 import 'server_safety.dart';
 
 /// The server header of 03 §10.2 and §10.5: the server's name, unless the
@@ -90,6 +91,7 @@ class ServerHeader extends StatelessWidget {
               serverId: server.id,
               serverName: server.displayName,
             ),
+            AlertRulesButton(server: server, fleet: fleet),
             AdminModeChip(serverId: server.id),
             OpenInSeanceButton(serverId: server.id),
             DetachedOperationsChip(

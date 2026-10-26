@@ -273,10 +273,23 @@ void main() {
         find.widgetWithText(TextField, 'Name'),
         'nfs-data',
       );
-      await tester.enterText(find.widgetWithText(TextField, 'Driver'), 'nfs');
+      // A plugin driver is a reference the daemon resolves.
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Driver'),
+        'vieux/sshfs:latest',
+      );
       await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
       await tester.pumpAndSettle();
-      expect((h.planned.last as CreateVolume).driver, 'nfs');
+      expect((h.planned.last as CreateVolume).driver, 'vieux/sshfs:latest');
+      await h.refuse(tester);
+
+      // Enter on an untouched name says the name is required.
+      await tester.tap(find.text('Create volume…'));
+      await tester.pumpAndSettle();
+      await tester.showKeyboard(find.widgetWithText(TextField, 'Name'));
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(find.text('Enter a name.'), findsOneWidget);
     });
 
     testWidgets('the volume button plans its removal', (tester) async {

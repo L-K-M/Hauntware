@@ -580,12 +580,45 @@ void main() {
         _step(plan).display,
         'POST /v1.52/volumes/create {"Name":"cache","Driver":"local"}',
       );
-      expect(plan.revalidate, isEmpty);
-
       final engineDefault = _planned(
         await _plan(const CreateVolume(_server, name: 'cache'), withVolume()),
       );
       expect(_step(engineDefault).json, {'Name': 'cache'});
+
+      // A plugin driver is a reference, which the daemon resolves.
+      final plugin = _planned(
+        await _plan(
+          const CreateVolume(
+            _server,
+            name: 'cache',
+            driver: 'vieux/sshfs:latest',
+          ),
+          withVolume(),
+        ),
+      );
+      expect(_step(plugin).json, {
+        'Name': 'cache',
+        'Driver': 'vieux/sshfs:latest',
+      });
+    });
+
+    test('the runner checks the name is still free right before the '
+        'create', () async {
+      final engine = withVolume();
+      final plan = _planned(
+        await _plan(const CreateVolume(_server, name: 'cache'), engine),
+      );
+      final check = plan.revalidate.single as DockerTargetUnchanged;
+      expect((check.kind, check.target), (DockerTargetKind.volume, 'cache'));
+      expect(await revalidateDockerTarget(_client(engine), check), isNull);
+
+      // Another tool took the name in between: the create would answer
+      // that volume as created.
+      engine.volumes.add({'Name': 'cache', 'Driver': 'local'});
+      expect(
+        await revalidateDockerTarget(_client(engine), check),
+        RevalidationFailure.targetChanged,
+      );
     });
 
     test('a taken name or one Docker refuses is not planned', () async {
@@ -601,7 +634,8 @@ void main() {
         ('a', null),
         ('-data', null),
         ('da ta', null),
-        ('data', 'lo/cal'),
+        ('data', ''),
+        ('cache', ' '),
       ]) {
         expect(
           (await _plan(
@@ -973,6 +1007,18 @@ void main() {
       );
     });
 
+    test('a prune target no prune names is refused, not passed', () async {
+      final check = DockerTargetUnchanged(
+        DockerTargetKind.prune,
+        'everything',
+        pruneFingerprint(PrunePreview(removes: const [], freed: 0)),
+      );
+      expect(
+        await revalidateDockerTarget(_client(_Engine()), check),
+        RevalidationFailure.targetChanged,
+      );
+    });
+
     test('a prune reads the lists it changed again', () {
       expect(
         apiStepChanges(
@@ -1141,6 +1187,36 @@ void main() {
         ),
         throwsA(isA<DockerCancelledException>()),
       );
+    });
+  });
+
+  group('pull cancels (IMG-03)', () {
+    test('a cancel stops the running pull', () {
+      final cancels = PullCancels();
+      final token = cancels.start('plan-1');
+      expect(token.isCancelled, isFalse);
+
+      cancels.cancel('plan-1');
+      expect(token.isCancelled, isTrue);
+    });
+
+    test('a cancel that comes before the pull starts it cancelled', () {
+      final cancels = PullCancels()..cancel('plan-1');
+
+      expect(cancels.start('plan-1').isCancelled, isTrue);
+      // Held once: a later pull of another plan is not touched.
+      expect(cancels.start('plan-2').isCancelled, isFalse);
+    });
+
+    test('a cancel after the pull ended touches no other pull', () {
+      final cancels = PullCancels();
+      final first = cancels.start('plan-1');
+      cancels
+        ..finish('plan-1')
+        ..cancel('plan-1');
+
+      expect(first.isCancelled, isFalse);
+      expect(cancels.start('plan-2').isCancelled, isFalse);
     });
   });
 

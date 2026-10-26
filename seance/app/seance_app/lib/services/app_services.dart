@@ -3,13 +3,13 @@ import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:ghost_keystore/app_lock.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:seance_core/catalog.dart'
     show ConflictAwareHostKeyStore, HostKeyConflict;
 import 'package:seance_core/seance_core.dart';
 
 import 'atomic_file.dart';
-import 'app_lock.dart';
 import 'app_lock_vault.dart';
 import 'app_settings.dart';
 import 'assistant_settings_sync.dart';

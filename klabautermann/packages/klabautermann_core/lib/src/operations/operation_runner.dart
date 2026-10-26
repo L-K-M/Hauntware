@@ -242,6 +242,7 @@ final class OperationRunner {
             try {
               status = await api(serverId, planId, step);
             } on ApiStepError catch (e) {
+              await _cleanUp(link, plan, session);
               return failed(
                 ActionFailure.stepFailed,
                 step: i,
@@ -249,6 +250,7 @@ final class OperationRunner {
                 output: ExecOutput(stdout: '', stderr: e.detail),
               );
             } on DockerCancelledException {
+              await _cleanUp(link, plan, session);
               return ActionFinished(
                 planId: planId,
                 outcome: ActionOutcome.cancelled,

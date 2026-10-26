@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ghost_keystore/app_lock.dart';
 
 import '../app_state.dart';
-import '../services/app_lock.dart';
 import 'recovery_settings.dart';
 import 'top_toast.dart';
 
