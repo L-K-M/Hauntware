@@ -77,6 +77,27 @@ void main() {
     )!;
     expect(busybox.sessions, isEmpty);
     expect(busybox.sessionsRead, isFalse);
+
+    // A host without who: the shell's error joins who's output.
+    final missing = parseAccounts(
+      'root:x:0:0::/root:/bin/sh\n$kAccountsGroupMarker\n'
+      '$kAccountsWhoMarker\n'
+      'sh: 1: who: not found\n',
+    )!;
+    expect(missing.sessionsRead, isFalse);
+  });
+
+  test('a no-login shell is known by its name wherever it is installed', () {
+    final snapshot = parseAccounts(
+      'svc:x:1500:1500::/var/lib/svc:/nix/store/abc-shadow/bin/nologin\n'
+      'ops:x:1501:1501::/home/ops:/usr/local/bin/false\n'
+      'dev:x:1502:1502::/home/dev:/bin/bash\n'
+      '$kAccountsGroupMarker\n$kAccountsWhoMarker\n',
+    )!;
+    expect(
+      [for (final a in snapshot.accounts) a.isSystem],
+      [true, true, false],
+    );
   });
 
   test('accounts past the limit are counted, malformed lines skipped, and '

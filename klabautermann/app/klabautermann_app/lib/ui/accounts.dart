@@ -147,7 +147,17 @@ class _AccountsSectionState extends State<AccountsSection> {
     final report = await widget.reads.read(widget.serverId);
     if (!mounted || ticket != _ticket) return;
     setState(() {
-      _report = report;
+      // A failed read again keeps the accounts last read for this server
+      // in view under its failure.
+      final kept = _report?.snapshot;
+      _report = report.failure != null && kept != null
+          ? AccountsReport(
+              serverId: report.serverId,
+              requestId: report.requestId,
+              snapshot: kept,
+              failure: report.failure,
+            )
+          : report;
       _reading = false;
     });
   }

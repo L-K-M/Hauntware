@@ -29,14 +29,10 @@ enum RootEquivalence {
 /// The groups sudo and polkit commonly grant root to.
 const _adminGroups = {'sudo', 'wheel', 'admin'};
 
-/// Shells that let no one log in.
-const _noLoginShells = {
-  '/usr/sbin/nologin',
-  '/sbin/nologin',
-  '/bin/false',
-  '/usr/bin/false',
-  '/usr/bin/nologin',
-};
+/// The names of shells that let no one log in, wherever they are
+/// installed (`/usr/sbin/nologin`, `/sbin/nologin`, `/bin/false`, a Nix
+/// store path).
+const _noLoginShells = {'nologin', 'false'};
 
 /// The first UID most distributions give a person rather than a service.
 const _firstPersonUid = 1000;
@@ -71,7 +67,7 @@ final class HostAccount {
   /// Whether it is a service account: no login shell, or a UID below the
   /// people's range other than root's.
   bool get isSystem =>
-      _noLoginShells.contains(shell) ||
+      _noLoginShells.contains(shell.split('/').last) ||
       (uid != 0 && uid < _firstPersonUid) ||
       uid == _nobodyUid;
 }

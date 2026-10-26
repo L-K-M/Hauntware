@@ -160,6 +160,21 @@ void main() {
     expect(find.textContaining('Who is logged in is unknown'), findsOneWidget);
   });
 
+  testWidgets('a failed read again keeps the accounts last read under '
+      'its failure', (tester) async {
+    await pump(tester);
+    await answer(tester, snapshot: _snapshot);
+    await tester.tap(find.text('Read again'));
+    await tester.pump();
+    await answer(tester, failure: AccountsReportFailure.transport);
+    expect(
+      find.text('The connection failed while the accounts were read.'),
+      findsOneWidget,
+    );
+    expect(find.text('root'), findsOneWidget);
+    expect(find.text('Logged in'), findsOneWidget);
+  });
+
   testWidgets('a failed read says why', (tester) async {
     await pump(tester);
     await answer(tester, failure: AccountsReportFailure.transport);

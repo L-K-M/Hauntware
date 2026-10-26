@@ -865,7 +865,9 @@ abstract final class HostCommands {
   /// which sees directory users too, or the files where it is missing,
   /// then the logins `who` lists. Each part is capped, so a directory
   /// that enumerates thousands stays a bounded read; `parseAccounts`
-  /// counts what went past its own limit.
+  /// counts what went past its own limit. `who`'s errors join its
+  /// output, so a host without `who` reads as logins unknown rather than
+  /// as no one logged in.
   static List<String> accounts() => const ['sh', '-c', _accounts];
 
   static const _accounts =
@@ -873,7 +875,7 @@ abstract final class HostCommands {
       'echo "$kAccountsGroupMarker"; '
       '{ getent group || cat /etc/group; } 2>/dev/null | head -n 5000; '
       'echo "$kAccountsWhoMarker"; '
-      'who 2>/dev/null | head -n 500; exit 0';
+      'who 2>&1 | head -n 500; exit 0';
 
   /// `smartctl --scan-open -j`: the drives smartctl can open, with the
   /// device type it would read each as (03 §7.11, HW-04).
