@@ -143,7 +143,8 @@ final class TlsEndpointCheck {
 
 /// Checks [endpoint] once: connects, completes a handshake that accepts
 /// any certificate so a bad one can still be read, and notes whether the
-/// device would have trusted it. Never throws; every failure is typed.
+/// device would have trusted it. Throws no exception; every failure is
+/// typed.
 Future<TlsEndpointCheck> checkTlsEndpoint(
   TlsEndpoint endpoint, {
   Duration timeout = kTlsCheckTimeout,
@@ -218,6 +219,10 @@ Future<TlsEndpointCheck> checkTlsEndpoint(
     if (error.message.contains('host lookup')) {
       return failed(TlsCheckFailure.lookup, error);
     }
+    return failed(TlsCheckFailure.connect, error);
+  } on Exception catch (error) {
+    // dart:io may raise others (an OSError, a trust store's
+    // FileSystemException); the check still answers.
     return failed(TlsCheckFailure.connect, error);
   } finally {
     if (socket != null) {
