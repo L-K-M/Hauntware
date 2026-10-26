@@ -172,6 +172,7 @@ void main() {
           query: MountsQuery(),
         ),
         const RedactLines('r-1', ['a', 'b']),
+        const CheckTlsEndpoints('t-1', [TlsEndpoint('example.com', 443)]),
         const DockerQuery(
           serverId: 'srv-1',
           queryId: 'q-1',
@@ -526,6 +527,23 @@ void main() {
           ),
         ),
         const RedactedLines('r-1', 'a\nb'),
+        TlsEndpointsChecked('t-1', [
+          TlsEndpointCheck(
+            endpoint: const TlsEndpoint('example.com', 443),
+            certificate: TlsCertificateFacts(
+              subject: '/CN=example.com',
+              issuer: '/C=US/O=Let\'s Encrypt/CN=R11',
+              notBefore: DateTime.utc(2026, 9, 1),
+              notAfter: DateTime.utc(2026, 11, 30),
+            ),
+            trusted: true,
+          ),
+          const TlsEndpointCheck(
+            endpoint: TlsEndpoint('example.com', 8443),
+            failure: TlsCheckFailure.connect,
+            detail: 'Connection refused',
+          ),
+        ]),
         FootprintState(
           'srv-1',
           files: const [

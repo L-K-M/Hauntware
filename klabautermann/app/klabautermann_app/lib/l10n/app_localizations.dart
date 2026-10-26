@@ -2397,6 +2397,108 @@ abstract class AppLocalizations {
   /// **'A key\'s options in authorized_keys, such as restrict, can block it too; sshd does not show those.'**
   String get systemSshdDockerNote;
 
+  /// System tab: the heading of the section that checks the TLS certificates of endpoints the user lists (CRT-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Certificates'**
+  String get systemCertificatesTitle;
+
+  /// System tab, Certificates: shown while the server has no endpoints listed.
+  ///
+  /// In en, this message translates to:
+  /// **'List the host names and ports whose certificates this device should check, such as this server\'s web sites.'**
+  String get systemCertificatesNone;
+
+  /// System tab, Certificates: the list was changed but writing settings.json failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The endpoints could not be saved on this device; they are kept until the app quits.'**
+  String get systemCertificatesNotSaved;
+
+  /// System tab, Certificates: the button that checks every listed endpoint again.
+  ///
+  /// In en, this message translates to:
+  /// **'Check again'**
+  String get systemCertificatesCheck;
+
+  /// System tab, Certificates: the button that opens the list of endpoints to check.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit endpoints…'**
+  String get systemCertificatesEdit;
+
+  /// System tab, Certificates: an endpoint's line while its check runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking…'**
+  String get systemCertificatesChecking;
+
+  /// System tab, Certificates: an endpoint's line before any check answered, as after the engine stopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Not checked yet'**
+  String get systemCertificatesNotChecked;
+
+  /// System tab, Certificates: why an endpoint's check read no certificate, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, lookup{The host name did not resolve from this device.} connect{This device could not connect.} timeout{No answer within 10 seconds.} handshake{The endpoint answered, but not with TLS.} other{The check failed.}}'**
+  String systemCertificatesFailed(String reason);
+
+  /// System tab, Certificates: when an endpoint's certificate expires and how many whole days are left.
+  ///
+  /// In en, this message translates to:
+  /// **'Expires {date}, {days, plural, =0{today} =1{in 1 day} other{in {days} days}}'**
+  String systemCertificatesExpires(DateTime date, int days);
+
+  /// System tab, Certificates: an endpoint presents a certificate that has expired.
+  ///
+  /// In en, this message translates to:
+  /// **'Expired {date}'**
+  String systemCertificatesExpired(DateTime date);
+
+  /// System tab, Certificates: the device's trust store rejected the certificate.
+  ///
+  /// In en, this message translates to:
+  /// **'This device does not trust this certificate for the host name: it may be self-signed, expired or issued for another name.'**
+  String get systemCertificatesUntrusted;
+
+  /// System tab, Certificates: who issued an endpoint's certificate, as the certificate names it.
+  ///
+  /// In en, this message translates to:
+  /// **'Issued by {issuer}'**
+  String systemCertificatesIssuer(String issuer);
+
+  /// System tab, Certificates: the title of the dialog that lists the endpoints.
+  ///
+  /// In en, this message translates to:
+  /// **'Endpoints to check'**
+  String get systemCertificatesEditTitle;
+
+  /// System tab, Certificates: how to list endpoints.
+  ///
+  /// In en, this message translates to:
+  /// **'One per line: a host name or address, with :port for a port other than 443. At most {max}.'**
+  String systemCertificatesHelper(int max);
+
+  /// System tab, Certificates: why the list was not taken, by problem.
+  ///
+  /// In en, this message translates to:
+  /// **'{problem, select, notEndpoint{Each line needs a host name or address, with an optional :port.} tooMany{List at most {max} endpoints.} other{These endpoints cannot be checked.}}'**
+  String systemCertificatesProblem(String problem, int max);
+
+  /// System tab, Certificates: closes the endpoints dialog without changes.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get systemCertificatesCancel;
+
+  /// System tab, Certificates: keeps the listed endpoints and checks them.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get systemCertificatesSave;
+
   /// System tab: heading of the section listing the server's accounts and who is logged in (ACC-01, ACC-02).
   ///
   /// In en, this message translates to:
