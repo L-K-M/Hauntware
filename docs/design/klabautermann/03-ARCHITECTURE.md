@@ -3265,6 +3265,21 @@ unless the user enables admin mode for that panel.
   steal explained), PSI (absence is normal), model and topology, OOM kills
   linked to journal entries, configurable cards, top lists, quick actions,
   threshold bands, bottom dock.
+- **As built (M6 N42c).** CPU-07's model and topology are a host query,
+  `CpuTopologyQuery`, shown in the System tab's Processor section beside
+  the identity, since they do not change while the Overview samples. It
+  prints `nproc`, `lscpu -J` in the C locale, whose field names `lscpu`
+  translates otherwise, and the model and placement lines of
+  `/proc/cpuinfo`, without the flags that make it about 1.5 KiB a CPU.
+  Each model's sockets and cores per socket (or clusters and cores per
+  cluster, on arm64 boards with no sockets) follow its name, or precede
+  it before util-linux 2.37, and a big.LITTLE board lists two models
+  whose cores add up. Without `lscpu` (BusyBox) the cpuinfo lines count
+  the CPUs and their distinct sockets and cores where every CPU names
+  both; arm64's names no model, which the section says. Inside a
+  container the socket, core and CPU counts are the host machine's, so
+  they read as unknown with D50's reason; `nproc`'s usable CPUs, which a
+  cpuset limits, stay.
 - **v1.x.** Frequency, per-cgroup CPU (paths per cgroup driver [U]), ZFS
   ARC as cache, zram and zswap [U].
 
@@ -4016,6 +4031,17 @@ TLS. The section checks when it shows, after an edit and on request.
   installed kernel; doctor checklist; "why is it slow"; attention queue
   (acknowledgements device-local); container diagnose without an LLM.
 
+  As built (M6 N53b), "why is it slow" (TRI-02) is a card under the
+  overview's Health card, from the live core reading alone
+  (`ui/slowness.dart`): tasks waiting for a CPU 20 % of the last 10 s
+  (PSI `cpu some`; without PSI, a load of 1.5 per core), steal of 10 %,
+  tasks stalled on storage 10 % (PSI `io some`; without PSI, iowait of
+  10 %), a disk at 50 ms per request or busy 90 %, tasks stalled for
+  memory 5 % (PSI `memory some`), and swap half full while under 10 % of
+  memory is available, each in a sentence. It points to Processes for
+  the top processes and to System for recent out-of-memory kills, which
+  stay their own reads.
+
   As built (M6 N37a, collector-set version 11), the slow `temps`
   collector reads each hwmon chip's `temp<N>_input` with its `_max`,
   `_crit` and `_label` through builtins, without `sensors`, and lists the
@@ -4104,6 +4130,19 @@ TLS. The section checks when it shows, after an edit and on request.
   boots, and newer distributions replace wtmp with wtmpdb. The section lists the current boot and those ten,
   newest first, each with its start and how long its journal ran, and
   counts the older boots the Logs panel's boot picker still lists.
+
+  As built (M6 N53a), container diagnose (TRI-04) reads the inspect the
+  details already hold, in `ui/docker/container_diagnosis.dart`, with
+  no query of its own: out of memory over the container's limit or on
+  the host; exit code 137 without the OOM flag (SIGKILL), 139
+  (segfault), 126 and 127 (command not executable, not found), any other
+  exit a stop (130, 143) does not leave; the engine's `State.Error`;
+  exit code 0 while restarting (the main process leaves the
+  foreground); a restart loop (restarting, or at least three restarts
+  since the last start by hand); and a failing health check. A running
+  container's exit code is the engine's 0 and is not read. The last log
+  lines are not read yet: the diagnosis points to the logs, which open
+  from the same details.
 - **v1.x.** Fans, battery, inventory, crash markers, boot performance,
   incident snapshot (redacted by default), deploy pre-flight checks.
 
@@ -4126,7 +4165,11 @@ TLS. The section checks when it shows, after an edit and on request.
   guarded container needs. It leaves out a container whose state does
   not take the verb as its own actions offer it (removal never forces,
   so only containers that are not up), and an id the engine no longer
-  lists refuses the plan as a changed target. Inspect
+  lists refuses the plan as a changed target. The Containers tab's
+  Select chip (where actions are allowed) puts a checkbox on each row
+  and project heading; a heading's selects the project's shown
+  containers, and the bar above the list names how many selected
+  containers each verb takes. Inspect
   (CTR-03): masked values with reveal; never synced, persisted or sent to an
   LLM without consent. Health (CTR-04). Logs (CTX-01, CTX-02): 5.6; when the
   logging driver keeps no readable logs, the view names the driver. List

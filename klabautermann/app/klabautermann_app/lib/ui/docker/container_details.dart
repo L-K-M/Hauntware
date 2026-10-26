@@ -16,6 +16,7 @@ import '../actions/docker_actions.dart'
 import '../processes_panel.dart' show kRevealDuration;
 import '../processes_view.dart' show argumentText, clipProcessText;
 import 'container_details_view.dart';
+import 'container_diagnosis.dart';
 import 'container_links.dart';
 import 'container_command.dart';
 import 'container_logs.dart';
@@ -495,6 +496,15 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
         title: l10n.dockerDetailsOverview,
         children: _overview(context, container, row),
       ),
+      if (diagnoseContainer(container) case final diagnoses
+          when diagnoses.isNotEmpty)
+        _Section(
+          title: l10n.dockerDiagnosisTitle,
+          children: [
+            for (final diagnosis in diagnoses)
+              ContainerDiagnosisRow(diagnosis: diagnosis),
+          ],
+        ),
       if (labelLinks(labels) case final links when links.isNotEmpty)
         _Section(
           title: l10n.dockerLinksTitle,
