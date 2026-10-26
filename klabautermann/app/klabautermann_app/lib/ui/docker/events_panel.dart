@@ -64,11 +64,16 @@ class EventsPanel extends StatefulWidget {
     required this.monitoring,
     required this.serverId,
     required this.visible,
+    this.now = DateTime.now,
   });
 
   final MonitoringController monitoring;
   final String serverId;
   final bool visible;
+
+  /// The clock that decides which rows are today's, which show their
+  /// time only.
+  final DateTime Function() now;
 
   @override
   State<EventsPanel> createState() => _EventsPanelState();
@@ -143,6 +148,7 @@ class _EventsPanelState extends State<EventsPanel> {
     final rows = entries == null
         ? const <DockerTimelineEntry>[]
         : timelineRows(entries, kind: _kind, terms: searchTerms(_search.text));
+    final format = _TimeFormat(l10n.localeName, widget.now().toLocal());
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -206,8 +212,12 @@ class _EventsPanelState extends State<EventsPanel> {
                     itemBuilder: (context, i) => switch (rows[i]) {
                       final DockerTimelineEvent event => _EventRow(
                         event: event,
+                        format: format,
                       ),
-                      final DockerTimelineGap gap => _GapRow(gap: gap),
+                      final DockerTimelineGap gap => _GapRow(
+                        gap: gap,
+                        format: format,
+                      ),
                     },
                   ),
           ),
@@ -217,11 +227,33 @@ class _EventsPanelState extends State<EventsPanel> {
   }
 }
 
+/// A row's time: the time alone today, with the date before, since the
+/// buffer can span days on a quiet server.
+final class _TimeFormat {
+  _TimeFormat(String locale, this._today)
+    : _time = DateFormat.Hms(locale),
+      _dated = DateFormat.yMMMd(locale).add_Hms();
+
+  final DateTime _today;
+  final DateFormat _time;
+  final DateFormat _dated;
+
+  String call(DateTime at) {
+    final local = at.toLocal();
+    final today =
+        local.year == _today.year &&
+        local.month == _today.month &&
+        local.day == _today.day;
+    return (today ? _time : _dated).format(local);
+  }
+}
+
 /// One event: its time, type, what it happened to and what happened.
 class _EventRow extends StatelessWidget {
-  const _EventRow({required this.event});
+  const _EventRow({required this.event, required this.format});
 
   final DockerTimelineEvent event;
+  final _TimeFormat format;
 
   @override
   Widget build(BuildContext context) {
@@ -231,7 +263,7 @@ class _EventRow extends StatelessWidget {
       color: theme.colorScheme.onSurfaceVariant,
     );
     final kind = DockerEventKind.of(event.type);
-    final time = DateFormat.Hms(l10n.localeName).format(event.at.toLocal());
+    final time = format(event.at);
     final details = [
       if (event.image case final image?) l10n.dockerEventsImage(image),
       if (event.exitCode case final code?) l10n.dockerEventsExitCode(code),
@@ -276,15 +308,15 @@ class _EventRow extends StatelessWidget {
 
 /// A span the app did not follow the events.
 class _GapRow extends StatelessWidget {
-  const _GapRow({required this.gap});
+  const _GapRow({required this.gap, required this.format});
 
   final DockerTimelineGap gap;
+  final _TimeFormat format;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final format = DateFormat.Hms(l10n.localeName);
     return MergeSemantics(
       child: Container(
         color: theme.colorScheme.surfaceContainerHigh,
@@ -301,8 +333,8 @@ class _GapRow extends StatelessWidget {
             Expanded(
               child: Text(
                 l10n.dockerEventsGap(
-                  format.format(gap.at.toLocal()),
-                  format.format(gap.until.toLocal()),
+                  format(gap.at),
+                  format(gap.until),
                   gap.resumed.toString(),
                 ),
               ),

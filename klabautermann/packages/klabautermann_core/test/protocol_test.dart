@@ -541,7 +541,9 @@ void main() {
               at: DateTime.utc(2026, 10, 17),
               type: 'container',
               action: 'die',
+              actorId: 'abc',
               name: 'web',
+              image: 'nginx:1',
               exitCode: 137,
             ),
             DockerTimelineGap(

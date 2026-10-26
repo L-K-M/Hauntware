@@ -216,6 +216,11 @@ final class DockerWatcher {
   bool _streamed = false;
   bool _timelineDue = false;
 
+  /// The last event the timeline took before a resumed stream: Docker's
+  /// `since` is inclusive and whole seconds, so the stream replays it and
+  /// any event of its second again; the timeline skips those.
+  LogTimestamp? _replayedTo;
+
   bool get _wantsContainers =>
       _lists.contains(DockerWatchList.containers) ||
       _lists.contains(DockerWatchList.stacks);
@@ -384,6 +389,7 @@ final class DockerWatcher {
         );
       }
       _streamed = true;
+      _replayedTo = since;
       _send(DockerWatchList.events, fresh: false);
       _timelineDue = false;
       _lostAt = null;
@@ -454,20 +460,29 @@ final class DockerWatcher {
       return;
     }
     final event = parseDockerEvent(decoded, expectEventV2: eventV2).value;
-    if (event.timestamp case final at?) _lastEvent = at;
+    final at = event.timestamp;
+    if (at != null) _lastEvent = at;
     if (_quiet(event)) return;
-    _addToTimeline(
-      DockerTimelineEvent(
-        at: (event.timestamp?.toDateTime() ?? _now()).toUtc(),
-        type: event.type,
-        action: event.action,
-        actorId: event.actorId,
-        name: event.name ?? (event.type == 'image' ? event.actorId : null),
-        image: event.type == 'container' ? event.image : null,
-        exitCode: event.exitCode,
-      ),
-    );
-    if (_lists.contains(DockerWatchList.events)) _timelineDue = true;
+    // A replayed event the timeline holds still feeds the reads below.
+    final replayed = switch (_replayedTo) {
+      final to? => at != null && at <= to,
+      null => false,
+    };
+    if (!replayed) {
+      _replayedTo = null;
+      _addToTimeline(
+        DockerTimelineEvent(
+          at: (at?.toDateTime() ?? _now()).toUtc(),
+          type: event.type,
+          action: event.action,
+          actorId: event.actorId,
+          name: event.name ?? (event.type == 'image' ? event.actorId : null),
+          image: event.type == 'container' ? event.image : null,
+          exitCode: event.exitCode,
+        ),
+      );
+      if (_lists.contains(DockerWatchList.events)) _timelineDue = true;
+    }
 
     final plan = planEventRefresh(event: event, now: _now());
     for (final list in plan.lists) {

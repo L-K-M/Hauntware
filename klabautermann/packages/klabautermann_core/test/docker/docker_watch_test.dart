@@ -644,6 +644,7 @@ void main() {
       );
       expect(die.at, DateTime.utc(2025, 10, 17, 12, 1));
       expect((pull as DockerTimelineEvent).name, 'sha256:1');
+      expect(pull.at, DateTime.utc(2025, 10, 17, 12, 1, 1));
       expect(pull.image, isNull);
     });
 
@@ -661,11 +662,35 @@ void main() {
       await h.clock.elapse(const Duration(seconds: 1));
       final entries = timeline(h.lists());
       expect(entries, hasLength(2));
+      expect((entries.first as DockerTimelineEvent).actorId, 'abc');
       final gap = entries.last as DockerTimelineGap;
       expect(gap.at, lost.toUtc());
       expect(gap.until, h.clock.now.toUtc());
       expect(gap.resumed, isTrue);
       expect(h.requests('/events').last, contains('since=1760702460'));
+      expect(h.requests('/events').last, isNot(contains('until=')));
+    });
+
+    test('a resumed stream does not add what the engine replays again: '
+        '`since` is inclusive and whole seconds', () async {
+      final h = _Harness();
+      await h.start({DockerWatchList.events});
+      h.daemon.emit(_event('abc', time: 1760702460));
+      await h.clock.elapse(kDockerEventBatch);
+      h.lists();
+
+      await h.daemon.dropEvents();
+      await h.settle();
+      await h.clock.elapse(const Duration(seconds: 1));
+      h.daemon
+        ..emit(_event('abc', time: 1760702460))
+        ..emit(_event('def', time: 1760702461));
+      await h.clock.elapse(kDockerEventBatch);
+      final entries = timeline(h.lists());
+      expect(entries, hasLength(3));
+      expect((entries[0] as DockerTimelineEvent).actorId, 'abc');
+      expect(entries[1], isA<DockerTimelineGap>());
+      expect((entries[2] as DockerTimelineEvent).actorId, 'def');
     });
 
     test('keeps only the newest entries', () async {
@@ -678,6 +703,10 @@ void main() {
       final entries = timeline(h.lists());
       expect(entries, hasLength(kDockerEventsKept));
       expect((entries.first as DockerTimelineEvent).actorId, 'c1');
+      expect(
+        (entries.last as DockerTimelineEvent).actorId,
+        'c$kDockerEventsKept',
+      );
     });
   });
 

@@ -84,6 +84,7 @@ void main() {
               monitoring: monitoring,
               serverId: _serverId,
               visible: shows,
+              now: () => DateTime.utc(2026, 10, 26, 12, 30),
             ),
           ),
         ),
@@ -140,6 +141,27 @@ void main() {
       engine.sentOfType<DockerUnwatch>().cast<DockerUnwatch>().single.watchId,
       watches().single.watchId,
     );
+
+    // Shown again, it watches again and keeps the last timeline meanwhile.
+    visible.value = true;
+    await tester.enterText(find.byType(TextField), '');
+    await tester.pumpAndSettle();
+    expect(watches(), hasLength(2));
+    expect(find.text('redis:7: pull'), findsOneWidget);
+  });
+
+  testWidgets('a row from another day shows its date', (tester) async {
+    await pump(tester);
+    final old = DockerTimelineEvent(
+      at: DateTime.utc(2026, 10, 20, 12),
+      type: 'container',
+      action: 'start',
+      name: 'db',
+    );
+    engine.emit(_timeline([old, _pull]));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Oct 20, 2026'), findsOneWidget);
+    expect(find.textContaining('Oct 26, 2026'), findsNothing);
   });
 
   testWidgets('a failed watch says why and can be tried again', (tester) async {
