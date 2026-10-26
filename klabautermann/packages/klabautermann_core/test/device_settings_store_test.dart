@@ -811,7 +811,10 @@ void main() {
         },
       });
 
-      writeDocument({...document(), _attentionKey: ['srv-a']});
+      writeDocument({
+        ...document(),
+        _attentionKey: ['srv-a'],
+      });
       expect((await DeviceSettingsStore.open(file)).attention, isNull);
     });
 
