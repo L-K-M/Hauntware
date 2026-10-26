@@ -356,6 +356,49 @@ void main() {
     expect(_line('FATAL:'), findsNothing);
   });
 
+  testWidgets('a time range reads anew: a span back from now follows, a '
+      'chosen start and end reads once and cannot follow', (tester) async {
+    final harness = await _pump(tester);
+    await _openLogs(tester);
+    await harness.running(tester);
+    final source = harness.opens.single.spec.source as ContainerLogSource;
+    expect((source.since, source.until), (null, null));
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Any time'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Last hour').last);
+    await tester.pumpAndSettle();
+    expect(harness.opens, hasLength(2));
+    final spanned = harness.opens.last.spec;
+    expect(spanned.follow, isTrue);
+    final since = (spanned.source as ContainerLogSource).since!;
+    expect(
+      DateTime.now().difference(since).inMinutes,
+      inInclusiveRange(59, 61),
+    );
+    expect(_line('FATAL:'), findsNothing);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Last hour'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Choose start and end…'));
+    await tester.pumpAndSettle();
+    expect(find.text('Time range'), findsOne);
+    await tester.tap(find.text('Apply'));
+    await tester.pumpAndSettle();
+
+    expect(harness.opens, hasLength(3));
+    final chosen = harness.opens.last.spec;
+    final range = chosen.source as ContainerLogSource;
+    expect(chosen.follow, isFalse);
+    expect(range.until!.difference(range.since!), const Duration(hours: 1));
+    expect(_chip('Stopped'), findsOne);
+    final live = tester.widget<FilterChip>(
+      find.ancestor(of: _chip('Stopped'), matching: find.byType(FilterChip)),
+    );
+    expect(live.onSelected, isNull);
+    expect(live.tooltip, 'A range with an end has no new lines to follow.');
+  });
+
   testWidgets('lines the engine dropped show as one row', (tester) async {
     final harness = await _pump(tester);
     await _openLogs(tester);

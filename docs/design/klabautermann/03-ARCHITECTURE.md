@@ -4196,6 +4196,17 @@ TLS. The section checks when it shows, after an edit and on request.
   and 128 plus SIGINT, SIGQUIT, SIGKILL or SIGTERM) as failed: the state
   in the error colour and an icon before the status words. The details show the restart count, the exit code and
   an OOM kill from the inspect.
+- **As built (M6 N19a).** CTX-03: `ContainerLogSource` takes `since`
+  and `until`, both inclusive, sent as the logs request's `since=` and
+  `until=` in 5.6's seconds and nanoseconds. A ranged read sends no
+  `tail`, since Docker applies `tail` before the range and the two
+  together would read only the window's lines inside it; the Logs
+  panel's 32 MiB buffer bounds what a long range holds. A follow takes
+  no `until`, and its resume after a lost stream starts after the
+  newest line, not at the range's start. The log view's range menu
+  offers LOG-01's spans, counted back from when the stream opens, and a
+  chosen start and end from date and time pickers, which reads once:
+  the Live chip stops and says why.
 - **As built (M4 E15).** `operations/plans/docker_plans.dart` plans
   CTR-02's verbs, CTR-06's removal, IMG-02 and STK-03 (7.14, 7.16) over
   the server's Docker endpoint (`DockerRouter.useEndpoint`).
