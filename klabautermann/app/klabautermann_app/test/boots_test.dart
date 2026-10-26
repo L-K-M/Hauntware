@@ -68,7 +68,7 @@ void main() {
 
   Future<void> answerAll(
     WidgetTester tester, {
-    KernelState state = KernelState.newerInstalled,
+    KernelCheckState state = KernelCheckState.newerInstalled,
     HostPayload? ends,
   }) async {
     await answer(
@@ -135,7 +135,7 @@ void main() {
     await pump(tester);
     await answerAll(
       tester,
-      state: KernelState.current,
+      state: KernelCheckState.current,
       ends: const HostQueryFailed(HostQueryFailure.denied),
     );
     expect(find.text('This is the newest kernel installed.'), findsOneWidget);

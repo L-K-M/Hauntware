@@ -32,7 +32,7 @@ Map<String, BootEnd> parseBootEnds(String raw) => {
 };
 
 /// Whether the running kernel is the newest installed (BOOT-03).
-enum KernelState {
+enum KernelCheckState {
   /// The running kernel is the newest whose modules are installed.
   current,
 
@@ -62,7 +62,7 @@ final class KernelCheck {
   /// The installed kernels' releases, oldest first by version.
   final List<String> installed;
 
-  final KernelState state;
+  final KernelCheckState state;
 
   /// The newest installed release, or null with none found.
   String? get newest => installed.isEmpty ? null : installed.last;
@@ -78,15 +78,15 @@ KernelCheck? parseKernels(String raw) {
     for (final line in lines.skip(markerAt + 1))
       if (_release.hasMatch(line)) line,
   ]..sort(compareVersions);
-  final KernelState state;
+  final KernelCheckState state;
   if (installed.isEmpty) {
-    state = KernelState.unknown;
+    state = KernelCheckState.unknown;
   } else if (!installed.contains(running)) {
-    state = KernelState.runningRemoved;
+    state = KernelCheckState.runningRemoved;
   } else if (compareVersions(installed.last, running) > 0) {
-    state = KernelState.newerInstalled;
+    state = KernelCheckState.newerInstalled;
   } else {
-    state = KernelState.current;
+    state = KernelCheckState.current;
   }
   return KernelCheck(running: running, installed: installed, state: state);
 }

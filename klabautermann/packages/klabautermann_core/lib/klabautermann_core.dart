@@ -125,7 +125,7 @@ export 'package:klabautermann_host/klabautermann_host.dart'
 // The System tab's boots section (BOOT-02, BOOT-03): how earlier boots
 // ended and the kernels a HostResult carries.
 export 'package:klabautermann_host/klabautermann_host.dart'
-    show BootEnd, KernelCheck, KernelState, kBootEndsRead;
+    show BootEnd, KernelCheck, KernelCheckState, kBootEndsRead;
 // The Jobs panel (JOB-01, JOB-02): the jobs rows a CronResult carries, the
 // timer rows the app builds from a TimersResult, their schedule
 // descriptions and their runs as plain CronRun values (D52), and the
