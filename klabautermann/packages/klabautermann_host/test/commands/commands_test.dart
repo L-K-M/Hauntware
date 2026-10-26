@@ -679,4 +679,21 @@ void main() {
     expect(script, contains('echo "$kAccountsWhoMarker"'));
     expect('head -n'.allMatches(script), hasLength(3));
   });
+
+  test('SYS-03 powers the host through systemctl where systemd runs it, '
+      'otherwise through init\'s own commands', () {
+    expect(HostCommands.power(PowerVerb.reboot, systemd: true), [
+      'systemctl',
+      'reboot',
+    ]);
+    expect(HostCommands.power(PowerVerb.poweroff, systemd: true), [
+      'systemctl',
+      'poweroff',
+    ]);
+    expect(HostCommands.power(PowerVerb.reboot, systemd: false), ['reboot']);
+    expect(HostCommands.power(PowerVerb.poweroff, systemd: false), [
+      'poweroff',
+    ]);
+    expect(HostCommands.hostname(), ['uname', '-n']);
+  });
 }

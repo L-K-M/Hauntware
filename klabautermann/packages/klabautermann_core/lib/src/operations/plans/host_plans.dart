@@ -9,6 +9,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         HostCommands,
         HostProfile,
         PackageManager,
+        PowerVerb,
         SystemctlVerb,
         UnitManager,
         kGuardedKillGone,
@@ -84,6 +85,7 @@ Future<PlanAttempt> planHostAction(
       StartTimer() => await _planTimer(intent, context),
       RunCronJob() => await _planCronRun(intent, context, elevated),
       RefreshPackageLists() => await _planPackageRefresh(intent, context),
+      PowerAction() => await _planPower(intent, context),
       _ => _refused(ActionRefusalReason.notImplemented),
     };
   } on HostCommandError {
@@ -235,6 +237,41 @@ Future<PlanAttempt> _planPackageRefresh(
       requiredLevel: RequiredLevel.admin,
       runner: _runner(c, elevated: true),
       hostWrites: const [HostWriteRow.loginRecords, HostWriteRow.packageLists],
+    ),
+  );
+}
+
+/// SYS-03: the host reboots or powers off as root, so only in admin
+/// mode, once the user types the host's own name. Planning reads that
+/// name over the link, so the confirmation names the machine the
+/// command will reach, not the label this device gave it.
+Future<PlanAttempt> _planPower(PowerAction intent, HostPlanContext c) async {
+  if (!c.adminMode) return _refused(ActionRefusalReason.adminRequired);
+  final hostname = await _read(c.link, HostCommands.hostname());
+  if (hostname == null || hostname.isEmpty) {
+    return _refused(ActionRefusalReason.invalidTarget);
+  }
+  final reboot = intent.verb == PowerVerb.reboot;
+  final systemd =
+      c.profile.systemdDir == true || c.profile.pid1Comm == 'systemd';
+  return _planned(
+    OperationPlan(
+      intent: intent,
+      kind: reboot ? OperationKind.reboot : OperationKind.powerOff,
+      targetName: hostname,
+      steps: [
+        ShellStep(
+          HostCommands.power(intent.verb, systemd: systemd),
+          elevated: true,
+          endsLink: true,
+        ),
+      ],
+      requiredLevel: RequiredLevel.admin,
+      runner: _runner(c, elevated: true),
+      hostWrites: const [HostWriteRow.loginRecords],
+      impact: PlanImpact(
+        reboot ? ImpactKind.restartsHost : ImpactKind.stopsHost,
+      ),
     ),
   );
 }

@@ -96,12 +96,30 @@ final class OperationPlan {
   final ConfirmationTier tier;
 
   /// This plan with [argv], the host syslog line (SAF-13), as a last
-  /// best-effort step and its row under the host writes.
-  OperationPlan withAuditLine(List<String> argv) => OperationPlan(
+  /// best-effort step and its row under the host writes; before a last
+  /// step that takes the host down, after which nothing runs.
+  OperationPlan withAuditLine(List<String> argv) {
+    // Nothing runs after a step that ends the link, so the line goes
+    // before it, which only works when it is the last step.
+    assert(
+      !steps.reversed.skip(1).any((s) => s is ShellStep && s.endsLink),
+      'a step that ends the link must be the last',
+    );
+    return _withAuditLine(argv);
+  }
+
+  OperationPlan _withAuditLine(List<String> argv) => OperationPlan(
     intent: intent,
     kind: kind,
     targetName: targetName,
-    steps: [...steps, ShellStep(argv, bestEffort: true)],
+    steps: switch (steps) {
+      [...final before, ShellStep(endsLink: true) && final last] => [
+        ...before,
+        ShellStep(argv, bestEffort: true),
+        last,
+      ],
+      _ => [...steps, ShellStep(argv, bestEffort: true)],
+    },
     requiredLevel: requiredLevel,
     runner: runner,
     hostWrites: [...hostWrites, HostWriteRow.auditSyslog],
