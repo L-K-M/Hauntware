@@ -497,6 +497,57 @@ void main() {
       expect(plan.tier, ConfirmationTier.typedPhrase);
     });
 
+    test('another manager\'s container alone needs the typed phrase', () async {
+      engine.containers.add(
+        _container('agent', labels: {'coolify.managed': 'true'}),
+      );
+      final plan = _planned(
+        await _plan(
+          ContainerBulkAction(
+            _server,
+            containerIds: ids(),
+            verb: ContainerBulkVerb.restart,
+          ),
+          engine,
+        ),
+      );
+      expect(plan.ownership?.manager, 'Coolify');
+      expect(plan.protected, isNull);
+      expect(plan.tier, ConfirmationTier.typedPhrase);
+    });
+
+    test(
+      'a mixed batch names the session port, which its impact follows',
+      () async {
+        engine.containers
+          ..add(_container('marked'))
+          ..add(
+            _container(
+              'sshd',
+              ports: [
+                {'PrivatePort': 22, 'PublicPort': 2222, 'Type': 'tcp'},
+              ],
+            ),
+          );
+        final plan = _planned(
+          await _plan(
+            ContainerBulkAction(
+              _server,
+              containerIds: ids(),
+              verb: ContainerBulkVerb.stop,
+            ),
+            engine,
+            protection: const ProtectionContext(
+              sshPort: 2222,
+              marks: {'marked'},
+            ),
+          ),
+        );
+        expect(plan.protected, ProtectedReason.publishesSessionPort);
+        expect(plan.impact?.kind, ImpactKind.dropsSession);
+      },
+    );
+
     test('refuses a gone, short, repeated or missing id, too many, and a '
         'verb no container takes', () async {
       Future<ActionRefusalReason?> refusal(
