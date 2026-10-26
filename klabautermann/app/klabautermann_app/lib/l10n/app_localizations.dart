@@ -4532,6 +4532,78 @@ abstract class AppLocalizations {
   /// **'No swap is set up.'**
   String get overviewSwapNone;
 
+  /// Overview: the heading of TRI-02's card, what in the latest reading slows the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Why is it slow?'**
+  String get overviewSlowTitle;
+
+  /// Overview, Why is it slow: no signal in the latest reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing in the latest reading points to a slowdown.'**
+  String get overviewSlowNone;
+
+  /// Overview, Why is it slow: PSI cpu some over 10 s reached 20 %. percent is the share, such as "35%".
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks waited for a CPU {percent} of the last 10 seconds: the processor is the bottleneck.'**
+  String overviewSlowCpuWait(String percent);
+
+  /// Overview, Why is it slow: without PSI, the load per core reached 1.5.
+  ///
+  /// In en, this message translates to:
+  /// **'The load is {load} per core: more tasks want to run than there are cores.'**
+  String overviewSlowLoadHigh(double load);
+
+  /// Overview, Why is it slow: steal reached 10 % of CPU time. percent is the share, such as "25%".
+  ///
+  /// In en, this message translates to:
+  /// **'The hypervisor gave {percent} of the CPU time to other guests.'**
+  String overviewSlowSteal(String percent);
+
+  /// Overview, Why is it slow: PSI io some over 10 s reached 10 %. percent is the share, such as "25%".
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks stalled on storage {percent} of the last 10 seconds: the disks are the bottleneck.'**
+  String overviewSlowIoStall(String percent);
+
+  /// Overview, Why is it slow: without PSI, iowait reached 10 % of CPU time. percent is the share, such as "25%".
+  ///
+  /// In en, this message translates to:
+  /// **'Cores sat idle {percent} of the time waiting for storage.'**
+  String overviewSlowIowait(String percent);
+
+  /// Overview, Why is it slow: a disk's mean time per request reached 50 ms. device is the disk's kernel name, such as sda.
+  ///
+  /// In en, this message translates to:
+  /// **'{device} takes {ms} ms per request: it is slow or saturated.'**
+  String overviewSlowSlowDisk(String device, int ms);
+
+  /// Overview, Why is it slow: a disk was busy 90 % of the time. device is the disk's kernel name; percent the share, such as "95%".
+  ///
+  /// In en, this message translates to:
+  /// **'{device} is busy {percent} of the time: requests queue behind each other.'**
+  String overviewSlowBusyDisk(String device, String percent);
+
+  /// Overview, Why is it slow: PSI memory some over 10 s reached 5 %. percent is the share, such as "12%".
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks stalled waiting for memory {percent} of the last 10 seconds: the server is short of RAM.'**
+  String overviewSlowMemoryStall(String percent);
+
+  /// Overview, Why is it slow: swap is half full while under 10 % of memory is available. percent is swap's used share, such as "80%".
+  ///
+  /// In en, this message translates to:
+  /// **'Swap is {percent} full and little memory is free: the server pages to disk.'**
+  String overviewSlowSwapHeavy(String percent);
+
+  /// Overview, Why is it slow: where to look next, under the signals.
+  ///
+  /// In en, this message translates to:
+  /// **'Processes sorts what runs by CPU and memory; System lists recent out-of-memory kills.'**
+  String get overviewSlowWhere;
+
   /// Heading of the Overview's pressure card (CPU-05, MEM-04): Linux pressure stall information.
   ///
   /// In en, this message translates to:

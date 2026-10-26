@@ -15,6 +15,7 @@ import 'failed_units_summary.dart';
 import 'fleet_row_state.dart' show kFleetRowStaleAfter, kFleetRowThresholds;
 import 'freshness.dart';
 import 'history_card.dart';
+import 'slowness.dart';
 import 'system_panel.dart' show PanelNotice, PanelSection;
 import 'system_view.dart';
 import 'threshold_announcer.dart';
@@ -261,6 +262,8 @@ class OverviewPanel extends StatelessWidget {
                 icon: Icons.hourglass_empty,
                 text: l10n.overviewWaiting,
               ),
+            // TRI-02 answers the question the cards below are read for.
+            ?cards?.slowness(context),
             if (cards != null && wide) ...[
               row(
                 column([
@@ -1227,6 +1230,66 @@ final class _Cards {
     CpuHintKind.iowait => l10n.overviewCpuHintIowait(percent),
     CpuHintKind.interrupts => l10n.overviewCpuHintInterrupts(percent),
   };
+
+  /// TRI-02: what in this reading slows the server, each in a sentence,
+  /// and where to look next.
+  Widget slowness(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final strings = klabautermannChartStrings(l10n);
+    String percent(double value) =>
+        formatChartValue(value, ChartUnit.percent, strings);
+    final signals = slownessSignals(core);
+    return PanelSection(
+      title: l10n.overviewSlowTitle,
+      children: [
+        if (signals.isEmpty)
+          Text(l10n.overviewSlowNone, style: _valueStyle(context, stale))
+        else ...[
+          for (final signal in signals)
+            PanelNotice(
+              icon: Icons.speed,
+              text: switch (signal.kind) {
+                SlownessKind.cpuWait => l10n.overviewSlowCpuWait(
+                  percent(signal.value),
+                ),
+                SlownessKind.loadHigh => l10n.overviewSlowLoadHigh(
+                  signal.value,
+                ),
+                SlownessKind.steal => l10n.overviewSlowSteal(
+                  percent(signal.value),
+                ),
+                SlownessKind.ioStall => l10n.overviewSlowIoStall(
+                  percent(signal.value),
+                ),
+                SlownessKind.iowait => l10n.overviewSlowIowait(
+                  percent(signal.value),
+                ),
+                SlownessKind.slowDisk => l10n.overviewSlowSlowDisk(
+                  signal.device!,
+                  signal.value.round(),
+                ),
+                SlownessKind.busyDisk => l10n.overviewSlowBusyDisk(
+                  signal.device!,
+                  percent(signal.value),
+                ),
+                SlownessKind.memoryStall => l10n.overviewSlowMemoryStall(
+                  percent(signal.value),
+                ),
+                SlownessKind.swapHeavy => l10n.overviewSlowSwapHeavy(
+                  percent(signal.value),
+                ),
+              },
+            ),
+          Text(
+            l10n.overviewSlowWhere,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 
   /// CPU-05 and MEM-04: how much of the time tasks stalled for CPU,
   /// memory and I/O. A kernel without PSI is normal (7.1), so its absence

@@ -4024,6 +4024,109 @@
   "@overviewSwapNone": {
     "description": "The swap card of a server with no swap space."
   },
+  "overviewSlowTitle": "Why is it slow?",
+  "@overviewSlowTitle": {
+    "description": "Overview: the heading of TRI-02's card, what in the latest reading slows the server."
+  },
+  "overviewSlowNone": "Nothing in the latest reading points to a slowdown.",
+  "@overviewSlowNone": {
+    "description": "Overview, Why is it slow: no signal in the latest reading."
+  },
+  "overviewSlowCpuWait": "Tasks waited for a CPU {percent} of the last 10 seconds: the processor is the bottleneck.",
+  "@overviewSlowCpuWait": {
+    "description": "Overview, Why is it slow: PSI cpu some over 10 s reached 20 %. percent is the share, such as \"35%\".",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewSlowLoadHigh": "The load is {load} per core: more tasks want to run than there are cores.",
+  "@overviewSlowLoadHigh": {
+    "description": "Overview, Why is it slow: without PSI, the load per core reached 1.5.",
+    "placeholders": {
+      "load": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 2
+        }
+      }
+    }
+  },
+  "overviewSlowSteal": "The hypervisor gave {percent} of the CPU time to other guests.",
+  "@overviewSlowSteal": {
+    "description": "Overview, Why is it slow: steal reached 10 % of CPU time. percent is the share, such as \"25%\".",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewSlowIoStall": "Tasks stalled on storage {percent} of the last 10 seconds: the disks are the bottleneck.",
+  "@overviewSlowIoStall": {
+    "description": "Overview, Why is it slow: PSI io some over 10 s reached 10 %. percent is the share, such as \"25%\".",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewSlowIowait": "Cores sat idle {percent} of the time waiting for storage.",
+  "@overviewSlowIowait": {
+    "description": "Overview, Why is it slow: without PSI, iowait reached 10 % of CPU time. percent is the share, such as \"25%\".",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewSlowSlowDisk": "{device} takes {ms} ms per request: it is slow or saturated.",
+  "@overviewSlowSlowDisk": {
+    "description": "Overview, Why is it slow: a disk's mean time per request reached 50 ms. device is the disk's kernel name, such as sda.",
+    "placeholders": {
+      "device": {
+        "type": "String"
+      },
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "overviewSlowBusyDisk": "{device} is busy {percent} of the time: requests queue behind each other.",
+  "@overviewSlowBusyDisk": {
+    "description": "Overview, Why is it slow: a disk was busy 90 % of the time. device is the disk's kernel name; percent the share, such as \"95%\".",
+    "placeholders": {
+      "device": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewSlowMemoryStall": "Tasks stalled waiting for memory {percent} of the last 10 seconds: the server is short of RAM.",
+  "@overviewSlowMemoryStall": {
+    "description": "Overview, Why is it slow: PSI memory some over 10 s reached 5 %. percent is the share, such as \"12%\".",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewSlowSwapHeavy": "Swap is {percent} full and little memory is free: the server pages to disk.",
+  "@overviewSlowSwapHeavy": {
+    "description": "Overview, Why is it slow: swap is half full while under 10 % of memory is available. percent is swap's used share, such as \"80%\".",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewSlowWhere": "Processes sorts what runs by CPU and memory; System lists recent out-of-memory kills.",
+  "@overviewSlowWhere": {
+    "description": "Overview, Why is it slow: where to look next, under the signals."
+  },
   "overviewPressureTitle": "Pressure",
   "@overviewPressureTitle": {
     "description": "Heading of the Overview's pressure card (CPU-05, MEM-04): Linux pressure stall information."

@@ -3417,6 +3417,69 @@ class AppLocalizationsEn extends AppLocalizations {
   String get overviewSwapNone => 'No swap is set up.';
 
   @override
+  String get overviewSlowTitle => 'Why is it slow?';
+
+  @override
+  String get overviewSlowNone =>
+      'Nothing in the latest reading points to a slowdown.';
+
+  @override
+  String overviewSlowCpuWait(String percent) {
+    return 'Tasks waited for a CPU $percent of the last 10 seconds: the processor is the bottleneck.';
+  }
+
+  @override
+  String overviewSlowLoadHigh(double load) {
+    final intl.NumberFormat loadNumberFormat =
+        intl.NumberFormat.decimalPatternDigits(
+          locale: localeName,
+          decimalDigits: 2,
+        );
+    final String loadString = loadNumberFormat.format(load);
+
+    return 'The load is $loadString per core: more tasks want to run than there are cores.';
+  }
+
+  @override
+  String overviewSlowSteal(String percent) {
+    return 'The hypervisor gave $percent of the CPU time to other guests.';
+  }
+
+  @override
+  String overviewSlowIoStall(String percent) {
+    return 'Tasks stalled on storage $percent of the last 10 seconds: the disks are the bottleneck.';
+  }
+
+  @override
+  String overviewSlowIowait(String percent) {
+    return 'Cores sat idle $percent of the time waiting for storage.';
+  }
+
+  @override
+  String overviewSlowSlowDisk(String device, int ms) {
+    return '$device takes $ms ms per request: it is slow or saturated.';
+  }
+
+  @override
+  String overviewSlowBusyDisk(String device, String percent) {
+    return '$device is busy $percent of the time: requests queue behind each other.';
+  }
+
+  @override
+  String overviewSlowMemoryStall(String percent) {
+    return 'Tasks stalled waiting for memory $percent of the last 10 seconds: the server is short of RAM.';
+  }
+
+  @override
+  String overviewSlowSwapHeavy(String percent) {
+    return 'Swap is $percent full and little memory is free: the server pages to disk.';
+  }
+
+  @override
+  String get overviewSlowWhere =>
+      'Processes sorts what runs by CPU and memory; System lists recent out-of-memory kills.';
+
+  @override
   String get overviewPressureTitle => 'Pressure';
 
   @override

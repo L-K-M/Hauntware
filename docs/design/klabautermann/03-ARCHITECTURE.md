@@ -4031,6 +4031,17 @@ TLS. The section checks when it shows, after an edit and on request.
   installed kernel; doctor checklist; "why is it slow"; attention queue
   (acknowledgements device-local); container diagnose without an LLM.
 
+  As built (M6 N53b), "why is it slow" (TRI-02) is a card under the
+  overview's Health card, from the live core reading alone
+  (`ui/slowness.dart`): tasks waiting for a CPU 20 % of the last 10 s
+  (PSI `cpu some`; without PSI, a load of 1.5 per core), steal of 10 %,
+  tasks stalled on storage 10 % (PSI `io some`; without PSI, iowait of
+  10 %), a disk at 50 ms per request or busy 90 %, tasks stalled for
+  memory 5 % (PSI `memory some`), and swap half full while under 10 % of
+  memory is available, each in a sentence. It points to Processes for
+  the top processes and to System for recent out-of-memory kills, which
+  stay their own reads.
+
   As built (M6 N37a, collector-set version 11), the slow `temps`
   collector reads each hwmon chip's `temp<N>_input` with its `_max`,
   `_crit` and `_label` through builtins, without `sensors`, and lists the
