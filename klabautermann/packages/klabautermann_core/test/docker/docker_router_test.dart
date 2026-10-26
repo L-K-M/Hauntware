@@ -604,6 +604,73 @@ void main() {
       );
     });
 
+    test('the review inspects each container listed and leaves out one '
+        'removed meanwhile (DKE-06, DKE-07)', () async {
+      final (h, daemon) = await ready();
+      daemon
+        ..routes['/v1.52/info'] = jsonEncode({
+          'SecurityOptions': ['name=seccomp,profile=builtin'],
+        })
+        ..routes['/v1.52/containers/json'] = jsonEncode([
+          {
+            'Id': 'abc',
+            'Names': ['/db'],
+            'State': 'running',
+            'Ports': [
+              {
+                'IP': '0.0.0.0',
+                'PrivatePort': 5432,
+                'PublicPort': 5432,
+                'Type': 'tcp',
+              },
+            ],
+            'Labels': {'com.docker.compose.project': 'shop'},
+          },
+          {
+            'Id': 'gone',
+            'Names': ['/gone'],
+            'State': 'exited',
+          },
+        ])
+        ..routes['/v1.52/containers/abc/json'] = jsonEncode({
+          'Id': 'abc',
+          'Name': '/db',
+          'Config': {
+            'Image': 'postgres:17',
+            'User': 'postgres',
+            'Healthcheck': {
+              'Test': ['CMD', 'pg_isready'],
+            },
+          },
+          'HostConfig': {
+            'Privileged': true,
+            'RestartPolicy': {'Name': 'unless-stopped'},
+            'LogConfig': {
+              'Type': 'json-file',
+              'Config': {'max-size': '10m'},
+            },
+          },
+        });
+
+      final id = h.query(const DockerReviewQuery());
+      final payload = await h.result(id) as DockerReviewPayload;
+      final review = payload.reviews.single;
+      expect(review.name, 'db');
+      expect(review.project, 'shop');
+      expect(review.findings, const [
+        ContainerFinding(ContainerRisk.privileged),
+        ContainerFinding(
+          ContainerRisk.databasePublished,
+          detail: '0.0.0.0:5432->5432/tcp',
+        ),
+      ]);
+      expect(payload.omitted, 0);
+      expect(
+        daemon.requests,
+        contains('GET /v1.52/containers/gone/json HTTP/1.1'),
+      );
+    });
+
     test('a gone container, a daemon error, an empty id and a server '
         'outside the fleet are answered as such', () async {
       final (h, daemon) = await ready();

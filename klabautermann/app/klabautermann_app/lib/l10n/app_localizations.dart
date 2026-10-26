@@ -6764,6 +6764,90 @@ abstract class AppLocalizations {
   /// **'Stacks'**
   String get dockerTabStacks;
 
+  /// Docker tab: the sub-tab with the containers' security review (DKE-06, DKE-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Review'**
+  String get dockerTabReview;
+
+  /// Docker Review sub-tab: what a review does, above its button.
+  ///
+  /// In en, this message translates to:
+  /// **'Reads each container\'s configuration and flags settings that give a container power over the host, expose a database, or let its logs fill the disk. Each container is read once per review.'**
+  String get dockerReviewIntro;
+
+  /// Docker Review sub-tab: the button that starts the first review.
+  ///
+  /// In en, this message translates to:
+  /// **'Review containers'**
+  String get dockerReviewRun;
+
+  /// Docker Review sub-tab: the button that reviews again after a review.
+  ///
+  /// In en, this message translates to:
+  /// **'Review again'**
+  String get dockerReviewAgain;
+
+  /// Docker Review sub-tab: while each container is read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading each container\'s configuration…'**
+  String get dockerReviewReading;
+
+  /// Docker Review sub-tab: no container carries a finding.
+  ///
+  /// In en, this message translates to:
+  /// **'{total, plural, =0{The engine has no containers to review.} =1{The one container carries no finding.} other{None of the {total} containers carries a finding.}}'**
+  String dockerReviewNone(int total);
+
+  /// Docker Review sub-tab: how many containers carry findings, of all read.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers with findings: {flagged} of {total}'**
+  String dockerReviewFlagged(int flagged, int total);
+
+  /// Docker Review sub-tab: containers past the review's cap, which were not read.
+  ///
+  /// In en, this message translates to:
+  /// **'{omitted, plural, =1{1 more container was not read: a review reads at most {max}.} other{{omitted} more containers were not read: a review reads at most {max}.}}'**
+  String dockerReviewOmitted(int omitted, int max);
+
+  /// Docker Review sub-tab: a container's heading when it belongs to a compose stack.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} in {stack}'**
+  String dockerReviewContainerInStack(String name, String stack);
+
+  /// Docker Review sub-tab: one finding's heading, its level then what it is.
+  ///
+  /// In en, this message translates to:
+  /// **'{level}: {risk}'**
+  String dockerReviewFinding(String level, String risk);
+
+  /// Docker Review sub-tab: a finding's severity, by ContainerRiskLevel name.
+  ///
+  /// In en, this message translates to:
+  /// **'{level, select, high{High} medium{Medium} low{Low} other{Finding}}'**
+  String dockerReviewLevel(String level);
+
+  /// Docker Review sub-tab: what a finding is, by ContainerRisk name.
+  ///
+  /// In en, this message translates to:
+  /// **'{risk, select, privileged{Privileged} socketMount{Engine socket mounted} hostNetwork{Host network} hostPid{Host processes visible} addedCapabilities{Added capabilities} databasePublished{Database on every address} rootUser{Runs as root} logsUnrotated{Logs never rotate} latestTag{Floating image tag} noHealthcheck{No health check} noRestartPolicy{No restart policy} other{Finding}}'**
+  String dockerReviewRisk(String risk);
+
+  /// Docker Review sub-tab: why a finding matters, by ContainerRisk name.
+  ///
+  /// In en, this message translates to:
+  /// **'{risk, select, privileged{It has every device and capability of the host, so a break-in reaches the host.} socketMount{Whoever controls the container controls the engine, which is root on the host.} hostNetwork{It shares the host\'s network and reaches every service listening on it.} hostPid{It sees, and can signal, every process on the host.} addedCapabilities{It holds capabilities beyond the engine\'s default set.} databasePublished{Its database port is published on every address, not only on localhost or a private network.} rootUser{Its processes run as root, and the engine maps root to root on the host.} logsUnrotated{It logs with json-file and no max-size, so its log file grows until the disk is full.} latestTag{A new pull can bring a different image. Pin a version or a digest.} noHealthcheck{The engine cannot tell when it stops working while it still runs.} noRestartPolicy{It stays stopped after a crash or a reboot.} other{It may put the host at risk.}}'**
+  String dockerReviewRiskWhy(String risk);
+
+  /// Docker Review sub-tab: why the review failed, by DockerQueryFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server\'s capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} daemonError{The engine refused or failed to list or inspect the containers.} connectionFailed{The connection to the engine failed during the review.} cancelled{The review stopped before it finished.} other{The containers could not be reviewed.}}'**
+  String dockerReviewFailed(String reason);
+
   /// Docker tab: heading of the strip with the engine's runtime, API version, version and operating system (DKE-01).
   ///
   /// In en, this message translates to:
