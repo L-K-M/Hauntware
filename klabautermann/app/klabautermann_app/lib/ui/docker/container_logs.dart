@@ -10,6 +10,7 @@ import '../logs/log_view.dart';
 import '../logs/logs_panel.dart';
 import '../logs/logs_panel_controller.dart';
 import 'container_details.dart' show InspectedContainer;
+import 'container_log_range.dart';
 import 'containers_view.dart' show containerNameOf;
 
 /// Below this width at 100 % text the log view puts its search on a row
@@ -269,6 +270,7 @@ class _ContainerLogsViewState extends State<ContainerLogsView> {
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       LogLiveChip(panel: _panel),
+                      ContainerLogRangeButton(panel: _panel),
                       if (!compact)
                         SizedBox(
                           width: scaler.scale(_searchWidth),

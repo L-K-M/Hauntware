@@ -704,6 +704,8 @@ class LogLiveChip extends StatelessWidget {
       label: Text(l10n.logsPanelLiveState(word.name)),
       tooltip: panel.canFollow
           ? l10n.logsPanelLiveTooltip
+          : panel.containerId != null
+          ? l10n.dockerLogsLiveRange
           : panel.query.source == LogSourceKind.file
           ? l10n.logsPanelLiveCompressed
           : l10n.logsPanelLivePastBoot,

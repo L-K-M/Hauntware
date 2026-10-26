@@ -7465,6 +7465,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerLogsEmpty => 'This container has no log lines.';
 
   @override
+  String get dockerLogsRangeChoose => 'Choose start and end…';
+
+  @override
+  String dockerLogsRangeBetween(String since, String until) {
+    return '$since to $until';
+  }
+
+  @override
+  String get dockerLogsRangeTitle => 'Time range';
+
+  @override
+  String get dockerLogsRangeFrom => 'From';
+
+  @override
+  String get dockerLogsRangeTo => 'To';
+
+  @override
+  String get dockerLogsRangeOrder => 'The start must come before the end.';
+
+  @override
+  String get dockerLogsRangeCancel => 'Cancel';
+
+  @override
+  String get dockerLogsRangeApply => 'Apply';
+
+  @override
+  String get dockerLogsLiveRange =>
+      'A range with an end has no new lines to follow.';
+
+  @override
   String dockerLogsDriverUnreadable(String reason, String driver) {
     String _temp0 = intl.Intl.selectLogic(reason, {
       'none': 'This container keeps no logs: driver none.',
