@@ -156,6 +156,11 @@ void main() {
           queryId: 'h-4',
           query: KernelsQuery(),
         ),
+        const HostQuery(
+          serverId: 'srv-1',
+          queryId: 'h-5',
+          query: MountsQuery(),
+        ),
         const RedactLines('r-1', ['a', 'b']),
         const DockerQuery(
           serverId: 'srv-1',
@@ -429,6 +434,31 @@ void main() {
               running: '6.1.0-13-amd64',
               installed: ['6.1.0-13-amd64'],
               state: KernelCheckState.current,
+            ),
+          ),
+        ),
+        HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-5',
+          payload: Mounts(
+            MountsRead(
+              mounts: [
+                MountEntry(
+                  target: '/',
+                  source: '/dev/sda1',
+                  type: 'ext4',
+                  options: const ['rw', 'relatime'],
+                ),
+              ],
+              swaps: const [
+                SwapDevice(
+                  path: '/swapfile',
+                  kind: SwapKind.file,
+                  sizeBytes: 1024,
+                  usedBytes: 0,
+                  priority: -2,
+                ),
+              ],
             ),
           ),
         ),

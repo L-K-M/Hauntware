@@ -1947,6 +1947,11 @@ is on main:
   created again under its name is not removed. An API step can now
   carry a JSON body, which the preview shows as sent. The Docker
   actions suite creates, refuses and removes a volume on the fixture.
+- Mounts and swap (M6 N31, DSK-05, DSK-14): a mount's details in the
+  Disks section add its source and options, flagging a read-only mount,
+  and the System tab's Swap section lists the swap partitions and files
+  with their use and priority. Hosts without findmnt read
+  /proc/self/mounts.
 - Boots (M6 N39, BOOT-02, BOOT-03): the System tab's Boots section says
   whether the running kernel is the newest installed, or a reboot loads
   a newer one, and lists the current boot and the ten before it with

@@ -1496,6 +1496,84 @@
   "@systemBootsTitle": {
     "description": "System tab: the section of the running kernel against the installed ones (BOOT-03) and the boot timeline (BOOT-02)."
   },
+  "systemMountReading": "Reading mount options…",
+  "@systemMountReading": {
+    "description": "A mount's details sheet, while it reads the mount's source and options (DSK-05)."
+  },
+  "systemMountFailed": "Mount options could not be read. {failure, select, noLink{Not connected to the server.} denied{The server denied the read.} missing{The server lacks a tool this read needs.} other{The read failed.}}",
+  "@systemMountFailed": {
+    "description": "A mount's details sheet when its source and options could not be read.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "systemMountGone": "Nothing is mounted here any more.",
+  "@systemMountGone": {
+    "description": "A mount's details sheet when the mount read no longer lists the mount point."
+  },
+  "systemMountSource": "Source",
+  "@systemMountSource": {
+    "description": "Label of the device, share or image a filesystem is mounted from."
+  },
+  "systemMountOptions": "Options",
+  "@systemMountOptions": {
+    "description": "Label of a mount's options, such as rw and relatime."
+  },
+  "systemMountReadOnly": "Mounted read-only",
+  "@systemMountReadOnly": {
+    "description": "A mount's details sheet when the filesystem is mounted read-only."
+  },
+  "systemSwapTitle": "Swap",
+  "@systemSwapTitle": {
+    "description": "Heading of the System tab's swap devices section (DSK-14)."
+  },
+  "systemSwapReading": "Reading swap devices…",
+  "@systemSwapReading": {
+    "description": "The swap section while it reads the swap devices."
+  },
+  "systemSwapNone": "No swap devices are in use.",
+  "@systemSwapNone": {
+    "description": "The swap section when the server uses no swap."
+  },
+  "systemSwapFailed": "Swap devices could not be read. {failure, select, noLink{Not connected to the server.} denied{The server denied the read.} missing{The server lacks a tool this read needs.} other{The read failed.}}",
+  "@systemSwapFailed": {
+    "description": "The swap section when the swap devices could not be read.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "systemSwapUsage": "{used} used of {size}",
+  "@systemSwapUsage": {
+    "description": "How much of a swap device is used, out of its size.",
+    "placeholders": {
+      "used": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "systemSwapDetail": "{kind, select, partition{Partition} file{File} other{Swap device}}, priority {priority}",
+  "@systemSwapDetail": {
+    "description": "What a swap device is (a disk partition or a file) and its priority; higher is used first.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      },
+      "priority": {
+        "type": "int"
+      }
+    }
+  },
+  "systemSwapReadAgain": "Read again",
+  "@systemSwapReadAgain": {
+    "description": "Button that reads the swap devices again."
+  },
   "systemBootsReading": "Reading kernels and boots…",
   "@systemBootsReading": {
     "description": "System tab, Boots: shown while the first read runs."
