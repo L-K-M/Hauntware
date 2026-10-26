@@ -382,10 +382,10 @@ abstract class AppLocalizations {
   /// **'Version unknown'**
   String get aboutVersionUnknown;
 
-  /// The app's licence line in the About dialog. Klabautermann and Unlicense are names: never translated.
+  /// The app's licence line in the About dialog: the Unlicense covers only the app's own code, and View licenses is the dialog's button. Klabautermann and Unlicense are names: never translated.
   ///
   /// In en, this message translates to:
-  /// **'Klabautermann is free and unencumbered software released into the public domain under the Unlicense.'**
+  /// **'Klabautermann\'s own code is public domain (Unlicense). It includes third-party components that keep their own licenses, listed under View licenses.'**
   String get aboutLicence;
 
   /// No description provided for @statusConnected.

@@ -5,6 +5,7 @@ import 'dart:ui' show AppExitType, PlatformDispatcher;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show ServicesBinding;
+import 'package:ghost_licenses/ghost_licenses.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -57,6 +58,8 @@ import 'ui/already_running_app.dart';
 /// are the engine's (03 §4.10, D63).
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  // The licenses page lists the APK's Maven libraries too (Android).
+  registerPlatformLicenses();
 
   // The desktop settings window's engine runs this same entrypoint (D32).
   // It is a second Flutter engine whose isolate shares nothing with this

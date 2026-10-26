@@ -65,6 +65,9 @@ dependencies:
   # with Séance and Klabautermann.
   ghost_keystore:
     path: ../../../planchette/packages/ghost_keystore
+  # The Android APK's Maven library notices on the licenses page.
+  ghost_licenses:
+    path: ../../../planchette/packages/ghost_licenses
   poltergeist_core:
     path: ../../packages/poltergeist_core
   poltergeist_sync:

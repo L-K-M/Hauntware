@@ -171,9 +171,9 @@
   "@aboutVersionUnknown": {
     "description": "In place of aboutVersion when the platform could not tell the app's version."
   },
-  "aboutLicence": "Klabautermann is free and unencumbered software released into the public domain under the Unlicense.",
+  "aboutLicence": "Klabautermann's own code is public domain (Unlicense). It includes third-party components that keep their own licenses, listed under View licenses.",
   "@aboutLicence": {
-    "description": "The app's licence line in the About dialog. Klabautermann and Unlicense are names: never translated."
+    "description": "The app's licence line in the About dialog: the Unlicense covers only the app's own code, and View licenses is the dialog's button. Klabautermann and Unlicense are names: never translated."
   },
   "statusConnected": "Connected",
   "statusConnecting": "Connecting",

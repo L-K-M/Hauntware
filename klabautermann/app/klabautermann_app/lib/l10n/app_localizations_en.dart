@@ -204,7 +204,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutLicence =>
-      'Klabautermann is free and unencumbered software released into the public domain under the Unlicense.';
+      'Klabautermann\'s own code is public domain (Unlicense). It includes third-party components that keep their own licenses, listed under View licenses.';
 
   @override
   String get statusConnected => 'Connected';
