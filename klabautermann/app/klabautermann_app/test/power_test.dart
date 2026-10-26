@@ -219,6 +219,7 @@ void main() {
     now = now.add(const Duration(minutes: 5));
     core.value = _core(_bootBefore, seq: 2);
     await tester.pump();
+    expect(find.textContaining('shutting down'), findsOneWidget);
     expect(find.text('Shut down'), findsNothing);
 
     // Started again, on a later boot: the buttons are back.
