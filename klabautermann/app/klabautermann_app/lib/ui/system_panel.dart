@@ -8,6 +8,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'accounts.dart';
 import 'boots.dart';
 import 'chart_strings.dart';
 import 'charts/charts.dart' show BarSegment, ChartUnit, StackedBar;
@@ -31,6 +32,7 @@ enum SystemSection {
   gpus,
   boots,
   driveHealth,
+  accounts,
 }
 
 /// The panel width from which the fact sections sit side by side and the
@@ -213,6 +215,12 @@ class _SystemPanelState extends State<SystemPanel> {
                 key: const ValueKey(SystemSection.driveHealth),
                 serverId: widget.serverId,
                 tableId: SystemSection.driveHealth.name,
+              ),
+              AccountsSection(
+                key: const ValueKey(SystemSection.accounts),
+                reads: widget.monitoring.accounts,
+                serverId: widget.serverId,
+                tableId: SystemSection.accounts.name,
               ),
             ],
           ),

@@ -271,6 +271,12 @@ void main() {
       expect(smart.requestId, 'r-2');
       expect(smart.failure, SmartReportFailure.noLink);
 
+      // ACC-01's read answers without a link.
+      client.send(const ReadAccounts('ssh-config:web', requestId: 'r-3'));
+      final accounts = (await next(events)) as AccountsReport;
+      expect(accounts.requestId, 'r-3');
+      expect(accounts.failure, AccountsReportFailure.noLink);
+
       // A detached operation's result is acknowledged over a link.
       client.send(
         const AcknowledgeOperation('ssh-config:web', '0123456789abcdef'),

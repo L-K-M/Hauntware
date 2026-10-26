@@ -3857,6 +3857,19 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   flagged as root-equivalent; logged-in sessions (`who`, `loginctl
   list-sessions --output=json`, JSON from systemd 240 [R: systemd NEWS],
   so RHEL 8 (239) shows `who` alone; `-j` from 256).
+
+  As built (M6 N40), one read as the login user, on request and never
+  cached, prints `getent passwd` and `getent group` (the files where
+  getent is missing), then `who`, each capped. An account is
+  root-equivalent at UID 0 or as a member, primary or listed, of
+  `sudo`, `wheel`, `admin` or `docker`; past 2000 accounts the rest are
+  counted. Service accounts (no login shell, a UID below 1000 other than
+  root's, or `nobody`) are hidden until the user shows them, unless
+  root-equivalent. The logins come from `who` alone: `loginctl`'s JSON
+  names no origin, which ACC-02 asks for. `who` runs under the command
+  wrapper's `TZ=UTC`, so each login's start is UTC; a `who` whose lines
+  do not parse, as BusyBox's, leaves the logins unknown rather than
+  none.
 - **v1.x.** Terminate a session; login history (`last`, `lastb`, sshd journal
   entries; wtmpdb and lastlog2 migrations [U]); `authorized_keys` inventory
   (sudo); "where is this key" across the fleet; sudoers overview.

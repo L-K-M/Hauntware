@@ -1952,6 +1952,12 @@ is on main:
   clock against this device's. The System tab's Time section shows the
   time zone, whether the clock is synchronized, and how far it is ahead
   or behind (in step within two seconds).
+- Users and logins (M6 N40, ACC-01, ACC-02): the System tab's Users
+  section reads the server's accounts and groups with `getent` and who
+  is logged in with `who`, as the login user, when it shows and on
+  request. Accounts that can become root (UID 0, the sudo, wheel, admin
+  or docker group) are flagged and sort first; service accounts are
+  hidden until shown. Each login shows its terminal, origin and start.
 - Drive health (M6 N37c, HW-04): in admin mode, the System tab's Drive
   health section reads every drive's SMART health on request through an
   elevated `smartctl --scan-open`, then `smartctl -n standby -a` per

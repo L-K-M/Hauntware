@@ -1503,6 +1503,128 @@
       }
     }
   },
+  "systemAccountsTitle": "Users",
+  "@systemAccountsTitle": {
+    "description": "System tab: heading of the section listing the server's accounts and who is logged in (ACC-01, ACC-02)."
+  },
+  "systemAccountsColumn": "Account",
+  "@systemAccountsColumn": {
+    "description": "System tab, Users: column of the account's name."
+  },
+  "systemAccountsUid": "UID",
+  "@systemAccountsUid": {
+    "description": "System tab, Users: column of the account's numeric user ID."
+  },
+  "systemAccountsRoot": "Root access",
+  "@systemAccountsRoot": {
+    "description": "System tab, Users: column saying why the account can become root, empty for most accounts."
+  },
+  "systemAccountsGroups": "Groups",
+  "@systemAccountsGroups": {
+    "description": "System tab, Users: column of the account's groups, its primary group first."
+  },
+  "systemAccountsShell": "Shell",
+  "@systemAccountsShell": {
+    "description": "System tab, Users: column of the account's login shell."
+  },
+  "systemAccountsRootReason": "{reason, select, uidZero{UID 0} adminGroup{sudo, wheel or admin group} dockerGroup{docker group} other{Can become root}}",
+  "@systemAccountsRootReason": {
+    "description": "System tab, Users: one reason the account can become root; reason is the engine's RootEquivalence name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "systemAccountsFailed": "{reason, select, noLink{The server is not connected, so its accounts could not be read.} unreadable{The server's answer could not be read as its accounts.} transport{The connection failed while the accounts were read.} other{The accounts could not be read.}}",
+  "@systemAccountsFailed": {
+    "description": "System tab, Users: why a read read nothing, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "systemAccountsReading": "Reading accounts…",
+  "@systemAccountsReading": {
+    "description": "System tab, Users: shown while the first read runs."
+  },
+  "systemAccountsNotListed": "{count, plural, =1{1 more account is not listed.} other{{count} more accounts are not listed.}}",
+  "@systemAccountsNotListed": {
+    "description": "System tab, Users: accounts past the read's limit, as on a host whose directory lists thousands.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemAccountsShowSystem": "{count, plural, =1{Show 1 service account} other{Show {count} service accounts}}",
+  "@systemAccountsShowSystem": {
+    "description": "System tab, Users: button that lists the accounts without a login shell or below the people's UID range, hidden by default.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemAccountsHideSystem": "Hide service accounts",
+  "@systemAccountsHideSystem": {
+    "description": "System tab, Users: button that hides the service accounts again."
+  },
+  "systemAccountsSessionsTitle": "Logged in",
+  "@systemAccountsSessionsTitle": {
+    "description": "System tab, Users: heading of the list of current logins."
+  },
+  "systemAccountsSessionsNone": "No one is logged in.",
+  "@systemAccountsSessionsNone": {
+    "description": "System tab, Users: the server lists no login."
+  },
+  "systemAccountsSessionsUnknown": "Who is logged in is unknown: this server's who prints a format the app does not read.",
+  "@systemAccountsSessionsUnknown": {
+    "description": "System tab, Users: the server's who printed lines the app could not parse, as BusyBox's."
+  },
+  "systemAccountsSessionLocal": "{user} on {line}, since {since}",
+  "@systemAccountsSessionLocal": {
+    "description": "System tab, Users: a local login; since is when it began, in this device's time zone.",
+    "placeholders": {
+      "user": {
+        "type": "String"
+      },
+      "line": {
+        "type": "String",
+        "example": "tty1"
+      },
+      "since": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "systemAccountsSessionRemote": "{user} on {line} from {from}, since {since}",
+  "@systemAccountsSessionRemote": {
+    "description": "System tab, Users: a remote login with the host or address it came from; since is when it began, in this device's time zone.",
+    "placeholders": {
+      "user": {
+        "type": "String"
+      },
+      "line": {
+        "type": "String",
+        "example": "pts/0"
+      },
+      "from": {
+        "type": "String",
+        "example": "203.0.113.7"
+      },
+      "since": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "systemAccountsReadAgain": "Read again",
+  "@systemAccountsReadAgain": {
+    "description": "System tab, Users: button that reads the accounts and logins again."
+  },
   "systemDriveColumn": "Drive",
   "@systemDriveColumn": {
     "description": "Drive health table: column of the drive's model, or its device where it reports none."
