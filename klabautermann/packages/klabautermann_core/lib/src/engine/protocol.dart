@@ -7,6 +7,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         AnacronJob,
         BackupEntry,
         CpuPercentages,
+        BootEnd,
         CronSnapshot,
         DiskRate,
         FootprintRow,
@@ -16,6 +17,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         JobEntry,
         JournalBoot,
         JournalBootEntry,
+        KernelCheck,
         KillSignal,
         LoadAvg,
         LogFileEntry,
@@ -728,6 +730,18 @@ final class BootsQuery extends HostQuerySpec {
 /// names (MEM-03), as [OomKills].
 final class OomKillsQuery extends HostQuerySpec {
   const OomKillsQuery();
+}
+
+/// How the boots before the current one ended (BOOT-02), as [BootEnds]:
+/// the last [kBootEndsRead] of them, read from their journals.
+final class BootEndsQuery extends HostQuerySpec {
+  const BootEndsQuery();
+}
+
+/// The running kernel against the installed ones (BOOT-03), as
+/// [Kernels].
+final class KernelsQuery extends HostQuerySpec {
+  const KernelsQuery();
 }
 
 /// Redacts [lines] the app holds for an export (LOG-10, 03 §8.9) through
@@ -2062,6 +2076,20 @@ final class OomKills extends HostPayload {
   const OomKills(this.read);
 
   final OomKillsRead read;
+}
+
+/// [BootEndsQuery]'s ends by boot ID; a boot it did not read is absent.
+final class BootEnds extends HostPayload {
+  BootEnds(Map<String, BootEnd> ends) : ends = Map.unmodifiable(ends);
+
+  final Map<String, BootEnd> ends;
+}
+
+/// [KernelsQuery]'s kernels.
+final class Kernels extends HostPayload {
+  const Kernels(this.check);
+
+  final KernelCheck check;
 }
 
 /// A [HostQuery] that read nothing; [detail] is the end of its stderr,

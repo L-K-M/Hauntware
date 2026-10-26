@@ -1326,6 +1326,88 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get systemBootsTitle => 'Boots';
+
+  @override
+  String get systemBootsReading => 'Reading kernels and boots…';
+
+  @override
+  String get systemBootsReadAgain => 'Read again';
+
+  @override
+  String systemKernelRunning(String release) {
+    return 'Running kernel $release';
+  }
+
+  @override
+  String systemKernelState(String state, String newest) {
+    String _temp0 = intl.Intl.selectLogic(state, {
+      'current': 'This is the newest kernel installed.',
+      'newerInstalled': 'Kernel $newest is installed. A reboot loads it.',
+      'runningRemoved':
+          'The running kernel\'s modules were removed, as an upgrade does. A reboot loads $newest.',
+      'other':
+          'Whether a newer kernel is installed is unknown: no module directory was found, as in a container.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String systemKernelFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server refused the kernel check.',
+      'missing': 'The server lacks the tools the kernel check runs.',
+      'other': 'The kernel check failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemBootsTimelineTitle => 'Boot timeline';
+
+  @override
+  String get systemBootsCurrent => 'This boot';
+
+  @override
+  String systemBootsSpan(String start, String duration) {
+    return 'Started $start, ran $duration';
+  }
+
+  @override
+  String systemBootEnd(String end) {
+    String _temp0 = intl.Intl.selectLogic(end, {
+      'clean': 'Shut down cleanly',
+      'unclean': 'Ended without a shutdown: a crash, power loss or hard reset',
+      'other':
+          'How it ended is unknown: its journal is not readable as this user',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemBootsNone => 'The journal lists no boots.';
+
+  @override
+  String systemBootsNotListed(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString earlier boots are not listed.',
+      one: '1 earlier boot is not listed.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get systemBootEndsUnknown =>
+      'How the earlier boots ended could not be read.';
+
+  @override
   String get systemDriveHealthTitle => 'Drive health';
 
   @override

@@ -193,6 +193,7 @@ final class MonitoringController extends ChangeNotifier {
   /// The System tab's package checks (PKG-01 to PKG-03), a concern of its
   /// own beside [logs].
   late final PackageReads packages;
+
   /// The on-device history the History card charts (HIS-01), a concern of
   /// its own beside [logs].
   late final HistoryReads rollups;

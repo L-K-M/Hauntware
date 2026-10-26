@@ -146,6 +146,16 @@ void main() {
           queryId: 'h-6',
           query: OomKillsQuery(),
         ),
+        const HostQuery(
+          serverId: 'srv-1',
+          queryId: 'h-3',
+          query: BootEndsQuery(),
+        ),
+        const HostQuery(
+          serverId: 'srv-1',
+          queryId: 'h-4',
+          query: KernelsQuery(),
+        ),
         const RedactLines('r-1', ['a', 'b']),
         const DockerQuery(
           serverId: 'srv-1',
@@ -401,6 +411,24 @@ void main() {
                   cgroup: '/system.slice/docker-0123.scope',
                 ),
               ],
+            ),
+          ),
+        ),
+        HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-3',
+          payload: BootEnds({
+            '0123456789abcdef0123456789abcdef': BootEnd.clean,
+          }),
+        ),
+        HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-4',
+          payload: Kernels(
+            KernelCheck(
+              running: '6.1.0-13-amd64',
+              installed: ['6.1.0-13-amd64'],
+              state: KernelCheckState.current,
             ),
           ),
         ),

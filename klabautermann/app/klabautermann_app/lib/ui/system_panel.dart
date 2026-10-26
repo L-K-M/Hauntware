@@ -10,6 +10,7 @@ import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'accounts.dart';
+import 'boots.dart';
 import 'chart_strings.dart';
 import 'charts/charts.dart' show BarSegment, ChartUnit, StackedBar;
 import 'disk_activity.dart';
@@ -33,6 +34,7 @@ enum SystemSection {
   temperatures,
   gpus,
   oomKills,
+  boots,
   driveHealth,
   updates,
   accounts,
@@ -216,6 +218,11 @@ class _SystemPanelState extends State<SystemPanel> {
               ?gpus,
               OomKillsSection(
                 key: const ValueKey(SystemSection.oomKills),
+                monitoring: widget.monitoring,
+                serverId: widget.serverId,
+              ),
+              BootsSection(
+                key: const ValueKey(SystemSection.boots),
                 monitoring: widget.monitoring,
                 serverId: widget.serverId,
               ),
