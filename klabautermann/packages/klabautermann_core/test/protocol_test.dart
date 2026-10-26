@@ -402,7 +402,7 @@ void main() {
             KernelCheck(
               running: '6.1.0-13-amd64',
               installed: ['6.1.0-13-amd64'],
-              state: KernelState.current,
+              state: KernelCheckState.current,
             ),
           ),
         ),

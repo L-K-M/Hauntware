@@ -28,7 +28,7 @@ void main() {
       final check = parseKernels(
         read('6.1.0-13-amd64', ['6.1.0-9-amd64', '6.1.0-13-amd64']),
       )!;
-      expect(check.state, KernelState.current);
+      expect(check.state, KernelCheckState.current);
       expect(check.installed, ['6.1.0-9-amd64', '6.1.0-13-amd64']);
       expect(check.newest, '6.1.0-13-amd64');
     });
@@ -37,7 +37,7 @@ void main() {
       final check = parseKernels(
         read('6.1.0-9-amd64', ['6.1.0-13-amd64', '6.1.0-9-amd64']),
       )!;
-      expect(check.state, KernelState.newerInstalled);
+      expect(check.state, KernelCheckState.newerInstalled);
       expect(check.installed, ['6.1.0-9-amd64', '6.1.0-13-amd64']);
       expect(check.newest, '6.1.0-13-amd64');
     });
@@ -46,7 +46,7 @@ void main() {
       final check = parseKernels(
         read('5.15.0-88-generic', ['5.15.0-91-generic']),
       )!;
-      expect(check.state, KernelState.runningRemoved);
+      expect(check.state, KernelCheckState.runningRemoved);
       expect(check.newest, '5.15.0-91-generic');
     });
 
@@ -60,13 +60,13 @@ void main() {
         ]),
       )!;
       expect(check.installed, ['6.1.0-13-amd64']);
-      expect(check.state, KernelState.current);
+      expect(check.state, KernelCheckState.current);
     });
 
     test('no module directory reads as unknown, and output without the '
         'marker is not the read', () {
       final none = parseKernels('6.18.44-fc\n$kKernelsMarker\n')!;
-      expect(none.state, KernelState.unknown);
+      expect(none.state, KernelCheckState.unknown);
       expect(none.newest, isNull);
       expect(parseKernels('6.18.44-fc\n'), isNull);
       expect(parseKernels('\n$kKernelsMarker\n6.1.0\n'), isNull);
