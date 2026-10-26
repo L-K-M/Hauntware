@@ -4181,6 +4181,10 @@ enum DockerWatchList {
 
   /// The network list (03 §7.15 DNW-01), as [DockerNetworksPayload].
   networks,
+
+  /// The engine's events while the app follows them (03 §7.12 DKE-03),
+  /// as [DockerEventsPayload].
+  events,
 }
 
 /// The most watches one server holds [E]: a Docker view holds one or two.
@@ -4295,6 +4299,68 @@ final class DockerNetworksPayload extends DockerPayload {
   const DockerNetworksPayload(this.networks);
 
   final List<NetworkSummary> networks;
+}
+
+/// The events timeline (DKE-03): the newest `kDockerEventsKept` entries,
+/// oldest first, events and the gaps between streams alike.
+final class DockerEventsPayload extends DockerPayload {
+  DockerEventsPayload(Iterable<DockerTimelineEntry> entries)
+    : entries = List.unmodifiable(entries);
+
+  final List<DockerTimelineEntry> entries;
+}
+
+/// One line of the events timeline.
+@immutable
+sealed class DockerTimelineEntry {
+  const DockerTimelineEntry(this.at);
+
+  /// When it happened, in UTC: the event's time, or when a gap began.
+  final DateTime at;
+}
+
+/// One engine event.
+final class DockerTimelineEvent extends DockerTimelineEntry {
+  const DockerTimelineEvent({
+    required DateTime at,
+    required this.type,
+    required this.action,
+    this.actorId,
+    this.name,
+    this.image,
+    this.exitCode,
+  }) : super(at);
+
+  /// `container`, `image`, `volume` or `network`.
+  final String type;
+
+  /// `start`, `die`, `health_status: unhealthy`, `pull`, ...
+  final String action;
+  final String? actorId;
+
+  /// The container's, volume's or network's name; an image's reference.
+  final String? name;
+
+  /// A container's image.
+  final String? image;
+
+  /// A container's exit code, on `die`.
+  final int? exitCode;
+}
+
+/// A span the app did not follow the events: the stream was lost from
+/// [at] until [until]. With [resumed] the stream asked the engine for the
+/// events of the span, which it keeps only in a bounded buffer; without
+/// it the span's events are not shown.
+final class DockerTimelineGap extends DockerTimelineEntry {
+  const DockerTimelineGap({
+    required DateTime at,
+    required this.until,
+    required this.resumed,
+  }) : super(at);
+
+  final DateTime until;
+  final bool resumed;
 }
 
 /// `/system/df`'s totals per type (02 OV-05), read in the shape the

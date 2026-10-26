@@ -4174,6 +4174,20 @@ TLS. The section checks when it shows, after an edit and on request.
   through one `docker compose logs -f` in low-session mode); JSON and level
   parsing; redacted log export; stats detail charts, sorting, memory limit
   risk, top table.
+- **As built (M6 N20).** DKE-03's timeline comes from the events stream
+  the watcher already holds for the lists (5.7), so it costs no channel
+  of its own. Each container, image, volume and network event the lists'
+  refresh does not ignore joins a buffer of the newest 500 per endpoint
+  (health-check execs and attach-like actions stay out). The buffer is
+  kept across a dropped link and forgotten on a socket change or when
+  the last watch ends. A stream opened after a lost one adds a gap from
+  the loss to the reopen, marked resumed when `since` asked the engine
+  to replay it (9.5 item 8's limited-buffer wording). The Docker
+  tab's Events sub-tab watches `DockerWatchList.events` while it shows.
+  It lists the timeline newest first with time, type, name and action, a
+  container's image and exit code, and the gaps. A filter chip per type
+  and a search by name, action or image leave the gaps in place.
+  DKE-04's disk usage on demand was already the Overview's (OV-05).
 - **v1.x.** Daemon config view, topology graph, interop labels, copy as
   `docker run`, generate compose service, rename, in-place limit updates,
   create from form, filesystem changes, container file browser, cgroup
