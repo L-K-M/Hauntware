@@ -118,6 +118,19 @@ final class HostQueries {
                 ),
               });
           }
+        case MountsQuery():
+          switch (await _run(link, HostCommands.mounts())) {
+            case _Failed(:final payload):
+              answer(payload);
+            case _Ran(:final stdout):
+              answer(switch (parseMounts(stdout)) {
+                final read? => Mounts(read),
+                null => const HostQueryFailed(
+                  HostQueryFailure.failed,
+                  detail: 'The mounts read printed something else.',
+                ),
+              });
+          }
       }
     } on Object catch (error) {
       answer(HostQueryFailed(HostQueryFailure.failed, detail: '$error'));
