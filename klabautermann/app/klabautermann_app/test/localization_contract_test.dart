@@ -31,6 +31,11 @@ const _generatedDartSuffixes = <String>{};
 // Literals are reviewed per file so an allowlist cannot hide UI copy. Every
 // entry is technical.
 const _allowedTechnicalLiterals = <String, Set<String>>{
+  // The separator between group names and root reasons, the UID as the
+  // host prints it, an empty root cell, and the groups' sort key.
+  'lib/ui/accounts.dart': {"', '", r"'${account.uid}'", "''", "','"},
+  // An account read's request id, matched in the engine's answer.
+  'lib/controllers/account_reads.dart': {r"'accounts-${_count++}'"},
   'lib/app.dart': {
     // The settings route's Navigator name.
     "'/settings'",

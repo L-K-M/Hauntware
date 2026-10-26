@@ -1965,6 +1965,12 @@ is on main:
   a reboot. "All servers" (N36d, PKG-06) opens the fleet update center:
   each server's updates, security updates and restart flag from its
   check of the last hour, most security updates first.
+- Users and logins (M6 N40, ACC-01, ACC-02): the System tab's Users
+  section reads the server's accounts and groups with `getent` and who
+  is logged in with `who`, as the login user, when it shows and on
+  request. Accounts that can become root (UID 0, the sudo, wheel, admin
+  or docker group) are flagged and sort first; service accounts are
+  hidden until shown. Each login shows its terminal, origin and start.
 - Drive health (M6 N37c, HW-04): in admin mode, the System tab's Drive
   health section reads every drive's SMART health on request through an
   elevated `smartctl --scan-open`, then `smartctl -n standby -a` per
@@ -2095,6 +2101,16 @@ is on main:
   in settings.json. Each notification states the same limit (Y3). The
   app icon's badge is not built, and whether the notifications show on
   real Android, iOS, macOS, Windows and Linux desktops is a manual check.
+- Image history (M6 N14, IMG-04): a click or tap on an Images row opens
+  a sheet with the image's layers, newest first, read by id through
+  `GET /images/{name}/history`. Each layer shows the instruction that
+  made it, when, its size, its id (none for a layer built elsewhere),
+  its tags and its comment. Build arguments can carry secrets, so the
+  engine masks each instruction as a command line, and "Reveal values"
+  shows them for 30 seconds, masked again early on request, when the
+  app turns inactive or when the sheet closes. It is a read, so it shows
+  with actions off. Tested in the docker package, the router and the
+  Images panel; no Docker fixture runs it yet.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container

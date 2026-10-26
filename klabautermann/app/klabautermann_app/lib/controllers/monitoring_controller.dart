@@ -5,6 +5,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../ui/charts/series_ring.dart';
 import '../ui/charts/time_series.dart';
+import 'account_reads.dart';
 import 'container_terminals.dart';
 import 'docker_controller.dart';
 import 'docker_endpoint_choices.dart';
@@ -162,6 +163,7 @@ final class MonitoringController extends ChangeNotifier {
     jobHistory = JobHistoryReads(_engine);
     packages = PackageReads(_engine);
     rollups = HistoryReads(_engine);
+    accounts = AccountReads(_engine);
     docker = DockerController(
       _engine,
       endpointChoices: dockerEndpointChoices,
@@ -194,6 +196,10 @@ final class MonitoringController extends ChangeNotifier {
   /// The on-device history the History card charts (HIS-01), a concern of
   /// its own beside [logs].
   late final HistoryReads rollups;
+
+  /// The System tab's account reads (ACC-01, ACC-02), a concern of its
+  /// own beside [logs].
+  late final AccountReads accounts;
 
   /// Each server's Docker endpoint, which the server header names, and
   /// the engine details the Docker tab shows (03 §5.9, §10.2): a concern
@@ -772,6 +778,7 @@ final class MonitoringController extends ChangeNotifier {
     jobHistory.dispose();
     packages.dispose();
     rollups.dispose();
+    accounts.dispose();
     docker.dispose();
     _onEngineDone();
     for (final refresh in _refreshes.toList()) {

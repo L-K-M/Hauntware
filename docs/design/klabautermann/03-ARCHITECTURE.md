@@ -3893,6 +3893,19 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   flagged as root-equivalent; logged-in sessions (`who`, `loginctl
   list-sessions --output=json`, JSON from systemd 240 [R: systemd NEWS],
   so RHEL 8 (239) shows `who` alone; `-j` from 256).
+
+  As built (M6 N40), one read as the login user, on request and never
+  cached, prints `getent passwd` and `getent group` (the files where
+  getent is missing), then `who`, each capped. An account is
+  root-equivalent at UID 0 or as a member, primary or listed, of
+  `sudo`, `wheel`, `admin` or `docker`; past 2000 accounts the rest are
+  counted. Service accounts (no login shell, a UID below 1000 other than
+  root's, or `nobody`) are hidden until the user shows them, unless
+  root-equivalent. The logins come from `who` alone: `loginctl`'s JSON
+  names no origin, which ACC-02 asks for. `who` runs under the command
+  wrapper's `TZ=UTC`, so each login's start is UTC; a `who` whose lines
+  do not parse, as BusyBox's, leaves the logins unknown rather than
+  none.
 - **v1.x.** Terminate a session; login history (`last`, `lastb`, sshd journal
   entries; wtmpdb and lastlog2 migrations [U]); `authorized_keys` inventory
   (sudo); "where is this key" across the fleet; sudoers overview.
@@ -5840,6 +5853,7 @@ shows there.
 | `PlanAction` with `PullImage(serverId, reference)` (M6 N13, IMG-03): one `POST /images/create` behind a plain confirmation; a name without a tag pulls `latest`; a reference Docker would reject is refused as `invalidTarget` | `ActionPlanned`, then `ImagePullProgress(planId, layers, status)` a few times a second while it runs (each layer's status and bytes, the image's own last message), then `ActionFinished`; an `errorDetail` fails the step with the daemon's words as its output; the image watch reads its list again |
 | `PullImage` with `via: host` or `hostDetached` (M6 N13b, REG-01): the host's own `docker --host unix://<socket> pull <reference>`, which uses the host's `docker login` and credential helpers; `host` runs it over the link with its output kept, `hostDetached` as a detached operation (7.17) on the runner row the host and admin mode allow; root over the sudo relay | `ActionPlanned`, then `ActionFinished` with the output, or with the operation id of the launched pull, which the operation list follows |
 | `CancelAction(planId)` (M6 N13, IMG-03): stops a running plan where its step can stop, today an image pull, whose request the engine closes so the daemon stops the pull | The plan's `ActionFinished` with `cancelled`; a step that cannot stop runs to its end |
+| `DockerQuery` with `DockerImageHistoryQuery(image)` (M6 N14, IMG-04): `GET /images/{name}/history` for an image's id or reference; the Images sub-tab opens it from a row | `DockerResult` with `DockerImageHistoryPayload(layers)`, newest first: each layer's id (null for one built elsewhere), creation time, size, comment and tags, and its `CreatedBy` masked as a command line, since build arguments can carry secrets (8.9); an empty image is `invalidQuery` |
 | `AnswerKeystore(requestId, result)` (D62) | `KeystoreRequest(requestId, operation)`: the engine asks the app for the OS keystore |
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)` (K41, 4.7) | `CatalogReplaced(entries)` with each synced entry's `endpoint`, after `RequestRejected` when a pin could not be saved; `EndpointChanged(serverId)` when a sync changes a confirmed endpoint |

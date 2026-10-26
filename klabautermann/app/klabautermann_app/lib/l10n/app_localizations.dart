@@ -1816,6 +1816,119 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{1 more drive was not read.} other{{count} more drives were not read.}}'**
   String systemDriveHealthNotRead(int count);
 
+  /// System tab: heading of the section listing the server's accounts and who is logged in (ACC-01, ACC-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Users'**
+  String get systemAccountsTitle;
+
+  /// System tab, Users: column of the account's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get systemAccountsColumn;
+
+  /// System tab, Users: column of the account's numeric user ID.
+  ///
+  /// In en, this message translates to:
+  /// **'UID'**
+  String get systemAccountsUid;
+
+  /// System tab, Users: column saying why the account can become root, empty for most accounts.
+  ///
+  /// In en, this message translates to:
+  /// **'Root access'**
+  String get systemAccountsRoot;
+
+  /// System tab, Users: column of the account's groups, its primary group first.
+  ///
+  /// In en, this message translates to:
+  /// **'Groups'**
+  String get systemAccountsGroups;
+
+  /// System tab, Users: column of the account's login shell.
+  ///
+  /// In en, this message translates to:
+  /// **'Shell'**
+  String get systemAccountsShell;
+
+  /// System tab, Users: one reason the account can become root; reason is the engine's RootEquivalence name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, uidZero{UID 0} adminGroup{sudo, wheel or admin group} dockerGroup{docker group} other{Can become root}}'**
+  String systemAccountsRootReason(String reason);
+
+  /// System tab, Users: why a read read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{The server is not connected, so its accounts could not be read.} unreadable{The server\'s answer could not be read as its accounts.} transport{The connection failed while the accounts were read.} other{The accounts could not be read.}}'**
+  String systemAccountsFailed(String reason);
+
+  /// System tab, Users: shown while the first read runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading accounts…'**
+  String get systemAccountsReading;
+
+  /// System tab, Users: accounts past the read's limit, as on a host whose directory lists thousands.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more account is not listed.} other{{count} more accounts are not listed.}}'**
+  String systemAccountsNotListed(int count);
+
+  /// System tab, Users: button that lists the accounts without a login shell or below the people's UID range, hidden by default.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Show 1 service account} other{Show {count} service accounts}}'**
+  String systemAccountsShowSystem(int count);
+
+  /// System tab, Users: button that hides the service accounts again.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide service accounts'**
+  String get systemAccountsHideSystem;
+
+  /// System tab, Users: heading of the list of current logins.
+  ///
+  /// In en, this message translates to:
+  /// **'Logged in'**
+  String get systemAccountsSessionsTitle;
+
+  /// System tab, Users: the server lists no login.
+  ///
+  /// In en, this message translates to:
+  /// **'No one is logged in.'**
+  String get systemAccountsSessionsNone;
+
+  /// System tab, Users: the server's who printed lines the app could not parse, as BusyBox's.
+  ///
+  /// In en, this message translates to:
+  /// **'Who is logged in is unknown: this server\'s who prints a format the app does not read.'**
+  String get systemAccountsSessionsUnknown;
+
+  /// System tab, Users: a local login; since is when it began, in this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'{user} on {line}, since {since}'**
+  String systemAccountsSessionLocal(String user, String line, DateTime since);
+
+  /// System tab, Users: a remote login with the host or address it came from; since is when it began, in this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'{user} on {line} from {from}, since {since}'**
+  String systemAccountsSessionRemote(
+    String user,
+    String line,
+    String from,
+    DateTime since,
+  );
+
+  /// System tab, Users: button that reads the accounts and logins again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemAccountsReadAgain;
+
   /// Drive health table: column of the drive's model, or its device where it reports none.
   ///
   /// In en, this message translates to:
@@ -6885,6 +6998,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Which images are in use is unknown: this engine\'s API reports no count, and the containers could not be listed.'**
   String get dockerImagesUseUnknown;
+
+  /// Image history sheet title (IMG-04): the image's tags, or its short id when it has none.
+  ///
+  /// In en, this message translates to:
+  /// **'{image}: history'**
+  String dockerImageHistoryTitle(String image);
+
+  /// Image history sheet: shown while the engine reads the image's layers.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the image\'s history…'**
+  String get dockerImageHistoryReading;
+
+  /// Image history sheet: the daemon answered with an empty history.
+  ///
+  /// In en, this message translates to:
+  /// **'The engine reports no layers for this image.'**
+  String get dockerImageHistoryEmpty;
+
+  /// Image history sheet: how many layer instructions the engine masked, since build arguments can hold secrets.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 instruction holds masked values. Reveal values shows them for {seconds} seconds.} other{{count} instructions hold masked values. Reveal values shows them for {seconds} seconds.}}'**
+  String dockerImageHistoryMasked(int count, int seconds);
+
+  /// Image history sheet: a layer whose CreatedBy is empty, as for an imported base layer.
+  ///
+  /// In en, this message translates to:
+  /// **'No instruction recorded'**
+  String get dockerImageHistoryNoInstruction;
+
+  /// Image history sheet: the label before a layer's comment, such as the builder that made it.
+  ///
+  /// In en, this message translates to:
+  /// **'Comment'**
+  String get dockerImageHistoryComment;
+
+  /// Image history sheet: why the history read failed, by DockerQueryFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server\'s capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} notFound{The engine no longer has this image.} daemonError{The engine refused or failed to read the image\'s history.} connectionFailed{The connection to the engine failed while reading the history.} cancelled{The read stopped before it ran.} other{The image\'s history could not be read.}}'**
+  String dockerImageHistoryFailed(String reason);
 
   /// Images list: the server's link has a session limit (03 §5.2) on a relay route.
   ///

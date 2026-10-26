@@ -16,6 +16,7 @@ import 'models/engine_info.dart';
 import 'models/events.dart';
 import 'models/exec.dart';
 import 'models/image.dart';
+import 'models/image_history.dart';
 import 'models/network.dart';
 import 'models/pull.dart';
 import 'models/stats.dart';
@@ -457,6 +458,22 @@ extension DockerEndpoints on DockerClient {
     timeout: timeout,
     cancelToken: cancelToken,
   );
+
+  /// `GET /images/{name}/history` (03 §7.14 IMG-04): the image's layers,
+  /// newest first.
+  Future<DockerParseResult<List<ImageHistoryEntry>>> imageHistory(
+    String name, {
+    Duration? timeout,
+    DockerCancelToken? cancelToken,
+  }) async {
+    final res = await request(
+      'GET',
+      '/images/${_seg(name)}/history',
+      timeout: timeout,
+      cancelToken: cancelToken,
+    );
+    return parseImageHistory(_decodeBuffered(res.body, 'image history').value);
+  }
 
   /// `POST /images/create?fromImage=&tag=` (03 §5.6, §7.14 IMG-03):
   /// concatenated JSON progress values keyed by layer id. Closing the

@@ -162,6 +162,8 @@ export 'src/models/image.dart'
         ImageSummary,
         parseImageInspect,
         parseImageSummaries;
+export 'src/models/image_history.dart'
+    show ImageHistoryEntry, parseImageHistory;
 export 'src/models/network.dart'
     show
         NetworkContainer,

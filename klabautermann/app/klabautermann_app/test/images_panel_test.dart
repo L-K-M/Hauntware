@@ -692,4 +692,137 @@ void main() {
       }, skip: !goldensCompareHere);
     }
   });
+
+  group('history (IMG-04)', () {
+    /// The history reads the panel sent, oldest first.
+    List<DockerImageHistoryQuery> reads(_Panel panel) => [
+      for (final query
+          in panel.engine.sentOfType<DockerQuery>().cast<DockerQuery>())
+        if (query.query case final DockerImageHistoryQuery read) read,
+    ];
+
+    Future<void> answer(
+      WidgetTester tester,
+      _Panel panel,
+      DockerPayload payload,
+    ) async {
+      final query = panel.engine.sentOfType<DockerQuery>().last as DockerQuery;
+      await panel.emit(tester, dockerAnswer(query, payload));
+    }
+
+    /// postgres:16's layers as the engine sends them: an instruction
+    /// holding a build argument's value, masked; one built elsewhere; and
+    /// an imported base layer with no instruction.
+    final layers = DockerImageHistoryPayload([
+      ImageLayer(
+        id: _postgres,
+        created: _now.subtract(const Duration(days: 4)),
+        createdBy: MaskedValue.redacted(
+          '/bin/sh -c #(nop)  ENV API_TOKEN=${MaskedValue.maskToken}',
+          '/bin/sh -c #(nop)  ENV API_TOKEN=s3cret',
+        ),
+        size: 0,
+        tags: const ['postgres:16'],
+      ),
+      ImageLayer(
+        createdBy: MaskedValue.plain('RUN |1 VERSION=2 /bin/sh -c make'),
+        size: 4096,
+        comment: 'buildkit.dockerfile.v0',
+      ),
+      ImageLayer(createdBy: MaskedValue.plain(''), size: 1024),
+    ]);
+
+    testWidgets('a click on a row reads its history by id and shows each '
+        'layer, its instruction masked', (tester) async {
+      final panel = await _pump(tester);
+      await panel.list(tester);
+
+      await tester.tap(find.text('postgres:16'));
+      await tester.pumpAndSettle();
+      expect(reads(panel).single.image, _postgres);
+      expect(find.text("Reading the image's history…"), findsOneWidget);
+
+      await answer(tester, panel, layers);
+      expect(find.text('postgres:16: history'), findsOneWidget);
+      expect(
+        find.text('/bin/sh -c #(nop)  ENV API_TOKEN=${MaskedValue.maskToken}'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('s3cret'), findsNothing);
+      expect(find.text('RUN |1 VERSION=2 /bin/sh -c make'), findsOneWidget);
+      expect(find.text('No instruction recorded'), findsOneWidget);
+      expect(find.text('ID: 8b7a6c5d4e3f'), findsOneWidget);
+      expect(find.text('Tags: postgres:16'), findsOneWidget);
+      expect(find.text('Created: Oct 11, 2026'), findsOneWidget);
+      expect(find.text('Size: 4 KiB'), findsOneWidget);
+      expect(find.text('Comment: buildkit.dockerfile.v0'), findsOneWidget);
+      // The layer built elsewhere has no id to show.
+      expect(find.textContaining('ID: '), findsOneWidget);
+      expect(
+        find.text(
+          '1 instruction holds masked values. Reveal values shows them for '
+          '30 seconds.',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('reveals the masked values for 30 seconds and masks them '
+        'again when the app turns inactive', (tester) async {
+      final panel = await _pump(tester);
+      await panel.list(tester);
+      await tester.tap(find.text('postgres:16'));
+      await tester.pumpAndSettle();
+      await answer(tester, panel, layers);
+
+      const revealed = '/bin/sh -c #(nop)  ENV API_TOKEN=s3cret';
+      await tester.tap(find.text('Reveal values'));
+      await tester.pumpAndSettle();
+      expect(find.text(revealed), findsOneWidget);
+      expect(find.text('Hide values'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 29));
+      expect(find.text(revealed), findsOneWidget);
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      expect(find.text(revealed), findsNothing);
+      expect(find.text('Reveal values'), findsOneWidget);
+
+      await tester.tap(find.text('Reveal values'));
+      await tester.pumpAndSettle();
+      expect(find.text(revealed), findsOneWidget);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pumpAndSettle();
+      expect(find.text(revealed), findsNothing);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    });
+
+    testWidgets('a phone row opens the history on a tap; a failed read says '
+        'why and reads again on retry', (tester) async {
+      final panel = await _pump(tester, size: _phone);
+      await panel.list(tester);
+
+      await tester.tap(find.text('myorg/worker:5'));
+      await tester.pumpAndSettle();
+      expect(reads(panel).single.image, _worker);
+
+      await answer(
+        tester,
+        panel,
+        const DockerQueryFailed(DockerQueryFailure.notFound),
+      );
+      expect(find.text('The engine no longer has this image.'), findsOneWidget);
+
+      await tester.tap(find.text('Try again'));
+      await tester.pumpAndSettle();
+      expect(reads(panel), hasLength(2));
+
+      await answer(tester, panel, DockerImageHistoryPayload(const []));
+      expect(
+        find.text('The engine reports no layers for this image.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('masked values'), findsNothing);
+    });
+  });
 }

@@ -413,6 +413,52 @@ void main() {
       expect(details.hostConfig!.networkMode, 'bridge');
     });
 
+    test('the history of an image crosses with each instruction masked '
+        '(IMG-04)', () async {
+      final (h, daemon) = await ready();
+      // The client percent-encodes the reference's colon.
+      daemon.routes['/v1.52/images/app%3A1/history'] = jsonEncode([
+        {
+          'Id': 'sha256:${'a' * 64}',
+          'Created': 1760000000,
+          'CreatedBy': '/bin/sh -c #(nop)  ENV API_TOKEN=s3cret',
+          'Size': 0,
+          'Tags': ['app:1'],
+          'Comment': '',
+        },
+        {
+          'Id': '<missing>',
+          'Created': 1750000000,
+          'CreatedBy': 'RUN |1 VERSION=2 /bin/sh -c make install',
+          'Size': 4096,
+          'Tags': null,
+          'Comment': 'buildkit.dockerfile.v0',
+        },
+      ]);
+
+      final id = h.query(const DockerImageHistoryQuery('app:1'));
+      final layers = (await h.result(id) as DockerImageHistoryPayload).layers;
+      expect(layers, hasLength(2));
+      expect(
+        layers.first.createdBy.display,
+        '/bin/sh -c #(nop)  ENV API_TOKEN=${MaskedValue.maskToken}',
+      );
+      expect(
+        layers.first.createdBy.reveal(),
+        '/bin/sh -c #(nop)  ENV API_TOKEN=s3cret',
+      );
+      expect(layers.first.tags, ['app:1']);
+      expect(layers.first.comment, isNull);
+      expect(
+        (layers.last.id, layers.last.size, layers.last.comment),
+        (null, 4096, 'buildkit.dockerfile.v0'),
+      );
+      expect(layers.last.createdBy.isMasked, isFalse);
+
+      final empty = h.query(const DockerImageHistoryQuery(''));
+      expect(await h.result(empty), _failed(DockerQueryFailure.invalidQuery));
+    });
+
     test('the container list drops each command line; images keep their '
         'masked labels', () async {
       final (h, daemon) = await ready();
