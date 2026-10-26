@@ -3314,6 +3314,19 @@ unless the user enables admin mode for that panel.
 - **v1.** Tree, detail with masked environment (`environ` is
   NUL-separated like `cmdline` and goes through `tr` the same way), unit
   and container attribution from `/proc/<pid>/cgroup`, state highlighting.
+
+  As built (M6 N43a), the tree (PRC-03) and state highlighting (PRC-06)
+  are the app's, over the `procs` rows' parent PID and run state. The
+  Tree toggle orders the rows depth first, each under its parent and
+  siblings in the chosen sort; a row whose parent is not in the reading
+  (PID 1, `kthreadd`, a row a selection left out) is a root, and each row
+  shows once even where reused PIDs make a cycle. Indentation stops
+  growing past twelve levels. A filter in the tree keeps each match's
+  ancestors so it stays in place. State `Z` (zombie) and `D`
+  (uninterruptible sleep) carry a badge in words, and the list counts
+  them above the table. Runaway thread counts need the thread count,
+  which the `procs` rows do not carry yet; they come with the process
+  detail (N43b).
 - **v1.x.** Renice and ionice, per-process I/O (sudo).
 
 As built in M4 (E08, `klabautermann_host/lib/src/commands/commands.dart`),

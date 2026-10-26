@@ -1318,6 +1318,30 @@ abstract class AppLocalizations {
   /// **'Parent PID'**
   String get processesParentPid;
 
+  /// Processes tab: the toggle that shows each process under its parent (PRC-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Tree'**
+  String get processesTree;
+
+  /// Processes tab: the badge beside a process in a flagged run state (PRC-06): a zombie (state Z) or in uninterruptible sleep (state D). Lower case, as a label beside the command.
+  ///
+  /// In en, this message translates to:
+  /// **'{flag, select, zombie{zombie} uninterruptible{waiting on I/O} other{flagged}}'**
+  String processesFlag(String flag);
+
+  /// Processes tab: how many processes a run state flag marks (PRC-06), above the list.
+  ///
+  /// In en, this message translates to:
+  /// **'{flag, select, zombie{{count, plural, =1{1 zombie process} other{{count} zombie processes}}} uninterruptible{{count, plural, =1{1 process waiting on I/O it cannot be interrupted from} other{{count} processes waiting on I/O they cannot be interrupted from}}} other{{count, plural, =1{1 flagged process} other{{count} flagged processes}}}}'**
+  String processesFlagCount(String flag, int count);
+
+  /// Processes tab: what joins the flag counts above the list.
+  ///
+  /// In en, this message translates to:
+  /// **'; '**
+  String get processesFlagSeparator;
+
   /// Label of a process's run state letter as the kernel reports it (such as R or S), in a process's details.
   ///
   /// In en, this message translates to:
