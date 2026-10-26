@@ -16,6 +16,7 @@ import 'controllers/alert_notifications.dart';
 import 'controllers/alert_rules_controller.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/app_lock_controller.dart';
+import 'controllers/attention.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/device_name.dart';
 import 'controllers/pin_publication_controller.dart';
@@ -207,8 +208,14 @@ Future<void> main(List<String> args) async {
     stored: settings.tlsEndpoints,
     save: settings.setTlsEndpoints,
   );
+  // TRI-03's acknowledgements, device-local in settings.json (02 TRI-03).
+  final attentionAcks = AttentionAcks(
+    stored: settings.attention,
+    save: settings.setAttention,
+  );
   final monitoring = MonitoringController(
     engine,
+    attentionAcks: attentionAcks,
     dockerEndpointChoices: dockerEndpointChoices,
     stackFolders: stackFolders,
     tlsEndpoints: tlsEndpoints,

@@ -11341,6 +11341,132 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Checked {time}'**
   String systemUpdatesCheckedAt(DateTime time);
+
+  /// Fleet list: the attention notice (TRI-03), counting the unacknowledged problems.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 problem needs attention} other{{count} problems need attention}}'**
+  String attentionNotice(int count);
+
+  /// Fleet list: opens the attention queue.
+  ///
+  /// In en, this message translates to:
+  /// **'Show'**
+  String get attentionShow;
+
+  /// Title of the attention queue (TRI-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Attention'**
+  String get attentionTitle;
+
+  /// Attention queue: what it lists and how acknowledging works.
+  ///
+  /// In en, this message translates to:
+  /// **'Problems across the fleet, from what this device has read this run. Acknowledging one hides it until it clears; acknowledgements stay on this device.'**
+  String get attentionIntro;
+
+  /// Attention queue: no unacknowledged problem.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing needs attention.'**
+  String get attentionNone;
+
+  /// Attention queue: heading over the acknowledged problems.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Acknowledged (1)} other{Acknowledged ({count})}}'**
+  String attentionAcknowledgedHeading(int count);
+
+  /// Attention queue: closes it.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get attentionClose;
+
+  /// Attention queue: when a problem was acknowledged, in this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledged {time}'**
+  String attentionAcknowledgedAt(DateTime time);
+
+  /// Attention queue: acknowledges a problem, after an optional note.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledge'**
+  String get attentionAcknowledge;
+
+  /// Attention queue: takes an acknowledgement back.
+  ///
+  /// In en, this message translates to:
+  /// **'Reopen'**
+  String get attentionReopen;
+
+  /// Attention queue: opens the problem's server.
+  ///
+  /// In en, this message translates to:
+  /// **'Open server'**
+  String get attentionOpenServer;
+
+  /// Attention queue: the engine will not dial the server until the user decides (D46).
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting is blocked until you decide, for example about a changed host key.'**
+  String get attentionBlocked;
+
+  /// Attention queue: the link failed or waits before dialling again.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot be reached: the last attempt failed.'**
+  String get attentionUnreachable;
+
+  /// Attention queue: an in-app alert is raised, with its metric's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Alert raised: {metric}'**
+  String attentionAlert(String metric);
+
+  /// Attention queue: a failed systemd unit.
+  ///
+  /// In en, this message translates to:
+  /// **'Unit failed: {unit}'**
+  String attentionFailedUnit(String unit);
+
+  /// Attention queue: a mount's space at the critical level.
+  ///
+  /// In en, this message translates to:
+  /// **'{mount} is {percent} full'**
+  String attentionDiskFull(String mount, String percent);
+
+  /// Attention queue: a mount's inodes at the critical level.
+  ///
+  /// In en, this message translates to:
+  /// **'{mount} uses {percent} of its inodes'**
+  String attentionInodesFull(String mount, String percent);
+
+  /// Attention queue: a container whose health check fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Container unhealthy: {container}'**
+  String attentionUnhealthy(String container);
+
+  /// Attention queue: title of the note dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledge the problem'**
+  String get attentionNoteTitle;
+
+  /// Attention queue: the note field's label.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get attentionNoteLabel;
+
+  /// Attention queue: closes the note dialog without acknowledging.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get attentionCancel;
 }
 
 class _AppLocalizationsDelegate
