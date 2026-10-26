@@ -2096,7 +2096,8 @@ is on main:
   certificate resolver or a `websecure` entry point; none while
   `traefik.enable=false`) and caddy-docker-proxy site addresses. Only
   plain `http` and `https` addresses without credentials become links,
-  and each opens in the system browser. Mute labels are not read yet:
+  and each opens in the system browser, or shows as text to copy
+  where the app has no launcher. Mute labels are not read yet:
   Klabautermann sends no per-container notifications for them to
   silence.
 - Container processes (M6 N17a, CTR-10): a running container's details
