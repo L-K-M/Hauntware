@@ -4094,7 +4094,14 @@ TLS. The section checks when it shows, after an edit and on request.
   grouped by compose project, Swarm task names parsed defensively.
   Lifecycle (CTR-02, CTR-05, CTR-06): start, stop, restart, pause, unpause,
   kill with a signal, remove, always by full ID after the ownership (8.7)
-  and protected-target checks; typed confirmation when `v=1`. Inspect
+  and protected-target checks; typed confirmation when `v=1`. Bulk
+  actions (CTR-07): `ContainerBulkAction` starts, stops, restarts or
+  removes up to 100 containers [E] by full id as one plan, a step per
+  container in the order given, confirmed once at the tier its most
+  guarded container needs. It leaves out a container whose state does
+  not take the verb as its own actions offer it (removal never forces,
+  so only containers that are not up), and an id the engine no longer
+  lists refuses the plan as a changed target. Inspect
   (CTR-03): masked values with reveal; never synced, persisted or sent to an
   LLM without consent. Health (CTR-04). Logs (CTX-01, CTX-02): 5.6; when the
   logging driver keeps no readable logs, the view names the driver. List
@@ -4992,6 +4999,7 @@ OperationPlan {
     - `StartTimer`;
     - `ContainerAction`;
     - `RemoveContainer`;
+    - `ContainerBulkAction` (M6 N16b, CTR-07);
     - `RemoveImage`;
     - `StackAction` (act anyway);
     - `RedeployStack` (remove orphans).

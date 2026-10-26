@@ -4914,6 +4914,46 @@ final class ContainerAction extends ActionIntent {
   final KillSignal? signal;
 }
 
+/// What [ContainerBulkAction] does to each container it names (CTR-07).
+enum ContainerBulkVerb {
+  start,
+  stop,
+  restart,
+
+  /// Removal without its anonymous volumes and without `force`, so only
+  /// a container that is not up.
+  remove;
+
+  /// Whether a container in [state], as the Engine API names it, takes
+  /// this verb, as its own actions offer it: start for one that is not
+  /// up, stop for one running or restarting, restart for one running,
+  /// remove for one not up. Paused and removing ones take none.
+  bool appliesTo(String? state) => switch (this) {
+    start || remove => const {'created', 'exited', 'dead'}.contains(state),
+    stop => state == 'running' || state == 'restarting',
+    restart => state == 'running',
+  };
+}
+
+/// The most containers one [ContainerBulkAction] names [E]: each takes
+/// a request to plan and one to re-validate.
+const kContainerBulkMax = 100;
+
+/// One verb on several containers (CTR-07), as one plan with a step per
+/// container in [containerIds]' order, each by its full id. The engine
+/// leaves out a container whose state does not take [verb]
+/// ([ContainerBulkVerb.appliesTo]) and refuses when none is left.
+final class ContainerBulkAction extends ActionIntent {
+  ContainerBulkAction(
+    super.serverId, {
+    required Iterable<String> containerIds,
+    required this.verb,
+  }) : containerIds = List.unmodifiable(containerIds);
+
+  final List<String> containerIds;
+  final ContainerBulkVerb verb;
+}
+
 /// Runs [argv] once in [containerId] without a TTY (03 §7.13, CTX-08), as
 /// [user] where set, and reports its output and exit code in
 /// [ActionFinished.output] and [ActionFinished.exitCode].
