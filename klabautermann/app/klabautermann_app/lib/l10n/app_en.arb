@@ -1761,6 +1761,55 @@
       }
     }
   },
+  "systemProcessorTitle": "Processor",
+  "@systemProcessorTitle": {
+    "description": "System tab: the heading of the processor section (CPU-07)."
+  },
+  "systemProcessorReading": "Reading the processor…",
+  "@systemProcessorReading": {
+    "description": "System tab, Processor: shown while the processor is read."
+  },
+  "systemProcessorReadAgain": "Read again",
+  "@systemProcessorReadAgain": {
+    "description": "System tab, Processor: the button that reads the processor again."
+  },
+  "systemProcessorModel": "Model",
+  "@systemProcessorModel": {
+    "description": "System tab, Processor: the label of the processor's model name, or its vendor where the server names no model."
+  },
+  "systemProcessorNoModel": "This processor does not report a model name, as is common on ARM boards.",
+  "@systemProcessorNoModel": {
+    "description": "System tab, Processor: why the model is unknown after a read that succeeded."
+  },
+  "systemProcessorSockets": "Sockets",
+  "@systemProcessorSockets": {
+    "description": "System tab, Processor: the label of the number of physical processor packages."
+  },
+  "systemProcessorCores": "Cores",
+  "@systemProcessorCores": {
+    "description": "System tab, Processor: the label of the number of physical cores across all sockets."
+  },
+  "systemProcessorThreadsPerCore": "Threads per core",
+  "@systemProcessorThreadsPerCore": {
+    "description": "System tab, Processor: the label of how many hardware threads one core runs; 2 with simultaneous multithreading."
+  },
+  "systemProcessorLogical": "Logical CPUs",
+  "@systemProcessorLogical": {
+    "description": "System tab, Processor: the label of how many CPUs the kernel counts."
+  },
+  "systemProcessorUsable": "Usable CPUs",
+  "@systemProcessorUsable": {
+    "description": "System tab, Processor: the label of how many CPUs the login's processes may run on: fewer than the logical CPUs when the processes are pinned to some of them, as in a container given a CPU set. A CPU time quota does not lower it."
+  },
+  "systemProcessorFailed": "{failure, select, noLink{Not connected to the server.} denied{The server refused the processor read.} missing{The server lacks the tools the processor read runs.} other{The processor read failed.}}",
+  "@systemProcessorFailed": {
+    "description": "System tab, Processor: why the processor read nothing, by reason.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
   "systemPortsTitle": "Listening ports",
   "@systemPortsTitle": {
     "description": "System tab: the heading of the listening ports section (NET-04)."
@@ -6361,7 +6410,7 @@
   "@activityColumnResult": {
     "description": "Column of the activity log: how the run ended."
   },
-  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} PowerAction{Reboot or shut down} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
+  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} PowerAction{Reboot or shut down} ContainerAction{Container action} RemoveContainer{Remove container} ContainerBulkAction{Containers action} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
   "@activityAction": {
     "description": "An activity log row's action; action is the engine's intent type name.",
     "placeholders": {
@@ -6759,6 +6808,97 @@
   "dockerTabNetworks": "Networks",
   "@dockerTabNetworks": {
     "description": "Docker tab: the sub-tab listing networks."
+  },
+  "dockerTabEvents": "Events",
+  "@dockerTabEvents": {
+    "description": "Docker tab: the sub-tab with the engine's events timeline (DKE-03)."
+  },
+  "dockerEventsBuffer": "Events show from when Klabautermann started following them. The engine keeps only a limited buffer, so events while the stream was lost may be missing.",
+  "@dockerEventsBuffer": {
+    "description": "Docker tab, Events: what the timeline covers."
+  },
+  "dockerEventsWaiting": "Waiting for the events stream…",
+  "@dockerEventsWaiting": {
+    "description": "Docker tab, Events: shown before the watch delivered the timeline."
+  },
+  "dockerEventsFailed": "{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} connectionFailed{The connection to the engine failed while following its events.} other{The engine's events could not be followed.}}",
+  "@dockerEventsFailed": {
+    "description": "Docker tab, Events: why the watch failed, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerEventsAll": "All",
+  "@dockerEventsAll": {
+    "description": "Docker tab, Events: the filter chip that shows every event type."
+  },
+  "dockerEventsKind": "{kind, select, container{Containers} image{Images} volume{Volumes} network{Networks} other{Other}}",
+  "@dockerEventsKind": {
+    "description": "Docker tab, Events: a filter chip for one event type.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerEventsSearch": "Search by name, action or image",
+  "@dockerEventsSearch": {
+    "description": "Docker tab, Events: the search field's hint."
+  },
+  "dockerEventsNone": "No events yet. They appear here as the engine reports them.",
+  "@dockerEventsNone": {
+    "description": "Docker tab, Events: the timeline holds no event."
+  },
+  "dockerEventsNoMatch": "No event matches the filter.",
+  "@dockerEventsNoMatch": {
+    "description": "Docker tab, Events: the filter or search hides every event."
+  },
+  "dockerEventsLine": "{name}: {action}",
+  "@dockerEventsLine": {
+    "description": "Docker tab, Events: one event, what it happened to and the engine's action as it names it (start, die, health_status: unhealthy, pull).",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerEventsImage": "image {image}",
+  "@dockerEventsImage": {
+    "description": "Docker tab, Events: a container event's image.",
+    "placeholders": {
+      "image": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerEventsExitCode": "exit code {code}",
+  "@dockerEventsExitCode": {
+    "description": "Docker tab, Events: the code a container exited with.",
+    "placeholders": {
+      "code": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerEventsGap": "{resumed, select, true{Not followed from {from} to {until}. The engine sent the events it still held, so some may be missing.} other{Not followed from {from} to {until}. Events in this span are not shown.}}",
+  "@dockerEventsGap": {
+    "description": "Docker tab, Events: a span while the events stream was lost; from and until are times of day.",
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "until": {
+        "type": "String"
+      },
+      "resumed": {
+        "type": "String"
+      }
+    }
   },
   "dockerTabStacks": "Stacks",
   "@dockerTabStacks": {
@@ -7220,6 +7360,34 @@
     "placeholders": {
       "state": {
         "type": "String"
+      }
+    }
+  },
+  "dockerContainerStateFlagged": "{state} ({flag, select, restartLoop{restart loop} failed{failed} other{flagged}})",
+  "@dockerContainerStateFlagged": {
+    "description": "Containers list: a container's state with its flag (CTR-09), as a screen reader hears the state cell. state is dockerContainerState's text; flag is restartLoop (the daemon is restarting it after it exited) or failed (it exited with a code a stop does not leave).",
+    "placeholders": {
+      "state": {
+        "type": "String",
+        "example": "Restarting"
+      },
+      "flag": {
+        "type": "String",
+        "example": "restartLoop"
+      }
+    }
+  },
+  "dockerContainerFlagTooltip": "{flag, select, restartLoop{The engine is starting it again after it exited, as a restart policy does in a loop. The details show how often it restarted.} failed{Its last run exited with code {code}, which a stop does not leave.} other{Exit code {code}}}",
+  "@dockerContainerFlagTooltip": {
+    "description": "Containers list: the tooltip on a flagged container's state (CTR-09). flag is restartLoop or failed; code is the exit code in the container's status, which only failed shows.",
+    "placeholders": {
+      "flag": {
+        "type": "String",
+        "example": "failed"
+      },
+      "code": {
+        "type": "int",
+        "example": "1"
       }
     }
   },

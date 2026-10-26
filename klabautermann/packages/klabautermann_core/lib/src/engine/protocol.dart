@@ -9,6 +9,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         BackupEntry,
         CpuPercentages,
         BootEnd,
+        CpuTopology,
         CronSnapshot,
         DiskRate,
         EngineMode,
@@ -766,6 +767,11 @@ final class BootEndsQuery extends HostQuerySpec {
 /// [Kernels].
 final class KernelsQuery extends HostQuerySpec {
   const KernelsQuery();
+}
+
+/// The processor's model and topology (CPU-07), as [CpuTopologyRead].
+final class CpuTopologyQuery extends HostQuerySpec {
+  const CpuTopologyQuery();
 }
 
 /// The network interfaces and socket counts (NET-02, NET-03), as
@@ -2181,6 +2187,13 @@ final class Kernels extends HostPayload {
   const Kernels(this.check);
 
   final KernelCheck check;
+}
+
+/// [CpuTopologyQuery]'s processor.
+final class CpuTopologyRead extends HostPayload {
+  const CpuTopologyRead(this.topology);
+
+  final CpuTopology topology;
 }
 
 /// [InterfacesQuery]'s interfaces and sockets.
@@ -4195,6 +4208,10 @@ enum DockerWatchList {
 
   /// The network list (03 §7.15 DNW-01), as [DockerNetworksPayload].
   networks,
+
+  /// The engine's events while the app follows them (03 §7.12 DKE-03),
+  /// as [DockerEventsPayload].
+  events,
 }
 
 /// The most watches one server holds [E]: a Docker view holds one or two.
@@ -4309,6 +4326,68 @@ final class DockerNetworksPayload extends DockerPayload {
   const DockerNetworksPayload(this.networks);
 
   final List<NetworkSummary> networks;
+}
+
+/// The events timeline (DKE-03): the newest `kDockerEventsKept` entries,
+/// oldest first, events and the gaps between streams alike.
+final class DockerEventsPayload extends DockerPayload {
+  DockerEventsPayload(Iterable<DockerTimelineEntry> entries)
+    : entries = List.unmodifiable(entries);
+
+  final List<DockerTimelineEntry> entries;
+}
+
+/// One line of the events timeline.
+@immutable
+sealed class DockerTimelineEntry {
+  const DockerTimelineEntry(this.at);
+
+  /// When it happened, in UTC: the event's time, or when a gap began.
+  final DateTime at;
+}
+
+/// One engine event.
+final class DockerTimelineEvent extends DockerTimelineEntry {
+  const DockerTimelineEvent({
+    required DateTime at,
+    required this.type,
+    required this.action,
+    this.actorId,
+    this.name,
+    this.image,
+    this.exitCode,
+  }) : super(at);
+
+  /// `container`, `image`, `volume` or `network`.
+  final String type;
+
+  /// `start`, `die`, `health_status: unhealthy`, `pull`, ...
+  final String action;
+  final String? actorId;
+
+  /// The container's, volume's or network's name; an image's reference.
+  final String? name;
+
+  /// A container's image.
+  final String? image;
+
+  /// A container's exit code, on `die`.
+  final int? exitCode;
+}
+
+/// A span the app did not follow the events: the stream was lost from
+/// [at] until [until]. With [resumed] the stream asked the engine for the
+/// events of the span, which it keeps only in a bounded buffer; without
+/// it the span's events are not shown.
+final class DockerTimelineGap extends DockerTimelineEntry {
+  const DockerTimelineGap({
+    required DateTime at,
+    required this.until,
+    required this.resumed,
+  }) : super(at);
+
+  final DateTime until;
+  final bool resumed;
 }
 
 /// `/system/df`'s totals per type (02 OV-05), read in the shape the
@@ -4982,6 +5061,46 @@ final class ContainerAction extends ActionIntent {
   final String containerId;
   final ContainerVerb verb;
   final KillSignal? signal;
+}
+
+/// What [ContainerBulkAction] does to each container it names (CTR-07).
+enum ContainerBulkVerb {
+  start,
+  stop,
+  restart,
+
+  /// Removal without its anonymous volumes and without `force`, so only
+  /// a container that is not up.
+  remove;
+
+  /// Whether a container in [state], as the Engine API names it, takes
+  /// this verb, as its own actions offer it: start for one that is not
+  /// up, stop for one running or restarting, restart for one running,
+  /// remove for one not up. Paused and removing ones take none.
+  bool appliesTo(String? state) => switch (this) {
+    start || remove => const {'created', 'exited', 'dead'}.contains(state),
+    stop => state == 'running' || state == 'restarting',
+    restart => state == 'running',
+  };
+}
+
+/// The most containers one [ContainerBulkAction] names [E]: each takes
+/// a request to plan and one to re-validate.
+const kContainerBulkMax = 100;
+
+/// One verb on several containers (CTR-07), as one plan with a step per
+/// container in [containerIds]' order, each by its full id. The engine
+/// leaves out a container whose state does not take [verb]
+/// ([ContainerBulkVerb.appliesTo]) and refuses when none is left.
+final class ContainerBulkAction extends ActionIntent {
+  ContainerBulkAction(
+    super.serverId, {
+    required Iterable<String> containerIds,
+    required this.verb,
+  }) : containerIds = List.unmodifiable(containerIds);
+
+  final List<String> containerIds;
+  final ContainerBulkVerb verb;
 }
 
 /// Runs [argv] once in [containerId] without a TTY (03 §7.13, CTX-08), as
