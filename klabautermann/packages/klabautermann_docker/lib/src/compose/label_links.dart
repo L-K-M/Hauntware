@@ -156,9 +156,10 @@ Uri? _webUri(String text) {
   final String host;
   try {
     host = Uri.decodeComponent(uri.host);
-    // An escape that is not UTF-8 (`a%FF.example`) parses but does not
-    // decode, and names no host a browser can open either.
   } on FormatException {
+    // An escape that is not UTF-8 (`a%FF.example`) or is cut short
+    // (`%E2`) parses but throws here, and names no host a browser can
+    // open either.
     return null;
   }
   if (_placeholder.hasMatch(host)) return null;
