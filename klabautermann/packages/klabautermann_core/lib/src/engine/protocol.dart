@@ -4,11 +4,13 @@ import 'dart:typed_data';
 // `Collector` (its argument validators) and `ServerZone` (`offsetAt`) do.
 import 'package:klabautermann_host/klabautermann_host.dart'
     show
+        AccountsSnapshot,
         AnacronJob,
         BackupEntry,
         CpuPercentages,
         CronSnapshot,
         DiskRate,
+        EngineMode,
         FootprintRow,
         FsSnapshot,
         GpuSnapshot,
@@ -23,11 +25,11 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         NetRate,
         OpDirectoryKind,
         OpDirectoryListing,
+        ProcessDetail,
         ProcsSelection,
         SmartDisk,
-        AccountsSnapshot,
-        SystemdUnit,
         SystemctlVerb,
+        SystemdUnit,
         TempsSnapshot,
         ThresholdRule,
         TimerLastRun,
@@ -35,7 +37,6 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         UnitResources,
         UnitSocket,
         UnitsSnapshot,
-        EngineMode,
         EngineRuntime;
 // A masked process argument (03 §8.9): its display and toString carry the
 // mask, so the app shows a secret only through the reveal action. The
@@ -715,6 +716,17 @@ final class VarLogQuery extends HostQuerySpec {
 /// older ones and where the probe found no version.
 final class BootsQuery extends HostQuerySpec {
   const BootsQuery();
+}
+
+/// One process's details and what owns it (PRC-04, PRC-05), as
+/// [ProcessDetails], read as the login user. [startTicks] guards against
+/// a reused PID: a process that ended, or whose PID now names another,
+/// answers [ProcessEnded].
+final class ProcessDetailQuery extends HostQuerySpec {
+  const ProcessDetailQuery({required this.pid, required this.startTicks});
+
+  final int pid;
+  final int startTicks;
 }
 
 /// Redacts [lines] the app holds for an export (LOG-10, 03 §8.9) through
@@ -2015,6 +2027,33 @@ final class JournalBoots extends HostPayload {
   const JournalBoots(this.boots);
 
   final List<JournalBootEntry> boots;
+}
+
+/// [ProcessDetailQuery]'s answer: the process's details, without its
+/// environment, which crosses in [environment] with each value masked by
+/// its key (03 §8.9); null where the login user may not read it.
+final class ProcessDetails extends HostPayload {
+  ProcessDetails(this.detail, {List<EnvVar>? environment})
+    : environment = environment == null ? null : List.unmodifiable(environment);
+
+  final ProcessDetail detail;
+  final List<EnvVar>? environment;
+}
+
+/// Why a [ProcessDetailQuery] read no process.
+enum ProcessEnd {
+  /// The process has exited.
+  gone,
+
+  /// Its PID names another process now.
+  reused,
+}
+
+/// [ProcessDetailQuery]'s answer for a process no longer there.
+final class ProcessEnded extends HostPayload {
+  const ProcessEnded(this.end);
+
+  final ProcessEnd end;
 }
 
 /// A [HostQuery] that read nothing; [detail] is the end of its stderr,

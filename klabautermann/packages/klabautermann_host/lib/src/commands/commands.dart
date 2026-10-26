@@ -143,6 +143,20 @@ enum KillSignal {
   final String wireName;
 }
 
+/// [HostCommands.processDetail]'s exit when the PID's start ticks are not
+/// the ones asked for: it names another process now.
+const int kProcessDetailReused = 4;
+
+/// The line that opens each section of [HostCommands.processDetail]'s
+/// output, before the section's name.
+const String kProcessDetailMarker = '==';
+
+/// A section of [HostCommands.processDetail] the login user may not read.
+const String kProcessDetailDenied = '== denied';
+
+/// The most environment entries [HostCommands.processDetail] prints.
+const int kProcessEnvironLimit = 500;
+
 /// [HostCommands.guardedKill]'s exit when the signal was sent.
 const int kGuardedKillSignalled = 0;
 
@@ -550,6 +564,54 @@ abstract final class HostCommands {
       '$pid',
     ];
   }
+
+  /// PRC-04 and PRC-05's read of process [pid] (03 §7.2), as the login
+  /// user: its working directory, its `status` counters, its cgroups, its
+  /// limits, how many files it holds open and its environment, each
+  /// after a `== <section>` line `parseProcessDetail` reads, a section
+  /// the user may not read holding `== denied`. The environment comes
+  /// last: its values can hold newlines, so no section after it could be
+  /// told from them. It exits as [startTicks] does when the process is
+  /// gone or unreadable, and [kProcessDetailReused] when its start ticks
+  /// are not [startTicks]: the PID names another process now.
+  static List<String> processDetail(int pid, int startTicks) {
+    if (pid <= 0) {
+      throw HostCommandError('pid must be positive', argument: '$pid');
+    }
+    if (startTicks < 0) {
+      throw HostCommandError('negative start ticks', argument: '$startTicks');
+    }
+    return [
+      'sh',
+      '-c',
+      _kProcessDetailScript,
+      'klabautermann-process',
+      '$pid',
+      '$startTicks',
+    ];
+  }
+
+  static const _kProcessDetailScript =
+      '${kStartTicksFunction}klab_ticks "\$1" || exit \$?\n'
+      '[ "\$KT" = "\$2" ] || exit $kProcessDetailReused\n'
+      'p=/proc/\$1\n'
+      "echo '$kProcessDetailMarker cwd'\n"
+      "readlink \"\$p/cwd\" 2>/dev/null || echo '$kProcessDetailDenied'\n"
+      "echo '$kProcessDetailMarker status'\n"
+      "grep -E '^(Threads|VmSwap|voluntary_ctxt_switches|"
+      "nonvoluntary_ctxt_switches):' \"\$p/status\" 2>/dev/null\n"
+      "echo '$kProcessDetailMarker cgroup'\n"
+      'head -n 64 "\$p/cgroup" 2>/dev/null\n'
+      "echo '$kProcessDetailMarker limits'\n"
+      'cat "\$p/limits" 2>/dev/null\n'
+      "echo '$kProcessDetailMarker fds'\n"
+      'if ls "\$p/fd" >/dev/null 2>&1; then ls -1 "\$p/fd" | wc -l; '
+      "else echo '$kProcessDetailDenied'; fi\n"
+      "echo '$kProcessDetailMarker environ'\n"
+      'if e=\$(tr \'\\0\' \'\\n\' <"\$p/environ" 2>/dev/null); then '
+      'printf \'%s\\n\' "\$e" | head -n $kProcessEnvironLimit; '
+      "else echo '$kProcessDetailDenied'; fi\n"
+      'exit 0';
 
   /// Prints the owner of process [pid]'s `/proc` entry and its `comm`,
   /// `<uid> <comm>`, for planning a kill (03 §7.2): the uid decides

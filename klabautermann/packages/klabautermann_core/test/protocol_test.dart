@@ -141,6 +141,11 @@ void main() {
           ),
         ),
         const HostQuery(serverId: 'srv-1', queryId: 'h-1', query: BootsQuery()),
+        const HostQuery(
+          serverId: 'srv-1',
+          queryId: 'h-5',
+          query: ProcessDetailQuery(pid: 42, startTicks: 900),
+        ),
         const RedactLines('r-1', ['a', 'b']),
         const DockerQuery(
           serverId: 'srv-1',
@@ -375,6 +380,26 @@ void main() {
           serverId: 'srv-1',
           queryId: 'h-2',
           payload: HostQueryFailed(HostQueryFailure.noLink),
+        ),
+        HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-5',
+          payload: ProcessDetails(
+            ProcessDetail(
+              cwd: '/srv',
+              attribution: const ProcessAttribution(
+                unit: 'app.service',
+                containerId: null,
+              ),
+              openFilesLimit: const ProcessLimit(soft: 1024),
+            ),
+            environment: [EnvVar('TOKEN', MaskedValue.secret('x'))],
+          ),
+        ),
+        const HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-6',
+          payload: ProcessEnded(ProcessEnd.reused),
         ),
         const RedactedLines('r-1', 'a\nb'),
         FootprintState(

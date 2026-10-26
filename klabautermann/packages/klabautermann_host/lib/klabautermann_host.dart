@@ -43,6 +43,7 @@ export 'src/parse/models.dart';
 export 'src/parse/oncalendar.dart';
 export 'src/parse/ops.dart';
 export 'src/parse/parse_result.dart';
+export 'src/parse/process_detail.dart';
 export 'src/parse/procs.dart';
 export 'src/parse/smart.dart';
 export 'src/parse/temps.dart';
