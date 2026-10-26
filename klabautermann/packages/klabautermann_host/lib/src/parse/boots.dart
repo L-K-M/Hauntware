@@ -2,6 +2,8 @@
 /// [HostCommands.bootEnds] and [HostCommands.kernels] print them.
 library;
 
+import 'dart:math' as math;
+
 import 'package:meta/meta.dart';
 
 import '../commands/commands.dart' show HostCommands, kKernelsMarker;
@@ -74,7 +76,7 @@ KernelCheck? parseKernels(String raw) {
   final running = lines.first;
   final installed = [
     for (final line in lines.skip(markerAt + 1))
-      if (line.isNotEmpty && !line.contains('/')) line,
+      if (_release.hasMatch(line)) line,
   ]..sort(compareVersions);
   final KernelState state;
   if (installed.isEmpty) {
@@ -89,20 +91,50 @@ KernelCheck? parseKernels(String raw) {
   return KernelCheck(running: running, installed: installed, state: state);
 }
 
+/// A kernel release as `/lib/modules` names one: it starts with a digit,
+/// so a stray line of other output is not taken for a kernel.
+final _release = RegExp(r'^[0-9][A-Za-z0-9._+~-]*$');
+
 final _versionPart = RegExp(r'\d+|\D+');
+final _digits = RegExp(r'^\d+$');
 
 /// Orders kernel releases as `sort -V` does: digit runs by value, other
-/// runs as text, so `6.1.0-9` comes before `6.1.0-13`.
+/// runs as text, so `6.1.0-9` comes before `6.1.0-13`, and a `~` before
+/// anything, even the end, so `6.1.0-13~rc1` comes before `6.1.0-13`.
 int compareVersions(String a, String b) {
   final left = _versionPart.allMatches(a).map((m) => m[0]!).toList();
   final right = _versionPart.allMatches(b).map((m) => m[0]!).toList();
   for (var i = 0; i < left.length && i < right.length; i++) {
-    final x = int.tryParse(left[i]);
-    final y = int.tryParse(right[i]);
-    final order = x != null && y != null
-        ? x.compareTo(y)
-        : left[i].compareTo(right[i]);
+    final order = _digits.hasMatch(left[i]) && _digits.hasMatch(right[i])
+        ? BigInt.parse(left[i]).compareTo(BigInt.parse(right[i]))
+        : _compareText(left[i], right[i]);
     if (order != 0) return order;
   }
-  return left.length.compareTo(right.length);
+  if (left.length == right.length) return 0;
+
+  // The longer one goes first only when what it adds starts with `~`.
+  final longer = left.length > right.length ? left : right;
+  final shorterFirst = longer[math.min(left.length, right.length)].startsWith(
+    '~',
+  );
+  final leftLonger = identical(longer, left);
+  return (leftLonger != shorterFirst) ? 1 : -1;
+}
+
+/// dpkg's order for text: `~` before the end, the end before letters,
+/// letters before other characters.
+int _compareText(String a, String b) {
+  int weight(String text, int i) {
+    if (i >= text.length) return 0;
+    final unit = text.codeUnitAt(i);
+    if (unit == 0x7E) return -1;
+    final letter = (unit | 0x20) >= 0x61 && (unit | 0x20) <= 0x7A;
+    return letter ? unit : unit + 0x100;
+  }
+
+  for (var i = 0; i < a.length || i < b.length; i++) {
+    final order = weight(a, i).compareTo(weight(b, i));
+    if (order != 0) return order;
+  }
+  return 0;
 }

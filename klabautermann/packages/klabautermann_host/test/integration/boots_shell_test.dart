@@ -26,8 +26,7 @@ final _current = 'd' * 32;
 /// A `journalctl` that lists four boots, the current one last, and
 /// answers each earlier boot's journal as its name says.
 String get _fakeJournalctl =>
-    '''
-#!/bin/sh
+    '''#!/bin/sh
 case "\$*" in
   *--list-boots*)
     echo "IDX BOOT ID                          FIRST ENTRY                 LAST ENTRY"

@@ -145,6 +145,8 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Shut down cleanly'), findsNothing);
+    // The boots still show, with their ends unknown.
+    expect(find.text('Previous boot'), findsOneWidget);
 
     await tester.tap(find.text('Read again'));
     await tester.pump();

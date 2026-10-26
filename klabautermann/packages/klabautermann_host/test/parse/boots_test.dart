@@ -38,6 +38,7 @@ void main() {
         read('6.1.0-9-amd64', ['6.1.0-13-amd64', '6.1.0-9-amd64']),
       )!;
       expect(check.state, KernelState.newerInstalled);
+      expect(check.installed, ['6.1.0-9-amd64', '6.1.0-13-amd64']);
       expect(check.newest, '6.1.0-13-amd64');
     });
 
@@ -46,6 +47,20 @@ void main() {
         read('5.15.0-88-generic', ['5.15.0-91-generic']),
       )!;
       expect(check.state, KernelState.runningRemoved);
+      expect(check.newest, '5.15.0-91-generic');
+    });
+
+    test('lines that are no kernel release are skipped', () {
+      final check = parseKernels(
+        read('6.1.0-13-amd64', [
+          '6.1.0-13-amd64',
+          'ls: cannot access',
+          'zz-notes',
+          'extramodules',
+        ]),
+      )!;
+      expect(check.installed, ['6.1.0-13-amd64']);
+      expect(check.state, KernelState.current);
     });
 
     test('no module directory reads as unknown, and output without the '
@@ -67,5 +82,20 @@ void main() {
       '6.1.0-13',
       '6.10.2',
     ]);
+  });
+
+  test('a ~ orders before anything, even the end, as sort -V orders it', () {
+    final releases = ['6.1.0-13', '6.1.0-13~bpo1', '6.1.0-13a', '6.1.0-13~rc'];
+    expect(releases..sort(compareVersions), [
+      '6.1.0-13~bpo1',
+      '6.1.0-13~rc',
+      '6.1.0-13',
+      '6.1.0-13a',
+    ]);
+    expect(compareVersions('6.1.0', '6.1.0'), 0);
+    expect(
+      compareVersions('1.99999999999999999999', '1.100000000000000000000'),
+      lessThan(0),
+    );
   });
 }

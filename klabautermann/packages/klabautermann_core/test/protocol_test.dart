@@ -143,12 +143,12 @@ void main() {
         const HostQuery(serverId: 'srv-1', queryId: 'h-1', query: BootsQuery()),
         const HostQuery(
           serverId: 'srv-1',
-          queryId: 'h-2',
+          queryId: 'h-3',
           query: BootEndsQuery(),
         ),
         const HostQuery(
           serverId: 'srv-1',
-          queryId: 'h-3',
+          queryId: 'h-4',
           query: KernelsQuery(),
         ),
         const RedactLines('r-1', ['a', 'b']),

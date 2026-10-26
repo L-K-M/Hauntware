@@ -775,7 +775,8 @@ abstract final class HostCommands {
   /// clean when the boot's last journal lines show journald stopping or
   /// a shutdown target, unknown when the system journal is not readable
   /// for it (no message from PID 1), as for a user outside the journal
-  /// groups. `parseBootEnds` reads it.
+  /// groups. `parseBootEnds` reads it. Each `journalctl` reads no
+  /// stdin, which is the loop's list of boot IDs.
   static List<String> bootEnds() => const ['sh', '-c', _kBootEndsScript];
 
   static const _kBootEndsScript =
@@ -786,8 +787,8 @@ abstract final class HostCommands {
       'printf "%s\\n" "\$ids" | head -n \$((n - 1)) '
       '| tail -n $kBootEndsRead | while read -r id; do '
       'if [ -z "\$(journalctl -b "\$id" -q -n 1 -o cat --no-pager _PID=1 '
-      '2>/dev/null)" ]; then echo "\$id unknown"; continue; fi; '
-      'if journalctl -b "\$id" -q -n 40 -o cat --no-pager 2>/dev/null '
+      '</dev/null 2>/dev/null)" ]; then echo "\$id unknown"; continue; fi; '
+      'if journalctl -b "\$id" -q -n 40 -o cat --no-pager </dev/null 2>/dev/null '
       "| grep -qE 'Journal stopped|Reached target .*(Reboot|Power-Off|Halt|Shutdown)'; "
       'then echo "\$id clean"; else echo "\$id unclean"; fi; done';
 

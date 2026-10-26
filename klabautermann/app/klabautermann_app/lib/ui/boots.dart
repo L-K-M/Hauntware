@@ -171,7 +171,9 @@ class _BootsSectionState extends State<BootsSection> {
     );
     switch (_boots) {
       case null:
-        return _kernels == null ? const [] : [heading];
+        return _kernels == null
+            ? const []
+            : [heading, Text(l10n.systemBootsReading)];
       case HostQueryFailed(:final failure):
         return [heading, Text(l10n.logsPanelBootsFailed(failure.name))];
       case JournalBoots(:final boots):
@@ -227,7 +229,12 @@ class _BootLine extends StatelessWidget {
         spacing: 8,
         children: [
           Icon(
-            unclean ? Icons.warning_amber : Icons.power_settings_new,
+            unclean
+                ? Icons.warning_amber
+                // The running boot has not ended.
+                : boot.offset == 0
+                ? Icons.play_circle_outline
+                : Icons.power_settings_new,
             size: 20,
             color: unclean
                 ? theme.colorScheme.error
