@@ -179,14 +179,24 @@ void main() {
         final copyright = _read(
           '${deb.path}/usr/share/doc/$_packageName/copyright',
         );
-        expect(copyright, startsWith('Klabautermann: '));
-        expect(copyright, contains('Upstream-Version: $version\n'));
-        expect(copyright, contains(_read('../../LICENSE')));
-        // The Unlicense covers the app's own code; the bundled components'
-        // texts are the bundle's NOTICES, shipped readable beside it.
-        expect(copyright, contains('Third-Party-Notices.txt next to this file'));
+        // Machine-readable (DEP-5): the Unlicense covers the app's own code,
+        // the bundle adds the third-party components, whose texts are the
+        // bundle's NOTICES, shipped readable beside it.
+        expect(copyright, startsWith('Format: https://www.debian.org/'));
+        expect(copyright, contains('\nComment: Klabautermann: '));
+        expect(copyright, contains('\nUpstream-Version: $version\n'));
+        expect(copyright, contains('\n\nFiles: *\n'));
+        expect(copyright, contains('\n\nFiles: usr/lib/$_packageName/*\n'));
+        final license = _dep5Text(_read('../../LICENSE'));
+        expect(copyright, contains('\n\nLicense: Unlicense\n$license'));
         expect(
-          _read('${deb.path}/usr/share/doc/$_packageName/Third-Party-Notices.txt'),
+          copyright,
+          contains('Third-Party-Notices.txt next to this file'),
+        );
+        expect(
+          _read(
+            '${deb.path}/usr/share/doc/$_packageName/Third-Party-Notices.txt',
+          ),
           _stubNotices,
         );
 
@@ -284,6 +294,16 @@ String _desktopEntry({required String exec}) =>
     '# The packaged build reports this X11 WM_CLASS class (the instance is the'
     '\n# lowercase application id); StartupWMClass is case-sensitive.\n'
     'StartupWMClass=$_linuxStartupWmClass\n';
+
+/// [text] as DEP-5 continuation lines: each line indented by one space,
+/// an empty line written as " .".
+String _dep5Text(String text) {
+  final lines = [
+    for (final line in text.trimRight().split('\n'))
+      line.trim().isEmpty ? ' .' : ' $line',
+  ];
+  return '${lines.join('\n')}\n';
+}
 
 /// The stub bundle's NOTICES, which the packages must ship readable.
 const _stubNotices = 'ghost_fonts\n\nUnlicense\n';
