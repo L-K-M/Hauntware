@@ -298,6 +298,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'$surface-${_subscriptionCount++}'",
     // A host query's id, which its HostResult answers by (LOG-08, LOG-09).
     r"'host-${_nextHostQuery++}'",
+    // A TLS check's id, which its TlsEndpointsChecked answers by (CRT-01).
+    r"'tls-${_nextTlsCheck++}'",
     // A unit read's request id, never shown.
     r"'unit-${_nextUnitQuery++}'",
     // An export redaction's id, which its RedactedLines answers by
@@ -609,6 +611,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'\n'",
     "r'^[a-zA-Z0-9][a-zA-Z0-9_.-]+\$'",
   },
+  // The line break between the endpoints the user lists (CRT-01).
+  'lib/controllers/tls_endpoints.dart': {r"'\n'"},
+  'lib/ui/certificates.dart': {r"'\n'"},
   'lib/ui/docker/unlisted_stacks.dart': {
     // The path separator a found file's folder and name split at, the
     // folders' list separator inside the ARB sentence, and the line
