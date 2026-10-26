@@ -538,6 +538,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${DockerWatchList.containers.name}.row.${_rowKey(entry)}'",
     r"'\n'",
     r"'group.${project ?? ''}'",
+    // The selection column's table id (CTR-07), a key.
+    "'select'",
     "''",
   },
   'lib/ui/docker/containers_view.dart': {
