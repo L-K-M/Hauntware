@@ -163,6 +163,11 @@ void main() {
         ),
         const HostQuery(
           serverId: 'srv-1',
+          queryId: 'h-cpu',
+          query: CpuTopologyQuery(),
+        ),
+        const HostQuery(
+          serverId: 'srv-1',
           queryId: 'h-net',
           query: InterfacesQuery(),
         ),
@@ -292,6 +297,7 @@ void main() {
         const ReadSmart('srv-1', requestId: 'r-1'),
         const ReadPackages('srv-1', requestId: 'r-1', fresh: true),
         const ReadRestarts('srv-1', requestId: 'r-1'),
+        const ReadFirewall('srv-1', requestId: 'r-1'),
         const ReadSshdPosture('srv-1', requestId: 'r-1'),
         const ReadAccounts('srv-1', requestId: 'r-1'),
         const ReadHistory('srv-1', HistoryTier.minute, requestId: 'h-1'),
@@ -466,6 +472,20 @@ void main() {
               running: '6.1.0-13-amd64',
               installed: ['6.1.0-13-amd64'],
               state: KernelCheckState.current,
+            ),
+          ),
+        ),
+        HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-cpu',
+          payload: CpuTopologyRead(
+            CpuTopology(
+              models: ['Cortex-A53', 'Cortex-A72'],
+              vendor: 'ARM',
+              logicalCpus: 6,
+              usableCpus: 6,
+              cores: 6,
+              threadsPerCore: 1,
             ),
           ),
         ),
@@ -1713,6 +1733,15 @@ void main() {
         () => spec(source: bounded, follow: true),
         throwsA(isA<AssertionError>()),
         reason: 'a follow reads up to the present',
+      );
+
+      expect(
+        () => spec(
+          source: ContainerLogSource('db', until: DateTime.utc(2026, 10, 15)),
+          follow: true,
+        ),
+        throwsA(isA<AssertionError>()),
+        reason: 'a container follow reads up to the present too',
       );
 
       expect(spec(source: bounded).follow, isFalse);

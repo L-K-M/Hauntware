@@ -3265,6 +3265,21 @@ unless the user enables admin mode for that panel.
   steal explained), PSI (absence is normal), model and topology, OOM kills
   linked to journal entries, configurable cards, top lists, quick actions,
   threshold bands, bottom dock.
+- **As built (M6 N42c).** CPU-07's model and topology are a host query,
+  `CpuTopologyQuery`, shown in the System tab's Processor section beside
+  the identity, since they do not change while the Overview samples. It
+  prints `nproc`, `lscpu -J` in the C locale, whose field names `lscpu`
+  translates otherwise, and the model and placement lines of
+  `/proc/cpuinfo`, without the flags that make it about 1.5 KiB a CPU.
+  Each model's sockets and cores per socket (or clusters and cores per
+  cluster, on arm64 boards with no sockets) follow its name, or precede
+  it before util-linux 2.37, and a big.LITTLE board lists two models
+  whose cores add up. Without `lscpu` (BusyBox) the cpuinfo lines count
+  the CPUs and their distinct sockets and cores where every CPU names
+  both; arm64's names no model, which the section says. Inside a
+  container the socket, core and CPU counts are the host machine's, so
+  they read as unknown with D50's reason; `nproc`'s usable CPUs, which a
+  cpuset limits, stay.
 - **v1.x.** Frequency, per-cgroup CPU (paths per cgroup driver [U]), ZFS
   ARC as cache, zram and zswap [U].
 
@@ -3423,6 +3438,18 @@ the guarded kill needs it.
   have one, and shows each interface's current rates from the `core`
   stream's per-interface rates. 02's `ss -s` is not read: the files
   answer without `iproute2`.
+- **As built (M6 N35).** NET-06 is one elevated read in admin mode, as
+  ufw, firewalld, nft and iptables all need root. It prints `ufw status
+  verbose`, firewalld's state and, while it runs, `firewall-cmd
+  --list-all-zones`, `nft -j list ruleset`, `iptables-save` and
+  `ip6tables-save`, each after its marker, only where the tool is
+  installed, and each cut to 4,000 lines. The System tab's Firewall
+  section reads it on request. It shows ufw's state, default policies
+  and rules, and firewalld's default and active zones with their
+  interfaces, sources, services and ports. For nftables and both
+  iptables families it shows each chain with a policy or rules, with
+  its policy and rule count. A host with none of the tools says so.
+  Rules are read, never changed.
 - **v1.x.** Exposure map (the device probe is the ground truth and is
   labelled with its vantage point; Docker-published ports bypass ufw INPUT
   rules unless `DOCKER-USER` restricts them [U: current wording]); routes and
@@ -4016,6 +4043,17 @@ TLS. The section checks when it shows, after an edit and on request.
   installed kernel; doctor checklist; "why is it slow"; attention queue
   (acknowledgements device-local); container diagnose without an LLM.
 
+  As built (M6 N53b), "why is it slow" (TRI-02) is a card under the
+  overview's Health card, from the live core reading alone
+  (`ui/slowness.dart`): tasks waiting for a CPU 20 % of the last 10 s
+  (PSI `cpu some`; without PSI, a load of 1.5 per core), steal of 10 %,
+  tasks stalled on storage 10 % (PSI `io some`; without PSI, iowait of
+  10 %), a disk at 50 ms per request or busy 90 %, tasks stalled for
+  memory 5 % (PSI `memory some`), and swap half full while under 10 % of
+  memory is available, each in a sentence. It points to Processes for
+  the top processes and to System for recent out-of-memory kills, which
+  stay their own reads.
+
   As built (M6 N37a, collector-set version 11), the slow `temps`
   collector reads each hwmon chip's `temp<N>_input` with its `_max`,
   `_crit` and `_label` through builtins, without `sensors`, and lists the
@@ -4104,6 +4142,19 @@ TLS. The section checks when it shows, after an edit and on request.
   boots, and newer distributions replace wtmp with wtmpdb. The section lists the current boot and those ten,
   newest first, each with its start and how long its journal ran, and
   counts the older boots the Logs panel's boot picker still lists.
+
+  As built (M6 N53a), container diagnose (TRI-04) reads the inspect the
+  details already hold, in `ui/docker/container_diagnosis.dart`, with
+  no query of its own: out of memory over the container's limit or on
+  the host; exit code 137 without the OOM flag (SIGKILL), 139
+  (segfault), 126 and 127 (command not executable, not found), any other
+  exit a stop (130, 143) does not leave; the engine's `State.Error`;
+  exit code 0 while restarting (the main process leaves the
+  foreground); a restart loop (restarting, or at least three restarts
+  since the last start by hand); and a failing health check. A running
+  container's exit code is the engine's 0 and is not read. The last log
+  lines are not read yet: the diagnosis points to the logs, which open
+  from the same details.
 - **v1.x.** Fans, battery, inventory, crash markers, boot performance,
   incident snapshot (redacted by default), deploy pre-flight checks.
 
@@ -4126,13 +4177,27 @@ TLS. The section checks when it shows, after an edit and on request.
   guarded container needs. It leaves out a container whose state does
   not take the verb as its own actions offer it (removal never forces,
   so only containers that are not up), and an id the engine no longer
-  lists refuses the plan as a changed target. Inspect
+  lists refuses the plan as a changed target. The Containers tab's
+  Select chip (where actions are allowed) puts a checkbox on each row
+  and project heading; a heading's selects the project's shown
+  containers, and the bar above the list names how many selected
+  containers each verb takes. Inspect
   (CTR-03): masked values with reveal; never synced, persisted or sent to an
   LLM without consent. Health (CTR-04). Logs (CTX-01, CTX-02): 5.6; when the
   logging driver keeps no readable logs, the view names the driver. List
   stats (CST-01): one-shot stats for visible rows, at most 4 in flight, CPU
   % from the spec formula, memory as usage minus `inactive_file` on cgroup v2
   (minus `cache` on v1) [R: r5 §1.7]. Managed-by badges (DKE-10): 8.7.
+  Column chooser (CTR-08, M6 N16d): the same one-shot read gives the
+  network bytes in and out (summed over interfaces), the block bytes
+  read and written and the PIDs, totals since the container started as
+  `docker stats` shows them. The tab shows, hides and orders the columns
+  after the name (state, health, status, image, ports, stack, CPU,
+  memory, network, block I/O, PIDs, IP, started), stored by name under
+  `klabautermann.docker.containerColumns`; a name it does not know is
+  skipped. Started is read from the status's uptime, since the list
+  carries no start time, so it is as coarse as the status words.
+
   Restart-loop and exit flags (CTR-09): the list carries no
   `RestartCount` or `State.OOMKilled`, and inspecting every row on each
   change would cost a request per container, so a row flags what its
@@ -4141,6 +4206,17 @@ TLS. The section checks when it shows, after an edit and on request.
   and 128 plus SIGINT, SIGQUIT, SIGKILL or SIGTERM) as failed: the state
   in the error colour and an icon before the status words. The details show the restart count, the exit code and
   an OOM kill from the inspect.
+- **As built (M6 N19a).** CTX-03: `ContainerLogSource` takes `since`
+  and `until`, both inclusive, sent as the logs request's `since=` and
+  `until=` in 5.6's seconds and nanoseconds. A ranged read sends no
+  `tail`, since Docker applies `tail` before the range and the two
+  together would read only the window's lines inside it; the Logs
+  panel's 32 MiB buffer bounds what a long range holds. A follow takes
+  no `until`, and its resume after a lost stream starts after the
+  newest line, not at the range's start. The log view's range menu
+  offers LOG-01's spans, counted back from when the stream opens, and a
+  chosen start and end from date and time pickers, which reads once:
+  the Live chip stops and says why.
 - **As built (M4 E15).** `operations/plans/docker_plans.dart` plans
   CTR-02's verbs, CTR-06's removal, IMG-02 and STK-03 (7.14, 7.16) over
   the server's Docker endpoint (`DockerRouter.useEndpoint`).
@@ -4174,6 +4250,23 @@ TLS. The section checks when it shows, after an edit and on request.
   through one `docker compose logs -f` in low-session mode); JSON and level
   parsing; redacted log export; stats detail charts, sorting, memory limit
   risk, top table.
+  Label links (M6 N17b, CTR-11) are read in the app from the inspected
+  labels, already masked by key (8.9), by `labelLinks` in
+  `klabautermann_docker`: `dockhand.url` (plain or `[Name](url)`),
+  `dockhand.port.<port>.url`, `dev.dozzle.url`, each Traefik router's
+  `Host(...)` names (scheme `https` with `tls=true`, a
+  `tls.certresolver` or a `websecure`/`https` entry point, else `http`;
+  skipped while `traefik.enable=false`, and `HostRegexp` never yields
+  one), and caddy-docker-proxy's `caddy` and `caddy_<n>` addresses
+  (HTTPS as Caddy serves it, but HTTP on an explicit port 80). A
+  masked value, another scheme, credentials, or a wildcard or a
+  placeholder in the host yields no link (a path or query may hold
+  them, as in `?$select=name`). The
+  links open through the hand-off launcher in the system browser, or
+  show as text where the app has none. CTR-11's mute labels
+  (`dockhand.notify`) wait for per-container notifications, which v1
+  does not send.
+
 - **As built (M6 N20).** DKE-03's timeline comes from the events stream
   the watcher already holds for the lists (5.7), so it costs no channel
   of its own. Each container, image, volume and network event the lists'
