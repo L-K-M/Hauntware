@@ -42,6 +42,7 @@ export 'src/parse/journal.dart';
 export 'src/parse/log_sources.dart';
 export 'src/parse/metrics.dart';
 export 'src/parse/models.dart';
+export 'src/parse/mounts.dart';
 export 'src/parse/oncalendar.dart';
 export 'src/parse/oom.dart';
 export 'src/parse/ops.dart';

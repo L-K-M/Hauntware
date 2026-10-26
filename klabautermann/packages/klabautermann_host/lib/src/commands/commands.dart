@@ -348,6 +348,13 @@ const kNetAddrMarker = '== addr';
 const kNetTcpMarker = '== tcp';
 const kNetSockstatMarker = '== sockstat';
 
+/// [HostCommands.mounts]'s section markers: `findmnt`'s JSON, or
+/// `/proc/self/mounts` where findmnt is missing or too old for `-J`, then
+/// `/proc/swaps`.
+const kMountsFindmntMarker = '== findmnt';
+const kMountsProcMarker = '== proc';
+const kMountsSwapsMarker = '== swaps';
+
 /// How [HostCommands.journalBoots] asks for the boot list: JSON on
 /// systemd [kListBootsJsonSystemd] and later, the text table below.
 enum JournalBootsFormat { json, text }
@@ -858,6 +865,18 @@ abstract final class HostCommands {
       'echo "$kNetSockstatMarker"; '
       'cat /proc/net/sockstat /proc/net/sockstat6 2>/dev/null; '
       'exit 0';
+
+  /// DSK-05 and DSK-14's read: every mount's source, type and options,
+  /// from `findmnt -J -l` (util-linux 2.27+) or `/proc/self/mounts`, then
+  /// the swap devices from `/proc/swaps`. `parseMounts` reads it.
+  static List<String> mounts() => const ['sh', '-c', _kMountsScript];
+
+  static const _kMountsScript =
+      'if command -v findmnt >/dev/null 2>&1 && '
+      'out=\$(findmnt -J -l -o TARGET,SOURCE,FSTYPE,OPTIONS 2>/dev/null); '
+      'then echo "$kMountsFindmntMarker"; printf "%s\\n" "\$out"; '
+      'else echo "$kMountsProcMarker"; cat /proc/self/mounts 2>/dev/null; fi; '
+      'echo "$kMountsSwapsMarker"; cat /proc/swaps 2>/dev/null; exit 0';
 
   /// The files under `/var/log` (LOG-08, 03 §7.6); `parseLogFiles`
   /// reads the output.

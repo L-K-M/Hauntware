@@ -779,6 +779,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${placement.group}:${placement.order}'",
     r"'${command.id} shares menu slot ${placement.group}:${placement.order}'",
   },
+  'lib/ui/mounts.dart': {
+    // The separator between a mount's options, machine data as the kernel
+    // lists them.
+    "', '",
+  },
   'lib/ui/oom_kills.dart': {
     // The journal pattern of an OOM report's kernel lines and the syslog
     // identifier the kernel's lines carry, both machine data.
