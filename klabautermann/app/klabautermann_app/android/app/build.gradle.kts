@@ -123,7 +123,7 @@ aboutLibraries {
         requireLicense.set(true)
         // The Flutter engine's own artifacts carry no POM license; Flutter's
         // NOTICES holds the engine's notices.
-        exclusionPatterns.add(java.util.regex.Pattern.compile("io\\.flutter:.*"))
+        exclusionPatterns.add(Regex("io\\.flutter:.*").toPattern())
     }
     license {
         strictMode.set(com.mikepenz.aboutlibraries.plugin.StrictMode.FAIL)
