@@ -12,6 +12,9 @@ enum ChartUnit {
   percent,
   bytes,
   bytesPerSecond,
+
+  /// A whole number of things, as a container's PIDs.
+  count,
 }
 
 /// The words charts say, from the host's catalogue (03 D10: the charts
@@ -119,6 +122,7 @@ String formatChartValue(double value, ChartUnit unit, ChartStrings strings) =>
       ChartUnit.percent => strings.percent(value),
       ChartUnit.bytes => ghostFormatBinarySize(value.round()),
       ChartUnit.bytesPerSecond => ghostFormatBinaryRate(value),
+      ChartUnit.count => value.round().toString(),
     };
 
 /// The steps of an automatic scale within one IEC unit: 1, 2 and 5 times a
@@ -145,6 +149,7 @@ double chartScaleMax(double? dataMax, ChartUnit unit) {
 @visibleForTesting
 double uncheckedChartScaleMax(double? dataMax, ChartUnit unit) {
   if (unit == ChartUnit.percent) return 100;
+  if (unit == ChartUnit.count) return _countScaleMax(dataMax);
   // NaN would never meet a step and +Infinity would reach an infinite
   // decade, so neither may enter the search below.
   if (dataMax == null || !dataMax.isFinite || dataMax <= 0) return 1024;
@@ -154,6 +159,17 @@ double uncheckedChartScaleMax(double? dataMax, ChartUnit unit) {
     }
   }
   for (var decade = _tebibyte; ; decade *= 10) {
+    for (final step in const [1, 2, 5]) {
+      if (step * decade >= dataMax) return step * decade;
+    }
+  }
+}
+
+/// A count's scale: the next 1, 2 or 5 times a power of ten at or above
+/// [dataMax], and 10 for an empty, all-zero or non-finite series.
+double _countScaleMax(double? dataMax) {
+  if (dataMax == null || !dataMax.isFinite || dataMax <= 0) return 10;
+  for (var decade = 1.0; ; decade *= 10) {
     for (final step in const [1, 2, 5]) {
       if (step * decade >= dataMax) return step * decade;
     }

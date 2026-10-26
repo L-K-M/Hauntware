@@ -21,6 +21,7 @@ import 'container_logs.dart';
 import 'container_processes.dart';
 import 'container_terminal.dart';
 import 'containers_panel.dart' show ContainerHealthBadge;
+import 'container_usage_charts.dart';
 import 'containers_view.dart';
 import 'images_view.dart' show shortImageId;
 
@@ -349,6 +350,7 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
     super.initState();
     _lifecycle = AppLifecycleListener(onInactive: _maskAll);
     _details = _docker.openContainer(widget.serverId, widget.container.id);
+    _docker.pinStats(widget.serverId, widget.container.id);
   }
 
   @override
@@ -362,7 +364,9 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
     // Another container: nothing revealed carries over.
     _maskAll();
     _docker.closeContainer(oldWidget.serverId, oldWidget.container.id);
+    _docker.unpinStats(oldWidget.serverId, oldWidget.container.id);
     _details = _docker.openContainer(widget.serverId, widget.container.id);
+    _docker.pinStats(widget.serverId, widget.container.id);
   }
 
   @override
@@ -372,6 +376,7 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
       timer.cancel();
     }
     _docker.closeContainer(widget.serverId, widget.container.id);
+    _docker.unpinStats(widget.serverId, widget.container.id);
     super.dispose();
   }
 
@@ -416,6 +421,20 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
     );
   }
 
+  /// [sections] with the usage charts (CST-03) after them while the
+  /// container is up: the facts come first, the charts' history below.
+  List<Widget> _withUsage(List<Widget> sections, ContainerSummary row) {
+    if (!containerIsUp(row)) return sections;
+    return [
+      ...sections,
+      ContainerUsageCharts(
+        monitoring: widget.monitoring,
+        serverId: widget.serverId,
+        containerId: row.id,
+      ),
+    ];
+  }
+
   Widget _build(
     BuildContext context,
     DockerContainerDetails read,
@@ -443,11 +462,14 @@ class _ContainerDetailsViewState extends State<ContainerDetailsView> {
       if (container != null && (read.removed || failure != null))
         _Notice(icon: Icons.history, text: l10n.dockerDetailsKept),
       if (container != null)
-        ..._sections(
-          context,
-          container,
+        ..._withUsage(
+          _sections(
+            context,
+            container,
+            row,
+            live: !read.removed && failure == null,
+          ),
           row,
-          live: !read.removed && failure == null,
         ),
     ];
     return ListView(

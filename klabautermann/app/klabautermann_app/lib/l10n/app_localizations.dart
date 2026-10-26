@@ -7364,6 +7364,114 @@ abstract class AppLocalizations {
   /// **'The columns could not be saved. They stay until Klabautermann quits.'**
   String get dockerContainersColumnsNotSaved;
 
+  /// Containers tab: the chip that lists the running containers in one list, the busiest first (CST-05).
+  ///
+  /// In en, this message translates to:
+  /// **'Top'**
+  String get dockerContainersTop;
+
+  /// Containers tab: the Top chip's tooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Running containers in one list, the busiest first'**
+  String get dockerContainersTopTooltip;
+
+  /// Containers table: a container's memory near its limit (CST-04), after a warning icon, in place of the bytes. share is the used share of the limit.
+  ///
+  /// In en, this message translates to:
+  /// **'{share} of limit'**
+  String dockerContainersMemoryRisk(double share);
+
+  /// Container details: the usage charts' heading (CST-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Usage'**
+  String get dockerUsageTitle;
+
+  /// Container details: where the usage charts' samples come from, as the chart legend names it.
+  ///
+  /// In en, this message translates to:
+  /// **'Read every 5 s while these details show'**
+  String get dockerUsageSource;
+
+  /// Container details: the usage charts have no reading yet.
+  ///
+  /// In en, this message translates to:
+  /// **'The first reading comes within a few seconds.'**
+  String get dockerUsageWaiting;
+
+  /// Container details: a container's memory at or above 90% of its limit (CST-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Memory is at {share} of its limit ({used} of {limit}); near the limit the kernel may kill it (OOM).'**
+  String dockerUsageMemoryRisk(double share, String used, String limit);
+
+  /// Container details: the CPU chart's title and series.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU'**
+  String get dockerUsageCpu;
+
+  /// Container details: the memory chart's title.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get dockerUsageMemory;
+
+  /// Container details: the memory chart's used series.
+  ///
+  /// In en, this message translates to:
+  /// **'Used'**
+  String get dockerUsageMemoryUsed;
+
+  /// Container details: the memory chart's limit series.
+  ///
+  /// In en, this message translates to:
+  /// **'Limit'**
+  String get dockerUsageMemoryLimit;
+
+  /// Container details: the network chart's title.
+  ///
+  /// In en, this message translates to:
+  /// **'Network'**
+  String get dockerUsageNetwork;
+
+  /// Container details: the network chart's received series.
+  ///
+  /// In en, this message translates to:
+  /// **'In'**
+  String get dockerUsageNetworkIn;
+
+  /// Container details: the network chart's sent series.
+  ///
+  /// In en, this message translates to:
+  /// **'Out'**
+  String get dockerUsageNetworkOut;
+
+  /// Container details: the block I/O chart's title.
+  ///
+  /// In en, this message translates to:
+  /// **'Block I/O'**
+  String get dockerUsageBlockIo;
+
+  /// Container details: the block I/O chart's read series.
+  ///
+  /// In en, this message translates to:
+  /// **'Read'**
+  String get dockerUsageBlockRead;
+
+  /// Container details: the block I/O chart's written series.
+  ///
+  /// In en, this message translates to:
+  /// **'Written'**
+  String get dockerUsageBlockWrite;
+
+  /// Container details: the PIDs chart's title and series.
+  ///
+  /// In en, this message translates to:
+  /// **'PIDs'**
+  String get dockerUsagePids;
+
   /// A container's state in words. state is the Engine API's state name; a state outside this list shows as the engine gave it instead.
   ///
   /// In en, this message translates to:

@@ -229,6 +229,15 @@ int healthRank(HealthStatus? health) => switch (health) {
   HealthStatus.none || null => 3,
 };
 
+/// How the Containers sub-tab lists its rows.
+enum ContainerGrouping {
+  /// Under a heading per compose project.
+  byProject,
+
+  /// In one list, as the Top view (CST-05) ranks them.
+  flat,
+}
+
 /// One row of the grouped list: a compose project's heading or a
 /// container.
 sealed class ContainerListEntry {
@@ -263,15 +272,25 @@ final class ContainerEntry extends ContainerListEntry {
 /// keep, grouped by compose project in name order, the containers in no
 /// project last. Each group's rows come in [order]'s order, and a group
 /// in [collapsed] shows only its heading, unless [terms] search, which
-/// shows every match. Where no container is in a compose project there
-/// are no headings.
+/// shows every match. Where no container is in a compose project, or
+/// [grouping] is [ContainerGrouping.flat], there are no headings.
 List<ContainerListEntry> containerListEntries(
   List<ContainerSummary> containers, {
   required bool runningOnly,
   required List<String> terms,
   required Set<String?> collapsed,
   required List<ContainerEntry> Function(List<ContainerEntry> rows) order,
+  ContainerGrouping grouping = ContainerGrouping.byProject,
 }) {
+  if (grouping == ContainerGrouping.flat) {
+    return order([
+      for (final container in containers)
+        if ((!runningOnly || containerIsUp(container)) &&
+            containerMatches(container, terms))
+          ContainerEntry(container),
+    ]);
+  }
+
   final groups = <String?, List<ContainerEntry>>{};
   for (final container in containers) {
     if (runningOnly && !containerIsUp(container)) continue;

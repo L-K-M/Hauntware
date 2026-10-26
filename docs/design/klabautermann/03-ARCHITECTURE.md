@@ -4110,6 +4110,17 @@ TLS. The section checks when it shows, after an edit and on request.
   `klabautermann.docker.containerColumns`; a name it does not know is
   skipped. Started is read from the status's uptime, since the list
   carries no start time, so it is as coarse as the status words.
+  Usage (CST-02 to CST-05, M6 N18): every figure column sorts (CST-02).
+  A container's details chart CPU, memory against its limit, network
+  and block I/O rates (from the totals between reads) and PIDs for the
+  last 30 minutes this device read (CST-03). The details pin the
+  container's stats into the watch, so they keep coming at the list's
+  5 s cadence whatever rows show, instead of opening a `stats?stream=1`
+  follow, which would hold one more channel; a pause of over 20 s breaks
+  the lines. Memory at or above 90 % of its limit [E] reads as at risk
+  in words beside an icon, in the list and the details (CST-04). Top
+  lists the running containers in one list, the busiest CPU first, as
+  ctop does (CST-05).
 - **As built (M4 E15).** `operations/plans/docker_plans.dart` plans
   CTR-02's verbs, CTR-06's removal, IMG-02 and STK-03 (7.14, 7.16) over
   the server's Docker endpoint (`DockerRouter.useEndpoint`).

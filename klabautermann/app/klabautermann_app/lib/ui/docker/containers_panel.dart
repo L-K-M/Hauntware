@@ -5,6 +5,8 @@ import 'package:ghost_ui/ghost_ui.dart'
     show SidebarMenuAction, ghostFormatBinarySize, ghostIsDesktopPlatform;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import '../../controllers/container_usage.dart'
+    show kMemoryRiskShare, memoryLimitShare;
 import '../../controllers/docker_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
@@ -83,6 +85,10 @@ class _ContainersPanelState extends State<ContainersPanel> {
   );
   final _search = TextEditingController();
   bool _runningOnly = false;
+
+  /// CST-05's Top view: the running containers in one list, the busiest
+  /// first, as ctop ranks them.
+  bool _top = false;
   final Set<String?> _collapsed = {};
 
   /// The server whose container watch this panel holds, if any.
@@ -330,9 +336,10 @@ class _ContainersPanelState extends State<ContainersPanel> {
     final terms = searchTerms(_search.text);
     final entries = containerListEntries(
       containers,
-      runningOnly: _runningOnly,
+      runningOnly: _runningOnly || _top,
       terms: terms,
       collapsed: _collapsed,
+      grouping: _top ? ContainerGrouping.flat : ContainerGrouping.byProject,
       order: (rows) =>
           sortTableRows<ContainerListEntry>(rows, columns, _sort).cast(),
     );
@@ -420,8 +427,25 @@ class _ContainersPanelState extends State<ContainersPanel> {
       ),
       FilterChip(
         label: Text(l10n.dockerContainersRunningOnly),
-        selected: _runningOnly,
-        onSelected: (selected) => setState(() => _runningOnly = selected),
+        selected: _runningOnly || _top,
+        onSelected: _top
+            ? null
+            : (selected) => setState(() => _runningOnly = selected),
+      ),
+      FilterChip(
+        avatar: const Icon(Icons.leaderboard_outlined),
+        label: Text(l10n.dockerContainersTop),
+        tooltip: l10n.dockerContainersTopTooltip,
+        selected: _top,
+        onSelected: (top) => setState(() {
+          _top = top;
+          if (top) {
+            _sort = TableSort(
+              ContainerColumn.cpu.name,
+              TableSortDirection.descending,
+            );
+          }
+        }),
       ),
       TextButton.icon(
         onPressed: _chooseColumns,
@@ -644,6 +668,7 @@ class _ContainersPanelState extends State<ContainersPanel> {
       String? Function(ContainerListStats stats) shown,
       Comparable<Object>? Function(ContainerListStats stats) sortKey, {
       double width = 88,
+      bool Function(ContainerListStats stats)? risky,
     }) {
       (String, bool)? read(ContainerSummary container) {
         if (!containerIsUp(container)) return null;
@@ -670,7 +695,14 @@ class _ContainersPanelState extends State<ContainersPanel> {
         alignment: CellAlignment.end,
         cell: (context, container) => switch (read(container)) {
           null => const SizedBox.shrink(),
-          (final value, final stale) => _Figure(value: value, stale: stale),
+          (final value, final stale) => _Figure(
+            value: value,
+            stale: stale,
+            risky: switch (stats[container.id]) {
+              final row? => risky?.call(row) ?? false,
+              null => false,
+            },
+          ),
         },
       );
     }
@@ -741,12 +773,15 @@ class _ContainersPanelState extends State<ContainersPanel> {
       ),
       figure(
         ContainerColumn.memory,
-        (row) => switch (row.memoryUsed) {
-          // IEC units (03 §10.10).
-          final bytes? => ghostFormatBinarySize(bytes),
-          null => null,
+        (row) => switch ((row.memoryUsed, memoryLimitShare(row))) {
+          // IEC units (03 §10.10); near its limit, its share of it (CST-04).
+          (_?, final share?) when share >= kMemoryRiskShare =>
+            l10n.dockerContainersMemoryRisk(share),
+          (final bytes?, _) => ghostFormatBinarySize(bytes),
+          (null, _) => null,
         },
         (row) => row.memoryUsed,
+        risky: (row) => (memoryLimitShare(row) ?? 0) >= kMemoryRiskShare,
       ),
       figure(
         ContainerColumn.network,
@@ -1065,10 +1100,13 @@ class _ColumnsDialogState extends State<_ColumnsDialog> {
 /// A stats figure on the end edge; a stale one grey after a history icon
 /// (03 §9.5 item 4), so its age is told apart without colour.
 class _Figure extends StatelessWidget {
-  const _Figure({required this.value, required this.stale});
+  const _Figure({required this.value, required this.stale, this.risky = false});
 
   final String value;
   final bool stale;
+
+  /// Near a limit (CST-04): after a warning icon, in the error colour.
+  final bool risky;
 
   @override
   Widget build(BuildContext context) {
@@ -1079,6 +1117,8 @@ class _Figure extends StatelessWidget {
       spacing: 2,
       children: [
         if (stale) Icon(Icons.history, size: 12, color: muted),
+        if (risky && !stale)
+          Icon(Icons.warning_amber, size: 12, color: theme.colorScheme.error),
         Flexible(
           child: Text(
             value,
@@ -1088,7 +1128,11 @@ class _Figure extends StatelessWidget {
             textAlign: TextAlign.end,
             // Figures line up digit under digit.
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: stale ? muted : null,
+              color: stale
+                  ? muted
+                  : risky
+                  ? theme.colorScheme.error
+                  : null,
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),

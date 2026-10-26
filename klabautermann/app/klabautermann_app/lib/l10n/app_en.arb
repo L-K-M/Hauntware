@@ -6898,6 +6898,100 @@
   "@dockerContainersColumnsNotSaved": {
     "description": "Containers tab: the chosen columns show, but settings.json could not be written."
   },
+  "dockerContainersTop": "Top",
+  "@dockerContainersTop": {
+    "description": "Containers tab: the chip that lists the running containers in one list, the busiest first (CST-05)."
+  },
+  "dockerContainersTopTooltip": "Running containers in one list, the busiest first",
+  "@dockerContainersTopTooltip": {
+    "description": "Containers tab: the Top chip's tooltip."
+  },
+  "dockerContainersMemoryRisk": "{share} of limit",
+  "@dockerContainersMemoryRisk": {
+    "description": "Containers table: a container's memory near its limit (CST-04), after a warning icon, in place of the bytes. share is the used share of the limit.",
+    "placeholders": {
+      "share": {
+        "type": "double",
+        "format": "percentPattern",
+        "example": "0.93"
+      }
+    }
+  },
+  "dockerUsageTitle": "Usage",
+  "@dockerUsageTitle": {
+    "description": "Container details: the usage charts' heading (CST-03)."
+  },
+  "dockerUsageSource": "Read every 5 s while these details show",
+  "@dockerUsageSource": {
+    "description": "Container details: where the usage charts' samples come from, as the chart legend names it."
+  },
+  "dockerUsageWaiting": "The first reading comes within a few seconds.",
+  "@dockerUsageWaiting": {
+    "description": "Container details: the usage charts have no reading yet."
+  },
+  "dockerUsageMemoryRisk": "Memory is at {share} of its limit ({used} of {limit}); near the limit the kernel may kill it (OOM).",
+  "@dockerUsageMemoryRisk": {
+    "description": "Container details: a container's memory at or above 90% of its limit (CST-04).",
+    "placeholders": {
+      "share": {
+        "type": "double",
+        "format": "percentPattern",
+        "example": "0.93"
+      },
+      "used": {
+        "type": "String",
+        "example": "930 MiB"
+      },
+      "limit": {
+        "type": "String",
+        "example": "1 GiB"
+      }
+    }
+  },
+  "dockerUsageCpu": "CPU",
+  "@dockerUsageCpu": {
+    "description": "Container details: the CPU chart's title and series."
+  },
+  "dockerUsageMemory": "Memory",
+  "@dockerUsageMemory": {
+    "description": "Container details: the memory chart's title."
+  },
+  "dockerUsageMemoryUsed": "Used",
+  "@dockerUsageMemoryUsed": {
+    "description": "Container details: the memory chart's used series."
+  },
+  "dockerUsageMemoryLimit": "Limit",
+  "@dockerUsageMemoryLimit": {
+    "description": "Container details: the memory chart's limit series."
+  },
+  "dockerUsageNetwork": "Network",
+  "@dockerUsageNetwork": {
+    "description": "Container details: the network chart's title."
+  },
+  "dockerUsageNetworkIn": "In",
+  "@dockerUsageNetworkIn": {
+    "description": "Container details: the network chart's received series."
+  },
+  "dockerUsageNetworkOut": "Out",
+  "@dockerUsageNetworkOut": {
+    "description": "Container details: the network chart's sent series."
+  },
+  "dockerUsageBlockIo": "Block I/O",
+  "@dockerUsageBlockIo": {
+    "description": "Container details: the block I/O chart's title."
+  },
+  "dockerUsageBlockRead": "Read",
+  "@dockerUsageBlockRead": {
+    "description": "Container details: the block I/O chart's read series."
+  },
+  "dockerUsageBlockWrite": "Written",
+  "@dockerUsageBlockWrite": {
+    "description": "Container details: the block I/O chart's written series."
+  },
+  "dockerUsagePids": "PIDs",
+  "@dockerUsagePids": {
+    "description": "Container details: the PIDs chart's title and series."
+  },
   "dockerContainerState": "{state, select, created{Created} running{Running} paused{Paused} restarting{Restarting} removing{Removing} exited{Exited} dead{Dead} other{Unknown}}",
   "@dockerContainerState": {
     "description": "A container's state in words. state is the Engine API's state name; a state outside this list shows as the engine gave it instead.",
