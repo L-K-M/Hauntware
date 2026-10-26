@@ -977,7 +977,8 @@ final class DockerRouter {
 
   /// DKE-06 and DKE-07 over every container, up to [kDockerReviewMax],
   /// one inspect at a time: on a relay each holds the one pooled
-  /// connection. A container removed before its inspect is left out.
+  /// connection. A container removed before its inspect is left out; one
+  /// whose inspect the daemon refuses is counted.
   Future<(DockerReviewPayload, List<String>)> _review(
     DockerClient client,
   ) async {
@@ -990,11 +991,18 @@ final class DockerRouter {
         );
     final warnings = [...info.warnings, ...list.warnings];
     final reviews = <ContainerReview>[];
+    var unreadable = 0;
     for (final summary in list.value.take(kDockerReviewMax)) {
       final DockerParseResult<ContainerInspect> inspect;
       try {
         inspect = await client.inspectContainer(summary.id);
       } on DockerNotFoundException {
+        continue;
+      } on DockerApiException {
+        // The daemon refused this one container (a 500 for one stuck in
+        // its runtime); the rest still read. A transport failure ends
+        // the review as any read's does.
+        unreadable++;
         continue;
       }
       warnings.addAll(inspect.warnings);
@@ -1019,6 +1027,7 @@ final class DockerRouter {
           0,
           list.value.length,
         ),
+        unreadable: unreadable,
       ),
       warnings,
     );

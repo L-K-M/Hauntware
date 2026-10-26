@@ -50,38 +50,43 @@ void main() {
     await tester.tap(find.text('Review containers'));
     await tester.pump();
     expect(find.text("Reading each container's configuration…"), findsOne);
+    expect(find.text('Review containers'), findsOne, reason: 'no review yet');
     expect(reviews(), hasLength(1));
 
     engine.emit(
       dockerAnswer(
         reviews().single,
-        const DockerReviewPayload([
-          ContainerReview(
-            containerId: 'a',
-            name: 'cache',
-            state: 'running',
-            findings: [ContainerFinding(ContainerRisk.noHealthcheck)],
-          ),
-          ContainerReview(
-            containerId: 'b',
-            name: 'clean',
-            state: 'running',
-            findings: [],
-          ),
-          ContainerReview(
-            containerId: 'c',
-            name: 'agent',
-            state: 'running',
-            project: 'ops',
-            findings: [
-              ContainerFinding(
-                ContainerRisk.socketMount,
-                detail: '/var/run/docker.sock',
-              ),
-              ContainerFinding(ContainerRisk.logsUnrotated),
-            ],
-          ),
-        ], omitted: 3),
+        const DockerReviewPayload(
+          [
+            ContainerReview(
+              containerId: 'a',
+              name: 'cache',
+              state: 'running',
+              findings: [ContainerFinding(ContainerRisk.noHealthcheck)],
+            ),
+            ContainerReview(
+              containerId: 'b',
+              name: 'clean',
+              state: 'running',
+              findings: [],
+            ),
+            ContainerReview(
+              containerId: 'c',
+              name: 'agent',
+              state: 'running',
+              project: 'ops',
+              findings: [
+                ContainerFinding(
+                  ContainerRisk.socketMount,
+                  detail: '/var/run/docker.sock',
+                ),
+                ContainerFinding(ContainerRisk.logsUnrotated),
+              ],
+            ),
+          ],
+          omitted: 3,
+          unreadable: 1,
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -91,6 +96,12 @@ void main() {
       find.text(
         '3 more containers were not read: a review reads at most '
         '$kDockerReviewMax.',
+      ),
+      findsOne,
+    );
+    expect(
+      find.text(
+        'The engine refused to inspect 1 container, so it is not reviewed.',
       ),
       findsOne,
     );

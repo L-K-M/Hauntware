@@ -4267,7 +4267,8 @@ enum ContainerRisk {
   privileged,
 
   /// An engine socket bind-mounted in, which is root on the host
-  /// (03 §8.1); its path is the finding's detail.
+  /// (03 §8.1), or a host folder that holds one (`/`, `/run`,
+  /// `/var/run`); its path is the finding's detail.
   socketMount,
 
   /// `NetworkMode` host.
@@ -4366,12 +4367,18 @@ final class ContainerReview {
 
 /// A [DockerReviewQuery]'s answer: each container read, in the list's
 /// order. A container removed between the list and its inspect is left
-/// out; [omitted] counts those past [kDockerReviewMax].
+/// out; [omitted] counts those past [kDockerReviewMax], [unreadable]
+/// those whose inspect the daemon refused.
 final class DockerReviewPayload extends DockerPayload {
-  const DockerReviewPayload(this.reviews, {this.omitted = 0});
+  const DockerReviewPayload(
+    this.reviews, {
+    this.omitted = 0,
+    this.unreadable = 0,
+  });
 
   final List<ContainerReview> reviews;
   final int omitted;
+  final int unreadable;
 }
 
 /// The containers grouped by compose project (STK-01), from the same

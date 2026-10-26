@@ -6812,6 +6812,12 @@ abstract class AppLocalizations {
   /// **'{omitted, plural, =1{1 more container was not read: a review reads at most {max}.} other{{omitted} more containers were not read: a review reads at most {max}.}}'**
   String dockerReviewOmitted(int omitted, int max);
 
+  /// Docker Review sub-tab: containers whose inspect the engine refused, which the review leaves out.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{The engine refused to inspect 1 container, so it is not reviewed.} other{The engine refused to inspect {count} containers, so they are not reviewed.}}'**
+  String dockerReviewUnreadable(int count);
+
   /// Docker Review sub-tab: a container's heading when it belongs to a compose stack.
   ///
   /// In en, this message translates to:
