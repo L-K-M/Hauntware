@@ -184,6 +184,7 @@ void main() {
         OperationKind.kill,
         OperationKind.runTimerNow,
         OperationKind.cronRunNow,
+        OperationKind.refreshPackageLists,
         OperationKind.stackStart,
         OperationKind.stackStop,
         OperationKind.stackRestart,

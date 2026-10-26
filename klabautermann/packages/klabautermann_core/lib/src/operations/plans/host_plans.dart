@@ -8,6 +8,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         HostCommandError,
         HostCommands,
         HostProfile,
+        PackageManager,
         SystemctlVerb,
         UnitManager,
         kGuardedKillGone,
@@ -82,6 +83,7 @@ Future<PlanAttempt> planHostAction(
       UnitAction() => await _planUnit(intent, context),
       StartTimer() => await _planTimer(intent, context),
       RunCronJob() => await _planCronRun(intent, context, elevated),
+      RefreshPackageLists() => await _planPackageRefresh(intent, context),
       _ => _refused(ActionRefusalReason.notImplemented),
     };
   } on HostCommandError {
@@ -209,6 +211,30 @@ Future<PlanAttempt> _planTimer(StartTimer intent, HostPlanContext c) async {
       // unit's lines are not found under that name.
       followUnit: manager.isUser ? null : unit,
       revalidate: [UnitLoaded(unit, manager: manager)],
+    ),
+  );
+}
+
+/// PKG-05: the package lists of the manager the check reads, refreshed
+/// as root, so only in admin mode. pacman's are refused (see
+/// [HostCommands.packageRefresh]).
+Future<PlanAttempt> _planPackageRefresh(
+  RefreshPackageLists intent,
+  HostPlanContext c,
+) async {
+  if (!c.adminMode) return _refused(ActionRefusalReason.adminRequired);
+  final name = await _read(c.link, HostCommands.packageManagerName());
+  final manager = PackageManager.values.asNameMap()[name];
+  if (manager == null) return _refused(ActionRefusalReason.invalidTarget);
+  return _planned(
+    OperationPlan(
+      intent: intent,
+      kind: OperationKind.refreshPackageLists,
+      targetName: manager.name,
+      steps: [ShellStep(HostCommands.packageRefresh(manager), elevated: true)],
+      requiredLevel: RequiredLevel.admin,
+      runner: _runner(c, elevated: true),
+      hostWrites: const [HostWriteRow.loginRecords, HostWriteRow.packageLists],
     ),
   );
 }

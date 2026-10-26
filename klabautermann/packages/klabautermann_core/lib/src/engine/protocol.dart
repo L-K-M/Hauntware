@@ -26,7 +26,9 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         NetRate,
         OpDirectoryKind,
         OpDirectoryListing,
+        PackageCheck,
         ProcsSelection,
+        RestartCheck,
         SmartDisk,
         AccountsSnapshot,
         SystemdUnit,
@@ -1219,6 +1221,33 @@ final class ReadUserCrontabs extends EngineRequest {
 /// left asleep. One [SmartReport] with [requestId] answers it.
 final class ReadSmart extends EngineRequest {
   const ReadSmart(this.serverId, {required this.requestId});
+
+  final String serverId;
+  final String requestId;
+}
+
+/// Reads [serverId]'s pending updates and reboot flag (PKG-01 to PKG-03,
+/// 03 §7.8) as the login user, from the package manager's cached
+/// metadata. The engine keeps each server's answer for an hour and
+/// answers from it unless [fresh] asks for a new check. One
+/// [PackagesReport] with [requestId] answers it.
+final class ReadPackages extends EngineRequest {
+  const ReadPackages(
+    this.serverId, {
+    required this.requestId,
+    this.fresh = false,
+  });
+
+  final String serverId;
+  final String requestId;
+  final bool fresh;
+}
+
+/// Reads [serverId]'s services still running replaced libraries (PKG-04,
+/// 03 §7.8): in admin mode only, since the tools read every process's
+/// memory maps. One [RestartReport] with [requestId] answers it.
+final class ReadRestarts extends EngineRequest {
+  const ReadRestarts(this.serverId, {required this.requestId});
 
   final String serverId;
   final String requestId;
@@ -2673,6 +2702,70 @@ final class SmartReport extends EngineEvent {
 
   /// Why nothing was read, or null.
   final SmartReportFailure? failure;
+}
+
+/// Why a [ReadRestarts] read nothing.
+enum RestartReportFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// Admin mode is off for the server.
+  adminRequired,
+
+  /// Elevation refused, so nothing ran.
+  elevationRefused,
+
+  /// None of needrestart, needs-restarting and zypper is installed.
+  missing,
+
+  /// The link failed while reading.
+  transport,
+}
+
+/// The answer to [ReadRestarts]: what the check found, or why nothing.
+final class RestartReport extends EngineEvent {
+  const RestartReport({
+    required this.serverId,
+    required this.requestId,
+    this.check,
+    this.failure,
+  });
+
+  final String serverId;
+  final String requestId;
+  final RestartCheck? check;
+  final RestartReportFailure? failure;
+}
+
+/// Why a [ReadPackages] checked nothing.
+enum PackagesReportFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// The link failed while checking.
+  transport,
+}
+
+/// The answer to [ReadPackages]: what the check found at [checkedAt], by
+/// the engine's clock, or why there was no check.
+final class PackagesReport extends EngineEvent {
+  const PackagesReport({
+    required this.serverId,
+    required this.requestId,
+    this.check,
+    this.checkedAt,
+    this.failure,
+  });
+
+  final String serverId;
+  final String requestId;
+
+  /// What the check found; its own failure says when the host's package
+  /// manager could not answer.
+  final PackageCheck? check;
+
+  final DateTime? checkedAt;
+  final PackagesReportFailure? failure;
 }
 
 /// The answer to [ReadUserCrontabs]: the listed users' crontab lines as
@@ -4670,6 +4763,12 @@ final class StartTimer extends ActionIntent {
 
   final String timer;
   final UnitScope scope;
+}
+
+/// Refreshes the package manager's lists as root (PKG-05, 03 §7.8), in
+/// admin mode, so the next package check reads current metadata.
+final class RefreshPackageLists extends ActionIntent {
+  const RefreshPackageLists(super.serverId);
 }
 
 /// Which systemd manager a unit action or query addresses (03 §7.5,

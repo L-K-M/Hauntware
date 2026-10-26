@@ -13,6 +13,7 @@ import 'history_reads.dart';
 import 'job_history_reads.dart';
 import 'log_reads.dart';
 import 'log_streams.dart';
+import 'package_reads.dart';
 import 'stack_folders.dart';
 
 /// How long a server's link outlives the last view that opened it, as long
@@ -160,6 +161,7 @@ final class MonitoringController extends ChangeNotifier {
     logs = LogStreams(_engine);
     terminals = ContainerTerminals(_engine);
     jobHistory = JobHistoryReads(_engine);
+    packages = PackageReads(_engine);
     rollups = HistoryReads(_engine);
     accounts = AccountReads(_engine);
     docker = DockerController(
@@ -188,6 +190,9 @@ final class MonitoringController extends ChangeNotifier {
   /// [logs].
   late final JobHistoryReads jobHistory;
 
+  /// The System tab's package checks (PKG-01 to PKG-03), a concern of its
+  /// own beside [logs].
+  late final PackageReads packages;
   /// The on-device history the History card charts (HIS-01), a concern of
   /// its own beside [logs].
   late final HistoryReads rollups;
@@ -771,6 +776,7 @@ final class MonitoringController extends ChangeNotifier {
     logs.dispose();
     terminals.dispose();
     jobHistory.dispose();
+    packages.dispose();
     rollups.dispose();
     accounts.dispose();
     docker.dispose();
