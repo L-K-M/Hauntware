@@ -259,6 +259,27 @@ void main() {
     if (goldensCompareHere) await loadGoldenFonts();
   });
 
+  test('flags a restart loop and an exit a stop does not leave (CTR-09)', () {
+    ContainerFlag? flag(String state, String status) =>
+        containerFlagOf(dockerContainer('c', state: state, status: status));
+    expect(
+      containerExitCode(dockerContainer('c', status: 'Exited (2) 1 hour ago')),
+      2,
+    );
+    expect(
+      flag('restarting', 'Restarting (1) 3 seconds ago'),
+      ContainerFlag.restartLoop,
+    );
+    expect(flag('exited', 'Exited (1) 2 minutes ago'), ContainerFlag.failed);
+    expect(flag('exited', 'Exited (139) 2 minutes ago'), ContainerFlag.failed);
+    // A stop's SIGTERM or SIGKILL, or a clean end, is no failure.
+    expect(flag('exited', 'Exited (0) 2 days ago'), isNull);
+    expect(flag('exited', 'Exited (143) 2 days ago'), isNull);
+    expect(flag('exited', 'Exited (137) 2 days ago'), isNull);
+    expect(flag('exited', 'Exited'), isNull);
+    expect(flag('running', 'Up 3 hours'), isNull);
+  });
+
   testWidgets('watches while it shows and reads nothing hidden', (
     tester,
   ) async {
@@ -353,6 +374,59 @@ void main() {
       find.bySemanticsLabel(RegExp(r'Name: web-worker\n.*CPU:', dotAll: true)),
       findsNothing,
     );
+  });
+
+  testWidgets('a flagged state shows an icon and says why', (tester) async {
+    final panel = await _pump(tester);
+    await panel.list(
+      tester,
+      containers: [
+        dockerContainer(
+          'e1',
+          name: 'looping',
+          state: 'restarting',
+          status: 'Restarting (1) 3 seconds ago',
+        ),
+        dockerContainer(
+          'e2',
+          name: 'broken',
+          state: 'exited',
+          status: 'Exited (2) 1 minute ago',
+        ),
+        dockerContainer(
+          'e3',
+          name: 'stopped',
+          state: 'exited',
+          status: 'Exited (143) 1 minute ago',
+        ),
+      ],
+    );
+
+    expect(find.byIcon(Icons.loop), findsOneWidget);
+    expect(find.byIcon(Icons.error_outline), findsOneWidget);
+    expect(
+      find.bySemanticsLabel(
+        RegExp(r'^Name: looping\nState: Restarting \(restart loop\)\n'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel(
+        RegExp(r'^Name: broken\nState: Exited \(failed\)\n'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel(RegExp(r'^Name: stopped\nState: Exited\n')),
+      findsOneWidget,
+    );
+    final tooltip = tester.widget<Tooltip>(
+      find.ancestor(
+        of: find.byIcon(Icons.error_outline),
+        matching: find.byType(Tooltip),
+      ),
+    );
+    expect(tooltip.message, contains('exited with code 2'));
   });
 
   testWidgets('sorts within each group, the busiest first by CPU', (

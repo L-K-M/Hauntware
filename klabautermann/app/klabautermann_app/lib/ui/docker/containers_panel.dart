@@ -642,9 +642,10 @@ class _ContainersPanelState extends State<ContainersPanel> {
       ),
       column(
         ContainerColumn.state,
-        (container) => containerStateText(l10n, container.state),
+        (container) => containerStateFlagText(l10n, container),
         (container) => _stateRank(container.state),
         extent: const FixedColumnExtent(88),
+        cell: (context, container) => ContainerStateBadge(container: container),
       ),
       column(
         ContainerColumn.health,
@@ -742,6 +743,19 @@ String containerStateText(AppLocalizations l10n, String? state) {
   if (state == null || state.isEmpty) return l10n.chartUnknownValue;
   return switch (EngineContainerState.of(state)) {
     final known? => l10n.dockerContainerState(known.name),
+    null => state,
+  };
+}
+
+/// [container]'s state in words, with its CTR-09 flag when it has one:
+/// "Restarting (restart loop)", "Exited (failed)".
+String containerStateFlagText(
+  AppLocalizations l10n,
+  ContainerSummary container,
+) {
+  final state = containerStateText(l10n, container.state);
+  return switch (containerFlagOf(container)) {
+    final flag? => l10n.dockerContainerStateFlagged(state, flag.name),
     null => state,
   };
 }
@@ -862,6 +876,68 @@ class ContainerHealthBadge extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A container's state in words, after an icon in the error colour when
+/// CTR-09 flags it (a restart loop, a failed exit), so colour is never
+/// the only cue (A11Y-01); the tooltip says why. The list's rows and a
+/// stack's share it.
+class ContainerStateBadge extends StatelessWidget {
+  const ContainerStateBadge({super.key, required this.container, this.style});
+
+  final ContainerSummary container;
+
+  /// The words' style; the body text's by default.
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final style = this.style ?? theme.textTheme.bodyMedium;
+    final words = containerStateText(l10n, container.state);
+    final flag = containerFlagOf(container);
+    if (flag == null) {
+      return Text(
+        words,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        softWrap: false,
+        style: style,
+      );
+    }
+
+    final error = theme.colorScheme.error;
+    return Tooltip(
+      message: l10n.dockerContainerFlagTooltip(
+        flag.name,
+        containerExitCode(container) ?? 0,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        spacing: 4,
+        children: [
+          Icon(
+            switch (flag) {
+              ContainerFlag.restartLoop => Icons.loop,
+              ContainerFlag.failed => Icons.error_outline,
+            },
+            size: 14,
+            color: error,
+          ),
+          Flexible(
+            child: Text(
+              words,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
+              style: style?.copyWith(color: error),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

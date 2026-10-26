@@ -5682,6 +5682,28 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String dockerContainerStateFlagged(String state, String flag) {
+    String _temp0 = intl.Intl.selectLogic(flag, {
+      'restartLoop': 'restart loop',
+      'failed': 'failed',
+      'other': 'flagged',
+    });
+    return '$state ($_temp0)';
+  }
+
+  @override
+  String dockerContainerFlagTooltip(String flag, int code) {
+    String _temp0 = intl.Intl.selectLogic(flag, {
+      'restartLoop':
+          'Docker is starting it again after it exited, as a restart policy does in a loop. The details show how often it restarted.',
+      'failed':
+          'Its last run exited with code $code, which a stop does not leave.',
+      'other': 'Exit code $code',
+    });
+    return '$_temp0';
+  }
+
+  @override
   String dockerContainerHealth(String health) {
     String _temp0 = intl.Intl.selectLogic(health, {
       'healthy': 'Healthy',
