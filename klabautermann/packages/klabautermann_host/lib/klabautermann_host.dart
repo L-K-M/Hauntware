@@ -35,6 +35,7 @@ export 'src/parse/cpu.dart';
 export 'src/parse/cron.dart';
 export 'src/parse/dmesg.dart';
 export 'src/parse/footprint.dart';
+export 'src/parse/firewall.dart';
 export 'src/parse/fs.dart';
 export 'src/parse/gpu.dart';
 export 'src/parse/identity.dart';

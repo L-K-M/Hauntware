@@ -2064,6 +2064,12 @@ is on main:
   zones, every 10 s. The System tab's Temperatures section lists each
   sensor with its high and critical limits, and does not show where the
   host has no sensor, as VMs, or inside a container.
+- Firewall (M6 N35, NET-06): in admin mode, the System tab's Firewall
+  section reads the rules of whichever of ufw, firewalld, nftables and
+  iptables the server has: ufw's state, default policies and rules,
+  firewalld's default and active zones with their services and ports,
+  and each nftables or iptables chain with its policy and rule count.
+
 - Processor (M6 N42c, CPU-07): the System tab's new section beside the
   identity shows the processor's model (or its vendor where it names
   none), sockets, cores, threads per core, the CPUs the kernel counts

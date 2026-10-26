@@ -2445,6 +2445,166 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{1 more drive was not read.} other{{count} more drives were not read.}}'**
   String systemDriveHealthNotRead(int count);
 
+  /// System tab: the heading of the firewall section (NET-06).
+  ///
+  /// In en, this message translates to:
+  /// **'Firewall'**
+  String get systemFirewallTitle;
+
+  /// System tab, Firewall: why the read waits for admin mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on admin mode to read the firewall: every firewall tool needs root to list its rules.'**
+  String get systemFirewallAdminNeeded;
+
+  /// System tab, Firewall: the button that reads the rules.
+  ///
+  /// In en, this message translates to:
+  /// **'Read firewall rules'**
+  String get systemFirewallRead;
+
+  /// System tab, Firewall: the button that reads the rules again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemFirewallReadAgain;
+
+  /// System tab, Firewall: shown while the rules are read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the firewall rules…'**
+  String get systemFirewallReading;
+
+  /// System tab, Firewall: why a read read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{The server is not connected, so the firewall could not be read.} adminRequired{Admin mode ended before the firewall was read.} elevationRefused{Elevation was refused, so the firewall was not read.} unreadable{The firewall tools answered in a way this app cannot read.} transport{The connection failed while the firewall was read.} other{The firewall could not be read.}}'**
+  String systemFirewallFailed(String reason);
+
+  /// System tab, Firewall: the read found no firewall tool.
+  ///
+  /// In en, this message translates to:
+  /// **'No firewall tool was found on this server: none of ufw, firewalld, nft or iptables is installed.'**
+  String get systemFirewallNoTool;
+
+  /// System tab, Firewall: the heading of ufw's rules; a product name.
+  ///
+  /// In en, this message translates to:
+  /// **'ufw'**
+  String get systemFirewallUfw;
+
+  /// System tab, Firewall: the heading of firewalld's zones; a product name.
+  ///
+  /// In en, this message translates to:
+  /// **'firewalld'**
+  String get systemFirewallFirewalld;
+
+  /// System tab, Firewall: the heading of the nftables chains; a product name.
+  ///
+  /// In en, this message translates to:
+  /// **'nftables'**
+  String get systemFirewallNftables;
+
+  /// System tab, Firewall: the heading of the IPv4 iptables chains.
+  ///
+  /// In en, this message translates to:
+  /// **'iptables (IPv4)'**
+  String get systemFirewallIptables;
+
+  /// System tab, Firewall: the heading of the IPv6 iptables chains.
+  ///
+  /// In en, this message translates to:
+  /// **'ip6tables (IPv6)'**
+  String get systemFirewallIp6tables;
+
+  /// System tab, Firewall: whether ufw is enabled.
+  ///
+  /// In en, this message translates to:
+  /// **'{active, select, true{Active} other{Inactive: ufw filters nothing}}'**
+  String systemFirewallActive(String active);
+
+  /// System tab, Firewall: whether firewalld runs.
+  ///
+  /// In en, this message translates to:
+  /// **'{running, select, true{Running} other{Not running}}'**
+  String systemFirewallRunning(String running);
+
+  /// System tab, Firewall: ufw's default policy per direction, each as ufw names it (deny, allow, reject, disabled).
+  ///
+  /// In en, this message translates to:
+  /// **'By default: incoming {incoming}, outgoing {outgoing}, routed {routed}'**
+  String systemFirewallUfwDefaults(
+    String incoming,
+    String outgoing,
+    String routed,
+  );
+
+  /// System tab, Firewall: one ufw rule, its parts as ufw prints them, such as 22/tcp: ALLOW IN from Anywhere.
+  ///
+  /// In en, this message translates to:
+  /// **'{to}: {action} from {from}'**
+  String systemFirewallUfwRule(String to, String action, String from);
+
+  /// System tab, Firewall: a tool that holds no rules.
+  ///
+  /// In en, this message translates to:
+  /// **'No rules.'**
+  String get systemFirewallNoRules;
+
+  /// System tab, Firewall: the firewalld zone new interfaces join.
+  ///
+  /// In en, this message translates to:
+  /// **'{zone} (default zone)'**
+  String systemFirewallZoneDefault(String zone);
+
+  /// System tab, Firewall: the interfaces bound to a firewalld zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Interfaces: {interfaces}'**
+  String systemFirewallZoneInterfaces(String interfaces);
+
+  /// System tab, Firewall: the source addresses bound to a firewalld zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Sources: {sources}'**
+  String systemFirewallZoneSources(String sources);
+
+  /// System tab, Firewall: the services a firewalld zone lets in.
+  ///
+  /// In en, this message translates to:
+  /// **'Services allowed: {services}'**
+  String systemFirewallZoneServices(String services);
+
+  /// System tab, Firewall: the ports a firewalld zone lets in beside its services.
+  ///
+  /// In en, this message translates to:
+  /// **'Ports allowed: {ports}'**
+  String systemFirewallZonePorts(String ports);
+
+  /// System tab, Firewall: a firewalld zone that allows no service.
+  ///
+  /// In en, this message translates to:
+  /// **'none'**
+  String get systemFirewallNone;
+
+  /// System tab, Firewall: zones that apply to no traffic, not listed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 other zone has no interface or source.} other{{count} other zones have no interface or source.}}'**
+  String systemFirewallZonesIdle(int count);
+
+  /// System tab, Firewall: one chain, named by its family, table and name, with its default policy as the tool prints it (accept, drop) and how many rules it holds.
+  ///
+  /// In en, this message translates to:
+  /// **'{chain}: policy {policy}, {rules, plural, =0{no rules} =1{1 rule} other{{rules} rules}}'**
+  String systemFirewallChain(String chain, String policy, int rules);
+
+  /// System tab, Firewall: a chain without a default policy, which only other chains jump to.
+  ///
+  /// In en, this message translates to:
+  /// **'none'**
+  String get systemFirewallNoPolicy;
+
   /// System tab: the heading of the SSH server section (SEC-01).
   ///
   /// In en, this message translates to:
@@ -4531,6 +4691,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No swap is set up.'**
   String get overviewSwapNone;
+
+  /// Overview: the heading of TRI-02's card, what in the latest reading slows the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Why is it slow?'**
+  String get overviewSlowTitle;
+
+  /// Overview, Why is it slow: no signal in the latest reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing in the latest reading points to a slowdown.'**
+  String get overviewSlowNone;
+
+  /// Overview, Why is it slow: PSI cpu some over 10 s reached 20 %. percent is the share, such as "35%".
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks waited for a CPU {percent} of the last 10 seconds: the processor is the bottleneck.'**
+  String overviewSlowCpuWait(String percent);
+
+  /// Overview, Why is it slow: without PSI, the load per core reached 1.5.
+  ///
+  /// In en, this message translates to:
+  /// **'The load is {load} per core: more tasks want to run than there are cores.'**
+  String overviewSlowLoadHigh(double load);
+
+  /// Overview, Why is it slow: steal reached 10 % of CPU time. percent is the share, such as "25%".
+  ///
+  /// In en, this message translates to:
+  /// **'The hypervisor gave {percent} of the CPU time to other guests.'**
+  String overviewSlowSteal(String percent);
+
+  /// Overview, Why is it slow: PSI io some over 10 s reached 10 %. percent is the share, such as "25%".
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks stalled on storage {percent} of the last 10 seconds: the disks are the bottleneck.'**
+  String overviewSlowIoStall(String percent);
+
+  /// Overview, Why is it slow: without PSI, iowait reached 10 % of CPU time. percent is the share, such as "25%".
+  ///
+  /// In en, this message translates to:
+  /// **'Cores sat idle {percent} of the time waiting for storage.'**
+  String overviewSlowIowait(String percent);
+
+  /// Overview, Why is it slow: a disk's mean time per request reached 50 ms. device is the disk's kernel name, such as sda.
+  ///
+  /// In en, this message translates to:
+  /// **'{device} takes {ms} ms per request: it is slow or saturated.'**
+  String overviewSlowSlowDisk(String device, int ms);
+
+  /// Overview, Why is it slow: a disk was busy 90 % of the time. device is the disk's kernel name; percent the share, such as "95%".
+  ///
+  /// In en, this message translates to:
+  /// **'{device} is busy {percent} of the time: requests queue behind each other.'**
+  String overviewSlowBusyDisk(String device, String percent);
+
+  /// Overview, Why is it slow: PSI memory some over 10 s reached 5 %. percent is the share, such as "12%".
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks stalled waiting for memory {percent} of the last 10 seconds: the server is short of RAM.'**
+  String overviewSlowMemoryStall(String percent);
+
+  /// Overview, Why is it slow: swap is half full while under 10 % of memory is available. percent is swap's used share, such as "80%".
+  ///
+  /// In en, this message translates to:
+  /// **'Swap is {percent} full and little memory is free: the server pages to disk.'**
+  String overviewSlowSwapHeavy(String percent);
+
+  /// Overview, Why is it slow: where to look next, under the signals.
+  ///
+  /// In en, this message translates to:
+  /// **'Processes sorts what runs by CPU and memory; System lists recent out-of-memory kills.'**
+  String get overviewSlowWhere;
 
   /// Heading of the Overview's pressure card (CPU-05, MEM-04): Linux pressure stall information.
   ///
@@ -7748,6 +7980,84 @@ abstract class AppLocalizations {
   /// **'Memory'**
   String get dockerContainersColumnMemory;
 
+  /// Containers tab: the chip that puts a checkbox on each row and heading, to act on several containers at once (CTR-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Select'**
+  String get dockerContainersSelect;
+
+  /// Containers table: the checkbox column's name, which a screen reader says before each row's selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Selection'**
+  String get dockerContainersColumnSelect;
+
+  /// Containers table: whether a row is selected, as a screen reader hears its checkbox cell. selected is true or false.
+  ///
+  /// In en, this message translates to:
+  /// **'{selected, select, true{Selected} other{Not selected}}'**
+  String dockerContainersRowSelected(String selected);
+
+  /// Containers table: the row action that selects the container.
+  ///
+  /// In en, this message translates to:
+  /// **'Select'**
+  String get dockerContainersSelectOne;
+
+  /// Containers table: the row action that clears the container's selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Deselect'**
+  String get dockerContainersDeselect;
+
+  /// Containers tab: the action on a compose project's heading that selects every container under it.
+  ///
+  /// In en, this message translates to:
+  /// **'Select its containers'**
+  String get dockerContainersSelectProject;
+
+  /// Containers tab: the action on a compose project's heading that clears the selection of every container under it.
+  ///
+  /// In en, this message translates to:
+  /// **'Deselect its containers'**
+  String get dockerContainersDeselectProject;
+
+  /// Containers tab: a heading's counts with how many of its containers are selected, as a screen reader hears it. summary is dockerContainersGroupSummary's text; selection is all, some or none.
+  ///
+  /// In en, this message translates to:
+  /// **'{summary}, {selection, select, all{all selected} some{some selected} other{none selected}}'**
+  String dockerContainersGroupSelection(String summary, String selection);
+
+  /// Containers tab: how many containers are selected, at the start of the bulk bar (CTR-07).
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{None selected} =1{1 selected} other{{count} selected}}'**
+  String dockerContainersSelectedCount(int count);
+
+  /// Containers tab: a bulk bar button, with how many of the selected containers the verb takes; a stopped container takes no stop. verb is start, stop, restart or remove.
+  ///
+  /// In en, this message translates to:
+  /// **'{verb, select, start{Start} stop{Stop} restart{Restart} remove{Remove} other{Act}} ({count})'**
+  String dockerContainersBulkVerb(String verb, int count);
+
+  /// Containers tab: the bulk bar button that selects every container the search and filters show.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all shown'**
+  String get dockerContainersSelectAll;
+
+  /// Containers tab: the bulk bar button that clears the selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear selection'**
+  String get dockerContainersSelectNone;
+
+  /// Containers tab: why the bulk buttons are off when too many containers are selected.
+  ///
+  /// In en, this message translates to:
+  /// **'Select at most {max} containers to act on them at once.'**
+  String dockerContainersBulkMax(int max);
+
   /// A container's state in words. state is the Engine API's state name; a state outside this list shows as the engine gave it instead.
   ///
   /// In en, this message translates to:
@@ -8485,6 +8795,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Changes made outside {manager} can be overwritten by it. The label {label} marks it.'**
   String dockerDetailsManagedByNote(String manager, String label);
+
+  /// Container details: the heading of TRI-04's diagnosis, what the container's state says went wrong.
+  ///
+  /// In en, this message translates to:
+  /// **'Diagnosis'**
+  String get dockerDiagnosisTitle;
+
+  /// Container details, Diagnosis: what went wrong, by ContainerDiagnosisKind name.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, oomLimit{Out of memory} oomHost{Out of memory on the host} killed{Killed} segfault{Crashed} notExecutable{Command not executable} commandNotFound{Command not found} runtimeError{The engine could not start it} exitedWithError{Exited with an error} exitsAtOnce{Exits right after starting} restartLoop{Restart loop} unhealthy{Health check failing} other{Something went wrong}}'**
+  String dockerDiagnosisKind(String kind);
+
+  /// Container details, Diagnosis: what the finding means and where to look, by ContainerDiagnosisKind name.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, oomLimit{The kernel stopped it, most likely for going over its memory limit. Raise the limit or find what keeps growing.} oomHost{The kernel stopped it while the host ran out of memory. It has no memory limit of its own.} killed{It ended with SIGKILL (exit code 137) without running out of memory: a docker kill, a stop that ran past its timeout, or another process.} segfault{It ended with a segmentation fault (exit code 139), a crash inside the program.} notExecutable{Exit code 126: the command exists but cannot run. Check its permissions and its interpreter line.} commandNotFound{Exit code 127: the entrypoint or command names a program the image does not have.} runtimeError{The engine reported this error for it:} exitedWithError{Its process ended with an error. Its last log lines usually say why.} exitsAtOnce{It exited with code 0 and its restart policy starts it again: its main process does not stay in the foreground.} restartLoop{Its restart policy has started it again after each exit since it was last started by hand. Its logs show what each run ended with.} unhealthy{Its health check keeps failing. Health checks shows what each check printed.} other{Its state says something went wrong.}}'**
+  String dockerDiagnosisWhy(String kind);
+
+  /// Container details, Diagnosis: the memory limit an out-of-memory container went over.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory limit: {limit}'**
+  String dockerDiagnosisMemoryLimit(String limit);
+
+  /// Container details, Diagnosis: the exit code of a container that exited with an error.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit code: {code}'**
+  String dockerDiagnosisExitCode(int code);
+
+  /// Container details, Diagnosis: how often the restart policy has started the container again.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Restarting now} =1{Restarted once} other{Restarted {count} times}}'**
+  String dockerDiagnosisRestarts(int count);
 
   /// Container details: heading of the section with the container's state, health, restart policy, image and times.
   ///

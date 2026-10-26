@@ -100,6 +100,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/updates.dart': {"''", "', '"},
   // A failed check's missing detail.
   'lib/ui/fleet_updates.dart': {"''"},
+  // The space between a firewalld zone's names, as firewalld lists them,
+  // and between a chain's family, table and name.
+  'lib/ui/firewall.dart': {"' '"},
   // The separator between the ports, addresses, key types and setting
   // names sshd printed.
   'lib/ui/sshd_posture.dart': {"', '"},
@@ -538,6 +541,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${DockerWatchList.containers.name}.row.${_rowKey(entry)}'",
     r"'\n'",
     r"'group.${project ?? ''}'",
+    // The selection column's table id (CTR-07), a key.
+    "'select'",
     "''",
   },
   'lib/ui/docker/containers_view.dart': {
