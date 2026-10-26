@@ -1,0 +1,13 @@
+{
+  "_comment": "Not on any runtime classpath (coreLibraryDesugaring in app/build.gradle.kts), so AboutLibraries cannot list it. Text: LICENSE of google/desugar_jdk_libs, unchanged since commit af7193bb1f81c050395c7273ee0354630a295d2f (2023-09-27), which the 2.1.4 POM names.",
+  "uniqueId": "com.android.tools:desugar_jdk_libs",
+  "licenses": [
+    "GPL-2.0-only-WITH-Classpath-exception-2.0"
+  ],
+  "name": "desugar_jdk_libs",
+  "artifactVersion": "2.1.4",
+  "website": "https://github.com/google/desugar_jdk_libs",
+  "description": "Core library desugaring: OpenJDK library classes (java.time and others) that the build compiles into the APK's dex, unmodified, for flutter_local_notifications. Built by Google from the OpenJDK 11 sources in https://github.com/google/desugar_jdk_libs; Maven com.android.tools:desugar_jdk_libs:2.1.4.",
+  "developers": [],
+  "tag": "bundled"
+}
