@@ -6764,6 +6764,12 @@ abstract class AppLocalizations {
   /// **'Stacks'**
   String get dockerTabStacks;
 
+  /// Docker tab, engine strip: a rootless engine whose user has linger off (DKE-11).
+  ///
+  /// In en, this message translates to:
+  /// **'This rootless engine runs under your user, and linger is off: its containers stop when your last session on the server ends. Turn linger on with loginctl enable-linger to keep them running.'**
+  String get dockerEngineLingerOff;
+
   /// Docker tab: the sub-tab with the containers' security review (DKE-06, DKE-07).
   ///
   /// In en, this message translates to:
@@ -6841,6 +6847,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{risk, select, privileged{It has every device and capability of the host, so a break-in reaches the host.} socketMount{Whoever controls the container controls the engine, which is root on the host.} hostNetwork{It shares the host\'s network and reaches every service listening on it.} hostPid{It sees, and can signal, every process on the host.} addedCapabilities{It holds capabilities beyond the engine\'s default set.} databasePublished{Its database port is published on every address, not only on localhost or a private network.} rootUser{Its processes run as root, and the engine maps root to root on the host.} logsUnrotated{It logs with json-file and no max-size, so its log file grows until the disk is full.} latestTag{A new pull can bring a different image. Pin a version or a digest.} noHealthcheck{The engine cannot tell when it stops working while it still runs.} noRestartPolicy{It stays stopped after a crash or a reboot.} other{It may put the host at risk.}}'**
   String dockerReviewRiskWhy(String risk);
+
+  /// Docker Review sub-tab: the heading over other managers and monitors found among the containers (DKE-17).
+  ///
+  /// In en, this message translates to:
+  /// **'Other tools on this host'**
+  String get dockerReviewToolsHeading;
+
+  /// Docker Review sub-tab: another tool's product name, by HostTool name. Product names stay as their makers spell them.
+  ///
+  /// In en, this message translates to:
+  /// **'{tool, select, portainer{Portainer} dockhand{Dockhand} dockge{Dockge} dozzle{Dozzle} beszel{Beszel} uptimeKuma{Uptime Kuma} netdata{Netdata} wud{What\'s Up Docker} other{Another tool}}'**
+  String dockerReviewTool(String tool);
+
+  /// Docker Review sub-tab: the container another tool runs in, and its state.
+  ///
+  /// In en, this message translates to:
+  /// **'Container {name}, {state}'**
+  String dockerReviewToolContainer(String name, String state);
+
+  /// Docker Review sub-tab: the container another tool runs in, when the list gives no state.
+  ///
+  /// In en, this message translates to:
+  /// **'Container {name}'**
+  String dockerReviewToolContainerName(String name);
+
+  /// Docker Review sub-tab: another tool's container publishes no port.
+  ///
+  /// In en, this message translates to:
+  /// **'It publishes no port.'**
+  String get dockerReviewToolNoPorts;
 
   /// Docker Review sub-tab: why the review failed, by DockerQueryFailure name.
   ///

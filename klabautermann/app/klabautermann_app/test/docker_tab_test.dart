@@ -547,6 +547,53 @@ void main() {
       expect(_queries(harness), hasLength(3));
     });
 
+    testWidgets('a rootless engine whose user has linger off says its '
+        'containers stop at logout (DKE-11)', (tester) async {
+      final harness = await _openWeb1(
+        tester,
+        notice: DockerNoticeController(dismissed: true),
+      );
+      await _openDockerTab(tester);
+      HostProfile profile({required bool linger}) =>
+          debianHost(overrides: {'lingerEnabled': linger});
+      await _emit(
+        tester,
+        harness,
+        HostProfileChanged('srv-1', profile(linger: false)),
+      );
+      await _emit(tester, harness, const LinkState('srv-1', LinkReady()));
+      await _emit(
+        tester,
+        harness,
+        dockerReady('srv-1', mode: EngineMode.rootless),
+      );
+      final engine = dockerEngine();
+      await _emit(
+        tester,
+        harness,
+        dockerAnswer(
+          _queries(harness).lastWhere((q) => q.query is DockerEngineQuery),
+          DockerEnginePayload(
+            EngineInfo(
+              name: engine.info.name,
+              serverVersion: engine.info.serverVersion,
+              securityOptions: const ['name=seccomp', 'name=rootless'],
+            ),
+            engine.version,
+          ),
+        ),
+      );
+      final warning = find.textContaining('linger is off');
+      expect(_inDocker(warning), findsOneWidget);
+
+      await _emit(
+        tester,
+        harness,
+        HostProfileChanged('srv-1', profile(linger: true)),
+      );
+      expect(_inDocker(warning), findsNothing);
+    });
+
     testWidgets('the Containers sub-tab watches the containers while it '
         'shows (CTR-01)', (tester) async {
       final harness = await _openWeb1(tester);

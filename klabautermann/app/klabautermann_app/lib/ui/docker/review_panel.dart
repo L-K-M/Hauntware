@@ -94,7 +94,7 @@ class _ReviewPanelState extends State<ReviewPanel> {
     }
 
     switch (_answer) {
-      case DockerReviewPayload(:final reviews, :final omitted):
+      case DockerReviewPayload(:final reviews, :final omitted, :final tools):
         final flagged = [
           for (final review in reviews)
             if (review.findings.isNotEmpty) review,
@@ -120,6 +120,20 @@ class _ReviewPanelState extends State<ReviewPanel> {
           for (final review in flagged) ...[
             const SizedBox(height: 12),
             ContainerReviewCard(review: review),
+          ],
+          if (tools.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            Semantics(
+              header: true,
+              child: Text(
+                l10n.dockerReviewToolsHeading,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            for (final tool in tools) ...[
+              const SizedBox(height: 8),
+              _ToolRow(tool: tool),
+            ],
           ],
         ];
       case DockerQueryFailed(:final failure, :final detail):
@@ -247,6 +261,64 @@ class _FindingRow extends StatelessWidget {
                     style: klabautermannMonoStyle.copyWith(
                       fontSize: theme.textTheme.bodySmall?.fontSize,
                       color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// DKE-17: another manager or monitor, the container it runs in and the
+/// ports it publishes, each as the list labels it.
+class _ToolRow extends StatelessWidget {
+  const _ToolRow({required this.tool});
+
+  final HostToolContainer tool;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return MergeSemantics(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: 8,
+        children: [
+          Icon(Icons.extension_outlined, size: 18, color: muted),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              spacing: 2,
+              children: [
+                Text(
+                  l10n.dockerReviewTool(tool.tool.name),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(switch (tool.state) {
+                  final state? => l10n.dockerReviewToolContainer(
+                    tool.name,
+                    state,
+                  ),
+                  null => l10n.dockerReviewToolContainerName(tool.name),
+                }, style: theme.textTheme.bodySmall),
+                if (tool.ports.isEmpty)
+                  Text(
+                    l10n.dockerReviewToolNoPorts,
+                    style: theme.textTheme.bodySmall,
+                  )
+                else
+                  SelectableText(
+                    tool.ports.join(', '),
+                    style: klabautermannMonoStyle.copyWith(
+                      fontSize: theme.textTheme.bodySmall?.fontSize,
+                      color: muted,
                     ),
                   ),
               ],

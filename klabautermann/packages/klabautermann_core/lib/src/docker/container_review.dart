@@ -1,5 +1,6 @@
 /// DKE-06's security review and DKE-07's log rotation lint over one
-/// container's list entry and inspect, before the inspect is masked.
+/// container's list entry and inspect, before the inspect is masked, and
+/// DKE-17's other tools by the list's images.
 library;
 
 import 'package:klabautermann_docker/klabautermann_docker.dart'
@@ -114,4 +115,40 @@ String? _floatingTag(String? image) {
   final colon = name.lastIndexOf(':');
   if (colon < 0) return image;
   return name.substring(colon + 1) == 'latest' ? image : null;
+}
+
+/// The image names, the last path segment without tag or digest, each
+/// [HostTool] publishes. Portainer's and Beszel's agents count: they
+/// show which manager or monitor reaches the host.
+const _toolImages = {
+  'portainer': HostTool.portainer,
+  'portainer-ce': HostTool.portainer,
+  'portainer-ee': HostTool.portainer,
+  'dockhand': HostTool.dockhand,
+  'dockge': HostTool.dockge,
+  'dozzle': HostTool.dozzle,
+  'beszel': HostTool.beszel,
+  'beszel-agent': HostTool.beszel,
+  'uptime-kuma': HostTool.uptimeKuma,
+  'netdata': HostTool.netdata,
+  'wud': HostTool.wud,
+  'whats-up-docker': HostTool.wud,
+};
+
+/// The [HostTool] [summary]'s image is, or null. `portainer/agent` is
+/// Portainer's too, though its name alone says nothing.
+HostTool? hostToolOf(ContainerSummary summary) {
+  final image = summary.image;
+  if (image == null || image.isEmpty) return null;
+
+  final reference = image.split('@').first;
+  final slash = reference.lastIndexOf('/');
+  var name = reference.substring(slash + 1);
+  final colon = name.indexOf(':');
+  if (colon >= 0) name = name.substring(0, colon);
+  if (name == 'agent') {
+    final owner = slash < 0 ? '' : reference.substring(0, slash);
+    return owner.endsWith('portainer') ? HostTool.portainer : null;
+  }
+  return _toolImages[name];
 }

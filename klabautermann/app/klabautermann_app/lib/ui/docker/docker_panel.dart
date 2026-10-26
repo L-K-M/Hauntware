@@ -248,7 +248,8 @@ class _DockerPanelState extends State<DockerPanel> {
 /// negotiated API version, and the engine's product, version and host
 /// from its details, or that they are being read or could not be. Under
 /// them, CN-09's socket picker ([DockerEndpointPicker]) over the sockets
-/// in [profile], the server's probe answer.
+/// in [profile], the server's probe answer, and DKE-11's warning when a
+/// rootless engine's user has linger off.
 class DockerEngineStrip extends StatelessWidget {
   const DockerEngineStrip({
     super.key,
@@ -266,7 +267,7 @@ class DockerEngineStrip extends StatelessWidget {
     final endpoint = docker.endpointFor(serverId);
     final engine = docker.engineFor(serverId);
     return ListenableBuilder(
-      listenable: Listenable.merge([endpoint, engine]),
+      listenable: Listenable.merge([endpoint, engine, profile]),
       builder: (context, _) {
         final l10n = AppLocalizations.of(context);
         final theme = Theme.of(context);
@@ -317,6 +318,16 @@ class DockerEngineStrip extends StatelessWidget {
               profile: profile,
               serverId: serverId,
             ),
+            // DKE-11: a rootless engine is its user's, and without linger
+            // systemd stops the user's services, the engine among them,
+            // when the user's last session ends [U].
+            if (engine.value case DockerEnginePayload(
+              :final info,
+            ) when info.rootless && profile.value?.lingerEnabled == false)
+              DockerNotice(
+                icon: Icons.warning_amber,
+                text: l10n.dockerEngineLingerOff,
+              ),
           ],
         );
       },
