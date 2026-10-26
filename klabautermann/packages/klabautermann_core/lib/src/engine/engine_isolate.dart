@@ -1456,7 +1456,7 @@ void engineMain(
               RemoveVolume() ||
               RemoveNetwork() ||
               PruneDocker() ||
-              PullImage() ||
+              PullImage(via: PullRoute.engine) ||
               StackAction() ||
               ContainerExec():
             final router = docker;
@@ -1480,7 +1480,7 @@ void engineMain(
                     refusal: ActionRefusalReason.engineUnavailable,
                   ),
                 );
-          case RedeployStack() || StackComposeAction():
+          case RedeployStack() || StackComposeAction() || PullImage():
             final router = docker;
             if (router == null) {
               refuse(ActionRefusalReason.engineUnavailable);
@@ -1520,6 +1520,7 @@ void engineMain(
                         compose,
                         context,
                       ),
+                      final PullImage pull => planHostPull(pull, context),
                       _ => throw StateError(
                         'not a compose intent: ${intent.runtimeType}',
                       ),

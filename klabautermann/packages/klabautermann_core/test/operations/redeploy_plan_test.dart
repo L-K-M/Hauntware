@@ -559,6 +559,86 @@ void main() {
     });
   });
 
+  group('the host pull (REG-01)', () {
+    Future<PlanAttempt> hostPull(
+      PullRoute via, {
+      String reference = 'registry.example.com/app:2',
+      DockerEndpointRoute route = _route,
+      bool adminMode = false,
+    }) => planHostPull(PullImage(_server, reference: reference, via: via), (
+      client: DockerClient(
+        DockerHttpClient(() async => _engine.connect().client),
+        apiVersion: ApiVersion.tryParse('1.52')!,
+      ),
+      route: route,
+      stacks: _host.sources(),
+      profile: _profile(),
+      adminMode: adminMode,
+      sudoAllows: (_) async => true,
+      protection: const ProtectionContext(),
+      loginUser: 'deploy',
+    ));
+
+    test('runs the host\'s docker pull through the endpoint, in the '
+        'foreground with its output kept, or detached', () async {
+      final foreground = _planned(await hostPull(PullRoute.host));
+      expect(foreground.kind, OperationKind.pullImage);
+      expect(foreground.tier, ConfirmationTier.acknowledge);
+      expect(foreground.detached, isFalse);
+      final step = foreground.steps.single as ShellStep;
+      expect(step.argv, [
+        'docker',
+        '--host',
+        'unix://$_socket',
+        'pull',
+        'registry.example.com/app:2',
+      ]);
+      expect((step.elevated, step.captureOutput), (false, true));
+      expect(foreground.runner.identity, 'deploy');
+
+      final detached = _planned(await hostPull(PullRoute.hostDetached));
+      expect(detached.detachedRunner, DetachedRunner.loginSetsid);
+      expect(_argv(detached, 0), step.argv);
+      expect(detached.hostWrites, contains(HostWriteRow.userOperationRecords));
+    });
+
+    test(
+      'over the sudo relay it runs as root, so only in admin mode',
+      () async {
+        const relay = DockerEndpointRoute(
+          rank: DockerRank.sudoRelay,
+          socketPath: _socket,
+          runtime: EngineRuntime.docker,
+          rootEquivalence: DockerRootEquivalence.rootfulSocket,
+        );
+        final foreground = _planned(
+          await hostPull(PullRoute.host, route: relay, adminMode: true),
+        );
+        expect(foreground.requiredLevel, RequiredLevel.admin);
+        expect((foreground.steps.single as ShellStep).elevated, isTrue);
+        expect(
+          (await hostPull(PullRoute.hostDetached, route: relay)).refusal,
+          ActionRefusalReason.adminRequired,
+        );
+      },
+    );
+
+    test('a reference Docker would reject, or the engine route, is no '
+        'host pull', () async {
+      for (final reference in ['-x', 'a b', 'NGINX']) {
+        expect(
+          (await hostPull(PullRoute.host, reference: reference)).refusal,
+          ActionRefusalReason.invalidTarget,
+          reason: reference,
+        );
+      }
+      expect(
+        (await hostPull(PullRoute.engine)).refusal,
+        ActionRefusalReason.invalidTarget,
+      );
+    });
+  });
+
   group('refusals', () {
     test('a project without containers is no target', () async {
       _engine.containers.clear();

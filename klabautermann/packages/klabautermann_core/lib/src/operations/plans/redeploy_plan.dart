@@ -28,7 +28,7 @@ import '../operation_plan.dart';
 import '../ownership.dart';
 import '../plan_types.dart';
 import '../protected_targets.dart';
-import 'docker_plans.dart' show stackFingerprint;
+import 'docker_plans.dart' show stackFingerprint, validImageReference;
 
 /// What planning a redeploy on one server sees: its Docker endpoint and
 /// stack checks, the host profile the runner row comes from, whether
@@ -262,6 +262,119 @@ Future<_Verification> _verify(String name, RedeployPlanContext c) async {
   return _VerifiedStack(project, containers, named);
 }
 
+/// The level the Docker CLI runs at on [c]'s route: only the sudo relay
+/// (rank 3, E16) needs root, since its socket refuses the login user,
+/// whom the CLI would otherwise run as.
+RequiredLevel _cliLevel(RedeployPlanContext c) =>
+    c.route.rank == DockerRank.sudoRelay
+    ? RequiredLevel.admin
+    : RequiredLevel.login;
+
+/// The detached runner row the host and admin mode allow at [level]
+/// (03 §7.17), or why none can run.
+Future<RunnerChoice> _detachedRunner(
+  RedeployPlanContext c,
+  RequiredLevel level,
+) async {
+  final choice = selectDetachedRunner(
+    profile: c.profile,
+    level: level,
+    adminMode: c.adminMode,
+  );
+  // A row that elevates its launch needs a sudo rule for the program it
+  // elevates; without one, the rows that elevate nothing remain.
+  final program = switch (choice.runner) {
+    final runner? => elevatedProgram(runner),
+    null => null,
+  };
+  if (program == null || await c.sudoAllows(program)) return choice;
+  return selectDetachedRunner(
+    profile: c.profile,
+    level: level,
+    adminMode: c.adminMode,
+    sudoCoversRunners: false,
+  );
+}
+
+ActionRefusalReason _detachedRefusal(DetachedRefusal refusal) =>
+    switch (refusal) {
+      DetachedRefusal.adminRequired => ActionRefusalReason.adminRequired,
+      DetachedRefusal.sudoRightMissing => ActionRefusalReason.sudoRightMissing,
+    };
+
+/// REG-01: the host's own `docker pull`, which uses the host's
+/// `docker login` and credential helpers that the daemon never reads
+/// (03 §7.14). In the foreground it runs over the link and ends with its
+/// channel, its output shown at the end; detached it is an operation
+/// that outlives the view (03 §7.17), followed through its log.
+Future<PlanAttempt> planHostPull(
+  PullImage intent,
+  RedeployPlanContext c,
+) async {
+  final reference = intent.reference;
+  if (!validImageReference(reference) || intent.via == PullRoute.engine) {
+    return _refused(ActionRefusalReason.invalidTarget);
+  }
+
+  final argv = dockerPull(
+    socketPath: c.route.socketPath,
+    reference: reference,
+  ).argv;
+  final level = _cliLevel(c);
+  final engine = '${c.route.runtime.name} ${c.route.socketPath}';
+  if (intent.via == PullRoute.host) {
+    final elevated = level == RequiredLevel.admin;
+    return (
+      plan: OperationPlan(
+        intent: intent,
+        kind: OperationKind.pullImage,
+        targetName: reference,
+        steps: [ShellStep(argv, elevated: elevated, captureOutput: true)],
+        requiredLevel: level,
+        runner: RunnerFacts(
+          identity: elevated ? 'root' : c.loginUser,
+          engine: engine,
+          credentials: elevated
+              ? RunnerCredentials.adminPassword
+              : RunnerCredentials.session,
+        ),
+        hostWrites: const [HostWriteRow.engineState],
+      ),
+      refusal: null,
+    );
+  }
+
+  final choice = await _detachedRunner(c, level);
+  final runner = choice.runner;
+  if (runner == null) return _refused(_detachedRefusal(choice.refusal!));
+  return (
+    plan: OperationPlan(
+      intent: intent,
+      kind: OperationKind.pullImage,
+      targetName: reference,
+      steps: [ShellStep(argv)],
+      requiredLevel: level,
+      runner: RunnerFacts(
+        identity: runner.runsAsRoot ? 'root' : c.loginUser,
+        engine: engine,
+        credentials: runner.elevated
+            ? RunnerCredentials.adminPassword
+            : RunnerCredentials.session,
+      ),
+      hostWrites: [
+        HostWriteRow.engineState,
+        runner.runsAsRoot
+            ? HostWriteRow.rootOperationRecords
+            : HostWriteRow.userOperationRecords,
+        if (runner.transientUnit) HostWriteRow.transientUnit,
+      ],
+      detachedRunner: runner,
+      warnings: [if (choice.mayDieAtLogout) PlanWarning.mayDieAtLogout],
+    ),
+    refusal: null,
+  );
+}
+
 /// The detached operation that runs [steps] after `config -q` on
 /// [stack], with the runner row the host and admin mode allow, or why
 /// none can run it.
@@ -275,37 +388,11 @@ Future<PlanAttempt> _composePlan(
   List<String> orphans = const [],
   List<PlanWarning> warnings = const [],
 }) async {
-  // Only the sudo relay (rank 3, E16) needs root: its socket refuses the
-  // login user, whom the CLI steps would otherwise run as. The files were
-  // read as the login user to verify them either way.
-  final level = c.route.rank == DockerRank.sudoRelay
-      ? RequiredLevel.admin
-      : RequiredLevel.login;
-  var choice = selectDetachedRunner(
-    profile: c.profile,
-    level: level,
-    adminMode: c.adminMode,
-  );
-  // A row that elevates its launch needs a sudo rule for the program it
-  // elevates; without one, the rows that elevate nothing remain.
-  if (choice.runner case final runner?) {
-    final program = elevatedProgram(runner);
-    if (program != null && !await c.sudoAllows(program)) {
-      choice = selectDetachedRunner(
-        profile: c.profile,
-        level: level,
-        adminMode: c.adminMode,
-        sudoCoversRunners: false,
-      );
-    }
-  }
+  // The files were read as the login user to verify them either way.
+  final level = _cliLevel(c);
+  final choice = await _detachedRunner(c, level);
   final runner = choice.runner;
-  if (runner == null) {
-    return _refused(switch (choice.refusal!) {
-      DetachedRefusal.adminRequired => ActionRefusalReason.adminRequired,
-      DetachedRefusal.sudoRightMissing => ActionRefusalReason.sudoRightMissing,
-    });
-  }
+  if (runner == null) return _refused(_detachedRefusal(choice.refusal!));
 
   final project = stack.project;
   final List<String> hashArgv;
