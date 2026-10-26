@@ -4101,6 +4101,15 @@ TLS. The section checks when it shows, after an edit and on request.
   stats (CST-01): one-shot stats for visible rows, at most 4 in flight, CPU
   % from the spec formula, memory as usage minus `inactive_file` on cgroup v2
   (minus `cache` on v1) [R: r5 §1.7]. Managed-by badges (DKE-10): 8.7.
+  Column chooser (CTR-08, M6 N16d): the same one-shot read gives the
+  network bytes in and out (summed over interfaces), the block bytes
+  read and written and the PIDs, totals since the container started as
+  `docker stats` shows them. The tab shows, hides and orders the columns
+  after the name (state, health, status, image, ports, stack, CPU,
+  memory, network, block I/O, PIDs, IP, started), stored by name under
+  `klabautermann.docker.containerColumns`; a name it does not know is
+  skipped. Started is read from the status's uptime, since the list
+  carries no start time, so it is as coarse as the status words.
 - **As built (M4 E15).** `operations/plans/docker_plans.dart` plans
   CTR-02's verbs, CTR-06's removal, IMG-02 and STK-03 (7.14, 7.16) over
   the server's Docker endpoint (`DockerRouter.useEndpoint`).

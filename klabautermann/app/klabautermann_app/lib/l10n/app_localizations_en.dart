@@ -5667,6 +5667,48 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerContainersColumnMemory => 'Memory';
 
   @override
+  String get dockerContainersColumnNetwork => 'Network';
+
+  @override
+  String get dockerContainersColumnBlockIo => 'Block I/O';
+
+  @override
+  String get dockerContainersColumnPids => 'PIDs';
+
+  @override
+  String get dockerContainersColumnIp => 'IP';
+
+  @override
+  String get dockerContainersColumnStarted => 'Started';
+
+  @override
+  String dockerContainersIo(String first, String second) {
+    return '$first / $second';
+  }
+
+  @override
+  String get dockerContainersColumns => 'Columns';
+
+  @override
+  String get dockerContainersColumnsTitle => 'Columns';
+
+  @override
+  String get dockerContainersColumnsDrag => 'Drag to reorder';
+
+  @override
+  String get dockerContainersColumnsReset => 'Reset';
+
+  @override
+  String get dockerContainersColumnsCancel => 'Cancel';
+
+  @override
+  String get dockerContainersColumnsDone => 'Done';
+
+  @override
+  String get dockerContainersColumnsNotSaved =>
+      'The columns could not be saved. They stay until Klabautermann quits.';
+
+  @override
   String dockerContainerState(String state) {
     String _temp0 = intl.Intl.selectLogic(state, {
       'created': 'Created',

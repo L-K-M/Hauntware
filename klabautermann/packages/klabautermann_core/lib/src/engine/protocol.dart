@@ -4478,6 +4478,11 @@ final class ContainerListStats {
     this.cpuPercent,
     this.memoryUsed,
     this.memoryLimit,
+    this.networkRx,
+    this.networkTx,
+    this.blockRead,
+    this.blockWrite,
+    this.pids,
   });
 
   final String containerId;
@@ -4492,6 +4497,21 @@ final class ContainerListStats {
   /// Bytes in use less `inactive_file` (cgroup v2) or the cache (v1).
   final int? memoryUsed;
   final int? memoryLimit;
+
+  /// Bytes received and sent over every interface since the container
+  /// started (CTR-08), as `docker stats` totals them; null when the
+  /// container has no network or the daemon reported none.
+  final int? networkRx;
+  final int? networkTx;
+
+  /// Bytes read and written on block devices since it started; null
+  /// where the cgroup reports no I/O accounting (`blkio_stats` empty, as
+  /// on some cgroup v2 hosts).
+  final int? blockRead;
+  final int? blockWrite;
+
+  /// The processes and threads in its cgroup.
+  final int? pids;
 }
 
 /// The query read nothing, for [failure]; [detail] is the daemon's own
