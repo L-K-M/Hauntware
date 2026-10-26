@@ -12,8 +12,9 @@
 # holding a flutter_assets/NOTICES.Z. It must not be empty and must name
 # the components PRODUCT bundles from outside the pub graph or under terms
 # that need their text: the OFL fonts every app bundles (ghost_fonts),
-# Séance's vendored xterm and flutter_pty, Poltergeist's PDFium and the
-# Unicode data tables. Exits 1 on any miss.
+# Séance's vendored xterm and flutter_pty and the NuGet libraries of its
+# Windows build, Poltergeist's PDFium and the Unicode data tables. Exits 1
+# on any miss.
 set -euo pipefail
 
 [[ $# -ge 2 ]] || { echo "usage: $0 PRODUCT FILE..." >&2; exit 2; }
@@ -23,7 +24,7 @@ shift
 required=('Iosevka Term' 'SIL Open Font License')
 case "$product" in
   planchette | klabautermann) ;;
-  seance) required+=('xterm' 'flutter_pty') ;;
+  seance) required+=('xterm' 'flutter_pty' 'Windows Implementation Libraries' 'C++/WinRT') ;;
   poltergeist) required+=('PDFium' 'PDFium: FreeType' 'UNICODE LICENSE V3') ;;
   *) echo "unknown product: $product" >&2; exit 2 ;;
 esac

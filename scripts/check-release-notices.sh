@@ -2,7 +2,8 @@
 # Checks the third-party notices in a client leg's release assets, as users
 # download them (release.yml runs it after each Package step):
 #
-#   android  the APK's flutter_assets/NOTICES.Z
+#   android  the APK's flutter_assets/NOTICES.Z and its Maven library
+#            definitions (scripts/android_notices.py)
 #   linux    LICENSE and Third-Party-Notices.txt at the tarball's top, the
 #            .deb's and the AppImage's /usr/share/doc/<package>/ files
 #   macos    <App>.app/Contents/Resources/Third-Party-Notices.txt
@@ -37,6 +38,11 @@ mkdir "$work"
 case "$target" in
   android)
     check "$stem-android.apk"
+    # The Maven libraries: AboutLibraries' definitions in the APK, and the
+    # NOTICE files of the resolved jars and aars (from this job's Gradle
+    # cache).
+    python3 -I "$here/android_notices.py" check "$stem-android.apk" --config "$here/android-notices.toml"
+    python3 -I "$here/android_notices.py" scan "$stem-android.apk" --config "$here/android-notices.toml"
     ;;
   linux)
     tar -xzf "$stem-linux-x64.tar.gz" -C "$work"

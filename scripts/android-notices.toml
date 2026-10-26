@@ -1,0 +1,18 @@
+# Overrides for scripts/android_notices.py (android recipe), shared by the
+# four apps' APK checks: the APK content that the AboutLibraries definitions
+# (res/raw/aboutlibraries.json, the Maven libraries) do not describe. Every
+# entry needs a reason; the checker rejects unknown keys.
+
+# Every app's graph has it through Flutter's embedding: an empty or broken
+# definitions file fails here.
+require = ["androidx.core:core"]
+
+[[claim]]
+paths = ["lib/*/*.so"]
+requires_entries = ["assets/flutter_assets/NOTICES.Z"]
+reason = "The Flutter engine (libflutter.so), the compiled Dart code (libapp.so) and the pub plugins' native libraries (PDFium, package:jni, flutter_pty): Flutter's NOTICES.Z carries their licenses, and scripts/check-flutter-notices.sh checks its contents"
+
+[[claim]]
+paths = ["assets/flutter_assets/**"]
+requires_entries = ["assets/flutter_assets/NOTICES.Z"]
+reason = "Fonts and assets of the app and its pub packages (ghost_fonts' OFL and BSD fonts, the Material and Cupertino icons): Flutter's NOTICES.Z carries their licenses"

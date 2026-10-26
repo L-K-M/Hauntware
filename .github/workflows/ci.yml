@@ -1366,6 +1366,7 @@ jobs:
           (cd planchette/packages/ghost_servers && flutter pub get)
           (cd planchette/packages/ghost_keystore && flutter pub get)
           (cd planchette/packages/ghost_apk_update && flutter pub get)
+          (cd planchette/packages/ghost_licenses && flutter pub get)
           (cd planchette/app/planchette_app && flutter pub get)
       - name: Shared UI primitives
         working-directory: planchette/packages/ghost_ui
@@ -1417,6 +1418,11 @@ jobs:
         run: |
           flutter analyze --no-pub
           flutter test --no-pub
+      - name: Shared platform license notices
+        working-directory: planchette/packages/ghost_licenses
+        run: |
+          flutter analyze --no-pub
+          flutter test --no-pub
       - name: Standalone app
         working-directory: planchette/app/planchette_app
         run: |
@@ -1432,7 +1438,8 @@ jobs:
           planchette/packages/ghost_marks planchette/packages/ghost_marks_picker
           planchette/packages/ghost_theme
           planchette/packages/ghost_servers planchette/packages/ghost_keystore
-          planchette/packages/ghost_apk_update planchette/app/planchette_app
+          planchette/packages/ghost_apk_update planchette/packages/ghost_licenses
+          planchette/app/planchette_app
 
   seance_flutter:
     name: Séance app (analyze + test)
@@ -1598,15 +1605,23 @@ jobs:
         working-directory: planchette
         run: scripts/package-linux.sh --appimage=required
       # The built artifacts carry their third-party notices: each
-      # NOTICES, the readable copy in the Apple apps, and the .deb's
-      # copyright file and Third-Party-Notices.txt.
+      # NOTICES, the APK's Maven library definitions, the readable copy in
+      # the Apple apps, and the .deb's copyright file and
+      # Third-Party-Notices.txt.
       - name: Verify bundled notices
         shell: bash
         run: |
           check() { bash scripts/check-flutter-notices.sh planchette "$@"; }
           build=planchette/app/planchette_app/build
           case "${{ matrix.target }}" in
-            android) check "$build/app/outputs/flutter-apk/app-release.apk" ;;
+            android)
+              apk="$build/app/outputs/flutter-apk/app-release.apk"
+              check "$apk"
+              # The Maven libraries: AboutLibraries' definitions in the APK,
+              # and the NOTICE files of the resolved jars and aars.
+              python3 -I scripts/android_notices.py check "$apk" --config scripts/android-notices.toml
+              python3 -I scripts/android_notices.py scan "$apk" --config scripts/android-notices.toml
+              ;;
             linux)
               check "$build/linux/x64/release/bundle/data/flutter_assets/NOTICES.Z"
               dpkg-deb -x planchette/dist/planchette_*.deb "$RUNNER_TEMP/notices-deb"
@@ -1801,15 +1816,23 @@ jobs:
         working-directory: seance
         run: scripts/package-linux.sh --output-dir dist-packages
       # The built artifacts carry their third-party notices: each
-      # NOTICES, the readable copy in the Apple apps, and the .deb's
-      # copyright file and Third-Party-Notices.txt.
+      # NOTICES, the APK's Maven library definitions, the readable copy in
+      # the Apple apps, and the .deb's copyright file and
+      # Third-Party-Notices.txt.
       - name: Verify bundled notices
         shell: bash
         run: |
           check() { bash scripts/check-flutter-notices.sh seance "$@"; }
           build=seance/app/seance_app/build
           case "${{ matrix.target }}" in
-            android) check "$build/app/outputs/flutter-apk/app-release.apk" ;;
+            android)
+              apk="$build/app/outputs/flutter-apk/app-release.apk"
+              check "$apk"
+              # The Maven libraries: AboutLibraries' definitions in the APK,
+              # and the NOTICE files of the resolved jars and aars.
+              python3 -I scripts/android_notices.py check "$apk" --config scripts/android-notices.toml
+              python3 -I scripts/android_notices.py scan "$apk" --config scripts/android-notices.toml
+              ;;
             linux)
               check "$build/linux/x64/release/bundle/data/flutter_assets/NOTICES.Z"
               dpkg-deb -x seance/dist-packages/seance_*.deb "$RUNNER_TEMP/notices-deb"
@@ -1980,15 +2003,23 @@ jobs:
         working-directory: poltergeist
         run: scripts/package-linux.sh --output-dir dist-packages
       # The built artifacts carry their third-party notices: each
-      # NOTICES, the readable copy in the Apple apps, and the .deb's
-      # copyright file and Third-Party-Notices.txt.
+      # NOTICES, the APK's Maven library definitions, the readable copy in
+      # the Apple apps, and the .deb's copyright file and
+      # Third-Party-Notices.txt.
       - name: Verify bundled notices
         shell: bash
         run: |
           check() { bash scripts/check-flutter-notices.sh poltergeist "$@"; }
           build=poltergeist/app/poltergeist_app/build
           case "${{ matrix.target }}" in
-            android) check "$build/app/outputs/flutter-apk/app-release.apk" ;;
+            android)
+              apk="$build/app/outputs/flutter-apk/app-release.apk"
+              check "$apk"
+              # The Maven libraries: AboutLibraries' definitions in the APK,
+              # and the NOTICE files of the resolved jars and aars.
+              python3 -I scripts/android_notices.py check "$apk" --config scripts/android-notices.toml
+              python3 -I scripts/android_notices.py scan "$apk" --config scripts/android-notices.toml
+              ;;
             linux)
               check "$build/linux/x64/release/bundle/data/flutter_assets/NOTICES.Z"
               dpkg-deb -x poltergeist/dist-packages/poltergeist_*.deb "$RUNNER_TEMP/notices-deb"
@@ -2157,15 +2188,23 @@ jobs:
         working-directory: klabautermann
         run: scripts/package-linux.sh --output-dir dist-packages
       # The built artifacts carry their third-party notices: each
-      # NOTICES, the readable copy in the Apple apps, and the .deb's
-      # copyright file and Third-Party-Notices.txt.
+      # NOTICES, the APK's Maven library definitions, the readable copy in
+      # the Apple apps, and the .deb's copyright file and
+      # Third-Party-Notices.txt.
       - name: Verify bundled notices
         shell: bash
         run: |
           check() { bash scripts/check-flutter-notices.sh klabautermann "$@"; }
           build=klabautermann/app/klabautermann_app/build
           case "${{ matrix.target }}" in
-            android) check "$build/app/outputs/flutter-apk/app-release.apk" ;;
+            android)
+              apk="$build/app/outputs/flutter-apk/app-release.apk"
+              check "$apk"
+              # The Maven libraries: AboutLibraries' definitions in the APK,
+              # and the NOTICE files of the resolved jars and aars.
+              python3 -I scripts/android_notices.py check "$apk" --config scripts/android-notices.toml
+              python3 -I scripts/android_notices.py scan "$apk" --config scripts/android-notices.toml
+              ;;
             linux)
               check "$build/linux/x64/release/bundle/data/flutter_assets/NOTICES.Z"
               dpkg-deb -x klabautermann/dist-packages/klabautermann_*.deb "$RUNNER_TEMP/notices-deb"
