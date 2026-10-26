@@ -3513,6 +3513,48 @@ abstract class AppLocalizations {
   /// **'Idle'**
   String get overviewCpuIdle;
 
+  /// CPU-04: the share of CPU time cores sat idle while tasks waited for storage (iowait).
+  ///
+  /// In en, this message translates to:
+  /// **'I/O wait'**
+  String get overviewCpuIowait;
+
+  /// CPU-04: the share of CPU time the hypervisor gave to other guests (steal).
+  ///
+  /// In en, this message translates to:
+  /// **'Steal'**
+  String get overviewCpuSteal;
+
+  /// CPU-04: the share of CPU time spent handling hardware interrupts (irq).
+  ///
+  /// In en, this message translates to:
+  /// **'IRQ'**
+  String get overviewCpuIrq;
+
+  /// CPU-04: the share of CPU time spent on deferred interrupt work such as network packets (softirq).
+  ///
+  /// In en, this message translates to:
+  /// **'Soft IRQ'**
+  String get overviewCpuSoftirq;
+
+  /// CPU-04's hint when steal reaches 10 % of CPU time. percent is the steal share, such as "25%".
+  ///
+  /// In en, this message translates to:
+  /// **'Steal {percent}: the host running this virtual machine gives its CPU time to other guests, often a noisy neighbour on a VPS. Programs here run slower than the busy figure suggests.'**
+  String overviewCpuHintSteal(String percent);
+
+  /// CPU-04's hint when iowait reaches 10 % of CPU time; the kernel documentation calls iowait unreliable. percent is the iowait share, such as "25%".
+  ///
+  /// In en, this message translates to:
+  /// **'I/O wait {percent}: cores sat idle while tasks waited for storage. The kernel calls this figure unreliable, so check disk latency before blaming the disks.'**
+  String overviewCpuHintIowait(String percent);
+
+  /// CPU-04's hint when hardware and soft interrupts together reach 10 % of CPU time. percent is their share, such as "25%".
+  ///
+  /// In en, this message translates to:
+  /// **'Interrupts {percent}: the CPUs spend this much handling devices, often heavy network traffic.'**
+  String overviewCpuHintInterrupts(String percent);
+
   /// CPU-02: heading over each core's busy share.
   ///
   /// In en, this message translates to:
@@ -3614,6 +3656,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No swap is set up.'**
   String get overviewSwapNone;
+
+  /// Heading of the Overview's pressure card (CPU-05, MEM-04): Linux pressure stall information.
+  ///
+  /// In en, this message translates to:
+  /// **'Pressure'**
+  String get overviewPressureTitle;
+
+  /// Explains the pressure card's figures and their order.
+  ///
+  /// In en, this message translates to:
+  /// **'Share of time tasks stalled, over the last 10 s, 1 min and 5 min. \"Some\" counts time at least one task waited, \"full\" time all of them did.'**
+  String get overviewPressureCaption;
+
+  /// The pressure card when the server has no /proc/pressure files; their absence is normal.
+  ///
+  /// In en, this message translates to:
+  /// **'This kernel reports no pressure figures. That is normal before Linux 4.20 or with PSI turned off.'**
+  String get overviewPressureNone;
+
+  /// The resource name in a pressure figure's label, for /proc/pressure/cpu.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU'**
+  String get overviewPressureCpu;
+
+  /// The resource name in a pressure figure's label, for /proc/pressure/memory.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get overviewPressureMemory;
+
+  /// The resource name in a pressure figure's label, for /proc/pressure/io.
+  ///
+  /// In en, this message translates to:
+  /// **'I/O'**
+  String get overviewPressureIo;
+
+  /// Label of a pressure figure: the share of time at least one task stalled on resource (CPU, Memory or I/O).
+  ///
+  /// In en, this message translates to:
+  /// **'{resource}, some'**
+  String overviewPressureSome(String resource);
+
+  /// Label of a pressure figure: the share of time all tasks stalled on resource (CPU, Memory or I/O).
+  ///
+  /// In en, this message translates to:
+  /// **'{resource}, full'**
+  String overviewPressureFull(String resource);
+
+  /// A pressure figure's three averages in percent with the kernel's two decimals, over 10 s, 1 min and 5 min, in that order.
+  ///
+  /// In en, this message translates to:
+  /// **'{avg10}% · {avg60}% · {avg300}%'**
+  String overviewPressureValue(double avg10, double avg60, double avg300);
 
   /// The Jobs tab before the server's cron jobs or timers have been read.
   ///

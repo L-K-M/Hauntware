@@ -2009,6 +2009,14 @@ is on main:
   zones, every 10 s. The System tab's Temperatures section lists each
   sensor with its high and critical limits, and does not show where the
   host has no sensor, as VMs, or inside a container.
+- CPU breakdown and pressure (M6 N42a, CPU-04, CPU-05, MEM-04): the
+  Overview's CPU card adds I/O wait, steal, IRQ and soft IRQ beside
+  user, system and idle, with a plain-language hint once steal, iowait
+  or interrupts reach 10 % of CPU time; the iowait hint says the kernel
+  calls the figure unreliable. A Pressure card shows each
+  `/proc/pressure` line's 10 s, 1 min and 5 min averages with two
+  decimals, says plainly when the kernel has none (before 4.20 or with
+  PSI off), and gives SYS-04's reason for a file a container withholds.
 - Disk activity (M6 N30, DSK-03, DSK-04): collector-set version 10's
   `diskstats` rows add ms reading, ms writing and `io_ticks`, and the
   rates add reads and writes per second, await per request and the busy
