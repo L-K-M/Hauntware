@@ -233,33 +233,57 @@ void main() {
     await tester.pump(const Duration(seconds: 10));
   });
 
-  test('a later boot is one btime apart by more than its jitter, or after '
-      'the reboot was asked for when the old boot is unknown', () {
-    final started = DateTime.utc(2026, 10, 26, 12);
+  test('a later boot is one btime apart by more than its jitter, or up '
+      'for less time than the reboot has taken when the old boot is '
+      'unknown, whatever the server\'s clock says', () {
+    const sinceStart = Duration(minutes: 2);
     expect(
       isLaterBoot(
         _bootBefore.add(const Duration(seconds: 1)),
         before: _bootBefore,
-        startedAt: started,
+        uptime: null,
+        sinceStart: sinceStart,
       ),
       isFalse,
     );
     expect(
       isLaterBoot(
-        started.add(const Duration(seconds: 5)),
+        _bootBefore.add(const Duration(minutes: 5)),
         before: _bootBefore,
-        startedAt: started,
+        uptime: null,
+        sinceStart: sinceStart,
       ),
       isTrue,
     );
-    expect(isLaterBoot(_bootBefore, before: null, startedAt: started), isFalse);
     expect(
       isLaterBoot(
-        started.add(const Duration(seconds: 5)),
+        _bootBefore,
         before: null,
-        startedAt: started,
+        uptime: const Duration(seconds: 40),
+        sinceStart: sinceStart,
       ),
       isTrue,
+    );
+    // The old boot, read from a server whose clock runs ten minutes
+    // ahead: its btime is after the start on this device's clock, but it
+    // has been up for days.
+    expect(
+      isLaterBoot(
+        DateTime.now().toUtc().add(const Duration(minutes: 10)),
+        before: null,
+        uptime: const Duration(days: 6),
+        sinceStart: sinceStart,
+      ),
+      isFalse,
+    );
+    expect(
+      isLaterBoot(
+        _bootBefore,
+        before: null,
+        uptime: null,
+        sinceStart: sinceStart,
+      ),
+      isFalse,
     );
   });
 }

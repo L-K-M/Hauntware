@@ -16,16 +16,20 @@ import 'system_panel.dart' show PanelSection;
 /// second.
 const _sameBoot = Duration(seconds: 2);
 
-/// Whether [bootedAt] is a boot after the one the reboot started from:
-/// unlike [before] where that boot was read, otherwise later than when
-/// the reboot was asked for, [startedAt], on this device's clock.
+/// Whether a reading is of a boot after the one the reboot started
+/// from: its [bootedAt] unlike [before] where that boot was read,
+/// otherwise its [uptime] shorter than the time [sinceStart] the reboot
+/// was asked for. Both compare the server's readings with each other or
+/// durations with durations, so a server clock that runs ahead of this
+/// device's cannot pass for a new boot.
 @visibleForTesting
 bool isLaterBoot(
   DateTime bootedAt, {
   required DateTime? before,
-  required DateTime startedAt,
+  required Duration? uptime,
+  required Duration sinceStart,
 }) => before == null
-    ? bootedAt.isAfter(startedAt)
+    ? uptime != null && uptime < sinceStart
     : bootedAt.difference(before).abs() > _sameBoot;
 
 /// SYS-03's words for how long the wait has lasted: seconds for the
@@ -112,24 +116,34 @@ class _PowerSectionState extends State<PowerSection> {
     startAction(
       context,
       PowerAction(widget.serverId, verb),
-      onRun: (planId, _) => setState(() {
-        _reset();
-        _planId = planId;
-        _verb = verb;
-        _startedAt = widget.now();
-        _bootBefore = _bootedAt(widget.core.value);
-        if (verb == PowerVerb.reboot) {
-          _ticker = Timer.periodic(
-            const Duration(seconds: 1),
-            (_) => setState(() {}),
-          );
-        }
-      }),
+      onRun: (planId, _) {
+        // The preview can outlast the section, as when the server leaves
+        // the fleet behind it.
+        if (!mounted) return;
+        setState(() {
+          _reset();
+          _planId = planId;
+          _verb = verb;
+          _startedAt = widget.now();
+          _bootBefore = _bootedAt(widget.core.value);
+          if (verb == PowerVerb.reboot) {
+            _ticker = Timer.periodic(
+              const Duration(seconds: 1),
+              (_) => setState(() {}),
+            );
+          }
+        });
+      },
     );
   }
 
   static DateTime? _bootedAt(Sample? sample) => switch (sample?.result) {
     final CoreResult core => core.bootedAt,
+    _ => null,
+  };
+
+  static Duration? _uptime(Sample? sample) => switch (sample?.result) {
+    final CoreResult core => core.uptime,
     _ => null,
   };
 
@@ -140,7 +154,12 @@ class _PowerSectionState extends State<PowerSection> {
     }
     final booted = _bootedAt(widget.core.value);
     if (booted == null ||
-        !isLaterBoot(booted, before: _bootBefore, startedAt: startedAt)) {
+        !isLaterBoot(
+          booted,
+          before: _bootBefore,
+          uptime: _uptime(widget.core.value),
+          sinceStart: widget.now().difference(startedAt),
+        )) {
       return;
     }
     _ticker?.cancel();
@@ -172,6 +191,12 @@ class _PowerSectionState extends State<PowerSection> {
         finished.outcome == ActionOutcome.succeeded,
       _ => false,
     };
+    // A run that ended without the host taking it shows no wait, so its
+    // clock stops.
+    if (run is RunFinished && !taken) {
+      _ticker?.cancel();
+      _ticker = null;
+    }
 
     return PanelSection(
       title: l10n.systemPowerTitle,

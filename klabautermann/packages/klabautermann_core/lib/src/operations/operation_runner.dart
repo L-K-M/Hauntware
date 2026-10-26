@@ -229,6 +229,12 @@ final class OperationRunner {
                 output: capturedOutput(result.stdout, result.stderr),
               );
             }
+            // The host is going down: nothing more runs on it.
+            return ActionFinished(
+              planId: planId,
+              outcome: ActionOutcome.succeeded,
+              skippedSteps: skipped,
+            );
           case final ShellStep step:
             final result = await _runShell(link, step, session);
             if (step.captureOutput) {

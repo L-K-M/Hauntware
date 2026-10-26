@@ -584,6 +584,28 @@ void main() {
       expect(refused.failure, ActionFailure.stepFailed);
       expect(refused.exitCode, 1);
     });
+
+    test('a step that takes the host down and exits 0 ends the run', () async {
+      final plan = OperationPlan(
+        intent: reboot,
+        kind: OperationKind.reboot,
+        targetName: 'web-01',
+        steps: [
+          ShellStep(['systemctl', 'reboot'], endsLink: true),
+          ShellStep(['true']),
+        ],
+        requiredLevel: RequiredLevel.login,
+        runner: const RunnerFacts(identity: 'deploy'),
+        hostWrites: const [HostWriteRow.loginRecords],
+      );
+      final link = _Link({
+        "'reboot'": const RemoteCommandResult(exitCode: 0),
+        "'true'": const RemoteCommandResult(exitCode: 0),
+      });
+      final done = await _run(link, plan);
+      expect(done.outcome, ActionOutcome.succeeded);
+      expect(link.commands.where((c) => c.contains("'true'")), isEmpty);
+    });
   });
 
   test('a link that fails while planning refuses with noLink', () async {
