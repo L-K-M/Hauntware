@@ -6571,6 +6571,79 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get dockerDiagnosisTitle => 'Diagnosis';
+
+  @override
+  String dockerDiagnosisKind(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'oomLimit': 'Out of memory',
+      'oomHost': 'Out of memory on the host',
+      'killed': 'Killed',
+      'segfault': 'Crashed',
+      'notExecutable': 'Command not executable',
+      'commandNotFound': 'Command not found',
+      'runtimeError': 'The engine could not start it',
+      'exitedWithError': 'Exited with an error',
+      'exitsAtOnce': 'Exits right after starting',
+      'restartLoop': 'Restart loop',
+      'unhealthy': 'Health check failing',
+      'other': 'Something went wrong',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerDiagnosisWhy(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'oomLimit':
+          'The kernel stopped it for going over its memory limit. Raise the limit or find what keeps growing.',
+      'oomHost':
+          'The kernel stopped it while the host ran out of memory. It has no memory limit of its own.',
+      'killed':
+          'It ended with SIGKILL (exit code 137) without running out of memory: a docker kill, a stop that ran past its timeout, or another process.',
+      'segfault':
+          'It ended with a segmentation fault (exit code 139), a crash inside the program.',
+      'notExecutable':
+          'Exit code 126: the command exists but cannot run. Check its permissions and its interpreter line.',
+      'commandNotFound':
+          'Exit code 127: the entrypoint or command names a program the image does not have.',
+      'runtimeError': 'The engine reported this error for it:',
+      'exitedWithError':
+          'Its process ended with an error. Its last log lines usually say why.',
+      'exitsAtOnce':
+          'It exited with code 0 and its restart policy starts it again: its main process does not stay in the foreground.',
+      'restartLoop':
+          'The engine keeps starting it again after it exits. Its logs show what each run ended with.',
+      'unhealthy':
+          'Its health check keeps failing. Health checks shows what each check printed.',
+      'other': 'Its state says something went wrong.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerDiagnosisMemoryLimit(String limit) {
+    return 'Memory limit: $limit';
+  }
+
+  @override
+  String dockerDiagnosisExitCode(int code) {
+    return 'Exit code: $code';
+  }
+
+  @override
+  String dockerDiagnosisRestarts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Restarted $count times',
+      one: 'Restarted once',
+      zero: 'Restarting now',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get dockerDetailsOverview => 'Overview';
 
   @override
