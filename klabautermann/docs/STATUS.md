@@ -969,6 +969,12 @@ is on main:
   Since K44b turned links on, the app's engine samples a connected server
   and sends its profile, so the tab shows its readings; phones reach it
   through More (K40, above).
+- Process tree and state flags (M6 N43a, PRC-03, PRC-06): the
+  Processes tab's Tree toggle shows each process under its parent, with
+  siblings in the chosen order; a filter keeps the matches' parents in
+  view. Zombies and processes in uninterruptible sleep carry a badge in
+  words ("zombie", "waiting on I/O"), and the tab counts them above the
+  list. Thread counts are not read yet.
 - Process detail read (M6 N43b, PRC-04, PRC-05): the engine reads one
   process's working directory, threads, swap, context switches, limits,
   open descriptors, environment and cgroups as the login user, after

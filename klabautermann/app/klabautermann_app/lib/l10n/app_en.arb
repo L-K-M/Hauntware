@@ -906,6 +906,36 @@
   "@processesParentPid": {
     "description": "Label of the process ID of a process's parent, in a process's details."
   },
+  "processesTree": "Tree",
+  "@processesTree": {
+    "description": "Processes tab: the toggle that shows each process under its parent (PRC-03)."
+  },
+  "processesFlag": "{flag, select, zombie{zombie} uninterruptible{waiting on I/O} other{flagged}}",
+  "@processesFlag": {
+    "description": "Processes tab: the badge beside a process in a flagged run state (PRC-06): a zombie (state Z) or in uninterruptible sleep (state D). Lower case, as a label beside the command.",
+    "placeholders": {
+      "flag": {
+        "type": "String"
+      }
+    }
+  },
+  "processesFlagCount": "{flag, select, zombie{{count, plural, =1{1 zombie process} other{{count} zombie processes}}} uninterruptible{{count, plural, =1{1 process waiting on I/O it cannot be interrupted from} other{{count} processes waiting on I/O they cannot be interrupted from}}} other{{count, plural, =1{1 flagged process} other{{count} flagged processes}}}}",
+  "@processesFlagCount": {
+    "description": "Processes tab: how many processes a run state flag marks (PRC-06), above the list.",
+    "placeholders": {
+      "flag": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "processesFlagSeparator": "; ",
+  "@processesFlagSeparator": {
+    "description": "Processes tab: what joins the flag counts above the list."
+  },
   "processesState": "State",
   "@processesState": {
     "description": "Label of a process's run state letter as the kernel reports it (such as R or S), in a process's details."
