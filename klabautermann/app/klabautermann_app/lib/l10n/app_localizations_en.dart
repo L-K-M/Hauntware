@@ -6629,6 +6629,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerLogsRangeApply => 'Apply';
 
   @override
+  String dockerLogsExportFileName(String container) {
+    return '$container.log';
+  }
+
+  @override
   String get dockerLogsLiveRange =>
       'A range with an end has no new lines to follow.';
 

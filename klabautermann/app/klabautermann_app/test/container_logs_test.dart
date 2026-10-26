@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +12,7 @@ import 'package:klabautermann_app/ui/docker/container_details.dart';
 import 'package:klabautermann_app/ui/docker/container_logs.dart';
 import 'package:klabautermann_app/ui/docker/containers_panel.dart';
 import 'package:klabautermann_app/ui/docker/docker_panel.dart';
+import 'package:klabautermann_app/ui/logs/log_export.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/charts.dart'
@@ -18,6 +21,24 @@ import 'support/docker.dart';
 import 'support/fake_engine.dart';
 
 const _serverId = 'srv-1';
+
+/// Saves what an export would write, by file name.
+final class _ExportHost implements LogExportHost {
+  final saved = <(String, String)>[];
+
+  @override
+  bool get canShare => false;
+
+  @override
+  Future<bool> save(String fileName, Uint8List bytes) async {
+    saved.add((fileName, utf8.decode(bytes)));
+    return true;
+  }
+
+  @override
+  Future<void> share(String fileName, Uint8List bytes, {Rect? origin}) async {}
+}
+
 const _id = 'b7e9d0c1a2f3';
 
 const _desktop = Size(1100, 900);
@@ -111,6 +132,7 @@ Future<_Harness> _pump(
   Size size = _desktop,
   bool phone = false,
   EngineRuntime runtime = EngineRuntime.docker,
+  _ExportHost? exportHost,
 }) async {
   tester.view.physicalSize = phone ? _phone : size;
   tester.view.devicePixelRatio = 1;
@@ -179,7 +201,10 @@ Future<_Harness> _pump(
       darkTheme: _theme(Brightness.dark),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: Scaffold(body: body),
+      home: LogExportScope(
+        host: exportHost ?? _ExportHost(),
+        child: Scaffold(body: body),
+      ),
     ),
   );
   final harness = _Harness(engine, visible, logs);
@@ -397,6 +422,26 @@ void main() {
     );
     expect(live.onSelected, isNull);
     expect(live.tooltip, 'A range with an end has no new lines to follow.');
+  });
+
+  testWidgets('Export saves the held lines as the container\'s log file '
+      '(CTX-06)', (tester) async {
+    final host = _ExportHost();
+    final harness = await _pump(tester, exportHost: host);
+    await _openLogs(tester);
+    await harness.running(tester);
+
+    await tester.tap(find.byTooltip('Export'));
+    await tester.pumpAndSettle();
+    expect(find.text('Include secrets'), findsOne);
+    await tester.tap(find.text('Include secrets'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save…'));
+    await tester.pumpAndSettle();
+
+    final (name, text) = host.saved.single;
+    expect(name, 'web-db.log');
+    expect(text, contains('stderr FATAL:  password authentication failed'));
   });
 
   testWidgets('lines the engine dropped show as one row', (tester) async {

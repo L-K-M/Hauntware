@@ -7971,6 +7971,16 @@
   "@dockerLogsRangeApply": {
     "description": "Reads the container's logs in the chosen time range."
   },
+  "dockerLogsExportFileName": "{container}.log",
+  "@dockerLogsExportFileName": {
+    "description": "The suggested file name for a container's saved log export: the container's name. Keep it a valid file name.",
+    "placeholders": {
+      "container": {
+        "type": "String",
+        "example": "web-db"
+      }
+    }
+  },
   "dockerLogsLiveRange": "A range with an end has no new lines to follow.",
   "@dockerLogsLiveRange": {
     "description": "Tooltip of the off Live chip while a container's logs read a range with a chosen end."

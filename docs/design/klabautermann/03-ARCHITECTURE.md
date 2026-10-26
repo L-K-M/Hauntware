@@ -4100,6 +4100,10 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   offers LOG-01's spans, counted back from when the stream opens, and a
   chosen start and end from date and time pickers, which reads once:
   the Live chip stops and says why.
+- **As built (M6 N19b).** CTX-06: the container log view's Export opens
+  LOG-10's sheet over the rows it holds, redacted by the engine's
+  `SecretRedactor` unless the user turns on Include secrets (SAF-07),
+  then copied, saved as `<container>.log` or shared.
 - **As built (M4 E15).** `operations/plans/docker_plans.dart` plans
   CTR-02's verbs, CTR-06's removal, IMG-02 and STK-03 (7.14, 7.16) over
   the server's Docker endpoint (`DockerRouter.useEndpoint`).
