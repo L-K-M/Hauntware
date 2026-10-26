@@ -9,6 +9,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         BackupEntry,
         CpuPercentages,
         BootEnd,
+        CpuTopology,
         CronSnapshot,
         DiskRate,
         EngineMode,
@@ -36,6 +37,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         ProcsSelection,
         RestartCheck,
         SmartDisk,
+        SshdPosture,
         SystemctlVerb,
         SystemdUnit,
         TempsSnapshot,
@@ -73,6 +75,7 @@ import 'package:meta/meta.dart';
 import 'package:seance_core/seance_core.dart' show DangerFinding;
 
 import '../catalog/klabautermann_records.dart' show SyncedRule;
+import '../certificates/tls_check.dart' show TlsEndpoint, TlsEndpointCheck;
 import '../history/history_store.dart' show HistoryRange, HistoryTier;
 import '../docker/docker_ladder.dart'
     show
@@ -759,6 +762,11 @@ final class KernelsQuery extends HostQuerySpec {
   const KernelsQuery();
 }
 
+/// The processor's model and topology (CPU-07), as [CpuTopologyRead].
+final class CpuTopologyQuery extends HostQuerySpec {
+  const CpuTopologyQuery();
+}
+
 /// The network interfaces and socket counts (NET-02, NET-03), as
 /// [NetInterfaces].
 final class InterfacesQuery extends HostQuerySpec {
@@ -779,6 +787,16 @@ final class RedactLines extends EngineRequest {
 
   final String requestId;
   final List<String> lines;
+}
+
+/// Checks each of [endpoints]' TLS certificate from this device (CRT-01,
+/// 03 §7.10): a handshake per endpoint, at once, without SSH. One
+/// [TlsEndpointsChecked] with [requestId] answers it.
+final class CheckTlsEndpoints extends EngineRequest {
+  const CheckTlsEndpoints(this.requestId, this.endpoints);
+
+  final String requestId;
+  final List<TlsEndpoint> endpoints;
 }
 
 /// Watches [lists] on [serverId]'s engine (03 §7.12 DKE-02, CST-01), as
@@ -1275,6 +1293,17 @@ final class ReadPackages extends EngineRequest {
 /// memory maps. One [RestartReport] with [requestId] answers it.
 final class ReadRestarts extends EngineRequest {
   const ReadRestarts(this.serverId, {required this.requestId});
+
+  final String serverId;
+  final String requestId;
+}
+
+/// Reads [serverId]'s effective sshd configuration for the app's own
+/// connection (SEC-01, 03 §7.10): in admin mode only, since `sshd -T`
+/// loads the host keys. One [SshdPostureReport] with [requestId] answers
+/// it.
+final class ReadSshdPosture extends EngineRequest {
+  const ReadSshdPosture(this.serverId, {required this.requestId});
 
   final String serverId;
   final String requestId;
@@ -2146,6 +2175,13 @@ final class Kernels extends HostPayload {
   final KernelCheck check;
 }
 
+/// [CpuTopologyQuery]'s processor.
+final class CpuTopologyRead extends HostPayload {
+  const CpuTopologyRead(this.topology);
+
+  final CpuTopology topology;
+}
+
 /// [InterfacesQuery]'s interfaces and sockets.
 final class NetInterfaces extends HostPayload {
   const NetInterfaces(this.read);
@@ -2191,6 +2227,15 @@ final class RedactedLines extends EngineEvent {
 
   final String requestId;
   final String text;
+}
+
+/// [CheckTlsEndpoints]' checks, in its order.
+final class TlsEndpointsChecked extends EngineEvent {
+  TlsEndpointsChecked(this.requestId, Iterable<TlsEndpointCheck> checks)
+    : checks = List.unmodifiable(checks);
+
+  final String requestId;
+  final List<TlsEndpointCheck> checks;
 }
 
 /// What the engine knows of [serverId]'s Docker endpoint (03 §5.8, §5.9),
@@ -2803,6 +2848,50 @@ final class RestartReport extends EngineEvent {
   final String requestId;
   final RestartCheck? check;
   final RestartReportFailure? failure;
+}
+
+/// Why a [ReadSshdPosture] read nothing.
+enum SshdPostureFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// Admin mode is off for the server.
+  adminRequired,
+
+  /// Elevation refused, so nothing ran.
+  elevationRefused,
+
+  /// No sshd binary was found.
+  missing,
+
+  /// `sshd -T` refused, as for a broken configuration; the report's
+  /// detail carries its error.
+  refused,
+
+  /// The read printed something else.
+  unreadable,
+
+  /// The link failed while reading.
+  transport,
+}
+
+/// The answer to [ReadSshdPosture].
+final class SshdPostureReport extends EngineEvent {
+  const SshdPostureReport({
+    required this.serverId,
+    required this.requestId,
+    this.posture,
+    this.failure,
+    this.detail,
+  });
+
+  final String serverId;
+  final String requestId;
+  final SshdPosture? posture;
+  final SshdPostureFailure? failure;
+
+  /// sshd's error lines for [SshdPostureFailure.refused].
+  final String? detail;
 }
 
 /// Why a [ReadPackages] checked nothing.
@@ -4122,6 +4211,10 @@ enum DockerWatchList {
 
   /// The network list (03 §7.15 DNW-01), as [DockerNetworksPayload].
   networks,
+
+  /// The engine's events while the app follows them (03 §7.12 DKE-03),
+  /// as [DockerEventsPayload].
+  events,
 }
 
 /// The most watches one server holds [E]: a Docker view holds one or two.
@@ -4236,6 +4329,68 @@ final class DockerNetworksPayload extends DockerPayload {
   const DockerNetworksPayload(this.networks);
 
   final List<NetworkSummary> networks;
+}
+
+/// The events timeline (DKE-03): the newest `kDockerEventsKept` entries,
+/// oldest first, events and the gaps between streams alike.
+final class DockerEventsPayload extends DockerPayload {
+  DockerEventsPayload(Iterable<DockerTimelineEntry> entries)
+    : entries = List.unmodifiable(entries);
+
+  final List<DockerTimelineEntry> entries;
+}
+
+/// One line of the events timeline.
+@immutable
+sealed class DockerTimelineEntry {
+  const DockerTimelineEntry(this.at);
+
+  /// When it happened, in UTC: the event's time, or when a gap began.
+  final DateTime at;
+}
+
+/// One engine event.
+final class DockerTimelineEvent extends DockerTimelineEntry {
+  const DockerTimelineEvent({
+    required DateTime at,
+    required this.type,
+    required this.action,
+    this.actorId,
+    this.name,
+    this.image,
+    this.exitCode,
+  }) : super(at);
+
+  /// `container`, `image`, `volume` or `network`.
+  final String type;
+
+  /// `start`, `die`, `health_status: unhealthy`, `pull`, ...
+  final String action;
+  final String? actorId;
+
+  /// The container's, volume's or network's name; an image's reference.
+  final String? name;
+
+  /// A container's image.
+  final String? image;
+
+  /// A container's exit code, on `die`.
+  final int? exitCode;
+}
+
+/// A span the app did not follow the events: the stream was lost from
+/// [at] until [until]. With [resumed] the stream asked the engine for the
+/// events of the span, which it keeps only in a bounded buffer; without
+/// it the span's events are not shown.
+final class DockerTimelineGap extends DockerTimelineEntry {
+  const DockerTimelineGap({
+    required DateTime at,
+    required this.until,
+    required this.resumed,
+  }) : super(at);
+
+  final DateTime until;
+  final bool resumed;
 }
 
 /// `/system/df`'s totals per type (02 OV-05), read in the shape the
@@ -4909,6 +5064,46 @@ final class ContainerAction extends ActionIntent {
   final String containerId;
   final ContainerVerb verb;
   final KillSignal? signal;
+}
+
+/// What [ContainerBulkAction] does to each container it names (CTR-07).
+enum ContainerBulkVerb {
+  start,
+  stop,
+  restart,
+
+  /// Removal without its anonymous volumes and without `force`, so only
+  /// a container that is not up.
+  remove;
+
+  /// Whether a container in [state], as the Engine API names it, takes
+  /// this verb, as its own actions offer it: start for one that is not
+  /// up, stop for one running or restarting, restart for one running,
+  /// remove for one not up. Paused and removing ones take none.
+  bool appliesTo(String? state) => switch (this) {
+    start || remove => const {'created', 'exited', 'dead'}.contains(state),
+    stop => state == 'running' || state == 'restarting',
+    restart => state == 'running',
+  };
+}
+
+/// The most containers one [ContainerBulkAction] names [E]: each takes
+/// a request to plan and one to re-validate.
+const kContainerBulkMax = 100;
+
+/// One verb on several containers (CTR-07), as one plan with a step per
+/// container in [containerIds]' order, each by its full id. The engine
+/// leaves out a container whose state does not take [verb]
+/// ([ContainerBulkVerb.appliesTo]) and refuses when none is left.
+final class ContainerBulkAction extends ActionIntent {
+  ContainerBulkAction(
+    super.serverId, {
+    required Iterable<String> containerIds,
+    required this.verb,
+  }) : containerIds = List.unmodifiable(containerIds);
+
+  final List<String> containerIds;
+  final ContainerBulkVerb verb;
 }
 
 /// Runs [argv] once in [containerId] without a TTY (03 §7.13, CTX-08), as

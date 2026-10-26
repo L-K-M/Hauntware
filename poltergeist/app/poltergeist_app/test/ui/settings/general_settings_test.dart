@@ -1,6 +1,8 @@
 // The Settings → General surface's first section (02 §10's tab list,
 // D19): the update-check opt-out toggle. Follows the settings idiom —
 // immediate persist, revert the field and toast on a failed write.
+import 'package:flutter/foundation.dart'
+    show LicenseEntryWithLineBreaks, LicenseRegistry;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
@@ -55,6 +57,26 @@ void main() {
 
     expect(committed, [false]);
     expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+  });
+
+  testWidgets('the licenses row opens the open-source licenses', (
+    tester,
+  ) async {
+    // A known entry instead of the bundle's NOTICES, which tests lack.
+    LicenseRegistry.reset();
+    LicenseRegistry.addLicense(
+      () => Stream.value(
+        const LicenseEntryWithLineBreaks(['bundled_component'], 'Its text.'),
+      ),
+    );
+    addTearDown(LicenseRegistry.reset);
+    await tester.pumpWidget(wrap(settings()));
+
+    await tester.tap(find.byKey(const ValueKey('settings.licenses')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(LicensePage), findsOneWidget);
+    expect(find.text('bundled_component'), findsWidgets);
   });
 
   testWidgets('a failed persist reverts the switch', (tester) async {

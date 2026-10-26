@@ -204,7 +204,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutLicence =>
-      'Klabautermann is free and unencumbered software released into the public domain under the Unlicense.';
+      'Klabautermann\'s own code is public domain (Unlicense). It includes third-party components that keep their own licenses, listed under View licenses.';
 
   @override
   String get statusConnected => 'Connected';
@@ -927,6 +927,116 @@ class AppLocalizationsEn extends AppLocalizations {
   String get processesCommandLineTitle => 'Command line';
 
   @override
+  String get processesDetailTitle => 'Details';
+
+  @override
+  String get processesDetailReading => 'Reading details…';
+
+  @override
+  String get processesDetailReadAgain => 'Read again';
+
+  @override
+  String processesDetailFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server denied reading this process.',
+      'missing': 'The server lacks a tool this read needs.',
+      'other': 'Reading this process\'s details failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String processesDetailEnded(String end) {
+    String _temp0 = intl.Intl.selectLogic(end, {
+      'gone': 'This process has exited.',
+      'reused':
+          'Its process ID now belongs to another process, so nothing was read.',
+      'other': 'This process has ended.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get processesDetailNoStart =>
+      'The server did not report when this process started, so its details are not read.';
+
+  @override
+  String get processesDetailUnit => 'Unit';
+
+  @override
+  String get processesDetailNoUnit => 'None';
+
+  @override
+  String get processesDetailContainer => 'Container';
+
+  @override
+  String processesDetailContainerValue(String runtime, String id) {
+    String _temp0 = intl.Intl.selectLogic(runtime, {
+      'docker': 'Docker',
+      'podman': 'Podman',
+      'containerd': 'containerd',
+      'crio': 'CRI-O',
+      'other': 'Container',
+    });
+    return '$_temp0 $id';
+  }
+
+  @override
+  String get processesDetailCwd => 'Working directory';
+
+  @override
+  String get processesDetailNotReadable => 'Not readable as this user';
+
+  @override
+  String get processesDetailThreads => 'Threads';
+
+  @override
+  String get processesDetailSwap => 'Swap';
+
+  @override
+  String get processesDetailSwitches => 'Context switches';
+
+  @override
+  String processesDetailSwitchesValue(int voluntary, int involuntary) {
+    return '$voluntary voluntary, $involuntary involuntary';
+  }
+
+  @override
+  String get processesDetailOpenFiles => 'Open files';
+
+  @override
+  String processesDetailOpenFilesOf(int count, int limit) {
+    return '$count of $limit';
+  }
+
+  @override
+  String get processesDetailProcessLimit => 'Process limit';
+
+  @override
+  String get processesDetailUnlimited => 'Unlimited';
+
+  @override
+  String get processesEnvironmentTitle => 'Environment';
+
+  @override
+  String get processesEnvironmentNone => 'No environment variables.';
+
+  @override
+  String get processesEnvironmentDenied =>
+      'The environment is not readable as this user.';
+
+  @override
+  String processesEnvironmentCapped(int count) {
+    return 'Only the first $count variables were read.';
+  }
+
+  @override
+  String processesEnvironmentEntry(String name, String value) {
+    return '$name: $value';
+  }
+
+  @override
   String processesRevealNote(int seconds) {
     return 'Select a masked argument to show it for $seconds seconds.';
   }
@@ -1428,6 +1538,48 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get systemProcessorTitle => 'Processor';
+
+  @override
+  String get systemProcessorReading => 'Reading the processor…';
+
+  @override
+  String get systemProcessorReadAgain => 'Read again';
+
+  @override
+  String get systemProcessorModel => 'Model';
+
+  @override
+  String get systemProcessorNoModel =>
+      'This processor does not report a model name, as is common on ARM boards.';
+
+  @override
+  String get systemProcessorSockets => 'Sockets';
+
+  @override
+  String get systemProcessorCores => 'Cores';
+
+  @override
+  String get systemProcessorThreadsPerCore => 'Threads per core';
+
+  @override
+  String get systemProcessorLogical => 'Logical CPUs';
+
+  @override
+  String get systemProcessorUsable => 'Usable CPUs';
+
+  @override
+  String systemProcessorFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server refused the processor read.',
+      'missing': 'The server lacks the tools the processor read runs.',
+      'other': 'The processor read failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
   String get systemNetInterfacesTitle => 'Interfaces';
 
   @override
@@ -1630,6 +1782,230 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get systemSshdTitle => 'SSH server';
+
+  @override
+  String get systemSshdAdminNeeded =>
+      'Turn on admin mode to read the SSH server\'s settings: sshd needs root to print them.';
+
+  @override
+  String get systemSshdRead => 'Read SSH server settings';
+
+  @override
+  String get systemSshdReadAgain => 'Read again';
+
+  @override
+  String get systemSshdReading => 'Reading the SSH server\'s settings…';
+
+  @override
+  String systemSshdFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noLink':
+          'The server is not connected, so the SSH server\'s settings could not be read.',
+      'adminRequired':
+          'Admin mode ended before the SSH server\'s settings were read.',
+      'elevationRefused':
+          'Elevation was refused, so the SSH server\'s settings were not read.',
+      'missing': 'No sshd was found on this server.',
+      'refused':
+          'sshd refused to print its settings, as for an error in its configuration.',
+      'unreadable': 'sshd\'s settings could not be read.',
+      'transport':
+          'The connection failed while the SSH server\'s settings were read.',
+      'other': 'The SSH server\'s settings could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemSshdMatchRemote =>
+      'Match blocks for the server\'s own address or port are not applied: this sshd is too old to be told them.';
+
+  @override
+  String get systemSshdMatchNone =>
+      'No Match blocks are applied: these are sshd\'s settings before any Match block, as the read could not name this connection.';
+
+  @override
+  String get systemSshdPorts => 'Ports';
+
+  @override
+  String get systemSshdListen => 'Listens on';
+
+  @override
+  String get systemSshdRootLogin => 'Root login';
+
+  @override
+  String systemSshdRoot(String value) {
+    String _temp0 = intl.Intl.selectLogic(value, {
+      'yes': 'Allowed',
+      'no': 'Not allowed',
+      'keysOnly': 'With a key only',
+      'forcedCommandsOnly': 'Forced commands only',
+      'other': 'Unknown',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemSshdPassword => 'Password login';
+
+  @override
+  String get systemSshdKeyboard => 'Keyboard-interactive login';
+
+  @override
+  String get systemSshdPubkey => 'Key login';
+
+  @override
+  String systemSshdEnabled(String state) {
+    String _temp0 = intl.Intl.selectLogic(state, {
+      'true': 'On',
+      'false': 'Off',
+      'other': 'Unknown',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemSshdMethods => 'Required login methods';
+
+  @override
+  String get systemSshdHostKeys => 'Host keys';
+
+  @override
+  String get systemSshdUserKeys => 'Accepted user key types';
+
+  @override
+  String get systemSshdMaxSessions => 'Sessions per connection';
+
+  @override
+  String get systemSshdTcpForwarding => 'TCP forwarding';
+
+  @override
+  String get systemSshdSocketForwarding => 'Socket forwarding';
+
+  @override
+  String systemSshdForwarding(String value) {
+    String _temp0 = intl.Intl.selectLogic(value, {
+      'all': 'Allowed',
+      'local': 'Local only',
+      'remote': 'Remote only',
+      'no': 'Off',
+      'other': 'Unknown',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemSshdPermitOpen => 'Forwarding targets';
+
+  @override
+  String get systemSshdDocker => 'Docker over SSH';
+
+  @override
+  String get systemSshdDockerAllowed => 'Not blocked by sshd\'s settings';
+
+  @override
+  String systemSshdDockerBlocked(String settings) {
+    return 'Blocked by $settings';
+  }
+
+  @override
+  String get systemSshdDockerNote =>
+      'A key\'s options in authorized_keys, such as restrict, can block it too; sshd does not show those.';
+
+  @override
+  String get systemCertificatesTitle => 'Certificates';
+
+  @override
+  String get systemCertificatesNone =>
+      'List the host names and ports whose certificates this device should check, such as this server\'s web sites.';
+
+  @override
+  String get systemCertificatesNotSaved =>
+      'The endpoints could not be saved on this device; they are kept until the app quits.';
+
+  @override
+  String get systemCertificatesCheck => 'Check again';
+
+  @override
+  String get systemCertificatesEdit => 'Edit endpoints…';
+
+  @override
+  String get systemCertificatesChecking => 'Checking…';
+
+  @override
+  String get systemCertificatesNotChecked => 'Not checked yet';
+
+  @override
+  String systemCertificatesFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'lookup': 'The host name did not resolve from this device.',
+      'connect': 'This device could not connect.',
+      'timeout': 'No answer within 10 seconds.',
+      'handshake': 'The endpoint answered, but not with TLS.',
+      'other': 'The check failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String systemCertificatesExpires(DateTime date, int days) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat.yMMMd(localeName);
+    final String dateString = dateDateFormat.format(date);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'in $days days',
+      one: 'in 1 day',
+      zero: 'today',
+    );
+    return 'Expires $dateString, $_temp0';
+  }
+
+  @override
+  String systemCertificatesExpired(DateTime date) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat.yMMMd(localeName);
+    final String dateString = dateDateFormat.format(date);
+
+    return 'Expired $dateString';
+  }
+
+  @override
+  String get systemCertificatesUntrusted =>
+      'This device does not trust this certificate for the host name: it may be self-signed, expired or issued for another name.';
+
+  @override
+  String systemCertificatesIssuer(String issuer) {
+    return 'Issued by $issuer';
+  }
+
+  @override
+  String get systemCertificatesEditTitle => 'Endpoints to check';
+
+  @override
+  String systemCertificatesHelper(int max) {
+    return 'One per line: a host name or address, with :port for a port other than 443. At most $max.';
+  }
+
+  @override
+  String systemCertificatesProblem(String problem, int max) {
+    String _temp0 = intl.Intl.selectLogic(problem, {
+      'notEndpoint':
+          'Each line needs a host name or address, with an optional :port.',
+      'tooMany': 'List at most $max endpoints.',
+      'other': 'These endpoints cannot be checked.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemCertificatesCancel => 'Cancel';
+
+  @override
+  String get systemCertificatesSave => 'Save';
 
   @override
   String get systemAccountsTitle => 'Users';
@@ -4917,6 +5293,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'PowerAction': 'Reboot or shut down',
       'ContainerAction': 'Container action',
       'RemoveContainer': 'Remove container',
+      'ContainerBulkAction': 'Containers action',
       'RemoveImage': 'Remove image',
       'CreateVolume': 'Create volume',
       'RemoveVolume': 'Remove volume',
@@ -5265,6 +5642,79 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerTabNetworks => 'Networks';
 
   @override
+  String get dockerTabEvents => 'Events';
+
+  @override
+  String get dockerEventsBuffer =>
+      'Events show from when Klabautermann started following them. The engine keeps only a limited buffer, so events while the stream was lost may be missing.';
+
+  @override
+  String get dockerEventsWaiting => 'Waiting for the events stream…';
+
+  @override
+  String dockerEventsFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'tooManyQueries':
+          'This server already has as many Docker watches open as Klabautermann allows.',
+      'connectionFailed':
+          'The connection to the engine failed while following its events.',
+      'other': 'The engine\'s events could not be followed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerEventsAll => 'All';
+
+  @override
+  String dockerEventsKind(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'container': 'Containers',
+      'image': 'Images',
+      'volume': 'Volumes',
+      'network': 'Networks',
+      'other': 'Other',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerEventsSearch => 'Search by name, action or image';
+
+  @override
+  String get dockerEventsNone =>
+      'No events yet. They appear here as the engine reports them.';
+
+  @override
+  String get dockerEventsNoMatch => 'No event matches the filter.';
+
+  @override
+  String dockerEventsLine(String name, String action) {
+    return '$name: $action';
+  }
+
+  @override
+  String dockerEventsImage(String image) {
+    return 'image $image';
+  }
+
+  @override
+  String dockerEventsExitCode(int code) {
+    return 'exit code $code';
+  }
+
+  @override
+  String dockerEventsGap(String from, String until, String resumed) {
+    String _temp0 = intl.Intl.selectLogic(resumed, {
+      'true':
+          'Not followed from $from to $until. The engine sent the events it still held, so some may be missing.',
+      'other':
+          'Not followed from $from to $until. Events in this span are not shown.',
+    });
+    return '$_temp0';
+  }
+
+  @override
   String get dockerTabStacks => 'Stacks';
 
   @override
@@ -5585,6 +6035,28 @@ class AppLocalizationsEn extends AppLocalizations {
       'exited': 'Exited',
       'dead': 'Dead',
       'other': 'Unknown',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerContainerStateFlagged(String state, String flag) {
+    String _temp0 = intl.Intl.selectLogic(flag, {
+      'restartLoop': 'restart loop',
+      'failed': 'failed',
+      'other': 'flagged',
+    });
+    return '$state ($_temp0)';
+  }
+
+  @override
+  String dockerContainerFlagTooltip(String flag, int code) {
+    String _temp0 = intl.Intl.selectLogic(flag, {
+      'restartLoop':
+          'The engine is starting it again after it exited, as a restart policy does in a loop. The details show how often it restarted.',
+      'failed':
+          'Its last run exited with code $code, which a stop does not leave.',
+      'other': 'Exit code $code',
     });
     return '$_temp0';
   }

@@ -18,6 +18,9 @@ dependencies:
     path: ../../packages/ghost_fonts
   ghost_keystore:
     path: ../../packages/ghost_keystore
+  # The Android APK's Maven library notices on the licenses page.
+  ghost_licenses:
+    path: ../../packages/ghost_licenses
   ghost_servers:
     path: ../../packages/ghost_servers
   ghost_ui:

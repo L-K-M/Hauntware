@@ -163,6 +163,11 @@ void main() {
         ),
         const HostQuery(
           serverId: 'srv-1',
+          queryId: 'h-cpu',
+          query: CpuTopologyQuery(),
+        ),
+        const HostQuery(
+          serverId: 'srv-1',
           queryId: 'h-net',
           query: InterfacesQuery(),
         ),
@@ -172,6 +177,7 @@ void main() {
           query: MountsQuery(),
         ),
         const RedactLines('r-1', ['a', 'b']),
+        const CheckTlsEndpoints('t-1', [TlsEndpoint('example.com', 443)]),
         const DockerQuery(
           serverId: 'srv-1',
           queryId: 'q-1',
@@ -291,6 +297,7 @@ void main() {
         const ReadSmart('srv-1', requestId: 'r-1'),
         const ReadPackages('srv-1', requestId: 'r-1', fresh: true),
         const ReadRestarts('srv-1', requestId: 'r-1'),
+        const ReadSshdPosture('srv-1', requestId: 'r-1'),
         const ReadAccounts('srv-1', requestId: 'r-1'),
         const ReadHistory('srv-1', HistoryTier.minute, requestId: 'h-1'),
         const AcknowledgeOperation('srv-1', '0123456789abcdef'),
@@ -469,6 +476,20 @@ void main() {
         ),
         HostResult(
           serverId: 'srv-1',
+          queryId: 'h-cpu',
+          payload: CpuTopologyRead(
+            CpuTopology(
+              models: ['Cortex-A53', 'Cortex-A72'],
+              vendor: 'ARM',
+              logicalCpus: 6,
+              usableCpus: 6,
+              cores: 6,
+              threadsPerCore: 1,
+            ),
+          ),
+        ),
+        HostResult(
+          serverId: 'srv-1',
           queryId: 'h-net',
           payload: NetInterfaces(
             InterfacesRead(
@@ -525,6 +546,23 @@ void main() {
           ),
         ),
         const RedactedLines('r-1', 'a\nb'),
+        TlsEndpointsChecked('t-1', [
+          TlsEndpointCheck(
+            endpoint: const TlsEndpoint('example.com', 443),
+            certificate: TlsCertificateFacts(
+              subject: '/CN=example.com',
+              issuer: '/C=US/O=Let\'s Encrypt/CN=R11',
+              notBefore: DateTime.utc(2026, 9, 1),
+              notAfter: DateTime.utc(2026, 11, 30),
+            ),
+            trusted: true,
+          ),
+          const TlsEndpointCheck(
+            endpoint: TlsEndpoint('example.com', 8443),
+            failure: TlsCheckFailure.connect,
+            detail: 'Connection refused',
+          ),
+        ]),
         FootprintState(
           'srv-1',
           files: const [
@@ -556,6 +594,27 @@ void main() {
           serverId: 'srv-1',
           list: DockerWatchList.images,
           payload: const DockerImagesPayload([]),
+          at: DateTime.utc(2026, 10, 17),
+        ),
+        DockerListChanged(
+          serverId: 'srv-1',
+          list: DockerWatchList.events,
+          payload: DockerEventsPayload([
+            DockerTimelineEvent(
+              at: DateTime.utc(2026, 10, 17),
+              type: 'container',
+              action: 'die',
+              actorId: 'abc',
+              name: 'web',
+              image: 'nginx:1',
+              exitCode: 137,
+            ),
+            DockerTimelineGap(
+              at: DateTime.utc(2026, 10, 17, 0, 1),
+              until: DateTime.utc(2026, 10, 17, 0, 2),
+              resumed: true,
+            ),
+          ]),
           at: DateTime.utc(2026, 10, 17),
         ),
         ActionPlanned(

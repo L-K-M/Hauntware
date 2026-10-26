@@ -3265,6 +3265,21 @@ unless the user enables admin mode for that panel.
   steal explained), PSI (absence is normal), model and topology, OOM kills
   linked to journal entries, configurable cards, top lists, quick actions,
   threshold bands, bottom dock.
+- **As built (M6 N42c).** CPU-07's model and topology are a host query,
+  `CpuTopologyQuery`, shown in the System tab's Processor section beside
+  the identity, since they do not change while the Overview samples. It
+  prints `nproc`, `lscpu -J` in the C locale, whose field names `lscpu`
+  translates otherwise, and the model and placement lines of
+  `/proc/cpuinfo`, without the flags that make it about 1.5 KiB a CPU.
+  Each model's sockets and cores per socket (or clusters and cores per
+  cluster, on arm64 boards with no sockets) follow its name, or precede
+  it before util-linux 2.37, and a big.LITTLE board lists two models
+  whose cores add up. Without `lscpu` (BusyBox) the cpuinfo lines count
+  the CPUs and their distinct sockets and cores where every CPU names
+  both; arm64's names no model, which the section says. Inside a
+  container the socket, core and CPU counts are the host machine's, so
+  they read as unknown with D50's reason; `nproc`'s usable CPUs, which a
+  cpuset limits, stay.
 - **v1.x.** Frequency, per-cgroup CPU (paths per cgroup driver [U]), ZFS
   ARC as cache, zram and zswap [U].
 
@@ -3327,6 +3342,17 @@ unless the user enables admin mode for that panel.
   them above the table. Runaway thread counts need the thread count,
   which the `procs` rows do not carry yet; they come with the process
   detail (N43b).
+
+  As built (M6 N43c), a process's details sheet reads
+  `ProcessDetailQuery` for its PID and start ticks when it opens and on
+  "Read again": the unit and container that own it (the runtime and the
+  container id's first 12 characters), working directory, threads,
+  swap, context switches, open files against their soft limit and the
+  process limit, then its environment after the arguments. Facts the
+  login user may not read say so; a process that exited or whose PID
+  was reused says which, and a reading without start ticks is not read.
+  Masked variables reveal like masked arguments (SAF-07), and a new
+  read masks them again.
 - **v1.x.** Renice and ionice, per-process I/O (sudo).
 
 As built in M4 (E08, `klabautermann_host/lib/src/commands/commands.dart`),
@@ -3960,6 +3986,20 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   `AllowTcpForwarding`, `PermitOpen` or `DisableForwarding` blocks the
   Docker transport (all four apply to socket forwarding, 5.3). Endpoint TLS
   expiry from the device (CRT-01, Dart `SecureSocket`).
+
+  As built in M6 (N41a), the read runs in admin mode as one elevated
+  command, since `sshd -T` loads the host keys. sudo drops
+  `$SSH_CONNECTION`, so the user and the connection come from the probe
+  (`user`, `ssh_connection`). The client's address serves as `host` too,
+  which is what sshd matches under its default `UseDNS no`, and `laddr`
+  and `lport` name the server's side. An sshd that refuses `laddr`
+  is retried with `user`, `host` and `addr`, then without `-C`. The
+  section says which `Match` blocks the settings reflect. It shows the
+  ports and addresses, root login, password, keyboard-interactive and
+  key login, required methods, host key types, accepted user key types,
+  `MaxSessions` and the forwarding settings. It names the settings that
+  block the Docker transport, with a note that `authorized_keys` options
+  are not shown.
 - **v1.x.** Lynis audit and fleet hardening table, fail2ban, SELinux and
   AppArmor, `systemd-analyze security --json=short` (systemd 250+), CPU
   vulnerability status, the root-equivalent access summary, host-key
@@ -3968,6 +4008,18 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   from the server.
 - **Later.** CrowdSec, domain expiry through RDAP from the device (+E,
   opt-in).
+
+As built in M6 (N41b), CRT-01's endpoints are listed per server in the
+System tab's Certificates section. They are kept device-local in
+`settings.json` (`klabautermann.certificates.endpoints`) as `host:port`,
+at most 20, port 443 by default, since the check runs from this device.
+The engine checks them at once, each with a 10-second handshake through
+`SecureSocket`. The handshake accepts any certificate so a bad one can
+still be read, and records whether the device's trust store accepted it
+for the host name. Each line shows the expiry and days left, warning
+within 14 days, the issuer, and a distrust note. A failed check names
+the failure: lookup, connection, timeout, or a port that does not speak
+TLS. The section checks when it shows, after an edit and on request.
 
 ### 7.11 Hardware, system, boot and triage (HW, SYS, BOOT, TRI)
 
@@ -4082,13 +4134,28 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   grouped by compose project, Swarm task names parsed defensively.
   Lifecycle (CTR-02, CTR-05, CTR-06): start, stop, restart, pause, unpause,
   kill with a signal, remove, always by full ID after the ownership (8.7)
-  and protected-target checks; typed confirmation when `v=1`. Inspect
+  and protected-target checks; typed confirmation when `v=1`. Bulk
+  actions (CTR-07): `ContainerBulkAction` starts, stops, restarts or
+  removes up to 100 containers [E] by full id as one plan, a step per
+  container in the order given, confirmed once at the tier its most
+  guarded container needs. It leaves out a container whose state does
+  not take the verb as its own actions offer it (removal never forces,
+  so only containers that are not up), and an id the engine no longer
+  lists refuses the plan as a changed target. Inspect
   (CTR-03): masked values with reveal; never synced, persisted or sent to an
   LLM without consent. Health (CTR-04). Logs (CTX-01, CTX-02): 5.6; when the
   logging driver keeps no readable logs, the view names the driver. List
   stats (CST-01): one-shot stats for visible rows, at most 4 in flight, CPU
   % from the spec formula, memory as usage minus `inactive_file` on cgroup v2
   (minus `cache` on v1) [R: r5 §1.7]. Managed-by badges (DKE-10): 8.7.
+  Restart-loop and exit flags (CTR-09): the list carries no
+  `RestartCount` or `State.OOMKilled`, and inspecting every row on each
+  change would cost a request per container, so a row flags what its
+  state and Status text say: a restarting container as a restart loop,
+  and an exited one whose code a stop does not leave (anything but 0
+  and 128 plus SIGINT, SIGQUIT, SIGKILL or SIGTERM) as failed: the state
+  in the error colour and an icon before the status words. The details show the restart count, the exit code and
+  an OOM kill from the inspect.
 - **As built (M6 N19a).** CTX-03: `ContainerLogSource` takes `since`
   and `until`, both inclusive, sent as the logs request's `since=` and
   `until=` in 5.6's seconds and nanoseconds. A ranged read sends no
@@ -4137,6 +4204,20 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   through one `docker compose logs -f` in low-session mode); JSON and level
   parsing; redacted log export; stats detail charts, sorting, memory limit
   risk, top table.
+- **As built (M6 N20).** DKE-03's timeline comes from the events stream
+  the watcher already holds for the lists (5.7), so it costs no channel
+  of its own. Each container, image, volume and network event the lists'
+  refresh does not ignore joins a buffer of the newest 500 per endpoint
+  (health-check execs and attach-like actions stay out). The buffer is
+  kept across a dropped link and forgotten on a socket change or when
+  the last watch ends. A stream opened after a lost one adds a gap from
+  the loss to the reopen, marked resumed when `since` asked the engine
+  to replay it (9.5 item 8's limited-buffer wording). The Docker
+  tab's Events sub-tab watches `DockerWatchList.events` while it shows.
+  It lists the timeline newest first with time, type, name and action, a
+  container's image and exit code, and the gaps. A filter chip per type
+  and a search by name, action or image leave the gaps in place.
+  DKE-04's disk usage on demand was already the Overview's (OV-05).
 - **v1.x.** Daemon config view, topology graph, interop labels, copy as
   `docker run`, generate compose service, rename, in-place limit updates,
   create from form, filesystem changes, container file browser, cgroup
@@ -4995,6 +5076,7 @@ OperationPlan {
     - `StartTimer`;
     - `ContainerAction`;
     - `RemoveContainer`;
+    - `ContainerBulkAction` (M6 N16b, CTR-07);
     - `RemoveImage`;
     - `StackAction` (act anyway);
     - `RedeployStack` (remove orphans).
@@ -5945,7 +6027,7 @@ shows there.
 | `CancelAction(planId)` (M6 N13, IMG-03): stops a running plan where its step can stop, today an image pull, whose request the engine closes so the daemon stops the pull | The plan's `ActionFinished` with `cancelled`; a step that cannot stop runs to its end |
 | `DockerQuery` with `DockerImageHistoryQuery(image)` (M6 N14, IMG-04): `GET /images/{name}/history` for an image's id or reference; the Images sub-tab opens it from a row | `DockerResult` with `DockerImageHistoryPayload(layers)`, newest first: each layer's id (null for one built elsewhere), creation time, size, comment and tags, and its `CreatedBy` masked as a command line, since build arguments can carry secrets (8.9); an empty image is `invalidQuery` |
 | `DockerQuery` with `DockerContainerTopQuery(containerId)` (M6 N17a, CTR-10): `GET /containers/{id}/top?ps_args=-eo pid,user,pcpu,rss,etime,args`, asked again without `ps_args` when the daemon answers 500, as BusyBox's `ps` (no `-e`) and a Windows daemon (no arguments) do; the container details open it for a running container | `DockerResult` with `DockerContainerTopPayload(titles, processes, commandColumn)`: the columns `ps` named and a row of cells per process, the `CMD`, `COMMAND` or `ARGS` cell masked as a command line (8.9) and its index in `commandColumn`; a stopped container's 409 is `daemonError`, an empty id `invalidQuery` |
-| `HostQuery` with `ProcessDetailQuery(pid, startTicks)` (M6 N43b, PRC-04, PRC-05): one `sh -c` as the login user that re-checks the start ticks (field 22 of `/proc/<pid>/stat`), then prints the process's `cwd`, `status` counters (threads, swap, context switches), `cgroup`, `limits`, open descriptor count and environment (at most 500 lines, last, since values can hold newlines, so a multi-line value counts more than once), the working directory, descriptors and environment marked denied where the user may not read them; the kernel lets anyone who sees the process read `status`, `cgroup` and `limits` | `HostResult` with `ProcessDetails(detail, environment)`: the details, with the unit and container `/proc/<pid>/cgroup` names (systemd units under the unified or `name=systemd` hierarchy; Docker, Podman, containerd and CRI-O scopes, cgroupfs `/docker/<id>` and kubepods leaves), and the environment as `EnvVar`s masked by key (8.9); or `ProcessEnded(gone | reused)` when the process exited or its PID names another |
+| `HostQuery` with `ProcessDetailQuery(pid, startTicks)` (M6 N43b, PRC-04, PRC-05): one `sh -c` as the login user that re-checks the start ticks (field 22 of `/proc/<pid>/stat`), then prints the process's `cwd`, `status` counters (threads, swap, context switches), `cgroup`, `limits`, open descriptor count and environment (at most 500 entries, one a line, a value's newlines printed as `\x01` so it stays one entry), the working directory, descriptors and environment marked denied where the user may not read them; the kernel lets anyone who sees the process read `status`, `cgroup` and `limits` | `HostResult` with `ProcessDetails(detail, environment)`: the details, with the unit and container `/proc/<pid>/cgroup` names (systemd units under the unified or `name=systemd` hierarchy; Docker, Podman, containerd and CRI-O scopes, cgroupfs `/docker/<id>` and kubepods leaves), and the environment as `EnvVar`s masked by key (8.9); or `ProcessEnded(gone | reused)` when the process exited or its PID names another |
 | `AnswerKeystore(requestId, result)` (D62) | `KeystoreRequest(requestId, operation)`: the engine asks the app for the OS keystore |
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)` (K41, 4.7) | `CatalogReplaced(entries)` with each synced entry's `endpoint`, after `RequestRejected` when a pin could not be saved; `EndpointChanged(serverId)` when a sync changes a confirmed endpoint |

@@ -87,4 +87,5 @@ checks, not a lock on other programs.
 
 [Unlicense](LICENSE), matching both sibling applications. Initial editor
 code was extracted from Poltergeist and Séance; provenance is recorded in
-the architecture document.
+the architecture document. The bundled engine, packages and fonts keep
+their own licenses; see the suite's [License section](../README.md#license).

@@ -255,6 +255,26 @@ void main() {
     expect(payload.failure, HostQueryFailure.failed);
   });
 
+  test('the processor read runs its command and parses', () async {
+    link = _RunLink(
+      (_) => _ok(
+        '$kCpuNprocMarker\n2\n$kCpuLscpuMarker\n$kCpuInfoMarker\n'
+        'processor\t: 0\nprocessor\t: 1\n',
+      ),
+    );
+    final read =
+        (await ask(const CpuTopologyQuery())).payload as CpuTopologyRead;
+    expect(read.topology.usableCpus, 2);
+    expect(read.topology.logicalCpus, 2);
+    expect(
+      link!.commands.single,
+      HostCommands.commandLine(
+        HostCommands.cpuTopology(),
+        quote: quoteShellWord,
+      ),
+    );
+  });
+
   test('the interface read runs its command and parses', () async {
     link = _RunLink(
       (_) => _ok(
@@ -275,6 +295,13 @@ void main() {
         quote: quoteShellWord,
       ),
     );
+  });
+
+  test('a processor read that printed something else fails', () async {
+    link = _RunLink((_) => _ok('sh: nproc: not found\n'));
+    final payload =
+        (await ask(const CpuTopologyQuery())).payload as HostQueryFailed;
+    expect(payload.failure, HostQueryFailure.failed);
   });
 
   test('an interface read that printed something else fails', () async {

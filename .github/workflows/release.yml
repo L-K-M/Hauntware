@@ -201,6 +201,21 @@ jobs:
       # (fetch-depth: 0 above — the validator walks the full graph.)
       - name: Verify preserved history
         run: python3 scripts/check-history.py
+      # License statements agree with LICENSE (the Unlicense): the README
+      # scopes it to the suite's own code and names where the bundled
+      # code's notices ship, and every macOS About string names the
+      # Unlicense without reserving rights the dedication gives away.
+      - name: Check license statements
+        run: |
+          grep -q '^## License$' README.md
+          grep -q 'Third-Party-Notices.txt' README.md
+          if grep -n 'All rights reserved' -- */app/*/macos/Runner/Configs/AppInfo.xcconfig; then
+            exit 1
+          fi
+          for config in */app/*/macos/Runner/Configs/AppInfo.xcconfig; do
+            grep -q '^PRODUCT_COPYRIGHT = .*Unlicense' "$config" \
+              || { echo "$config: PRODUCT_COPYRIGHT does not name the Unlicense" >&2; exit 1; }
+          done
       # Tag ordering: monotonic releases only. The tool owns the
       # semantics (prior-tag list); zero prior tags is vacuously fine.
       - name: Verify tag ordering
@@ -354,6 +369,7 @@ jobs:
           (cd planchette/packages/ghost_servers && flutter pub get)
           (cd planchette/packages/ghost_keystore && flutter pub get)
           (cd planchette/packages/ghost_apk_update && flutter pub get)
+          (cd planchette/packages/ghost_licenses && flutter pub get)
           (cd planchette/app/planchette_app && flutter pub get)
       - name: Planchette — analyze and test shared packages and app
         run: |
@@ -366,6 +382,7 @@ jobs:
           (cd planchette/packages/ghost_servers && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/packages/ghost_keystore && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/packages/ghost_apk_update && flutter analyze --no-pub && flutter test --no-pub)
+          (cd planchette/packages/ghost_licenses && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/app/planchette_app && flutter analyze --no-pub && flutter test --no-pub)
       - name: Séance — analyze and test app and vendored xterm fork
         run: |
@@ -445,9 +462,36 @@ jobs:
           exe=seance-sync
           if [ "${{ runner.os }}" = "Windows" ]; then exe=seance-sync.exe; fi
           dart compile exe packages/seance_sync_server/bin/seance_sync_server.dart -o "dist/$exe"
+      # Third-party notices beside the binary: the pub packages it compiles
+      # in, the Dart SDK and the third-party code its AOT runtime embeds,
+      # fetched at this SDK's exact revision (the SDK floats). The
+      # generator fails on a package without license text.
+      - name: Third-party notices
+        working-directory: seance
+        shell: bash
+        run: |
+          py=python3
+          if [ "$RUNNER_OS" = Windows ]; then py=python; fi
+          "$py" scripts/licenses/dart-runtime-licenses.py --out "$RUNNER_TEMP/dart-runtime"
+          "$py" scripts/licenses/go-dart-notices.py dart --workspace . \
+            --package seance_sync_server --runtime-licenses "$RUNNER_TEMP/dart-runtime" \
+            --title seance-sync -o dist/Third-Party-Notices.txt
+          cp LICENSE dist/LICENSE
       - name: Package
         shell: bash
         run: tar -czf seance-sync-${{ matrix.platform }}.tar.gz -C seance/dist .
+      # What users download must carry the notices (a relative -C: Git
+      # Bash's tar reads "D:" as a remote host).
+      - name: Verify notices in the archive
+        shell: bash
+        run: |
+          mkdir notices-check
+          tar -xzf seance-sync-${{ matrix.platform }}.tar.gz -C notices-check
+          test -s notices-check/LICENSE
+          test -s notices-check/Third-Party-Notices.txt
+          grep -q '^Dart SDK (runtime and core libraries) ' notices-check/Third-Party-Notices.txt
+          grep -q '^BoringSSL ' notices-check/Third-Party-Notices.txt
+          grep -q '^shelf ' notices-check/Third-Party-Notices.txt
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned: a retargeted tag would be arbitrary code with contents: write)
         with:
           # On a tag push these two resolve to the pushed tag (and the
@@ -546,7 +590,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
           libsecret-1-dev libjsoncpp-dev imagemagick file
-          dpkg-dev binutils xvfb xdotool
+          dpkg-dev binutils xvfb xdotool squashfs-tools
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -636,11 +680,22 @@ jobs:
               bundles=(planchette/app/planchette_app/build/linux/*/release/bundle)
               [[ ${#bundles[@]} -eq 1 ]] || { echo "expected one linux bundle, found ${#bundles[@]}" >&2; exit 1; }
               mv "${bundles[0]}" "planchette-linux-${{ matrix.flavor }}"
-              tar -czf "planchette-linux-${{ matrix.flavor }}.tar.gz" "planchette-linux-${{ matrix.flavor }}"
               # The mv above renamed the bundle out of Flutter's layout, so
               # point the packager at it explicitly (--bundle asks the ELF for
               # its arch).
               planchette/scripts/package-linux.sh --bundle "planchette-linux-${{ matrix.flavor }}" --output-dir .
+              # The AppImage runtime appimagetool put in front of the squashfs
+              # statically links libfuse, squashfuse, musl, zstd and zlib: add
+              # their notices and source pointers inside the AppImage.
+              python3 -I scripts/appimage-notices.py appimage "planchette-linux-${{ matrix.flavor }}.AppImage" \
+                --package planchette --overrides scripts/appimage-notices.json
+              # The tarball also carries the notices readable at its top, beside
+              # the license; added after packaging, so the .deb keeps them in
+              # its doc directory only.
+              gzip -dc "planchette-linux-${{ matrix.flavor }}/data/flutter_assets/NOTICES.Z" \
+                > "planchette-linux-${{ matrix.flavor }}/Third-Party-Notices.txt"
+              cp LICENSE "planchette-linux-${{ matrix.flavor }}/LICENSE"
+              tar -czf "planchette-linux-${{ matrix.flavor }}.tar.gz" "planchette-linux-${{ matrix.flavor }}"
               ;;
             macos)
               # ditto keeps the bundle's symlinks and metadata intact inside
@@ -655,9 +710,17 @@ jobs:
               runners=(planchette/app/planchette_app/build/windows/*/runner/Release)
               [[ ${#runners[@]} -eq 1 ]] || { echo "expected one windows runner dir, found ${#runners[@]}" >&2; exit 1; }
               mv "${runners[0]}" planchette-windows-x64
+              # The notices readable at the zip's top, beside the license.
+              gzip -dc planchette-windows-x64/data/flutter_assets/NOTICES.Z \
+                > planchette-windows-x64/Third-Party-Notices.txt
+              cp LICENSE planchette-windows-x64/LICENSE
               7z a -bd planchette-windows-x64.zip planchette-windows-x64
               ;;
           esac
+      # What users download must carry its third-party notices.
+      - name: Verify bundled notices
+        shell: bash
+        run: bash scripts/check-release-notices.sh planchette planchette "${{ matrix.target }}"
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned: a retargeted tag would be arbitrary code with contents: write)
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
@@ -999,7 +1062,7 @@ jobs:
         run: >-
           sudo apt-get update && sudo apt-get install -y
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
-          libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool
+          libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool squashfs-tools
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -1092,11 +1155,22 @@ jobs:
               bundles=(seance/app/seance_app/build/linux/*/release/bundle)
               [[ ${#bundles[@]} -eq 1 ]] || { echo "expected one linux bundle, found ${#bundles[@]}" >&2; exit 1; }
               mv "${bundles[0]}" "seance-linux-${{ matrix.flavor }}"
-              tar -czf "seance-linux-${{ matrix.flavor }}.tar.gz" "seance-linux-${{ matrix.flavor }}"
               # The mv above renamed the bundle out of Flutter's layout, so
               # point the packager at it explicitly (--bundle asks the ELF for
               # its arch).
               seance/scripts/package-linux.sh --bundle "seance-linux-${{ matrix.flavor }}" --output-dir .
+              # The AppImage runtime appimagetool put in front of the squashfs
+              # statically links libfuse, squashfuse, musl, zstd and zlib: add
+              # their notices and source pointers inside the AppImage.
+              python3 -I scripts/appimage-notices.py appimage "seance-linux-${{ matrix.flavor }}.AppImage" \
+                --package seance --overrides scripts/appimage-notices.json
+              # The tarball also carries the notices readable at its top, beside
+              # the license; added after packaging, so the .deb keeps them in
+              # its doc directory only.
+              gzip -dc "seance-linux-${{ matrix.flavor }}/data/flutter_assets/NOTICES.Z" \
+                > "seance-linux-${{ matrix.flavor }}/Third-Party-Notices.txt"
+              cp LICENSE "seance-linux-${{ matrix.flavor }}/LICENSE"
+              tar -czf "seance-linux-${{ matrix.flavor }}.tar.gz" "seance-linux-${{ matrix.flavor }}"
               # The .flatpak rides in its own leg (flatpak_seance): the
               # repack needs its own toolchain and a Flathub fill of its
               # runtimes, and a slow one must not take this leg's other
@@ -1126,9 +1200,17 @@ jobs:
               runners=(seance/app/seance_app/build/windows/*/runner/Release)
               [[ ${#runners[@]} -eq 1 ]] || { echo "expected one windows runner dir, found ${#runners[@]}" >&2; exit 1; }
               mv "${runners[0]}" seance-windows-x64
+              # The notices readable at the zip's top, beside the license.
+              gzip -dc seance-windows-x64/data/flutter_assets/NOTICES.Z \
+                > seance-windows-x64/Third-Party-Notices.txt
+              cp LICENSE seance-windows-x64/LICENSE
               7z a -bd seance-windows-x64.zip seance-windows-x64
               ;;
           esac
+      # What users download must carry its third-party notices.
+      - name: Verify bundled notices
+        shell: bash
+        run: bash scripts/check-release-notices.sh seance seance "${{ matrix.target }}"
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned)
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
@@ -1227,7 +1309,7 @@ jobs:
         run: >-
           sudo apt-get update && sudo apt-get install -y
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
-          libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool
+          libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool squashfs-tools
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -1323,11 +1405,22 @@ jobs:
               bundles=(poltergeist/app/poltergeist_app/build/linux/*/release/bundle)
               [[ ${#bundles[@]} -eq 1 ]] || { echo "expected one linux bundle, found ${#bundles[@]}" >&2; exit 1; }
               mv "${bundles[0]}" "poltergeist-linux-${{ matrix.flavor }}"
-              tar -czf "poltergeist-linux-${{ matrix.flavor }}.tar.gz" "poltergeist-linux-${{ matrix.flavor }}"
               # The mv above renamed the bundle out of Flutter's layout, so
               # point the packager at it explicitly (--bundle asks the ELF for
               # its arch).
               poltergeist/scripts/package-linux.sh --bundle "poltergeist-linux-${{ matrix.flavor }}" --output-dir .
+              # The AppImage runtime appimagetool put in front of the squashfs
+              # statically links libfuse, squashfuse, musl, zstd and zlib: add
+              # their notices and source pointers inside the AppImage.
+              python3 -I scripts/appimage-notices.py appimage "poltergeist-linux-${{ matrix.flavor }}.AppImage" \
+                --package poltergeist --overrides scripts/appimage-notices.json
+              # The tarball also carries the notices readable at its top, beside
+              # the license; added after packaging, so the .deb keeps them in
+              # its doc directory only.
+              gzip -dc "poltergeist-linux-${{ matrix.flavor }}/data/flutter_assets/NOTICES.Z" \
+                > "poltergeist-linux-${{ matrix.flavor }}/Third-Party-Notices.txt"
+              cp LICENSE "poltergeist-linux-${{ matrix.flavor }}/LICENSE"
+              tar -czf "poltergeist-linux-${{ matrix.flavor }}.tar.gz" "poltergeist-linux-${{ matrix.flavor }}"
               # The .flatpak rides in its own leg (flatpak_poltergeist):
               # the repack needs its own toolchain and a Flathub fill of
               # its runtimes, and a slow one must not take this leg's
@@ -1359,9 +1452,17 @@ jobs:
               runners=(poltergeist/app/poltergeist_app/build/windows/*/runner/Release)
               [[ ${#runners[@]} -eq 1 ]] || { echo "expected one windows runner dir, found ${#runners[@]}" >&2; exit 1; }
               mv "${runners[0]}" poltergeist-windows-x64
+              # The notices readable at the zip's top, beside the license.
+              gzip -dc poltergeist-windows-x64/data/flutter_assets/NOTICES.Z \
+                > poltergeist-windows-x64/Third-Party-Notices.txt
+              cp LICENSE poltergeist-windows-x64/LICENSE
               7z a -bd poltergeist-windows-x64.zip poltergeist-windows-x64
               ;;
           esac
+      # What users download must carry its third-party notices.
+      - name: Verify bundled notices
+        shell: bash
+        run: bash scripts/check-release-notices.sh poltergeist poltergeist "${{ matrix.target }}"
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned)
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
@@ -1459,7 +1560,7 @@ jobs:
         run: >-
           sudo apt-get update && sudo apt-get install -y
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
-          libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool
+          libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool squashfs-tools
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -1547,10 +1648,21 @@ jobs:
               bundles=(klabautermann/app/klabautermann_app/build/linux/*/release/bundle)
               [[ ${#bundles[@]} -eq 1 ]] || { echo "expected one linux bundle, found ${#bundles[@]}" >&2; exit 1; }
               mv "${bundles[0]}" "klabautermann-preview-linux-${{ matrix.flavor }}"
-              tar -czf "klabautermann-preview-linux-${{ matrix.flavor }}.tar.gz" "klabautermann-preview-linux-${{ matrix.flavor }}"
               # The mv above renamed the bundle out of Flutter's layout, so
               # point the packager at it explicitly.
               klabautermann/scripts/package-linux.sh --bundle "klabautermann-preview-linux-${{ matrix.flavor }}" --output-dir .
+              # The AppImage runtime appimagetool put in front of the squashfs
+              # statically links libfuse, squashfuse, musl, zstd and zlib: add
+              # their notices and source pointers inside the AppImage.
+              python3 -I scripts/appimage-notices.py appimage "klabautermann-preview-linux-${{ matrix.flavor }}.AppImage" \
+                --package klabautermann --overrides scripts/appimage-notices.json
+              # The tarball also carries the notices readable at its top, beside
+              # the license; added after packaging, so the .deb keeps them in
+              # its doc directory only.
+              gzip -dc "klabautermann-preview-linux-${{ matrix.flavor }}/data/flutter_assets/NOTICES.Z" \
+                > "klabautermann-preview-linux-${{ matrix.flavor }}/Third-Party-Notices.txt"
+              cp LICENSE "klabautermann-preview-linux-${{ matrix.flavor }}/LICENSE"
+              tar -czf "klabautermann-preview-linux-${{ matrix.flavor }}.tar.gz" "klabautermann-preview-linux-${{ matrix.flavor }}"
               # The .flatpak repacks the same .deb under /app.
               sudo apt-get update && sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
               # Ubuntu 24.04 denies the unprivileged user namespaces
@@ -1578,9 +1690,17 @@ jobs:
               runners=(klabautermann/app/klabautermann_app/build/windows/*/runner/Release)
               [[ ${#runners[@]} -eq 1 ]] || { echo "expected one windows runner dir, found ${#runners[@]}" >&2; exit 1; }
               mv "${runners[0]}" klabautermann-preview-windows-x64
+              # The notices readable at the zip's top, beside the license.
+              gzip -dc klabautermann-preview-windows-x64/data/flutter_assets/NOTICES.Z \
+                > klabautermann-preview-windows-x64/Third-Party-Notices.txt
+              cp LICENSE klabautermann-preview-windows-x64/LICENSE
               7z a -bd klabautermann-preview-windows-x64.zip klabautermann-preview-windows-x64
               ;;
           esac
+      # What users download must carry its third-party notices.
+      - name: Verify bundled notices
+        shell: bash
+        run: bash scripts/check-release-notices.sh klabautermann klabautermann-preview "${{ matrix.target }}"
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned)
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
@@ -1645,6 +1765,12 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # The Dockerfile's license label names the image's contents; without
+      # passing it through, metadata-action would claim only the
+      # repository's license for the whole image.
+      - name: Read the image license label
+        id: oci
+        run: echo "licenses=$(python3 seance/scripts/licenses/oci-licenses.py dockerfile seance/packages/seance_sync_server/Dockerfile)" >> "$GITHUB_OUTPUT"
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6 (SHA-pinned)
         with:
@@ -1659,6 +1785,32 @@ jobs:
             type=semver,pattern={{version}},value=${{ inputs.tag || github.ref_name }}
             type=semver,pattern={{major}}.{{minor}},value=${{ inputs.tag || github.ref_name }}
             type=raw,value=latest
+          labels: |
+            org.opencontainers.image.licenses=${{ steps.oci.outputs.licenses }}
+      # Check the image before anything is pushed: a local build (the cache
+      # makes the push build below reuse it) whose notices and label
+      # scripts/licenses/check-image-notices.sh verifies.
+      - name: Build image for checks
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7 (SHA-pinned)
+        with:
+          context: seance/
+          file: seance/packages/seance_sync_server/Dockerfile
+          load: true
+          tags: seance-sync:check
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # ca-certificates is GPL-2.0-or-later with MPL-2.0 certificate data
+      # (its Debian copyright file); libsqlite3-0 comes with the base image,
+      # so it needs no label term.
+      - name: Verify notices in the image
+        run: |
+          sh seance/scripts/licenses/check-image-notices.sh seance-sync:check \
+            /usr/share/doc/seance-sync Third-Party-Notices.txt OS-Packages.txt LICENSE \
+            -- --own Unlicense \
+            --package 'ca-certificates=GPL-2.0-or-later AND MPL-2.0'
+          docker run --rm --entrypoint grep seance-sync:check -q \
+            '^Dart SDK (runtime and core libraries) ' /usr/share/doc/seance-sync/Third-Party-Notices.txt
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7 (SHA-pinned)
         with:
           # Build context is the seance subtree root so its pub

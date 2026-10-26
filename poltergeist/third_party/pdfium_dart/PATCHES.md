@@ -47,10 +47,28 @@ the build hook returns early on iOS). Making the link hook effective
 would change how every platform's release build routes PDFium, so this
 fork leaves it alone.
 
+## PDFium's notices
+
+The build hook bundles PDFium from the pdfium-binaries archive but keeps
+only the library, and upstream's LICENSE covers the Dart bindings alone.
+So `LICENSE` names its MIT chunk `pdfium_dart` and appends one Flutter
+license chunk per component of the archive's `LICENSE` and `licenses/`
+texts: PDFium and the libraries compiled into it (FreeType, libjpeg-turbo,
+OpenJPEG, Little CMS, libpng, zlib, ICU, Abseil and others). Flutter
+copies them into every Poltergeist NOTICES; the macOS and iOS apps'
+PDFium.xcframework is built from the same PDFium release.
+
+`tool/pdfium_licenses.py` writes those chunks from the archives the apps
+ship, pinned by SHA-256 in `tool/pdfium_licenses.json`, and fails on a
+license file it does not know; `--check` compares instead. Rerun it when
+`_pdfiumRelease` changes: `app/poltergeist_app/test/third_party_notices_test.dart`
+fails until the recorded release matches the hook's.
+
 ## Removing this fork
 
 Delete this directory and the `dependency_overrides` entry once an upstream
-`pdfium_dart` release stops bundling a colliding macOS framework.
+`pdfium_dart` release stops bundling a colliding macOS framework and ships
+PDFium's notices; until then the chunks above need a home.
 `scripts/verify-macos-app.sh`, run by the macOS client jobs in
 `.github/workflows/ci.yml`, fails if the collision comes back.
 

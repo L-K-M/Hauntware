@@ -100,6 +100,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/updates.dart': {"''", "', '"},
   // A failed check's missing detail.
   'lib/ui/fleet_updates.dart': {"''"},
+  // The separator between the ports, addresses, key types and setting
+  // names sshd printed.
+  'lib/ui/sshd_posture.dart': {"', '"},
   // A history rollup read's request id, matched in the engine's answer.
   'lib/controllers/history_reads.dart': {r"'rollup-${_count++}'"},
   // The not-saved diagnostic; the Safety tab and the header's Safety menu
@@ -265,6 +268,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'stacks-${_count++}'",
     r"'volumes-${_count++}'",
     r"'networks-${_count++}'",
+    r"'events-${_count++}'",
     r"'stack-file-${_count++}'",
   },
   'lib/controllers/docker_endpoint_choices.dart': {
@@ -297,6 +301,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'$surface-${_subscriptionCount++}'",
     // A host query's id, which its HostResult answers by (LOG-08, LOG-09).
     r"'host-${_nextHostQuery++}'",
+    // A TLS check's id, which its TlsEndpointsChecked answers by (CRT-01).
+    r"'tls-${_nextTlsCheck++}'",
     // A unit read's request id, never shown.
     r"'unit-${_nextUnitQuery++}'",
     // An export redaction's id, which its RedactedLines answers by
@@ -551,6 +557,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'about an hour'",
     r"r'^Up (.+?)(?: ago)?(?: \(.*\))?$'",
     r"r'^(\d+) (second|minute|hour|day|week|month|year)s?$'",
+    // The exit code in a stopped or restarting container's Status text.
+    r"r'^(?:Exited|Restarting) \((-?\d+)\)'",
     "'0.0.0.0'",
     "'::'",
     // The separator `docker ps` prints between ports; machine data.
@@ -608,6 +616,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'\n'",
     "r'^[a-zA-Z0-9][a-zA-Z0-9_.-]+\$'",
   },
+  // The line break between the endpoints the user lists (CRT-01).
+  'lib/controllers/tls_endpoints.dart': {r"'\n'"},
+  'lib/ui/certificates.dart': {r"'\n'"},
   'lib/ui/docker/unlisted_stacks.dart': {
     // The path separator a found file's folder and name split at, the
     // folders' list separator inside the ARB sentence, and the line
@@ -797,6 +808,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${SampleStream.procs.name}.row.${row.pid}'",
     r"'\n'",
   },
+  'lib/ui/processor.dart': {r"'\n'"},
   'lib/ui/processes_view.dart': {
     // The ellipsis ending a cut command line, the space between its
     // arguments, and the filter's term separator and the line break

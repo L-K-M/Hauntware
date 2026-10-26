@@ -21,6 +21,16 @@ export 'src/history/history_store.dart'
 export 'src/catalog/engine_sync.dart' show engineSyncPushPolicy;
 export 'src/catalog/sync_credentials.dart'
     show klabautermannApiKeyPrefix, klabautermannMasterKeyEntry;
+// The System tab's Certificates section (CRT-01): the endpoints the
+// device checks and what each check found.
+export 'src/certificates/tls_check.dart'
+    show
+        TlsCertificateFacts,
+        TlsCheckFailure,
+        TlsEndpoint,
+        TlsEndpointCheck,
+        kTlsDefaultPort,
+        kTlsEndpointsMax;
 export 'src/engine/engine_client.dart';
 // What a substitute engine for IsolateEngineClient.spawn's entryPoint is
 // handed; the app's restart test runs one.
@@ -119,6 +129,16 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         RestartCheck,
         RestartTool,
         kPackageUpdatesKept;
+// The System tab's SSH server section (SEC-01): what an
+// SshdPostureReport read.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show
+        SshdForwarding,
+        SshdForwardingBlock,
+        SshdMatchContext,
+        SshdPosture,
+        SshdRootLogin;
+
 // A process's details and owner (PRC-04, PRC-05), as a HostResult's
 // ProcessDetails carry them.
 export 'package:klabautermann_host/klabautermann_host.dart'
@@ -140,6 +160,9 @@ export 'package:klabautermann_host/klabautermann_host.dart'
 // ended and the kernels a HostResult carries.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show BootEnd, KernelCheck, KernelCheckState, kBootEndsRead;
+// The System tab's processor section (CPU-07): the model and topology a
+// HostResult carries.
+export 'package:klabautermann_host/klabautermann_host.dart' show CpuTopology;
 // The System tab's interfaces section (NET-02, NET-03): the interfaces
 // and socket counts a HostResult carries.
 export 'package:klabautermann_host/klabautermann_host.dart'
