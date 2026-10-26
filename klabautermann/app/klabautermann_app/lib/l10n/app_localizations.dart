@@ -5011,7 +5011,7 @@ abstract class AppLocalizations {
   /// The action's impact in the preview; kind is the engine's ImpactKind name and count a number of containers.
   ///
   /// In en, this message translates to:
-  /// **'{kind, select, dropsSession{This can drop your connection to the server.} stopsContainers{This stops {count} running containers.} removesVolumes{This deletes the container\'s volumes and the data in them.} forcesImageInUse{{count} containers still use this image.} deletesVolumeData{This deletes the volume and the data in it.} interruptsTarget{This interrupts what the target is doing.} other{}}'**
+  /// **'{kind, select, dropsSession{This can drop your connection to the server.} stopsContainers{This stops {count} running containers.} removesVolumes{This deletes the container\'s volumes and the data in them.} forcesImageInUse{{count} containers still use this image.} deletesVolumeData{This deletes the volume and the data in it.} interruptsTarget{This interrupts what the target is doing.} restartsHost{This restarts the server: everything on it stops, and the connection drops until it is back.} stopsHost{This turns the server off: everything on it stops, and it stays off until someone starts it.} other{}}'**
   String actionPreviewImpact(String kind, int count);
 
   /// Why the target is protected (SAF-22); reason is the engine's ProtectedReason name.
@@ -5569,7 +5569,7 @@ abstract class AppLocalizations {
   /// An activity log row's action; action is the engine's intent type name.
   ///
   /// In en, this message translates to:
-  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
+  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} PowerAction{Reboot or shut down} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
   String activityAction(String action);
 
   /// An activity log row's confirmation; tier is the engine's ConfirmationTier name.
@@ -9969,6 +9969,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'When the refresh has finished, check again to read the new lists.'**
   String get systemUpdatesRefreshStarted;
+
+  /// System tab: heading of the section that reboots or shuts down the server (SYS-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Power'**
+  String get systemPowerTitle;
+
+  /// System tab, Power: button that restarts the server, after the user types its host name.
+  ///
+  /// In en, this message translates to:
+  /// **'Reboot'**
+  String get systemPowerReboot;
+
+  /// System tab, Power: button that turns the server off, after the user types its host name.
+  ///
+  /// In en, this message translates to:
+  /// **'Shut down'**
+  String get systemPowerShutDown;
+
+  /// System tab, Power: shown instead of the buttons while admin mode is off, since both run as root.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on admin mode to reboot or shut down this server.'**
+  String get systemPowerAdminNeeded;
+
+  /// System tab, Power: shown after the reboot was taken, until the server reports a new boot; elapsed is a duration such as '45 seconds'.
+  ///
+  /// In en, this message translates to:
+  /// **'Rebooting. Waiting for the server to answer again: {elapsed} so far.'**
+  String systemPowerWaiting(String elapsed);
+
+  /// System tab, Power: shown once the rebooted server reports a new boot; elapsed is a duration such as '2 minutes'.
+  ///
+  /// In en, this message translates to:
+  /// **'The server answered again {elapsed} after the reboot.'**
+  String systemPowerBack(String elapsed);
+
+  /// System tab, Power: shown after the shutdown was taken.
+  ///
+  /// In en, this message translates to:
+  /// **'The server is shutting down. It stays off until someone starts it.'**
+  String get systemPowerOff;
+
+  /// System tab, Power: button that stops showing the wait for a rebooted server.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop waiting'**
+  String get systemPowerStopWaiting;
 
   /// System tab, Updates: heading of the services still running libraries an update replaced.
   ///

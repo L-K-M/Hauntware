@@ -3979,6 +3979,19 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   measured once per probe, so per link, which is enough for a clock that
   drifts by seconds a day; durations on the server's clock (CN-17's
   second half) already use the server's times.
+
+  Reboot and shutdown (M6 N38b, SYS-03) are `PowerAction` plans, in
+  admin mode only: one elevated `systemctl reboot` or `systemctl
+  poweroff`, which queue the job and return, or init's own `reboot` and
+  `poweroff` where systemd does not run the host. The typed
+  confirmation asks for the host's own name, read with `uname -n` while
+  planning, so the user names the machine the command reaches. The step
+  is marked as ending the link: a link that drops while it runs counts
+  as the host having taken it, and the host syslog line (SAF-13) goes
+  before it. After a reboot the System tab's Power section waits for a
+  `core` reading whose `btime` differs from the old boot's by more than
+  two seconds (or, with the old boot unread, lies after the request),
+  and says how long the server took to answer again.
 - **v1.x.** Fans, battery, inventory, crash markers, boot performance,
   incident snapshot (redacted by default), deploy pre-flight checks.
 

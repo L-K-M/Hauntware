@@ -4629,7 +4629,7 @@
       }
     }
   },
-  "actionPreviewImpact": "{kind, select, dropsSession{This can drop your connection to the server.} stopsContainers{This stops {count} running containers.} removesVolumes{This deletes the container's volumes and the data in them.} forcesImageInUse{{count} containers still use this image.} deletesVolumeData{This deletes the volume and the data in it.} interruptsTarget{This interrupts what the target is doing.} other{}}",
+  "actionPreviewImpact": "{kind, select, dropsSession{This can drop your connection to the server.} stopsContainers{This stops {count} running containers.} removesVolumes{This deletes the container's volumes and the data in them.} forcesImageInUse{{count} containers still use this image.} deletesVolumeData{This deletes the volume and the data in it.} interruptsTarget{This interrupts what the target is doing.} restartsHost{This restarts the server: everything on it stops, and the connection drops until it is back.} stopsHost{This turns the server off: everything on it stops, and it stays off until someone starts it.} other{}}",
   "@actionPreviewImpact": {
     "description": "The action's impact in the preview; kind is the engine's ImpactKind name and count a number of containers.",
     "placeholders": {
@@ -5191,7 +5191,7 @@
   "@activityColumnResult": {
     "description": "Column of the activity log: how the run ended."
   },
-  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
+  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} PowerAction{Reboot or shut down} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
   "@activityAction": {
     "description": "An activity log row's action; action is the engine's intent type name.",
     "placeholders": {
@@ -9153,6 +9153,50 @@
   "systemUpdatesRefreshStarted": "When the refresh has finished, check again to read the new lists.",
   "@systemUpdatesRefreshStarted": {
     "description": "System tab, Updates: shown after the refresh starts, until the next check."
+  },
+  "systemPowerTitle": "Power",
+  "@systemPowerTitle": {
+    "description": "System tab: heading of the section that reboots or shuts down the server (SYS-03)."
+  },
+  "systemPowerReboot": "Reboot",
+  "@systemPowerReboot": {
+    "description": "System tab, Power: button that restarts the server, after the user types its host name."
+  },
+  "systemPowerShutDown": "Shut down",
+  "@systemPowerShutDown": {
+    "description": "System tab, Power: button that turns the server off, after the user types its host name."
+  },
+  "systemPowerAdminNeeded": "Turn on admin mode to reboot or shut down this server.",
+  "@systemPowerAdminNeeded": {
+    "description": "System tab, Power: shown instead of the buttons while admin mode is off, since both run as root."
+  },
+  "systemPowerWaiting": "Rebooting. Waiting for the server to answer again: {elapsed} so far.",
+  "@systemPowerWaiting": {
+    "description": "System tab, Power: shown after the reboot was taken, until the server reports a new boot; elapsed is a duration such as '45 seconds'.",
+    "placeholders": {
+      "elapsed": {
+        "type": "String",
+        "example": "45 seconds"
+      }
+    }
+  },
+  "systemPowerBack": "The server answered again {elapsed} after the reboot.",
+  "@systemPowerBack": {
+    "description": "System tab, Power: shown once the rebooted server reports a new boot; elapsed is a duration such as '2 minutes'.",
+    "placeholders": {
+      "elapsed": {
+        "type": "String",
+        "example": "2 minutes"
+      }
+    }
+  },
+  "systemPowerOff": "The server is shutting down. It stays off until someone starts it.",
+  "@systemPowerOff": {
+    "description": "System tab, Power: shown after the shutdown was taken."
+  },
+  "systemPowerStopWaiting": "Stop waiting",
+  "@systemPowerStopWaiting": {
+    "description": "System tab, Power: button that stops showing the wait for a rebooted server."
   },
   "systemUpdatesRestartsTitle": "Services to restart",
   "@systemUpdatesRestartsTitle": {
