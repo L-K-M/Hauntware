@@ -183,7 +183,10 @@ class _EndpointLine extends StatelessWidget {
                 ? Icons.warning_amber
                 : Icons.verified_outlined,
             size: 18,
-            color: theme.colorScheme.onSurfaceVariant,
+            // A failed, untrusted or expiring certificate stands out.
+            color: check != null && warn
+                ? theme.colorScheme.error
+                : theme.colorScheme.onSurfaceVariant,
           ),
           Expanded(
             child: Column(
