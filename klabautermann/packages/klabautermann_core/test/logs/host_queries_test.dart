@@ -134,6 +134,21 @@ void main() {
     expect(kernels.check.newest, '6.1.0-13-amd64');
   });
 
+  test('the mounts read answers findmnt\'s JSON too', () async {
+    link = _RunLink(
+      (_) => _ok(
+        '$kMountsFindmntMarker\n'
+        '{"filesystems": [{"target": "/", "source": "/dev/sda1", '
+        '"fstype": "ext4", "options": "ro,relatime"}]}\n'
+        '$kMountsSwapsMarker\nFilename Type Size Used Priority\n'
+        '/dev/sda3 partition 4096 0 -2\n',
+      ),
+    );
+    final read = ((await ask(const MountsQuery())).payload as Mounts).read;
+    expect(read.mountAt('/')!.readOnly, isTrue);
+    expect(read.swaps.single.kind, SwapKind.partition);
+  });
+
   test('the mounts read answers each mount and swap device', () async {
     link = _RunLink(
       (_) => _ok(

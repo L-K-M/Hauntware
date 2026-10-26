@@ -50,10 +50,9 @@ void main() {
       final (stdout, read) = await _read(shell);
       expect(read, isNotNull, reason: stdout);
       expect(read!.mountAt('/'), isNotNull);
-      final hasFindmnt = [
-        '/usr/bin/findmnt',
-        '/bin/findmnt',
-      ].any((path) => File(path).existsSync());
+      // Looked up on PATH, as the script does.
+      final hasFindmnt =
+          Process.runSync('sh', ['-c', 'command -v findmnt']).exitCode == 0;
       expect(
         stdout.startsWith(
           hasFindmnt ? kMountsFindmntMarker : kMountsProcMarker,

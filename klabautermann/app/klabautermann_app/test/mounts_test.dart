@@ -144,4 +144,43 @@ void main() {
     await answer(tester, Mounts(_read()));
     expect(find.text('No swap devices are in use.'), findsOneWidget);
   });
+
+  testWidgets('a server switch reads the new server\'s swap, and the old '
+      'server\'s late answer does not land', (tester) async {
+    await pump(tester, SwapSection(monitoring: monitoring, serverId: _server));
+    final first = queries().single;
+
+    await pump(tester, SwapSection(monitoring: monitoring, serverId: 'srv-2'));
+    expect(queries(), hasLength(2));
+    expect(queries().last.serverId, 'srv-2');
+    expect(find.text('Reading swap devices…'), findsOneWidget);
+
+    // The first server answers late: a swap file it would list.
+    engine.emit(
+      HostResult(
+        serverId: _server,
+        queryId: first.queryId,
+        payload: Mounts(
+          _read(
+            swaps: const [
+              SwapDevice(
+                path: '/old-swap',
+                kind: SwapKind.file,
+                sizeBytes: 1024,
+                usedBytes: 0,
+                priority: -2,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('/old-swap'), findsNothing);
+    expect(find.text('Reading swap devices…'), findsOneWidget);
+
+    await answer(tester, Mounts(_read()));
+    expect(find.text('No swap devices are in use.'), findsOneWidget);
+  });
 }
