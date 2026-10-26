@@ -57,6 +57,9 @@ const kDockerListPoll = Duration(seconds: 15);
 /// all.
 const _targetedMax = 16;
 
+/// The newest events timeline entries the watcher keeps (DKE-03 [E]).
+const kDockerEventsKept = 500;
+
 /// The event types the stream asks for (03 §7.12 DKE-02).
 const _eventTypes = ['container', 'image', 'volume', 'network'];
 
@@ -205,6 +208,14 @@ final class DockerWatcher {
   DateTime? _lostAt;
   String? _socketPath;
 
+  // The events timeline (DKE-03): the events this endpoint's streams
+  // read, oldest first, and a gap wherever a stream was lost. It starts
+  // with the first stream, and a new timeline entry is sent with the
+  // next batch.
+  final List<DockerTimelineEntry> _timeline = [];
+  bool _streamed = false;
+  bool _timelineDue = false;
+
   bool get _wantsContainers =>
       _lists.contains(DockerWatchList.containers) ||
       _lists.contains(DockerWatchList.stacks);
@@ -242,6 +253,7 @@ final class DockerWatcher {
         DockerWatchList.images => _images,
         DockerWatchList.volumes => _volumes,
         DockerWatchList.networks => _networks,
+        DockerWatchList.events => _timeline,
         DockerWatchList.stats => null,
       };
       if (attached && held != null) {
@@ -271,6 +283,8 @@ final class DockerWatcher {
       _lastEvent = null;
       _lostAt = null;
       _changedIds.clear();
+      _timeline.clear();
+      _streamed = false;
     }
     _socketPath = target.socketPath;
     _target = target;
@@ -313,6 +327,9 @@ final class DockerWatcher {
     _relist.clear();
     _fresh.clear();
     _changedIds.clear();
+    _timeline.clear();
+    _streamed = false;
+    _timelineDue = false;
     return detach();
   }
 
@@ -355,6 +372,20 @@ final class DockerWatcher {
         filters: {'type': _eventTypes},
       );
       if (epoch != _epoch) return;
+      // A stream after a lost one leaves a gap in the timeline; with
+      // `since` the engine replays what it still holds of it.
+      if (_streamed && lostAt != null) {
+        _addToTimeline(
+          DockerTimelineGap(
+            at: lostAt.toUtc(),
+            until: _now().toUtc(),
+            resumed: since != null,
+          ),
+        );
+      }
+      _streamed = true;
+      _send(DockerWatchList.events, fresh: false);
+      _timelineDue = false;
       _lostAt = null;
       _retries = 0;
       final eventV2 = client.gates.usesEventV2;
@@ -425,6 +456,18 @@ final class DockerWatcher {
     final event = parseDockerEvent(decoded, expectEventV2: eventV2).value;
     if (event.timestamp case final at?) _lastEvent = at;
     if (_quiet(event)) return;
+    _addToTimeline(
+      DockerTimelineEvent(
+        at: (event.timestamp?.toDateTime() ?? _now()).toUtc(),
+        type: event.type,
+        action: event.action,
+        actorId: event.actorId,
+        name: event.name ?? (event.type == 'image' ? event.actorId : null),
+        image: event.type == 'container' ? event.image : null,
+        exitCode: event.exitCode,
+      ),
+    );
+    if (_lists.contains(DockerWatchList.events)) _timelineDue = true;
 
     final plan = planEventRefresh(event: event, now: _now());
     for (final list in plan.lists) {
@@ -489,11 +532,22 @@ final class DockerWatcher {
 
   /// Reads what is due after [kDockerEventBatch], so a burst reads once.
   void _schedule() {
-    if (_relist.isEmpty && _changedIds.isEmpty) return;
+    if (_relist.isEmpty && _changedIds.isEmpty && !_timelineDue) return;
     _batch ??= _startTimer(kDockerEventBatch, () {
       _batch = null;
+      if (_timelineDue) {
+        _timelineDue = false;
+        _send(DockerWatchList.events, fresh: false);
+      }
       unawaited(_refresh());
     });
+  }
+
+  void _addToTimeline(DockerTimelineEntry entry) {
+    _timeline.add(entry);
+    if (_timeline.length > kDockerEventsKept) {
+      _timeline.removeRange(0, _timeline.length - kDockerEventsKept);
+    }
   }
 
   static bool _quiet(DockerEvent event) =>
@@ -696,6 +750,8 @@ final class DockerWatcher {
         payload = DockerVolumesPayload(_volumes!);
       case DockerWatchList.networks:
         payload = DockerNetworksPayload(_networks!);
+      case DockerWatchList.events:
+        payload = DockerEventsPayload(_timeline);
       case DockerWatchList.stats:
         return;
     }

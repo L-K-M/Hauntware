@@ -265,6 +265,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'stacks-${_count++}'",
     r"'volumes-${_count++}'",
     r"'networks-${_count++}'",
+    r"'events-${_count++}'",
     r"'stack-file-${_count++}'",
   },
   'lib/controllers/docker_endpoint_choices.dart': {
