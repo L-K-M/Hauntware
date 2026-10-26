@@ -11263,6 +11263,204 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Checked {time}'**
   String systemUpdatesCheckedAt(DateTime time);
+
+  /// The health card's button that opens the doctor checklist (TRI-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Run the doctor'**
+  String get doctorOpen;
+
+  /// Title of the doctor checklist (TRI-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Doctor'**
+  String get doctorTitle;
+
+  /// Doctor: what the checklist is.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only checks of this server, each with what to do about a finding. Nothing on the server changes.'**
+  String get doctorIntro;
+
+  /// Doctor: the summary line while a check still reads.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking…'**
+  String get doctorRunning;
+
+  /// Doctor: how many checks found a problem and how many a warning.
+  ///
+  /// In en, this message translates to:
+  /// **'{problems, plural, =0{No problems} =1{1 problem} other{{problems} problems}}, {warnings, plural, =0{no warnings} =1{1 warning} other{{warnings} warnings}}'**
+  String doctorSummary(int problems, int warnings);
+
+  /// Doctor: runs the on-demand reads again.
+  ///
+  /// In en, this message translates to:
+  /// **'Check again'**
+  String get doctorAgain;
+
+  /// Doctor: closes the checklist.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get doctorClose;
+
+  /// Doctor: a check's name, by kind.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, diskSpace{Disk space} inodes{Inodes} failedUnits{Failed units} securityUpdates{Security updates} rebootRequired{Reboot} timeSync{Time sync} certificates{Certificates} dockerDiskUse{Docker disk use} danglingImages{Dangling images} other{Check}}'**
+  String doctorCheck(String kind);
+
+  /// Doctor: what to do about a check's finding, by kind.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, diskSpace{Remove old logs, caches and unused images, or grow the filesystem. Disks on the System tab lists every mount.} inodes{Many small files use up inodes: look for caches, mail queues or session files and remove what is no longer needed.} failedUnits{Open Services to read each unit\'s log, and restart it once the cause is fixed.} securityUpdates{Install them from Updates on the System tab or with the package manager.} rebootRequired{Reboot from Power on the System tab when it suits, so the updated kernel or libraries run.} timeSync{Turn time sync on (for example with timedatectl set-ntp true) and make sure the NTP server can be reached.} certificates{Renew or replace the certificate before it expires. Certificates on the System tab shows each endpoint.} dockerDiskUse{Remove unused images, stopped containers and build cache from the Docker tab.} danglingImages{Rebuilds leave untagged images behind. Remove them from Images with the Dangling filter.} other{}}'**
+  String doctorHint(String kind);
+
+  /// Doctor: a check whose reading is missing.
+  ///
+  /// In en, this message translates to:
+  /// **'Not known: the reading failed or has not arrived.'**
+  String get doctorUnknown;
+
+  /// Doctor: a check whose on-demand read is under way.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading…'**
+  String get doctorChecking;
+
+  /// Doctor, disk space: nothing past the warning level.
+  ///
+  /// In en, this message translates to:
+  /// **'Every filesystem is under {percent} full.'**
+  String doctorSpaceOk(String percent);
+
+  /// Doctor, disk space: mounts past the warning level follow, one per line.
+  ///
+  /// In en, this message translates to:
+  /// **'Filling up, the fullest at {percent}:'**
+  String doctorSpaceFull(String percent);
+
+  /// Doctor, inodes: nothing past the warning level.
+  ///
+  /// In en, this message translates to:
+  /// **'Every filesystem uses under {percent} of its inodes.'**
+  String doctorInodesOk(String percent);
+
+  /// Doctor, inodes: mounts past the warning level follow, one per line.
+  ///
+  /// In en, this message translates to:
+  /// **'Running out of inodes, the fullest at {percent}:'**
+  String doctorInodesFull(String percent);
+
+  /// Doctor, failed units: none.
+  ///
+  /// In en, this message translates to:
+  /// **'No unit has failed.'**
+  String get doctorUnitsOk;
+
+  /// Doctor, failed units: the units follow, one per line.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 unit has failed:} other{{count} units have failed:}}'**
+  String doctorUnitsFailed(int count);
+
+  /// Doctor, security updates: how many.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 security update is pending.} other{{count} security updates are pending.}}'**
+  String doctorSecurityPending(int count);
+
+  /// Doctor, security updates: updates the manager cannot classify.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 update is pending, and the package manager does not say whether it fixes a security issue.} other{{count} updates are pending, and the package manager does not say which fix security issues.}}'**
+  String doctorUpdatesUnclassified(int count);
+
+  /// Doctor, security updates: none, with the other updates pending.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No updates are pending.} =1{No security updates are pending; 1 other update is.} other{No security updates are pending; {count} other updates are.}}'**
+  String doctorSecurityNone(int count);
+
+  /// Doctor, reboot: none needed.
+  ///
+  /// In en, this message translates to:
+  /// **'No reboot is needed.'**
+  String get doctorRebootNo;
+
+  /// Doctor, reboot: needed; the packages follow, one per line.
+  ///
+  /// In en, this message translates to:
+  /// **'A reboot is needed. Packages that asked for it, where the host says:'**
+  String get doctorRebootYes;
+
+  /// Doctor, time sync: in step.
+  ///
+  /// In en, this message translates to:
+  /// **'The clock is synchronized.'**
+  String get doctorTimeOk;
+
+  /// Doctor, time sync: the kernel is not synchronized or time sync is off.
+  ///
+  /// In en, this message translates to:
+  /// **'The clock is not synchronized.'**
+  String get doctorTimeNotSynced;
+
+  /// Doctor, time sync: not synchronized, with how far it is from this device ("2 minutes ahead of this device").
+  ///
+  /// In en, this message translates to:
+  /// **'The clock is not synchronized; it reads {skew}.'**
+  String doctorTimeNotSyncedSkew(String skew);
+
+  /// Doctor, time sync: the host believes it is synchronized but is off this device's clock ("2 minutes ahead of this device").
+  ///
+  /// In en, this message translates to:
+  /// **'The clock reads {skew}.'**
+  String doctorClockOff(String skew);
+
+  /// Doctor, certificates: nothing to check.
+  ///
+  /// In en, this message translates to:
+  /// **'No endpoints are listed for this server.'**
+  String get doctorCertificatesNone;
+
+  /// Doctor, certificates: how to set the check up.
+  ///
+  /// In en, this message translates to:
+  /// **'List endpoints under Certificates on the System tab to check them here.'**
+  String get doctorCertificatesSetUp;
+
+  /// Doctor, certificates: all fine.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{The endpoint presents a valid certificate.} other{All {count} endpoints present valid certificates.}}'**
+  String doctorCertificatesOk(int count);
+
+  /// Doctor, certificates: the endpoints follow, one per line.
+  ///
+  /// In en, this message translates to:
+  /// **'Failing, untrusted, expired or expiring within 14 days:'**
+  String get doctorCertificatesBad;
+
+  /// Doctor, Docker disk use: the reclaimable size from docker system df.
+  ///
+  /// In en, this message translates to:
+  /// **'Docker could free {size} of unused data.'**
+  String doctorDockerReclaimable(String size);
+
+  /// Doctor, dangling images: none.
+  ///
+  /// In en, this message translates to:
+  /// **'No dangling images.'**
+  String get doctorDanglingNone;
+
+  /// Doctor, dangling images: how many and their size.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 dangling image takes {size}.} other{{count} dangling images take {size}.}}'**
+  String doctorDangling(int count, String size);
 }
 
 class _AppLocalizationsDelegate

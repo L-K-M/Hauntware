@@ -10508,5 +10508,223 @@
         "format": "yMMMd+jm"
       }
     }
+  },
+  "doctorOpen": "Run the doctor",
+  "@doctorOpen": {
+    "description": "The health card's button that opens the doctor checklist (TRI-01)."
+  },
+  "doctorTitle": "Doctor",
+  "@doctorTitle": {
+    "description": "Title of the doctor checklist (TRI-01)."
+  },
+  "doctorIntro": "Read-only checks of this server, each with what to do about a finding. Nothing on the server changes.",
+  "@doctorIntro": {
+    "description": "Doctor: what the checklist is."
+  },
+  "doctorRunning": "Checking…",
+  "@doctorRunning": {
+    "description": "Doctor: the summary line while a check still reads."
+  },
+  "doctorSummary": "{problems, plural, =0{No problems} =1{1 problem} other{{problems} problems}}, {warnings, plural, =0{no warnings} =1{1 warning} other{{warnings} warnings}}",
+  "@doctorSummary": {
+    "description": "Doctor: how many checks found a problem and how many a warning.",
+    "placeholders": {
+      "problems": {
+        "type": "int"
+      },
+      "warnings": {
+        "type": "int"
+      }
+    }
+  },
+  "doctorAgain": "Check again",
+  "@doctorAgain": {
+    "description": "Doctor: runs the on-demand reads again."
+  },
+  "doctorClose": "Close",
+  "@doctorClose": {
+    "description": "Doctor: closes the checklist."
+  },
+  "doctorCheck": "{kind, select, diskSpace{Disk space} inodes{Inodes} failedUnits{Failed units} securityUpdates{Security updates} rebootRequired{Reboot} timeSync{Time sync} certificates{Certificates} dockerDiskUse{Docker disk use} danglingImages{Dangling images} other{Check}}",
+  "@doctorCheck": {
+    "description": "Doctor: a check's name, by kind.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorHint": "{kind, select, diskSpace{Remove old logs, caches and unused images, or grow the filesystem. Disks on the System tab lists every mount.} inodes{Many small files use up inodes: look for caches, mail queues or session files and remove what is no longer needed.} failedUnits{Open Services to read each unit's log, and restart it once the cause is fixed.} securityUpdates{Install them from Updates on the System tab or with the package manager.} rebootRequired{Reboot from Power on the System tab when it suits, so the updated kernel or libraries run.} timeSync{Turn time sync on (for example with timedatectl set-ntp true) and make sure the NTP server can be reached.} certificates{Renew or replace the certificate before it expires. Certificates on the System tab shows each endpoint.} dockerDiskUse{Remove unused images, stopped containers and build cache from the Docker tab.} danglingImages{Rebuilds leave untagged images behind. Remove them from Images with the Dangling filter.} other{}}",
+  "@doctorHint": {
+    "description": "Doctor: what to do about a check's finding, by kind.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorUnknown": "Not known: the reading failed or has not arrived.",
+  "@doctorUnknown": {
+    "description": "Doctor: a check whose reading is missing."
+  },
+  "doctorChecking": "Reading…",
+  "@doctorChecking": {
+    "description": "Doctor: a check whose on-demand read is under way."
+  },
+  "doctorSpaceOk": "Every filesystem is under {percent} full.",
+  "@doctorSpaceOk": {
+    "description": "Doctor, disk space: nothing past the warning level.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorSpaceFull": "Filling up, the fullest at {percent}:",
+  "@doctorSpaceFull": {
+    "description": "Doctor, disk space: mounts past the warning level follow, one per line.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorInodesOk": "Every filesystem uses under {percent} of its inodes.",
+  "@doctorInodesOk": {
+    "description": "Doctor, inodes: nothing past the warning level.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorInodesFull": "Running out of inodes, the fullest at {percent}:",
+  "@doctorInodesFull": {
+    "description": "Doctor, inodes: mounts past the warning level follow, one per line.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorUnitsOk": "No unit has failed.",
+  "@doctorUnitsOk": {
+    "description": "Doctor, failed units: none."
+  },
+  "doctorUnitsFailed": "{count, plural, =1{1 unit has failed:} other{{count} units have failed:}}",
+  "@doctorUnitsFailed": {
+    "description": "Doctor, failed units: the units follow, one per line.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "doctorSecurityPending": "{count, plural, =1{1 security update is pending.} other{{count} security updates are pending.}}",
+  "@doctorSecurityPending": {
+    "description": "Doctor, security updates: how many.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "doctorUpdatesUnclassified": "{count, plural, =1{1 update is pending, and the package manager does not say whether it fixes a security issue.} other{{count} updates are pending, and the package manager does not say which fix security issues.}}",
+  "@doctorUpdatesUnclassified": {
+    "description": "Doctor, security updates: updates the manager cannot classify.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "doctorSecurityNone": "{count, plural, =0{No updates are pending.} =1{No security updates are pending; 1 other update is.} other{No security updates are pending; {count} other updates are.}}",
+  "@doctorSecurityNone": {
+    "description": "Doctor, security updates: none, with the other updates pending.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "doctorRebootNo": "No reboot is needed.",
+  "@doctorRebootNo": {
+    "description": "Doctor, reboot: none needed."
+  },
+  "doctorRebootYes": "A reboot is needed. Packages that asked for it, where the host says:",
+  "@doctorRebootYes": {
+    "description": "Doctor, reboot: needed; the packages follow, one per line."
+  },
+  "doctorTimeOk": "The clock is synchronized.",
+  "@doctorTimeOk": {
+    "description": "Doctor, time sync: in step."
+  },
+  "doctorTimeNotSynced": "The clock is not synchronized.",
+  "@doctorTimeNotSynced": {
+    "description": "Doctor, time sync: the kernel is not synchronized or time sync is off."
+  },
+  "doctorTimeNotSyncedSkew": "The clock is not synchronized; it reads {skew}.",
+  "@doctorTimeNotSyncedSkew": {
+    "description": "Doctor, time sync: not synchronized, with how far it is from this device (\"2 minutes ahead of this device\").",
+    "placeholders": {
+      "skew": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorClockOff": "The clock reads {skew}.",
+  "@doctorClockOff": {
+    "description": "Doctor, time sync: the host believes it is synchronized but is off this device's clock (\"2 minutes ahead of this device\").",
+    "placeholders": {
+      "skew": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorCertificatesNone": "No endpoints are listed for this server.",
+  "@doctorCertificatesNone": {
+    "description": "Doctor, certificates: nothing to check."
+  },
+  "doctorCertificatesSetUp": "List endpoints under Certificates on the System tab to check them here.",
+  "@doctorCertificatesSetUp": {
+    "description": "Doctor, certificates: how to set the check up."
+  },
+  "doctorCertificatesOk": "{count, plural, =1{The endpoint presents a valid certificate.} other{All {count} endpoints present valid certificates.}}",
+  "@doctorCertificatesOk": {
+    "description": "Doctor, certificates: all fine.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "doctorCertificatesBad": "Failing, untrusted, expired or expiring within 14 days:",
+  "@doctorCertificatesBad": {
+    "description": "Doctor, certificates: the endpoints follow, one per line."
+  },
+  "doctorDockerReclaimable": "Docker could free {size} of unused data.",
+  "@doctorDockerReclaimable": {
+    "description": "Doctor, Docker disk use: the reclaimable size from docker system df.",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "doctorDanglingNone": "No dangling images.",
+  "@doctorDanglingNone": {
+    "description": "Doctor, dangling images: none."
+  },
+  "doctorDangling": "{count, plural, =1{1 dangling image takes {size}.} other{{count} dangling images take {size}.}}",
+  "@doctorDangling": {
+    "description": "Doctor, dangling images: how many and their size.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
   }
 }

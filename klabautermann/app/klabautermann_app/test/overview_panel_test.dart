@@ -1256,6 +1256,22 @@ void main() {
     expect(find.textContaining('Threshold announcements'), findsNothing);
   });
 
+  testWidgets('TRI-01: the health card runs the doctor', (tester) async {
+    final panel = await _pump(tester);
+    await tester.ensureVisible(find.text('Run the doctor'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Run the doctor'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Doctor'), findsOne);
+    expect(find.text('Checking…'), findsOne);
+    expect(panel.engine.sentOfType<ReadPackages>(), hasLength(1));
+
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    expect(find.text('Doctor'), findsNothing);
+  });
+
   group('A11Y-15', () {
     List<String> heard(WidgetTester tester) => [
       for (final announcement in tester.takeAnnouncements())
@@ -1888,6 +1904,8 @@ void main() {
       testWidgets('Docker desktop, ${brightness.name}', (tester) async {
         final panel = await pumpAll(tester, const Size(900, 1500), brightness);
         await panel.docker(tester);
+        await tester.ensureVisible(find.text('Measure disk use'));
+        await tester.pumpAndSettle();
         await tester.tap(find.text('Measure disk use'));
         await tester.pump();
         final query = panel.engine.sentOfType<DockerQuery>().last;
@@ -1914,6 +1932,8 @@ void main() {
         );
         await panel.sample(tester, _failed(), stream: SampleStream.failedUnits);
         await panel.docker(tester);
+        await tester.ensureVisible(find.text('Measure disk use'));
+        await tester.pumpAndSettle();
         await tester.tap(find.text('Measure disk use'));
         await tester.pump();
         final query = panel.engine.sentOfType<DockerQuery>().last;
