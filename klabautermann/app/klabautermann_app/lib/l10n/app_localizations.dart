@@ -6886,6 +6886,48 @@ abstract class AppLocalizations {
   /// **'Which images are in use is unknown: this engine\'s API reports no count, and the containers could not be listed.'**
   String get dockerImagesUseUnknown;
 
+  /// Image history sheet title (IMG-04): the image's tags, or its short id when it has none.
+  ///
+  /// In en, this message translates to:
+  /// **'{image}: history'**
+  String dockerImageHistoryTitle(String image);
+
+  /// Image history sheet: shown while the engine reads the image's layers.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the image\'s history…'**
+  String get dockerImageHistoryReading;
+
+  /// Image history sheet: the daemon answered with an empty history.
+  ///
+  /// In en, this message translates to:
+  /// **'The engine reports no layers for this image.'**
+  String get dockerImageHistoryEmpty;
+
+  /// Image history sheet: how many layer instructions the engine masked, since build arguments can hold secrets.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 instruction holds masked values. Reveal values shows them for {seconds} seconds.} other{{count} instructions hold masked values. Reveal values shows them for {seconds} seconds.}}'**
+  String dockerImageHistoryMasked(int count, int seconds);
+
+  /// Image history sheet: a layer whose CreatedBy is empty, as for an imported base layer.
+  ///
+  /// In en, this message translates to:
+  /// **'No instruction recorded'**
+  String get dockerImageHistoryNoInstruction;
+
+  /// Image history sheet: the label before a layer's comment, such as the builder that made it.
+  ///
+  /// In en, this message translates to:
+  /// **'Comment'**
+  String get dockerImageHistoryComment;
+
+  /// Image history sheet: why the history read failed, by DockerQueryFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server\'s capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} notFound{The engine no longer has this image.} daemonError{The engine refused or failed to read the image\'s history.} connectionFailed{The connection to the engine failed while reading the history.} cancelled{The read stopped before it ran.} other{The image\'s history could not be read.}}'**
+  String dockerImageHistoryFailed(String reason);
+
   /// Images list: the server's link has a session limit (03 §5.2) on a relay route.
   ///
   /// In en, this message translates to:

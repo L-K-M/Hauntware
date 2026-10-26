@@ -283,6 +283,10 @@ import '../operations/plan_types.dart';
 /// N13): the [PullImage] intent, [ImagePullProgress] while it runs, and
 /// [CancelAction], which stops it; then [PullRoute], the host's own
 /// `docker pull`, in the foreground or detached (REG-01, N13b).
+///
+/// An image's history then joined v3 the same way (03 §7.14 IMG-04, M6
+/// plan N14): [DockerImageHistoryQuery], answered by
+/// [DockerImageHistoryPayload] with each layer's instruction masked.
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -3758,6 +3762,14 @@ final class DockerImagesQuery extends DockerQuerySpec {
   const DockerImagesQuery();
 }
 
+/// One image's layers (IMG-04). Answered by [DockerImageHistoryPayload].
+final class DockerImageHistoryQuery extends DockerQuerySpec {
+  const DockerImageHistoryQuery(this.image);
+
+  /// The image's id, or a tag of it.
+  final String image;
+}
+
 /// Disk use by type (02 OV-05): `/system/df` without `verbose`, which
 /// the daemon computes by walking images, containers, volumes and the
 /// build cache, so the app asks for it only on demand. Answered by
@@ -3873,6 +3885,39 @@ final class DockerContainerPayload extends DockerPayload {
   const DockerContainerPayload(this.container);
 
   final ContainerDetails container;
+}
+
+/// An image's layers, newest first (IMG-04), each layer's instruction
+/// masked as a command line is (03 §8.9): a build argument or a secret
+/// assignment in it crosses only behind [MaskedValue].
+final class DockerImageHistoryPayload extends DockerPayload {
+  DockerImageHistoryPayload(Iterable<ImageLayer> layers)
+    : layers = List.unmodifiable(layers);
+
+  final List<ImageLayer> layers;
+}
+
+/// One layer of an image's history (IMG-04).
+@immutable
+final class ImageLayer {
+  const ImageLayer({
+    required this.createdBy,
+    this.id,
+    this.created,
+    this.size,
+    this.comment,
+    this.tags = const [],
+  });
+
+  /// The image id at this layer, or null for one built elsewhere.
+  final String? id;
+  final DateTime? created;
+
+  /// The instruction that made the layer, masked.
+  final MaskedValue createdBy;
+  final int? size;
+  final String? comment;
+  final List<String> tags;
 }
 
 /// The image list (IMG-01), labels masked by key.

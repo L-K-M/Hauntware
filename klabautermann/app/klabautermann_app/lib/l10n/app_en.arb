@@ -6385,6 +6385,53 @@
   "@dockerImagesUseUnknown": {
     "description": "Images list: below Docker API 1.51 the image list carries no container count, and the container list it is computed from failed."
   },
+  "dockerImageHistoryTitle": "{image}: history",
+  "@dockerImageHistoryTitle": {
+    "description": "Image history sheet title (IMG-04): the image's tags, or its short id when it has none.",
+    "placeholders": {
+      "image": {
+        "type": "String",
+        "example": "nginx:1.27"
+      }
+    }
+  },
+  "dockerImageHistoryReading": "Reading the image's history…",
+  "@dockerImageHistoryReading": {
+    "description": "Image history sheet: shown while the engine reads the image's layers."
+  },
+  "dockerImageHistoryEmpty": "The engine reports no layers for this image.",
+  "@dockerImageHistoryEmpty": {
+    "description": "Image history sheet: the daemon answered with an empty history."
+  },
+  "dockerImageHistoryMasked": "{count, plural, =1{1 instruction holds masked values. Reveal values shows them for {seconds} seconds.} other{{count} instructions hold masked values. Reveal values shows them for {seconds} seconds.}}",
+  "@dockerImageHistoryMasked": {
+    "description": "Image history sheet: how many layer instructions the engine masked, since build arguments can hold secrets.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerImageHistoryNoInstruction": "No instruction recorded",
+  "@dockerImageHistoryNoInstruction": {
+    "description": "Image history sheet: a layer whose CreatedBy is empty, as for an imported base layer."
+  },
+  "dockerImageHistoryComment": "Comment",
+  "@dockerImageHistoryComment": {
+    "description": "Image history sheet: the label before a layer's comment, such as the builder that made it."
+  },
+  "dockerImageHistoryFailed": "{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server's capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} notFound{The engine no longer has this image.} daemonError{The engine refused or failed to read the image's history.} connectionFailed{The connection to the engine failed while reading the history.} cancelled{The read stopped before it ran.} other{The image's history could not be read.}}",
+  "@dockerImageHistoryFailed": {
+    "description": "Image history sheet: why the history read failed, by DockerQueryFailure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
   "dockerImagesLowSessionRelay": "Low-session mode: the list is read again every 15 seconds instead of following engine events.",
   "@dockerImagesLowSessionRelay": {
     "description": "Images list: the server's link has a session limit (03 §5.2) on a relay route."

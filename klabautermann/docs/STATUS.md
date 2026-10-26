@@ -2076,6 +2076,16 @@ is on main:
   in settings.json. Each notification states the same limit (Y3). The
   app icon's badge is not built, and whether the notifications show on
   real Android, iOS, macOS, Windows and Linux desktops is a manual check.
+- Image history (M6 N14, IMG-04): a click or tap on an Images row opens
+  a sheet with the image's layers, newest first, read by id through
+  `GET /images/{name}/history`. Each layer shows the instruction that
+  made it, when, its size, its id (none for a layer built elsewhere),
+  its tags and its comment. Build arguments can carry secrets, so the
+  engine masks each instruction as a command line, and "Reveal values"
+  shows them for 30 seconds, masked again early on request, when the
+  app turns inactive or when the sheet closes. It is a read, so it shows
+  with actions off. Tested in the docker package, the router and the
+  Images panel; no Docker fixture runs it yet.
 - M4 Docker fixture for mutations (E27): the Docker fixture gains a
   registry on its Compose network, which dind alone trusts, and seeds a
   stack to redeploy, one with an orphan, a managed one and a container

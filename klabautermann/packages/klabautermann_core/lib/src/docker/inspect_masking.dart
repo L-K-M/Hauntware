@@ -1,7 +1,8 @@
 /// What the engine masks in a Docker read before it crosses (03 §8.9):
 /// an inspected container's command line and health-check output, read
-/// as Processes reads a command line, and the list's command line, which
-/// the list drops.
+/// as Processes reads a command line, the list's command line, which
+/// the list drops, and the instruction of each layer of an image's
+/// history.
 library;
 
 import 'package:klabautermann_docker/klabautermann_docker.dart'
@@ -11,6 +12,7 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
         ContainerInspect,
         ContainerState,
         ContainerSummary,
+        ImageHistoryEntry,
         MaskedValue;
 
 import '../engine/protocol.dart';
@@ -44,6 +46,27 @@ ContainerDetails maskContainerInspect(ContainerInspect inspect) {
     mounts: inspect.mounts,
     networkSettings: inspect.networkSettings,
   );
+}
+
+/// [history] as it may cross (02 IMG-04): each layer's instruction, such
+/// as `RUN |1 TOKEN=abc /bin/sh -c ...` or `ENV API_KEY=...`, masked as
+/// one command line, its first word read as the program. One budget
+/// bounds the tokens read across the layers.
+List<ImageLayer> maskImageHistory(List<ImageHistoryEntry> history) {
+  final budget = ArgumentMaskingBudget();
+  return [
+    for (final entry in history)
+      ImageLayer(
+        id: entry.id,
+        created: entry.created,
+        createdBy: entry.createdBy.isEmpty
+            ? MaskedValue.plain('')
+            : maskCommandLine([entry.createdBy], budget: budget).single,
+        size: entry.size,
+        comment: entry.comment,
+        tags: entry.tags,
+      ),
+  ];
 }
 
 /// [summaries] without their command lines, which [maskContainerInspect]
