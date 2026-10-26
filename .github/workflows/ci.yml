@@ -2277,14 +2277,15 @@ jobs:
       - name: Build image
         run: docker build -f seance/packages/seance_sync_server/Dockerfile -t seance-sync:ci seance/
       # The image carries the binary's and the OS packages' notices, and its
-      # license label names every license they list. libsqlite3-0 is
-      # SQLite's blessing; ca-certificates is GPL-2.0-or-later with MPL-2.0
-      # certificate data (its Debian copyright file).
+      # license label names every license they list. ca-certificates is
+      # GPL-2.0-or-later with MPL-2.0 certificate data (its Debian
+      # copyright file); libsqlite3-0 comes with the base image, so it
+      # needs no label term.
       - name: Verify notices in the image
         run: |
           sh seance/scripts/licenses/check-image-notices.sh seance-sync:ci \
             /usr/share/doc/seance-sync Third-Party-Notices.txt OS-Packages.txt LICENSE \
-            -- --own Unlicense --package libsqlite3-0=blessing \
+            -- --own Unlicense \
             --package 'ca-certificates=GPL-2.0-or-later AND MPL-2.0'
           docker run --rm --entrypoint grep seance-sync:ci -q \
             '^Dart SDK (runtime and core libraries) ' /usr/share/doc/seance-sync/Third-Party-Notices.txt

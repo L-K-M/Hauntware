@@ -1780,13 +1780,14 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      # libsqlite3-0 is SQLite's blessing; ca-certificates is GPL-2.0-or-later
-      # with MPL-2.0 certificate data (its Debian copyright file).
+      # ca-certificates is GPL-2.0-or-later with MPL-2.0 certificate data
+      # (its Debian copyright file); libsqlite3-0 comes with the base image,
+      # so it needs no label term.
       - name: Verify notices in the image
         run: |
           sh seance/scripts/licenses/check-image-notices.sh seance-sync:check \
             /usr/share/doc/seance-sync Third-Party-Notices.txt OS-Packages.txt LICENSE \
-            -- --own Unlicense --package libsqlite3-0=blessing \
+            -- --own Unlicense \
             --package 'ca-certificates=GPL-2.0-or-later AND MPL-2.0'
           docker run --rm --entrypoint grep seance-sync:check -q \
             '^Dart SDK (runtime and core libraries) ' /usr/share/doc/seance-sync/Third-Party-Notices.txt

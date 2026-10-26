@@ -52,9 +52,10 @@ COPY --from=build /app/seance-sync /usr/local/bin/seance-sync
 COPY --from=build /out/notices/ /usr/share/doc/seance-sync/
 COPY LICENSE /usr/share/doc/seance-sync/LICENSE
 # Séance's own code is Unlicense; the rest comes from the notices above
-# (scripts/licenses/oci-licenses.py expr). libsqlite3-0 is SQLite's
-# blessing, ca-certificates GPL-2.0-or-later with MPL-2.0 certificate data.
-LABEL org.opencontainers.image.licenses="Unlicense AND Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-3-Clause AND GPL-2.0-or-later AND ICU AND MIT AND MPL-2.0 AND NCSA AND Unicode-3.0 AND Zlib AND blessing"
+# (scripts/licenses/oci-licenses.py expr). ca-certificates is
+# GPL-2.0-or-later with MPL-2.0 certificate data. libsqlite3-0 is already
+# in the base image, whose packages OS-Packages.txt documents.
+LABEL org.opencontainers.image.licenses="Unlicense AND Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-3-Clause AND GPL-2.0-or-later AND ICU AND MIT AND MPL-2.0 AND NCSA AND Unicode-3.0 AND Zlib"
 
 # Sensible, locked-down defaults. Override via env or CLI flags.
 ENV SEANCE_BIND=0.0.0.0 \
