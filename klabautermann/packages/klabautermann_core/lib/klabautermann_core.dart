@@ -119,6 +119,15 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         RestartCheck,
         RestartTool,
         kPackageUpdatesKept;
+// A process's details and owner (PRC-04, PRC-05), as a HostResult's
+// ProcessDetails carry them.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show
+        ContainerRuntime,
+        ProcessAttribution,
+        ProcessDetail,
+        ProcessLimit,
+        kProcessEnvironLimit;
 // The Logs panel's boot picker and /var/log browser (LOG-08, LOG-09): a
 // HostResult's rows and the boot a source reads.
 export 'package:klabautermann_host/klabautermann_host.dart'

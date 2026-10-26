@@ -143,7 +143,12 @@ void main() {
         const HostQuery(serverId: 'srv-1', queryId: 'h-1', query: BootsQuery()),
         const HostQuery(
           serverId: 'srv-1',
-          queryId: 'h-6',
+          queryId: 'h-5',
+          query: ProcessDetailQuery(pid: 42, startTicks: 900),
+        ),
+        const HostQuery(
+          serverId: 'srv-1',
+          queryId: 'h-7',
           query: OomKillsQuery(),
         ),
         const HostQuery(
@@ -410,7 +415,27 @@ void main() {
         ),
         HostResult(
           serverId: 'srv-1',
+          queryId: 'h-5',
+          payload: ProcessDetails(
+            ProcessDetail(
+              cwd: '/srv',
+              attribution: const ProcessAttribution(
+                unit: 'app.service',
+                containerId: null,
+              ),
+              openFilesLimit: const ProcessLimit(soft: 1024),
+            ),
+            environment: [EnvVar('TOKEN', MaskedValue.secret('x'))],
+          ),
+        ),
+        const HostResult(
+          serverId: 'srv-1',
           queryId: 'h-6',
+          payload: ProcessEnded(ProcessEnd.reused),
+        ),
+        HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-7',
           payload: OomKills(
             OomKillsRead(
               killsSinceBoot: 1,

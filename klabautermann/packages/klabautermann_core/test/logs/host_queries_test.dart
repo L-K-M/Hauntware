@@ -110,6 +110,60 @@ void main() {
     ]);
   });
 
+  group('process detail (PRC-04, PRC-05)', () {
+    const read =
+        '== cwd\n/srv/app\n== status\nThreads:\t3\n'
+        '== cgroup\n0::/system.slice/app.service\n== limits\n'
+        '== fds\n12\n== environ\nHOME=/srv\nDB_PASSWORD=hunter2\n';
+
+    test('answers the details with each environment value masked by '
+        'key', () async {
+      link = _RunLink((_) => _ok(read));
+      final payload =
+          (await ask(
+                const ProcessDetailQuery(pid: 42, startTicks: 900),
+              )).payload
+              as ProcessDetails;
+      expect(payload.detail.cwd, '/srv/app');
+      expect(payload.detail.attribution.unit, 'app.service');
+      expect(payload.detail.environment, isNull);
+      final env = {for (final e in payload.environment!) e.name: e.value};
+      expect(env['HOME']!.isMasked, isFalse);
+      expect(env['DB_PASSWORD']!.display, MaskedValue.maskToken);
+      expect(env['DB_PASSWORD']!.reveal(), 'hunter2');
+      expect(
+        link!.commands.single,
+        HostCommands.commandLine(
+          HostCommands.processDetail(42, 900),
+          quote: quoteShellWord,
+        ),
+      );
+    });
+
+    test('a process that ended or whose PID was reused says so', () async {
+      final ends = <ProcessEnd>[];
+      for (final code in [kGuardedKillGone, kProcessDetailReused]) {
+        events.clear();
+        link = _RunLink(
+          (_) => RemoteCommandResult(exitCode: code, stdout: '', stderr: ''),
+        );
+        final payload = (await ask(
+          const ProcessDetailQuery(pid: 42, startTicks: 900),
+        )).payload;
+        ends.add((payload as ProcessEnded).end);
+      }
+      expect(ends, [ProcessEnd.gone, ProcessEnd.reused]);
+
+      events.clear();
+      link = _RunLink((_) => _ok(read));
+      final invalid = (await ask(
+        const ProcessDetailQuery(pid: 0, startTicks: 1),
+      )).payload;
+      expect((invalid as HostQueryFailed).failure, HostQueryFailure.failed);
+      expect(link!.commands, isEmpty);
+    });
+  });
+
   test('the out-of-memory read answers the kills', () async {
     link = _RunLink(
       (_) => _ok(
