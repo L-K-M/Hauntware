@@ -7,6 +7,7 @@ library;
 import '../cron/document.dart' show splitCronCommand;
 import '../hws/collector.dart' show ArgValidators;
 import '../hws/request.dart' show ShellQuote;
+import '../parse/packages.dart' show PackageManager;
 import '../parse/accounts.dart' show kAccountsGroupMarker, kAccountsWhoMarker;
 import 'proc_stat.dart';
 
@@ -38,6 +39,15 @@ final class HostCommandError implements Exception {
     final a = argument == null ? '' : ' (argument: $argument)';
     return 'HostCommandError: $reason$a';
   }
+}
+
+/// SYS-03's power verbs (03 §7.11).
+enum PowerVerb {
+  /// Restart the host.
+  reboot,
+
+  /// Turn the host off; it answers again only once someone starts it.
+  poweroff,
 }
 
 /// The `systemctl` verbs the unit view may run (03 §7.5).
@@ -326,6 +336,39 @@ final class JournalBoot {
 /// (03 §7.6).
 const int kListBootsJsonSystemd = 251;
 
+/// [HostCommands.oomKills]' section markers: the `oom_kill` count of
+/// `/proc/vmstat`, which kernel log was read, and how many of its lines.
+const kOomVmstatMarker = '== vmstat';
+const kOomSourceMarker = '== source';
+const kOomReadMarker = '== read';
+
+/// How many of the current boot's OOM kill lines [HostCommands.oomKills]
+/// keeps, the newest.
+const kOomLinesKept = 50;
+
+/// How many earlier boots [HostCommands.bootEnds] reads the ends of.
+const kBootEndsRead = 10;
+
+/// The marker between the running release and the installed kernels in
+/// [HostCommands.kernels]' output.
+const kKernelsMarker = '== modules';
+
+/// The markers before each part of [HostCommands.interfaces]' output:
+/// the sysfs link files, the physical interfaces, the addresses, the TCP
+/// socket states and `/proc/net/sockstat`.
+const kNetLinksMarker = '== links';
+const kNetPhysicalMarker = '== physical';
+const kNetAddrMarker = '== addr';
+const kNetTcpMarker = '== tcp';
+const kNetSockstatMarker = '== sockstat';
+
+/// [HostCommands.mounts]'s section markers: `findmnt`'s JSON, or
+/// `/proc/self/mounts` where findmnt is missing or too old for `-J`, then
+/// `/proc/swaps`.
+const kMountsFindmntMarker = '== findmnt';
+const kMountsProcMarker = '== proc';
+const kMountsSwapsMarker = '== swaps';
+
 /// How [HostCommands.journalBoots] asks for the boot list: JSON on
 /// systemd [kListBootsJsonSystemd] and later, the text table below.
 enum JournalBootsFormat { json, text }
@@ -568,10 +611,12 @@ abstract final class HostCommands {
   /// PRC-04 and PRC-05's read of process [pid] (03 §7.2), as the login
   /// user: its working directory, its `status` counters, its cgroups, its
   /// limits, how many files it holds open and its environment, each
-  /// after a `== <section>` line `parseProcessDetail` reads, a section
-  /// the user may not read holding `== denied`. The environment comes
-  /// last: its values can hold newlines, so no section after it could be
-  /// told from them. It exits as [startTicks] does when the process is
+  /// after a `== <section>` line `parseProcessDetail` reads. The working
+  /// directory, descriptors and environment, which the kernel shows only
+  /// to the owner and root, hold `== denied` when unreadable; `status`,
+  /// `cgroup` and `limits` are readable by anyone who sees the process.
+  /// The environment comes last: its values can hold newlines, so no
+  /// section after it could be told from them, and its cap counts lines. It exits as [startTicks] does when the process is
   /// gone or unreadable, and [kProcessDetailReused] when its start ticks
   /// are not [startTicks]: the PID names another process now.
   static List<String> processDetail(int pid, int startTicks) {
@@ -825,6 +870,78 @@ abstract final class HostCommands {
     if (format == JournalBootsFormat.json) ...['-o', 'json'],
   ];
 
+  /// BOOT-02's ends of the boots before the current one, at most
+  /// [kBootEndsRead], one `<boot id> clean|unclean|unknown` line each:
+  /// clean when the boot's last journal lines show journald stopping or
+  /// a shutdown target, unknown when the system journal is not readable
+  /// for it (no message from PID 1), as for a user outside the journal
+  /// groups. `parseBootEnds` reads it. Each `journalctl` reads no
+  /// stdin, which is the loop's list of boot IDs.
+  static List<String> bootEnds() => const ['sh', '-c', _kBootEndsScript];
+
+  static const _kBootEndsScript =
+      'ids=\$(journalctl --list-boots --no-pager 2>/dev/null '
+      "| awk 'length(\$2) == 32 { print \$2 }'); "
+      'n=\$(printf "%s\\n" "\$ids" | grep -c .); '
+      '[ "\$n" -gt 1 ] || exit 0; '
+      'printf "%s\\n" "\$ids" | head -n \$((n - 1)) '
+      '| tail -n $kBootEndsRead | while read -r id; do '
+      'if [ -z "\$(journalctl -b "\$id" -q -n 1 -o cat --no-pager _PID=1 '
+      '</dev/null 2>/dev/null)" ]; then echo "\$id unknown"; continue; fi; '
+      'if journalctl -b "\$id" -q -n 40 -o cat --no-pager </dev/null 2>/dev/null '
+      "| grep -qE 'Journal stopped|Reached target .*(Reboot|Power-Off|Halt|Shutdown)'; "
+      'then echo "\$id clean"; else echo "\$id unclean"; fi; done';
+
+  /// BOOT-03's read: the running kernel's release, then the module
+  /// directories of the kernels installed. `parseKernels` reads it.
+  static List<String> kernels() => const ['sh', '-c', _kKernelsScript];
+
+  static const _kKernelsScript =
+      'uname -r; echo "$kKernelsMarker"; '
+      'ls -1 /lib/modules 2>/dev/null || ls -1 /usr/lib/modules 2>/dev/null; '
+      'exit 0';
+
+  /// NET-02 and NET-03's read: each interface's sysfs files as
+  /// `<name>/<file>:<value>` lines from one `grep` (a down link's `speed`
+  /// fails to read and is left out), the interfaces backed by a device,
+  /// the addresses from `ip -j addr` or, where `ip` has no JSON
+  /// (BusyBox), `ip -o addr`, the count of TCP sockets per state from
+  /// `/proc/net/tcp` and `tcp6`, and `/proc/net/sockstat`. Everything
+  /// under `/proc/net` is the reader's network namespace's (D50).
+  /// `parseInterfaces` reads it.
+  static List<String> interfaces() => const ['sh', '-c', _kInterfacesScript];
+
+  static const _kInterfacesScript =
+      'echo "$kNetLinksMarker"; '
+      "cd /sys/class/net 2>/dev/null && grep -s -H '' -- "
+      '*/operstate */mtu */address */speed '
+      '*/statistics/rx_bytes */statistics/tx_bytes '
+      '*/statistics/rx_errors */statistics/tx_errors '
+      "*/statistics/rx_dropped */statistics/tx_dropped; "
+      'echo "$kNetPhysicalMarker"; '
+      '[ "\$PWD" = /sys/class/net ] && '
+      'for d in */device; do [ -e "\$d" ] && echo "\${d%/device}"; done; '
+      'echo "$kNetAddrMarker"; ip -j addr 2>/dev/null || ip -o addr 2>/dev/null; '
+      'echo "$kNetTcpMarker"; '
+      "cat /proc/net/tcp /proc/net/tcp6 2>/dev/null | "
+      "awk '\$4 ~ /^[0-9A-F][0-9A-F]\$/ { n[\$4]++ } "
+      "END { for (s in n) print s, n[s] }'; "
+      'echo "$kNetSockstatMarker"; '
+      'cat /proc/net/sockstat /proc/net/sockstat6 2>/dev/null; '
+      'exit 0';
+
+  /// DSK-05 and DSK-14's read: every mount's source, type and options,
+  /// from `findmnt -J -l` (util-linux 2.27+) or `/proc/self/mounts`, then
+  /// the swap devices from `/proc/swaps`. `parseMounts` reads it.
+  static List<String> mounts() => const ['sh', '-c', _kMountsScript];
+
+  static const _kMountsScript =
+      'if command -v findmnt >/dev/null 2>&1 && '
+      'out=\$(findmnt -J -l -o TARGET,SOURCE,FSTYPE,OPTIONS 2>/dev/null); '
+      'then echo "$kMountsFindmntMarker"; printf "%s\\n" "\$out"; '
+      'else echo "$kMountsProcMarker"; cat /proc/self/mounts 2>/dev/null; fi; '
+      'echo "$kMountsSwapsMarker"; cat /proc/swaps 2>/dev/null; exit 0';
+
   /// The files under `/var/log` (LOG-08, 03 §7.6); `parseLogFiles`
   /// reads the output.
   static List<String> logFiles() => const [
@@ -922,6 +1039,153 @@ abstract final class HostCommands {
       RunAsTool.su => ['su', '-s', '/bin/sh', '-c', command, asUser],
     };
   }
+
+  /// The package check (03 §7.8, PKG-01 to PKG-03), as the login user
+  /// and from cached metadata only: it never refreshes package lists
+  /// (PKG-05 does, in admin mode). It reads the first manager it finds
+  /// and prints `parsePackageCheck`'s sections: `== manager`, `== cache`
+  /// (the metadata's age as epoch seconds), `== updates` and, where the
+  /// manager has one, `== security`, each body ended by `== rc <status>`,
+  /// then `== reboot required|no|unknown` with the packages that asked.
+  /// apt simulates a `dist-upgrade`, since `upgrade` keeps back updates
+  /// that bring new packages, as a kernel's do.
+  static List<String> packageCheck() => const ['sh', '-c', _packageCheck];
+
+  /// The first package manager the check would read, by name, as
+  /// `parsePackageCheck` names them: what PKG-05's refresh plans for.
+  static List<String> packageManagerName() => const [
+    'sh',
+    '-c',
+    _packageManagerName,
+  ];
+
+  // The same order as [_packageCheck]'s branches; a test pins the two.
+  static const _packageManagerName =
+      'for m in apt-get dnf zypper pacman apk; do '
+      'command -v "\$m" >/dev/null 2>&1 && { echo "\${m%-get}"; exit 0; }; '
+      'done; exit 1';
+
+  /// The host's own name, as SYS-03's typed confirmation asks for it.
+  static List<String> hostname() => const ['uname', '-n'];
+
+  /// SYS-03's [verb], run as root: `systemctl` where systemd runs the
+  /// host ([systemd]), which queues the job and returns, otherwise the
+  /// `reboot` and `poweroff` that BusyBox and sysvinit provide, which
+  /// signal init and return.
+  static List<String> power(PowerVerb verb, {required bool systemd}) =>
+      systemd ? ['systemctl', verb.name] : [verb.name];
+
+  /// PKG-05's refresh of [manager]'s package lists, run as root: what the
+  /// check reads afterwards. pacman has none, since `pacman -Sy` without
+  /// upgrading leaves a partly upgraded system, so it throws
+  /// [HostCommandError].
+  static List<String> packageRefresh(PackageManager manager) =>
+      switch (manager) {
+        PackageManager.apt => const ['apt-get', '-q', 'update'],
+        PackageManager.dnf => const ['dnf', '-q', 'makecache'],
+        PackageManager.zypper => const [
+          'zypper',
+          '--non-interactive',
+          'refresh',
+        ],
+        PackageManager.apk => const ['apk', 'update'],
+        PackageManager.pacman => throw const HostCommandError(
+          'pacman lists refresh only with an upgrade',
+        ),
+      };
+
+  /// PKG-04's restart check (03 §7.8), run as root, since the tools read
+  /// every process's maps: the first of `needrestart -b`,
+  /// `needs-restarting -s` and `zypper ps -sss` installed, after a
+  /// `== tool <name>` line for `parseRestartCheck`, or `== tool none`.
+  static List<String> restartCheck() => const ['sh', '-c', _restartCheck];
+
+  static const _restartCheck =
+      'if command -v needrestart >/dev/null 2>&1; then '
+      'echo "== tool needrestart"; exec needrestart -b; '
+      'elif command -v needs-restarting >/dev/null 2>&1; then '
+      'echo "== tool needs-restarting"; exec needs-restarting -s; '
+      'elif command -v zypper >/dev/null 2>&1; then '
+      'echo "== tool zypper"; exec zypper ps -sss; '
+      'else echo "== tool none"; fi';
+
+  /// MEM-03's read (03 §7.1): the kills since boot from `/proc/vmstat`'s
+  /// `oom_kill` (Linux 4.13+), then the current boot's kill lines from the
+  /// kernel log, the journal's where the login user may read it, else
+  /// `dmesg`, which `kernel.dmesg_restrict` may refuse. Only the newest
+  /// [kOomLinesKept] are kept; `parseOomKills` reads them.
+  static List<String> oomKills() => const ['sh', '-c', _oomKills];
+
+  static const _oomKills =
+      '''
+echo "$kOomVmstatMarker \$(awk '\$1 == "oom_kill" { print \$2 }' /proc/vmstat 2>/dev/null)"
+kernel() {
+  if command -v journalctl >/dev/null 2>&1 &&
+    journalctl -k -b -q -n 1 --no-pager 2>/dev/null | grep -q .; then
+    echo '$kOomSourceMarker journal'
+    journalctl -k -b -q --no-pager -o short-unix 2>/dev/null
+  else
+    echo '$kOomSourceMarker dmesg'
+    dmesg 2>/dev/null
+  fi
+}
+kernel | awk -v keep=$kOomLinesKept '
+  NR == 1 { print; next }
+  { n++ }
+  /Killed process [0-9]+ \\(|oom-kill:/ { kept[k++ % keep] = \$0 }
+  END {
+    for (i = k > keep ? k - keep : 0; i < k; i++) print kept[i % keep]
+    print "$kOomReadMarker " n + 0
+  }'
+exit 0''';
+
+  static const _packageCheck = r'''
+have() { command -v "$1" >/dev/null 2>&1; }
+mtime() { stat -c %Y "$1" 2>/dev/null; }
+if have apt-get; then
+  echo '== manager apt'
+  echo "== cache $(mtime /var/cache/apt/pkgcache.bin)"
+  echo '== updates'
+  apt-get -s -o Debug::NoLocking=1 dist-upgrade 2>&1; echo "== rc $?"
+elif have dnf; then
+  echo '== manager dnf'
+  echo "== cache $(for f in /var/cache/dnf/*.solv /var/cache/libdnf5/*/solv/*.solv; do mtime "$f"; done | sort -n | tail -n 1)"
+  echo '== updates'
+  dnf -q --cacheonly check-update 2>&1; echo "== rc $?"
+  echo '== security'
+  dnf -q --cacheonly updateinfo list --security 2>&1; echo "== rc $?"
+elif have zypper; then
+  echo '== manager zypper'
+  echo "== cache $(for f in /var/cache/zypp/raw/*/repodata/repomd.xml; do mtime "$f"; done | sort -n | tail -n 1)"
+  echo '== updates'
+  zypper --non-interactive --no-refresh -q lu 2>&1; echo "== rc $?"
+  echo '== security'
+  zypper --non-interactive --no-refresh -q lp -g security 2>&1; echo "== rc $?"
+elif have pacman; then
+  echo '== manager pacman'
+  echo "== cache $(mtime /var/lib/pacman/sync)"
+  echo '== updates'
+  pacman -Qu 2>&1; echo "== rc $?"
+elif have apk; then
+  echo '== manager apk'
+  echo "== cache $(for f in /var/cache/apk/APKINDEX.*; do mtime "$f"; done | sort -n | tail -n 1)"
+  echo '== updates'
+  apk version -l '<' 2>&1; echo "== rc $?"
+else
+  echo '== manager none'
+fi
+if [ -e /var/run/reboot-required ]; then
+  echo '== reboot required'
+  cat /var/run/reboot-required.pkgs 2>/dev/null
+elif have needs-restarting; then
+  needs-restarting -r >/dev/null 2>&1
+  case $? in 0) echo '== reboot no' ;; 1) echo '== reboot required' ;; *) echo '== reboot unknown' ;; esac
+elif [ -d /var/lib/dpkg ]; then
+  echo '== reboot no'
+else
+  echo '== reboot unknown'
+fi
+''';
 
   /// ACC-01 and ACC-02's read: the accounts and groups through `getent`,
   /// which sees directory users too, or the files where it is missing,

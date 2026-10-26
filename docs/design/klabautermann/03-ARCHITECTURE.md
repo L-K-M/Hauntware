@@ -3382,6 +3382,16 @@ the guarded kill needs it.
   (util-linux 2.27+); swap devices; the disk space explorer (DSK-07), which
   streams `ncdu -x -o -` or `gdu -o-` when installed, else incremental `du -x
   -B1 -d1` per opened directory, read-only, sudo for a complete tree.
+- **As built (M6 N31).** DSK-05 and DSK-14 are one host query,
+  `MountsQuery`: `findmnt -J -l -o TARGET,SOURCE,FSTYPE,OPTIONS` where
+  findmnt is installed and takes `-J`, else `/proc/self/mounts` with its
+  octal escapes read back, then `/proc/swaps`. A mount's details in the
+  Disks section read it when they open and add the mount's source and
+  options, saying when it is mounted read-only; the last mount over a
+  point is the one in effect. The System tab's Swap section reads it
+  when it shows and on request, and lists each swap partition or file
+  with how much is used of its size and its priority, the device used
+  first at the top.
 - **v1.x.** "Open in Poltergeist" for deletion (DSK-08), layout (`lsblk -J
   -b`, LVM JSON reports with sudo), ZFS, mdraid, network mounts with
   stale-mount detection, cleanup suggestions with sizes and previews, fill
@@ -3397,6 +3407,22 @@ the guarded kill needs it.
   listening socket with `userland-proxy: false` [U]); firewall view (`ufw
   status verbose`, `nft -j list ruleset`, `firewall-cmd --list-all-zones`,
   `iptables-save`; admin mode); local port forward (5.11).
+- **As built (M6 N33).** NET-02 and NET-03 are one host query,
+  `InterfacesQuery`, which the System tab's Interfaces section runs when
+  it shows and on request. One `grep -H` prints each interface's sysfs
+  `operstate`, `mtu`, `address`, `speed` and error, drop and byte
+  counters; interfaces with a `device` link are physical. Addresses come
+  from `ip -j addr`, or `ip -o addr` where `ip` has no JSON (BusyBox),
+  and are left out, with a note, without `ip`. TCP sockets are counted
+  per state from `/proc/net/tcp` and `tcp6` by `awk` on the server, so a
+  busy host sends a dozen lines, and `/proc/net/sockstat` gives the UDP
+  and total counts; both are the reader's network namespace's (D50). The
+  section lists physical interfaces first, folds the loopback and
+  software interfaces without a routable address (containers' veth
+  pairs) behind a checkbox, keeps bridges, bonds, VLANs and tunnels that
+  have one, and shows each interface's current rates from the `core`
+  stream's per-interface rates. 02's `ss -s` is not read: the files
+  answer without `iproute2`.
 - **v1.x.** Exposure map (the device probe is the ground truth and is
   labelled with its vantage point; Docker-published ports bypass ufw INPUT
   rules unless `DOCKER-USER` restricts them [U: current wording]); routes and
@@ -3869,6 +3895,43 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   (`/var/run/reboot-required`, `needs-restarting -r`), services needing
   restart (`needrestart -b`, `needs-restarting -s`), refresh as an admin
   action, fleet update center from cached results.
+- **As built (M6 N36a).** One `sh -c` script (`HostCommands.packageCheck`)
+  runs as the login user and reads the first manager it finds:
+  `apt-get -s -o Debug::NoLocking=1 dist-upgrade` (security from an
+  origin naming `-security`; `upgrade` would keep back updates that
+  bring new packages, as a kernel's do), `dnf -q --cacheonly check-update` with
+  `updateinfo list --security` (an advisory naming a package followed by
+  its version marks it), `zypper --no-refresh -q lu` with `lp -g security`
+  (needed security patches counted, since zypper lists patches rather
+  than packages), `pacman -Qu` (the local sync database, never a
+  download) and `apk version -l '<'`. It prints the metadata's age where
+  the manager keeps one file for it, and the reboot flag from
+  `/var/run/reboot-required` and its `.pkgs`, else `needs-restarting -r`,
+  else "no" on a dpkg host. dnf without cached metadata is said so, not
+  downloaded [U: dnf 5's `updateinfo` alias]. `ReadPackages` answers with
+  a `PackagesReport`; the engine keeps each server's check for an hour
+  (`fresh` runs a new one), shares a running check between reads, keeps
+  no failed one, and forgets a server's with its capabilities. At most
+  1,000 updates are kept [E]. The check runs for at most 120 s.
+- **As built (M6 N36b).** PKG-05's `RefreshPackageLists` plans, in admin
+  mode only, the found manager's refresh as one elevated step:
+  `apt-get -q update`, `dnf -q makecache`, `zypper --non-interactive
+  refresh` or `apk update`, with the package lists as its host-write row.
+  pacman is refused, since `pacman -Sy` without an upgrade leaves a
+  partly upgraded system. The Updates section offers it in admin mode,
+  says admin mode downloads lists that were never downloaded, and asks
+  for a new check once the refresh has run.
+- **As built (M6 N36c).** PKG-04's `ReadRestarts`, in admin mode only,
+  runs the first of `needrestart -b`, `needs-restarting -s` and
+  `zypper ps -sss` as root through the elevation executor, since each
+  reads every process's maps. `RestartReport` lists the systemd units to
+  restart, once each, and from needrestart whether a newer kernel waits
+  for a reboot. The Updates section reads it on request.
+- **As built (M6 N36d).** PKG-06's fleet update center, opened from the
+  Updates section ("All servers"), reads every server's check, which the
+  engine answers from the last hour where it has one, and lists each
+  server's updates, security updates and restart flag, most security
+  updates first. Its refresh checks every server afresh.
 - **v1.x.** Apply updates (PKG-07) only as a detached operation with a typed
   confirmation and `DEBIAN_FRONTEND=noninteractive`, never in a client-held
   channel; holds; automatic-update status; old kernels; scheduled checks
@@ -3980,6 +4043,41 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   measured once per probe, so per link, which is enough for a clock that
   drifts by seconds a day; durations on the server's clock (CN-17's
   second half) already use the server's times.
+
+  Reboot and shutdown (M6 N38b, SYS-03) are `PowerAction` plans, in
+  admin mode only: one elevated `systemctl reboot` or `systemctl
+  poweroff`, which queue the job and return, or init's own `reboot` and
+  `poweroff` where systemd does not run the host. The typed
+  confirmation asks for the host's own name, read with `uname -n` while
+  planning, so the user names the machine the command reaches. The step
+  is marked as ending the link: a link that drops while it runs counts
+  as the host having taken it, and the host syslog line (SAF-13) goes
+  before it. After a reboot the System tab's Power section waits for a
+  `core` reading whose `btime` differs from the old boot's by more than
+  two seconds (or, with the old boot unread, reports an uptime shorter
+  than the time the request has been pending, so a server clock running
+  ahead cannot pass the old boot as a new one), and says how long the
+  server took to answer again.
+
+  Boots and kernels (M6 N39, BOOT-02, BOOT-03) are host queries the
+  System tab's Boots section runs one after another when it shows and
+  on request. `KernelsQuery` prints `uname -r` and the directories under
+  `/lib/modules` (or `/usr/lib/modules`), ordered as `sort -V` orders
+  them: the running kernel is current when it is the newest, a newer one
+  is installed when a later directory exists, and removed when its own
+  directory is gone, as after an upgrade that cleaned up; no directory
+  reads as unknown, as in a container. The package database would name
+  pending kernels more precisely, but differs per distribution, and every
+  kernel package installs its modules there. The boot list is LOG-09's
+  `BootsQuery`; `BootEndsQuery` reads how the last ten boots before the
+  current one ended from their journals: clean when the last 40 lines
+  show journald stopping or a reboot, power-off, halt or shutdown
+  target, unclean otherwise, and unknown when the journal holds no line
+  from PID 1 for the boot, as for a user outside the journal's groups.
+  02's `last -x` alternative is not read: the journal already lists the
+  boots, and newer distributions replace wtmp with wtmpdb. The section lists the current boot and those ten,
+  newest first, each with its start and how long its journal ran, and
+  counts the older boots the Logs panel's boot picker still lists.
 - **v1.x.** Fans, battery, inventory, crash markers, boot performance,
   incident snapshot (redacted by default), deploy pre-flight checks.
 
@@ -5842,7 +5940,8 @@ shows there.
 | `PullImage` with `via: host` or `hostDetached` (M6 N13b, REG-01): the host's own `docker --host unix://<socket> pull <reference>`, which uses the host's `docker login` and credential helpers; `host` runs it over the link with its output kept, `hostDetached` as a detached operation (7.17) on the runner row the host and admin mode allow; root over the sudo relay | `ActionPlanned`, then `ActionFinished` with the output, or with the operation id of the launched pull, which the operation list follows |
 | `CancelAction(planId)` (M6 N13, IMG-03): stops a running plan where its step can stop, today an image pull, whose request the engine closes so the daemon stops the pull | The plan's `ActionFinished` with `cancelled`; a step that cannot stop runs to its end |
 | `DockerQuery` with `DockerImageHistoryQuery(image)` (M6 N14, IMG-04): `GET /images/{name}/history` for an image's id or reference; the Images sub-tab opens it from a row | `DockerResult` with `DockerImageHistoryPayload(layers)`, newest first: each layer's id (null for one built elsewhere), creation time, size, comment and tags, and its `CreatedBy` masked as a command line, since build arguments can carry secrets (8.9); an empty image is `invalidQuery` |
-| `HostQuery` with `ProcessDetailQuery(pid, startTicks)` (M6 N43b, PRC-04, PRC-05): one `sh -c` as the login user that re-checks the start ticks (field 22 of `/proc/<pid>/stat`), then prints the process's `cwd`, `status` counters (threads, swap, context switches), `cgroup`, `limits`, open descriptor count and environment (at most 500 entries, last, since values can hold newlines), each section the user may not read marked denied | `HostResult` with `ProcessDetails(detail, environment)`: the details, with the unit and container `/proc/<pid>/cgroup` names (systemd units under the unified or `name=systemd` hierarchy; Docker, Podman, containerd and CRI-O scopes, cgroupfs `/docker/<id>` and kubepods leaves), and the environment as `EnvVar`s masked by key (8.9); or `ProcessEnded(gone | reused)` when the process exited or its PID names another |
+| `DockerQuery` with `DockerContainerTopQuery(containerId)` (M6 N17a, CTR-10): `GET /containers/{id}/top?ps_args=-eo pid,user,pcpu,rss,etime,args`, asked again without `ps_args` when the daemon answers 500, as BusyBox's `ps` (no `-e`) and a Windows daemon (no arguments) do; the container details open it for a running container | `DockerResult` with `DockerContainerTopPayload(titles, processes, commandColumn)`: the columns `ps` named and a row of cells per process, the `CMD`, `COMMAND` or `ARGS` cell masked as a command line (8.9) and its index in `commandColumn`; a stopped container's 409 is `daemonError`, an empty id `invalidQuery` |
+| `HostQuery` with `ProcessDetailQuery(pid, startTicks)` (M6 N43b, PRC-04, PRC-05): one `sh -c` as the login user that re-checks the start ticks (field 22 of `/proc/<pid>/stat`), then prints the process's `cwd`, `status` counters (threads, swap, context switches), `cgroup`, `limits`, open descriptor count and environment (at most 500 lines, last, since values can hold newlines, so a multi-line value counts more than once), the working directory, descriptors and environment marked denied where the user may not read them; the kernel lets anyone who sees the process read `status`, `cgroup` and `limits` | `HostResult` with `ProcessDetails(detail, environment)`: the details, with the unit and container `/proc/<pid>/cgroup` names (systemd units under the unified or `name=systemd` hierarchy; Docker, Podman, containerd and CRI-O scopes, cgroupfs `/docker/<id>` and kubepods leaves), and the environment as `EnvVar`s masked by key (8.9); or `ProcessEnded(gone | reused)` when the process exited or its PID names another |
 | `AnswerKeystore(requestId, result)` (D62) | `KeystoreRequest(requestId, operation)`: the engine asks the app for the OS keystore |
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)` (K41, 4.7) | `CatalogReplaced(entries)` with each synced entry's `endpoint`, after `RequestRejected` when a pin could not be saved; `EndpointChanged(serverId)` when a sync changes a confirmed endpoint |

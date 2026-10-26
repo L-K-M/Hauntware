@@ -1188,6 +1188,84 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get systemOomTitle => 'Out-of-memory kills';
+
+  @override
+  String get systemOomReading => 'Reading the kernel\'s out-of-memory kills.';
+
+  @override
+  String systemOomFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected, so the out-of-memory kills cannot be read.',
+      'denied': 'The server refused the out-of-memory read.',
+      'missing': 'The server lacks a tool the out-of-memory read needs.',
+      'other': 'The out-of-memory kills could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String systemOomCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count processes were killed for lack of memory since boot.',
+      one: '1 process was killed for lack of memory since boot.',
+      zero: 'No process was killed for lack of memory since boot.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get systemOomCountUnknown =>
+      'This kernel does not count out-of-memory kills (Linux 4.13 and later do).';
+
+  @override
+  String get systemOomLogDenied =>
+      'Your login may not read the kernel log, so the killed processes cannot be named. Membership in the adm or systemd-journal group, or sudo, gives access.';
+
+  @override
+  String systemOomProcess(String command, int pid) {
+    return '$command (PID $pid)';
+  }
+
+  @override
+  String systemOomKilledAt(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return 'Killed $timeString';
+  }
+
+  @override
+  String systemOomAfterBoot(String time) {
+    return 'Killed $time after boot';
+  }
+
+  @override
+  String systemOomMemory(String size) {
+    return '$size of its own memory when killed';
+  }
+
+  @override
+  String get systemOomCgroupLimit =>
+      'A memory limit ran out, such as a container\'s, not the server\'s memory.';
+
+  @override
+  String get systemOomShowLog => 'Show in kernel log';
+
+  @override
+  String get systemOomReadAgain => 'Read again';
+
+  @override
+  String get systemOomLogTitle => 'Out-of-memory reports';
+
+  @override
+  String get systemOomLogClose => 'Close';
+
+  @override
   String get systemReceive => 'Receive';
 
   @override
@@ -1356,6 +1434,265 @@ class AppLocalizationsEn extends AppLocalizations {
   String systemGpuNvidiaFailed(String message) {
     return 'nvidia-smi is installed but failed: $message';
   }
+
+  @override
+  String get systemBootsTitle => 'Boots';
+
+  @override
+  String get systemMountReading => 'Reading mount options…';
+
+  @override
+  String systemMountFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server denied the read.',
+      'missing': 'The server lacks a tool this read needs.',
+      'other': 'The read failed.',
+    });
+    return 'Mount options could not be read. $_temp0';
+  }
+
+  @override
+  String get systemMountGone => 'Nothing is mounted here any more.';
+
+  @override
+  String get systemMountSource => 'Source';
+
+  @override
+  String get systemMountOptions => 'Options';
+
+  @override
+  String get systemMountReadOnly => 'Mounted read-only';
+
+  @override
+  String get systemSwapTitle => 'Swap';
+
+  @override
+  String get systemSwapReading => 'Reading swap devices…';
+
+  @override
+  String get systemSwapNone => 'No swap devices are in use.';
+
+  @override
+  String systemSwapFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server denied the read.',
+      'missing': 'The server lacks a tool this read needs.',
+      'other': 'The read failed.',
+    });
+    return 'Swap devices could not be read. $_temp0';
+  }
+
+  @override
+  String systemSwapUsage(String used, String size) {
+    return '$used used of $size';
+  }
+
+  @override
+  String systemSwapDetail(String kind, int priority) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'partition': 'Partition',
+      'file': 'File',
+      'other': 'Swap device',
+    });
+    return '$_temp0, priority $priority';
+  }
+
+  @override
+  String get systemSwapReadAgain => 'Read again';
+
+  @override
+  String get systemBootsReading => 'Reading kernels and boots…';
+
+  @override
+  String get systemBootsReadAgain => 'Read again';
+
+  @override
+  String systemKernelRunning(String release) {
+    return 'Running kernel $release';
+  }
+
+  @override
+  String systemKernelState(String state, String newest) {
+    String _temp0 = intl.Intl.selectLogic(state, {
+      'current': 'This is the newest kernel installed.',
+      'newerInstalled': 'Kernel $newest is installed. A reboot loads it.',
+      'runningRemoved':
+          'The running kernel\'s modules were removed, as an upgrade does. A reboot loads $newest.',
+      'other':
+          'Whether a newer kernel is installed is unknown: no module directory was found, as in a container.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String systemKernelFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server refused the kernel check.',
+      'missing': 'The server lacks the tools the kernel check runs.',
+      'other': 'The kernel check failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemNetInterfacesTitle => 'Interfaces';
+
+  @override
+  String get systemNetReading => 'Reading the network interfaces…';
+
+  @override
+  String get systemNetReadAgain => 'Read again';
+
+  @override
+  String systemNetFailed(String failure) {
+    String _temp0 = intl.Intl.selectLogic(failure, {
+      'noLink': 'Not connected to the server.',
+      'denied': 'The server refused the interface read.',
+      'missing': 'The server lacks the tools the interface read runs.',
+      'other': 'The interface read failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemNetNoAddresses =>
+      'The server has no ip command that lists addresses, so none are shown.';
+
+  @override
+  String systemNetShowAll(int count) {
+    return 'Show loopback and virtual interfaces ($count)';
+  }
+
+  @override
+  String get systemNetNone => 'The server lists no network interfaces.';
+
+  @override
+  String systemNetInterface(String name, String state) {
+    String _temp0 = intl.Intl.selectLogic(state, {
+      'up': 'up',
+      'down': 'down',
+      'dormant': 'dormant',
+      'lowerLayerDown': 'lower layer down',
+      'notPresent': 'not present',
+      'testing': 'testing',
+      'other': 'state not reported',
+    });
+    return '$name: $_temp0';
+  }
+
+  @override
+  String systemNetAddress(String address, int prefix) {
+    return '$address/$prefix';
+  }
+
+  @override
+  String systemNetMtu(int mtu) {
+    return 'MTU $mtu';
+  }
+
+  @override
+  String systemNetSpeedMbps(int speed) {
+    return 'Link speed $speed Mb/s';
+  }
+
+  @override
+  String systemNetSpeedGbps(double speed) {
+    final intl.NumberFormat speedNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String speedString = speedNumberFormat.format(speed);
+
+    return 'Link speed $speedString Gb/s';
+  }
+
+  @override
+  String systemNetRates(String rx, String tx) {
+    return 'Receiving $rx, sending $tx';
+  }
+
+  @override
+  String systemNetErrors(
+    int rxErrors,
+    int txErrors,
+    int rxDropped,
+    int txDropped,
+  ) {
+    return 'Errors: $rxErrors in, $txErrors out. Dropped: $rxDropped in, $txDropped out.';
+  }
+
+  @override
+  String get systemNetConnectionsTitle => 'Connections';
+
+  @override
+  String get systemNetConnectionsUnknown =>
+      'The server\'s socket counts could not be read.';
+
+  @override
+  String get systemNetTcpEstablished => 'TCP established';
+
+  @override
+  String get systemNetTcpListening => 'TCP listening';
+
+  @override
+  String get systemNetTcpTimeWait => 'TCP time wait';
+
+  @override
+  String get systemNetTcpCloseWait => 'TCP close wait';
+
+  @override
+  String get systemNetTcpOther => 'TCP in other states';
+
+  @override
+  String get systemNetUdp => 'UDP sockets';
+
+  @override
+  String get systemNetSocketsUsed => 'All sockets';
+
+  @override
+  String get systemBootsTimelineTitle => 'Boot timeline';
+
+  @override
+  String get systemBootsCurrent => 'This boot';
+
+  @override
+  String systemBootsSpan(String start, String duration) {
+    return 'Started $start, ran $duration';
+  }
+
+  @override
+  String systemBootEnd(String end) {
+    String _temp0 = intl.Intl.selectLogic(end, {
+      'clean': 'Shut down cleanly',
+      'unclean': 'Ended without a shutdown: a crash, power loss or hard reset',
+      'other':
+          'How it ended is unknown: its journal is not readable as this user',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemBootsNone => 'The journal lists no boots.';
+
+  @override
+  String systemBootsNotListed(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString earlier boots are not listed.',
+      one: '1 earlier boot is not listed.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get systemBootEndsUnknown =>
+      'How the earlier boots ended could not be read.';
 
   @override
   String get systemDriveHealthTitle => 'Drive health';
@@ -2727,6 +3064,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String get overviewCpuIdle => 'Idle';
 
   @override
+  String get overviewCpuIowait => 'I/O wait';
+
+  @override
+  String get overviewCpuSteal => 'Steal';
+
+  @override
+  String get overviewCpuIrq => 'IRQ';
+
+  @override
+  String get overviewCpuSoftirq => 'Soft IRQ';
+
+  @override
+  String overviewCpuHintSteal(String percent) {
+    return 'Steal $percent: the host running this virtual machine gives its CPU time to other guests, often a noisy neighbour on a VPS. Programs here run slower than the busy figure suggests.';
+  }
+
+  @override
+  String overviewCpuHintIowait(String percent) {
+    return 'I/O wait $percent: cores sat idle while tasks waited for storage. The kernel calls this figure unreliable, so check disk latency before blaming the disks.';
+  }
+
+  @override
+  String overviewCpuHintInterrupts(String percent) {
+    return 'Interrupts $percent: the CPUs spend this much handling devices, often heavy network traffic.';
+  }
+
+  @override
   String get overviewPerCoreTitle => 'Per core';
 
   @override
@@ -2785,6 +3149,60 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get overviewSwapNone => 'No swap is set up.';
+
+  @override
+  String get overviewPressureTitle => 'Pressure';
+
+  @override
+  String get overviewPressureCaption =>
+      'Share of time tasks stalled, over the last 10 s, 1 min and 5 min. \"Some\" counts time at least one task waited, \"full\" time all of them did.';
+
+  @override
+  String get overviewPressureNone =>
+      'This kernel reports no pressure figures. That is normal before Linux 4.20 or with PSI turned off.';
+
+  @override
+  String get overviewPressureCpu => 'CPU';
+
+  @override
+  String get overviewPressureMemory => 'Memory';
+
+  @override
+  String get overviewPressureIo => 'I/O';
+
+  @override
+  String overviewPressureSome(String resource) {
+    return '$resource, some';
+  }
+
+  @override
+  String overviewPressureFull(String resource) {
+    return '$resource, full';
+  }
+
+  @override
+  String overviewPressureValue(double avg10, double avg60, double avg300) {
+    final intl.NumberFormat avg10NumberFormat =
+        intl.NumberFormat.decimalPatternDigits(
+          locale: localeName,
+          decimalDigits: 2,
+        );
+    final String avg10String = avg10NumberFormat.format(avg10);
+    final intl.NumberFormat avg60NumberFormat =
+        intl.NumberFormat.decimalPatternDigits(
+          locale: localeName,
+          decimalDigits: 2,
+        );
+    final String avg60String = avg60NumberFormat.format(avg60);
+    final intl.NumberFormat avg300NumberFormat =
+        intl.NumberFormat.decimalPatternDigits(
+          locale: localeName,
+          decimalDigits: 2,
+        );
+    final String avg300String = avg300NumberFormat.format(avg300);
+
+    return '$avg10String% · $avg60String% · $avg300String%';
+  }
 
   @override
   String get jobsWaiting => 'Waiting for the first reading.';
@@ -4100,6 +4518,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'userBackups': 'A backup in your Klabautermann backups folder',
       'rootBackups': 'A backup under /var/lib/klabautermann/backups',
       'footprintManifest': 'The list of what Klabautermann keeps on the server',
+      'packageLists': 'The package manager\'s cached package lists',
       'auditSyslog':
           'One line in the system log naming this action and this device',
       'other': 'A change on the server',
@@ -4117,6 +4536,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'forcesImageInUse': '$count containers still use this image.',
       'deletesVolumeData': 'This deletes the volume and the data in it.',
       'interruptsTarget': 'This interrupts what the target is doing.',
+      'restartsHost':
+          'This restarts the server: everything on it stops, and the connection drops until it is back.',
+      'stopsHost':
+          'This turns the server off: everything on it stops, and it stays off until someone starts it.',
       'other': '',
     });
     return '$_temp0';
@@ -4600,6 +5023,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'KillProcess': 'Signal',
       'UnitAction': 'Unit action',
       'StartTimer': 'Run timer now',
+      'RefreshPackageLists': 'Refresh package lists',
+      'PowerAction': 'Reboot or shut down',
       'ContainerAction': 'Container action',
       'RemoveContainer': 'Remove container',
       'RemoveImage': 'Remove image',
@@ -5586,6 +6011,58 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dockerImageHistoryComment => 'Comment';
+
+  @override
+  String get dockerProcessesTitle => 'Processes';
+
+  @override
+  String get dockerProcessesStopped =>
+      'The container is not running, so it has no processes.';
+
+  @override
+  String get dockerProcessesReading => 'Reading processes…';
+
+  @override
+  String get dockerProcessesReadAgain => 'Read again';
+
+  @override
+  String get dockerProcessesNone =>
+      'The engine lists no processes for this container.';
+
+  @override
+  String dockerProcessesCount(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString processes',
+      one: '1 process',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dockerProcessesFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'notInFleet': 'This server is no longer in the fleet.',
+      'linkUnavailable': 'There is no connection to this server.',
+      'profileUnknown': 'The server\'s capability check has not answered yet.',
+      'endpointUnavailable': 'The Docker engine cannot be reached.',
+      'tooManyQueries':
+          'This server already has as many Docker reads waiting as Klabautermann allows.',
+      'notFound': 'The engine no longer has this container.',
+      'daemonError':
+          'The engine refused or failed to list the container\'s processes.',
+      'connectionFailed':
+          'The connection to the engine failed while reading the processes.',
+      'cancelled': 'The read stopped before it ran.',
+      'other': 'The container\'s processes could not be read.',
+    });
+    return '$_temp0';
+  }
 
   @override
   String dockerImageHistoryFailed(String reason) {
@@ -7787,4 +8264,247 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get alertNotificationOpen => 'Open';
+
+  @override
+  String get systemUpdatesTitle => 'Updates';
+
+  @override
+  String get systemUpdatesNone => 'Up to date';
+
+  @override
+  String systemUpdatesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count updates available',
+      one: '1 update available',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String systemUpdatesSecurityCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count are security updates',
+      one: '1 is a security update',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String systemUpdatesSecurityPatches(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count security patches are needed',
+      one: '1 security patch is needed',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get systemUpdatesRestart => 'The server asks for a restart.';
+
+  @override
+  String systemUpdatesRestartFor(String packages) {
+    return 'The server asks for a restart, for $packages.';
+  }
+
+  @override
+  String get systemUpdatesNoRestart => 'No restart required';
+
+  @override
+  String systemUpdatesFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noLink': 'The server is not connected, so updates could not be checked.',
+      'transport': 'The connection failed while updates were checked.',
+      'other': 'Updates could not be checked.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get systemUpdatesNoManager =>
+      'No package manager Klabautermann reads was found (apt, dnf, zypper, pacman or apk).';
+
+  @override
+  String get systemUpdatesNoCache =>
+      'The package lists have not been downloaded on this server yet, and the check never downloads them.';
+
+  @override
+  String systemUpdatesManagerFailed(String detail) {
+    return 'The package manager failed: $detail';
+  }
+
+  @override
+  String get systemUpdatesPackage => 'Package';
+
+  @override
+  String get systemUpdatesInstalled => 'Installed';
+
+  @override
+  String get systemUpdatesAvailable => 'Available';
+
+  @override
+  String get systemUpdatesSecurity => 'Security';
+
+  @override
+  String get systemUpdatesSecurityYes => 'Security';
+
+  @override
+  String systemUpdatesCut(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Only the first $count updates are listed.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String systemUpdatesListsFrom(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return 'Package lists last downloaded $timeString';
+  }
+
+  @override
+  String get systemUpdatesChecking => 'Checking for updates…';
+
+  @override
+  String get systemUpdatesCheckAgain => 'Check again';
+
+  @override
+  String get systemUpdatesRefresh => 'Refresh package lists';
+
+  @override
+  String get systemUpdatesRefreshAdminNeeded =>
+      'Turn on admin mode to download them.';
+
+  @override
+  String get systemUpdatesRefreshStarted =>
+      'When the refresh has finished, check again to read the new lists.';
+
+  @override
+  String get systemPowerTitle => 'Power';
+
+  @override
+  String get systemPowerReboot => 'Reboot';
+
+  @override
+  String get systemPowerShutDown => 'Shut down';
+
+  @override
+  String get systemPowerAdminNeeded =>
+      'Turn on admin mode to reboot or shut down this server.';
+
+  @override
+  String systemPowerWaiting(String elapsed) {
+    return 'Rebooting. Waiting for the server to answer again: $elapsed so far.';
+  }
+
+  @override
+  String systemPowerBack(String elapsed) {
+    return 'The server answered again $elapsed after the reboot.';
+  }
+
+  @override
+  String get systemPowerOff =>
+      'The server is shutting down. It stays off until someone starts it.';
+
+  @override
+  String get systemPowerStopWaiting => 'Stop waiting';
+
+  @override
+  String get systemUpdatesRestartsTitle => 'Services to restart';
+
+  @override
+  String get systemUpdatesRestartsRead => 'Find services to restart';
+
+  @override
+  String get systemUpdatesRestartsReadAgain => 'Look again';
+
+  @override
+  String get systemUpdatesRestartsReading => 'Looking for services to restart…';
+
+  @override
+  String get systemUpdatesRestartsAdminNeeded =>
+      'Finding services that still run replaced libraries needs admin mode.';
+
+  @override
+  String get systemUpdatesRestartsNone => 'No service runs a replaced library.';
+
+  @override
+  String systemUpdatesRestartsList(String services) {
+    return 'Restart to load the updated libraries: $services';
+  }
+
+  @override
+  String get systemUpdatesKernelWaiting =>
+      'A newer kernel is installed and waits for a reboot.';
+
+  @override
+  String systemUpdatesRestartsFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noLink':
+          'The server is not connected, so services to restart could not be read.',
+      'adminRequired': 'Admin mode ended before services to restart were read.',
+      'elevationRefused':
+          'Elevation was refused, so services to restart were not read.',
+      'missing':
+          'None of needrestart, needs-restarting or zypper is installed on this server.',
+      'transport': 'The connection failed while services to restart were read.',
+      'other': 'Services to restart could not be read.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get fleetUpdatesTitle => 'Updates on all servers';
+
+  @override
+  String get fleetUpdatesOpen => 'All servers';
+
+  @override
+  String get fleetUpdatesCheckAll => 'Check every server again';
+
+  @override
+  String get fleetUpdatesNoServers => 'No servers yet.';
+
+  @override
+  String fleetUpdatesSummary(int updates, int security, String restart) {
+    String _temp0 = intl.Intl.pluralLogic(
+      updates,
+      locale: localeName,
+      other: '$updates updates',
+      one: '1 update',
+      zero: 'Up to date',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      security,
+      locale: localeName,
+      other: ', $security security',
+      zero: '',
+    );
+    String _temp2 = intl.Intl.selectLogic(restart, {
+      'true': ' · restart required',
+      'other': '',
+    });
+    return '$_temp0$_temp1$_temp2';
+  }
+
+  @override
+  String systemUpdatesCheckedAt(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return 'Checked $timeString';
+  }
 }

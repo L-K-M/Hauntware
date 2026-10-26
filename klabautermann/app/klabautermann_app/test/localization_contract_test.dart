@@ -93,6 +93,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // A job history read's request id, matched in the engine's answer.
   'lib/controllers/job_history_reads.dart': {r"'history-${_count++}'"},
+  // A package check's request id, matched in the engine's answer.
+  'lib/controllers/package_reads.dart': {r"'packages-${_count++}'"},
+  // An empty security cell, a missing detail, and the separator between
+  // package names the server reported.
+  'lib/ui/updates.dart': {"''", "', '"},
+  // A failed check's missing detail.
+  'lib/ui/fleet_updates.dart': {"''"},
   // A history rollup read's request id, matched in the engine's answer.
   'lib/controllers/history_reads.dart': {r"'rollup-${_count++}'"},
   // The not-saved diagnostic; the Safety tab and the header's Safety menu
@@ -419,6 +426,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "''",
     "', '",
   },
+  // The ps column title of resident memory, matched, never shown.
+  'lib/ui/docker/container_processes.dart': {"'RSS'"},
   'lib/ui/docker/container_details_view.dart': {
     // The Engine API's restart policy names, matched, never shown; the
     // empty one is the default.
@@ -660,6 +669,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // its answer (JOB-05); the details word it themselves.
     "'success'",
   },
+  'lib/ui/interfaces.dart': {"'lo'"},
   'lib/ui/logs/logs_panel.dart': {
     // The empty server pattern, which reads the whole journal again.
     "''",
@@ -768,6 +778,17 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'commands reach the macOS application menu through appMenuOnMac'",
     r"'${placement.group}:${placement.order}'",
     r"'${command.id} shares menu slot ${placement.group}:${placement.order}'",
+  },
+  'lib/ui/mounts.dart': {
+    // The separator between a mount's options, machine data as the kernel
+    // lists them.
+    "', '",
+  },
+  'lib/ui/oom_kills.dart': {
+    // The journal pattern of an OOM report's kernel lines and the syslog
+    // identifier the kernel's lines carry, both machine data.
+    "'oom-kill|out of memory|killed process'",
+    "'kernel'",
   },
   'lib/ui/processes_panel.dart': {
     // The key tests find a phone row by, in the table rows' form, and the

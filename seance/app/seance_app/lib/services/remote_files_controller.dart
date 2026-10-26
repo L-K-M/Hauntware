@@ -56,6 +56,12 @@ class RemoteFilesController extends ChangeNotifier {
   final Future<void> Function(List<String>)? saveBookmarks;
   final Future<void> Function(bool)? saveShowHidden;
 
+  /// Reads the shell's directory beside it while OSC 7 is absent.
+  final RemoteShellDirectory? _shellReader;
+
+  /// Ticks when the shell may have moved: the cue to read it again.
+  final Listenable? _shellMayHaveMoved;
+
   RemoteFilesController(
     this._openRemoteFileSystem, {
     required this.shellDirectory,
@@ -70,6 +76,8 @@ class RemoteFilesController extends ChangeNotifier {
     ValueListenable<String?>? activeCommand,
     Map<String, ManagedRemoteFile>? initialLocalCopies,
     DownloadProvenance? provenance,
+    this._shellReader,
+    this._shellMayHaveMoved,
   }) : terminalTitle = terminalTitle ?? const _EmptyStringListenable(),
        activeCommand = activeCommand ?? const _EmptyStringListenable(),
        _provenance = provenance ?? DownloadProvenance() {
@@ -77,8 +85,9 @@ class RemoteFilesController extends ChangeNotifier {
     showHidden = initialShowHidden;
     bookmarks.addAll(initialBookmarks.where(_isAbsolutePath));
     shellDirectory.addListener(_followShellDirectory);
-    this.terminalTitle.addListener(_followShellDirectory);
+    this.terminalTitle.addListener(_followTitle);
     this.activeCommand.addListener(_followActiveCommand);
+    _shellMayHaveMoved?.addListener(_scheduleShellRead);
   }
 
   RemoteFileSystem? _remoteFileSystem;
@@ -99,6 +108,21 @@ class RemoteFilesController extends ChangeNotifier {
   static const Duration _remoteSnapshotDebounceDelay = Duration(
     milliseconds: 350,
   );
+
+  /// The last answer from [_shellReader]. Kept through reads with no
+  /// answer: the shell is still somewhere, and the next cue asks again.
+  String? _readDirectory;
+  Timer? _shellReadDebounce;
+  Future<void>? _shellRead;
+  bool _shellReadAgain = false;
+
+  /// Gives the shell a moment to run the line before it is asked where it
+  /// is, and collapses a burst of Enters (a pasted script) into one read.
+  static const Duration _shellReadDelay = Duration(milliseconds: 300);
+
+  /// How long the first listing waits to open where the shell is rather
+  /// than at home; a later answer is still followed.
+  static const Duration _initialShellReadWait = Duration(seconds: 1);
 
   bool initialized = false;
   bool loading = false;
@@ -143,6 +167,7 @@ class RemoteFilesController extends ChangeNotifier {
   }
 
   Future<void> _initialize() async {
+    int? firstNavigation;
     loading = true;
     error = null;
     _notify();
@@ -153,16 +178,31 @@ class RemoteFilesController extends ChangeNotifier {
       _remoteFileSystem = remote;
       homePath = await remote.canonicalize('.');
       if (_disposed) return;
+      // Open where the shell is rather than at home first, unless reading
+      // it is slow.
+      if (_shellReadWanted) {
+        await _requestShellRead().timeout(
+          _initialShellReadWait,
+          onTimeout: () {},
+        );
+      }
+      if (_disposed) return;
       initialized = true;
       final shellPath = reportedShellDirectory;
-      await navigate(
+      final opening = navigate(
         followTerminal && _isAbsolutePath(shellPath) ? shellPath! : homePath!,
       );
+      firstNavigation = _navigationGeneration;
+      await opening;
     } catch (e) {
       if (_disposed) return;
       error = e.toString();
     } finally {
-      if (!_disposed) {
+      // A late shell read may have started a newer navigation, which owns
+      // `loading` until its listing lands.
+      final superseded =
+          firstNavigation != null && firstNavigation != _navigationGeneration;
+      if (!_disposed && !superseded) {
         loading = false;
         _notify();
       }
@@ -343,16 +383,24 @@ class RemoteFilesController extends ChangeNotifier {
     if (followTerminal == value) return;
     followTerminal = value;
     _notify();
-    if (value) _followShellDirectory();
+    if (!value) return;
+    _followShellDirectory();
+    if (initialized && _shellReadWanted) unawaited(_requestShellRead());
   }
 
-  /// OSC 7 is authoritative. Ubuntu/Debian's default Bash setup commonly emits
-  /// only an OSC 0 title such as `root@host: ~/docker`, so resolve that against
-  /// the SFTP home as a conservative fallback.
+  /// OSC 7 is authoritative. Without it, the directory read beside the shell
+  /// beats a title: nothing clears a title, so one left by `docker exec` or
+  /// an ssh hop would otherwise pin the pane.
   String? get reportedShellDirectory {
     final oscDirectory = shellDirectory.value;
     if (_isAbsolutePath(oscDirectory)) return oscDirectory;
+    return _readDirectory ?? _titleDirectory;
+  }
 
+  /// Ubuntu/Debian's default Bash setup commonly emits only an OSC 0 title
+  /// such as `root@host: ~/docker`, so resolve that against the SFTP home as
+  /// a conservative fallback.
+  String? get _titleDirectory {
     final home = homePath;
     final title = terminalTitle.value?.trim();
     if (home == null || title == null) return null;
@@ -1253,6 +1301,71 @@ class RemoteFilesController extends ChangeNotifier {
     unawaited(navigate(path!));
   }
 
+  /// Once the shell has been read, a title is no longer what is reported,
+  /// but its change still says the shell may have moved: a `cd` that ran
+  /// well after its Enter (`git clone … && cd repo`) retitles the tab.
+  void _followTitle() {
+    if (_readDirectory == null) {
+      _followShellDirectory();
+    } else {
+      _scheduleShellRead();
+    }
+  }
+
+  /// A followed shell is read only while it sends no OSC 7.
+  bool get _shellReadWanted =>
+      (_shellReader?.available ?? false) &&
+      followTerminal &&
+      !_isAbsolutePath(shellDirectory.value);
+
+  void _scheduleShellRead() {
+    if (!_shellReadWanted) return;
+    if (!initialized) {
+      // The first read may already have looked: ask once more after it.
+      if (_shellRead != null) _shellReadAgain = true;
+      return;
+    }
+    _shellReadDebounce?.cancel();
+    _shellReadDebounce = Timer(_shellReadDelay, () {
+      if (_disposed || !_shellReadWanted) return;
+      unawaited(_requestShellRead());
+    });
+  }
+
+  /// One read at a time: an Enter during a read asks once more after it,
+  /// so a slow server never stacks channels.
+  Future<void> _requestShellRead() {
+    final inFlight = _shellRead;
+    if (inFlight != null) {
+      _shellReadAgain = true;
+      return inFlight;
+    }
+    return _shellRead = _readShell().whenComplete(() {
+      _shellRead = null;
+      if (!_shellReadAgain || _disposed) return;
+      _shellReadAgain = false;
+      if (_shellReadWanted) unawaited(_requestShellRead());
+    });
+  }
+
+  /// Follows the answer when it changed, as a new OSC 7 report would be: an
+  /// unchanged one leaves a manual navigation alone. Once the server cannot
+  /// answer any more, its last answer is dropped and the title leads again.
+  Future<void> _readShell() async {
+    final reader = _shellReader!;
+    final directory = await reader.read();
+    if (_disposed) return;
+    if (!reader.available) {
+      if (_readDirectory == null) return;
+      _readDirectory = null;
+    } else {
+      if (directory == null || directory == _readDirectory) return;
+      _readDirectory = directory;
+    }
+    _notify();
+    _followShellDirectory();
+  }
+
   RemoteFileSystem _requireRemote() {
     final remote = _remoteFileSystem;
     if (remote == null) {
@@ -1555,8 +1668,10 @@ class RemoteFilesController extends ChangeNotifier {
     if (_disposed) return;
     _disposed = true;
     shellDirectory.removeListener(_followShellDirectory);
-    terminalTitle.removeListener(_followShellDirectory);
+    terminalTitle.removeListener(_followTitle);
     activeCommand.removeListener(_followActiveCommand);
+    _shellMayHaveMoved?.removeListener(_scheduleShellRead);
+    _shellReadDebounce?.cancel();
     _remoteSnapshotDebounce?.cancel();
     for (final transfer in transfers) {
       transfer.cancellation.cancel();

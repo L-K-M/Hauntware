@@ -1708,6 +1708,96 @@ abstract class AppLocalizations {
   /// **'{time}'**
   String systemBootedValue(DateTime time);
 
+  /// Heading of the System tab's MEM-03 section: processes the kernel's OOM killer ended since boot.
+  ///
+  /// In en, this message translates to:
+  /// **'Out-of-memory kills'**
+  String get systemOomTitle;
+
+  /// The OOM kills section while its read runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the kernel\'s out-of-memory kills.'**
+  String get systemOomReading;
+
+  /// The OOM kills section when its read failed; failure is noLink, denied, missing or failed.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected, so the out-of-memory kills cannot be read.} denied{The server refused the out-of-memory read.} missing{The server lacks a tool the out-of-memory read needs.} other{The out-of-memory kills could not be read.}}'**
+  String systemOomFailed(String failure);
+
+  /// How many processes the kernel's OOM killer ended since boot, from /proc/vmstat.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No process was killed for lack of memory since boot.} =1{1 process was killed for lack of memory since boot.} other{{count} processes were killed for lack of memory since boot.}}'**
+  String systemOomCount(int count);
+
+  /// The OOM kills section on a kernel without the oom_kill counter in /proc/vmstat.
+  ///
+  /// In en, this message translates to:
+  /// **'This kernel does not count out-of-memory kills (Linux 4.13 and later do).'**
+  String get systemOomCountUnknown;
+
+  /// The OOM kills section when neither the journal's kernel lines nor dmesg gave any line to the login user.
+  ///
+  /// In en, this message translates to:
+  /// **'Your login may not read the kernel log, so the killed processes cannot be named. Membership in the adm or systemd-journal group, or sudo, gives access.'**
+  String get systemOomLogDenied;
+
+  /// A killed process: its command name and process ID.
+  ///
+  /// In en, this message translates to:
+  /// **'{command} (PID {pid})'**
+  String systemOomProcess(String command, int pid);
+
+  /// When a process was killed, from the journal: a date and time in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Killed {time}'**
+  String systemOomKilledAt(DateTime time);
+
+  /// When a process was killed, from dmesg, which counts from boot; time is a span such as "3 days, 4 hours".
+  ///
+  /// In en, this message translates to:
+  /// **'Killed {time} after boot'**
+  String systemOomAfterBoot(String time);
+
+  /// How much anonymous memory (anon-rss) a killed process held, in binary units.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} of its own memory when killed'**
+  String systemOomMemory(String size);
+
+  /// Shown under a kill the kernel made because a memory cgroup reached its limit.
+  ///
+  /// In en, this message translates to:
+  /// **'A memory limit ran out, such as a container\'s, not the server\'s memory.'**
+  String get systemOomCgroupLimit;
+
+  /// Opens the current boot's kernel log lines of the OOM reports.
+  ///
+  /// In en, this message translates to:
+  /// **'Show in kernel log'**
+  String get systemOomShowLog;
+
+  /// Reads the OOM kills again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemOomReadAgain;
+
+  /// Heading of the sheet with the current boot's kernel log lines of OOM reports.
+  ///
+  /// In en, this message translates to:
+  /// **'Out-of-memory reports'**
+  String get systemOomLogTitle;
+
+  /// Tooltip of the button that closes the OOM reports sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get systemOomLogClose;
+
   /// Label of the server's total receive rate over all its network interfaces, in the System tab.
   ///
   /// In en, this message translates to:
@@ -1941,6 +2031,305 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'nvidia-smi is installed but failed: {message}'**
   String systemGpuNvidiaFailed(String message);
+
+  /// System tab: the section of the running kernel against the installed ones (BOOT-03) and the boot timeline (BOOT-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Boots'**
+  String get systemBootsTitle;
+
+  /// A mount's details sheet, while it reads the mount's source and options (DSK-05).
+  ///
+  /// In en, this message translates to:
+  /// **'Reading mount options…'**
+  String get systemMountReading;
+
+  /// A mount's details sheet when its source and options could not be read.
+  ///
+  /// In en, this message translates to:
+  /// **'Mount options could not be read. {failure, select, noLink{Not connected to the server.} denied{The server denied the read.} missing{The server lacks a tool this read needs.} other{The read failed.}}'**
+  String systemMountFailed(String failure);
+
+  /// A mount's details sheet when the mount read no longer lists the mount point.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is mounted here any more.'**
+  String get systemMountGone;
+
+  /// Label of the device, share or image a filesystem is mounted from.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get systemMountSource;
+
+  /// Label of a mount's options, such as rw and relatime.
+  ///
+  /// In en, this message translates to:
+  /// **'Options'**
+  String get systemMountOptions;
+
+  /// A mount's details sheet when the filesystem is mounted read-only.
+  ///
+  /// In en, this message translates to:
+  /// **'Mounted read-only'**
+  String get systemMountReadOnly;
+
+  /// Heading of the System tab's swap devices section (DSK-14).
+  ///
+  /// In en, this message translates to:
+  /// **'Swap'**
+  String get systemSwapTitle;
+
+  /// The swap section while it reads the swap devices.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading swap devices…'**
+  String get systemSwapReading;
+
+  /// The swap section when the server uses no swap.
+  ///
+  /// In en, this message translates to:
+  /// **'No swap devices are in use.'**
+  String get systemSwapNone;
+
+  /// The swap section when the swap devices could not be read.
+  ///
+  /// In en, this message translates to:
+  /// **'Swap devices could not be read. {failure, select, noLink{Not connected to the server.} denied{The server denied the read.} missing{The server lacks a tool this read needs.} other{The read failed.}}'**
+  String systemSwapFailed(String failure);
+
+  /// How much of a swap device is used, out of its size.
+  ///
+  /// In en, this message translates to:
+  /// **'{used} used of {size}'**
+  String systemSwapUsage(String used, String size);
+
+  /// What a swap device is (a disk partition or a file) and its priority; higher is used first.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, partition{Partition} file{File} other{Swap device}}, priority {priority}'**
+  String systemSwapDetail(String kind, int priority);
+
+  /// Button that reads the swap devices again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemSwapReadAgain;
+
+  /// System tab, Boots: shown while the first read runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading kernels and boots…'**
+  String get systemBootsReading;
+
+  /// System tab, Boots: the button that reads the kernels and boots again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemBootsReadAgain;
+
+  /// System tab, Boots: the release of the kernel the server runs, as uname -r prints it.
+  ///
+  /// In en, this message translates to:
+  /// **'Running kernel {release}'**
+  String systemKernelRunning(String release);
+
+  /// System tab, Boots: whether a reboot would load a newer kernel (BOOT-03), by state.
+  ///
+  /// In en, this message translates to:
+  /// **'{state, select, current{This is the newest kernel installed.} newerInstalled{Kernel {newest} is installed. A reboot loads it.} runningRemoved{The running kernel\'s modules were removed, as an upgrade does. A reboot loads {newest}.} other{Whether a newer kernel is installed is unknown: no module directory was found, as in a container.}}'**
+  String systemKernelState(String state, String newest);
+
+  /// System tab, Boots: why the kernel check read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected to the server.} denied{The server refused the kernel check.} missing{The server lacks the tools the kernel check runs.} other{The kernel check failed.}}'**
+  String systemKernelFailed(String failure);
+
+  /// System tab: the heading of the network interfaces section (NET-02, NET-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Interfaces'**
+  String get systemNetInterfacesTitle;
+
+  /// System tab, Interfaces: shown while the interfaces are read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the network interfaces…'**
+  String get systemNetReading;
+
+  /// System tab, Interfaces: the button that reads the interfaces again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemNetReadAgain;
+
+  /// System tab, Interfaces: why the interface read read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected to the server.} denied{The server refused the interface read.} missing{The server lacks the tools the interface read runs.} other{The interface read failed.}}'**
+  String systemNetFailed(String failure);
+
+  /// System tab, Interfaces: shown when the server could not list the interfaces' IP addresses.
+  ///
+  /// In en, this message translates to:
+  /// **'The server has no ip command that lists addresses, so none are shown.'**
+  String get systemNetNoAddresses;
+
+  /// System tab, Interfaces: the checkbox that also lists the loopback and software interfaces without a routable address, such as containers' veth pairs; count is how many it adds.
+  ///
+  /// In en, this message translates to:
+  /// **'Show loopback and virtual interfaces ({count})'**
+  String systemNetShowAll(int count);
+
+  /// System tab, Interfaces: shown when the read found no interface.
+  ///
+  /// In en, this message translates to:
+  /// **'The server lists no network interfaces.'**
+  String get systemNetNone;
+
+  /// System tab, Interfaces: an interface's name and its operational state. name is the interface's name on the server, never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}: {state, select, up{up} down{down} dormant{dormant} lowerLayerDown{lower layer down} notPresent{not present} testing{testing} other{state not reported}}'**
+  String systemNetInterface(String name, String state);
+
+  /// System tab, Interfaces: an IP address with its prefix length in CIDR notation.
+  ///
+  /// In en, this message translates to:
+  /// **'{address}/{prefix}'**
+  String systemNetAddress(String address, int prefix);
+
+  /// System tab, Interfaces: the interface's maximum transmission unit in bytes.
+  ///
+  /// In en, this message translates to:
+  /// **'MTU {mtu}'**
+  String systemNetMtu(int mtu);
+
+  /// System tab, Interfaces: the negotiated link speed in megabits per second.
+  ///
+  /// In en, this message translates to:
+  /// **'Link speed {speed} Mb/s'**
+  String systemNetSpeedMbps(int speed);
+
+  /// System tab, Interfaces: the negotiated link speed in gigabits per second, such as 2.5.
+  ///
+  /// In en, this message translates to:
+  /// **'Link speed {speed} Gb/s'**
+  String systemNetSpeedGbps(double speed);
+
+  /// System tab, Interfaces: the interface's current receive and transmit rates, already formatted.
+  ///
+  /// In en, this message translates to:
+  /// **'Receiving {rx}, sending {tx}'**
+  String systemNetRates(String rx, String tx);
+
+  /// System tab, Interfaces: the interface's receive and transmit errors and dropped packets, counted since it came up.
+  ///
+  /// In en, this message translates to:
+  /// **'Errors: {rxErrors} in, {txErrors} out. Dropped: {rxDropped} in, {txDropped} out.'**
+  String systemNetErrors(
+    int rxErrors,
+    int txErrors,
+    int rxDropped,
+    int txDropped,
+  );
+
+  /// System tab, Interfaces: the heading over the socket counts (NET-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Connections'**
+  String get systemNetConnectionsTitle;
+
+  /// System tab, Interfaces: shown when /proc/net gave no socket counts.
+  ///
+  /// In en, this message translates to:
+  /// **'The server\'s socket counts could not be read.'**
+  String get systemNetConnectionsUnknown;
+
+  /// System tab, Interfaces: the label of the number of established TCP connections.
+  ///
+  /// In en, this message translates to:
+  /// **'TCP established'**
+  String get systemNetTcpEstablished;
+
+  /// System tab, Interfaces: the label of the number of TCP sockets listening for connections.
+  ///
+  /// In en, this message translates to:
+  /// **'TCP listening'**
+  String get systemNetTcpListening;
+
+  /// System tab, Interfaces: the label of the number of closed TCP connections the kernel still holds in TIME-WAIT.
+  ///
+  /// In en, this message translates to:
+  /// **'TCP time wait'**
+  String get systemNetTcpTimeWait;
+
+  /// System tab, Interfaces: the label of the number of TCP connections the peer closed and the local program has not; many point to a program leaking connections.
+  ///
+  /// In en, this message translates to:
+  /// **'TCP close wait'**
+  String get systemNetTcpCloseWait;
+
+  /// System tab, Interfaces: the label of the number of TCP sockets opening or closing.
+  ///
+  /// In en, this message translates to:
+  /// **'TCP in other states'**
+  String get systemNetTcpOther;
+
+  /// System tab, Interfaces: the label of the number of UDP sockets in use.
+  ///
+  /// In en, this message translates to:
+  /// **'UDP sockets'**
+  String get systemNetUdp;
+
+  /// System tab, Interfaces: the label of the number of sockets of every kind in use.
+  ///
+  /// In en, this message translates to:
+  /// **'All sockets'**
+  String get systemNetSocketsUsed;
+
+  /// System tab, Boots: the heading over the list of boots, newest first (BOOT-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Boot timeline'**
+  String get systemBootsTimelineTitle;
+
+  /// System tab, Boots: the current boot in the timeline.
+  ///
+  /// In en, this message translates to:
+  /// **'This boot'**
+  String get systemBootsCurrent;
+
+  /// System tab, Boots: when a boot's journal starts and how long it ran until its last entry, under its name.
+  ///
+  /// In en, this message translates to:
+  /// **'Started {start}, ran {duration}'**
+  String systemBootsSpan(String start, String duration);
+
+  /// System tab, Boots: how an earlier boot ended (BOOT-02), by kind.
+  ///
+  /// In en, this message translates to:
+  /// **'{end, select, clean{Shut down cleanly} unclean{Ended without a shutdown: a crash, power loss or hard reset} other{How it ended is unknown: its journal is not readable as this user}}'**
+  String systemBootEnd(String end);
+
+  /// System tab, Boots: shown when journalctl lists no boots.
+  ///
+  /// In en, this message translates to:
+  /// **'The journal lists no boots.'**
+  String get systemBootsNone;
+
+  /// System tab, Boots: how many older boots the timeline leaves out; the Logs panel's boot picker lists every boot.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 earlier boot is not listed.} other{{count} earlier boots are not listed.}}'**
+  String systemBootsNotListed(int count);
+
+  /// System tab, Boots: shown under the timeline when reading the boots' ends failed.
+  ///
+  /// In en, this message translates to:
+  /// **'How the earlier boots ended could not be read.'**
+  String get systemBootEndsUnknown;
 
   /// System tab: the section of each drive's SMART health (HW-04), read on request in admin mode.
   ///
@@ -3663,6 +4052,48 @@ abstract class AppLocalizations {
   /// **'Idle'**
   String get overviewCpuIdle;
 
+  /// CPU-04: the share of CPU time cores sat idle while tasks waited for storage (iowait).
+  ///
+  /// In en, this message translates to:
+  /// **'I/O wait'**
+  String get overviewCpuIowait;
+
+  /// CPU-04: the share of CPU time the hypervisor gave to other guests (steal).
+  ///
+  /// In en, this message translates to:
+  /// **'Steal'**
+  String get overviewCpuSteal;
+
+  /// CPU-04: the share of CPU time spent handling hardware interrupts (irq).
+  ///
+  /// In en, this message translates to:
+  /// **'IRQ'**
+  String get overviewCpuIrq;
+
+  /// CPU-04: the share of CPU time spent on deferred interrupt work such as network packets (softirq).
+  ///
+  /// In en, this message translates to:
+  /// **'Soft IRQ'**
+  String get overviewCpuSoftirq;
+
+  /// CPU-04's hint when steal reaches 10 % of CPU time. percent is the steal share, such as "25%".
+  ///
+  /// In en, this message translates to:
+  /// **'Steal {percent}: the host running this virtual machine gives its CPU time to other guests, often a noisy neighbour on a VPS. Programs here run slower than the busy figure suggests.'**
+  String overviewCpuHintSteal(String percent);
+
+  /// CPU-04's hint when iowait reaches 10 % of CPU time; the kernel documentation calls iowait unreliable. percent is the iowait share, such as "25%".
+  ///
+  /// In en, this message translates to:
+  /// **'I/O wait {percent}: cores sat idle while tasks waited for storage. The kernel calls this figure unreliable, so check disk latency before blaming the disks.'**
+  String overviewCpuHintIowait(String percent);
+
+  /// CPU-04's hint when hardware and soft interrupts together reach 10 % of CPU time. percent is their share, such as "25%".
+  ///
+  /// In en, this message translates to:
+  /// **'Interrupts {percent}: the CPUs spend this much handling devices, often heavy network traffic.'**
+  String overviewCpuHintInterrupts(String percent);
+
   /// CPU-02: heading over each core's busy share.
   ///
   /// In en, this message translates to:
@@ -3764,6 +4195,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No swap is set up.'**
   String get overviewSwapNone;
+
+  /// Heading of the Overview's pressure card (CPU-05, MEM-04): Linux pressure stall information.
+  ///
+  /// In en, this message translates to:
+  /// **'Pressure'**
+  String get overviewPressureTitle;
+
+  /// Explains the pressure card's figures and their order.
+  ///
+  /// In en, this message translates to:
+  /// **'Share of time tasks stalled, over the last 10 s, 1 min and 5 min. \"Some\" counts time at least one task waited, \"full\" time all of them did.'**
+  String get overviewPressureCaption;
+
+  /// The pressure card when the server has no /proc/pressure files; their absence is normal.
+  ///
+  /// In en, this message translates to:
+  /// **'This kernel reports no pressure figures. That is normal before Linux 4.20 or with PSI turned off.'**
+  String get overviewPressureNone;
+
+  /// The resource name in a pressure figure's label, for /proc/pressure/cpu.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU'**
+  String get overviewPressureCpu;
+
+  /// The resource name in a pressure figure's label, for /proc/pressure/memory.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get overviewPressureMemory;
+
+  /// The resource name in a pressure figure's label, for /proc/pressure/io.
+  ///
+  /// In en, this message translates to:
+  /// **'I/O'**
+  String get overviewPressureIo;
+
+  /// Label of a pressure figure: the share of time at least one task stalled on resource (CPU, Memory or I/O).
+  ///
+  /// In en, this message translates to:
+  /// **'{resource}, some'**
+  String overviewPressureSome(String resource);
+
+  /// Label of a pressure figure: the share of time all tasks stalled on resource (CPU, Memory or I/O).
+  ///
+  /// In en, this message translates to:
+  /// **'{resource}, full'**
+  String overviewPressureFull(String resource);
+
+  /// A pressure figure's three averages in percent with the kernel's two decimals, over 10 s, 1 min and 5 min, in that order.
+  ///
+  /// In en, this message translates to:
+  /// **'{avg10}% · {avg60}% · {avg300}%'**
+  String overviewPressureValue(double avg10, double avg60, double avg300);
 
   /// The Jobs tab before the server's cron jobs or timers have been read.
   ///
@@ -5292,13 +5777,13 @@ abstract class AppLocalizations {
   /// One host write in the action preview; row is the engine's HostWriteRow name.
   ///
   /// In en, this message translates to:
-  /// **'{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine\'s own state} loginRecords{Login records, as every SSH command leaves} editTarget{The file or crontab you edited} editTempFile{A temporary copy beside the file, renamed over it or removed} userBackups{A backup in your Klabautermann backups folder} rootBackups{A backup under /var/lib/klabautermann/backups} footprintManifest{The list of what Klabautermann keeps on the server} auditSyslog{One line in the system log naming this action and this device} other{A change on the server}}'**
+  /// **'{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine\'s own state} loginRecords{Login records, as every SSH command leaves} editTarget{The file or crontab you edited} editTempFile{A temporary copy beside the file, renamed over it or removed} userBackups{A backup in your Klabautermann backups folder} rootBackups{A backup under /var/lib/klabautermann/backups} footprintManifest{The list of what Klabautermann keeps on the server} packageLists{The package manager\'s cached package lists} auditSyslog{One line in the system log naming this action and this device} other{A change on the server}}'**
   String actionPreviewHostWrite(String row);
 
   /// The action's impact in the preview; kind is the engine's ImpactKind name and count a number of containers.
   ///
   /// In en, this message translates to:
-  /// **'{kind, select, dropsSession{This can drop your connection to the server.} stopsContainers{This stops {count} running containers.} removesVolumes{This deletes the container\'s volumes and the data in them.} forcesImageInUse{{count} containers still use this image.} deletesVolumeData{This deletes the volume and the data in it.} interruptsTarget{This interrupts what the target is doing.} other{}}'**
+  /// **'{kind, select, dropsSession{This can drop your connection to the server.} stopsContainers{This stops {count} running containers.} removesVolumes{This deletes the container\'s volumes and the data in them.} forcesImageInUse{{count} containers still use this image.} deletesVolumeData{This deletes the volume and the data in it.} interruptsTarget{This interrupts what the target is doing.} restartsHost{This restarts the server: everything on it stops, and the connection drops until it is back.} stopsHost{This turns the server off: everything on it stops, and it stays off until someone starts it.} other{}}'**
   String actionPreviewImpact(String kind, int count);
 
   /// Why the target is protected (SAF-22); reason is the engine's ProtectedReason name.
@@ -5856,7 +6341,7 @@ abstract class AppLocalizations {
   /// An activity log row's action; action is the engine's intent type name.
   ///
   /// In en, this message translates to:
-  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
+  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} PowerAction{Reboot or shut down} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
   String activityAction(String action);
 
   /// An activity log row's confirmation; tier is the engine's ConfirmationTier name.
@@ -7208,6 +7693,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Comment'**
   String get dockerImageHistoryComment;
+
+  /// Container details: the section listing the processes running inside the container (CTR-10).
+  ///
+  /// In en, this message translates to:
+  /// **'Processes'**
+  String get dockerProcessesTitle;
+
+  /// Container details, Processes: shown while the container is stopped.
+  ///
+  /// In en, this message translates to:
+  /// **'The container is not running, so it has no processes.'**
+  String get dockerProcessesStopped;
+
+  /// Container details, Processes: shown while the processes are read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading processes…'**
+  String get dockerProcessesReading;
+
+  /// Container details, Processes: the button that reads the container's processes again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get dockerProcessesReadAgain;
+
+  /// Container details, Processes: shown when the read lists no process.
+  ///
+  /// In en, this message translates to:
+  /// **'The engine lists no processes for this container.'**
+  String get dockerProcessesNone;
+
+  /// Container details, Processes: how many processes the container runs.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 process} other{{count} processes}}'**
+  String dockerProcessesCount(int count);
+
+  /// Container details, Processes: why the read failed, by DockerQueryFailure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, notInFleet{This server is no longer in the fleet.} linkUnavailable{There is no connection to this server.} profileUnknown{The server\'s capability check has not answered yet.} endpointUnavailable{The Docker engine cannot be reached.} tooManyQueries{This server already has as many Docker reads waiting as Klabautermann allows.} notFound{The engine no longer has this container.} daemonError{The engine refused or failed to list the container\'s processes.} connectionFailed{The connection to the engine failed while reading the processes.} cancelled{The read stopped before it ran.} other{The container\'s processes could not be read.}}'**
+  String dockerProcessesFailed(String reason);
 
   /// Image history sheet: why the history read failed, by DockerQueryFailure name.
   ///
@@ -10172,6 +10699,288 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Open'**
   String get alertNotificationOpen;
+
+  /// System tab: title of the section listing the server's pending package updates.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates'**
+  String get systemUpdatesTitle;
+
+  /// System tab, Updates: the package manager lists no pending update.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to date'**
+  String get systemUpdatesNone;
+
+  /// System tab, Updates: how many package updates the package manager lists.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 update available} other{{count} updates available}}'**
+  String systemUpdatesCount(int count);
+
+  /// System tab, Updates: how many of the pending updates fix security issues.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 is a security update} other{{count} are security updates}}'**
+  String systemUpdatesSecurityCount(int count);
+
+  /// System tab, Updates: on SUSE, how many security patches zypper says are needed; zypper lists patches rather than packages.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 security patch is needed} other{{count} security patches are needed}}'**
+  String systemUpdatesSecurityPatches(int count);
+
+  /// System tab, Updates: the server reports that a reboot is required, without naming the packages that asked.
+  ///
+  /// In en, this message translates to:
+  /// **'The server asks for a restart.'**
+  String get systemUpdatesRestart;
+
+  /// System tab, Updates: the server reports that a reboot is required, with the packages that asked for it.
+  ///
+  /// In en, this message translates to:
+  /// **'The server asks for a restart, for {packages}.'**
+  String systemUpdatesRestartFor(String packages);
+
+  /// System tab, Updates: the server reports that no reboot is required.
+  ///
+  /// In en, this message translates to:
+  /// **'No restart required'**
+  String get systemUpdatesNoRestart;
+
+  /// System tab, Updates: why the check did not run, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{The server is not connected, so updates could not be checked.} transport{The connection failed while updates were checked.} other{Updates could not be checked.}}'**
+  String systemUpdatesFailed(String reason);
+
+  /// System tab, Updates: the server has none of the package managers the check knows.
+  ///
+  /// In en, this message translates to:
+  /// **'No package manager Klabautermann reads was found (apt, dnf, zypper, pacman or apk).'**
+  String get systemUpdatesNoManager;
+
+  /// System tab, Updates: dnf has no cached metadata; the check only reads cached metadata and never refreshes it.
+  ///
+  /// In en, this message translates to:
+  /// **'The package lists have not been downloaded on this server yet, and the check never downloads them.'**
+  String get systemUpdatesNoCache;
+
+  /// System tab, Updates: the package manager reported an error; detail is its own error text.
+  ///
+  /// In en, this message translates to:
+  /// **'The package manager failed: {detail}'**
+  String systemUpdatesManagerFailed(String detail);
+
+  /// System tab, Updates: column header of the package name.
+  ///
+  /// In en, this message translates to:
+  /// **'Package'**
+  String get systemUpdatesPackage;
+
+  /// System tab, Updates: column header of the installed version.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed'**
+  String get systemUpdatesInstalled;
+
+  /// System tab, Updates: column header of the version the update installs.
+  ///
+  /// In en, this message translates to:
+  /// **'Available'**
+  String get systemUpdatesAvailable;
+
+  /// System tab, Updates: column header marking security updates.
+  ///
+  /// In en, this message translates to:
+  /// **'Security'**
+  String get systemUpdatesSecurity;
+
+  /// System tab, Updates: the cell of an update that fixes a security issue.
+  ///
+  /// In en, this message translates to:
+  /// **'Security'**
+  String get systemUpdatesSecurityYes;
+
+  /// System tab, Updates: the list stops at its limit.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, other{Only the first {count} updates are listed.}}'**
+  String systemUpdatesCut(int count);
+
+  /// System tab, Updates: when the server last refreshed its package lists, in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Package lists last downloaded {time}'**
+  String systemUpdatesListsFrom(DateTime time);
+
+  /// System tab, Updates: a check is running.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking for updates…'**
+  String get systemUpdatesChecking;
+
+  /// System tab, Updates: button that runs a new check instead of using the one from the last hour.
+  ///
+  /// In en, this message translates to:
+  /// **'Check again'**
+  String get systemUpdatesCheckAgain;
+
+  /// System tab, Updates: button that downloads the server's package lists as root, in admin mode, so the next check reads current metadata.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh package lists'**
+  String get systemUpdatesRefresh;
+
+  /// System tab, Updates: after the note that the package lists were never downloaded, says that refreshing them needs admin mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on admin mode to download them.'**
+  String get systemUpdatesRefreshAdminNeeded;
+
+  /// System tab, Updates: shown after the refresh starts, until the next check.
+  ///
+  /// In en, this message translates to:
+  /// **'When the refresh has finished, check again to read the new lists.'**
+  String get systemUpdatesRefreshStarted;
+
+  /// System tab: heading of the section that reboots or shuts down the server (SYS-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Power'**
+  String get systemPowerTitle;
+
+  /// System tab, Power: button that restarts the server, after the user types its host name.
+  ///
+  /// In en, this message translates to:
+  /// **'Reboot'**
+  String get systemPowerReboot;
+
+  /// System tab, Power: button that turns the server off, after the user types its host name.
+  ///
+  /// In en, this message translates to:
+  /// **'Shut down'**
+  String get systemPowerShutDown;
+
+  /// System tab, Power: shown instead of the buttons while admin mode is off, since both run as root.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on admin mode to reboot or shut down this server.'**
+  String get systemPowerAdminNeeded;
+
+  /// System tab, Power: shown after the reboot was taken, until the server reports a new boot; elapsed is a duration such as '45 seconds'.
+  ///
+  /// In en, this message translates to:
+  /// **'Rebooting. Waiting for the server to answer again: {elapsed} so far.'**
+  String systemPowerWaiting(String elapsed);
+
+  /// System tab, Power: shown once the rebooted server reports a new boot; elapsed is a duration such as '2 minutes'.
+  ///
+  /// In en, this message translates to:
+  /// **'The server answered again {elapsed} after the reboot.'**
+  String systemPowerBack(String elapsed);
+
+  /// System tab, Power: shown after the shutdown was taken.
+  ///
+  /// In en, this message translates to:
+  /// **'The server is shutting down. It stays off until someone starts it.'**
+  String get systemPowerOff;
+
+  /// System tab, Power: button that stops showing the wait for a rebooted server.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop waiting'**
+  String get systemPowerStopWaiting;
+
+  /// System tab, Updates: heading of the services still running libraries an update replaced.
+  ///
+  /// In en, this message translates to:
+  /// **'Services to restart'**
+  String get systemUpdatesRestartsTitle;
+
+  /// System tab, Updates: button that reads, in admin mode, which services still run replaced libraries.
+  ///
+  /// In en, this message translates to:
+  /// **'Find services to restart'**
+  String get systemUpdatesRestartsRead;
+
+  /// System tab, Updates: button that reads the services to restart again.
+  ///
+  /// In en, this message translates to:
+  /// **'Look again'**
+  String get systemUpdatesRestartsReadAgain;
+
+  /// System tab, Updates: the services-to-restart read is running.
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for services to restart…'**
+  String get systemUpdatesRestartsReading;
+
+  /// System tab, Updates: the services-to-restart read needs admin mode, since it reads every process.
+  ///
+  /// In en, this message translates to:
+  /// **'Finding services that still run replaced libraries needs admin mode.'**
+  String get systemUpdatesRestartsAdminNeeded;
+
+  /// System tab, Updates: the read found no service to restart.
+  ///
+  /// In en, this message translates to:
+  /// **'No service runs a replaced library.'**
+  String get systemUpdatesRestartsNone;
+
+  /// System tab, Updates: the services still running replaced libraries; services is a comma-separated list of systemd unit names (server data).
+  ///
+  /// In en, this message translates to:
+  /// **'Restart to load the updated libraries: {services}'**
+  String systemUpdatesRestartsList(String services);
+
+  /// System tab, Updates: needrestart reports a newer kernel than the running one.
+  ///
+  /// In en, this message translates to:
+  /// **'A newer kernel is installed and waits for a reboot.'**
+  String get systemUpdatesKernelWaiting;
+
+  /// System tab, Updates: why the services-to-restart read read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{The server is not connected, so services to restart could not be read.} adminRequired{Admin mode ended before services to restart were read.} elevationRefused{Elevation was refused, so services to restart were not read.} missing{None of needrestart, needs-restarting or zypper is installed on this server.} transport{The connection failed while services to restart were read.} other{Services to restart could not be read.}}'**
+  String systemUpdatesRestartsFailed(String reason);
+
+  /// Title of PKG-06's fleet update center, listing every server's pending updates.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates on all servers'**
+  String get fleetUpdatesTitle;
+
+  /// System tab, Updates: button that opens the fleet update center.
+  ///
+  /// In en, this message translates to:
+  /// **'All servers'**
+  String get fleetUpdatesOpen;
+
+  /// Fleet update center: button that runs a new package check on every server instead of using the ones from the last hour.
+  ///
+  /// In en, this message translates to:
+  /// **'Check every server again'**
+  String get fleetUpdatesCheckAll;
+
+  /// Fleet update center: the fleet is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'No servers yet.'**
+  String get fleetUpdatesNoServers;
+
+  /// Fleet update center: one server's line: pending updates, security updates (omitted at zero) and whether it asks for a restart.
+  ///
+  /// In en, this message translates to:
+  /// **'{updates, plural, =0{Up to date} =1{1 update} other{{updates} updates}}{security, plural, =0{} other{, {security} security}}{restart, select, true{ · restart required} other{}}'**
+  String fleetUpdatesSummary(int updates, int security, String restart);
+
+  /// System tab, Updates: when the shown check ran, in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked {time}'**
+  String systemUpdatesCheckedAt(DateTime time);
 }
 
 class _AppLocalizationsDelegate

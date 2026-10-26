@@ -6,17 +6,24 @@ import 'package:ghost_ui/ghost_ui.dart'
     show ghostFormatBinaryRate, ghostFormatBinarySize, scaledGhostFileRowExtent;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'accounts.dart';
+import 'boots.dart';
 import 'chart_strings.dart';
 import 'charts/charts.dart' show BarSegment, ChartUnit, StackedBar;
 import 'disk_activity.dart';
 import 'drive_health.dart';
 import 'gpus.dart';
+import 'interfaces.dart';
+import 'mounts.dart';
+import 'oom_kills.dart';
+import 'power.dart';
 import 'sortable_table.dart';
 import 'system_view.dart';
 import 'temperatures.dart';
+import 'updates.dart';
 
 /// The System tab's sections, which key them; the Disks section's id also
 /// prefixes its table's keys.
@@ -25,12 +32,18 @@ enum SystemSection {
   uptime,
   time,
   network,
+  interfaces,
   disks,
   diskActivity,
+  swap,
   temperatures,
   gpus,
+  oomKills,
+  boots,
   driveHealth,
+  updates,
   accounts,
+  power,
 }
 
 /// The panel width from which the fact sections sit side by side and the
@@ -57,10 +70,15 @@ class SystemPanel extends StatefulWidget {
     super.key,
     required this.monitoring,
     required this.serverId,
+    this.fleet,
   });
 
   final MonitoringController monitoring;
   final String serverId;
+
+  /// The fleet, for the Updates section's fleet update center (PKG-06);
+  /// without it the section offers none.
+  final FleetController? fleet;
 
   @override
   State<SystemPanel> createState() => _SystemPanelState();
@@ -202,18 +220,51 @@ class _SystemPanelState extends State<SystemPanel> {
                 listenable: _core,
                 builder: (context, _) => _diskActivitySection(l10n, profile),
               ),
+              InterfacesSection(
+                key: const ValueKey(SystemSection.interfaces),
+                monitoring: widget.monitoring,
+                serverId: widget.serverId,
+                core: _core,
+                fact: (label, value) => _Fact(label: label, value: value),
+              ),
+              SwapSection(
+                monitoring: widget.monitoring,
+                serverId: widget.serverId,
+              ),
               ?temperatures,
               ?gpus,
+              OomKillsSection(
+                key: const ValueKey(SystemSection.oomKills),
+                monitoring: widget.monitoring,
+                serverId: widget.serverId,
+              ),
+              BootsSection(
+                key: const ValueKey(SystemSection.boots),
+                monitoring: widget.monitoring,
+                serverId: widget.serverId,
+              ),
               DriveHealthSection(
                 key: const ValueKey(SystemSection.driveHealth),
                 serverId: widget.serverId,
                 tableId: SystemSection.driveHealth.name,
+              ),
+              UpdatesSection(
+                key: const ValueKey(SystemSection.updates),
+                reads: widget.monitoring.packages,
+                serverId: widget.serverId,
+                tableId: SystemSection.updates.name,
+                fleet: widget.fleet,
               ),
               AccountsSection(
                 key: const ValueKey(SystemSection.accounts),
                 reads: widget.monitoring.accounts,
                 serverId: widget.serverId,
                 tableId: SystemSection.accounts.name,
+              ),
+              PowerSection(
+                key: const ValueKey(SystemSection.power),
+                serverId: widget.serverId,
+                core: _core,
               ),
             ],
           ),
@@ -484,8 +535,14 @@ class _SystemPanelState extends State<SystemPanel> {
             sort: _sort,
             onSort: (sort) => setState(() => _sort = sort),
             // The mount column may cut a mount point short (A11Y-09).
-            onRowActivated: (mount) =>
-                _showMountDetails(context, l10n, mount, timedOut: timedOut),
+            onRowActivated: (mount) => _showMountDetails(
+              context,
+              l10n,
+              mount,
+              timedOut: timedOut,
+              monitoring: widget.monitoring,
+              serverId: widget.serverId,
+            ),
           ),
         ),
     ];
@@ -621,6 +678,8 @@ void _showMountDetails(
   AppLocalizations l10n,
   FsMount mount, {
   required bool timedOut,
+  required MonitoringController monitoring,
+  required String serverId,
 }) {
   final theme = Theme.of(context);
   unawaited(
@@ -660,6 +719,12 @@ void _showMountDetails(
                   value: _percent(l10n, mount.inodeUsePercent),
                 ),
               ],
+              MountOptions(
+                monitoring: monitoring,
+                serverId: serverId,
+                mountPoint: mount.mountPoint,
+                fact: (label, value) => _Fact(label: label, value: value),
+              ),
             ],
           ),
         ),

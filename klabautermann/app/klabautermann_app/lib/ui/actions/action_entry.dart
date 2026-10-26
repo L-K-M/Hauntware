@@ -22,6 +22,12 @@ enum ActionEntryPoint {
   /// Pause and Resume on a cron line (JOB-07).
   cronPause,
 
+  /// Refreshing the package lists (PKG-05).
+  packageRefresh,
+
+  /// Reboot and Shut down (SYS-03).
+  power,
+
   /// A container's state verbs (CTR-02).
   containerVerb,
 

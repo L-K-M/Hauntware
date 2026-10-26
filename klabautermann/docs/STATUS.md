@@ -979,8 +979,9 @@ is on main:
   process's working directory, threads, swap, context switches, limits,
   open descriptors, environment and cgroups as the login user, after
   checking its start ticks, and names the systemd unit or container
-  that owns it. Environment values are masked by key; sections the user
-  may not read come back marked denied.
+  that owns it. Environment values are masked by key; the working
+  directory, descriptors and environment of another user's process come
+  back marked denied.
 - Process details sheet (M6 N43c, PRC-04, PRC-05): opening a process
   reads its details: the unit and container that own it, working
   directory, threads, swap, context switches, open files and limits,
@@ -1958,11 +1959,50 @@ is on main:
   created again under its name is not removed. An API step can now
   carry a JSON body, which the preview shows as sent. The Docker
   actions suite creates, refuses and removes a volume on the fixture.
+- Mounts and swap (M6 N31, DSK-05, DSK-14): a mount's details in the
+  Disks section add its source and options, flagging a read-only mount,
+  and the System tab's Swap section lists the swap partitions and files
+  with their use and priority. Hosts without findmnt read
+  /proc/self/mounts.
+- Boots (M6 N39, BOOT-02, BOOT-03): the System tab's Boots section says
+  whether the running kernel is the newest installed, or a reboot loads
+  a newer one, and lists the current boot and the ten before it with
+  when each started, how long it ran and whether it shut down cleanly,
+  from the journal. A user outside the journal's groups sees the ends as
+  unknown.
 - Time (M6 N38a, SYS-02, CN-17): collector-set version 13's probe reads
   timedatectl's NTP state, and each probe answer measures the server's
   clock against this device's. The System tab's Time section shows the
   time zone, whether the clock is synchronized, and how far it is ahead
   or behind (in step within two seconds).
+- Reboot and shutdown (M6 N38b, SYS-03): in admin mode, the System
+  tab's Power section reboots or shuts down the server after the user
+  types the host's own name, which planning reads with `uname -n`. The
+  engine runs `systemctl reboot` or `systemctl poweroff` as root, or
+  init's own `reboot` and `poweroff` without systemd. A link that drops
+  while that step runs counts as the host having taken it, and the host
+  syslog line is written before it. After a reboot the section waits,
+  counting the time, until a `core` reading reports a later boot. A
+  reboot and shutdown on a real host stay a manual check.
+- Pending updates (M6 N36a, PKG-01 to PKG-03): the System tab's Updates
+  section asks the server's package manager (apt, dnf, zypper, pacman or
+  apk) for its pending updates as the login user and from cached
+  metadata only, never refreshing it. It lists each update with its
+  installed and new versions, security ones first (apt's security
+  origins, dnf's security advisories; zypper counts needed security
+  patches), when the package lists were last downloaded, and whether the
+  server asks for a restart (`/var/run/reboot-required` with the packages
+  that asked, or `needs-restarting -r`). The engine keeps each server's
+  check for an hour; "Check again" runs a new one. In admin mode,
+  "Refresh package lists" (N36b, PKG-05) downloads the lists as root
+  through the action preview (apt, dnf, zypper and apk; never pacman,
+  whose refresh without an upgrade breaks partial installs). Also in
+  admin mode, "Find services to restart" (N36c, PKG-04) lists the
+  services still running replaced libraries (needrestart,
+  needs-restarting or zypper ps) and says when a newer kernel waits for
+  a reboot. "All servers" (N36d, PKG-06) opens the fleet update center:
+  each server's updates, security updates and restart flag from its
+  check of the last hour, most security updates first.
 - Users and logins (M6 N40, ACC-01, ACC-02): the System tab's Users
   section reads the server's accounts and groups with `getent` and who
   is logged in with `who`, as the login user, when it shows and on
@@ -2001,6 +2041,31 @@ is on main:
   zones, every 10 s. The System tab's Temperatures section lists each
   sensor with its high and critical limits, and does not show where the
   host has no sensor, as VMs, or inside a container.
+- Interfaces and connections (M6 N33, NET-02, NET-03): the System tab's
+  new Interfaces section lists each interface with its state,
+  addresses, MTU, link speed, current receive and send rates, and
+  errors and drops since it came up, physical interfaces first. The
+  loopback and containers' unaddressed veth pairs fold behind a
+  checkbox. Below, Connections counts the TCP sockets by state
+  (established, listening, time wait, close wait, others) and the UDP
+  and total sockets.
+- Out-of-memory kills (M6 N42b, MEM-03): the System tab's new section
+  counts the kills since boot from `/proc/vmstat`'s `oom_kill` (Linux
+  4.13+) and names the current boot's victims, newest first, from the
+  kernel log: the journal's where the login user may read it, else
+  `dmesg`. Each kill shows its command and PID, when it happened (from
+  boot with `dmesg`), its memory and its memory cgroup, and says when a
+  cgroup's limit ran out rather than the server's memory. "Show in
+  kernel log" opens the boot's OOM report lines from the journal. An
+  unreadable kernel log and a kernel without the counter say so.
+- CPU breakdown and pressure (M6 N42a, CPU-04, CPU-05, MEM-04): the
+  Overview's CPU card adds I/O wait, steal, IRQ and soft IRQ beside
+  user, system and idle, with a plain-language hint once steal, iowait
+  or interrupts reach 10 % of CPU time; the iowait hint says the kernel
+  calls the figure unreliable. A Pressure card shows each
+  `/proc/pressure` line's 10 s, 1 min and 5 min averages with two
+  decimals, says plainly when the kernel has none (before 4.20 or with
+  PSI off), and gives SYS-04's reason for a file a container withholds.
 - Disk activity (M6 N30, DSK-03, DSK-04): collector-set version 10's
   `diskstats` rows add ms reading, ms writing and `io_ticks`, and the
   rates add reads and writes per second, await per request and the busy
@@ -2099,6 +2164,16 @@ is on main:
   in settings.json. Each notification states the same limit (Y3). The
   app icon's badge is not built, and whether the notifications show on
   real Android, iOS, macOS, Windows and Linux desktops is a manual check.
+- Container processes (M6 N17a, CTR-10): a running container's details
+  end with a Processes section, read through `GET /containers/{id}/top`
+  when the details show, when the container starts and on "Read again".
+  Each process shows its command line over its PID, user, CPU share,
+  memory and age. The engine masks each command line as Processes masks
+  one, and "Reveal values" shows them for 30 seconds. Where `ps` rejects
+  those columns (BusyBox, a Windows daemon) the engine asks again with
+  the daemon's default. A stopped container says it has no processes.
+  Tested in the docker package, the router and the details view; no
+  Docker fixture runs it yet.
 - Image history (M6 N14, IMG-04): a click or tap on an Images row opens
   a sheet with the image's layers, newest first, read by id through
   `GET /images/{name}/history`. Each layer shows the instruction that

@@ -8,6 +8,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         AnacronJob,
         BackupEntry,
         CpuPercentages,
+        BootEnd,
         CronSnapshot,
         DiskRate,
         EngineMode,
@@ -15,18 +16,25 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         FsSnapshot,
         GpuSnapshot,
         HostProfile,
+        InterfacesRead,
         JobEntry,
         JournalBoot,
         JournalBootEntry,
+        KernelCheck,
+        MountsRead,
         KillSignal,
         LoadAvg,
         LogFileEntry,
+        OomKillsRead,
         LoggedCronRun,
         NetRate,
         OpDirectoryKind,
         OpDirectoryListing,
+        PackageCheck,
+        PowerVerb,
         ProcessDetail,
         ProcsSelection,
+        RestartCheck,
         SmartDisk,
         SystemctlVerb,
         SystemdUnit,
@@ -289,6 +297,10 @@ import '../operations/plan_types.dart';
 /// An image's history then joined v3 the same way (03 §7.14 IMG-04, M6
 /// plan N14): [DockerImageHistoryQuery], answered by
 /// [DockerImageHistoryPayload] with each layer's instruction masked.
+///
+/// A container's processes then joined v3 the same way (03 §7.12 CTR-10,
+/// M6 plan N17): [DockerContainerTopQuery], answered by
+/// [DockerContainerTopPayload] with each command line masked.
 const int kEngineProtocolVersion = 3;
 
 /// The most container shells one server holds open at once [E]: each on a
@@ -727,6 +739,36 @@ final class ProcessDetailQuery extends HostQuerySpec {
 
   final int pid;
   final int startTicks;
+}
+
+/// The kills since boot and the current boot's OOM kills the kernel log
+/// names (MEM-03), as [OomKills].
+final class OomKillsQuery extends HostQuerySpec {
+  const OomKillsQuery();
+}
+
+/// How the boots before the current one ended (BOOT-02), as [BootEnds]:
+/// the last [kBootEndsRead] of them, read from their journals.
+final class BootEndsQuery extends HostQuerySpec {
+  const BootEndsQuery();
+}
+
+/// The running kernel against the installed ones (BOOT-03), as
+/// [Kernels].
+final class KernelsQuery extends HostQuerySpec {
+  const KernelsQuery();
+}
+
+/// The network interfaces and socket counts (NET-02, NET-03), as
+/// [NetInterfaces].
+final class InterfacesQuery extends HostQuerySpec {
+  const InterfacesQuery();
+}
+
+/// Every mount's source, type and options (DSK-05) and the swap devices
+/// (DSK-14), as [Mounts].
+final class MountsQuery extends HostQuerySpec {
+  const MountsQuery();
 }
 
 /// Redacts [lines] the app holds for an export (LOG-10, 03 §8.9) through
@@ -1206,6 +1248,33 @@ final class ReadUserCrontabs extends EngineRequest {
 /// left asleep. One [SmartReport] with [requestId] answers it.
 final class ReadSmart extends EngineRequest {
   const ReadSmart(this.serverId, {required this.requestId});
+
+  final String serverId;
+  final String requestId;
+}
+
+/// Reads [serverId]'s pending updates and reboot flag (PKG-01 to PKG-03,
+/// 03 §7.8) as the login user, from the package manager's cached
+/// metadata. The engine keeps each server's answer for an hour and
+/// answers from it unless [fresh] asks for a new check. One
+/// [PackagesReport] with [requestId] answers it.
+final class ReadPackages extends EngineRequest {
+  const ReadPackages(
+    this.serverId, {
+    required this.requestId,
+    this.fresh = false,
+  });
+
+  final String serverId;
+  final String requestId;
+  final bool fresh;
+}
+
+/// Reads [serverId]'s services still running replaced libraries (PKG-04,
+/// 03 §7.8): in admin mode only, since the tools read every process's
+/// memory maps. One [RestartReport] with [requestId] answers it.
+final class ReadRestarts extends EngineRequest {
+  const ReadRestarts(this.serverId, {required this.requestId});
 
   final String serverId;
   final String requestId;
@@ -2056,6 +2125,41 @@ final class ProcessEnded extends HostPayload {
   final ProcessEnd end;
 }
 
+/// [OomKillsQuery]'s kills.
+final class OomKills extends HostPayload {
+  const OomKills(this.read);
+
+  final OomKillsRead read;
+}
+
+/// [BootEndsQuery]'s ends by boot ID; a boot it did not read is absent.
+final class BootEnds extends HostPayload {
+  BootEnds(Map<String, BootEnd> ends) : ends = Map.unmodifiable(ends);
+
+  final Map<String, BootEnd> ends;
+}
+
+/// [KernelsQuery]'s kernels.
+final class Kernels extends HostPayload {
+  const Kernels(this.check);
+
+  final KernelCheck check;
+}
+
+/// [InterfacesQuery]'s interfaces and sockets.
+final class NetInterfaces extends HostPayload {
+  const NetInterfaces(this.read);
+
+  final InterfacesRead read;
+}
+
+/// [MountsQuery]'s mounts and swap devices.
+final class Mounts extends HostPayload {
+  const Mounts(this.read);
+
+  final MountsRead read;
+}
+
 /// A [HostQuery] that read nothing; [detail] is the end of its stderr,
 /// or the text of an error the read threw (a timeout or a lost link).
 final class HostQueryFailed extends HostPayload {
@@ -2666,6 +2770,70 @@ final class SmartReport extends EngineEvent {
 
   /// Why nothing was read, or null.
   final SmartReportFailure? failure;
+}
+
+/// Why a [ReadRestarts] read nothing.
+enum RestartReportFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// Admin mode is off for the server.
+  adminRequired,
+
+  /// Elevation refused, so nothing ran.
+  elevationRefused,
+
+  /// None of needrestart, needs-restarting and zypper is installed.
+  missing,
+
+  /// The link failed while reading.
+  transport,
+}
+
+/// The answer to [ReadRestarts]: what the check found, or why nothing.
+final class RestartReport extends EngineEvent {
+  const RestartReport({
+    required this.serverId,
+    required this.requestId,
+    this.check,
+    this.failure,
+  });
+
+  final String serverId;
+  final String requestId;
+  final RestartCheck? check;
+  final RestartReportFailure? failure;
+}
+
+/// Why a [ReadPackages] checked nothing.
+enum PackagesReportFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// The link failed while checking.
+  transport,
+}
+
+/// The answer to [ReadPackages]: what the check found at [checkedAt], by
+/// the engine's clock, or why there was no check.
+final class PackagesReport extends EngineEvent {
+  const PackagesReport({
+    required this.serverId,
+    required this.requestId,
+    this.check,
+    this.checkedAt,
+    this.failure,
+  });
+
+  final String serverId;
+  final String requestId;
+
+  /// What the check found; its own failure says when the host's package
+  /// manager could not answer.
+  final PackageCheck? check;
+
+  final DateTime? checkedAt;
+  final PackagesReportFailure? failure;
 }
 
 /// The answer to [ReadUserCrontabs]: the listed users' crontab lines as
@@ -3835,6 +4003,17 @@ final class DockerContainerQuery extends DockerQuerySpec {
   final String containerId;
 }
 
+/// One running container's processes (CTR-10). Answered by
+/// [DockerContainerTopPayload]; the daemon refuses a container that is
+/// not running (409), which answers [DockerQueryFailed] with
+/// `daemonError`.
+final class DockerContainerTopQuery extends DockerQuerySpec {
+  const DockerContainerTopQuery(this.containerId);
+
+  /// The container's id or name.
+  final String containerId;
+}
+
 /// The image list (IMG-01). Answered by [DockerImagesPayload].
 final class DockerImagesQuery extends DockerQuerySpec {
   const DockerImagesQuery();
@@ -3973,6 +4152,29 @@ final class DockerImageHistoryPayload extends DockerPayload {
     : layers = List.unmodifiable(layers);
 
   final List<ImageLayer> layers;
+}
+
+/// A container's processes (CTR-10): the columns `ps` named and a row
+/// per process, the command line column masked as Processes masks one
+/// (03 §8.9).
+final class DockerContainerTopPayload extends DockerPayload {
+  DockerContainerTopPayload({
+    required Iterable<String> titles,
+    required Iterable<List<MaskedValue>> processes,
+    this.commandColumn,
+  }) : titles = List.unmodifiable(titles),
+       processes = List.unmodifiable([
+         for (final row in processes) List<MaskedValue>.unmodifiable(row),
+       ]);
+
+  final List<String> titles;
+
+  /// One cell per title; only the command line's can be masked.
+  final List<List<MaskedValue>> processes;
+
+  /// The index of the command line's title, or null where `ps` named
+  /// none (a Windows daemon lists the image name instead).
+  final int? commandColumn;
 }
 
 /// One layer of an image's history (IMG-04).
@@ -4629,6 +4831,21 @@ final class StartTimer extends ActionIntent {
 
   final String timer;
   final UnitScope scope;
+}
+
+/// Refreshes the package manager's lists as root (PKG-05, 03 §7.8), in
+/// admin mode, so the next package check reads current metadata.
+final class RefreshPackageLists extends ActionIntent {
+  const RefreshPackageLists(super.serverId);
+}
+
+/// Reboots or powers off the server (SYS-03, 03 §7.11) as root, in admin
+/// mode, after the user types its host name. The run ends once the host
+/// takes the command; the app waits for a rebooted host to answer again.
+final class PowerAction extends ActionIntent {
+  const PowerAction(super.serverId, this.verb);
+
+  final PowerVerb verb;
 }
 
 /// Which systemd manager a unit action or query addresses (03 §7.5,

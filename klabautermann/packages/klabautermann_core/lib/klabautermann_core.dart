@@ -33,9 +33,10 @@ export 'src/operations/plan_types.dart';
 
 export 'package:seance_core/seance_core.dart'
     show DangerFinding, DangerLinter, DangerSeverity;
-// The signal and unit verb an ActionIntent names (PRC-02, SVC-03).
+// The signal, unit verb and power verb an ActionIntent names (PRC-02,
+// SVC-03, SYS-03).
 export 'package:klabautermann_host/klabautermann_host.dart'
-    show KillSignal, SystemctlVerb;
+    show KillSignal, PowerVerb, SystemctlVerb;
 
 // FL-21's monitor set rules, which the engine enforces and the app's
 // toggles offer (03 §4.3 step 4).
@@ -105,6 +106,19 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         TimersSnapshot,
         UnitListFormat,
         UnitsSnapshot;
+// The System tab's Updates section (PKG-01 to PKG-04): what a
+// PackagesReport's or a RestartReport's check found.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show
+        KernelState,
+        PackageCheck,
+        PackageCheckFailure,
+        PackageManager,
+        PackageUpdate,
+        RebootState,
+        RestartCheck,
+        RestartTool,
+        kPackageUpdatesKept;
 // A process's details and owner (PRC-04, PRC-05), as a HostResult's
 // ProcessDetails carry them.
 export 'package:klabautermann_host/klabautermann_host.dart'
@@ -118,6 +132,29 @@ export 'package:klabautermann_host/klabautermann_host.dart'
 // HostResult's rows and the boot a source reads.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show JournalBoot, JournalBootEntry, LogCompression, LogFileEntry;
+// The System tab's out-of-memory kills (MEM-03): the read a HostResult
+// carries.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show OomKill, OomKillsRead, OomLogSource;
+// The System tab's boots section (BOOT-02, BOOT-03): how earlier boots
+// ended and the kernels a HostResult carries.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show BootEnd, KernelCheck, KernelCheckState, kBootEndsRead;
+// The System tab's interfaces section (NET-02, NET-03): the interfaces
+// and socket counts a HostResult carries.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show
+        InterfacesRead,
+        NetAddress,
+        NetAddressFamily,
+        NetInterface,
+        NetLinkState,
+        SocketCounts,
+        TcpState;
+// The Disks section's mount details and the Swap section (DSK-05,
+// DSK-14): the mounts and swap devices a HostResult carries.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show MountEntry, MountsRead, SwapDevice, SwapKind;
 // The Jobs panel (JOB-01, JOB-02): the jobs rows a CronResult carries, the
 // timer rows the app builds from a TimersResult, their schedule
 // descriptions and their runs as plain CronRun values (D52), and the

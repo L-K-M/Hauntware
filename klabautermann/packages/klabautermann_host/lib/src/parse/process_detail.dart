@@ -5,7 +5,11 @@ library;
 import 'package:meta/meta.dart';
 
 import '../commands/commands.dart'
-    show HostCommands, kProcessDetailDenied, kProcessDetailMarker;
+    show
+        HostCommands,
+        kProcessDetailDenied,
+        kProcessDetailMarker,
+        kProcessEnvironLimit;
 
 /// A container runtime a process's cgroup names (PRC-05).
 enum ContainerRuntime { docker, podman, containerd, crio }

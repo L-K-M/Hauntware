@@ -24,6 +24,9 @@ enum OperationKind {
 
   /// A cron line's command, run once now (JOB-19).
   cronRunNow(ConfirmationTier.acknowledge),
+
+  /// The package manager's lists, refreshed (PKG-05).
+  refreshPackageLists(ConfirmationTier.acknowledge),
   stackStart(ConfirmationTier.acknowledge),
   stackStop(ConfirmationTier.acknowledge),
   stackRestart(ConfirmationTier.acknowledge),
@@ -66,6 +69,9 @@ enum OperationKind {
   /// Remove every backup of one file: its edits' only undo (Q11).
   removeAllBackups(ConfirmationTier.typedPhrase),
   reboot(ConfirmationTier.typedPhrase),
+
+  /// The host stays off until someone starts it (SYS-03).
+  powerOff(ConfirmationTier.typedPhrase),
   packageUpgrade(ConfirmationTier.typedPhrase);
 
   const OperationKind(this.baseTier);

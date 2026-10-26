@@ -271,10 +271,22 @@ void main() {
       expect(smart.requestId, 'r-2');
       expect(smart.failure, SmartReportFailure.noLink);
 
+      // PKG-01's check needs the link.
+      client.send(const ReadPackages('ssh-config:web', requestId: 'r-3'));
+      final packages = (await next(events)) as PackagesReport;
+      expect(packages.requestId, 'r-3');
+      expect(packages.failure, PackagesReportFailure.noLink);
+
+      // PKG-04's read needs the link, then admin mode.
+      client.send(const ReadRestarts('ssh-config:web', requestId: 'r-4'));
+      final restarts = (await next(events)) as RestartReport;
+      expect(restarts.requestId, 'r-4');
+      expect(restarts.failure, RestartReportFailure.noLink);
+
       // ACC-01's read answers without a link.
-      client.send(const ReadAccounts('ssh-config:web', requestId: 'r-3'));
+      client.send(const ReadAccounts('ssh-config:web', requestId: 'r-5'));
       final accounts = (await next(events)) as AccountsReport;
-      expect(accounts.requestId, 'r-3');
+      expect(accounts.requestId, 'r-5');
       expect(accounts.failure, AccountsReportFailure.noLink);
 
       // A detached operation's result is acknowledged over a link.

@@ -146,6 +146,31 @@ void main() {
           queryId: 'h-5',
           query: ProcessDetailQuery(pid: 42, startTicks: 900),
         ),
+        const HostQuery(
+          serverId: 'srv-1',
+          queryId: 'h-7',
+          query: OomKillsQuery(),
+        ),
+        const HostQuery(
+          serverId: 'srv-1',
+          queryId: 'h-3',
+          query: BootEndsQuery(),
+        ),
+        const HostQuery(
+          serverId: 'srv-1',
+          queryId: 'h-4',
+          query: KernelsQuery(),
+        ),
+        const HostQuery(
+          serverId: 'srv-1',
+          queryId: 'h-net',
+          query: InterfacesQuery(),
+        ),
+        const HostQuery(
+          serverId: 'srv-1',
+          queryId: 'h-5',
+          query: MountsQuery(),
+        ),
         const RedactLines('r-1', ['a', 'b']),
         const DockerQuery(
           serverId: 'srv-1',
@@ -264,6 +289,8 @@ void main() {
         AuditQuery('srv-1', before: DateTime.utc(2026, 10, 18), limit: 20),
         const ReadUserCrontabs('srv-1', requestId: 'r-1'),
         const ReadSmart('srv-1', requestId: 'r-1'),
+        const ReadPackages('srv-1', requestId: 'r-1', fresh: true),
+        const ReadRestarts('srv-1', requestId: 'r-1'),
         const ReadAccounts('srv-1', requestId: 'r-1'),
         const ReadHistory('srv-1', HistoryTier.minute, requestId: 'h-1'),
         const AcknowledgeOperation('srv-1', '0123456789abcdef'),
@@ -400,6 +427,102 @@ void main() {
           serverId: 'srv-1',
           queryId: 'h-6',
           payload: ProcessEnded(ProcessEnd.reused),
+        ),
+        HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-7',
+          payload: OomKills(
+            OomKillsRead(
+              killsSinceBoot: 1,
+              source: OomLogSource.journal,
+              logRead: true,
+              kills: [
+                OomKill(
+                  pid: 4321,
+                  command: 'stress',
+                  at: DateTime.utc(2026, 10, 26, 3),
+                  anonRssKb: 1024,
+                  cgroupLimit: true,
+                  cgroup: '/system.slice/docker-0123.scope',
+                ),
+              ],
+            ),
+          ),
+        ),
+        HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-3',
+          payload: BootEnds({
+            '0123456789abcdef0123456789abcdef': BootEnd.clean,
+          }),
+        ),
+        HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-4',
+          payload: Kernels(
+            KernelCheck(
+              running: '6.1.0-13-amd64',
+              installed: ['6.1.0-13-amd64'],
+              state: KernelCheckState.current,
+            ),
+          ),
+        ),
+        HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-net',
+          payload: NetInterfaces(
+            InterfacesRead(
+              interfaces: [
+                NetInterface(
+                  name: 'eth0',
+                  state: NetLinkState.up,
+                  physical: true,
+                  addresses: const [
+                    NetAddress(
+                      family: NetAddressFamily.ipv4,
+                      address: '192.0.2.10',
+                      prefixLength: 24,
+                      scope: 'global',
+                    ),
+                  ],
+                  mtu: 1500,
+                  speedMbps: 1000,
+                  rxErrors: 0,
+                ),
+              ],
+              addressesRead: true,
+              sockets: SocketCounts(
+                tcp: {TcpState.established: 3},
+                used: 40,
+                udp: 2,
+              ),
+            ),
+          ),
+        ),
+        HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-5',
+          payload: Mounts(
+            MountsRead(
+              mounts: [
+                MountEntry(
+                  target: '/',
+                  source: '/dev/sda1',
+                  type: 'ext4',
+                  options: const ['rw', 'relatime'],
+                ),
+              ],
+              swaps: const [
+                SwapDevice(
+                  path: '/swapfile',
+                  kind: SwapKind.file,
+                  sizeBytes: 1024,
+                  usedBytes: 0,
+                  priority: -2,
+                ),
+              ],
+            ),
+          ),
         ),
         const RedactedLines('r-1', 'a\nb'),
         FootprintState(
