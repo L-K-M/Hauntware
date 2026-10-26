@@ -1256,6 +1256,34 @@ void main() {
     expect(find.textContaining('Threshold announcements'), findsNothing);
   });
 
+  testWidgets('TRI-02 names what in the reading slows the server', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.sample(
+      tester,
+      CoreResult(
+        cpu: CpuPercentages([10, 0, 5, 85], 15),
+        memory: _memory,
+        cpuPressure: const StallShares(some: StallAverages(42, 30, 20)),
+        ioPressure: const StallShares(some: StallAverages(1, 1, 1)),
+      ),
+      at: _start,
+    );
+    expect(find.text('Why is it slow?'), findsOneWidget);
+    expect(
+      find.text(
+        'Tasks waited for a CPU 42% of the last 10 seconds: the processor '
+        'is the bottleneck.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Nothing in the latest reading points to a slowdown.'),
+      findsNothing,
+    );
+  });
+
   group('A11Y-15', () {
     List<String> heard(WidgetTester tester) => [
       for (final announcement in tester.takeAnnouncements())
@@ -1888,6 +1916,8 @@ void main() {
       testWidgets('Docker desktop, ${brightness.name}', (tester) async {
         final panel = await pumpAll(tester, const Size(900, 1500), brightness);
         await panel.docker(tester);
+        await tester.ensureVisible(find.text('Measure disk use'));
+        await tester.pumpAndSettle();
         await tester.tap(find.text('Measure disk use'));
         await tester.pump();
         final query = panel.engine.sentOfType<DockerQuery>().last;
@@ -1914,6 +1944,8 @@ void main() {
         );
         await panel.sample(tester, _failed(), stream: SampleStream.failedUnits);
         await panel.docker(tester);
+        await tester.ensureVisible(find.text('Measure disk use'));
+        await tester.pumpAndSettle();
         await tester.tap(find.text('Measure disk use'));
         await tester.pump();
         final query = panel.engine.sentOfType<DockerQuery>().last;
