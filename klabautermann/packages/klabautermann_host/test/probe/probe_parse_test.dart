@@ -151,7 +151,9 @@ void main() {
     expect(synced.timezone, 'Etc/UTC');
     expect(synced.ntpEnabled, isTrue);
     expect(synced.ntpSynchronized, isTrue);
-    expect(HostProfile.fromJson(synced.toJson()).ntpSynchronized, isTrue);
+    final read = HostProfile.fromJson(synced.toJson());
+    expect(read.ntpEnabled, isTrue);
+    expect(read.ntpSynchronized, isTrue);
 
     final off = clock('NTP=no\nNTPSynchronized=no\nTimezone=Etc/UTC');
     expect(off.ntpEnabled, isFalse);
