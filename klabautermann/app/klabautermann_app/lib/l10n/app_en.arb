@@ -1761,6 +1761,55 @@
       }
     }
   },
+  "systemProcessorTitle": "Processor",
+  "@systemProcessorTitle": {
+    "description": "System tab: the heading of the processor section (CPU-07)."
+  },
+  "systemProcessorReading": "Reading the processor…",
+  "@systemProcessorReading": {
+    "description": "System tab, Processor: shown while the processor is read."
+  },
+  "systemProcessorReadAgain": "Read again",
+  "@systemProcessorReadAgain": {
+    "description": "System tab, Processor: the button that reads the processor again."
+  },
+  "systemProcessorModel": "Model",
+  "@systemProcessorModel": {
+    "description": "System tab, Processor: the label of the processor's model name, or its vendor where the server names no model."
+  },
+  "systemProcessorNoModel": "This processor does not report a model name, as is common on ARM boards.",
+  "@systemProcessorNoModel": {
+    "description": "System tab, Processor: why the model is unknown after a read that succeeded."
+  },
+  "systemProcessorSockets": "Sockets",
+  "@systemProcessorSockets": {
+    "description": "System tab, Processor: the label of the number of physical processor packages."
+  },
+  "systemProcessorCores": "Cores",
+  "@systemProcessorCores": {
+    "description": "System tab, Processor: the label of the number of physical cores across all sockets."
+  },
+  "systemProcessorThreadsPerCore": "Threads per core",
+  "@systemProcessorThreadsPerCore": {
+    "description": "System tab, Processor: the label of how many hardware threads one core runs; 2 with simultaneous multithreading."
+  },
+  "systemProcessorLogical": "Logical CPUs",
+  "@systemProcessorLogical": {
+    "description": "System tab, Processor: the label of how many CPUs the kernel counts."
+  },
+  "systemProcessorUsable": "Usable CPUs",
+  "@systemProcessorUsable": {
+    "description": "System tab, Processor: the label of how many CPUs the login's processes may run on: fewer than the logical CPUs when the processes are pinned to some of them, as in a container given a CPU set. A CPU time quota does not lower it."
+  },
+  "systemProcessorFailed": "{failure, select, noLink{Not connected to the server.} denied{The server refused the processor read.} missing{The server lacks the tools the processor read runs.} other{The processor read failed.}}",
+  "@systemProcessorFailed": {
+    "description": "System tab, Processor: why the processor read nothing, by reason.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
   "systemNetInterfacesTitle": "Interfaces",
   "@systemNetInterfacesTitle": {
     "description": "System tab: the heading of the network interfaces section (NET-02, NET-03)."
@@ -3974,6 +4023,109 @@
   "overviewSwapNone": "No swap is set up.",
   "@overviewSwapNone": {
     "description": "The swap card of a server with no swap space."
+  },
+  "overviewSlowTitle": "Why is it slow?",
+  "@overviewSlowTitle": {
+    "description": "Overview: the heading of TRI-02's card, what in the latest reading slows the server."
+  },
+  "overviewSlowNone": "Nothing in the latest reading points to a slowdown.",
+  "@overviewSlowNone": {
+    "description": "Overview, Why is it slow: no signal in the latest reading."
+  },
+  "overviewSlowCpuWait": "Tasks waited for a CPU {percent} of the last 10 seconds: the processor is the bottleneck.",
+  "@overviewSlowCpuWait": {
+    "description": "Overview, Why is it slow: PSI cpu some over 10 s reached 20 %. percent is the share, such as \"35%\".",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewSlowLoadHigh": "The load is {load} per core: more tasks want to run than there are cores.",
+  "@overviewSlowLoadHigh": {
+    "description": "Overview, Why is it slow: without PSI, the load per core reached 1.5.",
+    "placeholders": {
+      "load": {
+        "type": "double",
+        "format": "decimalPatternDigits",
+        "optionalParameters": {
+          "decimalDigits": 2
+        }
+      }
+    }
+  },
+  "overviewSlowSteal": "The hypervisor gave {percent} of the CPU time to other guests.",
+  "@overviewSlowSteal": {
+    "description": "Overview, Why is it slow: steal reached 10 % of CPU time. percent is the share, such as \"25%\".",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewSlowIoStall": "Tasks stalled on storage {percent} of the last 10 seconds: the disks are the bottleneck.",
+  "@overviewSlowIoStall": {
+    "description": "Overview, Why is it slow: PSI io some over 10 s reached 10 %. percent is the share, such as \"25%\".",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewSlowIowait": "Cores sat idle {percent} of the time waiting for storage.",
+  "@overviewSlowIowait": {
+    "description": "Overview, Why is it slow: without PSI, iowait reached 10 % of CPU time. percent is the share, such as \"25%\".",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewSlowSlowDisk": "{device} takes {ms} ms per request: it is slow or saturated.",
+  "@overviewSlowSlowDisk": {
+    "description": "Overview, Why is it slow: a disk's mean time per request reached 50 ms. device is the disk's kernel name, such as sda.",
+    "placeholders": {
+      "device": {
+        "type": "String"
+      },
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "overviewSlowBusyDisk": "{device} is busy {percent} of the time: requests queue behind each other.",
+  "@overviewSlowBusyDisk": {
+    "description": "Overview, Why is it slow: a disk was busy 90 % of the time. device is the disk's kernel name; percent the share, such as \"95%\".",
+    "placeholders": {
+      "device": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewSlowMemoryStall": "Tasks stalled waiting for memory {percent} of the last 10 seconds: the server is short of RAM.",
+  "@overviewSlowMemoryStall": {
+    "description": "Overview, Why is it slow: PSI memory some over 10 s reached 5 %. percent is the share, such as \"12%\".",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewSlowSwapHeavy": "Swap is {percent} full and little memory is free: the server pages to disk.",
+  "@overviewSlowSwapHeavy": {
+    "description": "Overview, Why is it slow: swap is half full while under 10 % of memory is available. percent is swap's used share, such as \"80%\".",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewSlowWhere": "Processes sorts what runs by CPU and memory; System lists recent out-of-memory kills.",
+  "@overviewSlowWhere": {
+    "description": "Overview, Why is it slow: where to look next, under the signals."
   },
   "overviewPressureTitle": "Pressure",
   "@overviewPressureTitle": {
@@ -6267,7 +6419,7 @@
   "@activityColumnResult": {
     "description": "Column of the activity log: how the run ended."
   },
-  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} PowerAction{Reboot or shut down} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
+  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} PowerAction{Reboot or shut down} ContainerAction{Container action} RemoveContainer{Remove container} ContainerBulkAction{Containers action} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
   "@activityAction": {
     "description": "An activity log row's action; action is the engine's intent type name.",
     "placeholders": {
@@ -6665,6 +6817,97 @@
   "dockerTabNetworks": "Networks",
   "@dockerTabNetworks": {
     "description": "Docker tab: the sub-tab listing networks."
+  },
+  "dockerTabEvents": "Events",
+  "@dockerTabEvents": {
+    "description": "Docker tab: the sub-tab with the engine's events timeline (DKE-03)."
+  },
+  "dockerEventsBuffer": "Events show from when Klabautermann started following them. The engine keeps only a limited buffer, so events while the stream was lost may be missing.",
+  "@dockerEventsBuffer": {
+    "description": "Docker tab, Events: what the timeline covers."
+  },
+  "dockerEventsWaiting": "Waiting for the events stream…",
+  "@dockerEventsWaiting": {
+    "description": "Docker tab, Events: shown before the watch delivered the timeline."
+  },
+  "dockerEventsFailed": "{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} connectionFailed{The connection to the engine failed while following its events.} other{The engine's events could not be followed.}}",
+  "@dockerEventsFailed": {
+    "description": "Docker tab, Events: why the watch failed, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerEventsAll": "All",
+  "@dockerEventsAll": {
+    "description": "Docker tab, Events: the filter chip that shows every event type."
+  },
+  "dockerEventsKind": "{kind, select, container{Containers} image{Images} volume{Volumes} network{Networks} other{Other}}",
+  "@dockerEventsKind": {
+    "description": "Docker tab, Events: a filter chip for one event type.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerEventsSearch": "Search by name, action or image",
+  "@dockerEventsSearch": {
+    "description": "Docker tab, Events: the search field's hint."
+  },
+  "dockerEventsNone": "No events yet. They appear here as the engine reports them.",
+  "@dockerEventsNone": {
+    "description": "Docker tab, Events: the timeline holds no event."
+  },
+  "dockerEventsNoMatch": "No event matches the filter.",
+  "@dockerEventsNoMatch": {
+    "description": "Docker tab, Events: the filter or search hides every event."
+  },
+  "dockerEventsLine": "{name}: {action}",
+  "@dockerEventsLine": {
+    "description": "Docker tab, Events: one event, what it happened to and the engine's action as it names it (start, die, health_status: unhealthy, pull).",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerEventsImage": "image {image}",
+  "@dockerEventsImage": {
+    "description": "Docker tab, Events: a container event's image.",
+    "placeholders": {
+      "image": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerEventsExitCode": "exit code {code}",
+  "@dockerEventsExitCode": {
+    "description": "Docker tab, Events: the code a container exited with.",
+    "placeholders": {
+      "code": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerEventsGap": "{resumed, select, true{Not followed from {from} to {until}. The engine sent the events it still held, so some may be missing.} other{Not followed from {from} to {until}. Events in this span are not shown.}}",
+  "@dockerEventsGap": {
+    "description": "Docker tab, Events: a span while the events stream was lost; from and until are times of day.",
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "until": {
+        "type": "String"
+      },
+      "resumed": {
+        "type": "String"
+      }
+    }
   },
   "dockerTabStacks": "Stacks",
   "@dockerTabStacks": {

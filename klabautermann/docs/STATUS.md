@@ -2056,6 +2056,12 @@ is on main:
   zones, every 10 s. The System tab's Temperatures section lists each
   sensor with its high and critical limits, and does not show where the
   host has no sensor, as VMs, or inside a container.
+- Processor (M6 N42c, CPU-07): the System tab's new section beside the
+  identity shows the processor's model (or its vendor where it names
+  none), sockets, cores, threads per core, the CPUs the kernel counts
+  and those the login may use, from `lscpu`, or `/proc/cpuinfo` where
+  `lscpu` is missing. A big.LITTLE board lists both models. Inside a
+  container the counts that would be the host machine's read as unknown.
 - Interfaces and connections (M6 N33, NET-02, NET-03): the System tab's
   new Interfaces section lists each interface with its state,
   addresses, MTU, link speed, current receive and send rates, and
@@ -2089,6 +2095,11 @@ is on main:
   and waits where every column fits; a figure the reading cannot give
   reads as unknown, and inside a container the section is withheld as
   the host's (D50).
+- Docker events (M6 N20, DKE-03): the Docker tab's Events sub-tab lists
+  the engine's container, image, volume and network events since the
+  app started following them, newest first, with a filter per type and
+  a search. Wherever the events stream was lost, a marker says for how
+  long and whether the engine replayed what it still held.
 - Networks (M6 N11, DNW-01, DNW-02): the Docker tab gains a Networks
   sub-tab after Volumes, listing every network by name with its driver,
   scope, first subnet and its gateway, and how many containers are on

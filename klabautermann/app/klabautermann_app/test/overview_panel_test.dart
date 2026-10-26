@@ -1272,6 +1272,34 @@ void main() {
     expect(find.text('Doctor'), findsNothing);
   });
 
+  testWidgets('TRI-02 names what in the reading slows the server', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.sample(
+      tester,
+      CoreResult(
+        cpu: CpuPercentages([10, 0, 5, 85], 15),
+        memory: _memory,
+        cpuPressure: const StallShares(some: StallAverages(42, 30, 20)),
+        ioPressure: const StallShares(some: StallAverages(1, 1, 1)),
+      ),
+      at: _start,
+    );
+    expect(find.text('Why is it slow?'), findsOneWidget);
+    expect(
+      find.text(
+        'Tasks waited for a CPU 42% of the last 10 seconds: the processor '
+        'is the bottleneck.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Nothing in the latest reading points to a slowdown.'),
+      findsNothing,
+    );
+  });
+
   group('A11Y-15', () {
     List<String> heard(WidgetTester tester) => [
       for (final announcement in tester.takeAnnouncements())

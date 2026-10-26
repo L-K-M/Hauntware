@@ -2146,6 +2146,72 @@ abstract class AppLocalizations {
   /// **'{failure, select, noLink{Not connected to the server.} denied{The server refused the kernel check.} missing{The server lacks the tools the kernel check runs.} other{The kernel check failed.}}'**
   String systemKernelFailed(String failure);
 
+  /// System tab: the heading of the processor section (CPU-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Processor'**
+  String get systemProcessorTitle;
+
+  /// System tab, Processor: shown while the processor is read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the processor…'**
+  String get systemProcessorReading;
+
+  /// System tab, Processor: the button that reads the processor again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemProcessorReadAgain;
+
+  /// System tab, Processor: the label of the processor's model name, or its vendor where the server names no model.
+  ///
+  /// In en, this message translates to:
+  /// **'Model'**
+  String get systemProcessorModel;
+
+  /// System tab, Processor: why the model is unknown after a read that succeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'This processor does not report a model name, as is common on ARM boards.'**
+  String get systemProcessorNoModel;
+
+  /// System tab, Processor: the label of the number of physical processor packages.
+  ///
+  /// In en, this message translates to:
+  /// **'Sockets'**
+  String get systemProcessorSockets;
+
+  /// System tab, Processor: the label of the number of physical cores across all sockets.
+  ///
+  /// In en, this message translates to:
+  /// **'Cores'**
+  String get systemProcessorCores;
+
+  /// System tab, Processor: the label of how many hardware threads one core runs; 2 with simultaneous multithreading.
+  ///
+  /// In en, this message translates to:
+  /// **'Threads per core'**
+  String get systemProcessorThreadsPerCore;
+
+  /// System tab, Processor: the label of how many CPUs the kernel counts.
+  ///
+  /// In en, this message translates to:
+  /// **'Logical CPUs'**
+  String get systemProcessorLogical;
+
+  /// System tab, Processor: the label of how many CPUs the login's processes may run on: fewer than the logical CPUs when the processes are pinned to some of them, as in a container given a CPU set. A CPU time quota does not lower it.
+  ///
+  /// In en, this message translates to:
+  /// **'Usable CPUs'**
+  String get systemProcessorUsable;
+
+  /// System tab, Processor: why the processor read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected to the server.} denied{The server refused the processor read.} missing{The server lacks the tools the processor read runs.} other{The processor read failed.}}'**
+  String systemProcessorFailed(String failure);
+
   /// System tab: the heading of the network interfaces section (NET-02, NET-03).
   ///
   /// In en, this message translates to:
@@ -4466,6 +4532,78 @@ abstract class AppLocalizations {
   /// **'No swap is set up.'**
   String get overviewSwapNone;
 
+  /// Overview: the heading of TRI-02's card, what in the latest reading slows the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Why is it slow?'**
+  String get overviewSlowTitle;
+
+  /// Overview, Why is it slow: no signal in the latest reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing in the latest reading points to a slowdown.'**
+  String get overviewSlowNone;
+
+  /// Overview, Why is it slow: PSI cpu some over 10 s reached 20 %. percent is the share, such as "35%".
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks waited for a CPU {percent} of the last 10 seconds: the processor is the bottleneck.'**
+  String overviewSlowCpuWait(String percent);
+
+  /// Overview, Why is it slow: without PSI, the load per core reached 1.5.
+  ///
+  /// In en, this message translates to:
+  /// **'The load is {load} per core: more tasks want to run than there are cores.'**
+  String overviewSlowLoadHigh(double load);
+
+  /// Overview, Why is it slow: steal reached 10 % of CPU time. percent is the share, such as "25%".
+  ///
+  /// In en, this message translates to:
+  /// **'The hypervisor gave {percent} of the CPU time to other guests.'**
+  String overviewSlowSteal(String percent);
+
+  /// Overview, Why is it slow: PSI io some over 10 s reached 10 %. percent is the share, such as "25%".
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks stalled on storage {percent} of the last 10 seconds: the disks are the bottleneck.'**
+  String overviewSlowIoStall(String percent);
+
+  /// Overview, Why is it slow: without PSI, iowait reached 10 % of CPU time. percent is the share, such as "25%".
+  ///
+  /// In en, this message translates to:
+  /// **'Cores sat idle {percent} of the time waiting for storage.'**
+  String overviewSlowIowait(String percent);
+
+  /// Overview, Why is it slow: a disk's mean time per request reached 50 ms. device is the disk's kernel name, such as sda.
+  ///
+  /// In en, this message translates to:
+  /// **'{device} takes {ms} ms per request: it is slow or saturated.'**
+  String overviewSlowSlowDisk(String device, int ms);
+
+  /// Overview, Why is it slow: a disk was busy 90 % of the time. device is the disk's kernel name; percent the share, such as "95%".
+  ///
+  /// In en, this message translates to:
+  /// **'{device} is busy {percent} of the time: requests queue behind each other.'**
+  String overviewSlowBusyDisk(String device, String percent);
+
+  /// Overview, Why is it slow: PSI memory some over 10 s reached 5 %. percent is the share, such as "12%".
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks stalled waiting for memory {percent} of the last 10 seconds: the server is short of RAM.'**
+  String overviewSlowMemoryStall(String percent);
+
+  /// Overview, Why is it slow: swap is half full while under 10 % of memory is available. percent is swap's used share, such as "80%".
+  ///
+  /// In en, this message translates to:
+  /// **'Swap is {percent} full and little memory is free: the server pages to disk.'**
+  String overviewSlowSwapHeavy(String percent);
+
+  /// Overview, Why is it slow: where to look next, under the signals.
+  ///
+  /// In en, this message translates to:
+  /// **'Processes sorts what runs by CPU and memory; System lists recent out-of-memory kills.'**
+  String get overviewSlowWhere;
+
   /// Heading of the Overview's pressure card (CPU-05, MEM-04): Linux pressure stall information.
   ///
   /// In en, this message translates to:
@@ -6611,7 +6749,7 @@ abstract class AppLocalizations {
   /// An activity log row's action; action is the engine's intent type name.
   ///
   /// In en, this message translates to:
-  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} PowerAction{Reboot or shut down} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
+  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} PowerAction{Reboot or shut down} ContainerAction{Container action} RemoveContainer{Remove container} ContainerBulkAction{Containers action} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
   String activityAction(String action);
 
   /// An activity log row's confirmation; tier is the engine's ConfirmationTier name.
@@ -7075,6 +7213,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Networks'**
   String get dockerTabNetworks;
+
+  /// Docker tab: the sub-tab with the engine's events timeline (DKE-03).
+  ///
+  /// In en, this message translates to:
+  /// **'Events'**
+  String get dockerTabEvents;
+
+  /// Docker tab, Events: what the timeline covers.
+  ///
+  /// In en, this message translates to:
+  /// **'Events show from when Klabautermann started following them. The engine keeps only a limited buffer, so events while the stream was lost may be missing.'**
+  String get dockerEventsBuffer;
+
+  /// Docker tab, Events: shown before the watch delivered the timeline.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the events stream…'**
+  String get dockerEventsWaiting;
+
+  /// Docker tab, Events: why the watch failed, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} connectionFailed{The connection to the engine failed while following its events.} other{The engine\'s events could not be followed.}}'**
+  String dockerEventsFailed(String reason);
+
+  /// Docker tab, Events: the filter chip that shows every event type.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get dockerEventsAll;
+
+  /// Docker tab, Events: a filter chip for one event type.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, container{Containers} image{Images} volume{Volumes} network{Networks} other{Other}}'**
+  String dockerEventsKind(String kind);
+
+  /// Docker tab, Events: the search field's hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search by name, action or image'**
+  String get dockerEventsSearch;
+
+  /// Docker tab, Events: the timeline holds no event.
+  ///
+  /// In en, this message translates to:
+  /// **'No events yet. They appear here as the engine reports them.'**
+  String get dockerEventsNone;
+
+  /// Docker tab, Events: the filter or search hides every event.
+  ///
+  /// In en, this message translates to:
+  /// **'No event matches the filter.'**
+  String get dockerEventsNoMatch;
+
+  /// Docker tab, Events: one event, what it happened to and the engine's action as it names it (start, die, health_status: unhealthy, pull).
+  ///
+  /// In en, this message translates to:
+  /// **'{name}: {action}'**
+  String dockerEventsLine(String name, String action);
+
+  /// Docker tab, Events: a container event's image.
+  ///
+  /// In en, this message translates to:
+  /// **'image {image}'**
+  String dockerEventsImage(String image);
+
+  /// Docker tab, Events: the code a container exited with.
+  ///
+  /// In en, this message translates to:
+  /// **'exit code {code}'**
+  String dockerEventsExitCode(int code);
+
+  /// Docker tab, Events: a span while the events stream was lost; from and until are times of day.
+  ///
+  /// In en, this message translates to:
+  /// **'{resumed, select, true{Not followed from {from} to {until}. The engine sent the events it still held, so some may be missing.} other{Not followed from {from} to {until}. Events in this span are not shown.}}'**
+  String dockerEventsGap(String from, String until, String resumed);
 
   /// Docker tab: the sub-tab listing compose stacks.
   ///

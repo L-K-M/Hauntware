@@ -3265,6 +3265,21 @@ unless the user enables admin mode for that panel.
   steal explained), PSI (absence is normal), model and topology, OOM kills
   linked to journal entries, configurable cards, top lists, quick actions,
   threshold bands, bottom dock.
+- **As built (M6 N42c).** CPU-07's model and topology are a host query,
+  `CpuTopologyQuery`, shown in the System tab's Processor section beside
+  the identity, since they do not change while the Overview samples. It
+  prints `nproc`, `lscpu -J` in the C locale, whose field names `lscpu`
+  translates otherwise, and the model and placement lines of
+  `/proc/cpuinfo`, without the flags that make it about 1.5 KiB a CPU.
+  Each model's sockets and cores per socket (or clusters and cores per
+  cluster, on arm64 boards with no sockets) follow its name, or precede
+  it before util-linux 2.37, and a big.LITTLE board lists two models
+  whose cores add up. Without `lscpu` (BusyBox) the cpuinfo lines count
+  the CPUs and their distinct sockets and cores where every CPU names
+  both; arm64's names no model, which the section says. Inside a
+  container the socket, core and CPU counts are the host machine's, so
+  they read as unknown with D50's reason; `nproc`'s usable CPUs, which a
+  cpuset limits, stay.
 - **v1.x.** Frequency, per-cgroup CPU (paths per cgroup driver [U]), ZFS
   ARC as cache, zram and zswap [U].
 
@@ -4029,6 +4044,17 @@ TLS. The section checks when it shows, after an edit and on request.
   ports and unrotated container logs join the list once the listening
   ports (N34) and the container review (N21a) are on main.
 
+  As built (M6 N53b), "why is it slow" (TRI-02) is a card under the
+  overview's Health card, from the live core reading alone
+  (`ui/slowness.dart`): tasks waiting for a CPU 20 % of the last 10 s
+  (PSI `cpu some`; without PSI, a load of 1.5 per core), steal of 10 %,
+  tasks stalled on storage 10 % (PSI `io some`; without PSI, iowait of
+  10 %), a disk at 50 ms per request or busy 90 %, tasks stalled for
+  memory 5 % (PSI `memory some`), and swap half full while under 10 % of
+  memory is available, each in a sentence. It points to Processes for
+  the top processes and to System for recent out-of-memory kills, which
+  stay their own reads.
+
   As built (M6 N37a, collector-set version 11), the slow `temps`
   collector reads each hwmon chip's `temp<N>_input` with its `_max`,
   `_crit` and `_label` through builtins, without `sensors`, and lists the
@@ -4132,7 +4158,14 @@ TLS. The section checks when it shows, after an edit and on request.
   grouped by compose project, Swarm task names parsed defensively.
   Lifecycle (CTR-02, CTR-05, CTR-06): start, stop, restart, pause, unpause,
   kill with a signal, remove, always by full ID after the ownership (8.7)
-  and protected-target checks; typed confirmation when `v=1`. Inspect
+  and protected-target checks; typed confirmation when `v=1`. Bulk
+  actions (CTR-07): `ContainerBulkAction` starts, stops, restarts or
+  removes up to 100 containers [E] by full id as one plan, a step per
+  container in the order given, confirmed once at the tier its most
+  guarded container needs. It leaves out a container whose state does
+  not take the verb as its own actions offer it (removal never forces,
+  so only containers that are not up), and an id the engine no longer
+  lists refuses the plan as a changed target. Inspect
   (CTR-03): masked values with reveal; never synced, persisted or sent to an
   LLM without consent. Health (CTR-04). Logs (CTX-01, CTX-02): 5.6; when the
   logging driver keeps no readable logs, the view names the driver. List
@@ -4180,6 +4213,20 @@ TLS. The section checks when it shows, after an edit and on request.
   through one `docker compose logs -f` in low-session mode); JSON and level
   parsing; redacted log export; stats detail charts, sorting, memory limit
   risk, top table.
+- **As built (M6 N20).** DKE-03's timeline comes from the events stream
+  the watcher already holds for the lists (5.7), so it costs no channel
+  of its own. Each container, image, volume and network event the lists'
+  refresh does not ignore joins a buffer of the newest 500 per endpoint
+  (health-check execs and attach-like actions stay out). The buffer is
+  kept across a dropped link and forgotten on a socket change or when
+  the last watch ends. A stream opened after a lost one adds a gap from
+  the loss to the reopen, marked resumed when `since` asked the engine
+  to replay it (9.5 item 8's limited-buffer wording). The Docker
+  tab's Events sub-tab watches `DockerWatchList.events` while it shows.
+  It lists the timeline newest first with time, type, name and action, a
+  container's image and exit code, and the gaps. A filter chip per type
+  and a search by name, action or image leave the gaps in place.
+  DKE-04's disk usage on demand was already the Overview's (OV-05).
 - **v1.x.** Daemon config view, topology graph, interop labels, copy as
   `docker run`, generate compose service, rename, in-place limit updates,
   create from form, filesystem changes, container file browser, cgroup
@@ -5038,6 +5085,7 @@ OperationPlan {
     - `StartTimer`;
     - `ContainerAction`;
     - `RemoveContainer`;
+    - `ContainerBulkAction` (M6 N16b, CTR-07);
     - `RemoveImage`;
     - `StackAction` (act anyway);
     - `RedeployStack` (remove orphans).
