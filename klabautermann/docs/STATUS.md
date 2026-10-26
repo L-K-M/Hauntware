@@ -969,6 +969,12 @@ is on main:
   Since K44b turned links on, the app's engine samples a connected server
   and sends its profile, so the tab shows its readings; phones reach it
   through More (K40, above).
+- Process tree and state flags (M6 N43a, PRC-03, PRC-06): the
+  Processes tab's Tree toggle shows each process under its parent, with
+  siblings in the chosen order; a filter keeps the matches' parents in
+  view. Zombies and processes in uninterruptible sleep carry a badge in
+  words ("zombie", "waiting on I/O"), and the tab counts them above the
+  list. Thread counts are not read yet.
 - Processes tab (M2, 03 §7.2, §8.9, §10.4, PRC-01, SAF-07, D48, D50,
   K33, #238): the Processes tab lists the `procs` stream while it shows,
   in the sortable table by CPU (busiest first), IEC memory, user, start

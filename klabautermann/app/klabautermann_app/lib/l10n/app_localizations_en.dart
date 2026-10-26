@@ -823,6 +823,55 @@ class AppLocalizationsEn extends AppLocalizations {
   String get processesParentPid => 'Parent PID';
 
   @override
+  String get processesTree => 'Tree';
+
+  @override
+  String processesFlag(String flag) {
+    String _temp0 = intl.Intl.selectLogic(flag, {
+      'zombie': 'zombie',
+      'uninterruptible': 'waiting on I/O',
+      'other': 'flagged',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String processesFlagCount(String flag, int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString zombie processes',
+      one: '1 zombie process',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$countString processes waiting on I/O they cannot be interrupted from',
+      one: '1 process waiting on I/O it cannot be interrupted from',
+    );
+    String _temp2 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString flagged processes',
+      one: '1 flagged process',
+    );
+    String _temp3 = intl.Intl.selectLogic(flag, {
+      'zombie': '$_temp0',
+      'uninterruptible': '$_temp1',
+      'other': '$_temp2',
+    });
+    return '$_temp3';
+  }
+
+  @override
+  String get processesFlagSeparator => '; ';
+
+  @override
   String get processesState => 'State';
 
   @override
