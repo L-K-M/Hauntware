@@ -124,6 +124,15 @@ void main() {
         reason: address,
       );
     }
+    // Only the host is checked: a path or query may hold them.
+    expect(
+      uris({
+        'dev.dozzle.url': MaskedValue.plain(
+          r'https://api.example.com/people?$select=name&q=*',
+        ),
+      }),
+      [r'https://api.example.com/people?$select=name&q=*'],
+    );
     expect(uris({'dev.dozzle.url': MaskedValue.plain('http://[::1]:8080/')}), [
       'http://[::1]:8080/',
     ]);
