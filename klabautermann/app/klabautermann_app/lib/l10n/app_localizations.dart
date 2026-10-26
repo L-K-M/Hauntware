@@ -1558,6 +1558,96 @@ abstract class AppLocalizations {
   /// **'{time}'**
   String systemBootedValue(DateTime time);
 
+  /// Heading of the System tab's MEM-03 section: processes the kernel's OOM killer ended since boot.
+  ///
+  /// In en, this message translates to:
+  /// **'Out-of-memory kills'**
+  String get systemOomTitle;
+
+  /// The OOM kills section while its read runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the kernel\'s out-of-memory kills.'**
+  String get systemOomReading;
+
+  /// The OOM kills section when its read failed; failure is noLink, denied, missing or failed.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected, so the out-of-memory kills cannot be read.} denied{The server refused the out-of-memory read.} missing{The server lacks a tool the out-of-memory read needs.} other{The out-of-memory kills could not be read.}}'**
+  String systemOomFailed(String failure);
+
+  /// How many processes the kernel's OOM killer ended since boot, from /proc/vmstat.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No process was killed for lack of memory since boot.} =1{1 process was killed for lack of memory since boot.} other{{count} processes were killed for lack of memory since boot.}}'**
+  String systemOomCount(int count);
+
+  /// The OOM kills section on a kernel without the oom_kill counter in /proc/vmstat.
+  ///
+  /// In en, this message translates to:
+  /// **'This kernel does not count out-of-memory kills (Linux 4.13 and later do).'**
+  String get systemOomCountUnknown;
+
+  /// The OOM kills section when neither the journal's kernel lines nor dmesg gave any line to the login user.
+  ///
+  /// In en, this message translates to:
+  /// **'Your login may not read the kernel log, so the killed processes cannot be named. Membership in the adm or systemd-journal group, or sudo, gives access.'**
+  String get systemOomLogDenied;
+
+  /// A killed process: its command name and process ID.
+  ///
+  /// In en, this message translates to:
+  /// **'{command} (PID {pid})'**
+  String systemOomProcess(String command, int pid);
+
+  /// When a process was killed, from the journal: a date and time in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Killed {time}'**
+  String systemOomKilledAt(DateTime time);
+
+  /// When a process was killed, from dmesg, which counts from boot; time is a span such as "3 days, 4 hours".
+  ///
+  /// In en, this message translates to:
+  /// **'Killed {time} after boot'**
+  String systemOomAfterBoot(String time);
+
+  /// How much anonymous memory (anon-rss) a killed process held, in binary units.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} of its own memory when killed'**
+  String systemOomMemory(String size);
+
+  /// Shown under a kill the kernel made because a memory cgroup reached its limit.
+  ///
+  /// In en, this message translates to:
+  /// **'A memory limit ran out, such as a container\'s, not the server\'s memory.'**
+  String get systemOomCgroupLimit;
+
+  /// Opens the current boot's kernel log lines of the OOM reports.
+  ///
+  /// In en, this message translates to:
+  /// **'Show in kernel log'**
+  String get systemOomShowLog;
+
+  /// Reads the OOM kills again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemOomReadAgain;
+
+  /// Heading of the sheet with the current boot's kernel log lines of OOM reports.
+  ///
+  /// In en, this message translates to:
+  /// **'Out-of-memory reports'**
+  String get systemOomLogTitle;
+
+  /// Tooltip of the button that closes the OOM reports sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get systemOomLogClose;
+
   /// Label of the server's total receive rate over all its network interfaces, in the System tab.
   ///
   /// In en, this message translates to:
@@ -3591,6 +3681,48 @@ abstract class AppLocalizations {
   /// **'Idle'**
   String get overviewCpuIdle;
 
+  /// CPU-04: the share of CPU time cores sat idle while tasks waited for storage (iowait).
+  ///
+  /// In en, this message translates to:
+  /// **'I/O wait'**
+  String get overviewCpuIowait;
+
+  /// CPU-04: the share of CPU time the hypervisor gave to other guests (steal).
+  ///
+  /// In en, this message translates to:
+  /// **'Steal'**
+  String get overviewCpuSteal;
+
+  /// CPU-04: the share of CPU time spent handling hardware interrupts (irq).
+  ///
+  /// In en, this message translates to:
+  /// **'IRQ'**
+  String get overviewCpuIrq;
+
+  /// CPU-04: the share of CPU time spent on deferred interrupt work such as network packets (softirq).
+  ///
+  /// In en, this message translates to:
+  /// **'Soft IRQ'**
+  String get overviewCpuSoftirq;
+
+  /// CPU-04's hint when steal reaches 10 % of CPU time. percent is the steal share, such as "25%".
+  ///
+  /// In en, this message translates to:
+  /// **'Steal {percent}: the host running this virtual machine gives its CPU time to other guests, often a noisy neighbour on a VPS. Programs here run slower than the busy figure suggests.'**
+  String overviewCpuHintSteal(String percent);
+
+  /// CPU-04's hint when iowait reaches 10 % of CPU time; the kernel documentation calls iowait unreliable. percent is the iowait share, such as "25%".
+  ///
+  /// In en, this message translates to:
+  /// **'I/O wait {percent}: cores sat idle while tasks waited for storage. The kernel calls this figure unreliable, so check disk latency before blaming the disks.'**
+  String overviewCpuHintIowait(String percent);
+
+  /// CPU-04's hint when hardware and soft interrupts together reach 10 % of CPU time. percent is their share, such as "25%".
+  ///
+  /// In en, this message translates to:
+  /// **'Interrupts {percent}: the CPUs spend this much handling devices, often heavy network traffic.'**
+  String overviewCpuHintInterrupts(String percent);
+
   /// CPU-02: heading over each core's busy share.
   ///
   /// In en, this message translates to:
@@ -3692,6 +3824,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No swap is set up.'**
   String get overviewSwapNone;
+
+  /// Heading of the Overview's pressure card (CPU-05, MEM-04): Linux pressure stall information.
+  ///
+  /// In en, this message translates to:
+  /// **'Pressure'**
+  String get overviewPressureTitle;
+
+  /// Explains the pressure card's figures and their order.
+  ///
+  /// In en, this message translates to:
+  /// **'Share of time tasks stalled, over the last 10 s, 1 min and 5 min. \"Some\" counts time at least one task waited, \"full\" time all of them did.'**
+  String get overviewPressureCaption;
+
+  /// The pressure card when the server has no /proc/pressure files; their absence is normal.
+  ///
+  /// In en, this message translates to:
+  /// **'This kernel reports no pressure figures. That is normal before Linux 4.20 or with PSI turned off.'**
+  String get overviewPressureNone;
+
+  /// The resource name in a pressure figure's label, for /proc/pressure/cpu.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU'**
+  String get overviewPressureCpu;
+
+  /// The resource name in a pressure figure's label, for /proc/pressure/memory.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get overviewPressureMemory;
+
+  /// The resource name in a pressure figure's label, for /proc/pressure/io.
+  ///
+  /// In en, this message translates to:
+  /// **'I/O'**
+  String get overviewPressureIo;
+
+  /// Label of a pressure figure: the share of time at least one task stalled on resource (CPU, Memory or I/O).
+  ///
+  /// In en, this message translates to:
+  /// **'{resource}, some'**
+  String overviewPressureSome(String resource);
+
+  /// Label of a pressure figure: the share of time all tasks stalled on resource (CPU, Memory or I/O).
+  ///
+  /// In en, this message translates to:
+  /// **'{resource}, full'**
+  String overviewPressureFull(String resource);
+
+  /// A pressure figure's three averages in percent with the kernel's two decimals, over 10 s, 1 min and 5 min, in that order.
+  ///
+  /// In en, this message translates to:
+  /// **'{avg10}% · {avg60}% · {avg300}%'**
+  String overviewPressureValue(double avg10, double avg60, double avg300);
 
   /// The Jobs tab before the server's cron jobs or timers have been read.
   ///

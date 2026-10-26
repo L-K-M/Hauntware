@@ -85,6 +85,19 @@ final class HostQueries {
           }
         case ProcessDetailQuery(:final pid, :final startTicks):
           answer(await _processDetail(link, pid, startTicks));
+        case OomKillsQuery():
+          switch (await _run(link, HostCommands.oomKills())) {
+            case _Failed(:final payload):
+              answer(payload);
+            case _Ran(:final stdout):
+              answer(switch (parseOomKills(stdout)) {
+                final read? => OomKills(read),
+                null => const HostQueryFailed(
+                  HostQueryFailure.failed,
+                  detail: 'The out-of-memory read printed something else.',
+                ),
+              });
+          }
         case BootEndsQuery():
           switch (await _run(link, HostCommands.bootEnds())) {
             case _Failed(:final payload):
