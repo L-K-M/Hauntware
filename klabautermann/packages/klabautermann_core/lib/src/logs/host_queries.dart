@@ -82,6 +82,26 @@ final class HostQueries {
               final parsed = parseJournalBoots(stdout, format);
               answer(JournalBoots(parsed.value), parsed.warnings);
           }
+        case BootEndsQuery():
+          switch (await _run(link, HostCommands.bootEnds())) {
+            case _Failed(:final payload):
+              answer(payload);
+            case _Ran(:final stdout):
+              answer(BootEnds(parseBootEnds(stdout)));
+          }
+        case KernelsQuery():
+          switch (await _run(link, HostCommands.kernels())) {
+            case _Failed(:final payload):
+              answer(payload);
+            case _Ran(:final stdout):
+              answer(switch (parseKernels(stdout)) {
+                final check? => Kernels(check),
+                null => const HostQueryFailed(
+                  HostQueryFailure.failed,
+                  detail: 'The kernel read printed something else.',
+                ),
+              });
+          }
       }
     } on Object catch (error) {
       answer(HostQueryFailed(HostQueryFailure.failed, detail: '$error'));

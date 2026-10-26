@@ -30,6 +30,7 @@ export 'src/jobs/job_history.dart';
 export 'src/jobs/jobs.dart';
 export 'src/jobs/schedule.dart';
 export 'src/parse/accounts.dart';
+export 'src/parse/boots.dart';
 export 'src/parse/cron.dart';
 export 'src/parse/dmesg.dart';
 export 'src/parse/footprint.dart';
