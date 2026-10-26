@@ -7,6 +7,7 @@ library;
 import '../cron/document.dart' show splitCronCommand;
 import '../hws/collector.dart' show ArgValidators;
 import '../hws/request.dart' show ShellQuote;
+import '../parse/accounts.dart' show kAccountsGroupMarker, kAccountsWhoMarker;
 import 'proc_stat.dart';
 
 /// The first systemd major whose `systemd-analyze calendar` takes
@@ -859,6 +860,20 @@ abstract final class HostCommands {
       RunAsTool.su => ['su', '-s', '/bin/sh', '-c', command, asUser],
     };
   }
+
+  /// ACC-01 and ACC-02's read: the accounts and groups through `getent`,
+  /// which sees directory users too, or the files where it is missing,
+  /// then the logins `who` lists. Each part is capped, so a directory
+  /// that enumerates thousands stays a bounded read; `parseAccounts`
+  /// counts what went past its own limit.
+  static List<String> accounts() => const ['sh', '-c', _accounts];
+
+  static const _accounts =
+      '{ getent passwd || cat /etc/passwd; } 2>/dev/null | head -n 5000; '
+      'echo "$kAccountsGroupMarker"; '
+      '{ getent group || cat /etc/group; } 2>/dev/null | head -n 5000; '
+      'echo "$kAccountsWhoMarker"; '
+      'who 2>/dev/null | head -n 500; exit 0';
 
   /// `smartctl --scan-open -j`: the drives smartctl can open, with the
   /// device type it would read each as (03 §7.11, HW-04).

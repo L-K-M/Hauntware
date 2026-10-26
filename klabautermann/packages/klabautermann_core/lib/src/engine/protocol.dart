@@ -25,6 +25,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         OpDirectoryListing,
         ProcsSelection,
         SmartDisk,
+        AccountsSnapshot,
         SystemdUnit,
         SystemctlVerb,
         TempsSnapshot,
@@ -1193,6 +1194,16 @@ final class ReadUserCrontabs extends EngineRequest {
 /// left asleep. One [SmartReport] with [requestId] answers it.
 final class ReadSmart extends EngineRequest {
   const ReadSmart(this.serverId, {required this.requestId});
+
+  final String serverId;
+  final String requestId;
+}
+
+/// Reads [serverId]'s accounts, their groups and who is logged in (ACC-01,
+/// ACC-02, 03 §7.9) as the login user; never cached. One [AccountsReport]
+/// with [requestId] answers it.
+final class ReadAccounts extends EngineRequest {
+  const ReadAccounts(this.serverId, {required this.requestId});
 
   final String serverId;
   final String requestId;
@@ -2544,6 +2555,34 @@ enum UserCrontabsFailure {
 
   /// The link failed while reading.
   transport,
+}
+
+/// Why a [ReadAccounts] read nothing.
+enum AccountsReportFailure {
+  /// The server has no ready link.
+  noLink,
+
+  /// The read printed nothing the parser recognised.
+  unreadable,
+
+  /// The link failed while reading.
+  transport,
+}
+
+/// The answer to [ReadAccounts]: what the read found, or why nothing was
+/// read.
+final class AccountsReport extends EngineEvent {
+  const AccountsReport({
+    required this.serverId,
+    required this.requestId,
+    this.snapshot,
+    this.failure,
+  });
+
+  final String serverId;
+  final String requestId;
+  final AccountsSnapshot? snapshot;
+  final AccountsReportFailure? failure;
 }
 
 /// Why a [ReadSmart] read nothing.
