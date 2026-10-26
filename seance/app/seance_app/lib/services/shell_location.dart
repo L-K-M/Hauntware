@@ -69,14 +69,13 @@ class ShellLocation extends ChangeNotifier implements ValueListenable<String?> {
   @override
   String? get value => _absolute(_reported.value) ?? _read;
 
-  /// Completes once the read in flight has answered; at once when none is,
-  /// or while OSC 7 answers, since no read can change [value] then.
-  Future<void> get settled {
-    final reading = _reading;
-    if (reading == null || _absolute(_reported.value) != null) {
-      return Future<void>.value();
-    }
-    return reading;
+  /// Asks where the shell is now, as Files opens or follows again: a shell
+  /// can move without a cue (a key binding that runs `cd`). Completes once
+  /// answered; a read in flight answers for it, and nothing is read while
+  /// OSC 7 answers.
+  Future<void> readNow() {
+    if (!_readWanted) return Future<void>.value();
+    return _reading ?? _requestRead();
   }
 
   /// Reads the shell through [reader] from now on: at once, and after every

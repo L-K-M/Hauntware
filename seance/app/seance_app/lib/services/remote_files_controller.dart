@@ -162,7 +162,7 @@ class RemoteFilesController extends ChangeNotifier {
       // Open where the shell is rather than at home first, unless reading
       // it is slow.
       if (followTerminal) {
-        await shellDirectory.settled.timeout(
+        await shellDirectory.readNow().timeout(
           _initialShellReadWait,
           onTimeout: () {},
         );
@@ -366,6 +366,7 @@ class RemoteFilesController extends ChangeNotifier {
     _notify();
     if (!value) return;
     _followShellDirectory();
+    if (initialized) unawaited(shellDirectory.readNow());
   }
 
   /// OSC 7, or the directory read beside a shell that sends none, beats a

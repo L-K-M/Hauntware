@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -75,17 +76,68 @@ void main() {
       expect(commands, hasLength(1), reason: 'one read serves every consumer');
     },
   );
+
+  test(
+    'the tab drops the read with the panes once the server stops answering',
+    () async {
+      final app = state = AppState(
+        services,
+        openSshSession:
+            (
+              manager, {
+              required config,
+              required credentials,
+              required engine,
+              log,
+            }) async => _SilentShellSession(
+              engine,
+              [],
+              answers: [
+                _shellAnswer('/var/log'),
+                const RemoteCommandResult(exitCode: 3),
+              ],
+            ),
+      );
+      app.servers = [
+        ServerConfig(
+          id: 'web',
+          label: 'web',
+          host: 'web.local',
+          username: 'deploy',
+          createdAt: 1,
+          updatedAt: 1,
+        ),
+      ];
+
+      await app.newTab(app.servers.single);
+      final tab = app.tabs.single as TerminalSession;
+      await _until(() => tab.metadata.value.workingDirectory == '/var/log');
+
+      // A Bash title is a cue to read again, and this read cannot answer.
+      tab.engine.feed(
+        Uint8List.fromList(utf8.encode('\x1b]2;deploy@web: ~/docker\x07')),
+      );
+      await _until(() => tab.metadata.value.workingDirectory == null);
+      expect(tab.metadata.value.terminalTitle, 'deploy@web: ~/docker');
+      expect(tab.git!.reportedDirectory, '~/docker');
+    },
+  );
 }
 
-/// A connected session whose shell is in `/mnt/tank` and says nothing; every
-/// command is the directory read.
+/// A connected session whose shell says nothing; every command is the
+/// directory read, answered from [answers] in order, then from `/mnt/tank`.
 class _SilentShellSession implements SshSession {
-  _SilentShellSession(this.engine, this.commands);
+  _SilentShellSession(
+    this.engine,
+    this.commands, {
+    List<RemoteCommandResult>? answers,
+  }) : answers = answers ?? [];
 
   @override
   final TerminalEngine engine;
 
   final List<String> commands;
+  final List<RemoteCommandResult> answers;
 
   @override
   void Function()? onClosed;
@@ -100,10 +152,8 @@ class _SilentShellSession implements SshSession {
     int maxOutputBytes = 256 * 1024,
   }) async {
     commands.add(command);
-    return const RemoteCommandResult(
-      stdout: 'seance-cwd\n/mnt/tank\n',
-      exitCode: 0,
-    );
+    if (answers.isNotEmpty) return answers.removeAt(0);
+    return _shellAnswer('/mnt/tank');
   }
 
   @override
@@ -120,6 +170,10 @@ class _SilentShellSession implements SshSession {
   @override
   Object? noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
+
+/// What [RemoteShellDirectory]'s script prints when the shell is in [path].
+RemoteCommandResult _shellAnswer(String path) =>
+    RemoteCommandResult(stdout: 'seance-cwd\n$path\n', exitCode: 0);
 
 /// Waits in real time until [condition] holds: the read runs on the
 /// connection's own schedule.

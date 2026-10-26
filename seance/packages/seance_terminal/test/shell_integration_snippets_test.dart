@@ -33,7 +33,7 @@ void main() {
         if (status != null) statuses.add(status);
       });
       engine.feed(
-        await _interactive(shell, args, [
+        await _interactive(shell, args, root, [
           ". '${startup.path}'",
           "cd '${directory.path}'",
           'false',
@@ -44,6 +44,14 @@ void main() {
       expect(engine.workingDirectory.value, directory.path);
       expect(engine.shellIntegration.value.shell, RemoteShellKind.posix);
       expect(statuses, [0, 0, 1], reason: 'sourcing, cd, false');
+      if (shell == 'bash') {
+        // An interactive bash saves, and trims, its history on exit.
+        expect(
+          File(_history(root)).existsSync(),
+          isTrue,
+          reason: "the developer's ~/.bash_history is left alone",
+        );
+      }
     }, skip: _missing(shell));
   }
 }
@@ -61,17 +69,18 @@ String _snippet(String guide, String shell) {
 
 /// Everything an interactive [shell] prints, prompts included, for [lines]
 /// typed at it. Prompt hooks run for piped input too, so no PTY is needed.
+/// Its history goes to [root], not the developer's.
 Future<Uint8List> _interactive(
   String shell,
   List<String> args,
+  Directory root,
   List<String> lines,
 ) async {
-  final process = await Process.start('sh', [
-    '-c',
-    r'exec "$0" "$@" 2>&1',
-    shell,
-    ...args,
-  ]);
+  final process = await Process.start(
+    'sh',
+    ['-c', r'exec "$0" "$@" 2>&1', shell, ...args],
+    environment: {'HISTFILE': _history(root)},
+  );
   process.stdin.write(lines.map((line) => '$line\n').join());
   await process.stdin.close();
   final output = BytesBuilder(copy: false);
@@ -82,6 +91,9 @@ Future<Uint8List> _interactive(
   expect(exitCode, 0);
   return output.takeBytes();
 }
+
+/// Where the shells under test keep their history.
+String _history(Directory root) => '${root.path}/history';
 
 /// Why [shell] cannot run here, or null when it can.
 String? _missing(String shell) {

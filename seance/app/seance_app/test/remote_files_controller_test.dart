@@ -149,7 +149,8 @@ void main() {
     });
 
     /// A controller over a shell that is read from the moment it connects,
-    /// as the session reads it for its tab before any pane opens.
+    /// as the session reads it for its tab before any pane opens. The pane
+    /// reads it again as it opens, so the first two answers are those.
     RemoteFilesController controller() {
       final reader = RemoteShellDirectory((command, {timeout}) async {
         reads++;
@@ -180,7 +181,7 @@ void main() {
     }
 
     test('opens where the shell is and follows it after Enter', () async {
-      answers = ['/var/log', '/home/test/docker'];
+      answers = ['/var/log', '/var/log', '/home/test/docker'];
       final files = controller();
 
       await files.initialize();
@@ -189,42 +190,63 @@ void main() {
 
       shellMoved.value++;
       await _until(() => files.currentPath == '/home/test/docker');
-      expect(reads, 2);
+      expect(reads, 3);
+    });
+
+    test('opening reads the shell again', () async {
+      // A key binding that runs `cd` moves the shell without a cue.
+      answers = ['/home/test', '/var/log'];
+      final files = controller();
+      await _until(() => reads == 1);
+
+      await files.initialize();
+      expect(files.currentPath, '/var/log');
     });
 
     test('an unchanged answer leaves a manual navigation alone', () async {
-      answers = ['/var/log', '/var/log'];
+      answers = ['/var/log', '/var/log', '/var/log'];
       final files = controller();
       await files.initialize();
       await files.navigate('/home/test');
 
       shellMoved.value++;
       await _pastDebounce();
-      expect(reads, 2);
+      expect(reads, 3);
       expect(files.currentPath, '/home/test');
     });
 
     test(
       'stays put while follow is off, then goes where the shell went',
       () async {
-        answers = ['/home/test', '/var/log'];
+        answers = ['/home/test', '/home/test', '/var/log'];
         final files = controller();
         await files.initialize();
 
         files.setFollowTerminal(false);
         shellMoved.value++;
-        await _until(() => reads == 2);
+        await _until(() => reads == 3);
         await _pastDebounce();
         expect(files.currentPath, '/home/test');
 
         files.setFollowTerminal(true);
         await _until(() => files.currentPath == '/var/log');
-        expect(reads, 2);
       },
     );
 
+    test('following again reads the shell again', () async {
+      answers = ['/home/test', '/home/test', '/var/log'];
+      final files = controller();
+      await files.initialize();
+
+      files.setFollowTerminal(false);
+      files.setFollowTerminal(true);
+      await _until(() => files.currentPath == '/var/log');
+      expect(reads, 3);
+    });
+
     test('opens where the shell went before the pane opened', () async {
-      answers = ['/home/test', '/var/log'];
+      // The read as the pane opens finds nothing; the last answer stands.
+      answers = ['/home/test', '/var/log', null];
       final files = controller();
       await _until(() => reads == 1);
 
@@ -259,11 +281,11 @@ void main() {
     test('a title change is a cue to read again, not a destination', () async {
       // `git clone … && cd repo`: the cd lands after the read that followed
       // its Enter, and only the title says so.
-      answers = ['/home/test', '/home/test', '/var/log'];
+      answers = ['/home/test', '/home/test', '/home/test', '/var/log'];
       final files = controller();
       await files.initialize();
       shellMoved.value++;
-      await _until(() => reads == 2);
+      await _until(() => reads == 3);
 
       terminalTitle.value = 'root@server: /home/test/docker';
       await _until(() => files.currentPath == '/var/log');
@@ -280,7 +302,11 @@ void main() {
     });
 
     test('once the server cannot answer, the title leads again', () async {
-      answers = ['/home/test', const RemoteCommandResult(exitCode: 3)];
+      answers = [
+        '/home/test',
+        '/home/test',
+        const RemoteCommandResult(exitCode: 3),
+      ];
       final files = controller();
       await files.initialize();
       expect(files.reportedShellDirectory, '/home/test');
@@ -291,7 +317,7 @@ void main() {
 
       shellMoved.value++;
       await _pastDebounce();
-      expect(reads, 2);
+      expect(reads, 3);
     });
 
     test('no answer leaves the pane at home without an error', () async {
@@ -369,7 +395,7 @@ void main() {
     });
 
     test('once read, a title change alone moves nothing', () async {
-      answers = ['/var/log', '/var/log'];
+      answers = ['/var/log', '/var/log', '/var/log'];
       final files = controller();
       await files.initialize();
       await files.navigate('/home/test');
@@ -377,7 +403,7 @@ void main() {
       // A program titling the tab: the read that follows finds the shell
       // where it was.
       terminalTitle.value = 'root@server: /home/test/docker';
-      await _until(() => reads == 2);
+      await _until(() => reads == 3);
       await _pastDebounce();
       expect(files.currentPath, '/home/test');
       expect(files.reportedShellDirectory, '/var/log');

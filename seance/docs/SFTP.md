@@ -78,9 +78,10 @@ absolute path), resolving `~` against SFTP's canonical home.
 
 Some shells report neither: TrueNAS's zsh sets a prompt and nothing else. So
 without OSC 7, Séance also reads the directory beside the shell: once the
-session connects, and shortly after each cue that the shell may have moved (an
-Enter that may reach it, a title change, a full-screen program such as a
-picker handing the terminal back). A read-only script on a separate exec
+session connects, when Files opens or **Follow terminal** is switched back on,
+and shortly after each cue that the shell may have moved (an Enter that may
+reach it, a title change, a full-screen program such as a picker handing the
+terminal back). A read-only script on a separate exec
 channel of the same SSH connection finds the connection's PTY shell in Linux
 `/proc` and prints its directory with `readlink`, without touching that
 directory's file system. The interactive shell is never touched, and one read

@@ -234,33 +234,48 @@ void main() {
     });
   });
 
-  test('settled does not wait for a read while OSC 7 answers', () {
+  test('readNow reads nothing while OSC 7 answers', () {
     fakeAsync((async) {
       answers = [Completer<RemoteCommandResult>().future];
       final shell = location();
       async.flushMicrotasks();
       osc7.value = '/srv';
 
-      var settled = false;
-      unawaited(shell.settled.then((_) => settled = true));
+      var answered = false;
+      unawaited(shell.readNow().then((_) => answered = true));
       async.flushMicrotasks();
-      expect(settled, isTrue);
+      expect(answered, isTrue);
+      expect(reads, 1);
     });
   });
 
-  test('settled completes once the read in flight answers', () {
+  test('readNow joins the read in flight', () {
     fakeAsync((async) {
       final slow = Completer<RemoteCommandResult>();
       answers = [slow.future];
       final shell = location();
-      var settled = false;
-      unawaited(shell.settled.then((_) => settled = true));
+      var answered = false;
+      unawaited(shell.readNow().then((_) => answered = true));
       async.flushMicrotasks();
-      expect(settled, isFalse);
+      expect(answered, isFalse);
 
       slow.complete(_answer('/var/log'));
       async.flushMicrotasks();
-      expect(settled, isTrue);
+      expect(answered, isTrue);
+      expect(shell.value, '/var/log');
+      expect(reads, 1);
+    });
+  });
+
+  test('readNow reads at once when none is in flight', () {
+    fakeAsync((async) {
+      answers = ['/home/test', '/var/log'];
+      final shell = location();
+      async.flushMicrotasks();
+
+      unawaited(shell.readNow());
+      async.flushMicrotasks();
+      expect(reads, 2);
       expect(shell.value, '/var/log');
     });
   });

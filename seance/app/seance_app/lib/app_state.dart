@@ -237,20 +237,27 @@ class TerminalSession extends PaneTab {
        metadata = ValueNotifier<SessionMetadata>(initialMetadata),
        customName = ValueNotifier<String?>(initialCustomName) {
     log = SshConnectionLog(onUpdate: logNotifier.bump);
-    _shellLocation.addListener(_syncMetadata);
-    engine.terminalTitle.addListener(_syncMetadata);
+    _shellLocation.addListener(_syncDirectory);
+    engine.terminalTitle.addListener(_syncTitle);
     engine.activeCommand.addListener(_syncRunningCommand);
   }
 
-  void _syncMetadata() {
+  /// The location turns null again only once the server stops answering
+  /// reads: then the title names the tab again, as it leads the panes.
+  void _syncDirectory() {
     metadata.value = SessionMetadata(
-      // Keep the last known values: a shell that stops reporting — or clears
-      // its title with an empty OSC 2, which is a common way to reset it —
-      // should not blank the tab back to "Session N" mid-session.
-      workingDirectory: _keepLast(
-        _shellLocation.value,
-        metadata.value.workingDirectory,
-      ),
+      workingDirectory: _shellLocation.value,
+      terminalTitle: metadata.value.terminalTitle,
+      runningCommand: metadata.value.runningCommand,
+    );
+  }
+
+  void _syncTitle() {
+    metadata.value = SessionMetadata(
+      // Keep the last known title: a shell that clears its title with an
+      // empty OSC 2, which is a common way to reset it, should not blank the
+      // tab back to "Session N" mid-session.
+      workingDirectory: metadata.value.workingDirectory,
       terminalTitle: _keepLast(
         engine.terminalTitle.value,
         metadata.value.terminalTitle,
@@ -301,9 +308,9 @@ class TerminalSession extends PaneTab {
   @override
   void dispose() {
     _commandReveal?.cancel();
-    _shellLocation.removeListener(_syncMetadata);
+    _shellLocation.removeListener(_syncDirectory);
     _shellLocation.dispose();
-    engine.terminalTitle.removeListener(_syncMetadata);
+    engine.terminalTitle.removeListener(_syncTitle);
     engine.activeCommand.removeListener(_syncRunningCommand);
     metadata.dispose();
     customName.dispose();
