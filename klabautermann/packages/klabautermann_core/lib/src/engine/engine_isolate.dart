@@ -27,6 +27,7 @@ import '../audit/host_audit_line.dart';
 import '../admin/restarts.dart';
 import '../admin/safety_policy.dart';
 import '../admin/smart.dart';
+import '../admin/sshd_posture.dart';
 import '../admin/user_crontabs.dart';
 import '../certificates/tls_check.dart';
 import '../alerts/alert_evaluator.dart';
@@ -1798,6 +1799,38 @@ void engineMain(
           ).then(
             uiPort.send,
             onError: (Object _) => fail(RestartReportFailure.transport),
+          ),
+        );
+      case ReadSshdPosture(:final serverId, :final requestId):
+        void fail(SshdPostureFailure failure) => uiPort.send(
+          SshdPostureReport(
+            serverId: serverId,
+            requestId: requestId,
+            failure: failure,
+          ),
+        );
+        if (links?.link(serverId) == null) {
+          fail(SshdPostureFailure.noLink);
+          return;
+        }
+        final session = admin?.session(serverId);
+        if (session == null) {
+          fail(SshdPostureFailure.adminRequired);
+          return;
+        }
+        admin?.touch(serverId);
+        unawaited(
+          lendSession(
+            serverId,
+            () => readSshdPosture(
+              serverId,
+              requestId: requestId,
+              session: session,
+              profile: profiles[serverId],
+            ),
+          ).then(
+            uiPort.send,
+            onError: (Object _) => fail(SshdPostureFailure.transport),
           ),
         );
       case ReadPackages(:final serverId, :final requestId, :final fresh):

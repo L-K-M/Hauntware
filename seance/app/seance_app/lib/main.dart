@@ -5,6 +5,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:ghost_keystore/app_lock.dart';
+import 'package:ghost_licenses/ghost_licenses.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'app_state.dart';
@@ -43,6 +44,8 @@ SettingsWindowHost? settingsWindowHost;
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  // The licenses page lists the APK's Maven libraries too (Android).
+  registerPlatformLicenses();
   // The settings window's engine runs this same entrypoint, and gets the
   // Settings screen rather than a second copy of the app.
   if (args.contains(settingsWindowArgument)) {

@@ -158,6 +158,7 @@
 				97C146EC1CF9000F007C117D /* Resources */,
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
+				3297DCDFEA13637B9D0691E6 /* Bundle license notices */,
 			);
 			buildRules = (
 			);
@@ -265,6 +266,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build";
+		};
+		3297DCDFEA13637B9D0691E6 /* Bundle license notices */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle license notices";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Third-Party-Notices.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "# Third-party notices readable in the app bundle, from the NOTICES the\n# embed step above put into App.framework; before code signing.\nnotices=\"$TARGET_BUILD_DIR/$WRAPPER_NAME/Frameworks/App.framework/flutter_assets/NOTICES.Z\"\nif [ ! -s \"$notices\" ]; then\n  echo \"error: $notices not found; the app must carry the bundled components notices\"\n  exit 1\nfi\ngzip -dc \"$notices\" > \"$SCRIPT_OUTPUT_FILE_0\"\n";
+			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
 

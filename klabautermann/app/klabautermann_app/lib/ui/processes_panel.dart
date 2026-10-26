@@ -11,6 +11,7 @@ import '../l10n/app_localizations.dart';
 import 'actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
 import 'actions/host_actions.dart';
 import 'freshness.dart';
+import 'process_detail_view.dart';
 import 'processes_view.dart';
 import 'sortable_table.dart';
 
@@ -247,6 +248,7 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
           context,
           row,
           columns,
+          monitoring: widget.monitoring,
           serverId: widget.serverId,
           reading: reading,
           clock: widget.monitoring.clock,
@@ -684,6 +686,7 @@ void _showProcess(
   BuildContext context,
   ProcessRow row,
   List<SortableTableColumn<ProcessRow>> columns, {
+  required MonitoringController monitoring,
   required String serverId,
   required Sample reading,
   required ValueListenable<DateTime> clock,
@@ -697,6 +700,7 @@ void _showProcess(
       isScrollControlled: true,
       showDragHandle: true,
       builder: (context) => _ProcessSheet(
+        monitoring: monitoring,
         serverId: serverId,
         row: row,
         reading: reading,
@@ -713,13 +717,17 @@ void _showProcess(
   );
 }
 
-/// A process's details. Revealed arguments live in this sheet only: each
-/// is masked again after [kRevealDuration], when the app turns inactive,
-/// and when the sheet closes, and nothing sends, stores or logs them
-/// (SAF-07). Inactive precedes hidden on the way to the background, while
-/// a frame can still draw the mask before an app switcher's snapshot.
+/// A process's details: the reading's facts, then PRC-04 and PRC-05's
+/// read of the process itself, which the sheet asks for when it opens and
+/// on request, then its arguments and environment. Revealed arguments and
+/// variables live in this sheet only: each is masked again after
+/// [kRevealDuration], when the app turns inactive, and when the sheet
+/// closes, and nothing sends, stores or logs them (SAF-07). Inactive
+/// precedes hidden on the way to the background, while a frame can still
+/// draw the mask before an app switcher's snapshot.
 class _ProcessSheet extends StatefulWidget {
   const _ProcessSheet({
+    required this.monitoring,
     required this.serverId,
     required this.row,
     required this.facts,
@@ -728,6 +736,7 @@ class _ProcessSheet extends StatefulWidget {
     required this.sampling,
   });
 
+  final MonitoringController monitoring;
   final String serverId;
   final ProcessRow row;
   final List<(String, String)> facts;
@@ -740,14 +749,46 @@ class _ProcessSheet extends StatefulWidget {
 }
 
 class _ProcessSheetState extends State<_ProcessSheet> {
-  /// The revealed arguments by index, each with the timer that masks it.
-  final Map<int, Timer> _revealed = {};
+  /// The revealed arguments and variables by kind and index, each with
+  /// the timer that masks it.
+  final Map<_Revealed, Timer> _revealed = {};
   late final AppLifecycleListener _lifecycle;
+
+  /// The process read's answer, null while it reads.
+  HostPayload? _detail;
+  bool _reading = false;
+
+  /// Bumped per read, so only the newest answer lands.
+  int _ticket = 0;
 
   @override
   void initState() {
     super.initState();
     _lifecycle = AppLifecycleListener(onInactive: _maskAll);
+    if (widget.row.startTicks != null) unawaited(_read());
+  }
+
+  Future<void> _read() async {
+    final ticks = widget.row.startTicks;
+    if (ticks == null) return;
+
+    final ticket = ++_ticket;
+    setState(() => _reading = true);
+    final result = await widget.monitoring.queryHost(
+      widget.serverId,
+      ProcessDetailQuery(pid: widget.row.pid, startTicks: ticks),
+    );
+    if (!mounted || ticket != _ticket) return;
+    setState(() {
+      _detail = result.payload;
+      _reading = false;
+      // A new read can list other variables at the same places.
+      _revealed.removeWhere((key, timer) {
+        if (key.$1 != _MaskedKind.variable) return false;
+        timer.cancel();
+        return true;
+      });
+    });
   }
 
   @override
@@ -759,15 +800,15 @@ class _ProcessSheetState extends State<_ProcessSheet> {
     super.dispose();
   }
 
-  void _toggle(int index) {
-    final timer = _revealed.remove(index);
+  void _toggle(_Revealed key) {
+    final timer = _revealed.remove(key);
     setState(() {
       if (timer != null) {
         timer.cancel();
         return;
       }
-      _revealed[index] = Timer(kRevealDuration, () {
-        if (mounted) setState(() => _revealed.remove(index));
+      _revealed[key] = Timer(kRevealDuration, () {
+        if (mounted) setState(() => _revealed.remove(key));
       });
     });
   }
@@ -820,39 +861,13 @@ class _ProcessSheetState extends State<_ProcessSheet> {
                 icon: freshness.stale ? Icons.history : Icons.schedule,
                 text: freshnessText(l10n, freshness),
               ),
-              Wrap(
-                spacing: 24,
-                runSpacing: 12,
-                children: [
-                  for (final (label, value) in widget.facts)
-                    MergeSemantics(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            label,
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          Text(
-                            value,
-                            // Grey once stale (03 §9.5 item 4).
-                            style: theme.textTheme.bodyLarge?.copyWith(
-                              color: freshness.stale
-                                  ? theme.colorScheme.onSurfaceVariant
-                                  : null,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
+              // Grey once stale (03 §9.5 item 4).
+              _Facts(facts: widget.facts, muted: freshness.stale),
             ],
           );
         },
       ),
+      ..._detailLines(l10n),
       Semantics(
         header: true,
         child: Text(
@@ -871,6 +886,34 @@ class _ProcessSheetState extends State<_ProcessSheet> {
           style: theme.textTheme.bodySmall,
         ),
     ];
+    final details = _detail;
+    final variables = details is ProcessDetails
+        ? details.environment ?? const <EnvVar>[]
+        : const <EnvVar>[];
+    final environment = <Widget>[
+      if (details case ProcessDetails(:final detail, :final environment)) ...[
+        Semantics(
+          header: true,
+          child: Text(
+            l10n.processesEnvironmentTitle,
+            style: theme.textTheme.titleSmall,
+          ),
+        ),
+        if (detail.environmentDenied)
+          _Notice(
+            icon: Icons.lock_outline,
+            text: l10n.processesEnvironmentDenied,
+          )
+        else if (environment == null || environment.isEmpty)
+          _Notice(icon: Icons.info_outline, text: l10n.processesEnvironmentNone)
+        else if (environment.length >= kProcessEnvironLimit)
+          Text(
+            l10n.processesEnvironmentCapped(kProcessEnvironLimit),
+            style: theme.textTheme.bodySmall,
+          ),
+      ],
+    ];
+    final variablesAt = header.length + arguments.length + environment.length;
     // Built lazily: a command line can hold thousands of arguments.
     return DraggableScrollableSheet(
       expand: false,
@@ -879,42 +922,135 @@ class _ProcessSheetState extends State<_ProcessSheet> {
       builder: (context, scroll) => ListView.builder(
         controller: scroll,
         padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-        itemCount: header.length + arguments.length,
+        itemCount: variablesAt + variables.length,
         itemBuilder: (context, index) => Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: index < header.length
               ? header[index]
-              : _argument(l10n, index - header.length, arguments),
+              : index < header.length + arguments.length
+              ? _masked(l10n, (
+                  _MaskedKind.argument,
+                  index - header.length,
+                ), arguments[index - header.length])
+              : index < variablesAt
+              ? environment[index - header.length - arguments.length]
+              : _variable(l10n, index - variablesAt, variables),
         ),
       ),
     );
   }
 
-  Widget _argument(
-    AppLocalizations l10n,
-    int index,
-    List<MaskedValue> arguments,
-  ) {
-    final argument = arguments[index];
-    if (!argument.isMasked) return Text(clipProcessText(argument.display));
+  /// PRC-04 and PRC-05's lines: what the process read found, or why it
+  /// found nothing, and the way to read it again.
+  List<Widget> _detailLines(AppLocalizations l10n) {
+    final theme = Theme.of(context);
+    final canRead = widget.row.startTicks != null;
+    final status = switch (_detail) {
+      _ when !canRead => _Notice(
+        icon: Icons.info_outline,
+        text: l10n.processesDetailNoStart,
+      ),
+      null => _Notice(
+        icon: Icons.hourglass_empty,
+        text: l10n.processesDetailReading,
+      ),
+      ProcessDetails(:final detail) => _Facts(
+        facts: processDetailFacts(
+          l10n,
+          detail,
+          unknown: l10n.chartUnknownValue,
+        ),
+      ),
+      ProcessEnded(:final end) => _Notice(
+        icon: Icons.history,
+        text: l10n.processesDetailEnded(end.name),
+      ),
+      HostQueryFailed(:final failure, :final detail) => _Notice(
+        icon: Icons.error_outline,
+        text: l10n.processesDetailFailed(failure.name),
+        detail: detail,
+      ),
+      _ => _Notice(
+        icon: Icons.error_outline,
+        text: l10n.processesDetailFailed(HostQueryFailure.failed.name),
+      ),
+    };
+    return [
+      Semantics(
+        header: true,
+        child: Text(
+          l10n.processesDetailTitle,
+          style: theme.textTheme.titleSmall,
+        ),
+      ),
+      status,
+      if (canRead)
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: OutlinedButton(
+            onPressed: _reading ? null : () => unawaited(_read()),
+            child: Text(l10n.processesDetailReadAgain),
+          ),
+        ),
+    ];
+  }
 
-    final revealed = _revealed.containsKey(index);
-    final shown = clipProcessText(
-      revealed ? argument.reveal()! : argument.display,
+  /// One environment variable, its name above its value, which is masked
+  /// by key (03 §8.9) until revealed.
+  Widget _variable(AppLocalizations l10n, int index, List<EnvVar> variables) {
+    final variable = variables[index];
+    return _masked(
+      l10n,
+      (_MaskedKind.variable, index),
+      variable.value,
+      name: variable.name,
     );
+  }
+
+  /// [value] under its [name], if any, shown as is or, when masked,
+  /// revealed for a while on a tap.
+  Widget _masked(
+    AppLocalizations l10n,
+    _Revealed key,
+    MaskedValue value, {
+    String? name,
+  }) {
+    final theme = Theme.of(context);
+    Widget named(Widget value) => name == null
+        ? value
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              value,
+            ],
+          );
+    if (!value.isMasked) {
+      return MergeSemantics(child: named(Text(clipProcessText(value.display))));
+    }
+
+    final revealed = _revealed.containsKey(key);
+    final shown = clipProcessText(revealed ? value.reveal()! : value.display);
+    // A masked value is read as masked, never as eight asterisks.
+    final spoken = revealed
+        ? shown
+        : clipProcessText(argumentText(value, maskWord: l10n.processesMasked));
     return Semantics(
       button: true,
       // A masked value is read as masked, never as eight asterisks.
-      label: revealed
-          ? shown
-          : clipProcessText(
-              argumentText(argument, maskWord: l10n.processesMasked),
-            ),
+      label: name == null
+          ? spoken
+          : l10n.processesEnvironmentEntry(name, spoken),
       hint: revealed ? l10n.processesHideHint : l10n.processesRevealHint,
       excludeSemantics: true,
-      onTap: () => _toggle(index),
+      onTap: () => _toggle(key),
       child: InkWell(
-        onTap: () => _toggle(index),
+        onTap: () => _toggle(key),
         child: ConstrainedBox(
           // A touch needs a 48 dp target (A11Y-01); a pointer, the line.
           constraints: BoxConstraints(
@@ -934,12 +1070,58 @@ class _ProcessSheetState extends State<_ProcessSheet> {
                       : Icons.visibility_outlined,
                   size: 18,
                 ),
-                Expanded(child: Text(shown)),
+                Expanded(child: named(Text(shown))),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// What a revealed value is in a process's details.
+enum _MaskedKind { argument, variable }
+
+/// A revealed value's key: its kind and its index among that kind.
+typedef _Revealed = (_MaskedKind, int);
+
+/// Labelled values in a wrapping row, each label and value read as one
+/// node; [muted] greys the values, as for a stale reading.
+class _Facts extends StatelessWidget {
+  const _Facts({required this.facts, this.muted = false});
+
+  final List<(String, String)> facts;
+  final bool muted;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Wrap(
+      spacing: 24,
+      runSpacing: 12,
+      children: [
+        for (final (label, value) in facts)
+          MergeSemantics(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: muted ? theme.colorScheme.onSurfaceVariant : null,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
