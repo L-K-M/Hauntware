@@ -2037,6 +2037,14 @@ is on main:
   zones, every 10 s. The System tab's Temperatures section lists each
   sensor with its high and critical limits, and does not show where the
   host has no sensor, as VMs, or inside a container.
+- Interfaces and connections (M6 N33, NET-02, NET-03): the System tab's
+  new Interfaces section lists each interface with its state,
+  addresses, MTU, link speed, current receive and send rates, and
+  errors and drops since it came up, physical interfaces first. The
+  loopback and containers' unaddressed veth pairs fold behind a
+  checkbox. Below, Connections counts the TCP sockets by state
+  (established, listening, time wait, close wait, others) and the UDP
+  and total sockets.
 - Out-of-memory kills (M6 N42b, MEM-03): the System tab's new section
   counts the kills since boot from `/proc/vmstat`'s `oom_kill` (Linux
   4.13+) and names the current boot's victims, newest first, from the

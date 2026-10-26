@@ -163,6 +163,11 @@ void main() {
         ),
         const HostQuery(
           serverId: 'srv-1',
+          queryId: 'h-net',
+          query: InterfacesQuery(),
+        ),
+        const HostQuery(
+          serverId: 'srv-1',
           queryId: 'h-5',
           query: MountsQuery(),
         ),
@@ -459,6 +464,38 @@ void main() {
               running: '6.1.0-13-amd64',
               installed: ['6.1.0-13-amd64'],
               state: KernelCheckState.current,
+            ),
+          ),
+        ),
+        HostResult(
+          serverId: 'srv-1',
+          queryId: 'h-net',
+          payload: NetInterfaces(
+            InterfacesRead(
+              interfaces: [
+                NetInterface(
+                  name: 'eth0',
+                  state: NetLinkState.up,
+                  physical: true,
+                  addresses: const [
+                    NetAddress(
+                      family: NetAddressFamily.ipv4,
+                      address: '192.0.2.10',
+                      prefixLength: 24,
+                      scope: 'global',
+                    ),
+                  ],
+                  mtu: 1500,
+                  speedMbps: 1000,
+                  rxErrors: 0,
+                ),
+              ],
+              addressesRead: true,
+              sockets: SocketCounts(
+                tcp: {TcpState.established: 3},
+                used: 40,
+                udp: 2,
+              ),
             ),
           ),
         ),
