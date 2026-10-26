@@ -2201,6 +2201,18 @@ is on main:
   in settings.json. Each notification states the same limit (Y3). The
   app icon's badge is not built, and whether the notifications show on
   real Android, iOS, macOS, Windows and Linux desktops is a manual check.
+- Label links (M6 N17b, CTR-11): a container whose labels point at web
+  pages shows a Links section under its overview. It reads Dockhand's
+  `dockhand.url` (a plain URL or `[Name](url)`) and
+  `dockhand.port.<port>.url`, Dozzle's `dev.dozzle.url`, Traefik
+  routers' `Host(...)` rules (HTTPS where the router has TLS, a
+  certificate resolver or a `websecure` entry point; none while
+  `traefik.enable=false`) and caddy-docker-proxy site addresses. Only
+  plain `http` and `https` addresses without credentials become links,
+  and each opens in the system browser, or shows as text to copy
+  where the app has no launcher. Mute labels are not read yet:
+  Klabautermann sends no per-container notifications for them to
+  silence.
 - Container processes (M6 N17a, CTR-10): a running container's details
   end with a Processes section, read through `GET /containers/{id}/top`
   when the details show, when the container starts and on "Read again".

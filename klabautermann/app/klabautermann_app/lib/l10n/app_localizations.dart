@@ -8430,6 +8430,36 @@ abstract class AppLocalizations {
   /// **'Comment'**
   String get dockerImageHistoryComment;
 
+  /// Container details: the section of web pages the container's labels point at (CTR-11).
+  ///
+  /// In en, this message translates to:
+  /// **'Links'**
+  String get dockerLinksTitle;
+
+  /// Container details, Links: where a link came from, under its address.
+  ///
+  /// In en, this message translates to:
+  /// **'{source, select, dockhand{From a Dockhand label} dozzle{From a Dozzle label} traefik{A Traefik route} caddy{A Caddy site} other{From a label}}'**
+  String dockerLinksFrom(String source);
+
+  /// Container details, Links: where a link came from, for one container port.
+  ///
+  /// In en, this message translates to:
+  /// **'{source, select, dockhand{From a Dockhand label, port {port}} other{From a label, port {port}}}'**
+  String dockerLinksFromPort(String source, String port);
+
+  /// Container details, Links: the tooltip and screen-reader label of the button that opens a link.
+  ///
+  /// In en, this message translates to:
+  /// **'Open {name} in the browser'**
+  String dockerLinksOpen(String name);
+
+  /// Container details, Links: shown when the system refused to open a link.
+  ///
+  /// In en, this message translates to:
+  /// **'The link could not be opened in a browser.'**
+  String get dockerLinksNotOpened;
+
   /// Container details: the section listing the processes running inside the container (CTR-10).
   ///
   /// In en, this message translates to:

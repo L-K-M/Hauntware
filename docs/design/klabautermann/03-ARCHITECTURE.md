@@ -4240,6 +4240,23 @@ TLS. The section checks when it shows, after an edit and on request.
   through one `docker compose logs -f` in low-session mode); JSON and level
   parsing; redacted log export; stats detail charts, sorting, memory limit
   risk, top table.
+  Label links (M6 N17b, CTR-11) are read in the app from the inspected
+  labels, already masked by key (8.9), by `labelLinks` in
+  `klabautermann_docker`: `dockhand.url` (plain or `[Name](url)`),
+  `dockhand.port.<port>.url`, `dev.dozzle.url`, each Traefik router's
+  `Host(...)` names (scheme `https` with `tls=true`, a
+  `tls.certresolver` or a `websecure`/`https` entry point, else `http`;
+  skipped while `traefik.enable=false`, and `HostRegexp` never yields
+  one), and caddy-docker-proxy's `caddy` and `caddy_<n>` addresses
+  (HTTPS as Caddy serves it, but HTTP on an explicit port 80). A
+  masked value, another scheme, credentials, or a wildcard or a
+  placeholder in the host yields no link (a path or query may hold
+  them, as in `?$select=name`). The
+  links open through the hand-off launcher in the system browser, or
+  show as text where the app has none. CTR-11's mute labels
+  (`dockhand.notify`) wait for per-container notifications, which v1
+  does not send.
+
 - **As built (M6 N20).** DKE-03's timeline comes from the events stream
   the watcher already holds for the lists (5.7), so it costs no channel
   of its own. Each container, image, volume and network event the lists'
