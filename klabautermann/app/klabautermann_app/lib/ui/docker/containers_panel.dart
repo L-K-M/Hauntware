@@ -1,6 +1,7 @@
 import 'dart:async' show Timer;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:ghost_ui/ghost_ui.dart'
     show SidebarMenuAction, ghostFormatBinarySize, ghostIsDesktopPlatform;
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -9,6 +10,7 @@ import '../../controllers/docker_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../actions/action_entry.dart' show ActionEntryPoint, actionsAllowedAt;
+import '../actions/action_preview.dart' show startAction;
 import '../actions/docker_actions.dart'
     show PruneButton, containerActionEntries;
 import '../sortable_table.dart';
@@ -31,6 +33,9 @@ const double _headerShare = 0.4;
 /// takes longer to go round.
 const Duration _statsStaleAfter = Duration(seconds: 20);
 
+/// The selection column's id in the table, beside [ContainerColumn]'s.
+const _selectColumnId = 'select';
+
 /// How long the rows on screen hold still before their ids go to the
 /// watch, so a scroll sends one [DockerWatch] when it settles rather than
 /// one per row it passes.
@@ -40,7 +45,11 @@ const Duration kStatsForSettle = Duration(milliseconds: 250);
 /// container by name, state, health, the engine's status (its uptime),
 /// image, ports, compose project, CPU and memory, grouped by compose
 /// project under headings that fold, with a running-only toggle and a
-/// search by name, image or ID.
+/// search by name, image or ID. Where actions are allowed, Select puts a
+/// checkbox on each row and heading (CTR-07): a heading's selects its
+/// project's containers, and the bar above the list starts, stops,
+/// restarts or removes the selected ones that take the verb, as one
+/// [ContainerBulkAction].
 ///
 /// While [visible], it holds the server's container watch
 /// ([DockerController.watchContainers]) and reports the running
@@ -84,6 +93,12 @@ class _ContainersPanelState extends State<ContainersPanel> {
   bool _runningOnly = false;
   final Set<String?> _collapsed = {};
 
+  /// CTR-07's selection: whether the rows carry checkboxes, and the
+  /// containers checked, by id. An id whose container is gone is
+  /// ignored.
+  bool _selecting = false;
+  final Set<String> _selected = {};
+
   /// The server whose container watch this panel holds, if any.
   String? _held;
 
@@ -111,6 +126,8 @@ class _ContainersPanelState extends State<ContainersPanel> {
       _release();
       _search.clear();
       _collapsed.clear();
+      _selecting = false;
+      _selected.clear();
       _shown = const [];
     }
     _sync();
@@ -159,6 +176,50 @@ class _ContainersPanelState extends State<ContainersPanel> {
   void _toggle(String? project) => setState(() {
     if (!_collapsed.remove(project)) _collapsed.add(project);
   });
+
+  void _toggleSelected(String id) => setState(() {
+    if (!_selected.remove(id)) _selected.add(id);
+  });
+
+  /// Selects [project]'s containers among [shown], or clears them when
+  /// all are selected already.
+  void _toggleProject(String? project, List<ContainerSummary> shown) {
+    final ids = [
+      for (final container in shown)
+        if (composeProjectOf(container) == project) container.id,
+    ];
+    setState(() {
+      if (ids.every(_selected.contains)) {
+        _selected.removeAll(ids);
+      } else {
+        _selected.addAll(ids);
+      }
+    });
+  }
+
+  /// Whether every one of [project]'s containers among [shown] is
+  /// selected (true), none is (false), or some are (null).
+  bool? _projectSelection(String? project, List<ContainerSummary> shown) {
+    final ids = [
+      for (final container in shown)
+        if (composeProjectOf(container) == project) container.id,
+    ];
+    final count = ids.where(_selected.contains).length;
+    if (count == 0) return false;
+    return count == ids.length ? true : null;
+  }
+
+  bool _bulkAllowed(BuildContext context) =>
+      actionsAllowedAt(
+        context,
+        widget.serverId,
+        ActionEntryPoint.containerVerb,
+      ) ||
+      actionsAllowedAt(
+        context,
+        widget.serverId,
+        ActionEntryPoint.containerRemove,
+      );
 
   void _open(ContainerSummary container) => openContainerDetails(
     context,
@@ -250,6 +311,8 @@ class _ContainersPanelState extends State<ContainersPanel> {
                 ),
               ),
             if (containers != null) _filters(l10n),
+            if (containers != null && _selecting && _bulkAllowed(context))
+              _selectionBar(l10n, containers),
             if (containers != null && !wide) _sortControls(l10n),
           ],
         );
@@ -296,6 +359,12 @@ class _ContainersPanelState extends State<ContainersPanel> {
     final l10n = AppLocalizations.of(context);
     final columns = _columns(l10n, stats, widget.monitoring.clock.value);
     final terms = searchTerms(_search.text);
+    final selecting = _selecting && _bulkAllowed(context);
+    final shown = containersShown(
+      containers,
+      runningOnly: _runningOnly,
+      terms: terms,
+    );
     final entries = containerListEntries(
       containers,
       runningOnly: _runningOnly,
@@ -314,24 +383,45 @@ class _ContainersPanelState extends State<ContainersPanel> {
             : l10n.dockerContainersNoneRunning,
       ),
     );
-    if (!wide) return _list(entries, columns, empty);
+    if (!wide) {
+      return _list(entries, columns, empty, selecting: selecting, shown: shown);
+    }
 
     return SortableTable<ContainerListEntry>(
       tableId: DockerWatchList.containers.name,
-      columns: columns,
+      columns: [if (selecting) _selectColumn(l10n), ...columns],
       rows: entries,
       rowKey: _rowKey,
       sort: _sort,
       onSort: (sort) => setState(() => _sort = sort),
       rowOrder: TableRowOrder.asGiven,
-      // A heading folds; a container opens its details.
+      // A heading folds; a container opens its details, or while
+      // selecting, is checked or unchecked.
       onRowActivated: (entry) => switch (entry) {
         ContainerGroupEntry(:final project) => _toggle(project),
+        ContainerEntry(:final container) when selecting => _toggleSelected(
+          container.id,
+        ),
         ContainerEntry(:final container) => _open(container),
       },
       rowActions: (entry) => switch (entry) {
+        ContainerGroupEntry(:final project) when selecting => [
+          SidebarMenuAction(
+            label: _projectSelection(project, shown) ?? false
+                ? l10n.dockerContainersDeselectProject
+                : l10n.dockerContainersSelectProject,
+            onSelected: () => _toggleProject(project, shown),
+          ),
+        ],
         ContainerGroupEntry() => const [],
         ContainerEntry(:final container) => [
+          if (selecting)
+            SidebarMenuAction(
+              label: _selected.contains(container.id)
+                  ? l10n.dockerContainersDeselect
+                  : l10n.dockerContainersSelectOne,
+              onSelected: () => _toggleSelected(container.id),
+            ),
           SidebarMenuAction(
             label: l10n.dockerLogsShow,
             onSelected: () => openContainerLogs(
@@ -349,7 +439,15 @@ class _ContainersPanelState extends State<ContainersPanel> {
         ],
       },
       spanningRow: (context, entry) => switch (entry) {
-        final ContainerGroupEntry group => _GroupHeading(group: group),
+        final ContainerGroupEntry group => _GroupHeading(
+          group: group,
+          selection: selecting
+              ? (
+                  selected: _projectSelection(group.project, shown),
+                  onToggle: () => _toggleProject(group.project, shown),
+                )
+              : null,
+        ),
         ContainerEntry() => null,
       },
       onShownRowsChanged: (rows) => _report([
@@ -391,7 +489,118 @@ class _ContainersPanelState extends State<ContainersPanel> {
         selected: _runningOnly,
         onSelected: (selected) => setState(() => _runningOnly = selected),
       ),
+      if (_bulkAllowed(context))
+        FilterChip(
+          avatar: const Icon(Icons.checklist),
+          label: Text(l10n.dockerContainersSelect),
+          selected: _selecting,
+          onSelected: (selecting) => setState(() {
+            _selecting = selecting;
+            if (!selecting) _selected.clear();
+          }),
+        ),
     ],
+  );
+
+  /// The bulk bar (CTR-07): how many are selected, a button per verb
+  /// naming how many of them it takes, and select-all and clear.
+  Widget _selectionBar(
+    AppLocalizations l10n,
+    List<ContainerSummary> containers,
+  ) {
+    final selected = [
+      for (final container in containers)
+        if (_selected.contains(container.id)) container,
+    ];
+    final shown = containersShown(
+      containers,
+      runningOnly: _runningOnly,
+      terms: searchTerms(_search.text),
+    );
+    final tooMany = selected.length > kContainerBulkMax;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: 8,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(l10n.dockerContainersSelectedCount(selected.length)),
+            for (final verb in ContainerBulkVerb.values)
+              if (actionsAllowedAt(
+                context,
+                widget.serverId,
+                verb == ContainerBulkVerb.remove
+                    ? ActionEntryPoint.containerRemove
+                    : ActionEntryPoint.containerVerb,
+              ))
+                switch (bulkTargets(selected, verb)) {
+                  final ids => OutlinedButton(
+                    onPressed: ids.isEmpty || tooMany
+                        ? null
+                        : () => startAction(
+                            context,
+                            ContainerBulkAction(
+                              widget.serverId,
+                              containerIds: ids,
+                              verb: verb,
+                            ),
+                          ),
+                    child: Text(
+                      l10n.dockerContainersBulkVerb(verb.name, ids.length),
+                    ),
+                  ),
+                },
+            TextButton(
+              onPressed: shown.every((c) => _selected.contains(c.id))
+                  ? null
+                  : () => setState(
+                      () => _selected.addAll(shown.map((c) => c.id)),
+                    ),
+              child: Text(l10n.dockerContainersSelectAll),
+            ),
+            TextButton(
+              onPressed: selected.isEmpty
+                  ? null
+                  : () => setState(_selected.clear),
+              child: Text(l10n.dockerContainersSelectNone),
+            ),
+          ],
+        ),
+        if (tooMany)
+          DockerNotice(
+            icon: Icons.info_outline,
+            text: l10n.dockerContainersBulkMax(kContainerBulkMax),
+          ),
+      ],
+    );
+  }
+
+  /// The table's checkbox column while selecting; it reads as whether the
+  /// row is selected.
+  SortableTableColumn<ContainerListEntry> _selectColumn(
+    AppLocalizations l10n,
+  ) => SortableTableColumn(
+    id: _selectColumnId,
+    label: l10n.dockerContainersColumnSelect,
+    text: (entry) => switch (entry) {
+      ContainerEntry(:final container) => l10n.dockerContainersRowSelected(
+        _selected.contains(container.id).toString(),
+      ),
+      ContainerGroupEntry() => '',
+    },
+    extent: const FixedColumnExtent(64),
+    cell: (context, entry) => switch (entry) {
+      ContainerEntry(:final container) => Checkbox(
+        value: _selected.contains(container.id),
+        visualDensity: VisualDensity.compact,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        onChanged: (_) => _toggleSelected(container.id),
+      ),
+      ContainerGroupEntry() => const SizedBox.shrink(),
+    },
   );
 
   /// The phone layout's order: the table's sortable columns in a menu,
@@ -457,8 +666,10 @@ class _ContainersPanelState extends State<ContainersPanel> {
   Widget _list(
     List<ContainerListEntry> entries,
     List<SortableTableColumn<ContainerListEntry>> columns,
-    Widget empty,
-  ) {
+    Widget empty, {
+    required bool selecting,
+    required List<ContainerSummary> shown,
+  }) {
     if (entries.isEmpty) {
       _report(const []);
       return empty;
@@ -473,11 +684,24 @@ class _ContainersPanelState extends State<ContainersPanel> {
         final entry = entries[index];
         if (entry is ContainerGroupEntry) {
           final group = entry;
+          final selected = selecting
+              ? _projectSelection(group.project, shown)
+              : false;
           return Semantics(
             key: ValueKey(_phoneRowKey(group)),
             container: true,
             button: true,
             onTap: () => _toggle(group.project),
+            customSemanticsActions: selecting
+                ? {
+                    CustomSemanticsAction(
+                      label: selected ?? false
+                          ? l10n.dockerContainersDeselectProject
+                          : l10n.dockerContainersSelectProject,
+                    ): () =>
+                        _toggleProject(group.project, shown),
+                  }
+                : null,
             child: InkWell(
               excludeFromSemantics: true,
               onTap: () => _toggle(group.project),
@@ -486,13 +710,22 @@ class _ContainersPanelState extends State<ContainersPanel> {
                 constraints: const BoxConstraints(
                   minHeight: kMinInteractiveDimension,
                 ),
-                child: _GroupHeading(group: group),
+                child: _GroupHeading(
+                  group: group,
+                  selection: selecting
+                      ? (
+                          selected: selected,
+                          onToggle: () => _toggleProject(group.project, shown),
+                        )
+                      : null,
+                ),
               ),
             ),
           );
         }
 
         final container = (entry as ContainerEntry).container;
+        final checked = _selected.contains(container.id);
         final cells = [
           for (final column in columns)
             if (column.text(entry) case final text when text.isNotEmpty)
@@ -506,47 +739,56 @@ class _ContainersPanelState extends State<ContainersPanel> {
             for (final cell in cells)
               l10n.tableCellSemantics(cell.label, cell.text),
           ].join('\n'),
+          checked: selecting ? checked : null,
           excludeSemantics: true,
-          onTap: () => _open(container),
+          onTap: selecting
+              ? () => _toggleSelected(container.id)
+              : () => _open(container),
           child: InkWell(
             excludeFromSemantics: true,
-            onTap: () => _open(container),
+            onTap: selecting
+                ? () => _toggleSelected(container.id)
+                : () => _open(container),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: 4,
-                children: [
-                  Row(
-                    spacing: 8,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          containerNameOf(container),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleSmall,
-                        ),
-                      ),
-                      if (container.health case final health?
-                          when health != HealthStatus.none)
-                        ContainerHealthBadge(health: health),
-                    ],
-                  ),
-                  Wrap(
-                    spacing: 16,
-                    runSpacing: 2,
-                    children: [
-                      // The name and the health badge head the row.
-                      for (final cell in cells.skip(1))
-                        if (cell.id != ContainerColumn.health.name)
-                          Text(
-                            l10n.dockerContainersFact(cell.label, cell.text),
-                            style: theme.textTheme.bodySmall,
+              child: _Selectable(
+                checked: selecting ? checked : null,
+                onChanged: () => _toggleSelected(container.id),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  spacing: 4,
+                  children: [
+                    Row(
+                      spacing: 8,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            containerNameOf(container),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall,
                           ),
-                    ],
-                  ),
-                ],
+                        ),
+                        if (container.health case final health?
+                            when health != HealthStatus.none)
+                          ContainerHealthBadge(health: health),
+                      ],
+                    ),
+                    Wrap(
+                      spacing: 16,
+                      runSpacing: 2,
+                      children: [
+                        // The name and the health badge head the row.
+                        for (final cell in cells.skip(1))
+                          if (cell.id != ContainerColumn.health.name)
+                            Text(
+                              l10n.dockerContainersFact(cell.label, cell.text),
+                              style: theme.textTheme.bodySmall,
+                            ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -766,9 +1008,13 @@ String _stackText(AppLocalizations l10n, ContainerSummary container) {
 /// A compose project's heading: a chevron that says whether it is
 /// folded, its name and its counts, read as one node with its state.
 class _GroupHeading extends StatelessWidget {
-  const _GroupHeading({required this.group});
+  const _GroupHeading({required this.group, this.selection});
 
   final ContainerGroupEntry group;
+
+  /// While selecting (CTR-07): whether its containers are all, none or
+  /// some (null) selected, and what its checkbox does.
+  final ({bool? selected, VoidCallback onToggle})? selection;
 
   @override
   Widget build(BuildContext context) {
@@ -777,9 +1023,16 @@ class _GroupHeading extends StatelessWidget {
     final muted = theme.colorScheme.onSurfaceVariant;
     final name = group.project ?? l10n.dockerContainersNoStack;
     final summary = l10n.dockerContainersGroupSummary(group.shown, group.up);
+    final selection = this.selection;
     return Semantics(
       label: name,
-      value: summary,
+      value: switch (selection?.selected) {
+        _ when selection == null => summary,
+        final selected => l10n.dockerContainersGroupSelection(
+          summary,
+          _GroupSelection.of(selected).name,
+        ),
+      },
       expanded: !group.collapsed,
       excludeSemantics: true,
       child: Padding(
@@ -787,6 +1040,15 @@ class _GroupHeading extends StatelessWidget {
         child: Row(
           spacing: 4,
           children: [
+            if (selection != null)
+              Checkbox(
+                tristate: true,
+                value: selection.selected,
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                // A tap on a partly selected heading selects them all.
+                onChanged: (_) => selection.onToggle(),
+              ),
             Icon(
               group.collapsed ? Icons.chevron_right : Icons.expand_more,
               size: 16,
@@ -861,6 +1123,47 @@ class ContainerHealthBadge extends StatelessWidget {
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// How much of a heading's group is selected, as its words name it.
+enum _GroupSelection {
+  all,
+  some,
+  none;
+
+  static _GroupSelection of(bool? selected) => switch (selected) {
+    true => all,
+    false => none,
+    null => some,
+  };
+}
+
+/// [child] after a checkbox while selecting ([checked] not null), which
+/// the row's own semantics name, so the box adds no node.
+class _Selectable extends StatelessWidget {
+  const _Selectable({
+    required this.checked,
+    required this.onChanged,
+    required this.child,
+  });
+
+  final bool? checked;
+  final VoidCallback onChanged;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final checked = this.checked;
+    if (checked == null) return child;
+
+    return Row(
+      spacing: 8,
+      children: [
+        Checkbox(value: checked, onChanged: (_) => onChanged()),
+        Expanded(child: child),
       ],
     );
   }

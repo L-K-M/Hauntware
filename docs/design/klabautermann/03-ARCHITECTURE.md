@@ -4101,7 +4101,11 @@ TLS. The section checks when it shows, after an edit and on request.
   guarded container needs. It leaves out a container whose state does
   not take the verb as its own actions offer it (removal never forces,
   so only containers that are not up), and an id the engine no longer
-  lists refuses the plan as a changed target. Inspect
+  lists refuses the plan as a changed target. The Containers tab's
+  Select chip (where actions are allowed) puts a checkbox on each row
+  and project heading; a heading's selects the project's shown
+  containers, and the bar above the list names how many selected
+  containers each verb takes. Inspect
   (CTR-03): masked values with reveal; never synced, persisted or sent to an
   LLM without consent. Health (CTR-04). Logs (CTX-01, CTX-02): 5.6; when the
   logging driver keeps no readable logs, the view names the driver. List

@@ -7286,6 +7286,84 @@ abstract class AppLocalizations {
   /// **'Memory'**
   String get dockerContainersColumnMemory;
 
+  /// Containers tab: the chip that puts a checkbox on each row and heading, to act on several containers at once (CTR-07).
+  ///
+  /// In en, this message translates to:
+  /// **'Select'**
+  String get dockerContainersSelect;
+
+  /// Containers table: the checkbox column's name, which a screen reader says before each row's selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Selection'**
+  String get dockerContainersColumnSelect;
+
+  /// Containers table: whether a row is selected, as a screen reader hears its checkbox cell. selected is true or false.
+  ///
+  /// In en, this message translates to:
+  /// **'{selected, select, true{Selected} other{Not selected}}'**
+  String dockerContainersRowSelected(String selected);
+
+  /// Containers table: the row action that selects the container.
+  ///
+  /// In en, this message translates to:
+  /// **'Select'**
+  String get dockerContainersSelectOne;
+
+  /// Containers table: the row action that clears the container's selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Deselect'**
+  String get dockerContainersDeselect;
+
+  /// Containers tab: the action on a compose project's heading that selects every container under it.
+  ///
+  /// In en, this message translates to:
+  /// **'Select its containers'**
+  String get dockerContainersSelectProject;
+
+  /// Containers tab: the action on a compose project's heading that clears the selection of every container under it.
+  ///
+  /// In en, this message translates to:
+  /// **'Deselect its containers'**
+  String get dockerContainersDeselectProject;
+
+  /// Containers tab: a heading's counts with how many of its containers are selected, as a screen reader hears it. summary is dockerContainersGroupSummary's text; selection is all, some or none.
+  ///
+  /// In en, this message translates to:
+  /// **'{summary}, {selection, select, all{all selected} some{some selected} other{none selected}}'**
+  String dockerContainersGroupSelection(String summary, String selection);
+
+  /// Containers tab: how many containers are selected, at the start of the bulk bar (CTR-07).
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{None selected} =1{1 selected} other{{count} selected}}'**
+  String dockerContainersSelectedCount(int count);
+
+  /// Containers tab: a bulk bar button, with how many of the selected containers the verb takes; a stopped container takes no stop. verb is start, stop, restart or remove.
+  ///
+  /// In en, this message translates to:
+  /// **'{verb, select, start{Start} stop{Stop} restart{Restart} remove{Remove} other{Act}} ({count})'**
+  String dockerContainersBulkVerb(String verb, int count);
+
+  /// Containers tab: the bulk bar button that selects every container the search and filters show.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all shown'**
+  String get dockerContainersSelectAll;
+
+  /// Containers tab: the bulk bar button that clears the selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear selection'**
+  String get dockerContainersSelectNone;
+
+  /// Containers tab: why the bulk buttons are off when too many containers are selected.
+  ///
+  /// In en, this message translates to:
+  /// **'Select at most {max} containers to act on them at once.'**
+  String dockerContainersBulkMax(int max);
+
   /// A container's state in words. state is the Engine API's state name; a state outside this list shows as the engine gave it instead.
   ///
   /// In en, this message translates to:

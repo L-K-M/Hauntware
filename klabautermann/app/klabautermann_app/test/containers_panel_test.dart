@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/controllers/operations_controller.dart';
+import 'package:klabautermann_app/controllers/safety_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
+import 'package:klabautermann_app/ui/actions/action_entry.dart';
 import 'package:klabautermann_app/ui/docker/containers_panel.dart';
 import 'package:klabautermann_app/ui/docker/containers_view.dart';
+import 'package:klabautermann_app/ui/server_safety.dart';
 import 'package:klabautermann_app/ui/sortable_table.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -126,6 +130,12 @@ final class _Panel {
   final ValueNotifier<bool> visible;
 
   List<DockerWatch> get watches => engine.sentOfType<DockerWatch>().cast();
+
+  List<ActionIntent> get planned => [
+    for (final PlanAction(:intent)
+        in engine.sentOfType<PlanAction>().cast<PlanAction>())
+      intent,
+  ];
   List<DockerUnwatch> get unwatches =>
       engine.sentOfType<DockerUnwatch>().cast();
 
@@ -165,6 +175,7 @@ Future<_Panel> _pump(
   Brightness brightness = Brightness.light,
   TargetPlatform platform = TargetPlatform.linux,
   double textScale = 1,
+  bool managed = false,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -174,9 +185,18 @@ Future<_Panel> _pump(
   final engine = FakeEngineClient();
   final monitoring = MonitoringController(engine, now: () => _clock);
   final visible = ValueNotifier(true);
+  final operations = OperationsController(engine);
+  final safety = SafetyController(
+    initial: SafetyPolicy(
+      servers: {_serverId: ServerSafety(management: managed)},
+    ),
+    apply: (_) {},
+  );
   addTearDown(() async {
     monitoring.dispose();
     visible.dispose();
+    operations.dispose();
+    safety.dispose();
     await engine.close();
   });
 
@@ -192,6 +212,10 @@ Future<_Panel> _pump(
       theme: theme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      builder: (context, child) => SafetyScope(
+        safety: safety,
+        child: OperationsScope(operations: operations, child: child!),
+      ),
       home: MediaQuery.withClampedTextScaling(
         minScaleFactor: textScale,
         maxScaleFactor: textScale,
@@ -353,6 +377,104 @@ void main() {
       find.bySemanticsLabel(RegExp(r'Name: web-worker\n.*CPU:', dotAll: true)),
       findsNothing,
     );
+  });
+
+  group('bulk actions (CTR-07)', () {
+    testWidgets('Select shows only where actions are allowed', (tester) async {
+      final panel = await _pump(tester);
+      await panel.list(tester);
+      expect(find.text('Select'), findsNothing);
+    });
+
+    testWidgets('a heading selects its project; each verb takes the selected '
+        'containers it applies to, as one action', (tester) async {
+      final panel = await _pump(tester, managed: true);
+      await panel.list(tester);
+      await tester.tap(find.widgetWithText(FilterChip, 'Select'));
+      await tester.pumpAndSettle();
+      expect(find.text('None selected'), findsOneWidget);
+      expect(find.text('Stop (0)'), findsOneWidget);
+
+      // The web project: two running containers and a stopped one.
+      await tester.tap(
+        find.descendant(of: _heading('web'), matching: find.byType(Checkbox)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('3 selected'), findsOneWidget);
+      expect(find.text('Start (1)'), findsOneWidget);
+      expect(find.text('Stop (2)'), findsOneWidget);
+      expect(find.text('Restart (2)'), findsOneWidget);
+      expect(find.text('Remove (1)'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Selection: Selected\nName: web-db\n')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Stop (2)'));
+      await tester.pumpAndSettle();
+      final stop = panel.planned.single as ContainerBulkAction;
+      expect(stop.verb, ContainerBulkVerb.stop);
+      expect(stop.containerIds, ['a1f3c2e4b5d6', 'b7e9d0c1a2f3']);
+
+      // A row toggles alone; the heading reads as partly selected.
+      await tester.tap(find.text('web-worker'));
+      await tester.pumpAndSettle();
+      expect(find.text('2 selected'), findsOneWidget);
+      expect(
+        tester
+            .widget<Checkbox>(
+              find.descendant(
+                of: _heading('web'),
+                matching: find.byType(Checkbox),
+              ),
+            )
+            .value,
+        isNull,
+      );
+
+      await tester.tap(find.text('Clear selection'));
+      await tester.pumpAndSettle();
+      expect(find.text('None selected'), findsOneWidget);
+      await tester.tap(find.text('Select all shown'));
+      await tester.pumpAndSettle();
+      expect(find.text('${_containers.length} selected'), findsOneWidget);
+
+      // Turning Select off clears it.
+      await tester.tap(find.widgetWithText(FilterChip, 'Select'));
+      await tester.pumpAndSettle();
+      expect(find.byType(Checkbox), findsNothing);
+    });
+
+    testWidgets('a phone row toggles by a tap and says it is checked', (
+      tester,
+    ) async {
+      final panel = await _pump(tester, size: _phone, managed: true);
+      await panel.list(tester);
+      await tester.tap(find.widgetWithText(FilterChip, 'Select'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('grafana'));
+      await tester.pumpAndSettle();
+      expect(find.text('1 selected'), findsOneWidget);
+      expect(
+        tester.getSemantics(
+          find.byKey(const ValueKey('containers.row.d0e1f2a3b4c5')),
+        ),
+        isSemantics(hasCheckedState: true, isChecked: true),
+      );
+    });
+
+    test('bulk targets keep the selection order and the states each verb '
+        'takes', () {
+      final selected = [
+        dockerContainer('r', state: 'running'),
+        dockerContainer('x', state: 'exited'),
+        dockerContainer('p', state: 'paused'),
+      ];
+      expect(bulkTargets(selected, ContainerBulkVerb.stop), ['r']);
+      expect(bulkTargets(selected, ContainerBulkVerb.start), ['x']);
+      expect(bulkTargets(selected, ContainerBulkVerb.remove), ['x']);
+    });
   });
 
   testWidgets('sorts within each group, the busiest first by CPU', (

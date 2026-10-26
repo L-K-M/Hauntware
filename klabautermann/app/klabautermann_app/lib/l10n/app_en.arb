@@ -6836,6 +6836,96 @@
   "@dockerContainersColumnMemory": {
     "description": "Containers table column: the memory the container uses, from its list stats (CST-01)."
   },
+  "dockerContainersSelect": "Select",
+  "@dockerContainersSelect": {
+    "description": "Containers tab: the chip that puts a checkbox on each row and heading, to act on several containers at once (CTR-07)."
+  },
+  "dockerContainersColumnSelect": "Selection",
+  "@dockerContainersColumnSelect": {
+    "description": "Containers table: the checkbox column's name, which a screen reader says before each row's selection."
+  },
+  "dockerContainersRowSelected": "{selected, select, true{Selected} other{Not selected}}",
+  "@dockerContainersRowSelected": {
+    "description": "Containers table: whether a row is selected, as a screen reader hears its checkbox cell. selected is true or false.",
+    "placeholders": {
+      "selected": {
+        "type": "String",
+        "example": "true"
+      }
+    }
+  },
+  "dockerContainersSelectOne": "Select",
+  "@dockerContainersSelectOne": {
+    "description": "Containers table: the row action that selects the container."
+  },
+  "dockerContainersDeselect": "Deselect",
+  "@dockerContainersDeselect": {
+    "description": "Containers table: the row action that clears the container's selection."
+  },
+  "dockerContainersSelectProject": "Select its containers",
+  "@dockerContainersSelectProject": {
+    "description": "Containers tab: the action on a compose project's heading that selects every container under it."
+  },
+  "dockerContainersDeselectProject": "Deselect its containers",
+  "@dockerContainersDeselectProject": {
+    "description": "Containers tab: the action on a compose project's heading that clears the selection of every container under it."
+  },
+  "dockerContainersGroupSelection": "{summary}, {selection, select, all{all selected} some{some selected} other{none selected}}",
+  "@dockerContainersGroupSelection": {
+    "description": "Containers tab: a heading's counts with how many of its containers are selected, as a screen reader hears it. summary is dockerContainersGroupSummary's text; selection is all, some or none.",
+    "placeholders": {
+      "summary": {
+        "type": "String",
+        "example": "3 containers, 2 running"
+      },
+      "selection": {
+        "type": "String",
+        "example": "some"
+      }
+    }
+  },
+  "dockerContainersSelectedCount": "{count, plural, =0{None selected} =1{1 selected} other{{count} selected}}",
+  "@dockerContainersSelectedCount": {
+    "description": "Containers tab: how many containers are selected, at the start of the bulk bar (CTR-07).",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "dockerContainersBulkVerb": "{verb, select, start{Start} stop{Stop} restart{Restart} remove{Remove} other{Act}} ({count})",
+  "@dockerContainersBulkVerb": {
+    "description": "Containers tab: a bulk bar button, with how many of the selected containers the verb takes; a stopped container takes no stop. verb is start, stop, restart or remove.",
+    "placeholders": {
+      "verb": {
+        "type": "String",
+        "example": "stop"
+      },
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "dockerContainersSelectAll": "Select all shown",
+  "@dockerContainersSelectAll": {
+    "description": "Containers tab: the bulk bar button that selects every container the search and filters show."
+  },
+  "dockerContainersSelectNone": "Clear selection",
+  "@dockerContainersSelectNone": {
+    "description": "Containers tab: the bulk bar button that clears the selection."
+  },
+  "dockerContainersBulkMax": "Select at most {max} containers to act on them at once.",
+  "@dockerContainersBulkMax": {
+    "description": "Containers tab: why the bulk buttons are off when too many containers are selected.",
+    "placeholders": {
+      "max": {
+        "type": "int",
+        "example": "100"
+      }
+    }
+  },
   "dockerContainerState": "{state, select, created{Created} running{Running} paused{Paused} restarting{Restarting} removing{Removing} exited{Exited} dead{Dead} other{Unknown}}",
   "@dockerContainerState": {
     "description": "A container's state in words. state is the Engine API's state name; a state outside this list shows as the engine gave it instead.",

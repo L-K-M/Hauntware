@@ -5668,6 +5668,78 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dockerContainersColumnMemory => 'Memory';
 
   @override
+  String get dockerContainersSelect => 'Select';
+
+  @override
+  String get dockerContainersColumnSelect => 'Selection';
+
+  @override
+  String dockerContainersRowSelected(String selected) {
+    String _temp0 = intl.Intl.selectLogic(selected, {
+      'true': 'Selected',
+      'other': 'Not selected',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerContainersSelectOne => 'Select';
+
+  @override
+  String get dockerContainersDeselect => 'Deselect';
+
+  @override
+  String get dockerContainersSelectProject => 'Select its containers';
+
+  @override
+  String get dockerContainersDeselectProject => 'Deselect its containers';
+
+  @override
+  String dockerContainersGroupSelection(String summary, String selection) {
+    String _temp0 = intl.Intl.selectLogic(selection, {
+      'all': 'all selected',
+      'some': 'some selected',
+      'other': 'none selected',
+    });
+    return '$summary, $_temp0';
+  }
+
+  @override
+  String dockerContainersSelectedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count selected',
+      one: '1 selected',
+      zero: 'None selected',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dockerContainersBulkVerb(String verb, int count) {
+    String _temp0 = intl.Intl.selectLogic(verb, {
+      'start': 'Start',
+      'stop': 'Stop',
+      'restart': 'Restart',
+      'remove': 'Remove',
+      'other': 'Act',
+    });
+    return '$_temp0 ($count)';
+  }
+
+  @override
+  String get dockerContainersSelectAll => 'Select all shown';
+
+  @override
+  String get dockerContainersSelectNone => 'Clear selection';
+
+  @override
+  String dockerContainersBulkMax(int max) {
+    return 'Select at most $max containers to act on them at once.';
+  }
+
+  @override
   String dockerContainerState(String state) {
     String _temp0 = intl.Intl.selectLogic(state, {
       'created': 'Created',
