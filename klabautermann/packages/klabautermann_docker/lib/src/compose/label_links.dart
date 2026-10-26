@@ -129,7 +129,11 @@ LabelLink? _dockhand(String key, String text, {int? port}) {
     uri: uri,
     source: LabelLinkSource.dockhand,
     label: key,
-    name: named?[1]?.trim(),
+    // A blank name would hide the address behind an empty title.
+    name: switch (named?[1]?.trim()) {
+      final name? when name.isNotEmpty => name,
+      _ => null,
+    },
     port: port,
   );
 }
@@ -154,7 +158,10 @@ bool _traefikSecure(Map<String, MaskedValue> labels, String router) {
 
   if (read('tls')?.toLowerCase() == 'true') return true;
   if (read('tls.certresolver')?.isNotEmpty ?? false) return true;
-  final entryPoints = read('entrypoints')?.toLowerCase() ?? '';
+  final entryPoints = {
+    for (final name in (read('entrypoints') ?? '').split(','))
+      name.trim().toLowerCase(),
+  };
   return entryPoints.contains('websecure') || entryPoints.contains('https');
 }
 
@@ -168,15 +175,22 @@ Iterable<String> _traefikHosts(String rule) sync* {
 }
 
 /// caddy-docker-proxy's site addresses: comma- or space-separated, each
-/// a host (served over HTTPS, as Caddy does by default) or a URL; ports,
-/// wildcards, placeholders and paths beyond a URL's own are skipped.
+/// a host with an optional port (served over HTTPS, as Caddy does by
+/// default) or a URL; wildcards, placeholders and paths beyond a URL's
+/// own are skipped.
 Iterable<Uri> _caddySites(String value) sync* {
   for (final address in value.split(RegExp(r'[,\s]+'))) {
     if (address.isEmpty) continue;
     if (address.contains('://')) {
       if (_webUri(address) case final uri?) yield uri;
-    } else if (_hostName.hasMatch(address)) {
-      yield Uri(scheme: 'https', host: address.toLowerCase());
+      continue;
     }
+    final [host, ...rest] = address.split(':');
+    final port = rest.length == 1 ? int.tryParse(rest.single) : null;
+    if (!_hostName.hasMatch(host)) continue;
+    if (rest.isNotEmpty && (port == null || port < 1 || port > 65535)) {
+      continue;
+    }
+    yield Uri(scheme: 'https', host: host.toLowerCase(), port: port);
   }
 }

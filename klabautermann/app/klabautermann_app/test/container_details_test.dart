@@ -748,6 +748,7 @@ void main() {
         'Host(`pg.example.com`)',
       ),
       'traefik.http.routers.db.tls': MaskedValue.plain('true'),
+      'dockhand.port.8080.url': MaskedValue.plain('http://10.0.0.5:8080'),
     };
 
     testWidgets('the labels\' pages are listed with where each came from, '
@@ -765,6 +766,11 @@ void main() {
       expect(_inDetails(find.text('From a Dockhand label')), findsOneWidget);
       expect(_inDetails(find.text('https://pg.example.com')), findsOneWidget);
       expect(_inDetails(find.text('A Traefik route')), findsOneWidget);
+      // A port as written, never with digit grouping.
+      expect(
+        _inDetails(find.text('From a Dockhand label, port 8080')),
+        findsOneWidget,
+      );
 
       await tester.tap(
         _inDetails(
@@ -794,6 +800,13 @@ void main() {
       );
       expect(
         _inDetails(find.widgetWithText(SelectableText, 'Admin')),
+        findsOneWidget,
+      );
+      // A named link's address can be copied too.
+      expect(
+        _inDetails(
+          find.widgetWithText(SelectableText, 'https://db.example.com/ui'),
+        ),
         findsOneWidget,
       );
       expect(_inDetails(find.byIcon(Icons.open_in_new)), findsNothing);

@@ -73,35 +73,82 @@ void main() {
     );
   });
 
-  test('caddy sites are HTTPS hosts or URLs; ports, wildcards and '
-      'placeholders are skipped', () {
+  test('caddy sites are HTTPS hosts, with a port where given, or URLs; '
+      'wildcards, placeholders and bare ports are skipped', () {
     final links = labelLinks(
       _labels({
-        'caddy': 'example.com, www.example.com',
-        'caddy_1': 'http://intranet.lan *.example.com {\$HOST} :8080',
+        'caddy': 'example.com, www.example.com:8443',
+        'caddy_1':
+            'http://intranet.lan *.example.com {\$HOST} :8080 a.example:99999',
       }),
     );
     expect(links.map((l) => '${l.uri}'), [
       'https://example.com',
-      'https://www.example.com',
+      'https://www.example.com:8443',
       'http://intranet.lan',
     ]);
   });
 
-  test('no link from a masked value, another scheme, credentials or a '
-      'relative address, and each address once', () {
-    final links = labelLinks({
-      'dockhand.url': MaskedValue.redacted(
-        'https://${MaskedValue.maskToken}@app.example.com',
-        'https://user:secret@app.example.com',
-      ),
-      'dev.dozzle.url': MaskedValue.plain('/logs'),
-      'dockhand.port.22.url': MaskedValue.plain('ssh://host'),
-      'dockhand.port.80.url': MaskedValue.plain('https://u:p@host.example'),
-      'caddy': MaskedValue.plain('app.example.com'),
-      'caddy_0': MaskedValue.plain('app.example.com'),
-      'dockhand.port.99999.url': MaskedValue.plain('https://x.example'),
-    });
-    expect(links.map((l) => '${l.uri}'), ['https://app.example.com']);
+  test('each rule rejects on its own', () {
+    List<String> uris(Map<String, MaskedValue> labels) => [
+      for (final link in labelLinks(labels)) '${link.uri}',
+    ];
+
+    // A masked value, even a well-formed address.
+    expect(
+      uris({
+        'dockhand.url': MaskedValue.redacted(
+          MaskedValue.maskToken,
+          'https://app.example.com',
+        ),
+      }),
+      isEmpty,
+    );
+    expect(uris({'dev.dozzle.url': MaskedValue.plain('/logs')}), isEmpty);
+    expect(uris({'dockhand.url': MaskedValue.plain('ssh://host')}), isEmpty);
+    expect(
+      uris({'dockhand.url': MaskedValue.plain('https://u:p@host.example')}),
+      isEmpty,
+    );
+    // A port label outside 1 to 65535 names no port.
+    expect(
+      uris({'dockhand.port.99999.url': MaskedValue.plain('https://x.example')}),
+      isEmpty,
+    );
+    expect(
+      uris({
+        'caddy': MaskedValue.plain('app.example.com'),
+        'caddy_0': MaskedValue.plain('app.example.com'),
+      }),
+      ['https://app.example.com'],
+    );
+  });
+
+  test('a blank Markdown name leaves the address as the title, and '
+      'entry points match by name', () {
+    expect(
+      labelLinks(
+        _labels({'dockhand.url': '[ ](https://app.example.com)'}),
+      ).single.name,
+      isNull,
+    );
+    expect(
+      labelLinks(
+        _labels({
+          'traefik.http.routers.web.rule': 'Host(`app.example.com`)',
+          'traefik.http.routers.web.entrypoints': 'api-https-proxy',
+        }),
+      ).single.uri.scheme,
+      'http',
+    );
+    expect(
+      labelLinks(
+        _labels({
+          'traefik.http.routers.web.rule': 'Host(`app.example.com`)',
+          'traefik.http.routers.web.entrypoints': 'web, websecure',
+        }),
+      ).single.uri.scheme,
+      'https',
+    );
   });
 }

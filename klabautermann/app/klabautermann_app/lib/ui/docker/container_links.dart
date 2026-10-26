@@ -42,7 +42,10 @@ class _LinkRow extends StatelessWidget {
     final address = link.uri.toString();
     final title = link.name ?? address;
     final from = switch (link.port) {
-      final port? => l10n.dockerLinksFromPort(link.source.name, port),
+      final port? => l10n.dockerLinksFromPort(
+        link.source.name,
+        port.toString(),
+      ),
       null => l10n.dockerLinksFrom(link.source.name),
     };
     final launcher = this.launcher;
@@ -57,7 +60,10 @@ class _LinkRow extends StatelessWidget {
               children: [
                 if (launcher == null) SelectableText(title) else Text(title),
                 if (link.name != null)
-                  Text(address, style: theme.textTheme.bodySmall),
+                  if (launcher == null)
+                    SelectableText(address, style: theme.textTheme.bodySmall)
+                  else
+                    Text(address, style: theme.textTheme.bodySmall),
                 Text(
                   from,
                   style: theme.textTheme.bodySmall?.copyWith(

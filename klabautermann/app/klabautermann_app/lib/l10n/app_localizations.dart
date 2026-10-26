@@ -7075,7 +7075,7 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'{source, select, dockhand{From a Dockhand label, port {port}} other{From a label, port {port}}}'**
-  String dockerLinksFromPort(String source, int port);
+  String dockerLinksFromPort(String source, String port);
 
   /// Container details, Links: the tooltip and screen-reader label of the button that opens a link.
   ///

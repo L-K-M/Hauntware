@@ -5493,15 +5493,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String dockerLinksFromPort(String source, int port) {
-    final intl.NumberFormat portNumberFormat = intl.NumberFormat.decimalPattern(
-      localeName,
-    );
-    final String portString = portNumberFormat.format(port);
-
+  String dockerLinksFromPort(String source, String port) {
     String _temp0 = intl.Intl.selectLogic(source, {
-      'dockhand': 'From a Dockhand label, port $portString',
-      'other': 'From a label, port $portString',
+      'dockhand': 'From a Dockhand label, port $port',
+      'other': 'From a label, port $port',
     });
     return '$_temp0';
   }

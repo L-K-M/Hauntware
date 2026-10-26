@@ -6596,8 +6596,7 @@
         "type": "String"
       },
       "port": {
-        "type": "int",
-        "format": "decimalPattern",
+        "type": "String",
         "example": "8080"
       }
     }
