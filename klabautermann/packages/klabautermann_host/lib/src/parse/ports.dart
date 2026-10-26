@@ -157,7 +157,12 @@ ListeningSocket? _netstatLine(String line) {
   final local = _hostPort(words[3]);
   if (protocol == null || local == null) return null;
   if (protocol == PortProtocol.tcp && words[5] != 'LISTEN') return null;
-  final process = _netstatProcess.firstMatch(words.last);
+  // net-tools prints the command line cut to 20 characters, which can
+  // hold spaces (`812/sshd: /usr/sbi`); BusyBox prints the bare name.
+  final start = words.indexWhere(_netstatProcess.hasMatch, 5);
+  final process = start < 0
+      ? null
+      : _netstatProcess.firstMatch(words.sublist(start).join(' '));
   return ListeningSocket(
     protocol: protocol,
     address: local.$1,

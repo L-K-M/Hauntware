@@ -33,6 +33,7 @@ ListeningPortsRead _read() => ListeningPortsRead(
   sockets: [
     _socket(22, '0.0.0.0', processes: const [_sshd]),
     _socket(22, '::', processes: const [_sshd]),
+    _socket(22, '::', processes: const [_sshd]),
     _socket(53, '127.0.0.53%lo', protocol: PortProtocol.udp),
     _socket(8080, '127.0.0.1', processes: const [_nginx]),
   ],

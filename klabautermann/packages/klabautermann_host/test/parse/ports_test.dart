@@ -81,6 +81,8 @@ void main() {
         'tcp        0      0 :::8080        :::*             LISTEN  -',
         'tcp        0      0 10.0.0.5:22    10.0.0.9:51000   ESTABLISHED 900/sshd',
         'udp        0      0 0.0.0.0:68     0.0.0.0:*                600/udhcpc',
+        'tcp        0      0 0.0.0.0:2222   0.0.0.0:*        LISTEN  '
+            '813/sshd: /usr/sbi',
       ]),
     )!;
     expect(read.tool, PortsTool.netstat);
@@ -90,7 +92,12 @@ void main() {
           '${s.protocol.name} ${s.address} ${s.port} '
               '${s.processes.map((p) => '${p.name}/${p.pid}').join(',')}',
       ],
-      ['tcp 0.0.0.0 22 sshd/812', 'udp 0.0.0.0 68 udhcpc/600', 'tcp :: 8080 '],
+      [
+        'tcp 0.0.0.0 22 sshd/812',
+        'udp 0.0.0.0 68 udhcpc/600',
+        'tcp 0.0.0.0 2222 sshd: /usr/sbi/813',
+        'tcp :: 8080 ',
+      ],
     );
   });
 

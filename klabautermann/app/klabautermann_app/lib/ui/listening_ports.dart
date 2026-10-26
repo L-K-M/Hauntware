@@ -32,7 +32,12 @@ List<PortRow> portRows(ListeningPortsRead read) {
     rows[key] = (
       protocol: socket.protocol,
       port: socket.port,
-      addresses: [...?row?.addresses, socket.address],
+      // SO_REUSEPORT gives each worker its own socket on one address.
+      addresses: [
+        ...?row?.addresses,
+        if (!(row?.addresses.contains(socket.address) ?? false))
+          socket.address,
+      ],
       processes: row?.processes ?? socket.processes,
       everyAddress: (row?.everyAddress ?? false) || socket.everyAddress,
     );
