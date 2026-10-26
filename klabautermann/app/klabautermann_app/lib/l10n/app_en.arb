@@ -1018,6 +1018,153 @@
   "@processesCommandLineTitle": {
     "description": "Heading of a process's arguments in its details."
   },
+  "processesDetailTitle": "Details",
+  "@processesDetailTitle": {
+    "description": "Heading of the facts a process's details read from the server (PRC-04, PRC-05)."
+  },
+  "processesDetailReading": "Reading details…",
+  "@processesDetailReading": {
+    "description": "Shown while a process's details are read from the server."
+  },
+  "processesDetailReadAgain": "Read again",
+  "@processesDetailReadAgain": {
+    "description": "Button that reads a process's details from the server again."
+  },
+  "processesDetailFailed": "{failure, select, noLink{Not connected to the server.} denied{The server denied reading this process.} missing{The server lacks a tool this read needs.} other{Reading this process's details failed.}}",
+  "@processesDetailFailed": {
+    "description": "Shown when a process's details could not be read.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "processesDetailEnded": "{end, select, gone{This process has exited.} reused{Its process ID now belongs to another process, so nothing was read.} other{This process has ended.}}",
+  "@processesDetailEnded": {
+    "description": "Shown when a process ended before its details were read: it exited, or its PID was reused by another process.",
+    "placeholders": {
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "processesDetailNoStart": "The server did not report when this process started, so its details are not read.",
+  "@processesDetailNoStart": {
+    "description": "Shown in a process's details when the reading has no start time, which the read needs to make sure it reads the same process."
+  },
+  "processesDetailUnit": "Unit",
+  "@processesDetailUnit": {
+    "description": "Label of the systemd unit a process runs in."
+  },
+  "processesDetailNoUnit": "None",
+  "@processesDetailNoUnit": {
+    "description": "Value of a process's unit when it runs outside any systemd unit."
+  },
+  "processesDetailContainer": "Container",
+  "@processesDetailContainer": {
+    "description": "Label of the container a process runs in."
+  },
+  "processesDetailContainerValue": "{runtime, select, docker{Docker} podman{Podman} containerd{containerd} crio{CRI-O} other{Container}} {id}",
+  "@processesDetailContainerValue": {
+    "description": "The container a process runs in: its runtime and short ID.",
+    "placeholders": {
+      "runtime": {
+        "type": "String"
+      },
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "processesDetailCwd": "Working directory",
+  "@processesDetailCwd": {
+    "description": "Label of a process's working directory."
+  },
+  "processesDetailNotReadable": "Not readable as this user",
+  "@processesDetailNotReadable": {
+    "description": "Value of a process fact the login user may not read."
+  },
+  "processesDetailThreads": "Threads",
+  "@processesDetailThreads": {
+    "description": "Label of a process's thread count."
+  },
+  "processesDetailSwap": "Swap",
+  "@processesDetailSwap": {
+    "description": "Label of how much of a process's memory is swapped out."
+  },
+  "processesDetailSwitches": "Context switches",
+  "@processesDetailSwitches": {
+    "description": "Label of a process's context switch counts."
+  },
+  "processesDetailSwitchesValue": "{voluntary} voluntary, {involuntary} involuntary",
+  "@processesDetailSwitchesValue": {
+    "description": "A process's voluntary and involuntary context switches.",
+    "placeholders": {
+      "voluntary": {
+        "type": "int"
+      },
+      "involuntary": {
+        "type": "int"
+      }
+    }
+  },
+  "processesDetailOpenFiles": "Open files",
+  "@processesDetailOpenFiles": {
+    "description": "Label of how many files a process holds open."
+  },
+  "processesDetailOpenFilesOf": "{count} of {limit}",
+  "@processesDetailOpenFilesOf": {
+    "description": "How many files a process holds open, out of its soft limit.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "processesDetailProcessLimit": "Process limit",
+  "@processesDetailProcessLimit": {
+    "description": "Label of the most processes the process's user may run (its soft limit)."
+  },
+  "processesDetailUnlimited": "Unlimited",
+  "@processesDetailUnlimited": {
+    "description": "Value of a limit the process does not have."
+  },
+  "processesEnvironmentTitle": "Environment",
+  "@processesEnvironmentTitle": {
+    "description": "Heading of a process's environment variables in its details."
+  },
+  "processesEnvironmentNone": "No environment variables.",
+  "@processesEnvironmentNone": {
+    "description": "Shown when a process has no environment variables."
+  },
+  "processesEnvironmentDenied": "The environment is not readable as this user.",
+  "@processesEnvironmentDenied": {
+    "description": "Shown when the login user may not read a process's environment."
+  },
+  "processesEnvironmentCapped": "Only the first {count} variables were read.",
+  "@processesEnvironmentCapped": {
+    "description": "Shown under a process's environment when it was cut at the read's limit.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "processesEnvironmentEntry": "{name}: {value}",
+  "@processesEnvironmentEntry": {
+    "description": "Screen-reader label of one of a process's environment variables: its name and its value, or the value's mask in words.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
   "processesRevealNote": "Select a masked argument to show it for {seconds} seconds.",
   "@processesRevealNote": {
     "description": "Note above a process's arguments when some are masked secrets (SAF-07): a reveal is temporary and stays on this device.",
