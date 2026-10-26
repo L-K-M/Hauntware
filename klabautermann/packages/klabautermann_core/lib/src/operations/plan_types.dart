@@ -34,6 +34,7 @@ final class ShellStep extends PlanStep {
     this.discardOutput = false,
     this.bestEffort = false,
     this.captureOutput = false,
+    this.endsLink = false,
     Iterable<String>? shownArgv,
     List<int>? input,
     Map<int, RevalidationFailure> exitMeanings = const {},
@@ -72,6 +73,11 @@ final class ShellStep extends PlanStep {
 
   /// The step runs through the elevation prelude (8.3).
   final bool elevated;
+
+  /// The step takes the host down (SYS-03): a link that drops while it
+  /// runs counts as the host having taken it, and the host syslog line
+  /// goes before it, since nothing runs after it.
+  final bool endsLink;
 
   /// The step's failure leaves the run as it was: the runner records it
   /// in [ActionFinished.skippedSteps] and goes on. Only the host syslog
@@ -270,6 +276,13 @@ enum ImpactKind {
 
   /// The target restarts or stops; nothing beyond it is touched.
   interruptsTarget,
+
+  /// The host restarts: everything on it stops, and the link drops until
+  /// it is back (SYS-03).
+  restartsHost,
+
+  /// The host turns off and stays off until someone starts it (SYS-03).
+  stopsHost,
 }
 
 @immutable

@@ -41,6 +41,15 @@ final class HostCommandError implements Exception {
   }
 }
 
+/// SYS-03's power verbs (03 §7.11).
+enum PowerVerb {
+  /// Restart the host.
+  reboot,
+
+  /// Turn the host off; it answers again only once someone starts it.
+  poweroff,
+}
+
 /// The `systemctl` verbs the unit view may run (03 §7.5).
 enum SystemctlVerb {
   show,
@@ -924,6 +933,16 @@ abstract final class HostCommands {
       'for m in apt-get dnf zypper pacman apk; do '
       'command -v "\$m" >/dev/null 2>&1 && { echo "\${m%-get}"; exit 0; }; '
       'done; exit 1';
+
+  /// The host's own name, as SYS-03's typed confirmation asks for it.
+  static List<String> hostname() => const ['uname', '-n'];
+
+  /// SYS-03's [verb], run as root: `systemctl` where systemd runs the
+  /// host ([systemd]), which queues the job and returns, otherwise the
+  /// `reboot` and `poweroff` that BusyBox and sysvinit provide, which
+  /// signal init and return.
+  static List<String> power(PowerVerb verb, {required bool systemd}) =>
+      systemd ? ['systemctl', verb.name] : [verb.name];
 
   /// PKG-05's refresh of [manager]'s package lists, run as root: what the
   /// check reads afterwards. pacman has none, since `pacman -Sy` without

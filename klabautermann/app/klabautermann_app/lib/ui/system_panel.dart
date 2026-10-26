@@ -16,6 +16,7 @@ import 'charts/charts.dart' show BarSegment, ChartUnit, StackedBar;
 import 'disk_activity.dart';
 import 'drive_health.dart';
 import 'gpus.dart';
+import 'power.dart';
 import 'sortable_table.dart';
 import 'system_view.dart';
 import 'temperatures.dart';
@@ -36,6 +37,7 @@ enum SystemSection {
   driveHealth,
   updates,
   accounts,
+  power,
 }
 
 /// The panel width from which the fact sections sit side by side and the
@@ -236,6 +238,11 @@ class _SystemPanelState extends State<SystemPanel> {
                 reads: widget.monitoring.accounts,
                 serverId: widget.serverId,
                 tableId: SystemSection.accounts.name,
+              ),
+              PowerSection(
+                key: const ValueKey(SystemSection.power),
+                serverId: widget.serverId,
+                core: _core,
               ),
             ],
           ),

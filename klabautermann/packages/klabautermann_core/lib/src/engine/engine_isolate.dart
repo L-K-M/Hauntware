@@ -1437,7 +1437,8 @@ void engineMain(
               UnitAction() ||
               StartTimer() ||
               RunCronJob() ||
-              RefreshPackageLists():
+              RefreshPackageLists() ||
+              PowerAction():
             // Planning reads the target over the link, as the run will.
             final session = admin?.session(serverId);
             attempt = lendSession(
