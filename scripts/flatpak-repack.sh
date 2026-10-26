@@ -62,10 +62,11 @@ flatpak_stage_deb() {
   cp -a "$work/debroot/usr/." "$work/stage/"
 
   # Shipped text files (wrappers, launchers, python) hardcode /usr; inside
-  # flatpak the prefix is /app.
+  # flatpak the prefix is /app. The doc directory stays verbatim: its
+  # license texts quote paths such as #!/usr/bin/env.
   while IFS= read -r f; do
     sed -i '/^#!/!s|/usr/|/app/|g' "$f"
-  done < <(grep -rIl '/usr/' "$work/stage" 2>/dev/null || true)
+  done < <(find "$work/stage" -path "$work/stage/share/doc" -prune -o -type f -exec grep -Il '/usr/' {} + 2>/dev/null || true)
   while IFS= read -r f; do
     sed -i -e 's|Exec=/usr/bin/|Exec=|g' -e 's|Exec=/opt/[^/]*/bin/|Exec=|g' -e 's|Exec=/app/bin/|Exec=|g' -e '/^TryExec=/d' "$f"
   done < <(find "$work/stage/share/applications" -type f -name '*.desktop' 2>/dev/null)

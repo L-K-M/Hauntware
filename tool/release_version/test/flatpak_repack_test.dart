@@ -529,6 +529,13 @@ flatpak_build "$2" "$3" https://example.test/flathub.flatpakrepo
             ).existsSync(),
             isTrue,
           );
+          // License texts stay verbatim, /usr/ paths included.
+          expect(
+            File(
+              p.join(stage, 'share/doc/demo/Third-Party-Notices.txt'),
+            ).readAsStringSync(),
+            _notices,
+          );
         },
       );
 
@@ -578,9 +585,12 @@ Future<ProcessResult> _stage(String deb, String work, String appId) =>
       appId,
     ]);
 
+/// Bundled notices quote shebangs, as Flutter's NOTICES does.
+const _notices = 'tool\n\nRun it with #!/usr/bin/env bash.\n';
+
 /// A .deb laid out like the products' packagers write them: a wrapper on
-/// PATH, the bundle under /usr/lib, a desktop entry and an icon named after
-/// the binary. [extra] adds one file outside /usr.
+/// PATH, the bundle under /usr/lib, a desktop entry, an icon named after
+/// the binary and the doc directory. [extra] adds one file outside /usr.
 String _buildDeb(Directory sandbox, {String? extra}) {
   final root = p.join(sandbox.path, 'debroot');
   void write(String relative, String contents) => File(p.join(root, relative))
@@ -605,6 +615,7 @@ String _buildDeb(Directory sandbox, {String? extra}) {
         'Exec=/usr/bin/demo %U\nTryExec=/usr/bin/demo\nIcon=demo\n',
   );
   write('usr/share/icons/hicolor/256x256/apps/demo.png', 'PNG');
+  write('usr/share/doc/demo/Third-Party-Notices.txt', _notices);
   if (extra != null) write(extra, 'extra');
 
   final deb = p.join(sandbox.path, 'demo.deb');

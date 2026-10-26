@@ -367,7 +367,8 @@ install_icons "$DEBROOT/usr"
 
 # The Debian copyright file must carry the license text verbatim — a bare
 # pointer to the repository leaves the .deb's licensing undiscoverable
-# offline.
+# offline. The Unlicense covers Planchette's own code only; the bundled
+# components keep their own licenses, whose texts ship next to it.
 LICENSE_FILE="$ROOT/LICENSE"
 [[ -f "$LICENSE_FILE" ]] \
   || die "LICENSE not found at $LICENSE_FILE — the .deb copyright file embeds it verbatim"
@@ -379,15 +380,38 @@ write_copyright() {  # $1 = destination; uses $VERSION and $LICENSE_FILE
 Planchette — a cross-platform text editor
 Source: https://github.com/L-K-M/Hauntware
 Upstream-Version: $VERSION
-License: Unlicense — the full text follows.
+License: Unlicense — the full text follows. It covers this package's own
+code; the bundled third-party components below keep their own licenses.
 
 EOF
     cat "$LICENSE_FILE"
+    cat <<EOF
+
+Bundled third-party components: the Flutter engine, the Dart runtime, the
+pub packages and native libraries the app compiles in (vendored ones
+included) and the bundled fonts keep their own licenses. Their license and
+notice texts are in Third-Party-Notices.txt next to this file.
+EOF
   } > "$1"
 }
 # --- end copyright file writer ----------------------------------------------
 
+# --- third-party notices writer (tests extract this block; keep the markers)
+# Flutter collects the license texts of the engine, the Dart runtime, every
+# package and the fonts into the bundle's data/flutter_assets/NOTICES.Z,
+# gzip-compressed. The package ships them readable; a bundle without them
+# must not be packaged.
+write_third_party_notices() {  # $1 = bundle, $2 = destination
+  local notices="$1/data/flutter_assets/NOTICES.Z"
+  [[ -s "$notices" ]] \
+    || die "$notices not found — the package must carry the bundled components' notices"
+  gzip -dc "$notices" > "$2" || die "cannot decompress $notices"
+  [[ -s "$2" ]] || die "$notices holds no notices"
+}
+# --- end third-party notices writer -----------------------------------------
+
 write_copyright "$DEBROOT/usr/share/doc/planchette/copyright"
+write_third_party_notices "$BUNDLE" "$DEBROOT/usr/share/doc/planchette/Third-Party-Notices.txt"
 
 cat > "$DEBROOT/DEBIAN/postinst" <<'EOF'
 #!/bin/sh
