@@ -7,6 +7,7 @@ import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/charts/charts.dart'
     show ChartSeverity, StackedBar;
+import 'package:klabautermann_app/ui/cpu_hints.dart';
 import 'package:klabautermann_app/ui/fleet_row_state.dart'
     show kFleetRowThresholds;
 import 'package:klabautermann_app/ui/overview_panel.dart';
@@ -61,8 +62,12 @@ CoreResult _core({
   },
   MemoryUsage? memory = _memory,
   Map<MetricField, MetricWithheldReason> withheld = const {},
+  StallShares? cpuPressure,
+  StallShares? memoryPressure,
 }) => CoreResult(
   cpu: CpuPercentages(const [12, 0, 5, 80, 3, 0, 0, 0], 17),
+  cpuPressure: cpuPressure,
+  memoryPressure: memoryPressure,
   perCpu: perCpu,
   memory: memory,
   load: const LoadAvg(load1: 0.52, load5: 0.4, load15: 0.333),
@@ -430,10 +435,10 @@ void main() {
       CoreResult(memory: const MemoryUsage(totalBytes: 16 * _gib)),
     );
 
-    // 3 CPU + 1 per core + 4 load + 4 memory (total is known) + 1 swap,
+    // 7 CPU + 1 per core + 4 load + 4 memory (total is known) + 1 swap,
     // 2 network, and uptime and boot time; the OS and kernel wait for
     // their own reading.
-    expect(find.text('Unknown'), findsNWidgets(17));
+    expect(find.text('Unknown'), findsNWidgets(21));
     expect(find.text('0%'), findsNothing);
     expect(find.text('0.00'), findsNothing);
     expect(find.textContaining('0 B'), findsNothing);
@@ -444,6 +449,146 @@ void main() {
       _core(memory: const MemoryUsage(swapTotalBytes: 0)),
     );
     expect(find.text('No swap is set up.'), findsOneWidget);
+  });
+
+  test('CPU-04 hints from a tenth of CPU time, steal first', () {
+    // user nice system idle iowait irq softirq steal
+    expect(
+      cpuHints(CpuPercentages(const [12, 0, 5, 80, 3, 0, 0, 0], 17)),
+      isEmpty,
+    );
+    expect(
+      cpuHints(CpuPercentages(const [20, 0, 5, 20, 15, 4, 6, 30], 65)),
+      <CpuHint>[
+        (kind: CpuHintKind.steal, percent: 30),
+        (kind: CpuHintKind.iowait, percent: 15),
+        (kind: CpuHintKind.interrupts, percent: 10),
+      ],
+    );
+    // Just under the line, and an older kernel's line without steal.
+    expect(
+      cpuHints(CpuPercentages(const [50, 0, 10, 30.1, 9.9, 0, 0, 0], 60)),
+      isEmpty,
+    );
+    expect(cpuHints(CpuPercentages(const [50, 0, 10, 40], 60)), isEmpty);
+  });
+
+  testWidgets('CPU-04 shows the breakdown with plain-language hints', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.sample(
+      tester,
+      CoreResult(
+        // user nice system idle iowait irq softirq steal
+        cpu: CpuPercentages(const [20, 0, 5, 20, 15, 1, 2, 37], 65),
+      ),
+    );
+
+    for (final (label, value) in [
+      ('I/O wait', '15%'),
+      ('Steal', '37%'),
+      ('IRQ', '1%'),
+      ('Soft IRQ', '2%'),
+    ]) {
+      expect(
+        find.bySemanticsLabel(RegExp('^$label\\s+$value\$')),
+        findsOneWidget,
+        reason: label,
+      );
+    }
+    expect(find.textContaining('Steal 37%: the host running'), findsOneWidget);
+    expect(find.textContaining('I/O wait 15%: cores sat idle'), findsOneWidget);
+    expect(find.textContaining('calls this figure unreliable'), findsOneWidget);
+    expect(find.textContaining('Interrupts'), findsNothing);
+
+    // A calm host has no hints.
+    await panel.sample(tester, _core());
+    expect(find.byIcon(Icons.lightbulb_outline), findsNothing);
+  });
+
+  testWidgets('CPU-05 and MEM-04 show each pressure line\'s averages', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.sample(
+      tester,
+      CoreResult(
+        cpuPressure: const StallShares(
+          some: StallAverages(4.5, 2.5, 1),
+          full: StallAverages(0, 0, 0),
+        ),
+        memoryPressure: const StallShares(
+          some: StallAverages(12, 8, 3.5),
+          full: StallAverages(6, 4, 1),
+        ),
+        // A kernel's io file without a full line.
+        ioPressure: const StallShares(some: StallAverages(30, 20, 10)),
+      ),
+    );
+
+    Finder inPressure(Finder matching) => find.descendant(
+      of: find.byWidgetPredicate(
+        (widget) => widget is PanelSection && widget.title == 'Pressure',
+      ),
+      matching: matching,
+    );
+    for (final (label, value) in [
+      ('CPU, some', '4.50% · 2.50% · 1.00%'),
+      ('CPU, full', '0.00% · 0.00% · 0.00%'),
+      ('Memory, some', '12.00% · 8.00% · 3.50%'),
+      ('Memory, full', '6.00% · 4.00% · 1.00%'),
+      ('I/O, some', '30.00% · 20.00% · 10.00%'),
+    ]) {
+      expect(inPressure(find.text(label)), findsOneWidget, reason: label);
+      expect(inPressure(find.text(value)), findsOneWidget, reason: label);
+    }
+    expect(inPressure(find.text('I/O, full')), findsNothing);
+    expect(inPressure(find.textContaining('over the last 10 s')), findsOne);
+
+    // Without /proc/pressure, as before Linux 4.20: normal, said plainly.
+    await panel.sample(tester, _core());
+    expect(
+      inPressure(find.textContaining('reports no pressure figures')),
+      findsOneWidget,
+    );
+    expect(inPressure(find.text('Unknown')), findsNothing);
+
+    // Inside a container that shows the host's figures, SYS-04's reason.
+    await panel.sample(
+      tester,
+      CoreResult(
+        cpuPressure: const StallShares(some: StallAverages(1, 1, 1)),
+        withheld: const {
+          MetricField.ioPressure: MetricWithheldReason.containerHostFigures,
+        },
+      ),
+    );
+    expect(inPressure(find.text('CPU, some')), findsOneWidget);
+    expect(inPressure(find.textContaining('host\'s, so they')), findsOne);
+    expect(
+      inPressure(find.textContaining('reports no pressure')),
+      findsNothing,
+    );
+
+    // All three withheld, as in a container without lxcfs: only the reason.
+    await panel.sample(
+      tester,
+      CoreResult(
+        withheld: const {
+          MetricField.cpuPressure: MetricWithheldReason.containerHostFigures,
+          MetricField.memoryPressure: MetricWithheldReason.containerHostFigures,
+          MetricField.ioPressure: MetricWithheldReason.containerHostFigures,
+        },
+      ),
+    );
+    expect(inPressure(find.textContaining('host\'s, so they')), findsOne);
+    expect(inPressure(find.textContaining('over the last 10 s')), findsNothing);
+    expect(inPressure(find.text('Unknown')), findsNothing);
+    expect(
+      inPressure(find.textContaining('reports no pressure')),
+      findsNothing,
+    );
   });
 
   for (final textScale in [1.0, 2.0]) {
@@ -1696,7 +1841,19 @@ void main() {
         brightness: brightness,
         announce: announce,
       );
-      await panel.sample(tester, _core());
+      await panel.sample(
+        tester,
+        _core(
+          cpuPressure: const StallShares(
+            some: StallAverages(1.25, 0.8, 0.31),
+            full: StallAverages(0, 0, 0),
+          ),
+          memoryPressure: const StallShares(
+            some: StallAverages(0.12, 0.05, 0.01),
+            full: StallAverages(0.04, 0.01, 0),
+          ),
+        ),
+      );
       await panel.sample(tester, FsResult(_fs), stream: SampleStream.fs);
       await panel.sample(tester, _identity, stream: SampleStream.identity);
       await panel.sample(
