@@ -1775,13 +1775,17 @@ void engineMain(
           return;
         }
         admin?.touch(serverId);
-        // Not awaited, as the drive health read.
+        // Not awaited, as the drive health read, and answering a lend
+        // that fails the same way.
         unawaited(
           lendSession(
             serverId,
             () =>
                 readRestarts(serverId, requestId: requestId, session: session),
-          ).then(uiPort.send),
+          ).then(
+            uiPort.send,
+            onError: (Object _) => fail(RestartReportFailure.transport),
+          ),
         );
       case ReadPackages(:final serverId, :final requestId, :final fresh):
         final link = links?.link(serverId);
@@ -1796,7 +1800,8 @@ void engineMain(
           return;
         }
         // Not awaited, as the other reads: the check answers rather than
-        // throws, and a kept answer goes out without one.
+        // throws, a kept answer goes out without one, and a lend that
+        // fails still answers.
         unawaited(
           packageReports
               .read(
@@ -1813,7 +1818,16 @@ void engineMain(
                   ),
                 ),
               )
-              .then(uiPort.send),
+              .then(
+                uiPort.send,
+                onError: (Object _) => uiPort.send(
+                  PackagesReport(
+                    serverId: serverId,
+                    requestId: requestId,
+                    failure: PackagesReportFailure.transport,
+                  ),
+                ),
+              ),
         );
       case UnitQuery(:final serverId, :final requestId, :final query):
         final link = links?.link(serverId);

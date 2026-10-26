@@ -80,4 +80,58 @@ void main() {
     final again = engine.sentOfType<ReadPackages>().skip(2).toList();
     expect([for (final r in again) (r as ReadPackages).fresh], [true, true]);
   });
+
+  testWidgets('a failed check shows as an error, and a server that joins '
+      'the fleet while the page is open is read', (tester) async {
+    final engine = FakeEngineClient();
+    final reads = PackageReads(engine);
+    final fleet = FleetController(engine, servers: twoServers);
+    addTearDown(() async {
+      reads.dispose();
+      fleet.dispose();
+      await engine.close();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: FleetUpdatesPage(reads: reads, fleet: fleet),
+      ),
+    );
+    final first = engine.sentOfType<ReadPackages>().first as ReadPackages;
+    engine.emit(
+      PackagesReport(
+        serverId: first.serverId,
+        requestId: first.requestId,
+        failure: PackagesReportFailure.transport,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.error_outline), findsOneWidget);
+    expect(find.byIcon(Icons.check_circle_outline), findsNothing);
+
+    FleetEntry entry(String id, String label) => FleetEntry(
+      serverId: id,
+      label: label,
+      host: '$label.example',
+      port: 22,
+      origin: FleetEntryOrigin.sshConfig,
+    );
+    engine.emit(
+      CatalogReplaced([
+        entry('srv-1', 'web-1'),
+        entry('srv-2', 'db-1'),
+        entry('srv-3', 'cache-1'),
+      ]),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      [
+        for (final r in engine.sentOfType<ReadPackages>().skip(2))
+          ((r as ReadPackages).serverId, r.fresh),
+      ],
+      [('srv-3', false)],
+    );
+  });
 }

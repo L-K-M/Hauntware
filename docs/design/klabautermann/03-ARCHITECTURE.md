@@ -3847,8 +3847,9 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   action, fleet update center from cached results.
 - **As built (M6 N36a).** One `sh -c` script (`HostCommands.packageCheck`)
   runs as the login user and reads the first manager it finds:
-  `apt-get -s -o Debug::NoLocking=1 upgrade` (security from an origin
-  naming `-security`), `dnf -q --cacheonly check-update` with
+  `apt-get -s -o Debug::NoLocking=1 dist-upgrade` (security from an
+  origin naming `-security`; `upgrade` would keep back updates that
+  bring new packages, as a kernel's do), `dnf -q --cacheonly check-update` with
   `updateinfo list --security` (an advisory naming a package followed by
   its version marks it), `zypper --no-refresh -q lu` with `lp -g security`
   (needed security patches counted, since zypper lists patches rather

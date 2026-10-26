@@ -123,6 +123,7 @@ Unknown argument "updateinfo" for command "dnf5".
 ''');
     expect(noAdvisories.updates.single.name, 'bash');
     expect(noAdvisories.securityCount, isNull);
+    expect(noAdvisories.reboot, RebootState.unknown);
   });
 
   test('zypper: the update table by its column names, and the needed '
@@ -185,6 +186,7 @@ linux 6.6.1.arch1-1 -> 6.6.2.arch1-1
 Installed:                                Available:
 busybox-1.36.1-r15                      < 1.36.1-r19
 ssl_client-1.36.1-r15                   < 1.36.1-r19
+apk-tools-2.14.0-r5                     < 2.14.1-r0
 == rc 0
 == reboot unknown
 ''');
@@ -193,6 +195,7 @@ ssl_client-1.36.1-r15                   < 1.36.1-r19
       [
         ('busybox', '1.36.1-r15', '1.36.1-r19'),
         ('ssl_client', '1.36.1-r15', '1.36.1-r19'),
+        ('apk-tools', '2.14.0-r5', '2.14.1-r0'),
       ],
     );
   });
@@ -202,6 +205,10 @@ ssl_client-1.36.1-r15                   < 1.36.1-r19
     final none = parsePackageCheck('== manager none\n== reboot required\n');
     expect(none.failure, PackageCheckFailure.noManager);
     expect(none.reboot, RebootState.required);
+    expect(
+      parsePackageCheck('== manager pkgin\n== cache 1700000000\n').cachedAt,
+      DateTime.utc(2023, 11, 14, 22, 13, 20),
+    );
 
     final failing = parsePackageCheck('''
 == manager apt

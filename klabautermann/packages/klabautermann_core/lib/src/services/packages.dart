@@ -67,10 +67,11 @@ final class PackageReports {
 
   final DateTime Function() _now;
   final _latest = <String, PackagesReport>{};
-  final _running = <String, Future<PackagesReport>>{};
+  final _running =
+      <String, ({int generation, Future<PackagesReport> report})>{};
 
   /// Bumped per server by [forget], so a check that was running then is
-  /// answered but not kept.
+  /// answered but not kept, even to a read that joins it afterwards.
   final _generations = <String, int>{};
 
   /// [serverId]'s report for [requestId]: the kept one while it stands
@@ -91,14 +92,17 @@ final class PackageReports {
       return _answer(kept, requestId);
     }
 
-    final generation = _generations[serverId] ?? 0;
-    // The block body matters: `remove` returns this very future, which
-    // `whenComplete` would otherwise wait on.
-    final running = _running[serverId] ??= check().whenComplete(() {
-      _running.remove(serverId);
-    });
-    final report = await running;
-    if (report.check != null && (_generations[serverId] ?? 0) == generation) {
+    final running = _running[serverId] ??= (
+      generation: _generations[serverId] ?? 0,
+      // The block body matters: `remove` returns this very entry, whose
+      // future `whenComplete` would otherwise wait on.
+      report: check().whenComplete(() {
+        _running.remove(serverId);
+      }),
+    );
+    final report = await running.report;
+    if (report.check != null &&
+        (_generations[serverId] ?? 0) == running.generation) {
       _latest[serverId] = report;
     }
     return _answer(report, requestId);

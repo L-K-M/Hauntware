@@ -869,6 +869,8 @@ abstract final class HostCommands {
   /// (the metadata's age as epoch seconds), `== updates` and, where the
   /// manager has one, `== security`, each body ended by `== rc <status>`,
   /// then `== reboot required|no|unknown` with the packages that asked.
+  /// apt simulates a `dist-upgrade`, since `upgrade` keeps back updates
+  /// that bring new packages, as a kernel's do.
   static List<String> packageCheck() => const ['sh', '-c', _packageCheck];
 
   /// The first package manager the check would read, by name, as
@@ -879,6 +881,7 @@ abstract final class HostCommands {
     _packageManagerName,
   ];
 
+  // The same order as [_packageCheck]'s branches; a test pins the two.
   static const _packageManagerName =
       'for m in apt-get dnf zypper pacman apk; do '
       'command -v "\$m" >/dev/null 2>&1 && { echo "\${m%-get}"; exit 0; }; '
@@ -925,7 +928,7 @@ if have apt-get; then
   echo '== manager apt'
   echo "== cache $(mtime /var/cache/apt/pkgcache.bin)"
   echo '== updates'
-  apt-get -s -o Debug::NoLocking=1 upgrade 2>&1; echo "== rc $?"
+  apt-get -s -o Debug::NoLocking=1 dist-upgrade 2>&1; echo "== rc $?"
 elif have dnf; then
   echo '== manager dnf'
   echo "== cache $(for f in /var/cache/dnf/*.solv /var/cache/libdnf5/*/solv/*.solv; do mtime "$f"; done | sort -n | tail -n 1)"
@@ -935,6 +938,7 @@ elif have dnf; then
   dnf -q --cacheonly updateinfo list --security 2>&1; echo "== rc $?"
 elif have zypper; then
   echo '== manager zypper'
+  echo "== cache $(for f in /var/cache/zypp/raw/*/repodata/repomd.xml; do mtime "$f"; done | sort -n | tail -n 1)"
   echo '== updates'
   zypper --non-interactive --no-refresh -q lu 2>&1; echo "== rc $?"
   echo '== security'

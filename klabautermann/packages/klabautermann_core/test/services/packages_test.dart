@@ -159,10 +159,13 @@ void main() {
         },
       );
       reports.forget({_server});
+      // A read after the forget joins the check, which is still not kept.
+      final joined = read('d');
       gate.complete();
       expect((await running).check, isNotNull);
+      expect((await joined).check, isNotNull);
 
-      await read('d');
+      await read('e');
       expect(checks, 3);
     });
   });

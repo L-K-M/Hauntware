@@ -18,15 +18,30 @@ NEEDRESTART-SVC: ssh.service
     expect(check.tool, RestartTool.needrestart);
     expect(check.services, ['ssh.service', 'cron.service']);
     expect(check.kernel, KernelState.versionUpgrade);
+
+    KernelState? kernel(String state) => parseRestartCheck(
+      '== tool needrestart\nNEEDRESTART-KSTA: $state\n',
+    ).kernel;
+    expect(kernel('1'), KernelState.current);
+    expect(kernel('2'), KernelState.abiCompatibleUpgrade);
+    expect(kernel('0'), isNull);
+  });
+
+  test('a unit systemd-escape named keeps its backslash', () {
+    final check = parseRestartCheck(
+      '== tool needs-restarting\n'
+      'systemd-fsck@dev-disk-by\\x2duuid-1234.service\n',
+    );
+    expect(check.services, [r'systemd-fsck@dev-disk-by\x2duuid-1234.service']);
   });
 
   test('needs-restarting and zypper: one unit per line, zypper\'s bare '
       'names as services', () {
-    final dnf = parseRestartCheck(
+    final needsRestarting = parseRestartCheck(
       '== tool needs-restarting\nsshd.service\nchronyd.service\n\n',
     );
-    expect(dnf.services, ['sshd.service', 'chronyd.service']);
-    expect(dnf.kernel, isNull);
+    expect(needsRestarting.services, ['sshd.service', 'chronyd.service']);
+    expect(needsRestarting.kernel, isNull);
 
     final zypper = parseRestartCheck('== tool zypper\nsshd\nnscd\n');
     expect(zypper.services, ['sshd.service', 'nscd.service']);
