@@ -17,6 +17,7 @@ import 'containers_view.dart';
 import 'stack_file_view.dart' show openStackFiles;
 import 'stacks_view.dart';
 import 'unlisted_stacks.dart';
+import 'stack_logs.dart' show openStackLogs;
 
 /// The panel width from which the stacks show as a list beside the
 /// selected one's overview; narrower, as on a phone, the list shows alone
@@ -779,6 +780,21 @@ class StackOverview extends StatelessWidget {
       _Section(
         title: l10n.dockerStackServicesHeading,
         children: [
+          // CTX-04: every service's logs, merged by time.
+          if (project.services.isNotEmpty)
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: OutlinedButton.icon(
+                onPressed: () => openStackLogs(
+                  context,
+                  monitoring: monitoring,
+                  serverId: serverId,
+                  project: project,
+                ),
+                icon: const Icon(Icons.subject),
+                label: Text(l10n.dockerStackLogsOpen),
+              ),
+            ),
           for (final service in project.services)
             _ServiceCard(
               service: service,

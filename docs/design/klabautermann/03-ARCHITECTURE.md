@@ -4104,6 +4104,17 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   LOG-10's sheet over the rows it holds, redacted by the engine's
   `SecretRedactor` unless the user turns on Include secrets (SAF-07),
   then copied, saved as `<container>.log` or shared.
+- **As built (M6 N19c).** CTX-04: a stack overview's Logs opens a page
+  that follows each of the stack's containers, the first 6 since each
+  follow holds one of the server's SSH channels (`MaxSessions` 10 by
+  default [E]), saying how many are left out. Lines merge by time, each
+  led by its container's name in one of ten xterm colours without red,
+  as SGR escapes the view holds to its contrast floor and its search
+  and export leave out. A batch older than the newest line shown
+  rebuilds the view in time order without moving its scroll state; the
+  page keeps the newest 10,000 merged lines. A chip per container hides
+  or shows its lines, which stay read, and names its stream's state
+  when it is not running; the page has LOG-10's export.
 - **As built (M4 E15).** `operations/plans/docker_plans.dart` plans
   CTR-02's verbs, CTR-06's removal, IMG-02 and STK-03 (7.14, 7.16) over
   the server's Docker endpoint (`DockerRouter.useEndpoint`).

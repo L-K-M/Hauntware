@@ -114,6 +114,15 @@ class LogViewController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Replaces every entry with [records], as [addContainer] appends them,
+  /// keeping [following]: a merged view (CTX-04) that takes a line older
+  /// than its newest rebuilds in time order without jumping to the end.
+  void replaceContainer(List<ContainerRecord> records) {
+    _buffer.clear();
+    _slots.clear();
+    addContainer(records);
+  }
+
   /// Empties the view and follows again, since an empty view has no place
   /// to hold; see [LogBuffer.clear].
   void clear() {

@@ -7981,6 +7981,49 @@
       }
     }
   },
+  "dockerStackLogsOpen": "Logs",
+  "@dockerStackLogsOpen": {
+    "description": "Stack overview: opens the logs of all the stack's containers, merged by time."
+  },
+  "dockerStackLogsTitle": "{project} logs",
+  "@dockerStackLogsTitle": {
+    "description": "Title of a stack's merged logs page.",
+    "placeholders": {
+      "project": {
+        "type": "String",
+        "example": "web"
+      }
+    }
+  },
+  "dockerStackLogsNone": "This stack has no containers, so it has no logs.",
+  "@dockerStackLogsNone": {
+    "description": "Stack logs page: the stack has no containers to read."
+  },
+  "dockerStackLogsOmitted": "{shown} containers' logs are read at once, as each holds a connection to the server. {omitted, plural, =1{1 more is not shown.} other{{omitted} more are not shown.}}",
+  "@dockerStackLogsOmitted": {
+    "description": "Stack logs page: only the first containers' logs are read.",
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "omitted": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerStackLogsState": "{container}: {state, select, waiting{waiting} ended{stopped reading} refused{refused} other{opening}}",
+  "@dockerStackLogsState": {
+    "description": "Stack logs page: a container's filter chip while its log stream is not running.",
+    "placeholders": {
+      "container": {
+        "type": "String",
+        "example": "web-db-1"
+      },
+      "state": {
+        "type": "String"
+      }
+    }
+  },
   "dockerLogsLiveRange": "A range with an end has no new lines to follow.",
   "@dockerLogsLiveRange": {
     "description": "Tooltip of the off Live chip while a container's logs read a range with a chosen end."

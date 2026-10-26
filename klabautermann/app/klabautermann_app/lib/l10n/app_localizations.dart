@@ -8486,6 +8486,36 @@ abstract class AppLocalizations {
   /// **'{container}.log'**
   String dockerLogsExportFileName(String container);
 
+  /// Stack overview: opens the logs of all the stack's containers, merged by time.
+  ///
+  /// In en, this message translates to:
+  /// **'Logs'**
+  String get dockerStackLogsOpen;
+
+  /// Title of a stack's merged logs page.
+  ///
+  /// In en, this message translates to:
+  /// **'{project} logs'**
+  String dockerStackLogsTitle(String project);
+
+  /// Stack logs page: the stack has no containers to read.
+  ///
+  /// In en, this message translates to:
+  /// **'This stack has no containers, so it has no logs.'**
+  String get dockerStackLogsNone;
+
+  /// Stack logs page: only the first containers' logs are read.
+  ///
+  /// In en, this message translates to:
+  /// **'{shown} containers\' logs are read at once, as each holds a connection to the server. {omitted, plural, =1{1 more is not shown.} other{{omitted} more are not shown.}}'**
+  String dockerStackLogsOmitted(int shown, int omitted);
+
+  /// Stack logs page: a container's filter chip while its log stream is not running.
+  ///
+  /// In en, this message translates to:
+  /// **'{container}: {state, select, waiting{waiting} ended{stopped reading} refused{refused} other{opening}}'**
+  String dockerStackLogsState(String container, String state);
+
   /// Tooltip of the off Live chip while a container's logs read a range with a chosen end.
   ///
   /// In en, this message translates to:
