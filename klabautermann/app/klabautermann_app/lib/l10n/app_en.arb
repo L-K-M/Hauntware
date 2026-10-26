@@ -1398,6 +1398,99 @@
       }
     }
   },
+  "systemBootsTitle": "Boots",
+  "@systemBootsTitle": {
+    "description": "System tab: the section of the running kernel against the installed ones (BOOT-03) and the boot timeline (BOOT-02)."
+  },
+  "systemBootsReading": "Reading kernels and boots…",
+  "@systemBootsReading": {
+    "description": "System tab, Boots: shown while the first read runs."
+  },
+  "systemBootsReadAgain": "Read again",
+  "@systemBootsReadAgain": {
+    "description": "System tab, Boots: the button that reads the kernels and boots again."
+  },
+  "systemKernelRunning": "Running kernel {release}",
+  "@systemKernelRunning": {
+    "description": "System tab, Boots: the release of the kernel the server runs, as uname -r prints it.",
+    "placeholders": {
+      "release": {
+        "type": "String",
+        "example": "6.1.0-13-amd64"
+      }
+    }
+  },
+  "systemKernelState": "{state, select, current{This is the newest kernel installed.} newerInstalled{Kernel {newest} is installed. A reboot loads it.} runningRemoved{The running kernel's modules were removed, as an upgrade does. A reboot loads {newest}.} other{Whether a newer kernel is installed is unknown: no module directory was found, as in a container.}}",
+  "@systemKernelState": {
+    "description": "System tab, Boots: whether a reboot would load a newer kernel (BOOT-03), by state.",
+    "placeholders": {
+      "state": {
+        "type": "String"
+      },
+      "newest": {
+        "type": "String",
+        "example": "6.1.0-13-amd64"
+      }
+    }
+  },
+  "systemKernelFailed": "{failure, select, noLink{Not connected to the server.} denied{The server refused the kernel check.} missing{The server lacks the tools the kernel check runs.} other{The kernel check failed.}}",
+  "@systemKernelFailed": {
+    "description": "System tab, Boots: why the kernel check read nothing, by reason.",
+    "placeholders": {
+      "failure": {
+        "type": "String"
+      }
+    }
+  },
+  "systemBootsTimelineTitle": "Boot timeline",
+  "@systemBootsTimelineTitle": {
+    "description": "System tab, Boots: the heading over the list of boots, newest first (BOOT-02)."
+  },
+  "systemBootsCurrent": "This boot",
+  "@systemBootsCurrent": {
+    "description": "System tab, Boots: the current boot in the timeline."
+  },
+  "systemBootsSpan": "Started {start}, ran {duration}",
+  "@systemBootsSpan": {
+    "description": "System tab, Boots: when a boot's journal starts and how long it ran until its last entry, under its name.",
+    "placeholders": {
+      "start": {
+        "type": "String",
+        "example": "12 Oct, 08:14"
+      },
+      "duration": {
+        "type": "String",
+        "example": "2 days, 3 hours"
+      }
+    }
+  },
+  "systemBootEnd": "{end, select, clean{Shut down cleanly} unclean{Ended without a shutdown: a crash, power loss or hard reset} other{How it ended is unknown: its journal is not readable as this user}}",
+  "@systemBootEnd": {
+    "description": "System tab, Boots: how an earlier boot ended (BOOT-02), by kind.",
+    "placeholders": {
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "systemBootsNone": "The journal lists no boots.",
+  "@systemBootsNone": {
+    "description": "System tab, Boots: shown when journalctl lists no boots."
+  },
+  "systemBootsNotListed": "{count, plural, =1{1 earlier boot is not listed.} other{{count} earlier boots are not listed.}}",
+  "@systemBootsNotListed": {
+    "description": "System tab, Boots: how many older boots the timeline leaves out; the Logs panel's boot picker lists every boot.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "systemBootEndsUnknown": "How the earlier boots ended could not be read.",
+  "@systemBootEndsUnknown": {
+    "description": "System tab, Boots: shown under the timeline when reading the boots' ends failed."
+  },
   "systemDriveHealthTitle": "Drive health",
   "@systemDriveHealthTitle": {
     "description": "System tab: the section of each drive's SMART health (HW-04), read on request in admin mode."
@@ -4772,7 +4865,7 @@
   "@actionPreviewHostWrites": {
     "description": "Heading above the host writes the action causes (03 §8.11)."
   },
-  "actionPreviewHostWrite": "{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine's own state} loginRecords{Login records, as every SSH command leaves} editTarget{The file or crontab you edited} editTempFile{A temporary copy beside the file, renamed over it or removed} userBackups{A backup in your Klabautermann backups folder} rootBackups{A backup under /var/lib/klabautermann/backups} footprintManifest{The list of what Klabautermann keeps on the server} auditSyslog{One line in the system log naming this action and this device} other{A change on the server}}",
+  "actionPreviewHostWrite": "{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine's own state} loginRecords{Login records, as every SSH command leaves} editTarget{The file or crontab you edited} editTempFile{A temporary copy beside the file, renamed over it or removed} userBackups{A backup in your Klabautermann backups folder} rootBackups{A backup under /var/lib/klabautermann/backups} footprintManifest{The list of what Klabautermann keeps on the server} packageLists{The package manager's cached package lists} auditSyslog{One line in the system log naming this action and this device} other{A change on the server}}",
   "@actionPreviewHostWrite": {
     "description": "One host write in the action preview; row is the engine's HostWriteRow name.",
     "placeholders": {
@@ -5343,7 +5436,7 @@
   "@activityColumnResult": {
     "description": "Column of the activity log: how the run ended."
   },
-  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
+  "activityAction": "{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}",
   "@activityAction": {
     "description": "An activity log row's action; action is the engine's intent type name.",
     "placeholders": {
@@ -9325,5 +9418,232 @@
   "alertNotificationOpen": "Open",
   "@alertNotificationOpen": {
     "description": "The default action of a desktop notification on Linux: brings the app forward."
+  },
+  "systemUpdatesTitle": "Updates",
+  "@systemUpdatesTitle": {
+    "description": "System tab: title of the section listing the server's pending package updates."
+  },
+  "systemUpdatesNone": "Up to date",
+  "@systemUpdatesNone": {
+    "description": "System tab, Updates: the package manager lists no pending update."
+  },
+  "systemUpdatesCount": "{count, plural, =1{1 update available} other{{count} updates available}}",
+  "@systemUpdatesCount": {
+    "description": "System tab, Updates: how many package updates the package manager lists.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemUpdatesSecurityCount": "{count, plural, =1{1 is a security update} other{{count} are security updates}}",
+  "@systemUpdatesSecurityCount": {
+    "description": "System tab, Updates: how many of the pending updates fix security issues.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemUpdatesSecurityPatches": "{count, plural, =1{1 security patch is needed} other{{count} security patches are needed}}",
+  "@systemUpdatesSecurityPatches": {
+    "description": "System tab, Updates: on SUSE, how many security patches zypper says are needed; zypper lists patches rather than packages.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemUpdatesRestart": "The server asks for a restart.",
+  "@systemUpdatesRestart": {
+    "description": "System tab, Updates: the server reports that a reboot is required, without naming the packages that asked."
+  },
+  "systemUpdatesRestartFor": "The server asks for a restart, for {packages}.",
+  "@systemUpdatesRestartFor": {
+    "description": "System tab, Updates: the server reports that a reboot is required, with the packages that asked for it.",
+    "placeholders": {
+      "packages": {
+        "type": "String",
+        "example": "libc6, linux-image-6.1.0-26-amd64"
+      }
+    }
+  },
+  "systemUpdatesNoRestart": "No restart required",
+  "@systemUpdatesNoRestart": {
+    "description": "System tab, Updates: the server reports that no reboot is required."
+  },
+  "systemUpdatesFailed": "{reason, select, noLink{The server is not connected, so updates could not be checked.} transport{The connection failed while updates were checked.} other{Updates could not be checked.}}",
+  "@systemUpdatesFailed": {
+    "description": "System tab, Updates: why the check did not run, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "systemUpdatesNoManager": "No package manager Klabautermann reads was found (apt, dnf, zypper, pacman or apk).",
+  "@systemUpdatesNoManager": {
+    "description": "System tab, Updates: the server has none of the package managers the check knows."
+  },
+  "systemUpdatesNoCache": "The package lists have not been downloaded on this server yet, and the check never downloads them.",
+  "@systemUpdatesNoCache": {
+    "description": "System tab, Updates: dnf has no cached metadata; the check only reads cached metadata and never refreshes it."
+  },
+  "systemUpdatesManagerFailed": "The package manager failed: {detail}",
+  "@systemUpdatesManagerFailed": {
+    "description": "System tab, Updates: the package manager reported an error; detail is its own error text.",
+    "placeholders": {
+      "detail": {
+        "type": "String",
+        "example": "E: Could not open lock file"
+      }
+    }
+  },
+  "systemUpdatesPackage": "Package",
+  "@systemUpdatesPackage": {
+    "description": "System tab, Updates: column header of the package name."
+  },
+  "systemUpdatesInstalled": "Installed",
+  "@systemUpdatesInstalled": {
+    "description": "System tab, Updates: column header of the installed version."
+  },
+  "systemUpdatesAvailable": "Available",
+  "@systemUpdatesAvailable": {
+    "description": "System tab, Updates: column header of the version the update installs."
+  },
+  "systemUpdatesSecurity": "Security",
+  "@systemUpdatesSecurity": {
+    "description": "System tab, Updates: column header marking security updates."
+  },
+  "systemUpdatesSecurityYes": "Security",
+  "@systemUpdatesSecurityYes": {
+    "description": "System tab, Updates: the cell of an update that fixes a security issue."
+  },
+  "systemUpdatesCut": "{count, plural, other{Only the first {count} updates are listed.}}",
+  "@systemUpdatesCut": {
+    "description": "System tab, Updates: the list stops at its limit.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "systemUpdatesListsFrom": "Package lists last downloaded {time}",
+  "@systemUpdatesListsFrom": {
+    "description": "System tab, Updates: when the server last refreshed its package lists, in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "systemUpdatesChecking": "Checking for updates…",
+  "@systemUpdatesChecking": {
+    "description": "System tab, Updates: a check is running."
+  },
+  "systemUpdatesCheckAgain": "Check again",
+  "@systemUpdatesCheckAgain": {
+    "description": "System tab, Updates: button that runs a new check instead of using the one from the last hour."
+  },
+  "systemUpdatesRefresh": "Refresh package lists",
+  "@systemUpdatesRefresh": {
+    "description": "System tab, Updates: button that downloads the server's package lists as root, in admin mode, so the next check reads current metadata."
+  },
+  "systemUpdatesRefreshAdminNeeded": "Turn on admin mode to download them.",
+  "@systemUpdatesRefreshAdminNeeded": {
+    "description": "System tab, Updates: after the note that the package lists were never downloaded, says that refreshing them needs admin mode."
+  },
+  "systemUpdatesRefreshStarted": "When the refresh has finished, check again to read the new lists.",
+  "@systemUpdatesRefreshStarted": {
+    "description": "System tab, Updates: shown after the refresh starts, until the next check."
+  },
+  "systemUpdatesRestartsTitle": "Services to restart",
+  "@systemUpdatesRestartsTitle": {
+    "description": "System tab, Updates: heading of the services still running libraries an update replaced."
+  },
+  "systemUpdatesRestartsRead": "Find services to restart",
+  "@systemUpdatesRestartsRead": {
+    "description": "System tab, Updates: button that reads, in admin mode, which services still run replaced libraries."
+  },
+  "systemUpdatesRestartsReadAgain": "Look again",
+  "@systemUpdatesRestartsReadAgain": {
+    "description": "System tab, Updates: button that reads the services to restart again."
+  },
+  "systemUpdatesRestartsReading": "Looking for services to restart…",
+  "@systemUpdatesRestartsReading": {
+    "description": "System tab, Updates: the services-to-restart read is running."
+  },
+  "systemUpdatesRestartsAdminNeeded": "Finding services that still run replaced libraries needs admin mode.",
+  "@systemUpdatesRestartsAdminNeeded": {
+    "description": "System tab, Updates: the services-to-restart read needs admin mode, since it reads every process."
+  },
+  "systemUpdatesRestartsNone": "No service runs a replaced library.",
+  "@systemUpdatesRestartsNone": {
+    "description": "System tab, Updates: the read found no service to restart."
+  },
+  "systemUpdatesRestartsList": "Restart to load the updated libraries: {services}",
+  "@systemUpdatesRestartsList": {
+    "description": "System tab, Updates: the services still running replaced libraries; services is a comma-separated list of systemd unit names (server data).",
+    "placeholders": {
+      "services": {
+        "type": "String",
+        "example": "ssh.service, cron.service"
+      }
+    }
+  },
+  "systemUpdatesKernelWaiting": "A newer kernel is installed and waits for a reboot.",
+  "@systemUpdatesKernelWaiting": {
+    "description": "System tab, Updates: needrestart reports a newer kernel than the running one."
+  },
+  "systemUpdatesRestartsFailed": "{reason, select, noLink{The server is not connected, so services to restart could not be read.} adminRequired{Admin mode ended before services to restart were read.} elevationRefused{Elevation was refused, so services to restart were not read.} missing{None of needrestart, needs-restarting or zypper is installed on this server.} transport{The connection failed while services to restart were read.} other{Services to restart could not be read.}}",
+  "@systemUpdatesRestartsFailed": {
+    "description": "System tab, Updates: why the services-to-restart read read nothing, by reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "fleetUpdatesTitle": "Updates on all servers",
+  "@fleetUpdatesTitle": {
+    "description": "Title of PKG-06's fleet update center, listing every server's pending updates."
+  },
+  "fleetUpdatesOpen": "All servers",
+  "@fleetUpdatesOpen": {
+    "description": "System tab, Updates: button that opens the fleet update center."
+  },
+  "fleetUpdatesCheckAll": "Check every server again",
+  "@fleetUpdatesCheckAll": {
+    "description": "Fleet update center: button that runs a new package check on every server instead of using the ones from the last hour."
+  },
+  "fleetUpdatesNoServers": "No servers yet.",
+  "@fleetUpdatesNoServers": {
+    "description": "Fleet update center: the fleet is empty."
+  },
+  "fleetUpdatesSummary": "{updates, plural, =0{Up to date} =1{1 update} other{{updates} updates}}{security, plural, =0{} other{, {security} security}}{restart, select, true{ · restart required} other{}}",
+  "@fleetUpdatesSummary": {
+    "description": "Fleet update center: one server's line: pending updates, security updates (omitted at zero) and whether it asks for a restart.",
+    "placeholders": {
+      "updates": {
+        "type": "int"
+      },
+      "security": {
+        "type": "int"
+      },
+      "restart": {
+        "type": "String"
+      }
+    }
+  },
+  "systemUpdatesCheckedAt": "Checked {time}",
+  "@systemUpdatesCheckedAt": {
+    "description": "System tab, Updates: when the shown check ran, in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
   }
 }

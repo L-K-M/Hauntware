@@ -1792,6 +1792,84 @@ abstract class AppLocalizations {
   /// **'nvidia-smi is installed but failed: {message}'**
   String systemGpuNvidiaFailed(String message);
 
+  /// System tab: the section of the running kernel against the installed ones (BOOT-03) and the boot timeline (BOOT-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Boots'**
+  String get systemBootsTitle;
+
+  /// System tab, Boots: shown while the first read runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading kernels and boots…'**
+  String get systemBootsReading;
+
+  /// System tab, Boots: the button that reads the kernels and boots again.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get systemBootsReadAgain;
+
+  /// System tab, Boots: the release of the kernel the server runs, as uname -r prints it.
+  ///
+  /// In en, this message translates to:
+  /// **'Running kernel {release}'**
+  String systemKernelRunning(String release);
+
+  /// System tab, Boots: whether a reboot would load a newer kernel (BOOT-03), by state.
+  ///
+  /// In en, this message translates to:
+  /// **'{state, select, current{This is the newest kernel installed.} newerInstalled{Kernel {newest} is installed. A reboot loads it.} runningRemoved{The running kernel\'s modules were removed, as an upgrade does. A reboot loads {newest}.} other{Whether a newer kernel is installed is unknown: no module directory was found, as in a container.}}'**
+  String systemKernelState(String state, String newest);
+
+  /// System tab, Boots: why the kernel check read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{failure, select, noLink{Not connected to the server.} denied{The server refused the kernel check.} missing{The server lacks the tools the kernel check runs.} other{The kernel check failed.}}'**
+  String systemKernelFailed(String failure);
+
+  /// System tab, Boots: the heading over the list of boots, newest first (BOOT-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Boot timeline'**
+  String get systemBootsTimelineTitle;
+
+  /// System tab, Boots: the current boot in the timeline.
+  ///
+  /// In en, this message translates to:
+  /// **'This boot'**
+  String get systemBootsCurrent;
+
+  /// System tab, Boots: when a boot's journal starts and how long it ran until its last entry, under its name.
+  ///
+  /// In en, this message translates to:
+  /// **'Started {start}, ran {duration}'**
+  String systemBootsSpan(String start, String duration);
+
+  /// System tab, Boots: how an earlier boot ended (BOOT-02), by kind.
+  ///
+  /// In en, this message translates to:
+  /// **'{end, select, clean{Shut down cleanly} unclean{Ended without a shutdown: a crash, power loss or hard reset} other{How it ended is unknown: its journal is not readable as this user}}'**
+  String systemBootEnd(String end);
+
+  /// System tab, Boots: shown when journalctl lists no boots.
+  ///
+  /// In en, this message translates to:
+  /// **'The journal lists no boots.'**
+  String get systemBootsNone;
+
+  /// System tab, Boots: how many older boots the timeline leaves out; the Logs panel's boot picker lists every boot.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 earlier boot is not listed.} other{{count} earlier boots are not listed.}}'**
+  String systemBootsNotListed(int count);
+
+  /// System tab, Boots: shown under the timeline when reading the boots' ends failed.
+  ///
+  /// In en, this message translates to:
+  /// **'How the earlier boots ended could not be read.'**
+  String get systemBootEndsUnknown;
+
   /// System tab: the section of each drive's SMART health (HW-04), read on request in admin mode.
   ///
   /// In en, this message translates to:
@@ -5142,7 +5220,7 @@ abstract class AppLocalizations {
   /// One host write in the action preview; row is the engine's HostWriteRow name.
   ///
   /// In en, this message translates to:
-  /// **'{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine\'s own state} loginRecords{Login records, as every SSH command leaves} editTarget{The file or crontab you edited} editTempFile{A temporary copy beside the file, renamed over it or removed} userBackups{A backup in your Klabautermann backups folder} rootBackups{A backup under /var/lib/klabautermann/backups} footprintManifest{The list of what Klabautermann keeps on the server} auditSyslog{One line in the system log naming this action and this device} other{A change on the server}}'**
+  /// **'{row, select, userOperationRecords{An operation record in your home directory} rootOperationRecords{An operation record under /var/lib/klabautermann} transientUnit{A transient systemd unit, gone when it ends} engineState{The container engine\'s own state} loginRecords{Login records, as every SSH command leaves} editTarget{The file or crontab you edited} editTempFile{A temporary copy beside the file, renamed over it or removed} userBackups{A backup in your Klabautermann backups folder} rootBackups{A backup under /var/lib/klabautermann/backups} footprintManifest{The list of what Klabautermann keeps on the server} packageLists{The package manager\'s cached package lists} auditSyslog{One line in the system log naming this action and this device} other{A change on the server}}'**
   String actionPreviewHostWrite(String row);
 
   /// The action's impact in the preview; kind is the engine's ImpactKind name and count a number of containers.
@@ -5706,7 +5784,7 @@ abstract class AppLocalizations {
   /// An activity log row's action; action is the engine's intent type name.
   ///
   /// In en, this message translates to:
-  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
+  /// **'{action, select, KillProcess{Signal} UnitAction{Unit action} StartTimer{Run timer now} RefreshPackageLists{Refresh package lists} ContainerAction{Container action} RemoveContainer{Remove container} RemoveImage{Remove image} CreateVolume{Create volume} RemoveVolume{Remove volume} RemoveNetwork{Remove network} PruneDocker{Prune} PullImage{Pull image} StackAction{Stack action} RedeployStack{Redeploy stack} ContainerExec{Run command} ContainerShell{Container shell} EditFile{Edit} KeepLastBackups{Keep recent backups} RemoveBackups{Remove backups} other{Action}}'**
   String activityAction(String action);
 
   /// An activity log row's confirmation; tier is the engine's ConfirmationTier name.
@@ -10094,6 +10172,240 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Open'**
   String get alertNotificationOpen;
+
+  /// System tab: title of the section listing the server's pending package updates.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates'**
+  String get systemUpdatesTitle;
+
+  /// System tab, Updates: the package manager lists no pending update.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to date'**
+  String get systemUpdatesNone;
+
+  /// System tab, Updates: how many package updates the package manager lists.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 update available} other{{count} updates available}}'**
+  String systemUpdatesCount(int count);
+
+  /// System tab, Updates: how many of the pending updates fix security issues.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 is a security update} other{{count} are security updates}}'**
+  String systemUpdatesSecurityCount(int count);
+
+  /// System tab, Updates: on SUSE, how many security patches zypper says are needed; zypper lists patches rather than packages.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 security patch is needed} other{{count} security patches are needed}}'**
+  String systemUpdatesSecurityPatches(int count);
+
+  /// System tab, Updates: the server reports that a reboot is required, without naming the packages that asked.
+  ///
+  /// In en, this message translates to:
+  /// **'The server asks for a restart.'**
+  String get systemUpdatesRestart;
+
+  /// System tab, Updates: the server reports that a reboot is required, with the packages that asked for it.
+  ///
+  /// In en, this message translates to:
+  /// **'The server asks for a restart, for {packages}.'**
+  String systemUpdatesRestartFor(String packages);
+
+  /// System tab, Updates: the server reports that no reboot is required.
+  ///
+  /// In en, this message translates to:
+  /// **'No restart required'**
+  String get systemUpdatesNoRestart;
+
+  /// System tab, Updates: why the check did not run, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{The server is not connected, so updates could not be checked.} transport{The connection failed while updates were checked.} other{Updates could not be checked.}}'**
+  String systemUpdatesFailed(String reason);
+
+  /// System tab, Updates: the server has none of the package managers the check knows.
+  ///
+  /// In en, this message translates to:
+  /// **'No package manager Klabautermann reads was found (apt, dnf, zypper, pacman or apk).'**
+  String get systemUpdatesNoManager;
+
+  /// System tab, Updates: dnf has no cached metadata; the check only reads cached metadata and never refreshes it.
+  ///
+  /// In en, this message translates to:
+  /// **'The package lists have not been downloaded on this server yet, and the check never downloads them.'**
+  String get systemUpdatesNoCache;
+
+  /// System tab, Updates: the package manager reported an error; detail is its own error text.
+  ///
+  /// In en, this message translates to:
+  /// **'The package manager failed: {detail}'**
+  String systemUpdatesManagerFailed(String detail);
+
+  /// System tab, Updates: column header of the package name.
+  ///
+  /// In en, this message translates to:
+  /// **'Package'**
+  String get systemUpdatesPackage;
+
+  /// System tab, Updates: column header of the installed version.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed'**
+  String get systemUpdatesInstalled;
+
+  /// System tab, Updates: column header of the version the update installs.
+  ///
+  /// In en, this message translates to:
+  /// **'Available'**
+  String get systemUpdatesAvailable;
+
+  /// System tab, Updates: column header marking security updates.
+  ///
+  /// In en, this message translates to:
+  /// **'Security'**
+  String get systemUpdatesSecurity;
+
+  /// System tab, Updates: the cell of an update that fixes a security issue.
+  ///
+  /// In en, this message translates to:
+  /// **'Security'**
+  String get systemUpdatesSecurityYes;
+
+  /// System tab, Updates: the list stops at its limit.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, other{Only the first {count} updates are listed.}}'**
+  String systemUpdatesCut(int count);
+
+  /// System tab, Updates: when the server last refreshed its package lists, in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Package lists last downloaded {time}'**
+  String systemUpdatesListsFrom(DateTime time);
+
+  /// System tab, Updates: a check is running.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking for updates…'**
+  String get systemUpdatesChecking;
+
+  /// System tab, Updates: button that runs a new check instead of using the one from the last hour.
+  ///
+  /// In en, this message translates to:
+  /// **'Check again'**
+  String get systemUpdatesCheckAgain;
+
+  /// System tab, Updates: button that downloads the server's package lists as root, in admin mode, so the next check reads current metadata.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh package lists'**
+  String get systemUpdatesRefresh;
+
+  /// System tab, Updates: after the note that the package lists were never downloaded, says that refreshing them needs admin mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on admin mode to download them.'**
+  String get systemUpdatesRefreshAdminNeeded;
+
+  /// System tab, Updates: shown after the refresh starts, until the next check.
+  ///
+  /// In en, this message translates to:
+  /// **'When the refresh has finished, check again to read the new lists.'**
+  String get systemUpdatesRefreshStarted;
+
+  /// System tab, Updates: heading of the services still running libraries an update replaced.
+  ///
+  /// In en, this message translates to:
+  /// **'Services to restart'**
+  String get systemUpdatesRestartsTitle;
+
+  /// System tab, Updates: button that reads, in admin mode, which services still run replaced libraries.
+  ///
+  /// In en, this message translates to:
+  /// **'Find services to restart'**
+  String get systemUpdatesRestartsRead;
+
+  /// System tab, Updates: button that reads the services to restart again.
+  ///
+  /// In en, this message translates to:
+  /// **'Look again'**
+  String get systemUpdatesRestartsReadAgain;
+
+  /// System tab, Updates: the services-to-restart read is running.
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for services to restart…'**
+  String get systemUpdatesRestartsReading;
+
+  /// System tab, Updates: the services-to-restart read needs admin mode, since it reads every process.
+  ///
+  /// In en, this message translates to:
+  /// **'Finding services that still run replaced libraries needs admin mode.'**
+  String get systemUpdatesRestartsAdminNeeded;
+
+  /// System tab, Updates: the read found no service to restart.
+  ///
+  /// In en, this message translates to:
+  /// **'No service runs a replaced library.'**
+  String get systemUpdatesRestartsNone;
+
+  /// System tab, Updates: the services still running replaced libraries; services is a comma-separated list of systemd unit names (server data).
+  ///
+  /// In en, this message translates to:
+  /// **'Restart to load the updated libraries: {services}'**
+  String systemUpdatesRestartsList(String services);
+
+  /// System tab, Updates: needrestart reports a newer kernel than the running one.
+  ///
+  /// In en, this message translates to:
+  /// **'A newer kernel is installed and waits for a reboot.'**
+  String get systemUpdatesKernelWaiting;
+
+  /// System tab, Updates: why the services-to-restart read read nothing, by reason.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noLink{The server is not connected, so services to restart could not be read.} adminRequired{Admin mode ended before services to restart were read.} elevationRefused{Elevation was refused, so services to restart were not read.} missing{None of needrestart, needs-restarting or zypper is installed on this server.} transport{The connection failed while services to restart were read.} other{Services to restart could not be read.}}'**
+  String systemUpdatesRestartsFailed(String reason);
+
+  /// Title of PKG-06's fleet update center, listing every server's pending updates.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates on all servers'**
+  String get fleetUpdatesTitle;
+
+  /// System tab, Updates: button that opens the fleet update center.
+  ///
+  /// In en, this message translates to:
+  /// **'All servers'**
+  String get fleetUpdatesOpen;
+
+  /// Fleet update center: button that runs a new package check on every server instead of using the ones from the last hour.
+  ///
+  /// In en, this message translates to:
+  /// **'Check every server again'**
+  String get fleetUpdatesCheckAll;
+
+  /// Fleet update center: the fleet is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'No servers yet.'**
+  String get fleetUpdatesNoServers;
+
+  /// Fleet update center: one server's line: pending updates, security updates (omitted at zero) and whether it asks for a restart.
+  ///
+  /// In en, this message translates to:
+  /// **'{updates, plural, =0{Up to date} =1{1 update} other{{updates} updates}}{security, plural, =0{} other{, {security} security}}{restart, select, true{ · restart required} other{}}'**
+  String fleetUpdatesSummary(int updates, int security, String restart);
+
+  /// System tab, Updates: when the shown check ran, in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked {time}'**
+  String systemUpdatesCheckedAt(DateTime time);
 }
 
 class _AppLocalizationsDelegate

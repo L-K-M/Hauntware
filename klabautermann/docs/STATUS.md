@@ -1947,11 +1947,36 @@ is on main:
   created again under its name is not removed. An API step can now
   carry a JSON body, which the preview shows as sent. The Docker
   actions suite creates, refuses and removes a volume on the fixture.
+- Boots (M6 N39, BOOT-02, BOOT-03): the System tab's Boots section says
+  whether the running kernel is the newest installed, or a reboot loads
+  a newer one, and lists the current boot and the ten before it with
+  when each started, how long it ran and whether it shut down cleanly,
+  from the journal. A user outside the journal's groups sees the ends as
+  unknown.
 - Time (M6 N38a, SYS-02, CN-17): collector-set version 13's probe reads
   timedatectl's NTP state, and each probe answer measures the server's
   clock against this device's. The System tab's Time section shows the
   time zone, whether the clock is synchronized, and how far it is ahead
   or behind (in step within two seconds).
+- Pending updates (M6 N36a, PKG-01 to PKG-03): the System tab's Updates
+  section asks the server's package manager (apt, dnf, zypper, pacman or
+  apk) for its pending updates as the login user and from cached
+  metadata only, never refreshing it. It lists each update with its
+  installed and new versions, security ones first (apt's security
+  origins, dnf's security advisories; zypper counts needed security
+  patches), when the package lists were last downloaded, and whether the
+  server asks for a restart (`/var/run/reboot-required` with the packages
+  that asked, or `needs-restarting -r`). The engine keeps each server's
+  check for an hour; "Check again" runs a new one. In admin mode,
+  "Refresh package lists" (N36b, PKG-05) downloads the lists as root
+  through the action preview (apt, dnf, zypper and apk; never pacman,
+  whose refresh without an upgrade breaks partial installs). Also in
+  admin mode, "Find services to restart" (N36c, PKG-04) lists the
+  services still running replaced libraries (needrestart,
+  needs-restarting or zypper ps) and says when a newer kernel waits for
+  a reboot. "All servers" (N36d, PKG-06) opens the fleet update center:
+  each server's updates, security updates and restart flag from its
+  check of the last hour, most security updates first.
 - Users and logins (M6 N40, ACC-01, ACC-02): the System tab's Users
   section reads the server's accounts and groups with `getent` and who
   is logged in with `who`, as the login user, when it shows and on

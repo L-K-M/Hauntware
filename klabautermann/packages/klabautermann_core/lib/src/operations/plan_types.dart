@@ -191,6 +191,9 @@ enum HostWriteRow {
   /// `/etc/klabautermann/manifest.json`, written with the first backup
   /// (v1, SAF-14).
   footprintManifest,
+
+  /// The package manager's cached lists, which PKG-05 refreshes.
+  packageLists,
 }
 
 /// How the steps reach their target.
