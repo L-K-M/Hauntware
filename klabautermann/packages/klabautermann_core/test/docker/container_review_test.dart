@@ -229,28 +229,42 @@ void main() {
     );
   });
 
-  test('a socket is named by its file; a volume named like one is not', () {
-    List<ContainerRisk> mounted(ContainerMount mount) =>
-        _risks(_with(mounts: [mount]));
+  test(
+    'a socket is named by its file or a folder that holds it; a volume named like one is not',
+    () {
+      List<ContainerRisk> mounted(ContainerMount mount) =>
+          _risks(_with(mounts: [mount]));
 
-    expect(
-      mounted(
-        const ContainerMount(
-          type: 'bind',
-          source: '/run/user/1000/podman/podman.sock',
+      expect(
+        mounted(
+          const ContainerMount(
+            type: 'bind',
+            source: '/run/user/1000/podman/podman.sock',
+          ),
         ),
-      ),
-      [ContainerRisk.socketMount],
-    );
-    expect(
-      mounted(const ContainerMount(type: 'volume', source: 'docker.sock')),
-      isEmpty,
-    );
-    expect(
-      mounted(const ContainerMount(type: 'bind', source: '/srv/docker.socks')),
-      isEmpty,
-    );
-  });
+        [ContainerRisk.socketMount],
+      );
+      for (final folder in ['/', '/run', '/var/run']) {
+        expect(mounted(ContainerMount(type: 'bind', source: folder)), [
+          ContainerRisk.socketMount,
+        ], reason: '$folder holds the sockets');
+      }
+      expect(
+        mounted(const ContainerMount(type: 'bind', source: '/run/lock')),
+        isEmpty,
+      );
+      expect(
+        mounted(const ContainerMount(type: 'volume', source: 'docker.sock')),
+        isEmpty,
+      );
+      expect(
+        mounted(
+          const ContainerMount(type: 'bind', source: '/srv/docker.socks'),
+        ),
+        isEmpty,
+      );
+    },
+  );
 
   test('no restart policy is fine when the container goes when it stops or '
       'is a compose one-off run', () {

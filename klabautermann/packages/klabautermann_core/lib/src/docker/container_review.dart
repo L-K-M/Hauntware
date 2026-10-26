@@ -92,8 +92,13 @@ List<ContainerFinding> reviewContainer(
   ];
 }
 
+/// The host folders whose bind mount brings the engine sockets in with
+/// them.
+const _socketFolders = {'/', '/run', '/var/run'};
+
 bool _isEngineSocket(String? path) {
   if (path == null) return false;
+  if (_socketFolders.contains(path)) return true;
   return _engineSockets.contains(path.substring(path.lastIndexOf('/') + 1));
 }
 

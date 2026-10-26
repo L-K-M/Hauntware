@@ -50,6 +50,7 @@ void main() {
     await tester.tap(find.text('Review containers'));
     await tester.pump();
     expect(find.text("Reading each container's configuration…"), findsOne);
+    expect(find.text('Review containers'), findsOne, reason: 'no review yet');
     expect(reviews(), hasLength(1));
 
     engine.emit(
@@ -84,6 +85,7 @@ void main() {
             ),
           ],
           omitted: 3,
+          unreadable: 1,
           tools: [
             HostToolContainer(
               tool: HostTool.uptimeKuma,
@@ -109,6 +111,12 @@ void main() {
       find.text(
         '3 more containers were not read: a review reads at most '
         '$kDockerReviewMax.',
+      ),
+      findsOne,
+    );
+    expect(
+      find.text(
+        'The engine refused to inspect 1 container, so it is not reviewed.',
       ),
       findsOne,
     );

@@ -666,6 +666,15 @@ void main() {
         ),
       ]);
       expect(payload.omitted, 0);
+      expect(payload.unreadable, 0);
+
+      // A container the daemon refuses to inspect is counted; the rest
+      // still read.
+      daemon.failures['/v1.52/containers/gone/json'] = (500, 'stuck');
+      final again = h.query(const DockerReviewQuery());
+      final second = await h.result(again) as DockerReviewPayload;
+      expect([for (final r in second.reviews) r.name], ['db']);
+      expect(second.unreadable, 1);
       expect(
         [for (final tool in payload.tools) (tool.tool, tool.name)],
         [(HostTool.dozzle, 'gone')],

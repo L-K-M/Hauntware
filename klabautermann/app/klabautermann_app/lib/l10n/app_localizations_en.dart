@@ -5409,6 +5409,18 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String dockerReviewUnreadable(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'The engine refused to inspect $count containers, so they are not reviewed.',
+      one: 'The engine refused to inspect 1 container, so it is not reviewed.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String dockerReviewContainerInStack(String name, String stack) {
     return '$name in $stack';
   }

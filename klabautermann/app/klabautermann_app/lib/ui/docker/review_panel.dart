@@ -64,7 +64,7 @@ class _ReviewPanelState extends State<ReviewPanel> {
       onPressed: _phase == _Phase.reading ? null : () => unawaited(_review()),
       icon: const Icon(Icons.policy_outlined),
       label: Text(
-        _phase == _Phase.idle ? l10n.dockerReviewRun : l10n.dockerReviewAgain,
+        _answer == null ? l10n.dockerReviewRun : l10n.dockerReviewAgain,
       ),
     );
     return ListView(
@@ -94,7 +94,12 @@ class _ReviewPanelState extends State<ReviewPanel> {
     }
 
     switch (_answer) {
-      case DockerReviewPayload(:final reviews, :final omitted, :final tools):
+      case DockerReviewPayload(
+        :final reviews,
+        :final omitted,
+        :final unreadable,
+        :final tools,
+      ):
         final flagged = [
           for (final review in reviews)
             if (review.findings.isNotEmpty) review,
@@ -110,6 +115,13 @@ class _ReviewPanelState extends State<ReviewPanel> {
               l10n.dockerReviewFlagged(flagged.length, reviews.length),
               style: Theme.of(context).textTheme.titleSmall,
             ),
+          if (unreadable > 0) ...[
+            const SizedBox(height: 8),
+            DockerNotice(
+              icon: Icons.error_outline,
+              text: l10n.dockerReviewUnreadable(unreadable),
+            ),
+          ],
           if (omitted > 0) ...[
             const SizedBox(height: 8),
             DockerNotice(
