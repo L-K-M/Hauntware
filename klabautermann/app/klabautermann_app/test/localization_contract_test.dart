@@ -669,6 +669,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // its answer (JOB-05); the details word it themselves.
     "'success'",
   },
+  'lib/ui/interfaces.dart': {"'lo'"},
   'lib/ui/logs/logs_panel.dart': {
     // The empty server pattern, which reads the whole journal again.
     "''",

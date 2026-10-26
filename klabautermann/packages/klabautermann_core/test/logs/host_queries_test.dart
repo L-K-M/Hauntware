@@ -221,10 +221,39 @@ void main() {
     );
   });
 
+  test('the interface read runs its command and parses', () async {
+    link = _RunLink(
+      (_) => _ok(
+        '$kNetLinksMarker\neth0/operstate:up\neth0/mtu:1500\n'
+        '$kNetPhysicalMarker\neth0\n$kNetAddrMarker\n'
+        '$kNetTcpMarker\n01 4\n$kNetSockstatMarker\nsockets: used 9\n',
+      ),
+    );
+    final read =
+        ((await ask(const InterfacesQuery())).payload as NetInterfaces).read;
+    expect(read.interfaces.single.name, 'eth0');
+    expect(read.interfaces.single.physical, isTrue);
+    expect(read.sockets.tcp, {TcpState.established: 4});
+    expect(
+      link!.commands.single,
+      HostCommands.commandLine(
+        HostCommands.interfaces(),
+        quote: quoteShellWord,
+      ),
+    );
+  });
+
   test('a processor read that printed something else fails', () async {
     link = _RunLink((_) => _ok('sh: nproc: not found\n'));
     final payload =
         (await ask(const CpuTopologyQuery())).payload as HostQueryFailed;
+    expect(payload.failure, HostQueryFailure.failed);
+  });
+
+  test('an interface read that printed something else fails', () async {
+    link = _RunLink((_) => _ok('sh: grep: not found\n'));
+    final payload =
+        (await ask(const InterfacesQuery())).payload as HostQueryFailed;
     expect(payload.failure, HostQueryFailure.failed);
   });
 

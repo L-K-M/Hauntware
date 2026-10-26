@@ -345,6 +345,15 @@ const kCpuNprocMarker = '== nproc';
 const kCpuLscpuMarker = '== lscpu';
 const kCpuInfoMarker = '== cpuinfo';
 
+/// The markers before each part of [HostCommands.interfaces]' output:
+/// the sysfs link files, the physical interfaces, the addresses, the TCP
+/// socket states and `/proc/net/sockstat`.
+const kNetLinksMarker = '== links';
+const kNetPhysicalMarker = '== physical';
+const kNetAddrMarker = '== addr';
+const kNetTcpMarker = '== tcp';
+const kNetSockstatMarker = '== sockstat';
+
 /// [HostCommands.mounts]'s section markers: `findmnt`'s JSON, or
 /// `/proc/self/mounts` where findmnt is missing or too old for `-J`, then
 /// `/proc/swaps`.
@@ -848,6 +857,35 @@ abstract final class HostCommands {
       'echo "$kCpuInfoMarker"; '
       "grep -E '^(processor|model name|cpu model|cpu|physical id|core id)"
       "[[:space:]]*:' /proc/cpuinfo 2>/dev/null; "
+      'exit 0';
+
+  /// NET-02 and NET-03's read: each interface's sysfs files as
+  /// `<name>/<file>:<value>` lines from one `grep` (a down link's `speed`
+  /// fails to read and is left out), the interfaces backed by a device,
+  /// the addresses from `ip -j addr` or, where `ip` has no JSON
+  /// (BusyBox), `ip -o addr`, the count of TCP sockets per state from
+  /// `/proc/net/tcp` and `tcp6`, and `/proc/net/sockstat`. Everything
+  /// under `/proc/net` is the reader's network namespace's (D50).
+  /// `parseInterfaces` reads it.
+  static List<String> interfaces() => const ['sh', '-c', _kInterfacesScript];
+
+  static const _kInterfacesScript =
+      'echo "$kNetLinksMarker"; '
+      "cd /sys/class/net 2>/dev/null && grep -s -H '' -- "
+      '*/operstate */mtu */address */speed '
+      '*/statistics/rx_bytes */statistics/tx_bytes '
+      '*/statistics/rx_errors */statistics/tx_errors '
+      "*/statistics/rx_dropped */statistics/tx_dropped; "
+      'echo "$kNetPhysicalMarker"; '
+      '[ "\$PWD" = /sys/class/net ] && '
+      'for d in */device; do [ -e "\$d" ] && echo "\${d%/device}"; done; '
+      'echo "$kNetAddrMarker"; ip -j addr 2>/dev/null || ip -o addr 2>/dev/null; '
+      'echo "$kNetTcpMarker"; '
+      "cat /proc/net/tcp /proc/net/tcp6 2>/dev/null | "
+      "awk '\$4 ~ /^[0-9A-F][0-9A-F]\$/ { n[\$4]++ } "
+      "END { for (s in n) print s, n[s] }'; "
+      'echo "$kNetSockstatMarker"; '
+      'cat /proc/net/sockstat /proc/net/sockstat6 2>/dev/null; '
       'exit 0';
 
   /// DSK-05 and DSK-14's read: every mount's source, type and options,

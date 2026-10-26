@@ -2035,6 +2035,14 @@ is on main:
   and those the login may use, from `lscpu`, or `/proc/cpuinfo` where
   `lscpu` is missing. A big.LITTLE board lists both models. Inside a
   container the counts that would be the host machine's read as unknown.
+- Interfaces and connections (M6 N33, NET-02, NET-03): the System tab's
+  new Interfaces section lists each interface with its state,
+  addresses, MTU, link speed, current receive and send rates, and
+  errors and drops since it came up, physical interfaces first. The
+  loopback and containers' unaddressed veth pairs fold behind a
+  checkbox. Below, Connections counts the TCP sockets by state
+  (established, listening, time wait, close wait, others) and the UDP
+  and total sockets.
 - Out-of-memory kills (M6 N42b, MEM-03): the System tab's new section
   counts the kills since boot from `/proc/vmstat`'s `oom_kill` (Linux
   4.13+) and names the current boot's victims, newest first, from the

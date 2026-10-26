@@ -15,6 +15,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         FsSnapshot,
         GpuSnapshot,
         HostProfile,
+        InterfacesRead,
         JobEntry,
         JournalBoot,
         JournalBootEntry,
@@ -750,6 +751,12 @@ final class KernelsQuery extends HostQuerySpec {
 /// The processor's model and topology (CPU-07), as [CpuTopologyRead].
 final class CpuTopologyQuery extends HostQuerySpec {
   const CpuTopologyQuery();
+}
+
+/// The network interfaces and socket counts (NET-02, NET-03), as
+/// [NetInterfaces].
+final class InterfacesQuery extends HostQuerySpec {
+  const InterfacesQuery();
 }
 
 /// Every mount's source, type and options (DSK-05) and the swap devices
@@ -2111,6 +2118,13 @@ final class CpuTopologyRead extends HostPayload {
   const CpuTopologyRead(this.topology);
 
   final CpuTopology topology;
+}
+
+/// [InterfacesQuery]'s interfaces and sockets.
+final class NetInterfaces extends HostPayload {
+  const NetInterfaces(this.read);
+
+  final InterfacesRead read;
 }
 
 /// [MountsQuery]'s mounts and swap devices.

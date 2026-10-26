@@ -134,6 +134,17 @@ export 'package:klabautermann_host/klabautermann_host.dart'
 // The System tab's processor section (CPU-07): the model and topology a
 // HostResult carries.
 export 'package:klabautermann_host/klabautermann_host.dart' show CpuTopology;
+// The System tab's interfaces section (NET-02, NET-03): the interfaces
+// and socket counts a HostResult carries.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show
+        InterfacesRead,
+        NetAddress,
+        NetAddressFamily,
+        NetInterface,
+        NetLinkState,
+        SocketCounts,
+        TcpState;
 // The Disks section's mount details and the Swap section (DSK-05,
 // DSK-14): the mounts and swap devices a HostResult carries.
 export 'package:klabautermann_host/klabautermann_host.dart'

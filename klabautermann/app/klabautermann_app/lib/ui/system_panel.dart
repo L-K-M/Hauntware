@@ -16,6 +16,7 @@ import 'charts/charts.dart' show BarSegment, ChartUnit, StackedBar;
 import 'disk_activity.dart';
 import 'drive_health.dart';
 import 'gpus.dart';
+import 'interfaces.dart';
 import 'mounts.dart';
 import 'oom_kills.dart';
 import 'power.dart';
@@ -33,6 +34,7 @@ enum SystemSection {
   uptime,
   time,
   network,
+  interfaces,
   disks,
   diskActivity,
   swap,
@@ -234,6 +236,13 @@ class _SystemPanelState extends State<SystemPanel> {
               ListenableBuilder(
                 listenable: _core,
                 builder: (context, _) => _diskActivitySection(l10n, profile),
+              ),
+              InterfacesSection(
+                key: const ValueKey(SystemSection.interfaces),
+                monitoring: widget.monitoring,
+                serverId: widget.serverId,
+                core: _core,
+                fact: (label, value) => _Fact(label: label, value: value),
               ),
               SwapSection(
                 monitoring: widget.monitoring,
