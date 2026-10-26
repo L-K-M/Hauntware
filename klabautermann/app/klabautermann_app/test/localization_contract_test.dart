@@ -268,6 +268,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'stacks-${_count++}'",
     r"'volumes-${_count++}'",
     r"'networks-${_count++}'",
+    r"'events-${_count++}'",
     r"'stack-file-${_count++}'",
   },
   'lib/controllers/docker_endpoint_choices.dart': {
@@ -556,6 +557,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'about an hour'",
     r"r'^Up (.+?)(?: ago)?(?: \(.*\))?$'",
     r"r'^(\d+) (second|minute|hour|day|week|month|year)s?$'",
+    // The exit code in a stopped or restarting container's Status text.
+    r"r'^(?:Exited|Restarting) \((-?\d+)\)'",
     "'0.0.0.0'",
     "'::'",
     // The separator `docker ps` prints between ports; machine data.

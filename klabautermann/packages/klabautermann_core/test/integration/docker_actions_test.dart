@@ -198,6 +198,49 @@ void main() {
     await untilContainer(engine, id, (c) => c == null);
   });
 
+  test('a bulk action runs one step per container and the list follows '
+      '(CTR-07)', () async {
+    const names = ['actions-bulk-a', 'actions-bulk-b'];
+    for (final name in names) {
+      await dind([
+        'run',
+        '--detach',
+        '--name',
+        name,
+        _image,
+        'sh',
+        '-c',
+        'while :; do sleep 60; done',
+      ]);
+      addTearDown(() => dind(['rm', '--force', name]));
+    }
+    final ids = [for (final name in names) await containerId(name)];
+    final engine = await start('bulk-actions');
+    watch(engine, {DockerWatchList.containers});
+    for (final id in ids) {
+      await untilContainer(engine, id, (c) => c?.state == 'running');
+    }
+
+    Future<void> act(ContainerBulkVerb verb, String? state) async {
+      final planned = await plan(
+        engine,
+        ContainerBulkAction(dockerServer, containerIds: ids, verb: verb),
+      );
+      expect(planned.preview.targetName, names.join(', '));
+      expect(planned.preview.steps, hasLength(2));
+      expectSucceeded(await run(engine, planned));
+      for (final id in ids) {
+        await untilContainer(engine, id, (c) => c?.state == state);
+      }
+    }
+
+    await act(ContainerBulkVerb.stop, 'exited');
+    await act(ContainerBulkVerb.start, 'running');
+    await act(ContainerBulkVerb.restart, 'running');
+    await act(ContainerBulkVerb.stop, 'exited');
+    await act(ContainerBulkVerb.remove, null);
+  });
+
   test('an unused image is removed; one in use only by force, with its '
       'typed name (IMG-02)', () async {
     const unused = 'actions-unused:1';

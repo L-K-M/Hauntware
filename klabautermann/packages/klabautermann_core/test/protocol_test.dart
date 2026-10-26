@@ -577,6 +577,27 @@ void main() {
           payload: const DockerImagesPayload([]),
           at: DateTime.utc(2026, 10, 17),
         ),
+        DockerListChanged(
+          serverId: 'srv-1',
+          list: DockerWatchList.events,
+          payload: DockerEventsPayload([
+            DockerTimelineEvent(
+              at: DateTime.utc(2026, 10, 17),
+              type: 'container',
+              action: 'die',
+              actorId: 'abc',
+              name: 'web',
+              image: 'nginx:1',
+              exitCode: 137,
+            ),
+            DockerTimelineGap(
+              at: DateTime.utc(2026, 10, 17, 0, 1),
+              until: DateTime.utc(2026, 10, 17, 0, 2),
+              resumed: true,
+            ),
+          ]),
+          at: DateTime.utc(2026, 10, 17),
+        ),
         ActionPlanned(
           'plan-1',
           ActionPreview(
