@@ -4033,8 +4033,9 @@ them again. Admin mode that ends returns the tab to the streams' rows.
   skipped while `traefik.enable=false`, and `HostRegexp` never yields
   one), and caddy-docker-proxy's `caddy` and `caddy_<n>` addresses
   (HTTPS as Caddy serves it, but HTTP on an explicit port 80). A
-  masked value, another scheme, credentials, a wildcard or a
-  placeholder yields no link. The
+  masked value, another scheme, credentials, or a wildcard or a
+  placeholder in the host yields no link (a path or query may hold
+  them, as in `?$select=name`). The
   links open through the hand-off launcher in the system browser, or
   show as text where the app has none. CTR-11's mute labels
   (`dockhand.notify`) wait for per-container notifications, which v1

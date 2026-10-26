@@ -124,6 +124,15 @@ void main() {
         reason: address,
       );
     }
+    // A malformed escape in the host is no placeholder, and reading it
+    // does not throw: Uri.tryParse stores the bare % as %25.
+    expect(uris({'dockhand.url': MaskedValue.plain('https://bad%host/')}), [
+      'https://bad%25host/',
+    ]);
+    expect(
+      uris({'dockhand.url': MaskedValue.plain('http://%7Bhost%7D:8080/')}),
+      isEmpty,
+    );
     // Only the host is checked: a path or query may hold them.
     expect(
       uris({
