@@ -157,26 +157,37 @@ Future<TlsEndpointCheck> checkTlsEndpoint(
       );
 
   var trusted = true;
-  // connect's own timeout bounds only the TCP connection; the outer one
-  // bounds connection and handshake together.
-  final connect = SecureSocket.connect(
-    endpoint.host,
-    endpoint.port,
-    context: context,
-    timeout: timeout,
-    onBadCertificate: (_) {
-      trusted = false;
-      return true;
-    },
-  );
-  SecureSocket? socket;
+  final deadline = Stopwatch()..start();
+  // The raw socket is the check's own, so a handshake that never
+  // answers is torn down with it (a [Socket] handed to
+  // [SecureSocket.secure] is detached, and destroying it closes nothing);
+  // one deadline bounds connection and handshake together.
+  RawSocket? plain;
+  RawSecureSocket? socket;
   try {
-    socket = await connect.timeout(
-      timeout,
+    plain = await RawSocket.connect(
+      endpoint.host,
+      endpoint.port,
+      timeout: timeout,
+    );
+    final connected = plain;
+    final secure = RawSecureSocket.secure(
+      connected,
+      host: endpoint.host,
+      context: context,
+      onBadCertificate: (_) {
+        trusted = false;
+        return true;
+      },
+    );
+    final left = timeout - deadline.elapsed;
+    socket = await secure.timeout(
+      left.isNegative ? Duration.zero : left,
       onTimeout: () {
+        unawaited(connected.close());
         // A handshake that completes after the timeout is closed at once.
         unawaited(
-          connect.then<void>((late) => late.destroy(), onError: (Object _) {}),
+          secure.then<void>((late) => late.close(), onError: (Object _) {}),
         );
         throw TimeoutException('No TLS handshake', timeout);
       },
@@ -209,6 +220,10 @@ Future<TlsEndpointCheck> checkTlsEndpoint(
     }
     return failed(TlsCheckFailure.connect, error);
   } finally {
-    socket?.destroy();
+    if (socket != null) {
+      unawaited(socket.close());
+    } else {
+      unawaited(plain?.close());
+    }
   }
 }

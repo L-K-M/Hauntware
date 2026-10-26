@@ -109,12 +109,17 @@ void main() {
       server.listen((raw) async {
         // Answers the handshake only after the client gave up.
         await Future<void>.delayed(const Duration(milliseconds: 600));
-        final secure = await SecureSocket.secureServer(raw, context);
-        secure.listen(
-          null,
-          onDone: closed.complete,
-          onError: (Object _) => closed.complete(),
-        );
+        try {
+          final secure = await SecureSocket.secureServer(raw, context);
+          secure.listen(
+            null,
+            onDone: closed.complete,
+            onError: (Object _) => closed.complete(),
+          );
+        } on Object {
+          // The client closed the connection before the handshake.
+          closed.complete();
+        }
       });
 
       final check = await checkTlsEndpoint(
@@ -139,11 +144,20 @@ void main() {
       expect(check.certificate, isNull);
     });
 
-    test('an endpoint that never answers times out', () async {
+    test('an endpoint that never answers times out, and its connection '
+        'is closed', () async {
       final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
       addTearDown(server.close);
+      final closed = Completer<void>();
       final held = <Socket>[];
-      server.listen(held.add);
+      server.listen((socket) {
+        held.add(socket);
+        socket.listen(
+          null,
+          onDone: closed.complete,
+          onError: (Object _) => closed.complete(),
+        );
+      });
       addTearDown(() {
         for (final socket in held) {
           socket.destroy();
@@ -154,6 +168,7 @@ void main() {
         timeout: const Duration(milliseconds: 300),
       );
       expect(check.failure, TlsCheckFailure.timeout);
+      await closed.future.timeout(const Duration(seconds: 5));
     });
 
     test('a closed port does not connect', () async {
