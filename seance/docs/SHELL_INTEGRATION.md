@@ -3,7 +3,9 @@
 Séance can follow a shell directory without integration when the shell emits
 OSC 7 or a conventional Bash title. On a Linux server it also follows a shell
 that reports neither, by reading the shell's directory from `/proc` over a
-separate channel after each Enter. The optional setup below also marks an
+separate channel after each Enter. The optional setup below reports the
+directory with OSC 7, which needs no `/proc` and also covers a shell started
+inside another one with the same setup, such as `sudo -i`. It also marks an
 idle prompt, which enables **Open terminal here** without guessing whether text
 is already waiting on the command line.
 
@@ -19,8 +21,22 @@ if [[ $- == *i* ]] && [[ -z ${SEANCE_SHELL_INTEGRATION-} ]]; then
   SEANCE_SHELL_INTEGRATION=1
   printf '\e]1337;ShellIntegrationVersion=1;bash\a'
 
+  # The directory as a file:// URL, every byte outside [A-Za-z0-9/._~-] %XX.
+  __seance_report_directory() {
+    local LC_ALL=C path=$PWD url= c i
+    for (( i = 0; i < ${#path}; i++ )); do
+      c=${path:i:1}
+      case $c in
+        [A-Za-z0-9/._~-]) url+=$c ;;
+        *) printf -v c '%%%02X' "'$c"; url+=$c ;;
+      esac
+    done
+    printf '\e]7;file://%s%s\a' "${HOSTNAME-}" "$url"
+  }
+
   __seance_prompt_start() {
     local status=$?
+    __seance_report_directory
     printf '\e]133;D;%d\a\e]133;A\a' "$status"
     return "$status"
   }
@@ -38,9 +54,17 @@ if [[ -o interactive && -z ${SEANCE_SHELL_INTEGRATION-} ]]; then
   typeset -g SEANCE_SHELL_INTEGRATION=1
   printf '\e]1337;ShellIntegrationVersion=1;zsh\a'
   autoload -Uz add-zsh-hook
+  # The directory as a file:// URL, every byte outside [A-Za-z0-9/._~-] %XX.
+  __seance_report_directory() {
+    emulate -L zsh -o extended_glob
+    local LC_ALL=C
+    printf '\e]7;file://%s%s\a' "$HOST" \
+      "${PWD//(#m)[^A-Za-z0-9\/._~-]/%${(l:2::0:)$(([##16]#MATCH))}}"
+  }
   __seance_precmd() {
-    local status=$?
-    printf '\e]133;D;%d\a\e]133;A\a' "$status"
+    local exit_status=$?
+    __seance_report_directory
+    printf '\e]133;D;%d\a\e]133;A\a' "$exit_status"
   }
   add-zsh-hook precmd __seance_precmd
   PROMPT="${PROMPT}"$'%{\e]133;B\a%}'
@@ -64,7 +88,8 @@ printf '\e]1337;ShellIntegrationVersion=1;fish\a'
 The `B` marker must not be emitted for `fish_prompt --final-rendering`.
 
 The snippets preserve the existing prompt and do not submit commands. They use
-OSC 133 `A`, `B`, and `D` markers plus a narrow OSC 1337 shell identity marker.
+OSC 7 for the directory, OSC 133 `A`, `B`, and `D` markers, and a narrow
+OSC 1337 shell identity marker.
 Séance treats all remote control sequences as untrusted UX metadata: generated
 paths are still validated and shell-quoted, the command is inserted without a
 newline, and the user must press Enter.
